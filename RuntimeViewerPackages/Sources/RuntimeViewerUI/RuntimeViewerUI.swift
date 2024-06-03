@@ -4,7 +4,7 @@
 @_exported import SnapKit
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-
+@_exported import OpenUXKit
 #endif
 
 #if canImport(UIKit)

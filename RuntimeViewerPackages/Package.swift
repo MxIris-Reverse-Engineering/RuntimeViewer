@@ -18,8 +18,8 @@ let package = Package(
             targets: ["RuntimeViewerUI"]
         ),
         .library(
-            name: "RxRuntimeViewer",
-            targets: ["RxRuntimeViewer"]
+            name: "RuntimeViewerArchitectures",
+            targets: ["RuntimeViewerArchitectures"]
         ),
     ],
     dependencies: [
@@ -63,10 +63,14 @@ let package = Package(
             url: "https://github.com/Mx-Iris/RxAppKit",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/OpenUXKit/OpenUXKit",
+            branch: "main"
+        ),
     ],
     targets: [
         .target(
-            name: "RxRuntimeViewer",
+            name: "RuntimeViewerArchitectures",
             dependencies: [
                 .product(name: "RxSwift", package: "RxSwift"),
                 .product(name: "RxCocoa", package: "RxSwift"),
@@ -76,6 +80,7 @@ let package = Package(
                 .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: [.iOS, .tvOS, .watchOS, .macCatalyst])),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
+                .product(name: "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
             ]
         ),
         .target(
@@ -91,6 +96,7 @@ let package = Package(
                 .product(name: "UIFoundationToolbox", package: "UIFoundation"),
                 .product(name: "ViewHierarchyBuilder", package: "ViewHierarchyBuilder"),
                 .product(name: "SnapKit", package: "SnapKit"),
+                .product(name: "OpenUXKit", package: "OpenUXKit"),
             ]
         ),
     ]

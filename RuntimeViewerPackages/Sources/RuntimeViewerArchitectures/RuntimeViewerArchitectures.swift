@@ -7,4 +7,5 @@
 @_exported import RxAppKit
 @_exported import CocoaCoordinator
 @_exported import RxCocoaCoordinator
+@_exported import OpenUXKitCoordinator
 #endif
