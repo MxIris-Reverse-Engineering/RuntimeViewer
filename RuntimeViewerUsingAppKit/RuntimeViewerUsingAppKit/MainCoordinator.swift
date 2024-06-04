@@ -21,14 +21,18 @@ typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewCo
 class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     let appServices: AppServices
 
-    lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices)
-    lazy var contentCoordinator = ContentCoordinator(appServices: appServices)
-    lazy var inspectorCoordinator = InspectorCoordinator(appServices: appServices)
     lazy var splitViewController = MainSplitViewController()
-    
+
+    lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices)
+
+    lazy var contentCoordinator = ContentCoordinator(appServices: appServices)
+
+    lazy var inspectorCoordinator = InspectorCoordinator(appServices: appServices)
+
     init(appServices: AppServices) {
         self.appServices = appServices
         super.init(windowController: .init(), initialRoute: .initial)
+        sidebarCoordinator.delegate = self
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
@@ -37,14 +41,23 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             let viewModel = MainViewModel(appServices: appServices, router: unownedRouter)
             splitViewController.setupBindings(for: viewModel)
             return .multiple(.show(splitViewController), .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator))
-        case .select(let runtimeObject):
+        case let .select(runtimeObject):
             return .route(.root(runtimeObject), on: contentCoordinator)
-        case .inspect(let inspectableType):
+        case let .inspect(inspectableType):
             return .route(.select(inspectableType), on: inspectorCoordinator)
         }
     }
 }
 
-
-
-
+extension MainCoordinator: SidebarCoordinatorDelegate {
+    func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
+        switch route {
+        case let .selectedNode(runtimeNamedNode):
+            inspectorCoordinator.contextTrigger(.select(.node(runtimeNamedNode)))
+        case let .selectedObject(runtimeObjectType):
+            contentCoordinator.contextTrigger(.root(runtimeObjectType))
+        default:
+            break
+        }
+    }
+}

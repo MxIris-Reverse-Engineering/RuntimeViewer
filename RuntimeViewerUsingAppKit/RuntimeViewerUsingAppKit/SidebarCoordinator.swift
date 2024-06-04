@@ -38,6 +38,7 @@ class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
         case .root:
             let viewController = SidebarRootViewController()
             let viewModel = SidebarRootViewModel(appServices: appServices, router: unownedRouter)
+            viewController.setupBindings(for: viewModel)
             return .push(viewController, animated: false)
         case let .clickedNode(clickedNode):
             let imageViewController = SidebarImageViewController()
@@ -47,5 +48,9 @@ class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
         default:
             return .none()
         }
+    }
+    
+    override func completeTransition(_ route: SidebarRoute) {
+        delegate?.sidebarCoordinator(self, completeTransition: route)
     }
 }
