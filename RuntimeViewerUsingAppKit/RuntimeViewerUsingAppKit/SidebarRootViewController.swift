@@ -35,9 +35,12 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
         let output = viewModel.transform(input)
 
         output.rootNode.drive(outlineView.rx.rootNode) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: RuntimeNamedNode) -> NSView? in
-
-            return nil
+            let cellView = outlineView.box.makeView(ofClass: SidebarRootTableCellView.self, owner: nil)
+            
+            return cellView
         }
         .disposed(by: rx.disposeBag)
     }
 }
+
+class SidebarRootTableCellView: ImageTextTableCellView {}
