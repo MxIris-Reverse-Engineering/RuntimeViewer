@@ -47,6 +47,15 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             return .route(.select(inspectableType), on: inspectorCoordinator)
         }
     }
+    
+    override func completeTransition(_ route: MainRoute) {
+        switch route {
+        case .initial:
+            splitViewController.setupSplitViewItems()
+        default:
+            break
+        }
+    }
 }
 
 extension MainCoordinator: SidebarCoordinatorDelegate {

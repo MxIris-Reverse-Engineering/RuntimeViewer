@@ -9,6 +9,7 @@ import AppKit
 import RxAppKit
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
+import RuntimeViewerUI
 
 final class SidebarRootCellViewModel: ViewModel<SidebarRoute>, OutlineNodeType, Differentiable {
     let node: RuntimeNamedNode
@@ -16,11 +17,25 @@ final class SidebarRootCellViewModel: ViewModel<SidebarRoute>, OutlineNodeType, 
     weak var parent: SidebarRootCellViewModel?
     
     lazy var children: [SidebarRootCellViewModel] = {
-        node.children.map { .init(node: $0, parent: self, appServices: appServices, router: router) }
+        let children = node.children.map { SidebarRootCellViewModel(node: $0, parent: self, appServices: appServices, router: router) }
+        return children.sorted { $0.node.name < $1.node.name }
     }()
+    
+    @Observed
+    var icon: NSImage?
+    
+    @Observed
+    var name: NSAttributedString
+    
     
     init(node: RuntimeNamedNode, parent: SidebarRootCellViewModel?, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
         self.node = node
+        self.name = NSAttributedString {
+            AText(node.name.isEmpty ? "Dyld Shared Cache" : node.name)
+                .foregroundColor(.labelColor)
+                .font(.systemFont(ofSize: 13))
+        }
+        self.icon = SFSymbol(systemName: node.isLeaf ? .doc : .folder).nsImage
         super.init(appServices: appServices, router: router)
     }
 }

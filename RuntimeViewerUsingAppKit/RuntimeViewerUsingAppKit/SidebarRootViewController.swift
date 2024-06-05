@@ -22,6 +22,11 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
         scrollView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
+        
+        outlineView.do {
+            $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
+            $0.headerView = nil
+        }
     }
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
@@ -34,13 +39,20 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
 
         let output = viewModel.transform(input)
 
-        output.rootNode.drive(outlineView.rx.rootNode) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: RuntimeNamedNode) -> NSView? in
+        output.rootNode.drive(outlineView.rx.rootNode) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: SidebarRootCellViewModel) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: SidebarRootTableCellView.self, owner: nil)
-            
+            cellView.bind(to: node)
             return cellView
         }
         .disposed(by: rx.disposeBag)
     }
 }
 
-class SidebarRootTableCellView: ImageTextTableCellView {}
+class SidebarRootTableCellView: ImageTextTableCellView {
+    
+    func bind(to viewModel: SidebarRootCellViewModel) {
+        rx.disposeBag = DisposeBag()
+        viewModel.$icon.asDriver().drive(_imageView.rx.image).disposed(by: rx.disposeBag)
+        viewModel.$name.asDriver().drive(_textField.rx.attributedStringValue).disposed(by: rx.disposeBag)
+    }
+}

@@ -67,6 +67,14 @@ let package = Package(
             url: "https://github.com/OpenUXKit/OpenUXKit",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/MxIris-Library-Forks/NSAttributedStringBuilder",
+            branch: "master"
+        ),
+        .package(
+            url: "https://github.com/Mx-Iris/SFSymbol",
+            branch: "main"
+        ),
     ],
     targets: [
         .target(
@@ -97,6 +105,8 @@ let package = Package(
                 .product(name: "ViewHierarchyBuilder", package: "ViewHierarchyBuilder"),
                 .product(name: "SnapKit", package: "SnapKit"),
                 .product(name: "OpenUXKit", package: "OpenUXKit"),
+                .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
+                .product(name: "SFSymbol", package: "SFSymbol"),
             ]
         ),
     ]

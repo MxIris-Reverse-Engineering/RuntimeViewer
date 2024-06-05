@@ -27,4 +27,13 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoutable, InspectorTransiti
         self.appServices = appServices
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
     }
+    
+    override func prepareTransition(for route: InspectorRoutable) -> InspectorTransition {
+        switch route {
+        case .placeholder:
+            return .none()
+        case .select(let inspectableType):
+            return .none()
+        }
+    }
 }
