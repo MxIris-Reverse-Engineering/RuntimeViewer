@@ -37,6 +37,17 @@ final class SidebarRootCellViewModel: ViewModel<SidebarRoute>, OutlineNodeType, 
         self.icon = SFSymbol(systemName: node.isLeaf ? .doc : .folder).nsImage
         super.init(appServices: appServices, router: router)
     }
+    
+    override var hash: Int {
+        var hasher = Hasher()
+        hasher.combine(node)
+        return hasher.finalize()
+    }
+    
+    override func isEqual(to object: Any?) -> Bool {
+        guard let object = object as? Self else { return false }
+        return node == object.node
+    }
 }
 
 class SidebarRootViewModel: ViewModel<SidebarRoute> {

@@ -20,7 +20,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         _ = mainCoordinator
-        _ = RuntimeListings.shared
+        DispatchQueue.global().async {
+            _ = RuntimeListings.shared
+        }
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {

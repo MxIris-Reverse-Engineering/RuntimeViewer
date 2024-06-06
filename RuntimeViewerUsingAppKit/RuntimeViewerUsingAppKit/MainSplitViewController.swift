@@ -17,7 +17,6 @@ class MainSplitViewController: NSSplitViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        print(Self.automaticDimension)
         view.frame = .init(x: 0, y: 0, width: 1280, height: 800)
         splitView.autosaveName = "\(Self.self).AutosaveName"
     }

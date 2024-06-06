@@ -15,6 +15,7 @@ enum SidebarRoute: Routable {
     case selectedNode(RuntimeNamedNode)
     case clickedNode(RuntimeNamedNode)
     case selectedObject(RuntimeObjectType)
+    case back
 }
 
 typealias SidebarTransition = Transition<Void, SidebarNavigationController>
@@ -28,8 +29,9 @@ class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
 
     weak var delegate: SidebarCoordinatorDelegate?
     
-    init(appServices: AppServices) {
+    init(appServices: AppServices, delegate: SidebarCoordinatorDelegate? = nil) {
         self.appServices = appServices
+        self.delegate = delegate
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .root)
     }
 
@@ -45,12 +47,14 @@ class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
             let imageViewModel = SidebarImageViewModel(node: clickedNode, appServices: appServices, router: unownedRouter)
             imageViewController.setupBindings(for: imageViewModel)
             return .push(imageViewController, animated: true)
+        case .back:
+            return .pop(animated: true)
         default:
             return .none()
         }
     }
     
-    override func completeTransition(_ route: SidebarRoute) {
+    override func completeTransition(for route: SidebarRoute) {
         delegate?.sidebarCoordinator(self, completeTransition: route)
     }
 }

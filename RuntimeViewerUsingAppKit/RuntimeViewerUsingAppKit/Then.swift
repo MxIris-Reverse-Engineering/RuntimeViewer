@@ -33,6 +33,7 @@ import AppKit
 import UIKit.UIGeometry
 #endif
 
+@MainActor
 protocol Then {}
 
 extension Then where Self: Any {
@@ -72,7 +73,7 @@ extension Then where Self: AnyObject {
     ///     }
     @inlinable
     @discardableResult
-    nonisolated func then(_ block: @Sendable (Self) throws -> Void) rethrows -> Self {
+    func then(_ block: @MainActor @Sendable (Self) throws -> Void) rethrows -> Self {
         try block(self)
         return self
     }
@@ -112,3 +113,6 @@ extension UIEdgeInsets: Then {}
 extension UIOffset: Then {}
 extension UIRectEdge: Then {}
 #endif
+
+import RuntimeViewerArchitectures
+extension Coordinator: Then {}

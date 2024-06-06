@@ -140,8 +140,8 @@ extension RuntimeListings {
     }
 }
 
-public extension CDUtilities {
-    class func imageNames() -> [String] {
+extension CDUtilities {
+    public class func imageNames() -> [String] {
         (0...)
             .lazy
             .map(_dyld_get_image_name)
@@ -150,7 +150,7 @@ public extension CDUtilities {
             .map { String(cString: $0) }
     }
 
-    class func protocolNames() -> [String] {
+    public class func protocolNames() -> [String] {
         var protocolCount: UInt32 = 0
         guard let protocolList = objc_copyProtocolList(&protocolCount) else { return [] }
 
@@ -161,7 +161,7 @@ public extension CDUtilities {
         return names
     }
 
-    class func classNamesIn(image: String) -> [String] {
+    public class func classNamesIn(image: String) -> [String] {
         patchImagePathForDyld(image).withCString { cString in
             var classCount: UInt32 = 0
             guard let classNames = objc_copyClassNamesForImage(cString, &classCount) else { return [] }
@@ -177,15 +177,15 @@ public extension CDUtilities {
     }
 }
 
-public extension CDUtilities {
-    class func patchImagePathForDyld(_ imagePath: String) -> String {
+extension CDUtilities {
+    public class func patchImagePathForDyld(_ imagePath: String) -> String {
         guard imagePath.starts(with: "/") else { return imagePath }
         let rootPath = ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]
         guard let rootPath else { return imagePath }
         return rootPath.appending(imagePath)
     }
 
-    class func loadImage(at path: String) throws {
+    public class func loadImage(at path: String) throws {
         try path.withCString { cString in
             let handle = dlopen(cString, RTLD_LAZY)
             // get the error and copy it into an object we control since the error is shared
@@ -202,8 +202,8 @@ public struct DlOpenError: Error {
     public let message: String?
 }
 
-public extension CDUtilities {
-    class var dyldSharedCacheImageRootNode: RuntimeNamedNode {
+extension CDUtilities {
+    public class var dyldSharedCacheImageRootNode: RuntimeNamedNode {
         let root = RuntimeNamedNode("")
         for path in CDUtilities.dyldSharedCacheImagePaths() {
             var current = root

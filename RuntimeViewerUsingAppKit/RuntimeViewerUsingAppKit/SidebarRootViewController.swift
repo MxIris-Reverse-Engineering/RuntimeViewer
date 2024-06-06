@@ -12,13 +12,20 @@ import RuntimeViewerArchitectures
 
 class SidebarRootViewController: ViewController<SidebarRootViewModel> {
     let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
-
+    let visualEffectView = NSVisualEffectView()
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         hierarchy {
-            scrollView
+            visualEffectView.hierarchy {
+                scrollView
+            }
         }
 
+        visualEffectView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        
         scrollView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
@@ -27,16 +34,14 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
             $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
             $0.headerView = nil
         }
-        
-        uxView.setValue(NSColor.windowBackgroundColor, forKeyPath: "backgroundColor")
     }
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
         super.setupBindings(for: viewModel)
 
         let input = SidebarRootViewModel.Input(
-            clickedNode: outlineView.rx.doubleClickedItem().asSignal(),
-            selectedNode: outlineView.rx.selectedItem().asSignal()
+            clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
+            selectedNode: outlineView.rx.modelSelected().asSignal()
         )
 
         let output = viewModel.transform(input)

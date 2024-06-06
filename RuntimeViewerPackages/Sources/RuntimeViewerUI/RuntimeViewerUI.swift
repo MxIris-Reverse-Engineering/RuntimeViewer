@@ -4,6 +4,7 @@
 @_exported import SnapKit
 @_exported import NSAttributedStringBuilder
 @_exported import SFSymbol
+@_exported import IDEIcons
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 @_exported import OpenUXKit

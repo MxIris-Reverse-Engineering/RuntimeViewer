@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
-        .iOS(.v14), .macOS(.v11),
+        .iOS(.v15), .macOS(.v12),
     ],
     products: [
         .library(
@@ -79,6 +79,10 @@ let package = Package(
             url: "https://github.com/CombineCommunity/RxCombine",
             .upToNextMajor(from: "2.0.0")
         ),
+        .package(
+            url: "https://github.com/freysie/ide-icons",
+            branch: "main"
+        ),
     ],
     targets: [
         .target(
@@ -112,6 +116,7 @@ let package = Package(
                 .product(name: "OpenUXKit", package: "OpenUXKit"),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbol", package: "SFSymbol"),
+                .product(name: "IDEIcons", package: "ide-icons"),
             ]
         ),
     ]

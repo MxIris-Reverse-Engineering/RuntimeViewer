@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
@@ -115,5 +116,66 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
         } catch {
             loadState = .loadError(error)
         }
+    }
+    
+    struct Input {
+        let clickedRuntimeObject: Signal<SidebarImageCellViewModel>
+    }
+    
+    struct Output {
+        let runtimeObjects: Driver<[SidebarImageCellViewModel]>
+    }
+    
+    func transform(_ input: Input) -> Output {
+        
+        input.clickedRuntimeObject.emitOnNextMainActor { [weak self] viewModel in
+            guard let self else { return }
+            self.router.trigger(.selectedObject(viewModel.runtimeObject))
+        }
+        .disposed(by: rx.disposeBag)
+        
+        return Output(runtimeObjects: $runtimeObjects.asDriver().map {
+            $0.compactMap { [weak self] in
+                guard let self else { return nil }
+                return SidebarImageCellViewModel(runtimeObject: $0, appServices: appServices, router: router)
+            }
+        })
+    }
+}
+
+class SidebarImageCellViewModel: ViewModel<SidebarRoute>, Differentiable {
+    let runtimeObject: RuntimeObjectType
+    
+    @Observed
+    var icon: NSImage?
+    
+    @Observed
+    var name: NSAttributedString
+    
+    init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
+        self.runtimeObject = runtimeObject
+        switch runtimeObject {
+        case .class:
+            self.icon = IDEIcon("C", color: .yellow).image
+        case .protocol:
+            self.icon = IDEIcon("P", color: .purple).image
+        }
+        self.name = NSAttributedString {
+            AText(runtimeObject.name)
+                .font(.systemFont(ofSize: 13))
+                .foregroundColor(.labelColor)
+        }
+        super.init(appServices: appServices, router: router)
+    }
+    
+    override var hash: Int {
+        var hasher = Hasher()
+        hasher.combine(runtimeObject)
+        return hasher.finalize()
+    }
+    
+    override func isEqual(to object: Any?) -> Bool {
+        guard let object = object as? Self else { return false }
+        return runtimeObject == object.runtimeObject
     }
 }

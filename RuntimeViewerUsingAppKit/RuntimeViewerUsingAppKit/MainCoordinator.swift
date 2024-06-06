@@ -14,16 +14,18 @@ enum MainRoute: Routable {
     case initial
     case select(RuntimeObjectType)
     case inspect(InspectableType)
+    case sidebarBack
 }
 
 typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewController>
+
 
 class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     let appServices: AppServices
 
     lazy var splitViewController = MainSplitViewController()
 
-    lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices)
+    lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
 
     lazy var contentCoordinator = ContentCoordinator(appServices: appServices)
 
@@ -32,7 +34,6 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     init(appServices: AppServices) {
         self.appServices = appServices
         super.init(windowController: .init(), initialRoute: .initial)
-        sidebarCoordinator.delegate = self
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
@@ -40,15 +41,18 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         case .initial:
             let viewModel = MainViewModel(appServices: appServices, router: unownedRouter)
             splitViewController.setupBindings(for: viewModel)
+            windowController.setupBindings(for: viewModel)
             return .multiple(.show(splitViewController), .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator))
         case let .select(runtimeObject):
-            return .route(.root(runtimeObject), on: contentCoordinator)
+            return .route(on: contentCoordinator, to: .root(runtimeObject))
         case let .inspect(inspectableType):
-            return .route(.select(inspectableType), on: inspectorCoordinator)
+            return .route(on: inspectorCoordinator, to: .select(inspectableType))
+        case .sidebarBack:
+            return .route(on: sidebarCoordinator, to: .back)
         }
     }
     
-    override func completeTransition(_ route: MainRoute) {
+    override func completeTransition(for route: MainRoute) {
         switch route {
         case .initial:
             splitViewController.setupSplitViewItems()
@@ -68,5 +72,6 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
         default:
             break
         }
+        windowController.toolbarController.backItem.backButton.isHidden = sidebarCoordinator.rootViewController.viewControllers.count < 2
     }
 }
