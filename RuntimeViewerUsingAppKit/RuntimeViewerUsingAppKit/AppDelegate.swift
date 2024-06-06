@@ -6,6 +6,7 @@
 //
 
 import Cocoa
+import RuntimeViewerCore
 
 @MainActor
 @main
@@ -19,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         _ = mainCoordinator
+        _ = RuntimeListings.shared
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {

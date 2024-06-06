@@ -75,6 +75,10 @@ let package = Package(
             url: "https://github.com/Mx-Iris/SFSymbol",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/CombineCommunity/RxCombine",
+            .upToNextMajor(from: "2.0.0")
+        ),
     ],
     targets: [
         .target(
@@ -85,6 +89,7 @@ let package = Package(
                 .product(name: "RxSwiftExt", package: "RxSwiftExt"),
                 .product(name: "RxSwiftPlus", package: "RxSwiftPlus"),
                 .product(name: "RxAppKit", package: "RxAppKit"),
+                .product(name: "RxCombine", package: "RxCombine"),
                 .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: [.iOS, .tvOS, .watchOS, .macCatalyst])),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),

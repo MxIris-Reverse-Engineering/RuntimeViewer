@@ -2,6 +2,7 @@
 @_exported import RxCocoa
 @_exported import RxSwiftExt
 @_exported import RxSwiftPlus
+@_exported import RxCombine
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 @_exported import RxAppKit

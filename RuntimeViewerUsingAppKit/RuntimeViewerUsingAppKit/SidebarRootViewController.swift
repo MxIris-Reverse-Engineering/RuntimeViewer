@@ -27,6 +27,8 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
             $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
             $0.headerView = nil
         }
+        
+        uxView.setValue(NSColor.windowBackgroundColor, forKeyPath: "backgroundColor")
     }
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {

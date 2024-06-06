@@ -13,21 +13,20 @@ import RuntimeViewerUI
 
 final class SidebarRootCellViewModel: ViewModel<SidebarRoute>, OutlineNodeType, Differentiable {
     let node: RuntimeNamedNode
-    
+
     weak var parent: SidebarRootCellViewModel?
-    
+
     lazy var children: [SidebarRootCellViewModel] = {
         let children = node.children.map { SidebarRootCellViewModel(node: $0, parent: self, appServices: appServices, router: router) }
         return children.sorted { $0.node.name < $1.node.name }
     }()
-    
+
     @Observed
     var icon: NSImage?
-    
+
     @Observed
     var name: NSAttributedString
-    
-    
+
     init(node: RuntimeNamedNode, parent: SidebarRootCellViewModel?, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
         self.node = node
         self.name = NSAttributedString {
@@ -42,23 +41,30 @@ final class SidebarRootCellViewModel: ViewModel<SidebarRoute>, OutlineNodeType, 
 
 class SidebarRootViewModel: ViewModel<SidebarRoute> {
     let rootNode = CDUtilities.dyldSharedCacheImageRootNode
-    
+
     struct Input {
         let clickedNode: Signal<SidebarRootCellViewModel>
         let selectedNode: Signal<SidebarRootCellViewModel>
     }
-    
+
     struct Output {
         let rootNode: Driver<SidebarRootCellViewModel>
     }
-    
+
     func transform(_ input: Input) -> Output {
+        input.clickedNode.emitOnNext { [weak self] viewModel in
+            guard let self = self else { return }
+            Task { @MainActor in
+                if viewModel.node.isLeaf {
+                    self.router.trigger(.clickedNode(viewModel.node))
+                }
+            }
+        }
+        .disposed(by: rx.disposeBag)
         return Output(rootNode: .just(.init(node: rootNode, parent: nil, appServices: appServices, router: router)))
     }
 }
 
-extension SidebarRootViewModel: NSOutlineViewDataSource, NSOutlineViewDelegate {
-    
-}
+extension SidebarRootViewModel: NSOutlineViewDataSource, NSOutlineViewDelegate {}
 
 extension RuntimeNamedNode: OutlineNodeType, Differentiable {}

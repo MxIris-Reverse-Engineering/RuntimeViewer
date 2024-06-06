@@ -10,14 +10,6 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
 class SidebarImageViewModel: ViewModel<SidebarRoute> {
-    let node: RuntimeNamedNode
-    
-    init(node: RuntimeNamedNode, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
-        self.node = node
-        super.init(appServices: appServices, router: router)
-    }
-}
-class RuntimeImageObjectsViewModel: ViewModel<SidebarRoute> {
     public let namedNode: RuntimeNamedNode
 
     public let imagePath: String
@@ -25,12 +17,12 @@ class RuntimeImageObjectsViewModel: ViewModel<SidebarRoute> {
 
     public let runtimeListings: RuntimeListings = .shared
 
-    @Published public private(set) var searchString: String
-    @Published public private(set) var searchScope: RuntimeTypeSearchScope
-    @Published public private(set) var classNames: [String] // not filtered
-    @Published public private(set) var protocolNames: [String] // not filtered
-    @Published public private(set) var runtimeObjects: [RuntimeObjectType] // filtered based on search
-    @Published public private(set) var loadState: RuntimeImageLoadState
+    @Observed public private(set) var searchString: String
+    @Observed public private(set) var searchScope: RuntimeTypeSearchScope
+    @Observed public private(set) var classNames: [String] // not filtered
+    @Observed public private(set) var protocolNames: [String] // not filtered
+    @Observed public private(set) var runtimeObjects: [RuntimeObjectType] // filtered based on search
+    @Observed public private(set) var loadState: RuntimeImageLoadState
 
     private static func runtimeObjectsFor(classNames: [String], protocolNames: [String], searchString: String, searchScope: RuntimeTypeSearchScope) -> [RuntimeObjectType] {
         var ret: [RuntimeObjectType] = []
@@ -44,7 +36,7 @@ class RuntimeImageObjectsViewModel: ViewModel<SidebarRoute> {
         return ret.filter { $0.name.localizedCaseInsensitiveContains(searchString) }
     }
 
-    public init(namedNode: RuntimeNamedNode, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
+    public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
         self.namedNode = namedNode
         let imagePath = namedNode.path
         self.imagePath = imagePath
@@ -74,25 +66,33 @@ class RuntimeImageObjectsViewModel: ViewModel<SidebarRoute> {
             .map { _ in
                 CDUtilities.classNamesIn(image: imagePath)
             }
-            .assign(to: &$classNames)
+            .asObservable()
+            .bind(to: $classNames)
+            .disposed(by: rx.disposeBag)
 
         runtimeListings.$imageToProtocols
             .map { imageToProtocols in
                 imageToProtocols[CDUtilities.patchImagePathForDyld(imagePath)] ?? []
             }
-            .assign(to: &$protocolNames)
+            .asObservable()
+            .bind(to: $protocolNames)
+            .disposed(by: rx.disposeBag)
 
         let debouncedSearch = $searchString
-            .debounce(for: 0.08, scheduler: RunLoop.main)
+            .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
+            .asObservable()
 
         $searchScope
-            .combineLatest(debouncedSearch, $classNames, $protocolNames) {
+            .asPublisher()
+            .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
                 Self.runtimeObjectsFor(
                     classNames: $2, protocolNames: $3,
                     searchString: $1, searchScope: $0
                 )
             }
-            .assign(to: &$runtimeObjects)
+            .asObservable()
+            .bind(to: $runtimeObjects)
+            .disposed(by: rx.disposeBag)
 
         runtimeListings.$imageList
             .map { imageList in
@@ -102,7 +102,9 @@ class RuntimeImageObjectsViewModel: ViewModel<SidebarRoute> {
             .map { _ in
                 RuntimeImageLoadState.loaded
             }
-            .assign(to: &$loadState)
+            .asObservable()
+            .bind(to: $loadState)
+            .disposed(by: rx.disposeBag)
     }
 
     public func tryLoadImage() {
