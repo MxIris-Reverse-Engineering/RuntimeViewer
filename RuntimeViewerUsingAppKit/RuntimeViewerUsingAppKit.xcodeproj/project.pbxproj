@@ -14,6 +14,7 @@
 		E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94330172C0DA62500362862 /* SidebarRootViewController.swift */; };
 		E943301A2C0DB6CD00362862 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E94330192C0DB6CD00362862 /* RuntimeViewerCore */; };
 		E943301C2C0DB75B00362862 /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E943301B2C0DB75B00362862 /* Then.swift */; };
+		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */; };
 		E9A8252F2C0DED6700D9A85D /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E9A8252E2C0DED6700D9A85D /* RuntimeViewerArchitectures */; };
 		E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825372C0E085200D9A85D /* MainCoordinator.swift */; };
@@ -43,6 +44,7 @@
 		E9432FEC2C0D614A00362862 /* RuntimeViewerUsingAppKit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerUsingAppKit.entitlements; sourceTree = "<group>"; };
 		E94330172C0DA62500362862 /* SidebarRootViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootViewController.swift; sourceTree = "<group>"; };
 		E943301B2C0DB75B00362862 /* Then.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Then.swift; sourceTree = "<group>"; };
+		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCoordinator.swift; sourceTree = "<group>"; };
 		E9A825372C0E085200D9A85D /* MainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainCoordinator.swift; sourceTree = "<group>"; };
 		E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageViewController.swift; sourceTree = "<group>"; };
@@ -114,6 +116,7 @@
 				E9A825492C0E0E9F00D9A85D /* ContentCoordinator.swift */,
 				E9A825512C0E0F9F00D9A85D /* ContentNavigationController.swift */,
 				E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */,
+				E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */,
 				E9A8254B2C0E0EA600D9A85D /* InspectorCoordinator.swift */,
 				E9A8254F2C0E0EB400D9A85D /* InspectorViewController.swift */,
 				E9A8254D2C0E0EAE00D9A85D /* InspectorViewModel.swift */,
@@ -220,6 +223,7 @@
 				E9A825522C0E0F9F00D9A85D /* ContentNavigationController.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorViewController.swift in Sources */,
 				E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */,
+				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
 				E9A825482C0E0BF900D9A85D /* SidebarImageViewModel.swift in Sources */,
 				E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */,
 				E9A825402C0E0AE900D9A85D /* AppServices.swift in Sources */,

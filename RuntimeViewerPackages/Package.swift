@@ -36,7 +36,7 @@ let package = Package(
             branch: "main"
         ),
         .package(
-            url: "https://github.com/leptos-null/ClassDumpRuntime",
+            url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
             branch: "master"
         ),
         .package(
@@ -83,6 +83,10 @@ let package = Package(
             url: "https://github.com/freysie/ide-icons",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/krzyzanowskim/STTextView",
+            from: "0.9.5"
+        ),
     ],
     targets: [
         .target(
@@ -117,6 +121,7 @@ let package = Package(
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbol", package: "SFSymbol"),
                 .product(name: "IDEIcons", package: "ide-icons"),
+                .product(name: "STTextView", package: "STTextView"),
             ]
         ),
     ]

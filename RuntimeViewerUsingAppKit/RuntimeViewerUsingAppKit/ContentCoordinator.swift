@@ -31,7 +31,10 @@ class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
         case .placeholder:
             return .none()
         case .root(let runtimeObjectType):
-            return .none()
+            let contentTextViewController = ContentTextViewController()
+            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: unownedRouter)
+            contentTextViewController.setupBindings(for: contentTextViewModel)
+            return .set([contentTextViewController], animated: false)
         case .next(let runtimeObjectType):
             return .none()
         case .back:
