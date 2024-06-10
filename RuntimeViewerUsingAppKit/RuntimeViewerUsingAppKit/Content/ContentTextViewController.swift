@@ -19,7 +19,7 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
 
     var textView: ContentTextView { scrollView.documentView as! ContentTextView }
 
-    lazy var lineNumberGutter = LineNumberGutter(withTextView: textView, foregroundColor: .secondaryLabelColor, backgroundColor: .clear)
+//    lazy var lineNumberGutter = LineNumberGutter(withTextView: textView, foregroundColor: .secondaryLabelColor, backgroundColor: .clear)
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -32,17 +32,17 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
             make.edges.equalToSuperview()
         }
 
-        scrollView.do {
-            $0.rulersVisible = true
-            $0.hasVerticalRuler = true
-            $0.verticalRulerView = lineNumberGutter
-        }
+//        scrollView.do {
+//            $0.rulersVisible = true
+//            $0.hasVerticalRuler = true
+//            $0.verticalRulerView = lineNumberGutter
+//        }
 
         textView.do {
             $0.isSelectable = true
             $0.isEditable = false
             $0.usesFindBar = true
-            $0.textContainerInset = .init(width: 5.0, height: 0)
+            $0.textContainerInset = .init(width: 5.0, height: 5.0)
         }
     }
 
@@ -65,7 +65,7 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
 
         output.theme.drive(with: self, onNext: {
             $0.textView.backgroundColor = $1.backgroundColor
-            $0.lineNumberGutter.backgroundColor = $1.backgroundColor
+//            $0.lineNumberGutter.backgroundColor = $1.backgroundColor
 //            $0.textView.selectionBackgroundColor = $1.selectionBackgroundColor
         })
         .disposed(by: rx.disposeBag)

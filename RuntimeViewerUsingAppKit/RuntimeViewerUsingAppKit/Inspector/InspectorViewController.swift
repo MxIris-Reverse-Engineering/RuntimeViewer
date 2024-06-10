@@ -28,6 +28,8 @@ class InspectorViewController: ViewController<InspectorViewModel> {
     let stripDtorMethodCheckbox = CheckboxButton(title: "Strip Dtor Method")
 
     let addSymbolImageCommentsCheckbox = CheckboxButton(title: "Add Symbol Image Comments")
+    
+    let addIvarOffsetCommentsCheckbox = CheckboxButton(title: "Add Ivar Offset Comments")
 
     lazy var generationOptionsView = VStackView(alignment: .left, spacing: 10) {
         generationOptionsLabel
@@ -38,6 +40,7 @@ class InspectorViewController: ViewController<InspectorViewModel> {
         stripCtorMethodCheckbox
         stripDtorMethodCheckbox
         addSymbolImageCommentsCheckbox
+        addIvarOffsetCommentsCheckbox
     }
 
     override func viewDidLoad() {
@@ -57,7 +60,7 @@ class InspectorViewController: ViewController<InspectorViewModel> {
             make.top.equalTo(view.safeAreaLayoutGuide)
             make.left.equalToSuperview().inset(15)
             make.right.equalToSuperview()
-            make.height.equalTo(200)
+            make.height.equalTo(250)
         }
     }
     
@@ -66,13 +69,14 @@ class InspectorViewController: ViewController<InspectorViewModel> {
         super.setupBindings(for: viewModel)
         
         let input = InspectorViewModel.Input(
-            stripProtocolConformanceChecked: stripProtocolConformanceCheckbox.rx.state.asSignal().asObservable().map { $0 == .on },
-            stripOverridesChecked: stripOverridesCheckbox.rx.state.asSignal().asObservable().map { $0 == .on },
-            stripDuplicatesChecked: stripDuplicatesCheckbox.rx.state.asSignal().asObservable().map { $0 == .on },
-            stripSynthesizedChecked: stripSynthesizedCheckbox.rx.state.asSignal().asObservable().map { $0 == .on },
-            stripCtorMethodChecked: stripCtorMethodCheckbox.rx.state.asSignal().asObservable().map { $0 == .on },
-            stripDtorMethodChecked: stripDtorMethodCheckbox.rx.state.asSignal().asObservable().map { $0 == .on },
-            addSymbolImageCommentsChecked: addSymbolImageCommentsCheckbox.rx.state.asSignal().asObservable().map { $0 == .on }
+            stripProtocolConformanceChecked: stripProtocolConformanceCheckbox.rx.state.asSignal().map { $0 == .on },
+            stripOverridesChecked: stripOverridesCheckbox.rx.state.asSignal().map { $0 == .on },
+            stripDuplicatesChecked: stripDuplicatesCheckbox.rx.state.asSignal().map { $0 == .on },
+            stripSynthesizedChecked: stripSynthesizedCheckbox.rx.state.asSignal().map { $0 == .on },
+            stripCtorMethodChecked: stripCtorMethodCheckbox.rx.state.asSignal().map { $0 == .on },
+            stripDtorMethodChecked: stripDtorMethodCheckbox.rx.state.asSignal().map { $0 == .on },
+            addSymbolImageCommentsChecked: addSymbolImageCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
+            addIvarOffsetCommentsChecked: addIvarOffsetCommentsCheckbox.rx.state.asSignal().map { $0 == .on }
         )
         let output = viewModel.transform(input)
         

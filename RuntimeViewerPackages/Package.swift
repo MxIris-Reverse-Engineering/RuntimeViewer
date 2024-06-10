@@ -35,11 +35,13 @@ let package = Package(
             url: "https://github.com/Mx-Iris/CocoaCoordinator",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
+            branch: "master"
+        ),
 //        .package(
-//            url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
-//            branch: "master"
+//            path: "/Volumes/Repositories/Private/Fork/Library/ClassDumpRuntime"
 //        ),
-        .package(path: "/Volumes/Repositories/Private/Fork/Library/ClassDumpRuntime"),
         .package(
             url: "https://github.com/Mx-Iris/ViewHierarchyBuilder",
             branch: "main"
@@ -56,13 +58,13 @@ let package = Package(
             url: "https://github.com/RxSwiftCommunity/RxSwiftExt.git",
             .upToNextMajor(from: "6.0.0")
         ),
-//        .package(
-//            url: "https://github.com/Mx-Iris/RxSwiftPlus",
-//            branch: "main"
-//        ),
         .package(
-            path: "/Volumes/Repositories/Private/Personal/Library/Multi/RxSwiftPlus"
+            url: "https://github.com/Mx-Iris/RxSwiftPlus",
+            branch: "main"
         ),
+//        .package(
+//            path: "/Volumes/Repositories/Private/Personal/Library/Multi/RxSwiftPlus"
+//        ),
         .package(
             url: "https://github.com/Mx-Iris/RxAppKit",
             branch: "main"
