@@ -11,11 +11,8 @@ import RuntimeViewerCore
 @MainActor
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
-
-    @IBOutlet var window: NSWindow!
-
     let appServices = AppServices()
-    
+
     lazy var mainCoordinator = MainCoordinator(appServices: appServices)
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -32,7 +29,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         return true
     }
-
-
 }
-

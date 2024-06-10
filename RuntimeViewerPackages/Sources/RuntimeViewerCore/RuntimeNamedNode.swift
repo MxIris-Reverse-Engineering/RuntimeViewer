@@ -18,11 +18,11 @@ public final class RuntimeNamedNode {
         self.name = name
     }
 
-    public var path: String {
+    public lazy var path: String = {
         guard let parent else { return name }
         let directory = parent.path
         return directory + "/" + name
-    }
+    }()
 
     public var isLeaf: Bool { children.isEmpty }
 

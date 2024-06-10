@@ -35,10 +35,11 @@ let package = Package(
             url: "https://github.com/Mx-Iris/CocoaCoordinator",
             branch: "main"
         ),
-        .package(
-            url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
-            branch: "master"
-        ),
+//        .package(
+//            url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
+//            branch: "master"
+//        ),
+        .package(path: "/Volumes/Repositories/Private/Fork/Library/ClassDumpRuntime"),
         .package(
             url: "https://github.com/Mx-Iris/ViewHierarchyBuilder",
             branch: "main"
@@ -55,9 +56,12 @@ let package = Package(
             url: "https://github.com/RxSwiftCommunity/RxSwiftExt.git",
             .upToNextMajor(from: "6.0.0")
         ),
+//        .package(
+//            url: "https://github.com/Mx-Iris/RxSwiftPlus",
+//            branch: "main"
+//        ),
         .package(
-            url: "https://github.com/Mx-Iris/RxSwiftPlus",
-            branch: "main"
+            path: "/Volumes/Repositories/Private/Personal/Library/Multi/RxSwiftPlus"
         ),
         .package(
             url: "https://github.com/Mx-Iris/RxAppKit",
@@ -87,6 +91,10 @@ let package = Package(
             url: "https://github.com/krzyzanowskim/STTextView",
             from: "0.9.5"
         ),
+        .package(
+            url: "https://github.com/gringoireDM/RxEnumKit",
+            branch: "master"
+        ),
     ],
     targets: [
         .target(
@@ -96,18 +104,22 @@ let package = Package(
                 .product(name: "RxCocoa", package: "RxSwift"),
                 .product(name: "RxSwiftExt", package: "RxSwiftExt"),
                 .product(name: "RxSwiftPlus", package: "RxSwiftPlus"),
+                .product(name: "RxDefaultsPlus", package: "RxSwiftPlus"),
                 .product(name: "RxAppKit", package: "RxAppKit"),
                 .product(name: "RxCombine", package: "RxCombine"),
+                .product(name: "RxEnumKit", package: "RxEnumKit"),
                 .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: [.iOS, .tvOS, .watchOS, .macCatalyst])),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
                 .product(name: "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
+//                .product(name: "UXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
             ]
         ),
         .target(
             name: "RuntimeViewerCore",
             dependencies: [
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
+                .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
             ]
         ),
         .target(
@@ -118,6 +130,7 @@ let package = Package(
                 .product(name: "ViewHierarchyBuilder", package: "ViewHierarchyBuilder"),
                 .product(name: "SnapKit", package: "SnapKit"),
                 .product(name: "OpenUXKit", package: "OpenUXKit"),
+//                .product(name: "UXKit", package: "OpenUXKit"),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbol", package: "SFSymbol"),
                 .product(name: "IDEIcons", package: "ide-icons"),

@@ -12,11 +12,9 @@ class MainViewModel: ViewModel<MainRoute> {
     struct Input {
         let sidebarBackClick: Signal<Void>
     }
-    
-    struct Output {
-        
-    }
-    
+
+    struct Output {}
+
     func transform(_ input: Input) -> Output {
         input.sidebarBackClick.emit(to: router.rx.trigger(.sidebarBack)).disposed(by: rx.disposeBag)
         return Output()

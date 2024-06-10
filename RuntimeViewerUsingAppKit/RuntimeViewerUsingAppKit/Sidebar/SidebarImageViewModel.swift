@@ -25,18 +25,6 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @Observed public private(set) var runtimeObjects: [RuntimeObjectType] // filtered based on search
     @Observed public private(set) var loadState: RuntimeImageLoadState
 
-    private static func runtimeObjectsFor(classNames: [String], protocolNames: [String], searchString: String, searchScope: RuntimeTypeSearchScope) -> [RuntimeObjectType] {
-        var ret: [RuntimeObjectType] = []
-        if searchScope.includesClasses {
-            ret += classNames.map { .class(named: $0) }
-        }
-        if searchScope.includesProtocols {
-            ret += protocolNames.map { .protocol(named: $0) }
-        }
-        if searchString.isEmpty { return ret }
-        return ret.filter { $0.name.localizedCaseInsensitiveContains(searchString) }
-    }
-
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
         self.namedNode = namedNode
         let imagePath = namedNode.path
@@ -92,6 +80,7 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 )
             }
             .asObservable()
+            .map { $0.sorted() }
             .bind(to: $runtimeObjects)
             .disposed(by: rx.disposeBag)
 
@@ -108,7 +97,78 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
             .disposed(by: rx.disposeBag)
     }
 
-    public func tryLoadImage() {
+    struct Input {
+        let runtimeObjectClicked: Signal<SidebarImageCellViewModel>
+        let loadImageClicked: Signal<Void>
+        let searchString: Signal<String>
+    }
+
+    struct Output {
+        let runtimeObjects: Driver<[SidebarImageCellViewModel]>
+        let loadState: Driver<RuntimeImageLoadState>
+        let notLoadedText: Driver<String>
+        let errorText: Driver<String>
+        let emptyText: Driver<String>
+        let isEmpty: Driver<Bool>
+    }
+
+    func transform(_ input: Input) -> Output {
+        input.searchString.emit(to: $searchString).disposed(by: rx.disposeBag)
+        
+        input.runtimeObjectClicked.emitOnNextMainActor { [weak self] viewModel in
+            guard let self else { return }
+            self.router.trigger(.selectedObject(viewModel.runtimeObject))
+        }
+        .disposed(by: rx.disposeBag)
+        
+        input.loadImageClicked.emitOnNextMainActor { [weak self] in
+            guard let self else { return }
+            tryLoadImage()
+        }
+        .disposed(by: rx.disposeBag)
+        
+        let runtimeObjects = $runtimeObjects.asDriver()
+            .map {
+                $0.compactMap { [weak self] runtimeObject -> SidebarImageCellViewModel? in
+                    guard let self else { return nil }
+                    return SidebarImageCellViewModel(runtimeObject: runtimeObject, appServices: appServices, router: router)
+                }
+            }
+        
+        let errorText = $loadState
+            .capture(case: RuntimeImageLoadState.loadError).map { [weak self] error in
+                guard let self else { return "" }
+                if let dlOpenError = error as? DlOpenError, let message = dlOpenError.message {
+                    return message
+                } else {
+                    return "An unknown error occured trying to load '\(imagePath)'"
+                }
+            }
+            .asDriver(onErrorJustReturn: "")
+        
+        return Output(
+            runtimeObjects: runtimeObjects,
+            loadState: $loadState.asDriver(),
+            notLoadedText: .just("\(imageName) is not yet loaded"),
+            errorText: errorText,
+            emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
+            isEmpty: .combineLatest($classNames.asDriver(), $protocolNames.asDriver(), resultSelector: { $0.isEmpty && $1.isEmpty}).startWith(classNames.isEmpty && protocolNames.isEmpty)
+        )
+    }
+
+    private static func runtimeObjectsFor(classNames: [String], protocolNames: [String], searchString: String, searchScope: RuntimeTypeSearchScope) -> [RuntimeObjectType] {
+        var ret: [RuntimeObjectType] = []
+        if searchScope.includesClasses {
+            ret += classNames.map { .class(named: $0) }
+        }
+        if searchScope.includesProtocols {
+            ret += protocolNames.map { .protocol(named: $0) }
+        }
+        if searchString.isEmpty { return ret }
+        return ret.filter { $0.name.localizedCaseInsensitiveContains(searchString) }
+    }
+
+    func tryLoadImage() {
         do {
             loadState = .loading
             try CDUtilities.loadImage(at: imagePath)
@@ -117,49 +177,20 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
             loadState = .loadError(error)
         }
     }
-    
-    struct Input {
-        let clickedRuntimeObject: Signal<SidebarImageCellViewModel>
-    }
-    
-    struct Output {
-        let runtimeObjects: Driver<[SidebarImageCellViewModel]>
-    }
-    
-    func transform(_ input: Input) -> Output {
-        
-        input.clickedRuntimeObject.emitOnNextMainActor { [weak self] viewModel in
-            guard let self else { return }
-            self.router.trigger(.selectedObject(viewModel.runtimeObject))
-        }
-        .disposed(by: rx.disposeBag)
-        
-        return Output(runtimeObjects: $runtimeObjects.asDriver().map {
-            $0.compactMap { [weak self] in
-                guard let self else { return nil }
-                return SidebarImageCellViewModel(runtimeObject: $0, appServices: appServices, router: router)
-            }
-        })
-    }
 }
 
 class SidebarImageCellViewModel: ViewModel<SidebarRoute>, Differentiable {
     let runtimeObject: RuntimeObjectType
-    
+
     @Observed
     var icon: NSImage?
-    
+
     @Observed
     var name: NSAttributedString
-    
+
     init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
         self.runtimeObject = runtimeObject
-        switch runtimeObject {
-        case .class:
-            self.icon = IDEIcon("C", color: .yellow).image
-        case .protocol:
-            self.icon = IDEIcon("P", color: .purple).image
-        }
+        self.icon = runtimeObject.icon
         self.name = NSAttributedString {
             AText(runtimeObject.name)
                 .font(.systemFont(ofSize: 13))
@@ -167,15 +198,44 @@ class SidebarImageCellViewModel: ViewModel<SidebarRoute>, Differentiable {
         }
         super.init(appServices: appServices, router: router)
     }
-    
+
     override var hash: Int {
         var hasher = Hasher()
         hasher.combine(runtimeObject)
         return hasher.finalize()
     }
-    
+
     override func isEqual(to object: Any?) -> Bool {
         guard let object = object as? Self else { return false }
         return runtimeObject == object.runtimeObject
     }
 }
+
+extension RuntimeObjectType {
+    
+    static let classIcon = IDEIcon("C", color: .yellow).image
+    static let protocolIcon = IDEIcon("P", color: .purple).image
+    var icon: NSImage {
+        switch self {
+        case .class: return Self.classIcon
+        case .protocol: return Self.protocolIcon
+        }
+    }
+}
+
+extension RuntimeObjectType: Comparable {
+    public static func < (lhs: RuntimeObjectType, rhs: RuntimeObjectType) -> Bool {
+        switch (lhs, rhs) {
+        case (.class, .protocol):
+            return true
+        case (.protocol, .class):
+            return false
+        case let (.class(className1), .class(className2)):
+            return className1 < className2
+        case let (.protocol(protocolName1), .protocol(protocolName2)):
+            return protocolName1 < protocolName2
+        }
+    }
+}
+
+extension RuntimeImageLoadState: CaseAccessible {}

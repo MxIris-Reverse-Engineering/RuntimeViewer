@@ -1,41 +1,12 @@
 //
-//  MainWindowController.swift
+//  MainToolbarController.swift
 //  RuntimeViewerUsingAppKit
 //
-//  Created by JH on 2024/6/3.
+//  Created by JH on 2024/6/8.
 //
 
 import AppKit
 import RuntimeViewerUI
-import RuntimeViewerArchitectures
-
-class MainWindow: NSWindow {
-    init() {
-        super.init(contentRect: .init(x: 0, y: 0, width: 1280, height: 800), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-    }
-}
-
-class MainWindowController: XiblessWindowController<MainWindow> {
-    let toolbarController = MainToolbarController()
-
-    var viewModel: MainViewModel?
-    
-    func setupBindings(for viewModel: MainViewModel) {
-        self.viewModel = viewModel
-        let input = MainViewModel.Input(sidebarBackClick: toolbarController.backItem.backButton.rx.click.asSignal())
-        let _ = viewModel.transform(input)
-    }
-    
-    init() {
-        super.init(windowGenerator: .init())
-    }
-
-    override func windowDidLoad() {
-        super.windowDidLoad()
-        window?.toolbar = toolbarController.toolbar
-        window?.box.positionCenter()
-    }
-}
 
 extension NSToolbarItem.Identifier {
     static let back = Self("back")
@@ -56,7 +27,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     let toolbar: NSToolbar
 
     let backItem = BackToolbarItem()
-    
+
     override init() {
         self.toolbar = NSToolbar()
         super.init()

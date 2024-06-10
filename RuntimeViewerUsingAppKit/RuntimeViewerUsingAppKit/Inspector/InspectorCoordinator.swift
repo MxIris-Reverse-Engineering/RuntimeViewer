@@ -15,7 +15,7 @@ enum InspectableType {
 }
 
 enum InspectorRoutable: Routable {
-    case placeholder
+    case root
     case select(InspectableType)
 }
 
@@ -25,12 +25,14 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoutable, InspectorTransiti
     let appServices: AppServices
     init(appServices: AppServices) {
         self.appServices = appServices
-        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
+        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .root)
     }
     
     override func prepareTransition(for route: InspectorRoutable) -> InspectorTransition {
         switch route {
-        case .placeholder:
+        case .root:
+            let viewModel = InspectorViewModel(appServices: appServices, router: unownedRouter)
+            rootViewController.setupBindings(for: viewModel)
             return .none()
         case .select(let inspectableType):
             return .none()

@@ -10,13 +10,10 @@
 		E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FE52C0D614900362862 /* AppDelegate.swift */; };
 		E9432FE82C0D614A00362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FE72C0D614A00362862 /* Assets.xcassets */; };
 		E9432FEB2C0D614A00362862 /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E9432FEA2C0D614A00362862 /* Base */; };
-		E9432FF52C0D637500362862 /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9432FF42C0D637500362862 /* RuntimeViewerUI */; };
 		E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94330172C0DA62500362862 /* SidebarRootViewController.swift */; };
-		E943301A2C0DB6CD00362862 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E94330192C0DB6CD00362862 /* RuntimeViewerCore */; };
 		E943301C2C0DB75B00362862 /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E943301B2C0DB75B00362862 /* Then.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */; };
-		E9A8252F2C0DED6700D9A85D /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E9A8252E2C0DED6700D9A85D /* RuntimeViewerArchitectures */; };
 		E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825372C0E085200D9A85D /* MainCoordinator.swift */; };
 		E9A8253A2C0E095500D9A85D /* SidebarImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */; };
 		E9A8253C2C0E0AC300D9A85D /* ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8253B2C0E0AC300D9A85D /* ViewModel.swift */; };
@@ -34,6 +31,18 @@
 		E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */; };
 		E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */; };
 		E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825572C0E202600D9A85D /* MainViewModel.swift */; };
+		E9CBCC162C13685400169ABF /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC152C13685400169ABF /* RuntimeViewerArchitectures */; };
+		E9CBCC182C13685400169ABF /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC172C13685400169ABF /* RuntimeViewerCore */; };
+		E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC192C13685400169ABF /* RuntimeViewerUI */; };
+		E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */; };
+		E9CE07B12C148FD80070A6E8 /* AppDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B02C148FD80070A6E8 /* AppDefaults.swift */; };
+		E9CE07B32C1494F10070A6E8 /* ContentTextViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B22C1494F10070A6E8 /* ContentTextViewModel.swift */; };
+		E9CE07B52C1497330070A6E8 /* ThemeProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B42C1497330070A6E8 /* ThemeProfile.swift */; };
+		E9CE07B72C1497590070A6E8 /* CDSemanticString+ThemeProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B62C1497590070A6E8 /* CDSemanticString+ThemeProfile.swift */; };
+		E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */; };
+		E9FD73C52C15EC9800E391F5 /* SourceView in Frameworks */ = {isa = PBXBuildFile; productRef = E9FD73C42C15EC9800E391F5 /* SourceView */; };
+		E9FD73CA2C16042F00E391F5 /* LineNumberGutter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */; };
+		E9FD73CD2C160F4100E391F5 /* FilterUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9FD73CC2C160F4100E391F5 /* FilterUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -63,6 +72,13 @@
 		E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarNavigationController.swift; sourceTree = "<group>"; };
 		E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPlaceholderViewController.swift; sourceTree = "<group>"; };
 		E9A825572C0E202600D9A85D /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
+		E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainToolbarController.swift; sourceTree = "<group>"; };
+		E9CE07B02C148FD80070A6E8 /* AppDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDefaults.swift; sourceTree = "<group>"; };
+		E9CE07B22C1494F10070A6E8 /* ContentTextViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewModel.swift; sourceTree = "<group>"; };
+		E9CE07B42C1497330070A6E8 /* ThemeProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeProfile.swift; sourceTree = "<group>"; };
+		E9CE07B62C1497590070A6E8 /* CDSemanticString+ThemeProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CDSemanticString+ThemeProfile.swift"; sourceTree = "<group>"; };
+		E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTableCellView.swift; sourceTree = "<group>"; };
+		E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LineNumberGutter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,9 +86,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E943301A2C0DB6CD00362862 /* RuntimeViewerCore in Frameworks */,
-				E9432FF52C0D637500362862 /* RuntimeViewerUI in Frameworks */,
-				E9A8252F2C0DED6700D9A85D /* RuntimeViewerArchitectures in Frameworks */,
+				E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */,
+				E9CBCC182C13685400169ABF /* RuntimeViewerCore in Frameworks */,
+				E9FD73C52C15EC9800E391F5 /* SourceView in Frameworks */,
+				E9FD73CD2C160F4100E391F5 /* FilterUI in Frameworks */,
+				E9CBCC162C13685400169ABF /* RuntimeViewerArchitectures in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,28 +117,13 @@
 		E9432FE42C0D614900362862 /* RuntimeViewerUsingAppKit */ = {
 			isa = PBXGroup;
 			children = (
-				E9432FE52C0D614900362862 /* AppDelegate.swift */,
-				E9A8253F2C0E0AE900D9A85D /* AppServices.swift */,
-				E9A825452C0E0B4900D9A85D /* ViewController.swift */,
-				E9A8253B2C0E0AC300D9A85D /* ViewModel.swift */,
-				E9A825372C0E085200D9A85D /* MainCoordinator.swift */,
-				E9A825412C0E0B2300D9A85D /* MainWindowController.swift */,
-				E9A825432C0E0B2800D9A85D /* MainSplitViewController.swift */,
-				E9A825572C0E202600D9A85D /* MainViewModel.swift */,
-				E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */,
-				E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */,
-				E94330172C0DA62500362862 /* SidebarRootViewController.swift */,
-				E9A8253D2C0E0ADD00D9A85D /* SidebarRootViewModel.swift */,
-				E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */,
-				E9A825472C0E0BF900D9A85D /* SidebarImageViewModel.swift */,
-				E9A825492C0E0E9F00D9A85D /* ContentCoordinator.swift */,
-				E9A825512C0E0F9F00D9A85D /* ContentNavigationController.swift */,
-				E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */,
-				E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */,
-				E9A8254B2C0E0EA600D9A85D /* InspectorCoordinator.swift */,
-				E9A8254F2C0E0EB400D9A85D /* InspectorViewController.swift */,
-				E9A8254D2C0E0EAE00D9A85D /* InspectorViewModel.swift */,
-				E943301B2C0DB75B00362862 /* Then.swift */,
+				E9CE07C02C1498280070A6E8 /* App */,
+				E9CE07BA2C1497EA0070A6E8 /* Base */,
+				E9CE07BB2C1497F10070A6E8 /* Main */,
+				E9CE07BC2C1497F70070A6E8 /* Sidebar */,
+				E9CE07BD2C1498000070A6E8 /* Content */,
+				E9CE07BE2C14980B0070A6E8 /* Inspector */,
+				E9CE07BF2C14981D0070A6E8 /* Utils */,
 				E9432FE72C0D614A00362862 /* Assets.xcassets */,
 				E9432FE92C0D614A00362862 /* MainMenu.xib */,
 				E9432FEC2C0D614A00362862 /* RuntimeViewerUsingAppKit.entitlements */,
@@ -133,6 +136,84 @@
 			children = (
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		E9CE07BA2C1497EA0070A6E8 /* Base */ = {
+			isa = PBXGroup;
+			children = (
+				E9A825452C0E0B4900D9A85D /* ViewController.swift */,
+				E9A8253B2C0E0AC300D9A85D /* ViewModel.swift */,
+			);
+			path = Base;
+			sourceTree = "<group>";
+		};
+		E9CE07BB2C1497F10070A6E8 /* Main */ = {
+			isa = PBXGroup;
+			children = (
+				E9A825372C0E085200D9A85D /* MainCoordinator.swift */,
+				E9A825412C0E0B2300D9A85D /* MainWindowController.swift */,
+				E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */,
+				E9A825432C0E0B2800D9A85D /* MainSplitViewController.swift */,
+				E9A825572C0E202600D9A85D /* MainViewModel.swift */,
+			);
+			path = Main;
+			sourceTree = "<group>";
+		};
+		E9CE07BC2C1497F70070A6E8 /* Sidebar */ = {
+			isa = PBXGroup;
+			children = (
+				E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */,
+				E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */,
+				E94330172C0DA62500362862 /* SidebarRootViewController.swift */,
+				E9A8253D2C0E0ADD00D9A85D /* SidebarRootViewModel.swift */,
+				E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */,
+				E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */,
+				E9A825472C0E0BF900D9A85D /* SidebarImageViewModel.swift */,
+			);
+			path = Sidebar;
+			sourceTree = "<group>";
+		};
+		E9CE07BD2C1498000070A6E8 /* Content */ = {
+			isa = PBXGroup;
+			children = (
+				E9A825492C0E0E9F00D9A85D /* ContentCoordinator.swift */,
+				E9A825512C0E0F9F00D9A85D /* ContentNavigationController.swift */,
+				E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */,
+				E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */,
+				E9CE07B22C1494F10070A6E8 /* ContentTextViewModel.swift */,
+			);
+			path = Content;
+			sourceTree = "<group>";
+		};
+		E9CE07BE2C14980B0070A6E8 /* Inspector */ = {
+			isa = PBXGroup;
+			children = (
+				E9A8254B2C0E0EA600D9A85D /* InspectorCoordinator.swift */,
+				E9A8254F2C0E0EB400D9A85D /* InspectorViewController.swift */,
+				E9A8254D2C0E0EAE00D9A85D /* InspectorViewModel.swift */,
+			);
+			path = Inspector;
+			sourceTree = "<group>";
+		};
+		E9CE07BF2C14981D0070A6E8 /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				E9CE07B62C1497590070A6E8 /* CDSemanticString+ThemeProfile.swift */,
+				E9CE07B42C1497330070A6E8 /* ThemeProfile.swift */,
+				E943301B2C0DB75B00362862 /* Then.swift */,
+				E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */,
+			);
+			path = Utils;
+			sourceTree = "<group>";
+		};
+		E9CE07C02C1498280070A6E8 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				E9432FE52C0D614900362862 /* AppDelegate.swift */,
+				E9A8253F2C0E0AE900D9A85D /* AppServices.swift */,
+				E9CE07B02C148FD80070A6E8 /* AppDefaults.swift */,
+			);
+			path = App;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -152,9 +233,11 @@
 			);
 			name = RuntimeViewerUsingAppKit;
 			packageProductDependencies = (
-				E9432FF42C0D637500362862 /* RuntimeViewerUI */,
-				E94330192C0DB6CD00362862 /* RuntimeViewerCore */,
-				E9A8252E2C0DED6700D9A85D /* RuntimeViewerArchitectures */,
+				E9CBCC152C13685400169ABF /* RuntimeViewerArchitectures */,
+				E9CBCC172C13685400169ABF /* RuntimeViewerCore */,
+				E9CBCC192C13685400169ABF /* RuntimeViewerUI */,
+				E9FD73C42C15EC9800E391F5 /* SourceView */,
+				E9FD73CC2C160F4100E391F5 /* FilterUI */,
 			);
 			productName = RuntimeViewerUsingAppKit;
 			productReference = E9432FE22C0D614900362862 /* RuntimeViewerUsingAppKit.app */;
@@ -184,6 +267,10 @@
 				Base,
 			);
 			mainGroup = E9432FD92C0D614900362862;
+			packageReferences = (
+				E9FD73C32C15EC9800E391F5 /* XCRemoteSwiftPackageReference "SourceView" */,
+				E9FD73CB2C160F4100E391F5 /* XCRemoteSwiftPackageReference "filter-ui" */,
+			);
 			productRefGroup = E9432FE32C0D614900362862 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -215,23 +302,30 @@
 				E9A8253A2C0E095500D9A85D /* SidebarImageViewController.swift in Sources */,
 				E943301C2C0DB75B00362862 /* Then.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
+				E9CE07B52C1497330070A6E8 /* ThemeProfile.swift in Sources */,
+				E9CE07B12C148FD80070A6E8 /* AppDefaults.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
+				E9CE07B32C1494F10070A6E8 /* ContentTextViewModel.swift in Sources */,
 				E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */,
 				E9A8254E2C0E0EAE00D9A85D /* InspectorViewModel.swift in Sources */,
 				E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */,
 				E9A825462C0E0B4900D9A85D /* ViewController.swift in Sources */,
 				E9A825522C0E0F9F00D9A85D /* ContentNavigationController.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorViewController.swift in Sources */,
+				E9CE07B72C1497590070A6E8 /* CDSemanticString+ThemeProfile.swift in Sources */,
 				E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
 				E9A825482C0E0BF900D9A85D /* SidebarImageViewModel.swift in Sources */,
 				E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */,
 				E9A825402C0E0AE900D9A85D /* AppServices.swift in Sources */,
 				E9A8253C2C0E0AC300D9A85D /* ViewModel.swift in Sources */,
+				E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
+				E9FD73CA2C16042F00E391F5 /* LineNumberGutter.swift in Sources */,
 				E9A8253E2C0E0ADD00D9A85D /* SidebarRootViewModel.swift in Sources */,
 				E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */,
+				E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -448,18 +542,47 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCSwiftPackageProductDependency section */
-		E9432FF42C0D637500362862 /* RuntimeViewerUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerUI;
+/* Begin XCRemoteSwiftPackageReference section */
+		E9FD73C32C15EC9800E391F5 /* XCRemoteSwiftPackageReference "SourceView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ChimeHQ/SourceView";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
 		};
-		E94330192C0DB6CD00362862 /* RuntimeViewerCore */ = {
+		E9FD73CB2C160F4100E391F5 /* XCRemoteSwiftPackageReference "filter-ui" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/freysie/filter-ui";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E9CBCC152C13685400169ABF /* RuntimeViewerArchitectures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerArchitectures;
+		};
+		E9CBCC172C13685400169ABF /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCore;
 		};
-		E9A8252E2C0DED6700D9A85D /* RuntimeViewerArchitectures */ = {
+		E9CBCC192C13685400169ABF /* RuntimeViewerUI */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerArchitectures;
+			productName = RuntimeViewerUI;
+		};
+		E9FD73C42C15EC9800E391F5 /* SourceView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E9FD73C32C15EC9800E391F5 /* XCRemoteSwiftPackageReference "SourceView" */;
+			productName = SourceView;
+		};
+		E9FD73CC2C160F4100E391F5 /* FilterUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E9FD73CB2C160F4100E391F5 /* XCRemoteSwiftPackageReference "filter-ui" */;
+			productName = FilterUI;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

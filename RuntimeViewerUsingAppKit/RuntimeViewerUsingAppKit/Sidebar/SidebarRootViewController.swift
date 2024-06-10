@@ -9,30 +9,57 @@ import AppKit
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
+import FilterUI
 
 class SidebarRootViewController: ViewController<SidebarRootViewModel> {
     let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
+
     let visualEffectView = NSVisualEffectView()
+    
+    let filterSearchField = FilterSearchField()
+
+    let bottomSeparatorView = NSBox()
     
     override func viewDidLoad() {
         super.viewDidLoad()
+
         hierarchy {
             visualEffectView.hierarchy {
                 scrollView
+                bottomSeparatorView
+                filterSearchField
             }
         }
 
         visualEffectView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
-        
+
         scrollView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.top.left.right.equalToSuperview()
+            make.bottom.equalTo(bottomSeparatorView.snp.top)
+        }
+
+        bottomSeparatorView.snp.makeConstraints { make in
+            make.left.right.equalToSuperview()
+            make.bottom.equalTo(filterSearchField.snp.top).offset(-5)
+            make.height.equalTo(1)
+        }
+        
+        filterSearchField.snp.makeConstraints { make in
+            make.left.right.bottom.equalToSuperview().inset(5)
+        }
+        
+        bottomSeparatorView.do {
+            $0.boxType = .separator
         }
         
         outlineView.do {
             $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
             $0.headerView = nil
+            $0.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName"
+            $0.autosaveExpandedItems = true
+            $0.identifier = .init("com.JH.RuntimeViewer.SidebarRootViewController.identifier")
         }
     }
 
@@ -52,14 +79,6 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
             return cellView
         }
         .disposed(by: rx.disposeBag)
-    }
-}
-
-class SidebarRootTableCellView: ImageTextTableCellView {
-    
-    func bind(to viewModel: SidebarRootCellViewModel) {
-        rx.disposeBag = DisposeBag()
-        viewModel.$icon.asDriver().drive(_imageView.rx.image).disposed(by: rx.disposeBag)
-        viewModel.$name.asDriver().drive(_textField.rx.attributedStringValue).disposed(by: rx.disposeBag)
+        outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
     }
 }

@@ -7,10 +7,6 @@
 
 import AppKit
 import RuntimeViewerCore
+import RuntimeViewerArchitectures
 
-class AppServices: NSObject {
-    
-    var options: CDGenerationOptions = .init()
-}
-
-
+class AppServices: NSObject {}

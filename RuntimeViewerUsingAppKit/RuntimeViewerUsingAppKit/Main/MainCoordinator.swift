@@ -34,6 +34,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     init(appServices: AppServices) {
         self.appServices = appServices
         super.init(windowController: .init(), initialRoute: .initial)
+        windowController.window?.title = "Runtime Viewer"
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
@@ -67,8 +68,13 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
         switch route {
         case let .selectedNode(runtimeNamedNode):
             inspectorCoordinator.contextTrigger(.select(.node(runtimeNamedNode)))
+        case .clickedNode(let runtimeNamedNode):
+            windowController.window?.title = runtimeNamedNode.name
         case let .selectedObject(runtimeObjectType):
             contentCoordinator.contextTrigger(.root(runtimeObjectType))
+        case .back:
+            windowController.window?.title = "Runtime Viewer"
+            contentCoordinator.contextTrigger(.placeholder)
         default:
             break
         }

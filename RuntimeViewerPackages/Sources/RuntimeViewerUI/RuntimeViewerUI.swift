@@ -8,6 +8,7 @@
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 @_exported import OpenUXKit
+//@_exported import UXKit
 @_exported import STTextView
 #endif
 
