@@ -12,7 +12,8 @@ import RuntimeViewerArchitectures
 import RuntimeViewerUI
 
 class SidebarRootViewModel: ViewModel<SidebarRoute> {
-    let rootNode = SidebarRootCellViewModel(node: CDUtilities.dyldSharedCacheImageRootNode, parent: nil)
+    @Observed
+    var rootNode = SidebarRootCellViewModel(node: CDUtilities.dyldSharedCacheImageRootNode, parent: nil)
 
     lazy var allNodes: [String: SidebarRootCellViewModel] = {
         var allNodes: [String: SidebarRootCellViewModel] = [:]
@@ -24,12 +25,11 @@ class SidebarRootViewModel: ViewModel<SidebarRoute> {
 
     @Observed
     var searchString: String = ""
-    
-    
-    
+
     struct Input {
         let clickedNode: Signal<SidebarRootCellViewModel>
         let selectedNode: Signal<SidebarRootCellViewModel>
+        let searchString: Signal<String>
     }
 
     struct Output {
@@ -45,7 +45,12 @@ class SidebarRootViewModel: ViewModel<SidebarRoute> {
             }
         }
         .disposed(by: rx.disposeBag)
-        return Output(rootNode: .just(rootNode))
+
+        input.searchString.emit(with: self) {
+            $0.rootNode.filter = $1
+            $0.rootNode = $0.rootNode
+        }.disposed(by: rx.disposeBag)
+        return Output(rootNode: $rootNode.asDriver())
     }
 }
 
@@ -83,15 +88,45 @@ extension RuntimeNamedNode: Sequence {
     }
 }
 
+class ChildrenPath {
+    var value: String = ""
+    init(value: String) {
+        self.value = value
+    }
+}
+
 final class SidebarRootCellViewModel: NSObject, OutlineNodeType, Differentiable, Sequence {
     let node: RuntimeNamedNode
 
     weak var parent: SidebarRootCellViewModel?
 
-    lazy var children: [SidebarRootCellViewModel] = {
+    var children: [SidebarRootCellViewModel] { _filteredChildren }
+
+    var isLeaf: Bool { children.isEmpty }
+
+    private lazy var _filteredChildren: [SidebarRootCellViewModel] = _children
+
+    private lazy var _children: [SidebarRootCellViewModel] = {
         let children = node.children.map { SidebarRootCellViewModel(node: $0, parent: self) }
         return children.sorted { $0.node.name < $1.node.name }
     }()
+
+    private lazy var currentAndChildrenNames: String = {
+        let childrenNames = _children.map { $0.currentAndChildrenNames }.joined(separator: " ")
+        return "\(node.name) \(childrenNames)"
+    }()
+
+    var filter: String = "" {
+        didSet {
+            if filter.isEmpty {
+                _children.forEach { $0.filter = filter }
+                _filteredChildren = _children
+            } else {
+                _children.forEach { $0.filter = filter }
+                _filteredChildren = _children.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
+            }
+        }
+    }
 
     @Observed
     var icon: NSImage?
@@ -139,32 +174,17 @@ final class SidebarRootCellViewModel: NSObject, OutlineNodeType, Differentiable,
             return nil
         }
     }
-
-    func search(with term: String) -> [SidebarRootCellViewModel] {
-        var results: [SidebarRootCellViewModel] = []
-
-        if node.name.localizedCaseInsensitiveContains(term) {
-            results.append(self)
-        }
-
-        for child in children {
-            results.append(contentsOf: child.search(with: term))
-        }
-
-        return results
-    }
 }
 
 extension RuntimeNamedNode: OutlineNodeType, Differentiable {
-    
     static let frameworkIcon = SFSymbol(systemName: .latch2Case).nsImage
-    
+
     static let bundleIcon = SFSymbol(systemName: .shippingbox).nsImage
-    
+
     static let imageIcon = SFSymbol(systemName: .doc).nsImage
-    
+
     static let folderIcon = SFSymbol(systemName: .folder).nsImage
-    
+
     var icon: NSImage {
         if name.hasSuffix("framework") {
             Self.frameworkIcon
@@ -176,5 +196,4 @@ extension RuntimeNamedNode: OutlineNodeType, Differentiable {
             Self.folderIcon
         }
     }
-    
 }

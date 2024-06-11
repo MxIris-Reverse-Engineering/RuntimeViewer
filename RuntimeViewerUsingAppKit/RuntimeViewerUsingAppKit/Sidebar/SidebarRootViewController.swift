@@ -68,7 +68,8 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
 
         let input = SidebarRootViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
-            selectedNode: outlineView.rx.modelSelected().asSignal()
+            selectedNode: outlineView.rx.modelSelected().asSignal(),
+            searchString: filterSearchField.rx.stringValue.asSignal()
         )
 
         let output = viewModel.transform(input)
