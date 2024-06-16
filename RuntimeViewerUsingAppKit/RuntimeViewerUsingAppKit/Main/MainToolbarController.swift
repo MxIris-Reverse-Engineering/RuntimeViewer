@@ -9,7 +9,9 @@ import AppKit
 import RuntimeViewerUI
 
 extension NSToolbarItem.Identifier {
-    static let back = Self("back")
+    static let back: Self = "back"
+    static let share: Self = "share"
+    static let save: Self = "save"
 }
 
 class MainToolbarController: NSObject, NSToolbarDelegate {
@@ -23,6 +25,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             backButton.image = SFSymbol(systemName: .chevronBackward).nsImage
         }
     }
+    
 
     let toolbar: NSToolbar
 
@@ -50,5 +53,11 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
         default:
             return nil
         }
+    }
+}
+
+extension NSToolbarItem.Identifier: ExpressibleByStringLiteral {
+    public init(stringLiteral value: StringLiteralType) {
+        self.init(value)
     }
 }

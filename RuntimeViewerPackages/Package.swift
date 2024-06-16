@@ -55,12 +55,12 @@ let package = Package(
             .upToNextMajor(from: "6.0.0")
         ),
         .package(
-            url: "https://github.com/RxSwiftCommunity/RxSwiftExt.git",
-            .upToNextMajor(from: "6.0.0")
-        ),
-        .package(
             url: "https://github.com/Mx-Iris/RxSwiftPlus",
             branch: "main"
+        ),
+        .package(
+            url: "https://github.com/RxSwiftCommunity/RxSwiftExt.git",
+            .upToNextMajor(from: "6.0.0")
         ),
 //        .package(
 //            path: "/Volumes/Repositories/Private/Personal/Library/Multi/RxSwiftPlus"
@@ -104,12 +104,12 @@ let package = Package(
             dependencies: [
                 .product(name: "RxSwift", package: "RxSwift"),
                 .product(name: "RxCocoa", package: "RxSwift"),
-                .product(name: "RxSwiftExt", package: "RxSwiftExt"),
                 .product(name: "RxSwiftPlus", package: "RxSwiftPlus"),
                 .product(name: "RxDefaultsPlus", package: "RxSwiftPlus"),
                 .product(name: "RxAppKit", package: "RxAppKit"),
                 .product(name: "RxCombine", package: "RxCombine"),
                 .product(name: "RxEnumKit", package: "RxEnumKit"),
+                .product(name: "RxSwiftExt", package: "RxSwiftExt"),
                 .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: [.iOS, .tvOS, .watchOS, .macCatalyst])),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
