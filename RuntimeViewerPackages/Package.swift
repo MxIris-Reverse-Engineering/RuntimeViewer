@@ -109,7 +109,7 @@ let package = Package(
                 .product(name: "RxAppKit", package: "RxAppKit"),
                 .product(name: "RxCombine", package: "RxCombine"),
                 .product(name: "RxEnumKit", package: "RxEnumKit"),
-                .product(name: "RxSwiftExt", package: "RxSwiftExt"),
+//                .product(name: "RxSwiftExt", package: "RxSwiftExt"),
                 .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: [.iOS, .tvOS, .watchOS, .macCatalyst])),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),

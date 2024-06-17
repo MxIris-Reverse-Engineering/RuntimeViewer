@@ -12,7 +12,7 @@ class MainSplitViewController: NSSplitViewController {
     var viewModel: MainViewModel?
 
     private static let autosaveName = "com.JH.RuntimeViewer.MainSplitViewController.autosaveName"
-    
+
     private static let identifier = "com.JH.RuntimeViewer.MainSplitViewController.identifier"
 
     func setupBindings(for viewModel: MainViewModel) {
@@ -32,7 +32,7 @@ class MainSplitViewController: NSSplitViewController {
     @objc func transitionCoordinator() -> Any? {
         return nil
     }
-    
+
     @objc func _ancestorViewControllerOfClass(_ class: Any?) -> Any? {
         return nil
     }

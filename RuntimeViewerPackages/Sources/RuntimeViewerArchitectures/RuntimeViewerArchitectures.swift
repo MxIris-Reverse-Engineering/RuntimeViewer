@@ -1,6 +1,6 @@
 @_exported import RxSwift
 @_exported import RxCocoa
-@_exported import RxSwiftExt
+//@_exported import RxSwiftExt
 @_exported import RxSwiftPlus
 @_exported import RxCombine
 @_exported import RxDefaultsPlus

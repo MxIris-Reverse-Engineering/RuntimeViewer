@@ -18,8 +18,10 @@ class MainWindow: NSWindow {
 }
 
 class MainWindowController: XiblessWindowController<MainWindow> {
-    let toolbarController = MainToolbarController()
+    lazy var toolbarController = MainToolbarController(delegate: self)
 
+    lazy var splitViewController = MainSplitViewController()
+    
     var viewModel: MainViewModel?
 
     func setupBindings(for viewModel: MainViewModel) {
@@ -35,11 +37,16 @@ class MainWindowController: XiblessWindowController<MainWindow> {
     override func windowDidLoad() {
         super.windowDidLoad()
         contentWindow.toolbar = toolbarController.toolbar
-
         if contentWindow.frameAutosaveName != MainWindow.frameAutosaveName {
             contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
             contentWindow.box.positionCenter()
             contentWindow.setFrameAutosaveName(MainWindow.frameAutosaveName)
         }
+    }
+}
+
+extension MainWindowController: MainToolbarController.Delegate {
+    var splitView: NSSplitView {
+        splitViewController.splitView
     }
 }

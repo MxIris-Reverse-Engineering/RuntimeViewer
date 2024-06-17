@@ -23,7 +23,6 @@ typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewCo
 class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     let appServices: AppServices
 
-    lazy var splitViewController = MainSplitViewController()
 
     lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
 
@@ -41,9 +40,9 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         switch route {
         case .initial:
             let viewModel = MainViewModel(appServices: appServices, router: unownedRouter)
-            splitViewController.setupBindings(for: viewModel)
+            windowController.splitViewController.setupBindings(for: viewModel)
             windowController.setupBindings(for: viewModel)
-            return .multiple(.show(splitViewController), .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator))
+            return .multiple(.show(windowController.splitViewController), .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator))
         case let .select(runtimeObject):
             return .route(on: contentCoordinator, to: .root(runtimeObject))
         case let .inspect(inspectableType):
@@ -56,7 +55,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     override func completeTransition(for route: MainRoute) {
         switch route {
         case .initial:
-            splitViewController.setupSplitViewItems()
+            windowController.splitViewController.setupSplitViewItems()
         default:
             break
         }
