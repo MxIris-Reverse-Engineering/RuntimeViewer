@@ -56,4 +56,9 @@ class MainSplitViewController: NSSplitViewController {
             AppDefaults[\.isInitialSetupSplitView] = false
         }
     }
+    
+    @objc func _toggleInspector(_ sender: Any?) {
+        guard let inspectorItem = splitViewItems.filter({ $0.behavior == .inspector }).first else { return }
+        inspectorItem.animator().isCollapsed = !inspectorItem.isCollapsed
+    }
 }

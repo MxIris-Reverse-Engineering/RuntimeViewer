@@ -67,3 +67,26 @@ class ContentTextViewModel: ViewModel<ContentRoute> {
         )
     }
 }
+
+
+extension RuntimeObjectType {
+    @MainActor
+    func semanticString(for options: CDGenerationOptions) -> CDSemanticString? {
+        switch self {
+        case let .class(named):
+            if let cls = NSClassFromString(named) {
+                let classModel = CDClassModel(with: cls)
+                return classModel.semanticLines(with: options)
+            } else {
+                return nil
+            }
+        case let .protocol(named):
+            if let proto = NSProtocolFromString(named) {
+                let protocolModel = CDProtocolModel(with: proto)
+                return protocolModel.semanticLines(with: options)
+            } else {
+                return nil
+            }
+        }
+    }
+}

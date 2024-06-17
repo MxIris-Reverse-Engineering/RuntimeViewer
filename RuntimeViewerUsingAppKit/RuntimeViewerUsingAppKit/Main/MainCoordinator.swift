@@ -19,11 +19,11 @@ enum MainRoute: Routable {
 
 typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewController>
 
-
 class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     let appServices: AppServices
 
-
+    let completeTransition: PublishRelay<SidebarRoute> = .init()
+    
     lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
 
     lazy var contentCoordinator = ContentCoordinator(appServices: appServices)
@@ -39,7 +39,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
         case .initial:
-            let viewModel = MainViewModel(appServices: appServices, router: unownedRouter)
+            let viewModel = MainViewModel(appServices: appServices, router: unownedRouter, completeTransition: completeTransition.asObservable())
             windowController.splitViewController.setupBindings(for: viewModel)
             windowController.setupBindings(for: viewModel)
             return .multiple(.show(windowController.splitViewController), .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator))
@@ -51,7 +51,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             return .route(on: sidebarCoordinator, to: .back)
         }
     }
-    
+
     override func completeTransition(for route: MainRoute) {
         switch route {
         case .initial:
@@ -67,7 +67,7 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
         switch route {
         case let .selectedNode(runtimeNamedNode):
             inspectorCoordinator.contextTrigger(.select(.node(runtimeNamedNode)))
-        case .clickedNode(let runtimeNamedNode):
+        case let .clickedNode(runtimeNamedNode):
             windowController.window?.title = runtimeNamedNode.name
         case let .selectedObject(runtimeObjectType):
             contentCoordinator.contextTrigger(.root(runtimeObjectType))
@@ -78,5 +78,6 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
             break
         }
         windowController.toolbarController.backItem.backButton.isHidden = sidebarCoordinator.rootViewController.viewControllers.count < 2
+        completeTransition.accept(route)
     }
 }

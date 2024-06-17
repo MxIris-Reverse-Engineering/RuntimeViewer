@@ -21,13 +21,14 @@ class MainWindowController: XiblessWindowController<MainWindow> {
     lazy var toolbarController = MainToolbarController(delegate: self)
 
     lazy var splitViewController = MainSplitViewController()
-    
+
     var viewModel: MainViewModel?
 
     func setupBindings(for viewModel: MainViewModel) {
         self.viewModel = viewModel
         let input = MainViewModel.Input(sidebarBackClick: toolbarController.backItem.backButton.rx.click.asSignal())
-        let _ = viewModel.transform(input)
+        let output = viewModel.transform(input)
+        output.sharingServiceItems.bind(to: toolbarController.sharingServicePickerItem.rx.items).disposed(by: rx.disposeBag)
     }
 
     init() {
