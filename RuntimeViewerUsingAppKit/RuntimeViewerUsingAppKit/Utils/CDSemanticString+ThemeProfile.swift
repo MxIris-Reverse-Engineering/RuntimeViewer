@@ -12,10 +12,13 @@ extension CDSemanticString {
     func attributedString(for provider: ThemeProfile) -> NSAttributedString {
         let attributedString = NSMutableAttributedString(string: "")
         enumerateTypes { string, type in
-            let attributes: [NSAttributedString.Key: Any] = [
+            var attributes: [NSAttributedString.Key: Any] = [
                 .font: provider.font(for: type),
                 .foregroundColor: provider.color(for: type),
             ]
+            if type == .class || type == .protocol {
+                attributes.updateValue(type == .class ? RuntimeObjectType.class(named: string) : RuntimeObjectType.protocol(named: string), forKey: .link)
+            }
             attributedString.append(NSAttributedString(string: string, attributes: attributes))
         }
         return attributedString

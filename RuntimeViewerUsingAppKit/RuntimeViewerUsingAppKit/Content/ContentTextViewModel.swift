@@ -30,7 +30,9 @@ class ContentTextViewModel: ViewModel<ContentRoute> {
         }).disposed(by: rx.disposeBag)
     }
 
-    struct Input {}
+    struct Input {
+        let runtimeObjectClicked: Signal<RuntimeObjectType>
+    }
     
     struct Output {
         let attributedString: Driver<NSAttributedString>
@@ -61,6 +63,7 @@ class ContentTextViewModel: ViewModel<ContentRoute> {
     }
 
     func transform(_ input: Input) -> Output {
+        input.runtimeObjectClicked.emit(with: self) { $0.router.trigger(.next($1)) }.disposed(by: rx.disposeBag)
         return Output(
             attributedString: $attributedString.asDriver().compactMap { $0 },
             theme: $theme.asDriver()

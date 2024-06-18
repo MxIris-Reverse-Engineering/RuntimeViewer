@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
 		E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FE52C0D614900362862 /* AppDelegate.swift */; };
 		E9432FE82C0D614A00362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FE72C0D614A00362862 /* Assets.xcassets */; };
 		E9432FEB2C0D614A00362862 /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E9432FEA2C0D614A00362862 /* Base */; };
@@ -46,6 +47,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E91CD9962C2127AD00C989CC /* EventMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
 		E9432FE22C0D614900362862 /* RuntimeViewerUsingAppKit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerUsingAppKit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FE52C0D614900362862 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E9432FE72C0D614A00362862 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -198,6 +200,7 @@
 		E9CE07BF2C14981D0070A6E8 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				E91CD9962C2127AD00C989CC /* EventMonitor.swift */,
 				E9CE07B62C1497590070A6E8 /* CDSemanticString+ThemeProfile.swift */,
 				E9CE07B42C1497330070A6E8 /* ThemeProfile.swift */,
 				E943301B2C0DB75B00362862 /* Then.swift */,
@@ -318,6 +321,7 @@
 				E9A825482C0E0BF900D9A85D /* SidebarImageViewModel.swift in Sources */,
 				E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */,
 				E9A825402C0E0AE900D9A85D /* AppServices.swift in Sources */,
+				E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */,
 				E9A8253C2C0E0AC300D9A85D /* ViewModel.swift in Sources */,
 				E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,

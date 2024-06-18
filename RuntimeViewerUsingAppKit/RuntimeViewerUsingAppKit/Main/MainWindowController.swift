@@ -26,7 +26,10 @@ class MainWindowController: XiblessWindowController<MainWindow> {
 
     func setupBindings(for viewModel: MainViewModel) {
         self.viewModel = viewModel
-        let input = MainViewModel.Input(sidebarBackClick: toolbarController.backItem.backButton.rx.click.asSignal())
+        let input = MainViewModel.Input(
+            sidebarBackClick: toolbarController.backItem.backButton.rx.click.asSignal(),
+            saveClick: toolbarController.saveItem.saveButton.rx.click.asSignal()
+        )
         let output = viewModel.transform(input)
         output.sharingServiceItems.bind(to: toolbarController.sharingServicePickerItem.rx.items).disposed(by: rx.disposeBag)
     }
