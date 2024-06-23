@@ -1,31 +1,31 @@
-//
-//  SidebarImageViewModel.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
+#endif
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
 import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-class SidebarImageViewModel: ViewModel<SidebarRoute> {
-    public let namedNode: RuntimeNamedNode
+public class SidebarImageViewModel: ViewModel<SidebarRoute> {
+    private let namedNode: RuntimeNamedNode
 
-    public let imagePath: String
-    public let imageName: String
+    private let imagePath: String
+    private let imageName: String
 
-    public let runtimeListings: RuntimeListings = .shared
+    private let runtimeListings: RuntimeListings = .shared
 
-    @Observed public private(set) var searchString: String
-    @Observed public private(set) var searchScope: RuntimeTypeSearchScope
-    @Observed public private(set) var classNames: [String] // not filtered
-    @Observed public private(set) var protocolNames: [String] // not filtered
-    @Observed public private(set) var runtimeObjects: [RuntimeObjectType] // filtered based on search
-    @Observed public private(set) var loadState: RuntimeImageLoadState
+    @Observed private var searchString: String
+    @Observed private var searchScope: RuntimeTypeSearchScope
+    @Observed private var classNames: [String] // not filtered
+    @Observed private var protocolNames: [String] // not filtered
+    @Observed private var runtimeObjects: [RuntimeObjectType] // filtered based on search
+    @Observed private var loadState: RuntimeImageLoadState
 
-    public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
+    public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
         self.namedNode = namedNode
         let imagePath = namedNode.path
         self.imagePath = imagePath
@@ -97,36 +97,41 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
             .disposed(by: rx.disposeBag)
     }
 
-    struct Input {
-        let runtimeObjectClicked: Signal<SidebarImageCellViewModel>
-        let loadImageClicked: Signal<Void>
-        let searchString: Signal<String>
+    public struct Input {
+        public let runtimeObjectClicked: Signal<SidebarImageCellViewModel>
+        public let loadImageClicked: Signal<Void>
+        public let searchString: Signal<String>
+        public init(runtimeObjectClicked: Signal<SidebarImageCellViewModel>, loadImageClicked: Signal<Void>, searchString: Signal<String>) {
+            self.runtimeObjectClicked = runtimeObjectClicked
+            self.loadImageClicked = loadImageClicked
+            self.searchString = searchString
+        }
     }
 
-    struct Output {
-        let runtimeObjects: Driver<[SidebarImageCellViewModel]>
-        let loadState: Driver<RuntimeImageLoadState>
-        let notLoadedText: Driver<String>
-        let errorText: Driver<String>
-        let emptyText: Driver<String>
-        let isEmpty: Driver<Bool>
+    public struct Output {
+        public let runtimeObjects: Driver<[SidebarImageCellViewModel]>
+        public let loadState: Driver<RuntimeImageLoadState>
+        public let notLoadedText: Driver<String>
+        public let errorText: Driver<String>
+        public let emptyText: Driver<String>
+        public let isEmpty: Driver<Bool>
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         input.searchString.emit(to: $searchString).disposed(by: rx.disposeBag)
-        
+
         input.runtimeObjectClicked.emitOnNextMainActor { [weak self] viewModel in
             guard let self else { return }
             self.router.trigger(.selectedObject(viewModel.runtimeObject))
         }
         .disposed(by: rx.disposeBag)
-        
+
         input.loadImageClicked.emitOnNextMainActor { [weak self] in
             guard let self else { return }
             tryLoadImage()
         }
         .disposed(by: rx.disposeBag)
-        
+
         let runtimeObjects = $runtimeObjects.asDriver()
             .map {
                 $0.compactMap { [weak self] runtimeObject -> SidebarImageCellViewModel? in
@@ -134,7 +139,7 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     return SidebarImageCellViewModel(runtimeObject: runtimeObject, appServices: appServices, router: router)
                 }
             }
-        
+
         let errorText = $loadState
             .capture(case: RuntimeImageLoadState.loadError).map { [weak self] error in
                 guard let self else { return "" }
@@ -145,14 +150,14 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 }
             }
             .asDriver(onErrorJustReturn: "")
-        
+
         return Output(
             runtimeObjects: runtimeObjects,
             loadState: $loadState.asDriver(),
             notLoadedText: .just("\(imageName) is not yet loaded"),
             errorText: errorText,
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
-            isEmpty: .combineLatest($classNames.asDriver(), $protocolNames.asDriver(), resultSelector: { $0.isEmpty && $1.isEmpty}).startWith(classNames.isEmpty && protocolNames.isEmpty)
+            isEmpty: .combineLatest($classNames.asDriver(), $protocolNames.asDriver(), resultSelector: { $0.isEmpty && $1.isEmpty }).startWith(classNames.isEmpty && protocolNames.isEmpty)
         )
     }
 
@@ -168,7 +173,7 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
         return ret.filter { $0.name.localizedCaseInsensitiveContains(searchString) }
     }
 
-    func tryLoadImage() {
+    private func tryLoadImage() {
         do {
             loadState = .loading
             try CDUtilities.loadImage(at: imagePath)
@@ -179,16 +184,16 @@ class SidebarImageViewModel: ViewModel<SidebarRoute> {
     }
 }
 
-class SidebarImageCellViewModel: ViewModel<SidebarRoute>, Differentiable {
+public class SidebarImageCellViewModel: ViewModel<SidebarRoute> {
     let runtimeObject: RuntimeObjectType
 
     @Observed
-    var icon: NSImage?
+    public private(set) var icon: NSUIImage?
 
     @Observed
-    var name: NSAttributedString
+    public private(set) var name: NSAttributedString
 
-    init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: UnownedRouter<SidebarRoute>) {
+    public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<SidebarRoute>) {
         self.runtimeObject = runtimeObject
         self.icon = runtimeObject.icon
         self.name = NSAttributedString {
@@ -199,23 +204,29 @@ class SidebarImageCellViewModel: ViewModel<SidebarRoute>, Differentiable {
         super.init(appServices: appServices, router: router)
     }
 
-    override var hash: Int {
+    public override var hash: Int {
         var hasher = Hasher()
         hasher.combine(runtimeObject)
         return hasher.finalize()
     }
 
-    override func isEqual(to object: Any?) -> Bool {
+    public override func isEqual(_ object: Any?) -> Bool {
         guard let object = object as? Self else { return false }
         return runtimeObject == object.runtimeObject
     }
 }
 
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+
+extension SidebarImageCellViewModel: Differentiable {}
+
+#endif
+
 extension RuntimeObjectType {
-    
-    static let classIcon = IDEIcon("C", color: .yellow).image
-    static let protocolIcon = IDEIcon("P", color: .purple).image
-    var icon: NSImage {
+    public static let classIcon = IDEIcon("C", color: .yellow).image
+    public static let protocolIcon = IDEIcon("P", color: .purple).image
+
+    public var icon: NSUIImage {
         switch self {
         case .class: return Self.classIcon
         case .protocol: return Self.protocolIcon
@@ -239,3 +250,11 @@ extension RuntimeObjectType: Comparable {
 }
 
 extension RuntimeImageLoadState: CaseAccessible {}
+
+#if canImport(UIKit)
+
+extension UIColor {
+    static var labelColor: UIColor { .label }
+}
+
+#endif

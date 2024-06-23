@@ -1,18 +1,13 @@
-//
-//  InspectorCoordinator.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
+#if canImport(UIKit)
 
-import AppKit
+import UIKit
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-typealias InspectorTransition = Transition<Void, InspectorViewController>
+typealias InspectorTransition = Transition<InspectorViewController>
 
-class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition> {
+class InspectorCoordinator: BaseCoordinator<InspectorRoute, InspectorTransition> {
     let appServices: AppServices
     init(appServices: AppServices) {
         self.appServices = appServices
@@ -30,3 +25,5 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
         }
     }
 }
+
+#endif

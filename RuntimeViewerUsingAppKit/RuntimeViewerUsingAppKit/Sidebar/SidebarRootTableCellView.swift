@@ -8,6 +8,7 @@
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
+import RuntimeViewerApplication
 
 class SidebarRootTableCellView: ImageTextTableCellView {
     func bind(to viewModel: SidebarRootCellViewModel) {

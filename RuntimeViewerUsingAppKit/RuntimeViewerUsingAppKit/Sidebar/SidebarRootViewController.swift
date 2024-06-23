@@ -6,20 +6,20 @@
 //
 
 import AppKit
-import RuntimeViewerCore
+import FilterUI
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
-import FilterUI
+import RuntimeViewerApplication
 
 class SidebarRootViewController: ViewController<SidebarRootViewModel> {
     let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
 
     let visualEffectView = NSVisualEffectView()
-    
+
     let filterSearchField = FilterSearchField()
 
     let bottomSeparatorView = NSBox()
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -45,15 +45,15 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
             make.bottom.equalTo(filterSearchField.snp.top).offset(-5)
             make.height.equalTo(1)
         }
-        
+
         filterSearchField.snp.makeConstraints { make in
             make.left.right.bottom.equalToSuperview().inset(5)
         }
-        
+
         bottomSeparatorView.do {
             $0.boxType = .separator
         }
-        
+
         outlineView.do {
             $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
             $0.headerView = nil

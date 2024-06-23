@@ -7,6 +7,7 @@
 
 import Cocoa
 import RuntimeViewerCore
+import RuntimeViewerApplication
 
 @MainActor
 @main

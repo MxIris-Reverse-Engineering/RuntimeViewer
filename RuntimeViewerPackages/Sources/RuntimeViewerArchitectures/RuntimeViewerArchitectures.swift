@@ -14,3 +14,10 @@
 @_exported import OpenUXKitCoordinator
 //@_exported import UXKitCoordinator
 #endif
+
+#if canImport(UIKit)
+@_exported import RxUIKit
+@_exported import XCoordinator
+@_exported import XCoordinatorRx
+public typealias Routable = Route
+#endif

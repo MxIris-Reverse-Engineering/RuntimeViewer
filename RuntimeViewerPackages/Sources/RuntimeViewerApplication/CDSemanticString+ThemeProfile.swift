@@ -5,11 +5,18 @@
 //  Created by JH on 2024/6/8.
 //
 
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
+#endif
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
 import RuntimeViewerCore
 
 extension CDSemanticString {
-    func attributedString(for provider: ThemeProfile) -> NSAttributedString {
+    public func attributedString(for provider: ThemeProfile) -> NSAttributedString {
         let attributedString = NSMutableAttributedString(string: "")
         enumerateTypes { string, type in
             var attributes: [NSAttributedString.Key: Any] = [

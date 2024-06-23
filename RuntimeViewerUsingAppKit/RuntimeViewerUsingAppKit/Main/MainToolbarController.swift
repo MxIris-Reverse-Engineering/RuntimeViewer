@@ -44,10 +44,10 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             inspectorButton.action = #selector(MainSplitViewController._toggleInspector(_:))
         }
     }
-    
+
     class SaveToolbarItem: NSToolbarItem {
         let saveButton = ToolbarButton()
-        
+
         init() {
             super.init(itemIdentifier: .Main.save)
             view = saveButton
@@ -65,11 +65,11 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     let inspectorItem = InspectorToolbarItem()
 
     let saveItem = SaveToolbarItem()
-    
+
     lazy var inspectorTrackingSeparatorItem = NSTrackingSeparatorToolbarItem(identifier: .Main.inspectorTrackingSeparator, splitView: delegate.splitView, dividerIndex: 1)
 
     let sharingServicePickerItem = NSSharingServicePickerToolbarItem(itemIdentifier: .Main.share)
-    
+
     init(delegate: Delegate) {
         self.delegate = delegate
         self.toolbar = NSToolbar()

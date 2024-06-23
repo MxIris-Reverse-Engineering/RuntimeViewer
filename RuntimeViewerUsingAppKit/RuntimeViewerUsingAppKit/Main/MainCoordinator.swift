@@ -9,13 +9,7 @@ import AppKit
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
-
-enum MainRoute: Routable {
-    case initial
-    case select(RuntimeObjectType)
-    case inspect(InspectableType)
-    case sidebarBack
-}
+import RuntimeViewerApplication
 
 typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewController>
 
@@ -23,7 +17,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     let appServices: AppServices
 
     let completeTransition: PublishRelay<SidebarRoute> = .init()
-    
+
     lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
 
     lazy var contentCoordinator = ContentCoordinator(appServices: appServices)
@@ -39,7 +33,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
         case .initial:
-            let viewModel = MainViewModel(appServices: appServices, router: unownedRouter, completeTransition: completeTransition.asObservable())
+            let viewModel = MainViewModel(appServices: appServices, router: self, completeTransition: completeTransition.asObservable())
             windowController.splitViewController.setupBindings(for: viewModel)
             windowController.setupBindings(for: viewModel)
             return .multiple(.show(windowController.splitViewController), .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator))

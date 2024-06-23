@@ -6,10 +6,11 @@
 //
 
 import AppKit
+import FilterUI
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
-import FilterUI
+import RuntimeViewerApplication
 
 class SidebarImageViewController: ViewController<SidebarImageViewModel> {
     let visualEffectView = NSVisualEffectView()
@@ -99,16 +100,16 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
         output.notLoadedText.drive(imageNotLoadedView.titleLabel.rx.stringValue).disposed(by: rx.disposeBag)
 
         output.emptyText.drive(imageLoadedView.emptyLabel.rx.stringValue).disposed(by: rx.disposeBag)
-        
+
         output.isEmpty.not().drive(imageLoadedView.emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
-        
+
         output.loadState.driveOnNextMainActor { [weak self] loadState in
             guard let self else { return }
             tabView.selectTabViewItem(withIdentifier: loadState.tabViewItemIdentifier)
         }
         .disposed(by: rx.disposeBag)
     }
-    
+
     deinit {
         print("\(Self.self) is deinit")
     }
@@ -161,7 +162,7 @@ extension SidebarImageViewController {
                 make.center.equalToSuperview()
                 make.left.right.equalToSuperview().inset(15)
             }
-            
+
             emptyLabel.do {
                 $0.alignment = .center
             }

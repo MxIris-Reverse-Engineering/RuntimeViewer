@@ -1,12 +1,17 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 5.9
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
 
+let appkitPlatforms: [Platform] = [.macOS]
+
+let uikitPlatforms: [Platform] = [.iOS, .tvOS, .macCatalyst, .visionOS]
+
+
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
-        .iOS(.v15), .macOS(.v12),
+        .iOS(.v14), .macOS(.v11), .macCatalyst(.v14), .tvOS(.v14), .visionOS(.v1)
     ],
     products: [
         .library(
@@ -21,6 +26,10 @@ let package = Package(
             name: "RuntimeViewerArchitectures",
             targets: ["RuntimeViewerArchitectures"]
         ),
+        .library(
+            name: "RuntimeViewerApplication",
+            targets: ["RuntimeViewerApplication"]
+        ),
     ],
     dependencies: [
         .package(
@@ -28,8 +37,8 @@ let package = Package(
             branch: "main"
         ),
         .package(
-            url: "https://github.com/QuickBirdEng/XCoordinator",
-            .upToNextMajor(from: "2.0.0")
+            url: "https://github.com/MxIris-Library-Forks/XCoordinator",
+            branch: "master"
         ),
         .package(
             url: "https://github.com/Mx-Iris/CocoaCoordinator",
@@ -86,16 +95,20 @@ let package = Package(
             .upToNextMajor(from: "2.0.0")
         ),
         .package(
-            url: "https://github.com/freysie/ide-icons",
+            url: "https://github.com/MxIris-Library-Forks/ide-icons",
             branch: "main"
         ),
-        .package(
-            url: "https://github.com/krzyzanowskim/STTextView",
-            from: "0.9.5"
-        ),
+//        .package(
+//            url: "https://github.com/krzyzanowskim/STTextView",
+//            from: "0.9.5"
+//        ),
         .package(
             url: "https://github.com/gringoireDM/RxEnumKit",
             branch: "master"
+        ),
+        .package(
+            url: "https://github.com/Mx-Iris/RxUIKit",
+            branch: "main"
         ),
     ],
     targets: [
@@ -106,14 +119,16 @@ let package = Package(
                 .product(name: "RxCocoa", package: "RxSwift"),
                 .product(name: "RxSwiftPlus", package: "RxSwiftPlus"),
                 .product(name: "RxDefaultsPlus", package: "RxSwiftPlus"),
-                .product(name: "RxAppKit", package: "RxAppKit"),
+                .product(name: "RxAppKit", package: "RxAppKit", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "RxUIKit", package: "RxUIKit", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "RxCombine", package: "RxCombine"),
                 .product(name: "RxEnumKit", package: "RxEnumKit"),
 //                .product(name: "RxSwiftExt", package: "RxSwiftExt"),
-                .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: [.iOS, .tvOS, .watchOS, .macCatalyst])),
-                .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
-                .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
-                .product(name: "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
+                .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
+                .product(name: "XCoordinatorRx", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
+                .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
 //                .product(name: "UXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
             ]
         ),
@@ -131,13 +146,20 @@ let package = Package(
                 .product(name: "UIFoundationToolbox", package: "UIFoundation"),
                 .product(name: "ViewHierarchyBuilder", package: "ViewHierarchyBuilder"),
                 .product(name: "SnapKit", package: "SnapKit"),
-                .product(name: "OpenUXKit", package: "OpenUXKit"),
+                .product(name: "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
 //                .product(name: "UXKit", package: "OpenUXKit"),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbol", package: "SFSymbol"),
                 .product(name: "IDEIcons", package: "ide-icons"),
-                .product(name: "STTextView", package: "STTextView"),
             ]
         ),
+        .target(
+            name: "RuntimeViewerApplication",
+            dependencies: [
+                "RuntimeViewerCore",
+                "RuntimeViewerUI",
+                "RuntimeViewerArchitectures",
+            ]
+        )
     ]
 )

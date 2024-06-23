@@ -9,6 +9,7 @@ import AppKit
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
+import RuntimeViewerApplication
 
 class ContentTextView: NSTextView {
     override func clicked(onLink link: Any, at charIndex: Int) {
@@ -77,7 +78,7 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
             isPressedCommand = event.modifierFlags.contains(.command)
             if isPressedCommand {
                 textView.linkTextAttributes = [
-                    .cursor: NSCursor.pointingHand
+                    .cursor: NSCursor.pointingHand,
                 ]
             } else {
                 textView.linkTextAttributes = [:]

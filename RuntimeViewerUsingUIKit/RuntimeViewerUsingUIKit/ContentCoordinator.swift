@@ -1,20 +1,14 @@
-//
-//  EditorCoordinator.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
+#if canImport(UIKit)
 
-import AppKit
-import RuntimeViewerCore
-import RuntimeViewerUI
-import RuntimeViewerArchitectures
+import UIKit
 import RuntimeViewerApplication
+import RuntimeViewerArchitectures
 
-typealias ContentTransition = Transition<Void, ContentNavigationController>
+typealias ContentTransition = NavigationTransition
 
-class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
+class ContentCoordinator: NavigationCoordinator<ContentRoute> {
     let appServices: AppServices
+    
     init(appServices: AppServices) {
         self.appServices = appServices
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
@@ -26,19 +20,21 @@ class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
             let contentPlaceholderViewController = ContentPlaceholderViewController()
             let contentPlaceholderViewModel = ContentPlaceholderViewModel(appServices: appServices, router: self)
             contentPlaceholderViewController.setupBindings(for: contentPlaceholderViewModel)
-            return .set([contentPlaceholderViewController], animated: false)
+            return .set([contentPlaceholderViewController], animation: nil)
         case let .root(runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
-            return .set([contentTextViewController], animated: false)
+            return .set([contentTextViewController], animation: nil)
         case let .next(runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
-            return .push(contentTextViewController, animated: true)
+            return .push(contentTextViewController, animation: .default)
         case .back:
-            return .pop(animated: true)
+            return .pop(animation: .default)
         }
     }
 }
+
+#endif

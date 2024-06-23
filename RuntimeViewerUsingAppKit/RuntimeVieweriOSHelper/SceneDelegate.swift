@@ -1,31 +1,22 @@
 //
 //  SceneDelegate.swift
-//  RuntimeViewerUsingUIKit
+//  RuntimeVieweriOSHelper
 //
-//  Created by JH on 2024/6/3.
+//  Created by JH on 2024/6/24.
 //
 
 import UIKit
-import RuntimeViewerCore
-import RuntimeViewerApplication
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+
     var window: UIWindow?
 
-    let appServices = AppServices()
-
-    lazy var mainCoordinator = MainCoordinator(appServices: appServices)
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        guard let windowScene = (scene as? UIWindowScene) else { return }
-        let window = UIWindow(windowScene: windowScene)
-        window.rootViewController = mainCoordinator.rootViewController
-        window.makeKeyAndVisible()
-        self.window = window
-
-        DispatchQueue.global().async {
-            _ = RuntimeListings.shared
-        }
+        // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
+        // If using a storyboard, the `window` property will automatically be initialized and attached to the scene.
+        // This delegate does not imply the connecting scene or session are new (see `application:configurationForConnectingSceneSession` instead).
+        guard let _ = (scene as? UIWindowScene) else { return }
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -55,4 +46,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
     }
+
+
 }
+

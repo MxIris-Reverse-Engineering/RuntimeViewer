@@ -6,14 +6,12 @@
 //
 
 import UIKit
+import RuntimeViewerUI
 
-class ViewController: UIViewController {
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        // Do any additional setup after loading the view.
+class ViewController<ViewModelType>: UIViewController {
+    var viewModel: ViewModelType?
+    
+    func setupBindings(for viewModel: ViewModelType) {
+        self.viewModel = viewModel
     }
-
-
 }
-

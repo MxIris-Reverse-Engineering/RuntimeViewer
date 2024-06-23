@@ -9,8 +9,7 @@ import AppKit
 import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-
-class ContentPlaceholderViewModel: ViewModel<ContentRoute> {}
+import RuntimeViewerApplication
 
 class ContentPlaceholderViewController: ViewController<ContentPlaceholderViewModel> {
     let placeholderLabel = Label("Select a runtime object")

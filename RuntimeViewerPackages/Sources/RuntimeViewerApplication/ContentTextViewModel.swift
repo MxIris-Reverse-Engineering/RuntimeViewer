@@ -1,26 +1,26 @@
-//
-//  ContentTextViewModel.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/8.
-//
-
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
+#endif
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
-class ContentTextViewModel: ViewModel<ContentRoute> {
+public class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
-    var theme: ThemeProfile
+    private var theme: ThemeProfile
 
     @Observed
-    var runtimeObject: RuntimeObjectType
+    private var runtimeObject: RuntimeObjectType
 
     @Observed
-    var attributedString: NSAttributedString?
+    private var attributedString: NSAttributedString?
 
-    init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: UnownedRouter<ContentRoute>) {
+    public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
         self.theme = XcodeDarkTheme()
         super.init(appServices: appServices, router: router)
@@ -30,16 +30,19 @@ class ContentTextViewModel: ViewModel<ContentRoute> {
         }).disposed(by: rx.disposeBag)
     }
 
-    struct Input {
-        let runtimeObjectClicked: Signal<RuntimeObjectType>
+    public struct Input {
+        public let runtimeObjectClicked: Signal<RuntimeObjectType>
+        public init(runtimeObjectClicked: Signal<RuntimeObjectType>) {
+            self.runtimeObjectClicked = runtimeObjectClicked
+        }
     }
     
-    struct Output {
-        let attributedString: Driver<NSAttributedString>
-        let theme: Driver<ThemeProfile>
+    public struct Output {
+        public let attributedString: Driver<NSAttributedString>
+        public let theme: Driver<ThemeProfile>
     }
 
-    func setAttributedString(for options: CDGenerationOptions) {
+    private func setAttributedString(for options: CDGenerationOptions) {
         switch runtimeObject {
         case let .class(named):
             if let cls = NSClassFromString(named) {
@@ -62,7 +65,7 @@ class ContentTextViewModel: ViewModel<ContentRoute> {
         }
     }
 
-    func transform(_ input: Input) -> Output {
+    public func transform(_ input: Input) -> Output {
         input.runtimeObjectClicked.emit(with: self) { $0.router.trigger(.next($1)) }.disposed(by: rx.disposeBag)
         return Output(
             attributedString: $attributedString.asDriver().compactMap { $0 },
@@ -73,8 +76,7 @@ class ContentTextViewModel: ViewModel<ContentRoute> {
 
 
 extension RuntimeObjectType {
-    @MainActor
-    func semanticString(for options: CDGenerationOptions) -> CDSemanticString? {
+    public func semanticString(for options: CDGenerationOptions) -> CDSemanticString? {
         switch self {
         case let .class(named):
             if let cls = NSClassFromString(named) {

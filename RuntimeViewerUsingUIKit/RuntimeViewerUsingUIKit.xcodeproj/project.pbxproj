@@ -7,25 +7,52 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E942AC772C270C0000A2F3D3 /* MainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */; };
+		E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */; };
+		E942AC8C2C27CF0A00A2F3D3 /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */; };
+		E942AC8E2C27CF3400A2F3D3 /* SidebarNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */; };
+		E942AC902C27CF4F00A2F3D3 /* SidebarRootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8F2C27CF4F00A2F3D3 /* SidebarRootViewController.swift */; };
+		E942AC932C28210100A2F3D3 /* SidebarImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC922C28210100A2F3D3 /* SidebarImageViewController.swift */; };
+		E942AC962C28654F00A2F3D3 /* ContentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC952C28654F00A2F3D3 /* ContentCoordinator.swift */; };
+		E942AC982C28658A00A2F3D3 /* ContentNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC972C28658A00A2F3D3 /* ContentNavigationController.swift */; };
+		E942AC9A2C28659C00A2F3D3 /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC992C28659C00A2F3D3 /* ContentPlaceholderViewController.swift */; };
+		E942AC9C2C2865A300A2F3D3 /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC9B2C2865A300A2F3D3 /* ContentTextViewController.swift */; };
+		E942ACA02C2866E600A2F3D3 /* InspectorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC9F2C2866E600A2F3D3 /* InspectorViewController.swift */; };
+		E942ACA22C2866F400A2F3D3 /* InspectorCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACA12C2866F400A2F3D3 /* InspectorCoordinator.swift */; };
+		E942ACA42C28682C00A2F3D3 /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACA32C28682C00A2F3D3 /* MainViewModel.swift */; };
 		E9432FC62C0D612000362862 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC52C0D612000362862 /* AppDelegate.swift */; };
 		E9432FC82C0D612000362862 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC72C0D612000362862 /* SceneDelegate.swift */; };
 		E9432FCA2C0D612000362862 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC92C0D612000362862 /* ViewController.swift */; };
-		E9432FCD2C0D612000362862 /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E9432FCC2C0D612000362862 /* Base */; };
 		E9432FCF2C0D612100362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FCE2C0D612100362862 /* Assets.xcassets */; };
 		E9432FD22C0D612100362862 /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E9432FD12C0D612100362862 /* Base */; };
 		E9432FF82C0D638200362862 /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9432FF72C0D638200362862 /* RuntimeViewerUI */; };
+		E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */; };
+		E95441BA2C26E94700DFFD40 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B92C26E94700DFFD40 /* RuntimeViewerCore */; };
+		E95441BC2C26E99400DFFD40 /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainCoordinator.swift; sourceTree = "<group>"; };
+		E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCoordinator.swift; sourceTree = "<group>"; };
+		E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarNavigationController.swift; sourceTree = "<group>"; };
+		E942AC8F2C27CF4F00A2F3D3 /* SidebarRootViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootViewController.swift; sourceTree = "<group>"; };
+		E942AC922C28210100A2F3D3 /* SidebarImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageViewController.swift; sourceTree = "<group>"; };
+		E942AC952C28654F00A2F3D3 /* ContentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentCoordinator.swift; sourceTree = "<group>"; };
+		E942AC972C28658A00A2F3D3 /* ContentNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentNavigationController.swift; sourceTree = "<group>"; };
+		E942AC992C28659C00A2F3D3 /* ContentPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPlaceholderViewController.swift; sourceTree = "<group>"; };
+		E942AC9B2C2865A300A2F3D3 /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
+		E942AC9F2C2866E600A2F3D3 /* InspectorViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorViewController.swift; sourceTree = "<group>"; };
+		E942ACA12C2866F400A2F3D3 /* InspectorCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorCoordinator.swift; sourceTree = "<group>"; };
+		E942ACA32C28682C00A2F3D3 /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
 		E9432FC22C0D612000362862 /* RuntimeViewerUsingUIKit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerUsingUIKit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FC52C0D612000362862 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E9432FC72C0D612000362862 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		E9432FC92C0D612000362862 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
-		E9432FCC2C0D612000362862 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		E9432FCE2C0D612100362862 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E9432FD12C0D612100362862 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		E9432FD32C0D612100362862 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9432FF22C0D617200362862 /* RuntimeViewerUsingUIKit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerUsingUIKit.entitlements; sourceTree = "<group>"; };
+		E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -33,6 +60,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E95441BA2C26E94700DFFD40 /* RuntimeViewerCore in Frameworks */,
+				E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */,
+				E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */,
 				E9432FF82C0D638200362862 /* RuntimeViewerUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -63,8 +93,20 @@
 				E9432FF22C0D617200362862 /* RuntimeViewerUsingUIKit.entitlements */,
 				E9432FC52C0D612000362862 /* AppDelegate.swift */,
 				E9432FC72C0D612000362862 /* SceneDelegate.swift */,
+				E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */,
+				E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */,
+				E942ACA32C28682C00A2F3D3 /* MainViewModel.swift */,
+				E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */,
+				E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */,
+				E942AC8F2C27CF4F00A2F3D3 /* SidebarRootViewController.swift */,
+				E942AC922C28210100A2F3D3 /* SidebarImageViewController.swift */,
+				E942AC952C28654F00A2F3D3 /* ContentCoordinator.swift */,
+				E942AC972C28658A00A2F3D3 /* ContentNavigationController.swift */,
+				E942AC992C28659C00A2F3D3 /* ContentPlaceholderViewController.swift */,
+				E942AC9B2C2865A300A2F3D3 /* ContentTextViewController.swift */,
+				E942AC9F2C2866E600A2F3D3 /* InspectorViewController.swift */,
+				E942ACA12C2866F400A2F3D3 /* InspectorCoordinator.swift */,
 				E9432FC92C0D612000362862 /* ViewController.swift */,
-				E9432FCB2C0D612000362862 /* Main.storyboard */,
 				E9432FCE2C0D612100362862 /* Assets.xcassets */,
 				E9432FD02C0D612100362862 /* LaunchScreen.storyboard */,
 				E9432FD32C0D612100362862 /* Info.plist */,
@@ -97,6 +139,9 @@
 			name = RuntimeViewerUsingUIKit;
 			packageProductDependencies = (
 				E9432FF72C0D638200362862 /* RuntimeViewerUI */,
+				E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */,
+				E95441B92C26E94700DFFD40 /* RuntimeViewerCore */,
+				E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */,
 			);
 			productName = RuntimeViewerUsingUIKit;
 			productReference = E9432FC22C0D612000362862 /* RuntimeViewerUsingUIKit.app */;
@@ -142,7 +187,6 @@
 			files = (
 				E9432FCF2C0D612100362862 /* Assets.xcassets in Resources */,
 				E9432FD22C0D612100362862 /* Base in Resources */,
-				E9432FCD2C0D612000362862 /* Base in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,23 +197,28 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E942AC982C28658A00A2F3D3 /* ContentNavigationController.swift in Sources */,
+				E942AC8E2C27CF3400A2F3D3 /* SidebarNavigationController.swift in Sources */,
+				E95441BC2C26E99400DFFD40 /* MainSplitViewController.swift in Sources */,
+				E942AC9C2C2865A300A2F3D3 /* ContentTextViewController.swift in Sources */,
+				E942ACA22C2866F400A2F3D3 /* InspectorCoordinator.swift in Sources */,
+				E942AC962C28654F00A2F3D3 /* ContentCoordinator.swift in Sources */,
+				E942AC8C2C27CF0A00A2F3D3 /* SidebarCoordinator.swift in Sources */,
 				E9432FCA2C0D612000362862 /* ViewController.swift in Sources */,
 				E9432FC62C0D612000362862 /* AppDelegate.swift in Sources */,
+				E942AC932C28210100A2F3D3 /* SidebarImageViewController.swift in Sources */,
+				E942AC772C270C0000A2F3D3 /* MainCoordinator.swift in Sources */,
 				E9432FC82C0D612000362862 /* SceneDelegate.swift in Sources */,
+				E942AC9A2C28659C00A2F3D3 /* ContentPlaceholderViewController.swift in Sources */,
+				E942ACA02C2866E600A2F3D3 /* InspectorViewController.swift in Sources */,
+				E942AC902C27CF4F00A2F3D3 /* SidebarRootViewController.swift in Sources */,
+				E942ACA42C28682C00A2F3D3 /* MainViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
-		E9432FCB2C0D612000362862 /* Main.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				E9432FCC2C0D612000362862 /* Base */,
-			);
-			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
 		E9432FD02C0D612100362862 /* LaunchScreen.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -312,9 +361,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingUIKit/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
@@ -331,7 +380,7 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2,6,7";
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Debug;
@@ -348,9 +397,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingUIKit/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
@@ -367,7 +416,7 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2,6,7";
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Release;
@@ -396,9 +445,21 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerApplication;
+		};
 		E9432FF72C0D638200362862 /* RuntimeViewerUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerUI;
+		};
+		E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerArchitectures;
+		};
+		E95441B92C26E94700DFFD40 /* RuntimeViewerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

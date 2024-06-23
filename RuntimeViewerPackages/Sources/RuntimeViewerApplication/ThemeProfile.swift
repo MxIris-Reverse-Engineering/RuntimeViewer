@@ -5,23 +5,30 @@
 //  Created by JH on 2024/6/8.
 //
 
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
+#endif
+
+#if canImport(UIKit)
+import UIKit
+#endif
+
+import UIFoundation
 import RuntimeViewerCore
 
-@MainActor
-protocol ThemeProfile {
-    var selectionBackgroundColor: NSColor { get }
-    var backgroundColor: NSColor { get }
-    func font(for type: CDSemanticType) -> NSFont
-    func color(for type: CDSemanticType) -> NSColor
+public protocol ThemeProfile {
+    var selectionBackgroundColor: NSUIColor { get }
+    var backgroundColor: NSUIColor { get }
+    func font(for type: CDSemanticType) -> NSUIFont
+    func color(for type: CDSemanticType) -> NSUIColor
 }
 
-struct XcodeDarkTheme: ThemeProfile {
-    let selectionBackgroundColor: NSColor = #colorLiteral(red: 0.3904261589, green: 0.4343567491, blue: 0.5144847631, alpha: 1)
+public struct XcodeDarkTheme: ThemeProfile {
+    public let selectionBackgroundColor: NSUIColor = #colorLiteral(red: 0.3904261589, green: 0.4343567491, blue: 0.5144847631, alpha: 1)
 
-    let backgroundColor: NSColor = #colorLiteral(red: 0.1251632571, green: 0.1258862913, blue: 0.1465735137, alpha: 1)
+    public let backgroundColor: NSUIColor = #colorLiteral(red: 0.1251632571, green: 0.1258862913, blue: 0.1465735137, alpha: 1)
 
-    func font(for type: CDSemanticType) -> NSFont {
+    public func font(for type: CDSemanticType) -> NSUIFont {
         switch type {
         case .keyword:
             return .monospacedSystemFont(ofSize: 13, weight: .semibold)
@@ -30,7 +37,7 @@ struct XcodeDarkTheme: ThemeProfile {
         }
     }
 
-    func color(for type: CDSemanticType) -> NSColor {
+    public func color(for type: CDSemanticType) -> NSUIColor {
         switch type {
         case .comment:
             return #colorLiteral(red: 0.4976348877, green: 0.5490466952, blue: 0.6000126004, alpha: 1)

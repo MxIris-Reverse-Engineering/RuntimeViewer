@@ -7,6 +7,7 @@
 
 import AppKit
 import RuntimeViewerUI
+import RuntimeViewerApplication
 
 class MainSplitViewController: NSSplitViewController {
     var viewModel: MainViewModel?
@@ -36,7 +37,7 @@ class MainSplitViewController: NSSplitViewController {
     @objc func _ancestorViewControllerOfClass(_ class: Any?) -> Any? {
         return nil
     }
-    
+
     func setupSplitViewItems() {
         splitViewItems[0].do {
             $0.minimumThickness = 250
@@ -56,7 +57,7 @@ class MainSplitViewController: NSSplitViewController {
             AppDefaults[\.isInitialSetupSplitView] = false
         }
     }
-    
+
     @objc func _toggleInspector(_ sender: Any?) {
         guard let inspectorItem = splitViewItems.filter({ $0.behavior == .inspector }).first else { return }
         inspectorItem.animator().isCollapsed = !inspectorItem.isCollapsed

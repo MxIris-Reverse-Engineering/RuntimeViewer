@@ -5,22 +5,22 @@
 //  Created by JH on 2024/6/8.
 //
 
-import AppKit
+import Foundation
 import RxDefaultsPlus
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-class AppDefaults {
-    static let shared = AppDefaults()
+public class AppDefaults {
+    public static let shared = AppDefaults()
 
     @UserDefault(key: "isInitialSetupSplitView", defaultValue: true)
-    var isInitialSetupSplitView: Bool
+    public var isInitialSetupSplitView: Bool
 
     @UserDefault(key: "generationOptions", defaultValue: .init())
-//    @Observed
-    var options: CDGenerationOptions
-    
-    static subscript<Value>(keyPath: ReferenceWritableKeyPath<AppDefaults, Value>) -> Value {
+    ///    @Observed
+    public var options: CDGenerationOptions
+
+    public static subscript<Value>(keyPath: ReferenceWritableKeyPath<AppDefaults, Value>) -> Value {
         set {
             shared[keyPath: keyPath] = newValue
         }
@@ -29,7 +29,7 @@ class AppDefaults {
         }
     }
 
-    static subscript<Value>(keyPath: KeyPath<AppDefaults, Value>) -> Value {
+    public static subscript<Value>(keyPath: KeyPath<AppDefaults, Value>) -> Value {
         shared[keyPath: keyPath]
     }
 }
