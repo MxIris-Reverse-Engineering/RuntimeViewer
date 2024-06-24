@@ -25,6 +25,10 @@ class MainViewModel: ViewModel<MainRoute> {
     let completeTransition: Observable<SidebarRoute>
 
     func transform(_ input: Input) -> Output {
+//        input.sidebarBackClick.emitOnNext { [unowned self] in
+//            router.trigger(.sidebarBack)
+//        }
+//        .disposed(by: rx.disposeBag)
         input.sidebarBackClick.emit(to: router.rx.trigger(.sidebarBack)).disposed(by: rx.disposeBag)
         let sharingServiceItems = completeTransition.map { router -> [Any] in
             switch router {

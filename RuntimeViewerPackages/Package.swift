@@ -160,7 +160,7 @@ let package = Package(
 //                .product(name: "UXKit", package: "OpenUXKit"),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbol", package: "SFSymbol"),
-//                .product(name: "IDEIcons", package: "ide-icons"),
+                .product(name: "IDEIcons", package: "ide-icons"),
                 .product(name: "FilterUI", package: "filter-ui")
             ]
         ),
