@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import FilterUI
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication

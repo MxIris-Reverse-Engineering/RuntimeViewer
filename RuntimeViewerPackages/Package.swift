@@ -11,7 +11,7 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .macCatalyst, .visionOS]
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
-        .iOS(.v14), .macOS(.v11), .macCatalyst(.v14), .tvOS(.v14), .visionOS(.v1)
+        .iOS(.v14), .macOS(.v12), .macCatalyst(.v14), .tvOS(.v14), .visionOS(.v1)
     ],
     products: [
         .library(
@@ -90,6 +90,7 @@ let package = Package(
             url: "https://github.com/Mx-Iris/SFSymbol",
             branch: "main"
         ),
+//        .package(path: "/Volumes/Code/Personal/SFSymbol"),
         .package(
             url: "https://github.com/CombineCommunity/RxCombine",
             .upToNextMajor(from: "2.0.0")
@@ -98,6 +99,7 @@ let package = Package(
             url: "https://github.com/MxIris-Library-Forks/ide-icons",
             branch: "main"
         ),
+//            .package(path: "/Volumes/Code/Personal/ide-icons"),
 //        .package(
 //            url: "https://github.com/krzyzanowskim/STTextView",
 //            from: "0.9.5"
@@ -108,6 +110,14 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/RxUIKit",
+            branch: "main"
+        ),
+        .package(
+            url: "https://github.com/CharlesJS/SwiftyXPC",
+            .upToNextMajor(from: "0.5.3")
+        ),
+        .package(
+            url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
             branch: "main"
         ),
     ],
@@ -150,7 +160,8 @@ let package = Package(
 //                .product(name: "UXKit", package: "OpenUXKit"),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbol", package: "SFSymbol"),
-                .product(name: "IDEIcons", package: "ide-icons"),
+//                .product(name: "IDEIcons", package: "ide-icons"),
+                .product(name: "FilterUI", package: "filter-ui")
             ]
         ),
         .target(

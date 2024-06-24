@@ -1,41 +1,16 @@
 //
 //  SceneDelegate.swift
-//  RuntimeVieweriOSHelper
+//  RuntimeViewerUsingCatalyst
 //
 //  Created by JH on 2024/6/24.
 //
 
 import UIKit
-class ServiceDelegate: NSObject, NSXPCListenerDelegate {
-    
-    /// This method is where the NSXPCListener configures, accepts, and resumes a new incoming NSXPCConnection.
-    func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection) -> Bool {
-        
-        // Configure the connection.
-        // First, set the interface that the exported object implements.
-        newConnection.exportedInterface = NSXPCInterface(with: RuntimeVieweriOSHelperServiceProtocol.self)
-        
-        // Next, set the object that the connection exports. All messages sent on the connection to this service will be sent to the exported object to handle. The connection retains the exported object.
-        let exportedObject = RuntimeVieweriOSHelperService()
-        newConnection.exportedObject = exportedObject
-        
-        // Resuming the connection allows the system to deliver more incoming messages.
-        newConnection.resume()
-        
-        // Returning true from this method tells the system that you have accepted this connection. If you want to reject the connection for some reason, call invalidate() on the connection and return false.
-        return true
-    }
-}
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
-    // Create the delegate for the service.
-    let delegate = ServiceDelegate()
 
-    // Set up the one NSXPCListener for this service. It will handle all incoming connections.
-    let listener = NSXPCListener.service()
-   
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
@@ -43,6 +18,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // This delegate does not imply the connecting scene or session are new (see `application:configurationForConnectingSceneSession` instead).
         guard let _ = (scene as? UIWindowScene) else { return }
         
+        do {
+            try AppKitBridge.shared.loadPlugins()
+            AppKitBridge.shared.plugin?.launch()
+        } catch {
+            print(error)
+        }
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

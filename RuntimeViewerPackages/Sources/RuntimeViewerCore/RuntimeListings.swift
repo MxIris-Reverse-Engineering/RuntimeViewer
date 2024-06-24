@@ -11,6 +11,15 @@ import ClassDumpRuntime
 import MachO.dyld
 import OSLog
 
+public enum RuntimeSource {
+    case native
+    @available(iOS, unavailable)
+    @available(tvOS, unavailable)
+    @available(watchOS, unavailable)
+    @available(visionOS, unavailable)
+    case macCatalyst
+}
+
 public final class RuntimeListings: ObservableObject {
     public static let shared = RuntimeListings()
     private static var sharedIfExists: RuntimeListings?
@@ -27,7 +36,7 @@ public final class RuntimeListings: ObservableObject {
 
     private var subscriptions: Set<AnyCancellable> = []
 
-    private init() {
+    public init(source: RuntimeSource = .native) {
         let classList = CDUtilities.classNames()
         let protocolList = CDUtilities.protocolNames()
         self.classList = classList

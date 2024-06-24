@@ -9,7 +9,6 @@ import Cocoa
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-@MainActor
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
     let appServices = AppServices()
