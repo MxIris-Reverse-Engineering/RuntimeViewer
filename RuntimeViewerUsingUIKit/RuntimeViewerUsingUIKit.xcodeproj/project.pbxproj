@@ -26,6 +26,8 @@
 		E9432FCF2C0D612100362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FCE2C0D612100362862 /* Assets.xcassets */; };
 		E9432FD22C0D612100362862 /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E9432FD12C0D612100362862 /* Base */; };
 		E9432FF82C0D638200362862 /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9432FF72C0D638200362862 /* RuntimeViewerUI */; };
+		E947C39E2C2AB7E400296B2E /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C39D2C2AB7E400296B2E /* Then.swift */; };
+		E947C3A12C2ACE9300296B2E /* LookinServer in Frameworks */ = {isa = PBXBuildFile; productRef = E947C3A02C2ACE9300296B2E /* LookinServer */; };
 		E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */; };
 		E95441BA2C26E94700DFFD40 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B92C26E94700DFFD40 /* RuntimeViewerCore */; };
 		E95441BC2C26E99400DFFD40 /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */; };
@@ -52,6 +54,7 @@
 		E9432FD12C0D612100362862 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		E9432FD32C0D612100362862 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9432FF22C0D617200362862 /* RuntimeViewerUsingUIKit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerUsingUIKit.entitlements; sourceTree = "<group>"; };
+		E947C39D2C2AB7E400296B2E /* Then.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Then.swift; sourceTree = "<group>"; };
 		E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -60,6 +63,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E947C3A12C2ACE9300296B2E /* LookinServer in Frameworks */,
 				E95441BA2C26E94700DFFD40 /* RuntimeViewerCore in Frameworks */,
 				E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */,
 				E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */,
@@ -91,6 +95,7 @@
 			isa = PBXGroup;
 			children = (
 				E9432FF22C0D617200362862 /* RuntimeViewerUsingUIKit.entitlements */,
+				E947C39D2C2AB7E400296B2E /* Then.swift */,
 				E9432FC52C0D612000362862 /* AppDelegate.swift */,
 				E9432FC72C0D612000362862 /* SceneDelegate.swift */,
 				E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */,
@@ -142,6 +147,7 @@
 				E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */,
 				E95441B92C26E94700DFFD40 /* RuntimeViewerCore */,
 				E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */,
+				E947C3A02C2ACE9300296B2E /* LookinServer */,
 			);
 			productName = RuntimeViewerUsingUIKit;
 			productReference = E9432FC22C0D612000362862 /* RuntimeViewerUsingUIKit.app */;
@@ -171,6 +177,9 @@
 				Base,
 			);
 			mainGroup = E9432FB92C0D612000362862;
+			packageReferences = (
+				E947C39F2C2ACE9300296B2E /* XCRemoteSwiftPackageReference "LookinServer" */,
+			);
 			productRefGroup = E9432FC32C0D612000362862 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -199,6 +208,7 @@
 			files = (
 				E942AC982C28658A00A2F3D3 /* ContentNavigationController.swift in Sources */,
 				E942AC8E2C27CF3400A2F3D3 /* SidebarNavigationController.swift in Sources */,
+				E947C39E2C2AB7E400296B2E /* Then.swift in Sources */,
 				E95441BC2C26E99400DFFD40 /* MainSplitViewController.swift in Sources */,
 				E942AC9C2C2865A300A2F3D3 /* ContentTextViewController.swift in Sources */,
 				E942ACA22C2866F400A2F3D3 /* InspectorCoordinator.swift in Sources */,
@@ -366,7 +376,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -402,7 +412,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -444,6 +454,17 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		E947C39F2C2ACE9300296B2E /* XCRemoteSwiftPackageReference "LookinServer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/QMUI/LookinServer/";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.8;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -452,6 +473,11 @@
 		E9432FF72C0D638200362862 /* RuntimeViewerUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerUI;
+		};
+		E947C3A02C2ACE9300296B2E /* LookinServer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E947C39F2C2ACE9300296B2E /* XCRemoteSwiftPackageReference "LookinServer" */;
+			productName = LookinServer;
 		};
 		E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */ = {
 			isa = XCSwiftPackageProductDependency;

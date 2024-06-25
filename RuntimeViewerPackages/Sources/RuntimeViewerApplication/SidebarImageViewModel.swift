@@ -224,7 +224,7 @@ extension SidebarImageCellViewModel: Differentiable {}
 
 extension RuntimeObjectType {
     public static let classIcon = IDEIcon("C", color: .yellow).image
-    public static let protocolIcon = IDEIcon("Pr", color: .purple).image
+    public static let protocolIcon = IDEIcon("P", color: .purple).image
 //    public static let classIcon = SFSymbol(systemName: .cSquare).nsuiImage
 //    public static let protocolIcon = SFSymbol(systemName: .pSquare).nsuiImage
 
