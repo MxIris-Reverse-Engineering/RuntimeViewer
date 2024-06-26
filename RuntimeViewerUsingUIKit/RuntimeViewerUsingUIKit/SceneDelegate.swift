@@ -6,10 +6,9 @@
 //
 
 import UIKit
-import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+class SceneDelegate: UIResponder, UIWindowSceneDelegate, UISplitViewControllerDelegate {
     var window: UIWindow?
 
     let appServices = AppServices()
@@ -19,13 +18,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = (scene as? UIWindowScene) else { return }
         let window = UIWindow(windowScene: windowScene)
+        mainCoordinator.rootViewController.delegate = self
         window.rootViewController = mainCoordinator.rootViewController
         window.makeKeyAndVisible()
         self.window = window
-
-        DispatchQueue.global().async {
-            _ = RuntimeListings.shared
-        }
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -54,5 +50,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Called as the scene transitions from the foreground to the background.
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
+    }
+    
+    func splitViewController(_ svc: UISplitViewController, topColumnForCollapsingToProposedTopColumn proposedTopColumn: UISplitViewController.Column) -> UISplitViewController.Column {
+        return .primary
+    }
+    
+    func splitViewController(_ splitViewController: UISplitViewController, collapseSecondary secondaryViewController: UIViewController, onto primaryViewController: UIViewController) -> Bool {
+        return true
+    }
+    
+    func splitViewController(_ svc: UISplitViewController, willHide column: UISplitViewController.Column) {
+        
+    }
+    
+    func splitViewController(_ svc: UISplitViewController, willShow column: UISplitViewController.Column) {
+        print(column.rawValue)
     }
 }

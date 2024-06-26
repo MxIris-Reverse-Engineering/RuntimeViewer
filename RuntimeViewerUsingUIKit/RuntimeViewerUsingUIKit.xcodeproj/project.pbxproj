@@ -98,6 +98,7 @@
 				E947C39D2C2AB7E400296B2E /* Then.swift */,
 				E9432FC52C0D612000362862 /* AppDelegate.swift */,
 				E9432FC72C0D612000362862 /* SceneDelegate.swift */,
+				E9432FC92C0D612000362862 /* ViewController.swift */,
 				E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */,
 				E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */,
 				E942ACA32C28682C00A2F3D3 /* MainViewModel.swift */,
@@ -111,7 +112,6 @@
 				E942AC9B2C2865A300A2F3D3 /* ContentTextViewController.swift */,
 				E942AC9F2C2866E600A2F3D3 /* InspectorViewController.swift */,
 				E942ACA12C2866F400A2F3D3 /* InspectorCoordinator.swift */,
-				E9432FC92C0D612000362862 /* ViewController.swift */,
 				E9432FCE2C0D612100362862 /* Assets.xcassets */,
 				E9432FD02C0D612100362862 /* LaunchScreen.storyboard */,
 				E9432FD32C0D612100362862 /* Info.plist */,
@@ -385,7 +385,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerUsingUIKit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
-				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -421,7 +421,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerUsingUIKit;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
-				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;

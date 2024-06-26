@@ -25,7 +25,7 @@ class ContentCoordinator: NavigationCoordinator<ContentRoute> {
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
-            return .set([contentTextViewController], animation: nil)
+            return .set([contentTextViewController], animation: .default)
         case let .next(runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)

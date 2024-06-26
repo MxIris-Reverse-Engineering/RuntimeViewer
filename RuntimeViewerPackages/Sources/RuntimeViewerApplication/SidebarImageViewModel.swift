@@ -178,6 +178,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
             loadState = .loading
             try CDUtilities.loadImage(at: imagePath)
             // we could set .loaded here, but there are already pipelines that will update the state
+            loadState = .loaded
         } catch {
             loadState = .loadError(error)
         }

@@ -18,7 +18,8 @@ class XiblessView: UIView {
 }
 
 class SidebarImageViewController: ViewController<SidebarImageViewModel> {
-    let imageTabBarController = UITabBarController()
+    @MagicViewLoading
+    var imageTabBarController = UITabBarController()
 
     let imageNotLoadedView = ImageLoadableView()
 
@@ -47,14 +48,15 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
             UIViewController(view: imageLoadedView),
             UIViewController(view: imageLoadErrorView),
         ]
-        imageLoadedView.tableView.register(UITableViewCell.self, forCellReuseIdentifier: .init(describing: UITableViewCell.self))
+//        imageLoadedView.tableView.register(UITableViewCell.self, forCellReuseIdentifier: .init(describing: UITableViewCell.self))
+        
         view.backgroundColor = .systemBackground
     }
 
     override func setupBindings(for viewModel: SidebarImageViewModel) {
         super.setupBindings(for: viewModel)
         let input = SidebarImageViewModel.Input(
-            runtimeObjectClicked: imageLoadedView.tableView.rx.modelSelected(SidebarImageCellViewModel.self).asSignal(),
+            runtimeObjectClicked: imageLoadedView.listView.rx.modelSelected(SidebarImageCellViewModel.self).asSignal(),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.tap.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.tap.asSignal()
@@ -63,15 +65,25 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
         )
 
         let output = viewModel.transform(input)
+        let listCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarImageCellViewModel> { cell, indexPath, viewModel in
+            var content = cell.defaultContentConfiguration()
+            content.attributedText = viewModel.name
+            content.image = viewModel.icon
+            cell.contentConfiguration = content
+        }
+//        output.runtimeObjects.drive(imageLoadedView.tableView.rx.items(cellIdentifier: .init(describing: UITableViewCell.self), cellType: UITableViewCell.self)) { _, viewModel, cell in
+//            var contentConfiguration = cell.defaultContentConfiguration()
+//            contentConfiguration.image = viewModel.icon
+//            contentConfiguration.attributedText = viewModel.name
+//            cell.contentConfiguration = contentConfiguration
+//        }
+//        .disposed(by: rx.disposeBag)
 
-        output.runtimeObjects.drive(imageLoadedView.tableView.rx.items(cellIdentifier: .init(describing: UITableViewCell.self), cellType: UITableViewCell.self)) { _, viewModel, cell in
-            var contentConfiguration = cell.defaultContentConfiguration()
-            contentConfiguration.image = viewModel.icon
-            contentConfiguration.attributedText = viewModel.name
-            cell.contentConfiguration = contentConfiguration
+        output.runtimeObjects.drive(imageLoadedView.listView.rx.items) { (collectionView, index, viewModel) -> UICollectionViewCell in
+            collectionView.dequeueConfiguredReusableCell(using: listCellRegistration, for: IndexPath(item: index, section: 0), item: viewModel)
         }
         .disposed(by: rx.disposeBag)
-
+        
         output.errorText.drive(imageLoadErrorView.titleLabel.rx.text).disposed(by: rx.disposeBag)
 
         output.notLoadedText.drive(imageNotLoadedView.titleLabel.rx.text).disposed(by: rx.disposeBag)
@@ -81,6 +93,10 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
         output.isEmpty.not().drive(imageLoadedView.emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
 
         output.loadState.map { $0.index }.drive(imageTabBarController.rx.selectedIndex).disposed(by: rx.disposeBag)
+//        output.loadState.drive(with: self) {
+//            $0.imageTabBarController.selectedIndex = $1.index
+//        }
+//        .disposed(by: rx.disposeBag)
     }
 }
 
@@ -122,8 +138,10 @@ extension SidebarImageViewController {
     class ImageLoadedView: XiblessView {
         let searchBar = UISearchBar()
 
-        let tableView = UITableView(frame: .zero, style: .insetGrouped)
+//        let tableView = UITableView(frame: .zero, style: .plain)
 
+        let listView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .sidebar)))
+        
         let emptyLabel = UILabel()
 
         override init(frame: CGRect) {
@@ -131,19 +149,21 @@ extension SidebarImageViewController {
 
             hierarchy {
                 searchBar
-                tableView
+//                tableView
+                listView
                 emptyLabel
             }
 
             searchBar.snp.makeConstraints { make in
-                make.top.left.right.equalToSuperview().inset(15)
+                make.top.equalToSuperview()
+                make.left.right.equalToSuperview().inset(15)
             }
 
-            tableView.snp.makeConstraints { make in
+            listView.snp.makeConstraints { make in
                 make.top.equalTo(searchBar.snp.bottom)
                 make.bottom.left.right.equalToSuperview().inset(15)
             }
-
+            
             emptyLabel.snp.makeConstraints { make in
                 make.center.equalToSuperview()
                 make.left.right.equalToSuperview().inset(15)
@@ -154,8 +174,12 @@ extension SidebarImageViewController {
             }
             
             searchBar.do {
-                $0.backgroundImage = nil
+                $0.backgroundImage = .image(withColor: .clear)
             }
+            
+//            tableView.do {
+//                $0.sectionHeaderTopPadding = 0
+//            }
         }
     }
 
@@ -196,6 +220,16 @@ extension UIViewController {
     convenience init(view: UIView) {
         self.init()
         self.view = view
+    }
+}
+
+extension UIImage {
+    static func image(withColor color: UIColor, size: CGSize = CGSize(width: 1, height: 1)) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { context in
+            color.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
     }
 }
 

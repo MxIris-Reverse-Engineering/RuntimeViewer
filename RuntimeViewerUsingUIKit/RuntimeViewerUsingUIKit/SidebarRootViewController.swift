@@ -22,6 +22,7 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
         super.setupBindings(for: viewModel)
+        
         let headerCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarRootCellViewModel> { cell, indexPath, viewModel in
             var content = cell.defaultContentConfiguration()
             content.attributedText = viewModel.name
