@@ -29,7 +29,8 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
 
     init(appServices: AppServices) {
         self.appServices = appServices
-        super.init(rootViewController: .init(style: .doubleColumn), initialRoute: .initial)
+        super.init(rootViewController: .init(style: .doubleColumn), initialRoute: nil)
+        rootViewController.delegate = self
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
@@ -45,6 +46,8 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
         }
     }
 
+    
+    
     override func completeTransition(for route: MainRoute) {
 //        switch route {
 //        case .initial:
@@ -55,6 +58,11 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
     }
 }
 
+extension MainCoordinator: UISplitViewControllerDelegate {
+    func splitViewController(_ svc: UISplitViewController, topColumnForCollapsingToProposedTopColumn proposedTopColumn: UISplitViewController.Column) -> UISplitViewController.Column {
+        return .primary
+    }
+}
 
 extension MainCoordinator: SidebarCoordinatorDelegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {

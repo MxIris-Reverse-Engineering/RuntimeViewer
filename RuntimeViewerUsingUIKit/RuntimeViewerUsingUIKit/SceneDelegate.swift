@@ -18,10 +18,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate, UISplitViewControllerDe
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = (scene as? UIWindowScene) else { return }
         let window = UIWindow(windowScene: windowScene)
-        mainCoordinator.rootViewController.delegate = self
         window.rootViewController = mainCoordinator.rootViewController
         window.makeKeyAndVisible()
         self.window = window
+        mainCoordinator.trigger(.initial)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

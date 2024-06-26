@@ -8,16 +8,32 @@ import RuntimeViewerApplication
 class SidebarRootViewController: ViewController<SidebarRootViewModel> {
     let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .sidebar)))
 
+    let searchBar = UISearchBar()
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
         hierarchy {
+            searchBar
             collectionView
         }
 
-        collectionView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+        searchBar.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide)
+            make.left.right.equalTo(view.safeAreaLayoutGuide)
+            
         }
+        
+        collectionView.snp.makeConstraints { make in
+            make.top.equalTo(searchBar.snp.bottom)
+            make.left.right.bottom.equalTo(view.safeAreaLayoutGuide)
+        }
+        
+        searchBar.do {
+            $0.backgroundImage = .image(withColor: .clear)
+        }
+        
+        view.backgroundColor = .secondarySystemBackground
     }
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {

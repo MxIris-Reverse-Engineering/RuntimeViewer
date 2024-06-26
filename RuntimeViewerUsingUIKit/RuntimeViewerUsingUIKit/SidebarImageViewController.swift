@@ -48,9 +48,8 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
             UIViewController(view: imageLoadedView),
             UIViewController(view: imageLoadErrorView),
         ]
-//        imageLoadedView.tableView.register(UITableViewCell.self, forCellReuseIdentifier: .init(describing: UITableViewCell.self))
         
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .secondarySystemBackground
     }
 
     override func setupBindings(for viewModel: SidebarImageViewModel) {
@@ -138,8 +137,6 @@ extension SidebarImageViewController {
     class ImageLoadedView: XiblessView {
         let searchBar = UISearchBar()
 
-//        let tableView = UITableView(frame: .zero, style: .plain)
-
         let listView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .sidebar)))
         
         let emptyLabel = UILabel()
@@ -207,10 +204,13 @@ extension SidebarImageViewController {
 
             titleLabel.do {
                 $0.textAlignment = .center
+                $0.numberOfLines = 0
             }
 
             loadImageButton.do {
+                $0.configuration = .tinted()
                 $0.setTitle("Load now", for: .normal)
+                
             }
         }
     }
