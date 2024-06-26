@@ -22,7 +22,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
 
     public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
-        self.theme = XcodeDarkTheme()
+        self.theme = XcodePresentationTheme()
         super.init(appServices: appServices, router: router)
         setAttributedString(for: AppDefaults[\.options])
         AppDefaults[\.$options].asSignalOnErrorJustComplete().emit(with: self, onNext: {
@@ -39,6 +39,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
     
     public struct Output {
         public let attributedString: Driver<NSAttributedString>
+        public let runtimeObjectName: Driver<String>
         public let theme: Driver<ThemeProfile>
     }
 
@@ -69,6 +70,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         input.runtimeObjectClicked.emit(with: self) { $0.router.trigger(.next($1)) }.disposed(by: rx.disposeBag)
         return Output(
             attributedString: $attributedString.asDriver().compactMap { $0 },
+            runtimeObjectName: $runtimeObject.asDriver().map { $0.name },
             theme: $theme.asDriver()
         )
     }

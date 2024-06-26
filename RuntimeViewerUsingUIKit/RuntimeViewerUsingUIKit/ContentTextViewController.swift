@@ -27,6 +27,7 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
             $0.isEditable = false
             $0.linkTextAttributes = [:]
             $0.delegate = self
+            $0.textContainerInset = .init(top: 0, left: 15, bottom: 0, right: 15)
         }
     }
 
@@ -36,6 +37,7 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
         let output = viewModel.transform(input)
 
         output.attributedString.drive(textView.rx.attributedText).disposed(by: rx.disposeBag)
+        output.runtimeObjectName.drive(navigationItem.rx.title).disposed(by: rx.disposeBag)
     }
 }
 

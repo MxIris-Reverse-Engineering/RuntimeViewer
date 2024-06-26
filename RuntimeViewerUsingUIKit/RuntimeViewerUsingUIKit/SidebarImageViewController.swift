@@ -38,6 +38,7 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
 
         imageTabBarController.view.snp.makeConstraints { make in
             make.edges.equalTo(view.safeAreaLayoutGuide)
+//            make.left.right.equalToSuperview()
         }
 
         imageTabBarController.tabBar.isHidden = true
@@ -48,7 +49,7 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
             UIViewController(view: imageLoadedView),
             UIViewController(view: imageLoadErrorView),
         ]
-        
+
         view.backgroundColor = .secondarySystemBackground
     }
 
@@ -70,32 +71,23 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
             content.image = viewModel.icon
             cell.contentConfiguration = content
         }
-//        output.runtimeObjects.drive(imageLoadedView.tableView.rx.items(cellIdentifier: .init(describing: UITableViewCell.self), cellType: UITableViewCell.self)) { _, viewModel, cell in
-//            var contentConfiguration = cell.defaultContentConfiguration()
-//            contentConfiguration.image = viewModel.icon
-//            contentConfiguration.attributedText = viewModel.name
-//            cell.contentConfiguration = contentConfiguration
-//        }
-//        .disposed(by: rx.disposeBag)
 
-        output.runtimeObjects.drive(imageLoadedView.listView.rx.items) { (collectionView, index, viewModel) -> UICollectionViewCell in
+        output.runtimeObjects.drive(imageLoadedView.listView.rx.items) { collectionView, index, viewModel -> UICollectionViewCell in
             collectionView.dequeueConfiguredReusableCell(using: listCellRegistration, for: IndexPath(item: index, section: 0), item: viewModel)
         }
         .disposed(by: rx.disposeBag)
-        
+
         output.errorText.drive(imageLoadErrorView.titleLabel.rx.text).disposed(by: rx.disposeBag)
 
         output.notLoadedText.drive(imageNotLoadedView.titleLabel.rx.text).disposed(by: rx.disposeBag)
 
         output.emptyText.drive(imageLoadedView.emptyLabel.rx.text).disposed(by: rx.disposeBag)
 
+        output.isEmpty.drive(imageLoadedView.searchBar.rx.isHidden).disposed(by: rx.disposeBag)
+        
         output.isEmpty.not().drive(imageLoadedView.emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
 
         output.loadState.map { $0.index }.drive(imageTabBarController.rx.selectedIndex).disposed(by: rx.disposeBag)
-//        output.loadState.drive(with: self) {
-//            $0.imageTabBarController.selectedIndex = $1.index
-//        }
-//        .disposed(by: rx.disposeBag)
     }
 }
 
@@ -138,7 +130,7 @@ extension SidebarImageViewController {
         let searchBar = UISearchBar()
 
         let listView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .sidebar)))
-        
+
         let emptyLabel = UILabel()
 
         override init(frame: CGRect) {
@@ -146,7 +138,6 @@ extension SidebarImageViewController {
 
             hierarchy {
                 searchBar
-//                tableView
                 listView
                 emptyLabel
             }
@@ -160,7 +151,7 @@ extension SidebarImageViewController {
                 make.top.equalTo(searchBar.snp.bottom)
                 make.bottom.left.right.equalToSuperview().inset(15)
             }
-            
+
             emptyLabel.snp.makeConstraints { make in
                 make.center.equalToSuperview()
                 make.left.right.equalToSuperview().inset(15)
@@ -168,15 +159,12 @@ extension SidebarImageViewController {
 
             emptyLabel.do {
                 $0.textAlignment = .center
+                $0.numberOfLines = 0
             }
-            
+
             searchBar.do {
                 $0.backgroundImage = .image(withColor: .clear)
             }
-            
-//            tableView.do {
-//                $0.sectionHeaderTopPadding = 0
-//            }
         }
     }
 
@@ -210,7 +198,6 @@ extension SidebarImageViewController {
             loadImageButton.do {
                 $0.configuration = .tinted()
                 $0.setTitle("Load now", for: .normal)
-                
             }
         }
     }

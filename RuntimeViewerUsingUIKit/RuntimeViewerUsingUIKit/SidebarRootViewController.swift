@@ -9,7 +9,7 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
     let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .sidebar)))
 
     let searchBar = UISearchBar()
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -20,52 +20,39 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
 
         searchBar.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide)
-            make.left.right.equalTo(view.safeAreaLayoutGuide)
-            
+            make.left.right.equalTo(view.safeAreaLayoutGuide).inset(15)
         }
-        
+
         collectionView.snp.makeConstraints { make in
             make.top.equalTo(searchBar.snp.bottom)
-            make.left.right.bottom.equalTo(view.safeAreaLayoutGuide)
+            make.bottom.equalTo(view.safeAreaLayoutGuide)
+            make.left.right.equalToSuperview()
         }
-        
+
         searchBar.do {
             $0.backgroundImage = .image(withColor: .clear)
         }
-        
+
         view.backgroundColor = .secondarySystemBackground
     }
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
         super.setupBindings(for: viewModel)
-        
-        let headerCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarRootCellViewModel> { cell, indexPath, viewModel in
-            var content = cell.defaultContentConfiguration()
-            content.attributedText = viewModel.name
-            content.image = viewModel.icon
-            cell.contentConfiguration = content
-            cell.indentationWidth = 8
-            cell.accessories = [.outlineDisclosure(options: .init(style: .header))]
-        }
-        let leafCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarRootCellViewModel> { cell, indexPath, viewModel in
-            var content = cell.defaultContentConfiguration()
-            content.attributedText = viewModel.name
-            content.image = viewModel.icon
-            cell.contentConfiguration = content
-            cell.indentationWidth = 8
-        }
-        let input = SidebarRootViewModel.Input(clickedNode: collectionView.rx.modelSelected(SidebarRootCellViewModel.self).asSignal(), selectedNode: .never(), searchString: .never())
+
+        let input = SidebarRootViewModel.Input(clickedNode: collectionView.rx.modelSelected(SidebarRootCellViewModel.self).asSignal(), selectedNode: .never(), searchString: searchBar.rx.text.asSignalOnErrorJustComplete().filterNil())
 
         let output = viewModel.transform(input)
 
-        output.rootNode.drive(collectionView.rx.rootNode(source:)) { (collectionView: UICollectionView, indexPath: IndexPath, viewModel: SidebarRootCellViewModel) -> UICollectionViewCell? in
-            if viewModel.isExpandable {
-                return collectionView.dequeueConfiguredReusableCell(using: headerCellRegistration, for: indexPath, item: viewModel)
-            } else {
-                return collectionView.dequeueConfiguredReusableCell(using: leafCellRegistration, for: indexPath, item: viewModel)
-            }
+        output.rootNode.drive(collectionView.rx.rootNode(source:)) { (collectionView: UICollectionView, indexPath: IndexPath, viewModel: SidebarRootCellViewModel, cell: UICollectionViewListCell) in
+            var content = cell.defaultContentConfiguration()
+            content.attributedText = viewModel.name
+            content.image = viewModel.icon
+            cell.contentConfiguration = content
+            cell.indentationWidth = 8
         }
         .disposed(by: rx.disposeBag)
+        
+        output.filteredRootNode.map { $0.map { [$0] } }.drive(collectionView.rx.filteredNodes).disposed(by: rx.disposeBag)
     }
 }
 

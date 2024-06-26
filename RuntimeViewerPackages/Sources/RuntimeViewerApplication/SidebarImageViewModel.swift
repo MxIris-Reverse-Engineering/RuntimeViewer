@@ -224,8 +224,16 @@ extension SidebarImageCellViewModel: Differentiable {}
 #endif
 
 extension RuntimeObjectType {
-    public static let classIcon = IDEIcon("C", color: .yellow).image
-    public static let protocolIcon = IDEIcon("P", color: .purple).image
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+    private static let iconSize: CGFloat = 16
+    #endif
+
+    #if canImport(UIKit)
+    private static let iconSize: CGFloat = 24
+    #endif
+
+    public static let classIcon = IDEIcon("C", color: .yellow, style: .default, size: iconSize).image
+    public static let protocolIcon = IDEIcon("Pr", color: .purple, style: .default, size: iconSize).image
 //    public static let classIcon = SFSymbol(systemName: .cSquare).nsuiImage
 //    public static let protocolIcon = SFSymbol(systemName: .pSquare).nsuiImage
 

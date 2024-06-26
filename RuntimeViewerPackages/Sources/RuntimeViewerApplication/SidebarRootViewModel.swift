@@ -15,6 +15,9 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     @Observed
     private var rootNode = SidebarRootCellViewModel(node: CDUtilities.dyldSharedCacheImageRootNode, parent: nil)
 
+    @Observed
+    private var filteredRootNode: SidebarRootCellViewModel? = nil
+
     private lazy var allNodes: [String: SidebarRootCellViewModel] = {
         var allNodes: [String: SidebarRootCellViewModel] = [:]
         for node in rootNode {
@@ -39,6 +42,9 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 
     public struct Output {
         public let rootNode: Driver<SidebarRootCellViewModel>
+        #if canImport(UIKit)
+        public let filteredRootNode: Driver<SidebarRootCellViewModel?>
+        #endif
     }
 
     public func transform(_ input: Input) -> Output {
@@ -50,12 +56,29 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
             }
         }
         .disposed(by: rx.disposeBag)
-
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         input.searchString.emit(with: self) {
             $0.rootNode.filter = $1
             $0.rootNode = $0.rootNode
         }.disposed(by: rx.disposeBag)
         return Output(rootNode: $rootNode.asDriver())
+        #endif
+
+        #if canImport(UIKit)
+
+        input.searchString.emit(with: self) { target, searchString in
+            if searchString.isEmpty {
+                target.filteredRootNode = nil
+            } else {
+                let rootNode = SidebarRootCellViewModel(node: CDUtilities.dyldSharedCacheImageRootNode, parent: nil)
+                rootNode.filter = searchString
+                target.filteredRootNode = rootNode
+            }
+        }.disposed(by: rx.disposeBag)
+        
+        return Output(rootNode: $rootNode.asDriver(), filteredRootNode: $filteredRootNode.asDriver())
+        
+        #endif
     }
 }
 
