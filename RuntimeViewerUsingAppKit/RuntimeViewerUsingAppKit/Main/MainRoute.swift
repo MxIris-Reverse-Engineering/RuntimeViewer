@@ -12,7 +12,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 public enum MainRoute: Routable {
-    case initial
+    case main(RuntimeListings)
     case select(RuntimeObjectType)
     case inspect(InspectableType)
     case sidebarBack

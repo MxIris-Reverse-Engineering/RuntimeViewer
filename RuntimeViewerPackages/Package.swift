@@ -124,6 +124,10 @@ let package = Package(
             url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/TrGiLong/RxConcurrency",
+            branch: "main"
+        ),
     ],
     targets: [
         .target(
@@ -137,6 +141,7 @@ let package = Package(
                 .product(name: "RxUIKit", package: "RxUIKit", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "RxCombine", package: "RxCombine"),
                 .product(name: "RxEnumKit", package: "RxEnumKit"),
+                .product(name: "RxConcurrency", package: "RxConcurrency"),
 //                .product(name: "RxSwiftExt", package: "RxSwiftExt"),
                 .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "XCoordinatorRx", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),

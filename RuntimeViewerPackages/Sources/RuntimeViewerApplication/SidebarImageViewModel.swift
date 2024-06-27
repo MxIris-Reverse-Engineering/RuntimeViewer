@@ -10,91 +10,103 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
+
 public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     private let namedNode: RuntimeNamedNode
 
     private let imagePath: String
     private let imageName: String
 
-    private let runtimeListings: RuntimeListings = .shared
+    private let runtimeListings: RuntimeListings
 
-    @Observed private var searchString: String
-    @Observed private var searchScope: RuntimeTypeSearchScope
-    @Observed private var classNames: [String] // not filtered
-    @Observed private var protocolNames: [String] // not filtered
-    @Observed private var runtimeObjects: [RuntimeObjectType] // filtered based on search
-    @Observed private var loadState: RuntimeImageLoadState
+    
+    @MainActor @Observed private var searchString: String = ""
+    @MainActor @Observed private var searchScope: RuntimeTypeSearchScope = .all
+    @MainActor @Observed private var classNames: [String] = []
+    @MainActor @Observed private var protocolNames: [String] = []
+    @MainActor @Observed private var runtimeObjects: [RuntimeObjectType] = []
+    @MainActor @Observed private var loadState: RuntimeImageLoadState = .notLoaded
 
+    
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
+        self.runtimeListings = appServices.runtimeListings
         self.namedNode = namedNode
         let imagePath = namedNode.path
         self.imagePath = imagePath
         self.imageName = namedNode.name
-
-        let classNames = CDUtilities.classNamesIn(image: imagePath)
-        let protocolNames = runtimeListings.imageToProtocols[CDUtilities.patchImagePathForDyld(imagePath)] ?? []
-        self.classNames = classNames
-        self.protocolNames = protocolNames
-
-        let searchString = ""
-        let searchScope: RuntimeTypeSearchScope = .all
-
-        self.searchString = searchString
-        self.searchScope = searchScope
-
-        self.runtimeObjects = Self.runtimeObjectsFor(
-            classNames: classNames, protocolNames: protocolNames,
-            searchString: searchString, searchScope: searchScope
-        )
-
-        self.loadState = runtimeListings.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
-
         super.init(appServices: appServices, router: router)
+        Task {
 
-        runtimeListings.$classList
-            .map { _ in
-                CDUtilities.classNamesIn(image: imagePath)
-            }
-            .asObservable()
-            .bind(to: $classNames)
-            .disposed(by: rx.disposeBag)
+            let classNames = try await runtimeListings.classNamesIn(image: imagePath)
+            let protocolNames = runtimeListings.imageToProtocols[try await runtimeListings.patchImagePathForDyld(imagePath)] ?? []
+            await MainActor.run {
+                self.classNames = classNames
+                self.protocolNames = protocolNames
 
-        runtimeListings.$imageToProtocols
-            .map { imageToProtocols in
-                imageToProtocols[CDUtilities.patchImagePathForDyld(imagePath)] ?? []
-            }
-            .asObservable()
-            .bind(to: $protocolNames)
-            .disposed(by: rx.disposeBag)
+                let searchString = ""
+                let searchScope: RuntimeTypeSearchScope = .all
 
-        let debouncedSearch = $searchString
-            .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
-            .asObservable()
+                self.searchString = searchString
+                self.searchScope = searchScope
 
-        $searchScope
-            .asPublisher()
-            .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
-                Self.runtimeObjectsFor(
-                    classNames: $2, protocolNames: $3,
-                    searchString: $1, searchScope: $0
+                self.runtimeObjects = Self.runtimeObjectsFor(
+                    classNames: classNames, protocolNames: protocolNames,
+                    searchString: searchString, searchScope: searchScope
                 )
-            }
-            .asObservable()
-            .map { $0.sorted() }
-            .bind(to: $runtimeObjects)
-            .disposed(by: rx.disposeBag)
 
-        runtimeListings.$imageList
-            .map { imageList in
-                imageList.contains(CDUtilities.patchImagePathForDyld(imagePath))
+                self.loadState = runtimeListings.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
             }
-            .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
-            .map { _ in
-                RuntimeImageLoadState.loaded
-            }
-            .asObservable()
-            .bind(to: $loadState)
-            .disposed(by: rx.disposeBag)
+
+
+            runtimeListings.$classList
+                .asObservable()
+                .flatMap { [unowned self] _ in
+                    try await runtimeListings.classNamesIn(image: imagePath)
+                }
+                .catchAndReturn([])
+                .bind(to: $classNames)
+                .disposed(by: rx.disposeBag)
+
+            runtimeListings.$imageToProtocols
+                .asObservable()
+                .flatMap { [unowned self] imageToProtocols in
+                    imageToProtocols[try await runtimeListings.patchImagePathForDyld(imagePath)] ?? []
+                }
+                .catchAndReturn([])
+                .bind(to: $protocolNames)
+                .disposed(by: rx.disposeBag)
+
+            let debouncedSearch = $searchString
+                .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
+                .asObservable()
+
+            $searchScope
+                .asPublisher()
+                .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
+                    Self.runtimeObjectsFor(
+                        classNames: $2, protocolNames: $3,
+                        searchString: $1, searchScope: $0
+                    )
+                }
+                .asObservable()
+                .map { $0.sorted() }
+                .bind(to: $runtimeObjects)
+                .disposed(by: rx.disposeBag)
+
+            runtimeListings.$imageList
+                .asObservable()
+                .flatMap { [unowned self] imageList in
+                    imageList.contains(try await runtimeListings.patchImagePathForDyld(imagePath))
+                }
+                .catchAndReturn(false)
+                .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
+                .map { _ in
+                    RuntimeImageLoadState.loaded
+                }
+                .asObservable()
+                .bind(to: $loadState)
+                .disposed(by: rx.disposeBag)
+        }
     }
 
     public struct Input {
@@ -117,6 +129,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         public let isEmpty: Driver<Bool>
     }
 
+    @MainActor
     public func transform(_ input: Input) -> Output {
         input.searchString.emit(to: $searchString).disposed(by: rx.disposeBag)
 
@@ -174,13 +187,20 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     }
 
     private func tryLoadImage() {
-        do {
-            loadState = .loading
-            try CDUtilities.loadImage(at: imagePath)
-            // we could set .loaded here, but there are already pipelines that will update the state
-            loadState = .loaded
-        } catch {
-            loadState = .loadError(error)
+        Task {
+            do {
+                await MainActor.run {
+                    loadState = .loading
+                }
+                try await runtimeListings.loadImage(at: imagePath)
+                await MainActor.run {
+                    loadState = .loaded
+                }
+            } catch {
+                await MainActor.run {
+                    loadState = .loadError(error)
+                }
+            }
         }
     }
 }

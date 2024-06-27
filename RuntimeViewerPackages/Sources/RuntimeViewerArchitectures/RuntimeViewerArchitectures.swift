@@ -6,6 +6,7 @@
 @_exported import RxDefaultsPlus
 @_exported import RxEnumKit
 @_exported import EnumKit
+@_exported import RxConcurrency
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 @_exported import RxAppKit

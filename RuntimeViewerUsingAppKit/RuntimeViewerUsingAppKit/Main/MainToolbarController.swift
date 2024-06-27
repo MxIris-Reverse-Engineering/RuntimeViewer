@@ -14,6 +14,7 @@ extension NSToolbarItem.Identifier {
         static let share: NSToolbarItem.Identifier = "share"
         static let save: NSToolbarItem.Identifier = "save"
         static let inspector: NSToolbarItem.Identifier = "inspector"
+        static let switchSource: NSToolbarItem.Identifier = "switchSource"
         static let inspectorTrackingSeparator: NSToolbarItem.Identifier = "inspectorTrackingSeparator"
     }
 }
@@ -55,6 +56,15 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             saveButton.image = SFSymbol(systemName: .squareAndArrowDown).nsImage
         }
     }
+    
+    class SwitchSourceToolbarItem: NSToolbarItem {
+        let segmentedControl = NSSegmentedControl(labels: ["Native", "Mac Catalyst"], trackingMode: .selectOne, target: nil, action: nil)
+        init() {
+            super.init(itemIdentifier: .Main.switchSource)
+            view = segmentedControl
+            segmentedControl.selectedSegment = 0
+        }
+    }
 
     let toolbar: NSToolbar
 
@@ -66,6 +76,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
 
     let saveItem = SaveToolbarItem()
 
+    let switchSourceItem = SwitchSourceToolbarItem()
+    
     lazy var inspectorTrackingSeparatorItem = NSTrackingSeparatorToolbarItem(identifier: .Main.inspectorTrackingSeparator, splitView: delegate.splitView, dividerIndex: 1)
 
     let sharingServicePickerItem = NSSharingServicePickerToolbarItem(itemIdentifier: .Main.share)
@@ -80,11 +92,11 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .Main.back, .flexibleSpace, .sidebarTrackingSeparator, .Main.save, .Main.share, .Main.inspectorTrackingSeparator, .flexibleSpace, .Main.inspector]
+        [.toggleSidebar, .Main.back, .flexibleSpace, .sidebarTrackingSeparator, .Main.switchSource, .Main.save, .Main.share, .Main.inspectorTrackingSeparator, .flexibleSpace, .Main.inspector]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.Main.back, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .Main.inspectorTrackingSeparator, .Main.inspector, .Main.share, .Main.save]
+        [.Main.back, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .Main.inspectorTrackingSeparator, .Main.inspector, .Main.share, .Main.save, .Main.switchSource]
     }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
@@ -99,6 +111,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             return sharingServicePickerItem
         case .Main.save:
             return saveItem
+        case .Main.switchSource:
+            return switchSourceItem
         default:
             return nil
         }

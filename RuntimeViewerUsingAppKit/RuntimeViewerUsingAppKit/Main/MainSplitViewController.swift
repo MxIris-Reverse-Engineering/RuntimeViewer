@@ -16,10 +16,6 @@ class MainSplitViewController: NSSplitViewController {
 
     private static let identifier = "com.JH.RuntimeViewer.MainSplitViewController.identifier"
 
-    func setupBindings(for viewModel: MainViewModel) {
-        self.viewModel = viewModel
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
         splitView.identifier = .init(Self.identifier)

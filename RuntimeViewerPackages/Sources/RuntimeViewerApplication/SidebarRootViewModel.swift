@@ -13,15 +13,17 @@ import RuntimeViewerUI
 
 public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     @Observed
-    private var rootNode = SidebarRootCellViewModel(node: CDUtilities.dyldSharedCacheImageRootNode, parent: nil)
+    private var nodes: [SidebarRootCellViewModel] = []
 
     @Observed
     private var filteredRootNode: SidebarRootCellViewModel? = nil
 
     private lazy var allNodes: [String: SidebarRootCellViewModel] = {
         var allNodes: [String: SidebarRootCellViewModel] = [:]
-        for node in rootNode {
-            allNodes[node.node.path] = node
+        for rootNode in nodes {
+            for node in rootNode {
+                allNodes[node.node.path] = node
+            }
         }
         return allNodes
     }()
@@ -29,6 +31,11 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     @Observed
     private var searchString: String = ""
 
+    public override init(appServices: AppServices, router: any Router<SidebarRoute>) {
+        super.init(appServices: appServices, router: router)
+        appServices.runtimeListings.$dyldSharedCacheImageNodes.asObservable().observe(on: MainScheduler.instance).map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }.bind(to: $nodes).disposed(by: rx.disposeBag)
+    }
+    
     public struct Input {
         public let clickedNode: Signal<SidebarRootCellViewModel>
         public let selectedNode: Signal<SidebarRootCellViewModel>
@@ -41,7 +48,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     }
 
     public struct Output {
-        public let rootNode: Driver<SidebarRootCellViewModel>
+        public let nodes: Driver<[SidebarRootCellViewModel]>
         #if canImport(UIKit)
         public let filteredRootNode: Driver<SidebarRootCellViewModel?>
         #endif
@@ -58,10 +65,10 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
         .disposed(by: rx.disposeBag)
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         input.searchString.emit(with: self) {
-            $0.rootNode.filter = $1
-            $0.rootNode = $0.rootNode
+            $0.nodes.first?.filter = $1
+            $0.nodes = $0.nodes
         }.disposed(by: rx.disposeBag)
-        return Output(rootNode: $rootNode.asDriver())
+        return Output(nodes: $nodes.asDriver())
         #endif
 
         #if canImport(UIKit)

@@ -10,6 +10,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
 class MainWindow: NSWindow {
+    static let identifier: NSUserInterfaceItemIdentifier = "com.JH.RuntimeViewer.MainWindow"
     static let frameAutosaveName = "com.JH.RuntimeViewer.MainWindow.FrameAutosaveName"
 
     init() {
@@ -26,6 +27,7 @@ class MainWindowController: XiblessWindowController<MainWindow> {
 
     func setupBindings(for viewModel: MainViewModel) {
         self.viewModel = viewModel
+        self.splitViewController = MainSplitViewController()
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.backItem.backButton.rx.click.asSignal(),
             saveClick: toolbarController.saveItem.saveButton.rx.click.asSignal()
@@ -41,11 +43,10 @@ class MainWindowController: XiblessWindowController<MainWindow> {
     override func windowDidLoad() {
         super.windowDidLoad()
         contentWindow.toolbar = toolbarController.toolbar
-        if contentWindow.frameAutosaveName != MainWindow.frameAutosaveName {
-            contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
-            contentWindow.box.positionCenter()
-            contentWindow.setFrameAutosaveName(MainWindow.frameAutosaveName)
-        }
+        contentWindow.identifier = MainWindow.identifier
+        contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
+        contentWindow.box.positionCenter()
+        contentWindow.setFrameAutosaveName(MainWindow.frameAutosaveName)
     }
 }
 

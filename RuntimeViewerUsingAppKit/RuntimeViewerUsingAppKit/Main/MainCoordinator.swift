@@ -26,15 +26,18 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
 
     init(appServices: AppServices) {
         self.appServices = appServices
-        super.init(windowController: .init(), initialRoute: .initial)
+        super.init(windowController: .init(), initialRoute: .main(.shared))
         windowController.window?.title = "Runtime Viewer"
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
-        case .initial:
+        case let .main(runtimeListings):
+            appServices.runtimeListings = runtimeListings
+            sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
+            contentCoordinator = ContentCoordinator(appServices: appServices)
+            inspectorCoordinator = InspectorCoordinator(appServices: appServices)
             let viewModel = MainViewModel(appServices: appServices, router: self, completeTransition: completeTransition.asObservable())
-            windowController.splitViewController.setupBindings(for: viewModel)
             windowController.setupBindings(for: viewModel)
             return .multiple(.show(windowController.splitViewController), .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator))
         case let .select(runtimeObject):
@@ -48,7 +51,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
 
     override func completeTransition(for route: MainRoute) {
         switch route {
-        case .initial:
+        case .main:
             windowController.splitViewController.setupSplitViewItems()
         default:
             break

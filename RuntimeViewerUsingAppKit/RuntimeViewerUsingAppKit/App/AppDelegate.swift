@@ -10,6 +10,7 @@ import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerService
 import Combine
+
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
     let appServices = AppServices()
@@ -19,35 +20,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-//        _ = mainCoordinator
+        CatalystHelperLauncher.shared.terminate()
+        try? HelperInstaller.install()
+        _ = mainCoordinator
+
         DispatchQueue.global().async {
             _ = RuntimeListings.shared
         }
-        do {
-//            try HelperInstaller.install()
-            RuntimeListings.macCatalystReceiver.$imageList
-                .sink { imageList in
-                    print(imageList)
-                    print(RuntimeListings.macCatalystReceiver.imageList.contains("UIKitCore"))
-                }
-                .store(in: &cancellables)
-            DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-                RuntimeViewerCatalystHelperLauncher.shared.launch { result in
-                    switch result {
-                    case .success:
-                        print("launch success")
-                    case let .failure(failure):
-                        print(failure)
-                    }
+
+        RuntimeListings.macCatalystReceiver.$imageList
+            .sink { imageList in
+                print(imageList)
+            }
+            .store(in: &cancellables)
+
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+            CatalystHelperLauncher.shared.launch { result in
+                switch result {
+                case .success:
+                    print("launch success")
+                case let .failure(failure):
+                    print(failure)
                 }
             }
-        } catch {
-            print(error)
         }
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
-        // Insert code here to tear down your application
+        CatalystHelperLauncher.shared.terminate()
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -55,56 +55,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-class RuntimeViewerCatalystHelperLauncher {
-    static let shared = RuntimeViewerCatalystHelperLauncher()
+class CatalystHelperLauncher {
+    static let shared = CatalystHelperLauncher()
 
-    enum Error: Swift.Error {
+    enum LaunchError: Swift.Error {
         case helperNotFound
-        case launchFailed
     }
 
-    func launch(completion: @escaping (Result<NSRunningApplication, Swift.Error>) -> Void) {
-        let helperURL = Bundle.main.bundlePath.box.appendingPathComponent("Contents").box.appendingPathComponent("Applications").box.appendingPathComponent("RuntimeViewerCatalystHelper.app").filePathURL
+    private var process: Process?
 
-        guard FileManager.default.fileExists(atPath: helperURL.path) else {
-            completion(.failure(Error.helperNotFound))
-            return
+    func terminate() {
+        do {
+            let process = Process()
+            process.executableURL = .init(fileURLWithPath: "/usr/bin/killall")
+            process.arguments = ["RuntimeViewerCatalystHelper"]
+            process.environment = [
+                "__CFBundleIdentifier": "com.apple.Terminal",
+            ]
+            try process.run()
+        } catch {
+            print(error)
         }
+    }
 
-        DispatchQueue.global().async {
+    func launch(completion: @escaping (Result<Void, Swift.Error>) -> Void) {
+        DispatchQueue.global(qos: .userInteractive).async {
+            let helperURL = Bundle.main.bundlePath.box.appendingPathComponent("Contents").box.appendingPathComponent("Applications").box.appendingPathComponent("RuntimeViewerCatalystHelper.app").filePathURL
+
+            guard FileManager.default.fileExists(atPath: helperURL.path) else {
+                completion(.failure(LaunchError.helperNotFound))
+                return
+            }
+
             do {
                 let process = Process()
                 process.executableURL = .init(fileURLWithPath: "/usr/bin/open")
-                process.arguments = [helperURL.path]
-                let pipe = Pipe()
-                process.standardError = pipe
-                
+                process.arguments = ["-a", "RuntimeViewerCatalystHelper", helperURL.path]
+                process.environment = [
+                    "__CFBundleIdentifier": "com.apple.Terminal",
+                ]
                 try process.run()
-                if let data = try pipe.fileHandleForReading.readToEnd(), let error = String(data: data, encoding: .utf8) {
-                    print(error)
-                }
-                
-                if let runningApp = NSRunningApplication(processIdentifier: process.processIdentifier) {
-                    completion(.success(runningApp))
-                } else {
-                    completion(.failure(Error.launchFailed))
-                }
+                completion(.success(()))
+                self.process = process
             } catch {
                 completion(.failure(error))
             }
         }
-
-//        let openConfiguration = NSWorkspace.OpenConfiguration()
-//        NSWorkspace.shared.openApplication(at: helperURL, configuration: openConfiguration) { runningApp, error in
-//            if let error {
-//                completion(.failure(error))
-//            } else if let runningApp {
-//                print(runningApp.processIdentifier)
-//                completion(.success(runningApp))
-//            } else {
-//                completion(.failure(Error.launchFailed))
-//            }
-//        }
     }
 }
 

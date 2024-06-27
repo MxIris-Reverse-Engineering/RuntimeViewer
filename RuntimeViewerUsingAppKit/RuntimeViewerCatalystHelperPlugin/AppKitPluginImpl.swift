@@ -20,7 +20,6 @@ class AppKitPluginImpl: NSObject, AppKitPlugin {
     
     @objc func setupWindow(_ notification: Notification) {
         if let window = notification.object as? NSWindow, let uinsWindowClass = NSClassFromString("UINSWindow"), window.isKind(of: uinsWindowClass) {
-            window.alphaValue = 0
             window.orderOut(nil)
         }
     }
