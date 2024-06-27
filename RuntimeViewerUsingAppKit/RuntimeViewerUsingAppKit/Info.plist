@@ -7,22 +7,5 @@
 		<key>com.JH.RuntimeViewerService</key>
 		<string>identifier "com.JH.RuntimeViewerService" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: JieHui Lai (4ZZALU97YZ)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
 	</dict>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
-		<key>UISceneConfigurations</key>
-		<dict>
-			<key>UIWindowSceneSessionRoleApplication</key>
-			<array>
-				<dict>
-					<key>UISceneConfigurationName</key>
-					<string>Default Configuration</string>
-					<key>UISceneDelegateClassName</key>
-					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-				</dict>
-			</array>
-		</dict>
-	</dict>
 </dict>
 </plist>

@@ -1,6 +1,6 @@
 import Foundation
 
-#if targetEnvironment(macCatalyst)
+//#if targetEnvironment(macCatalyst)
 
 @objcMembers
 @dynamicMemberLookup
@@ -16,7 +16,7 @@ class AppKitBridge: NSObject {
     }
 
     func loadPlugins() throws {
-        guard let bundlePath = Bundle.main.builtInPlugInsURL?.appendingPathComponent("AppKitPlugin.bundle").path else {
+        guard let bundlePath = Bundle.main.builtInPlugInsURL?.appendingPathComponent("RuntimeViewerCatalystHelperPlugin.bundle").path else {
             throw Error.failedCreateBundlePath
         }
 
@@ -59,4 +59,4 @@ class AppKitBridge: NSObject {
         }
     }
 }
-#endif
+//#endif

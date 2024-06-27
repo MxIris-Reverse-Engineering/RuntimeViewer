@@ -30,6 +30,10 @@ let package = Package(
             name: "RuntimeViewerApplication",
             targets: ["RuntimeViewerApplication"]
         ),
+        .library(
+            name: "RuntimeViewerService",
+            targets: ["RuntimeViewerService"]
+        ),
     ],
     dependencies: [
         .package(
@@ -145,8 +149,10 @@ let package = Package(
         .target(
             name: "RuntimeViewerCore",
             dependencies: [
+                "RuntimeViewerService",
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
+                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms))
             ]
         ),
         .target(
@@ -170,6 +176,12 @@ let package = Package(
                 "RuntimeViewerCore",
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
+            ]
+        ),
+        .target(
+            name: "RuntimeViewerService",
+            dependencies: [
+                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms))
             ]
         )
     ]

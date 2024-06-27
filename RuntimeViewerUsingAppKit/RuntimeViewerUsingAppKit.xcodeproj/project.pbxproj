@@ -17,10 +17,7 @@
 		E943301C2C0DB75B00362862 /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E943301B2C0DB75B00362862 /* Then.swift */; };
 		E947C36A2C2A4D0400296B2E /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C3692C2A4D0400296B2E /* AppDelegate.swift */; };
 		E947C36C2C2A4D0400296B2E /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */; };
-		E947C36E2C2A4D0400296B2E /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C36D2C2A4D0400296B2E /* ViewController.swift */; };
-		E947C3712C2A4D0400296B2E /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E947C3702C2A4D0400296B2E /* Base */; };
 		E947C3732C2A4D0500296B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E947C3722C2A4D0500296B2E /* Assets.xcassets */; };
-		E947C3762C2A4D0500296B2E /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E947C3752C2A4D0500296B2E /* Base */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A18B662C2976B500689B49 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E9A18B652C2976B500689B49 /* RuntimeViewerApplication */; };
 		E9A18B682C2976B500689B49 /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E9A18B672C2976B500689B49 /* RuntimeViewerArchitectures */; };
@@ -68,11 +65,24 @@
 		E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */; };
 		E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */; };
 		E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825572C0E202600D9A85D /* MainViewModel.swift */; };
+		E9C9E9CB2C2D0F1500C4AA34 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9C9E9CA2C2D0F1500C4AA34 /* RuntimeViewerService */; };
+		E9C9E9CD2C2D0F2100C4AA34 /* com.JH.RuntimeViewerService in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E9C9E9D22C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9D12C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift */; };
+		E9C9E9D42C2D160100C4AA34 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9C9E9D32C2D160100C4AA34 /* RuntimeViewerCore */; };
+		E9C9E9D62C2D160100C4AA34 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9C9E9D52C2D160100C4AA34 /* RuntimeViewerService */; };
+		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E9C9E9DD2C2D169D00C4AA34 /* AppKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */; };
+		E9C9E9DE2C2D169D00C4AA34 /* AppKitPluginImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */; };
+		E9C9E9DF2C2D16B000C4AA34 /* AppKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */; };
+		E9C9E9E02C2D172600C4AA34 /* AppKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */; };
+		E9C9E9F02C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app in CopyFiles */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E9CBCC162C13685400169ABF /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC152C13685400169ABF /* RuntimeViewerArchitectures */; };
 		E9CBCC182C13685400169ABF /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC172C13685400169ABF /* RuntimeViewerCore */; };
 		E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC192C13685400169ABF /* RuntimeViewerUI */; };
 		E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */; };
 		E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */; };
+		E9E900EB2C2D0D5B00FADDCC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E900EA2C2D0D5B00FADDCC /* main.swift */; };
+		E9E900F02C2D0D9E00FADDCC /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9E900EF2C2D0D9E00FADDCC /* RuntimeViewerService */; };
 		E9FD73CA2C16042F00E391F5 /* LineNumberGutter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */; };
 /* End PBXBuildFile section */
 
@@ -83,6 +93,20 @@
 			proxyType = 1;
 			remoteGlobalIDString = E9A18B602C2976A100689B49;
 			remoteInfo = AppKitPlugin;
+		};
+		E9C9E9D82C2D161000C4AA34 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E9E900DB2C2CF9A500FADDCC;
+			remoteInfo = RuntimeViewerCatalystHelperPlugin;
+		};
+		E9C9E9E42C2D1E2700C4AA34 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E9E900E72C2D0D5B00FADDCC;
+			remoteInfo = com.JH.RuntimeViewerService;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -96,6 +120,38 @@
 				E9A18BA32C29785600689B49 /* AppKitPlugin.bundle in Embed PlugIns */,
 			);
 			name = "Embed PlugIns";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LaunchServices;
+			dstSubfolderSpec = 1;
+			files = (
+				E9C9E9CD2C2D0F2100C4AA34 /* com.JH.RuntimeViewerService in Embed LaunchServices */,
+			);
+			name = "Embed LaunchServices";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9C9E9DA2C2D161000C4AA34 /* Embed PlugIns */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */,
+			);
+			name = "Embed PlugIns";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9C9E9EB2C2D33F500C4AA34 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = ../Applications;
+			dstSubfolderSpec = 6;
+			files = (
+				E9C9E9F02C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app in CopyFiles */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -113,10 +169,7 @@
 		E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerCatalystHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E947C3692C2A4D0400296B2E /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		E947C36D2C2A4D0400296B2E /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
-		E947C3702C2A4D0400296B2E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		E947C3722C2A4D0500296B2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		E947C3752C2A4D0500296B2E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		E947C3772C2A4D0500296B2E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18B612C2976A100689B49 /* AppKitPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppKitPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -141,8 +194,18 @@
 		E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarNavigationController.swift; sourceTree = "<group>"; };
 		E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPlaceholderViewController.swift; sourceTree = "<group>"; };
 		E9A825572C0E202600D9A85D /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
+		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		E9C9E9CE2C2D10C600C4AA34 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E9C9E9D12C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerCatalystHelperPlugin.swift; sourceTree = "<group>"; };
+		E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitPlugin.swift; sourceTree = "<group>"; };
+		E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitPluginImpl.swift; sourceTree = "<group>"; };
+		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
 		E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainToolbarController.swift; sourceTree = "<group>"; };
 		E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTableCellView.swift; sourceTree = "<group>"; };
+		E9E900D72C2CF96500FADDCC /* RuntimeViewerCatalystHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerCatalystHelper.entitlements; sourceTree = "<group>"; };
+		E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerCatalystHelperPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9E900EA2C2D0D5B00FADDCC /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LineNumberGutter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -153,6 +216,7 @@
 			files = (
 				E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */,
 				E9CBCC182C13685400169ABF /* RuntimeViewerCore in Frameworks */,
+				E9C9E9CB2C2D0F1500C4AA34 /* RuntimeViewerService in Frameworks */,
 				E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */,
 				E9CBCC162C13685400169ABF /* RuntimeViewerArchitectures in Frameworks */,
 			);
@@ -183,16 +247,36 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E9E900D92C2CF9A500FADDCC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9C9E9D42C2D160100C4AA34 /* RuntimeViewerCore in Frameworks */,
+				E9C9E9D62C2D160100C4AA34 /* RuntimeViewerService in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9E900E52C2D0D5B00FADDCC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9E900F02C2D0D9E00FADDCC /* RuntimeViewerService in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
+				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
 				E9432FE42C0D614900362862 /* RuntimeViewerUsingAppKit */,
 				E9A18B8F2C29781000689B49 /* RuntimeViewerUsingCatalyst */,
 				E9A18B852C29770E00689B49 /* AppKitPlugin */,
 				E947C3682C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
+				E9E900E02C2CF9B000FADDCC /* RuntimeViewerCatalystHelperPlugin */,
+				E9E900E92C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
 				E9432FE32C0D614900362862 /* Products */,
 				E9432FF32C0D637500362862 /* Frameworks */,
 			);
@@ -205,6 +289,8 @@
 				E9A18B612C2976A100689B49 /* AppKitPlugin.bundle */,
 				E9A18B8E2C29781000689B49 /* RuntimeViewerUsingCatalyst.app */,
 				E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */,
+				E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */,
+				E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -212,6 +298,7 @@
 		E9432FE42C0D614900362862 /* RuntimeViewerUsingAppKit */ = {
 			isa = PBXGroup;
 			children = (
+				E9C9E9CE2C2D10C600C4AA34 /* Info.plist */,
 				E9CE07C02C1498280070A6E8 /* App */,
 				E9CE07BA2C1497EA0070A6E8 /* Base */,
 				E9CE07BB2C1497F10070A6E8 /* Main */,
@@ -236,12 +323,10 @@
 		E947C3682C2A4D0400296B2E /* RuntimeViewerCatalystHelper */ = {
 			isa = PBXGroup;
 			children = (
+				E9E900D72C2CF96500FADDCC /* RuntimeViewerCatalystHelper.entitlements */,
 				E947C3692C2A4D0400296B2E /* AppDelegate.swift */,
 				E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */,
-				E947C36D2C2A4D0400296B2E /* ViewController.swift */,
-				E947C36F2C2A4D0400296B2E /* Main.storyboard */,
 				E947C3722C2A4D0500296B2E /* Assets.xcassets */,
-				E947C3742C2A4D0500296B2E /* LaunchScreen.storyboard */,
 				E947C3772C2A4D0500296B2E /* Info.plist */,
 			);
 			path = RuntimeViewerCatalystHelper;
@@ -339,6 +424,25 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		E9E900E02C2CF9B000FADDCC /* RuntimeViewerCatalystHelperPlugin */ = {
+			isa = PBXGroup;
+			children = (
+				E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */,
+				E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */,
+				E9C9E9D12C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift */,
+			);
+			path = RuntimeViewerCatalystHelperPlugin;
+			sourceTree = "<group>";
+		};
+		E9E900E92C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {
+			isa = PBXGroup;
+			children = (
+				E9E900EA2C2D0D5B00FADDCC /* main.swift */,
+				E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */,
+			);
+			path = com.JH.RuntimeViewerService;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -346,13 +450,17 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E9432FEF2C0D614A00362862 /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingAppKit" */;
 			buildPhases = (
+				E9C9E9E72C2D20D800C4AA34 /* Run Script */,
 				E9432FDE2C0D614900362862 /* Sources */,
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
+				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
+				E9C9E9EB2C2D33F500C4AA34 /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E9C9E9E52C2D1E2700C4AA34 /* PBXTargetDependency */,
 			);
 			name = RuntimeViewerUsingAppKit;
 			packageProductDependencies = (
@@ -360,6 +468,7 @@
 				E9CBCC172C13685400169ABF /* RuntimeViewerCore */,
 				E9CBCC192C13685400169ABF /* RuntimeViewerUI */,
 				E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */,
+				E9C9E9CA2C2D0F1500C4AA34 /* RuntimeViewerService */,
 			);
 			productName = RuntimeViewerUsingAppKit;
 			productReference = E9432FE22C0D614900362862 /* RuntimeViewerUsingAppKit.app */;
@@ -372,10 +481,13 @@
 				E947C3632C2A4D0400296B2E /* Sources */,
 				E947C3642C2A4D0400296B2E /* Frameworks */,
 				E947C3652C2A4D0400296B2E /* Resources */,
+				E9C9E9DA2C2D161000C4AA34 /* Embed PlugIns */,
+				E9C9E9E92C2D296E00C4AA34 /* ShellScript */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E9C9E9D92C2D161000C4AA34 /* PBXTargetDependency */,
 			);
 			name = RuntimeViewerCatalystHelper;
 			productName = RuntimeViewerCatalystHelper;
@@ -424,6 +536,46 @@
 			productReference = E9A18B8E2C29781000689B49 /* RuntimeViewerUsingCatalyst.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E9E900DD2C2CF9A500FADDCC /* Build configuration list for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */;
+			buildPhases = (
+				E9E900D82C2CF9A500FADDCC /* Sources */,
+				E9E900D92C2CF9A500FADDCC /* Frameworks */,
+				E9E900DA2C2CF9A500FADDCC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RuntimeViewerCatalystHelperPlugin;
+			packageProductDependencies = (
+				E9C9E9D32C2D160100C4AA34 /* RuntimeViewerCore */,
+				E9C9E9D52C2D160100C4AA34 /* RuntimeViewerService */,
+			);
+			productName = RuntimeViewerCatalystHelperPlugin;
+			productReference = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */;
+			productType = "com.apple.product-type.bundle";
+		};
+		E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E9E900EC2C2D0D5B00FADDCC /* Build configuration list for PBXNativeTarget "com.JH.RuntimeViewerService" */;
+			buildPhases = (
+				E9E900E42C2D0D5B00FADDCC /* Sources */,
+				E9E900E52C2D0D5B00FADDCC /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = com.JH.RuntimeViewerService;
+			packageProductDependencies = (
+				E9E900EF2C2D0D9E00FADDCC /* RuntimeViewerService */,
+			);
+			productName = com.JH.RuntimeViewerService;
+			productReference = E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -444,6 +596,12 @@
 						CreatedOnToolsVersion = 15.4;
 					};
 					E9A18B8D2C29781000689B49 = {
+						CreatedOnToolsVersion = 15.4;
+					};
+					E9E900DB2C2CF9A500FADDCC = {
+						CreatedOnToolsVersion = 15.4;
+					};
+					E9E900E72C2D0D5B00FADDCC = {
 						CreatedOnToolsVersion = 15.4;
 					};
 				};
@@ -467,6 +625,8 @@
 				E9A18B8D2C29781000689B49 /* RuntimeViewerUsingCatalyst */,
 				E9A18B602C2976A100689B49 /* AppKitPlugin */,
 				E947C3662C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
+				E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */,
+				E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
 			);
 		};
 /* End PBXProject section */
@@ -486,8 +646,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				E947C3732C2A4D0500296B2E /* Assets.xcassets in Resources */,
-				E947C3762C2A4D0500296B2E /* Base in Resources */,
-				E947C3712C2A4D0400296B2E /* Base in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -507,7 +665,53 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E9E900DA2C2CF9A500FADDCC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		E9C9E9E72C2D20D800C4AA34 /* Run Script */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Run Script";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#xcodebuild -workspace ../RuntimeViewer.xcworkspace -scheme \"RuntimeViewerCatalystHelper\" -sdk \"macosx\" -destination 'platform=macOS,variant=Mac Catalyst,name=Any Mac'\n";
+		};
+		E9C9E9E92C2D296E00C4AA34 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "cp -R \"${BUILT_PRODUCTS_DIR}/${TARGET_NAME}.app\" \"${SRCROOT}\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E9432FDE2C0D614900362862 /* Sources */ = {
@@ -543,7 +747,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E947C36E2C2A4D0400296B2E /* ViewController.swift in Sources */,
+				E9C9E9E02C2D172600C4AA34 /* AppKitBridge.swift in Sources */,
+				E9C9E9DF2C2D16B000C4AA34 /* AppKitPlugin.swift in Sources */,
 				E947C36A2C2A4D0400296B2E /* AppDelegate.swift in Sources */,
 				E947C36C2C2A4D0400296B2E /* SceneDelegate.swift in Sources */,
 			);
@@ -589,6 +794,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E9E900D82C2CF9A500FADDCC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9C9E9DE2C2D169D00C4AA34 /* AppKitPluginImpl.swift in Sources */,
+				E9C9E9DD2C2D169D00C4AA34 /* AppKitPlugin.swift in Sources */,
+				E9C9E9D22C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9E900E42C2D0D5B00FADDCC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9E900EB2C2D0D5B00FADDCC /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -597,6 +820,17 @@
 			platformFilter = maccatalyst;
 			target = E9A18B602C2976A100689B49 /* AppKitPlugin */;
 			targetProxy = E9A18BA42C29785600689B49 /* PBXContainerItemProxy */;
+		};
+		E9C9E9D92C2D161000C4AA34 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = maccatalyst;
+			target = E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */;
+			targetProxy = E9C9E9D82C2D161000C4AA34 /* PBXContainerItemProxy */;
+		};
+		E9C9E9E52C2D1E2700C4AA34 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */;
+			targetProxy = E9C9E9E42C2D1E2700C4AA34 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -607,22 +841,6 @@
 				E9432FEA2C0D614A00362862 /* Base */,
 			);
 			name = MainMenu.xib;
-			sourceTree = "<group>";
-		};
-		E947C36F2C2A4D0400296B2E /* Main.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				E947C3702C2A4D0400296B2E /* Base */,
-			);
-			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
-		E947C3742C2A4D0500296B2E /* LaunchScreen.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				E947C3752C2A4D0500296B2E /* Base */,
-			);
-			name = LaunchScreen.storyboard;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
@@ -749,6 +967,7 @@
 		E9432FF02C0D614A00362862 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
@@ -757,8 +976,12 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = D5Q73692VW;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Allow authorization to launch other apps";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainNibFile = MainMenu;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -778,6 +1001,7 @@
 		E9432FF12C0D614A00362862 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
@@ -786,8 +1010,12 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = D5Q73692VW;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Allow authorization to launch other apps";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMainNibFile = MainMenu;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -807,61 +1035,85 @@
 		E947C3782C2A4D0500296B2E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
+				CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystHelper/RuntimeViewerCatalystHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				DEVELOPMENT_TEAM = D5Q73692VW;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerCatalystHelper/Info.plist;
+				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = Debug;
 		};
 		E947C3792C2A4D0500296B2E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				BUILD_LIBRARY_FOR_DISTRIBUTION = NO;
+				CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystHelper/RuntimeViewerCatalystHelper.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				DEVELOPMENT_TEAM = D5Q73692VW;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerCatalystHelper/Info.plist;
+				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VALIDATE_PRODUCT = YES;
+				TARGETED_DEVICE_FAMILY = "1,2,6";
+				VALIDATE_PRODUCT = NO;
 			};
 			name = Release;
 		};
@@ -978,6 +1230,76 @@
 			};
 			name = Release;
 		};
+		E9E900DE2C2CF9A500FADDCC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelperPlugin;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = bundle;
+			};
+			name = Debug;
+		};
+		E9E900DF2C2CF9A500FADDCC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelperPlugin;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				WRAPPER_EXTENSION = bundle;
+			};
+			name = Release;
+		};
+		E9E900ED2C2D0D5B00FADDCC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E9E900EE2C2D0D5B00FADDCC /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1026,6 +1348,24 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		E9E900DD2C2CF9A500FADDCC /* Build configuration list for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9E900DE2C2CF9A500FADDCC /* Debug */,
+				E9E900DF2C2CF9A500FADDCC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		E9E900EC2C2D0D5B00FADDCC /* Build configuration list for PBXNativeTarget "com.JH.RuntimeViewerService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9E900ED2C2D0D5B00FADDCC /* Debug */,
+				E9E900EE2C2D0D5B00FADDCC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1049,6 +1389,18 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerUI;
 		};
+		E9C9E9CA2C2D0F1500C4AA34 /* RuntimeViewerService */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerService;
+		};
+		E9C9E9D32C2D160100C4AA34 /* RuntimeViewerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCore;
+		};
+		E9C9E9D52C2D160100C4AA34 /* RuntimeViewerService */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerService;
+		};
 		E9CBCC152C13685400169ABF /* RuntimeViewerArchitectures */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerArchitectures;
@@ -1060,6 +1412,10 @@
 		E9CBCC192C13685400169ABF /* RuntimeViewerUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerUI;
+		};
+		E9E900EF2C2D0D9E00FADDCC /* RuntimeViewerService */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerService;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
