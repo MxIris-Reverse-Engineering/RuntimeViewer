@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum RuntimeObjectType: Hashable, Identifiable {
+public enum RuntimeObjectType: Codable, Hashable, Identifiable {
     case `class`(named: String)
     case `protocol`(named: String)
 

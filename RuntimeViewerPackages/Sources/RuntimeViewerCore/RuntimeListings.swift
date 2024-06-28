@@ -117,6 +117,7 @@ public final class RuntimeListings {
         static let senderLaunched = "com.JH.RuntimeViewer.RuntimeListings.senderLaunched"
         static let classNamesInImage = "com.JH.RuntimeViewer.RuntimeListings.classNamesInImage"
         static let patchImagePathForDyld = "com.JH.RuntimeViewer.RuntimeListings.patchImagePathForDyld"
+        static let semanticStringForRuntimeObjectWithOptions = "com.JH.RuntimeViewer.RuntimeListings.semanticStringForRuntimeObjectWithOptions"
     }
 
     private let shouldReload = PassthroughSubject<Void, Never>()
@@ -326,6 +327,55 @@ public final class RuntimeListings {
                 return CDUtilities.patchImagePathForDyld(imagePath)
             } else {
                 return try await senderConnection?.sendMessage(name: ListingsCommandSet.patchImagePathForDyld, request: imagePath) ?? ""
+            }
+        }
+    }
+    
+    struct SemanticStringRequest: Codable {
+        let runtimeObject: RuntimeObjectType
+        let options: CDGenerationOptions
+    }
+    
+    public func semanticString(for runtimeObject: RuntimeObjectType, options: CDGenerationOptions) async throws -> CDSemanticString {
+        enum NullError: Error {
+            case objectIsNull
+        }
+        var semanticString: CDSemanticString?
+        switch source {
+        case .native:
+            semanticString = runtimeObject.semanticString(for: options)
+        case .macCatalyst(let isSender):
+            if isSender {
+                semanticString = runtimeObject.semanticString(for: options)
+            } else {
+                let semanticStringData: Data? = try await senderConnection?.sendMessage(name: ListingsCommandSet.semanticStringForRuntimeObjectWithOptions, request: SemanticStringRequest(runtimeObject: runtimeObject, options: options))
+                semanticString = try semanticStringData.flatMap { try NSKeyedUnarchiver.unarchivedObject(ofClass: CDSemanticString.self, from: $0) }
+            }
+        }
+        guard let semanticString else {
+            throw NullError.objectIsNull
+        }
+        return semanticString
+    }
+}
+
+
+extension RuntimeObjectType {
+    public func semanticString(for options: CDGenerationOptions) -> CDSemanticString? {
+        switch self {
+        case let .class(named):
+            if let cls = NSClassFromString(named) {
+                let classModel = CDClassModel(with: cls)
+                return classModel.semanticLines(with: options)
+            } else {
+                return nil
+            }
+        case let .protocol(named):
+            if let proto = NSProtocolFromString(named) {
+                let protocolModel = CDProtocolModel(with: proto)
+                return protocolModel.semanticLines(with: options)
+            } else {
+                return nil
             }
         }
     }
