@@ -8,7 +8,16 @@
 import AppKit
 import RuntimeViewerUI
 
-class ViewController<ViewModelType>: UXViewController {
+class UXKitViewController<ViewModelType>: UXViewController {
+    var viewModel: ViewModelType?
+    
+    func setupBindings(for viewModel: ViewModelType) {
+        self.viewModel = viewModel
+    }
+}
+
+
+class AppKitViewController<ViewModelType>: NSViewController {
     var viewModel: ViewModelType?
     
     func setupBindings(for viewModel: ViewModelType) {

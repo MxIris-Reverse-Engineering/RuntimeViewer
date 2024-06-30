@@ -39,13 +39,24 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             inspectorCoordinator = InspectorCoordinator(appServices: appServices)
             let viewModel = MainViewModel(appServices: appServices, router: self, completeTransition: completeTransition.asObservable())
             windowController.setupBindings(for: viewModel)
-            return .multiple(.show(windowController.splitViewController), .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator))
+            return .multiple(
+                .show(windowController.splitViewController),
+                .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator),
+                .route(on: sidebarCoordinator, to: .root),
+                .route(on: contentCoordinator, to: .placeholder),
+                .route(on: inspectorCoordinator, to: .root)
+            )
         case let .select(runtimeObject):
             return .route(on: contentCoordinator, to: .root(runtimeObject))
         case let .inspect(inspectableType):
             return .route(on: inspectorCoordinator, to: .select(inspectableType))
         case .sidebarBack:
             return .route(on: sidebarCoordinator, to: .back)
+        case .generationOptions(let sender):
+            let viewController = GenerationOptionsViewController()
+            let viewModel = GenerationOptionsViewModel(appServices: appServices, router: self)
+            viewController.setupBindings(for: viewModel)
+            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         }
     }
 

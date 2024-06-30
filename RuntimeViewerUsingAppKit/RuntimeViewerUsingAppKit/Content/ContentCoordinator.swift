@@ -17,7 +17,7 @@ class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
     let appServices: AppServices
     init(appServices: AppServices) {
         self.appServices = appServices
-        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
+        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
     }
 
     override func prepareTransition(for route: ContentRoute) -> ContentTransition {

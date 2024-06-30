@@ -17,9 +17,10 @@ class InspectorCoordinator: BaseCoordinator<InspectorRoute, InspectorTransition>
     override func prepareTransition(for route: InspectorRoute) -> InspectorTransition {
         switch route {
         case .root:
-            let viewModel = InspectorViewModel(appServices: appServices, router: self)
-            rootViewController.setupBindings(for: viewModel)
-            return .none()
+            let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
+            let viewController = InspectorPlaceholderViewController()
+            viewController.setupBindings(for: viewModel)
+            return .set([viewController])
         case let .select(inspectableType):
             return .none()
         }

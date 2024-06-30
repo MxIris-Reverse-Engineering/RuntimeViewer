@@ -22,3 +22,9 @@
 @_exported import XCoordinatorRx
 public typealias Routable = Route
 #endif
+
+extension ObservableType {
+    public func observeOnMainScheduler() -> Observable<Element> {
+        observe(on: MainScheduler.instance)
+    }
+}

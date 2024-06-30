@@ -7,8 +7,9 @@
 
 import Foundation
 
-public final class RuntimeNamedNode {
+public final class RuntimeNamedNode: Codable {
     public let name: String
+    
     public weak var parent: RuntimeNamedNode?
 
     public var children: [RuntimeNamedNode] = []

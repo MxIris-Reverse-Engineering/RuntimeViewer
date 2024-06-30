@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import SwiftyXPC
 
@@ -54,3 +55,4 @@ public final class RuntimeViewerService {
         RunLoop.current.run()
     }
 }
+#endif

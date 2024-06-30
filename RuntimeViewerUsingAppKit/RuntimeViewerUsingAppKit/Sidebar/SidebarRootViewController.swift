@@ -10,7 +10,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootViewController: ViewController<SidebarRootViewModel> {
+class SidebarRootViewController: UXKitViewController<SidebarRootViewModel> {
     let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
 
     let visualEffectView = NSVisualEffectView()

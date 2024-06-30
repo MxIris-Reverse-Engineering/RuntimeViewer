@@ -27,13 +27,16 @@ class MainWindowController: XiblessWindowController<MainWindow> {
 
     func setupBindings(for viewModel: MainViewModel) {
         self.viewModel = viewModel
-        self.splitViewController = MainSplitViewController()
+
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.backItem.backButton.rx.click.asSignal(),
-            saveClick: toolbarController.saveItem.saveButton.rx.click.asSignal()
+            saveClick: toolbarController.saveItem.saveButton.rx.click.asSignal(),
+            switchSource: toolbarController.switchSourceItem.segmentedControl.rx.selectedSegment.asSignal(),
+            generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 }
         )
         let output = viewModel.transform(input)
         output.sharingServiceItems.bind(to: toolbarController.sharingServicePickerItem.rx.items).disposed(by: rx.disposeBag)
+        output.isSavable.drive(toolbarController.saveItem.saveButton.rx.isEnabled).disposed(by: rx.disposeBag)
     }
 
     init() {

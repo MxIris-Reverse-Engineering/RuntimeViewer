@@ -11,7 +11,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class ContentPlaceholderViewController: ViewController<ContentPlaceholderViewModel> {
+class ContentPlaceholderViewController: UXKitViewController<ContentPlaceholderViewModel> {
     let placeholderLabel = Label("Select a runtime object")
 
     override func viewDidLoad() {

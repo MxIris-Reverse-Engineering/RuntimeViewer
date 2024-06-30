@@ -1,10 +1,3 @@
-//
-//  ThemeProfile.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/8.
-//
-
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
 #endif
@@ -58,18 +51,4 @@ public struct XcodePresentationTheme: ThemeProfile {
     }
 }
 
-extension NSUIColor {
-    convenience init(light: NSUIColor, dark: NSUIColor) {
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        self.init(name: nil) { appearance in
-            appearance.isLight ? light : dark
-        }
-        #endif
 
-        #if canImport(UIKit)
-        self.init { traitCollection in
-            traitCollection.userInterfaceStyle == .light ? light : dark
-        }
-        #endif
-    }
-}

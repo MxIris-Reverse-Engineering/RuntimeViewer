@@ -11,7 +11,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SidebarImageViewController: ViewController<SidebarImageViewModel> {
+class SidebarImageViewController: UXKitViewController<SidebarImageViewModel> {
     let visualEffectView = NSVisualEffectView()
 
     let tabView = NSTabView()

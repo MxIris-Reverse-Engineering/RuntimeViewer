@@ -17,7 +17,7 @@ class ContentTextView: NSTextView {
     }
 }
 
-class ContentTextViewController: ViewController<ContentTextViewModel> {
+class ContentTextViewController: UXKitViewController<ContentTextViewModel> {
     override var acceptsFirstResponder: Bool { true }
 
     let scrollView = ContentTextView.scrollableTextView()

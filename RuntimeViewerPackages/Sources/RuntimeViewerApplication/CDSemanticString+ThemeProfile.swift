@@ -1,10 +1,3 @@
-//
-//  CDSemanticString+ThemeProfile.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/8.
-//
-
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
 #endif

@@ -24,13 +24,12 @@
 		E9432FC82C0D612000362862 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC72C0D612000362862 /* SceneDelegate.swift */; };
 		E9432FCA2C0D612000362862 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC92C0D612000362862 /* ViewController.swift */; };
 		E9432FCF2C0D612100362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FCE2C0D612100362862 /* Assets.xcassets */; };
-		E9432FD22C0D612100362862 /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E9432FD12C0D612100362862 /* Base */; };
 		E9432FF82C0D638200362862 /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9432FF72C0D638200362862 /* RuntimeViewerUI */; };
 		E947C39E2C2AB7E400296B2E /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C39D2C2AB7E400296B2E /* Then.swift */; };
-		E947C3A12C2ACE9300296B2E /* LookinServer in Frameworks */ = {isa = PBXBuildFile; productRef = E947C3A02C2ACE9300296B2E /* LookinServer */; };
 		E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */; };
 		E95441BA2C26E94700DFFD40 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B92C26E94700DFFD40 /* RuntimeViewerCore */; };
 		E95441BC2C26E99400DFFD40 /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */; };
+		E9AA36242C318A7300A9B2E4 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,11 +50,11 @@
 		E9432FC72C0D612000362862 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		E9432FC92C0D612000362862 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		E9432FCE2C0D612100362862 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		E9432FD12C0D612100362862 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		E9432FD32C0D612100362862 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9432FF22C0D617200362862 /* RuntimeViewerUsingUIKit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerUsingUIKit.entitlements; sourceTree = "<group>"; };
 		E947C39D2C2AB7E400296B2E /* Then.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Then.swift; sourceTree = "<group>"; };
 		E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitViewController.swift; sourceTree = "<group>"; };
+		E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -63,7 +62,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E947C3A12C2ACE9300296B2E /* LookinServer in Frameworks */,
 				E95441BA2C26E94700DFFD40 /* RuntimeViewerCore in Frameworks */,
 				E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */,
 				E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */,
@@ -113,7 +111,7 @@
 				E942AC9F2C2866E600A2F3D3 /* InspectorViewController.swift */,
 				E942ACA12C2866F400A2F3D3 /* InspectorCoordinator.swift */,
 				E9432FCE2C0D612100362862 /* Assets.xcassets */,
-				E9432FD02C0D612100362862 /* LaunchScreen.storyboard */,
+				E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */,
 				E9432FD32C0D612100362862 /* Info.plist */,
 			);
 			path = RuntimeViewerUsingUIKit;
@@ -147,7 +145,6 @@
 				E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */,
 				E95441B92C26E94700DFFD40 /* RuntimeViewerCore */,
 				E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */,
-				E947C3A02C2ACE9300296B2E /* LookinServer */,
 			);
 			productName = RuntimeViewerUsingUIKit;
 			productReference = E9432FC22C0D612000362862 /* RuntimeViewerUsingUIKit.app */;
@@ -178,7 +175,6 @@
 			);
 			mainGroup = E9432FB92C0D612000362862;
 			packageReferences = (
-				E947C39F2C2ACE9300296B2E /* XCRemoteSwiftPackageReference "LookinServer" */,
 			);
 			productRefGroup = E9432FC32C0D612000362862 /* Products */;
 			projectDirPath = "";
@@ -195,7 +191,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E9432FCF2C0D612100362862 /* Assets.xcassets in Resources */,
-				E9432FD22C0D612100362862 /* Base in Resources */,
+				E9AA36242C318A7300A9B2E4 /* LaunchScreen.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -227,17 +223,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXVariantGroup section */
-		E9432FD02C0D612100362862 /* LaunchScreen.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				E9432FD12C0D612100362862 /* Base */,
-			);
-			name = LaunchScreen.storyboard;
-			sourceTree = "<group>";
-		};
-/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		E9432FD42C0D612100362862 /* Debug */ = {
@@ -382,7 +367,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerUsingUIKit;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -390,7 +375,7 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,6,7";
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Debug;
@@ -418,7 +403,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerUsingUIKit;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
 				SUPPORTS_MACCATALYST = NO;
@@ -426,7 +411,7 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,6,7";
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Release;
@@ -454,17 +439,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		E947C39F2C2ACE9300296B2E /* XCRemoteSwiftPackageReference "LookinServer" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/QMUI/LookinServer/";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.8;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
 		E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -473,11 +447,6 @@
 		E9432FF72C0D638200362862 /* RuntimeViewerUI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerUI;
-		};
-		E947C3A02C2ACE9300296B2E /* LookinServer */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = E947C39F2C2ACE9300296B2E /* XCRemoteSwiftPackageReference "LookinServer" */;
-			productName = LookinServer;
 		};
 		E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */ = {
 			isa = XCSwiftPackageProductDependency;

@@ -9,7 +9,7 @@ import RuntimeViewerApplication
 public enum MainRoute: Routable {
     case initial
     case select(RuntimeObjectType)
-    case inspect(InspectableType)
+    case inspect(InspectableObject)
 }
 
 typealias MainTransition = Transition<MainSplitViewController>

@@ -10,7 +10,6 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-
 public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     private let namedNode: RuntimeNamedNode
 
@@ -19,7 +18,6 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
     private let runtimeListings: RuntimeListings
 
-    
     @MainActor @Observed private var searchString: String = ""
     @MainActor @Observed private var searchScope: RuntimeTypeSearchScope = .all
     @MainActor @Observed private var classNames: [String] = []
@@ -27,7 +25,6 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @MainActor @Observed private var runtimeObjects: [RuntimeObjectType] = []
     @MainActor @Observed private var loadState: RuntimeImageLoadState = .notLoaded
 
-    
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
         self.runtimeListings = appServices.runtimeListings
         self.namedNode = namedNode
@@ -36,9 +33,9 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         self.imageName = namedNode.name
         super.init(appServices: appServices, router: router)
         Task {
-
             let classNames = try await runtimeListings.classNamesIn(image: imagePath)
-            let protocolNames = runtimeListings.imageToProtocols[try await runtimeListings.patchImagePathForDyld(imagePath)] ?? []
+            let protocolNames = try runtimeListings.imageToProtocols[await runtimeListings.patchImagePathForDyld(imagePath)] ?? []
+            let loadState: RuntimeImageLoadState = try await runtimeListings.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
             await MainActor.run {
                 self.classNames = classNames
                 self.protocolNames = protocolNames
@@ -54,9 +51,8 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     searchString: searchString, searchScope: searchScope
                 )
 
-                self.loadState = runtimeListings.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
+                self.loadState = loadState
             }
-
 
             runtimeListings.$classList
                 .asObservable()
@@ -64,15 +60,17 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     try await runtimeListings.classNamesIn(image: imagePath)
                 }
                 .catchAndReturn([])
+                .observeOnMainScheduler()
                 .bind(to: $classNames)
                 .disposed(by: rx.disposeBag)
 
             runtimeListings.$imageToProtocols
                 .asObservable()
                 .flatMap { [unowned self] imageToProtocols in
-                    imageToProtocols[try await runtimeListings.patchImagePathForDyld(imagePath)] ?? []
+                    try imageToProtocols[await runtimeListings.patchImagePathForDyld(imagePath)] ?? []
                 }
                 .catchAndReturn([])
+                .observeOnMainScheduler()
                 .bind(to: $protocolNames)
                 .disposed(by: rx.disposeBag)
 
@@ -96,14 +94,12 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
             runtimeListings.$imageList
                 .asObservable()
                 .flatMap { [unowned self] imageList in
-                    imageList.contains(try await runtimeListings.patchImagePathForDyld(imagePath))
+                    try imageList.contains(await runtimeListings.patchImagePathForDyld(imagePath))
                 }
                 .catchAndReturn(false)
                 .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
-                .map { _ in
-                    RuntimeImageLoadState.loaded
-                }
-                .asObservable()
+                .map { _ in RuntimeImageLoadState.loaded }
+                .observeOnMainScheduler()
                 .bind(to: $loadState)
                 .disposed(by: rx.disposeBag)
         }
@@ -131,6 +127,8 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
     @MainActor
     public func transform(_ input: Input) -> Output {
+        input.runtimeObjectClicked.map { $0.runtimeObject }.emit(to: appServices.$selectedRuntimeObject).disposed(by: rx.disposeBag)
+        
         input.searchString.emit(to: $searchString).disposed(by: rx.disposeBag)
 
         input.runtimeObjectClicked.emitOnNextMainActor { [weak self] viewModel in
@@ -205,87 +203,3 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     }
 }
 
-public class SidebarImageCellViewModel: ViewModel<SidebarRoute> {
-    let runtimeObject: RuntimeObjectType
-
-    @Observed
-    public private(set) var icon: NSUIImage?
-
-    @Observed
-    public private(set) var name: NSAttributedString
-
-    public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<SidebarRoute>) {
-        self.runtimeObject = runtimeObject
-        self.icon = runtimeObject.icon
-        self.name = NSAttributedString {
-            AText(runtimeObject.name)
-                .font(.systemFont(ofSize: 13))
-                .foregroundColor(.labelColor)
-        }
-        super.init(appServices: appServices, router: router)
-    }
-
-    public override var hash: Int {
-        var hasher = Hasher()
-        hasher.combine(runtimeObject)
-        return hasher.finalize()
-    }
-
-    public override func isEqual(_ object: Any?) -> Bool {
-        guard let object = object as? Self else { return false }
-        return runtimeObject == object.runtimeObject
-    }
-}
-
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-
-extension SidebarImageCellViewModel: Differentiable {}
-
-#endif
-
-extension RuntimeObjectType {
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-    private static let iconSize: CGFloat = 16
-    #endif
-
-    #if canImport(UIKit)
-    private static let iconSize: CGFloat = 24
-    #endif
-
-    public static let classIcon = IDEIcon("C", color: .yellow, style: .default, size: iconSize).image
-    public static let protocolIcon = IDEIcon("Pr", color: .purple, style: .default, size: iconSize).image
-//    public static let classIcon = SFSymbol(systemName: .cSquare).nsuiImage
-//    public static let protocolIcon = SFSymbol(systemName: .pSquare).nsuiImage
-
-    public var icon: NSUIImage {
-        switch self {
-        case .class: return Self.classIcon
-        case .protocol: return Self.protocolIcon
-        }
-    }
-}
-
-extension RuntimeObjectType: Comparable {
-    public static func < (lhs: RuntimeObjectType, rhs: RuntimeObjectType) -> Bool {
-        switch (lhs, rhs) {
-        case (.class, .protocol):
-            return true
-        case (.protocol, .class):
-            return false
-        case let (.class(className1), .class(className2)):
-            return className1 < className2
-        case let (.protocol(protocolName1), .protocol(protocolName2)):
-            return protocolName1 < protocolName2
-        }
-    }
-}
-
-extension RuntimeImageLoadState: CaseAccessible {}
-
-#if canImport(UIKit)
-
-extension UIColor {
-    static var labelColor: UIColor { .label }
-}
-
-#endif

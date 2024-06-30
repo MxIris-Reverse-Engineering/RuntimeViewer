@@ -43,7 +43,7 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
 
         let output = viewModel.transform(input)
 
-        output.rootNode.drive(collectionView.rx.rootNode(source:)) { (collectionView: UICollectionView, indexPath: IndexPath, viewModel: SidebarRootCellViewModel, cell: UICollectionViewListCell) in
+        output.nodes.drive(collectionView.rx.nodes(source:)) { (collectionView: UICollectionView, indexPath: IndexPath, viewModel: SidebarRootCellViewModel, cell: UICollectionViewListCell) in
             var content = cell.defaultContentConfiguration()
             content.attributedText = viewModel.name
             content.image = viewModel.icon
@@ -52,7 +52,7 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
         }
         .disposed(by: rx.disposeBag)
         
-        output.filteredRootNode.map { $0.map { [$0] } }.drive(collectionView.rx.filteredNodes).disposed(by: rx.disposeBag)
+        output.filteredNodes.drive(collectionView.rx.filteredNodes).disposed(by: rx.disposeBag)
     }
 }
 

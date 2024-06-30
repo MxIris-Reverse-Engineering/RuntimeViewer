@@ -154,7 +154,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerCore",
             dependencies: [
-                "RuntimeViewerService",
+                .target(name: "RuntimeViewerService", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms))

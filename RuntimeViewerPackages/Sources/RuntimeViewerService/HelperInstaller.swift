@@ -1,3 +1,4 @@
+#if os(macOS)
 import ServiceManagement
 
 public enum HelperAuthorizationError: Error {
@@ -36,3 +37,4 @@ public enum HelperInstaller {
         }
     }
 }
+#endif

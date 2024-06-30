@@ -16,6 +16,7 @@ extension NSToolbarItem.Identifier {
         static let inspector: NSToolbarItem.Identifier = "inspector"
         static let switchSource: NSToolbarItem.Identifier = "switchSource"
         static let inspectorTrackingSeparator: NSToolbarItem.Identifier = "inspectorTrackingSeparator"
+        static let generationOptions: NSToolbarItem.Identifier = "generationOptions"
     }
 }
 
@@ -66,6 +67,17 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
+    class GenerationOptionsToolbarItem: NSToolbarItem {
+        let button = ToolbarButton()
+        
+        init() {
+            super.init(itemIdentifier: .Main.generationOptions)
+            view = button
+            button.title = ""
+            button.image = SFSymbol(systemName: .ellipsisCurlybraces).nsImage
+        }
+    }
+    
     let toolbar: NSToolbar
 
     unowned let delegate: Delegate
@@ -77,6 +89,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     let saveItem = SaveToolbarItem()
 
     let switchSourceItem = SwitchSourceToolbarItem()
+    
+    let generationOptionsItem = GenerationOptionsToolbarItem()
     
     lazy var inspectorTrackingSeparatorItem = NSTrackingSeparatorToolbarItem(identifier: .Main.inspectorTrackingSeparator, splitView: delegate.splitView, dividerIndex: 1)
 
@@ -92,11 +106,11 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .Main.back, .flexibleSpace, .sidebarTrackingSeparator, .Main.switchSource, .Main.save, .Main.share, .Main.inspectorTrackingSeparator, .flexibleSpace, .Main.inspector]
+        [.toggleSidebar, .Main.back, .flexibleSpace, .sidebarTrackingSeparator, .Main.switchSource, .Main.generationOptions, .Main.save, .Main.share, .Main.inspectorTrackingSeparator, .flexibleSpace, .Main.inspector]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.Main.back, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .Main.inspectorTrackingSeparator, .Main.inspector, .Main.share, .Main.save, .Main.switchSource]
+        [.Main.back, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .Main.inspectorTrackingSeparator, .Main.inspector, .Main.share, .Main.save, .Main.switchSource, .Main.generationOptions]
     }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
@@ -113,6 +127,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             return saveItem
         case .Main.switchSource:
             return switchSourceItem
+        case .Main.generationOptions:
+            return generationOptionsItem
         default:
             return nil
         }

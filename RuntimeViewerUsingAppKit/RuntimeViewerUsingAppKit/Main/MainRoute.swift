@@ -14,6 +14,7 @@ import RuntimeViewerApplication
 public enum MainRoute: Routable {
     case main(RuntimeListings)
     case select(RuntimeObjectType)
-    case inspect(InspectableType)
+    case inspect(InspectableObject)
     case sidebarBack
+    case generationOptions(sender: NSView)
 }

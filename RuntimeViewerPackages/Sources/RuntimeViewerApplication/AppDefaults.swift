@@ -1,10 +1,3 @@
-//
-//  AppDefaults.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/8.
-//
-
 import Foundation
 import RxDefaultsPlus
 import RuntimeViewerCore

@@ -25,7 +25,7 @@ class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
     init(appServices: AppServices, delegate: SidebarCoordinatorDelegate? = nil) {
         self.appServices = appServices
         self.delegate = delegate
-        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .root)
+        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
     }
 
     override func prepareTransition(for route: SidebarRoute) -> SidebarTransition {

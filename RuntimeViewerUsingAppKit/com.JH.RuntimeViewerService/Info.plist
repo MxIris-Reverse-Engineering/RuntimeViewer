@@ -14,7 +14,7 @@
 	<string>1</string>
 	<key>SMAuthorizedClients</key>
 	<array>
-		<string>identifier &quot;com.JH.RuntimeViewerUsingAppKit&quot; and anchor apple generic and certificate leaf[subject.CN] = &quot;Apple Development: JieHui Lai (4ZZALU97YZ)&quot; and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
+		<string>identifier &quot;com.JH.RuntimeViewer&quot; and anchor apple generic and certificate leaf[subject.CN] = &quot;Apple Development: JieHui Lai (4ZZALU97YZ)&quot; and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
 		<string>identifier &quot;com.JH.RuntimeViewerCatalystHelper&quot; and anchor apple generic and certificate leaf[subject.CN] = &quot;Apple Development: JieHui Lai (4ZZALU97YZ)&quot; and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
 	</array>
 </dict>

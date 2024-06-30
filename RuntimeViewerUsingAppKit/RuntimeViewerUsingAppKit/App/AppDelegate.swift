@@ -21,27 +21,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         CatalystHelperLauncher.shared.terminate()
-        try? HelperInstaller.install()
+//        try? HelperInstaller.install()
         _ = mainCoordinator
 
         DispatchQueue.global().async {
             _ = RuntimeListings.shared
         }
-
-        RuntimeListings.macCatalystReceiver.$imageList
+        
+        RuntimeListings.macCatalystReceiver.$dyldSharedCacheImageNodes
             .sink { imageList in
                 print(imageList)
             }
             .store(in: &cancellables)
-
-        DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
-            CatalystHelperLauncher.shared.launch { result in
-                switch result {
-                case .success:
-                    print("launch success")
-                case let .failure(failure):
-                    print(failure)
-                }
+        
+        CatalystHelperLauncher.shared.launch { result in
+            switch result {
+            case .success:
+                print("launch success")
+            case let .failure(failure):
+                print(failure)
             }
         }
     }
@@ -56,6 +54,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 class CatalystHelperLauncher {
+    static let appName = "RuntimeViewerCatalystHelper"
+
     static let shared = CatalystHelperLauncher()
 
     enum LaunchError: Swift.Error {
@@ -68,7 +68,7 @@ class CatalystHelperLauncher {
         do {
             let process = Process()
             process.executableURL = .init(fileURLWithPath: "/usr/bin/killall")
-            process.arguments = ["RuntimeViewerCatalystHelper"]
+            process.arguments = [CatalystHelperLauncher.appName]
             process.environment = [
                 "__CFBundleIdentifier": "com.apple.Terminal",
             ]
@@ -80,7 +80,7 @@ class CatalystHelperLauncher {
 
     func launch(completion: @escaping (Result<Void, Swift.Error>) -> Void) {
         DispatchQueue.global(qos: .userInteractive).async {
-            let helperURL = Bundle.main.bundlePath.box.appendingPathComponent("Contents").box.appendingPathComponent("Applications").box.appendingPathComponent("RuntimeViewerCatalystHelper.app").filePathURL
+            let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents").appendingPathComponent("Applications").appendingPathComponent("\(CatalystHelperLauncher.appName).app")
 
             guard FileManager.default.fileExists(atPath: helperURL.path) else {
                 completion(.failure(LaunchError.helperNotFound))
@@ -90,7 +90,7 @@ class CatalystHelperLauncher {
             do {
                 let process = Process()
                 process.executableURL = .init(fileURLWithPath: "/usr/bin/open")
-                process.arguments = ["-a", "RuntimeViewerCatalystHelper", helperURL.path]
+                process.arguments = ["-a", CatalystHelperLauncher.appName, helperURL.path]
                 process.environment = [
                     "__CFBundleIdentifier": "com.apple.Terminal",
                 ]

@@ -16,7 +16,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     private var nodes: [SidebarRootCellViewModel] = []
 
     @Observed
-    private var filteredRootNode: SidebarRootCellViewModel? = nil
+    private var filteredNodes: [SidebarRootCellViewModel]? = nil
 
     private lazy var allNodes: [String: SidebarRootCellViewModel] = {
         var allNodes: [String: SidebarRootCellViewModel] = [:]
@@ -50,7 +50,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     public struct Output {
         public let nodes: Driver<[SidebarRootCellViewModel]>
         #if canImport(UIKit)
-        public let filteredRootNode: Driver<SidebarRootCellViewModel?>
+        public let filteredNodes: Driver<[SidebarRootCellViewModel]?>
         #endif
     }
 
@@ -73,17 +73,17 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 
         #if canImport(UIKit)
 
-        input.searchString.emit(with: self) { target, searchString in
-            if searchString.isEmpty {
-                target.filteredRootNode = nil
-            } else {
-                let rootNode = SidebarRootCellViewModel(node: CDUtilities.dyldSharedCacheImageRootNode, parent: nil)
-                rootNode.filter = searchString
-                target.filteredRootNode = rootNode
-            }
-        }.disposed(by: rx.disposeBag)
+//        input.searchString.emit(with: self) { target, searchString in
+//            if searchString.isEmpty {
+//                target.filteredNodes = nil
+//            } else {
+//                let rootNode = [SidebarRootCellViewModel(node: CDUtilities.dyldSharedCacheImageRootNode, parent: nil)]
+//                rootNode.filter = searchString
+//                target.filteredNodes = rootNode
+//            }
+//        }.disposed(by: rx.disposeBag)
         
-        return Output(rootNode: $rootNode.asDriver(), filteredRootNode: $filteredRootNode.asDriver())
+        return Output(nodes: $nodes.asDriver(), filteredNodes: $filteredNodes.asDriver())
         
         #endif
     }
@@ -103,145 +103,4 @@ extension SidebarRootViewModel: NSOutlineViewDataSource {
 }
 #endif
 
-extension RuntimeNamedNode: Sequence {
-    public func makeIterator() -> Iterator {
-        return Iterator(node: self)
-    }
 
-    public struct Iterator: IteratorProtocol {
-        var stack: [RuntimeNamedNode] = []
-
-        init(node: RuntimeNamedNode) {
-            self.stack = [node]
-        }
-
-        public mutating func next() -> RuntimeNamedNode? {
-            if let node = stack.popLast() {
-                stack.append(contentsOf: node.children.reversed())
-                return node
-            }
-            return nil
-        }
-    }
-}
-
-public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType {
-    public let node: RuntimeNamedNode
-
-    public weak var parent: SidebarRootCellViewModel?
-
-    public var children: [SidebarRootCellViewModel] { _filteredChildren }
-
-    public var isLeaf: Bool { children.isEmpty }
-
-    private lazy var _filteredChildren: [SidebarRootCellViewModel] = _children
-
-    private lazy var _children: [SidebarRootCellViewModel] = {
-        let children = node.children.map { SidebarRootCellViewModel(node: $0, parent: self) }
-        return children.sorted { $0.node.name < $1.node.name }
-    }()
-
-    private lazy var currentAndChildrenNames: String = {
-        let childrenNames = _children.map { $0.currentAndChildrenNames }.joined(separator: " ")
-        return "\(node.name) \(childrenNames)"
-    }()
-
-    var filter: String = "" {
-        didSet {
-            if filter.isEmpty {
-                _children.forEach { $0.filter = filter }
-                _filteredChildren = _children
-            } else {
-                _children.forEach { $0.filter = filter }
-                _filteredChildren = _children.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
-            }
-        }
-    }
-
-    @Observed
-    public private(set) var icon: NSUIImage?
-
-    @Observed
-    public private(set) var name: NSAttributedString
-
-    public init(node: RuntimeNamedNode, parent: SidebarRootCellViewModel?) {
-        self.node = node
-        self.name = NSAttributedString {
-            AText(node.name.isEmpty ? "Dyld Shared Cache" : node.name)
-                .foregroundColor(.labelColor)
-                .font(.systemFont(ofSize: 13))
-        }
-        self.icon = node.icon
-    }
-
-    public override var hash: Int {
-        var hasher = Hasher()
-        hasher.combine(node)
-        return hasher.finalize()
-    }
-
-    public override func isEqual(_ object: Any?) -> Bool {
-        guard let object = object as? Self else { return false }
-        return node == object.node
-    }
-
-    public func makeIterator() -> Iterator {
-        return Iterator(node: self)
-    }
-
-    public struct Iterator: IteratorProtocol {
-        var stack: [SidebarRootCellViewModel] = []
-
-        init(node: SidebarRootCellViewModel) {
-            self.stack = [node]
-        }
-
-        public mutating func next() -> SidebarRootCellViewModel? {
-            if let node = stack.popLast() {
-                stack.append(contentsOf: node.children.reversed())
-                return node
-            }
-            return nil
-        }
-    }
-}
-
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-
-extension SidebarRootCellViewModel: Differentiable {}
-
-#endif
-
-extension RuntimeNamedNode {
-    public static let frameworkIcon = SFSymbol(systemName: .latch2Case).nsuiImage
-
-    public static let bundleIcon = SFSymbol(systemName: .shippingbox).nsuiImage
-
-    public static let imageIcon = SFSymbol(systemName: .doc).nsuiImage
-
-    public static let folderIcon = SFSymbol(systemName: .folder).nsuiImage
-
-    public var icon: NSUIImage {
-        if name.hasSuffix("framework") {
-            Self.frameworkIcon
-        } else if name.hasSuffix("bundle") {
-            Self.bundleIcon
-        } else if isLeaf {
-            Self.imageIcon
-        } else {
-            Self.folderIcon
-        }
-    }
-}
-
-extension SFSymbol {
-    public var nsuiImage: NSUIImage {
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        return nsImage
-        #endif
-
-        #if canImport(UIKit)
-        return uiImage
-        #endif
-    }
-}
