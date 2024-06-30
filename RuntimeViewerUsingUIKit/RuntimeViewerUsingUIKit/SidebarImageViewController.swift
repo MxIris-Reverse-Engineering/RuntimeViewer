@@ -50,7 +50,11 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
             UIViewController(view: imageLoadErrorView),
         ]
 
-        view.backgroundColor = .secondarySystemBackground
+        if traitCollection.userInterfaceIdiom == .phone {
+            view.backgroundColor = .systemBackground
+        } else {
+            view.backgroundColor = .secondarySystemBackground
+        }
     }
 
     override func setupBindings(for viewModel: SidebarImageViewModel) {
@@ -84,7 +88,7 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
         output.emptyText.drive(imageLoadedView.emptyLabel.rx.text).disposed(by: rx.disposeBag)
 
         output.isEmpty.drive(imageLoadedView.searchBar.rx.isHidden).disposed(by: rx.disposeBag)
-        
+
         output.isEmpty.not().drive(imageLoadedView.emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
 
         output.loadState.map { $0.index }.drive(imageTabBarController.rx.selectedIndex).disposed(by: rx.disposeBag)
@@ -129,7 +133,12 @@ extension SidebarImageViewController {
     class ImageLoadedView: XiblessView {
         let searchBar = UISearchBar()
 
-        let listView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .sidebar)))
+        let listView: UICollectionView = {
+            var configuration = UICollectionLayoutListConfiguration(appearance: .sidebar)
+            configuration.backgroundColor = UIDevice.current.userInterfaceIdiom == .phone ? .systemBackground : .secondarySystemBackground
+            let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
+            return collectionView
+        }()
 
         let emptyLabel = UILabel()
 

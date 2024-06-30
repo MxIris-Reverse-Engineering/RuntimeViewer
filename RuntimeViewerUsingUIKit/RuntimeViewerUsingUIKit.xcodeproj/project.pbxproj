@@ -7,6 +7,28 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E9038FA32C31A8200051B6AC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9038FA22C31A8200051B6AC /* Assets.xcassets */; };
+		E9038FAB2C31A8500051B6AC /* SidebarRootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8F2C27CF4F00A2F3D3 /* SidebarRootViewController.swift */; };
+		E9038FAC2C31A8500051B6AC /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */; };
+		E9038FAD2C31A8500051B6AC /* ContentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC952C28654F00A2F3D3 /* ContentCoordinator.swift */; };
+		E9038FAE2C31A8500051B6AC /* ContentNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC972C28658A00A2F3D3 /* ContentNavigationController.swift */; };
+		E9038FAF2C31A8500051B6AC /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC72C0D612000362862 /* SceneDelegate.swift */; };
+		E9038FB02C31A8500051B6AC /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */; };
+		E9038FB12C31A8500051B6AC /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C39D2C2AB7E400296B2E /* Then.swift */; };
+		E9038FB22C31A8500051B6AC /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACA32C28682C00A2F3D3 /* MainViewModel.swift */; };
+		E9038FB32C31A8500051B6AC /* InspectorViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC9F2C2866E600A2F3D3 /* InspectorViewController.swift */; };
+		E9038FB42C31A8500051B6AC /* SidebarImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC922C28210100A2F3D3 /* SidebarImageViewController.swift */; };
+		E9038FB52C31A8500051B6AC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC52C0D612000362862 /* AppDelegate.swift */; };
+		E9038FB62C31A8500051B6AC /* SidebarNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */; };
+		E9038FB72C31A8500051B6AC /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC992C28659C00A2F3D3 /* ContentPlaceholderViewController.swift */; };
+		E9038FB82C31A8500051B6AC /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC9B2C2865A300A2F3D3 /* ContentTextViewController.swift */; };
+		E9038FB92C31A8500051B6AC /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC92C0D612000362862 /* ViewController.swift */; };
+		E9038FBA2C31A8500051B6AC /* InspectorCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACA12C2866F400A2F3D3 /* InspectorCoordinator.swift */; };
+		E9038FBB2C31A8500051B6AC /* MainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */; };
+		E9038FBD2C31A8810051B6AC /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E9038FBC2C31A8810051B6AC /* RuntimeViewerApplication */; };
+		E9038FBF2C31A8810051B6AC /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E9038FBE2C31A8810051B6AC /* RuntimeViewerArchitectures */; };
+		E9038FC12C31A8810051B6AC /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9038FC02C31A8810051B6AC /* RuntimeViewerCore */; };
+		E9038FC32C31A8810051B6AC /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9038FC22C31A8810051B6AC /* RuntimeViewerUI */; };
 		E942AC772C270C0000A2F3D3 /* MainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */; };
 		E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */; };
 		E942AC8C2C27CF0A00A2F3D3 /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */; };
@@ -33,6 +55,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E9038F982C31A81F0051B6AC /* RuntimeViewerUsingVision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerUsingVision.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9038FA22C31A8200051B6AC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E9038FA72C31A8200051B6AC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainCoordinator.swift; sourceTree = "<group>"; };
 		E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCoordinator.swift; sourceTree = "<group>"; };
 		E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarNavigationController.swift; sourceTree = "<group>"; };
@@ -58,6 +83,17 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		E9038F952C31A81F0051B6AC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9038FC12C31A8810051B6AC /* RuntimeViewerCore in Frameworks */,
+				E9038FBF2C31A8810051B6AC /* RuntimeViewerArchitectures in Frameworks */,
+				E9038FBD2C31A8810051B6AC /* RuntimeViewerApplication in Frameworks */,
+				E9038FC32C31A8810051B6AC /* RuntimeViewerUI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E9432FBF2C0D612000362862 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -72,10 +108,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E9038F992C31A81F0051B6AC /* RuntimeViewerUsingVision */ = {
+			isa = PBXGroup;
+			children = (
+				E9038FA22C31A8200051B6AC /* Assets.xcassets */,
+				E9038FA72C31A8200051B6AC /* Info.plist */,
+			);
+			path = RuntimeViewerUsingVision;
+			sourceTree = "<group>";
+		};
 		E9432FB92C0D612000362862 = {
 			isa = PBXGroup;
 			children = (
 				E9432FC42C0D612000362862 /* RuntimeViewerUsingUIKit */,
+				E9038F992C31A81F0051B6AC /* RuntimeViewerUsingVision */,
 				E9432FC32C0D612000362862 /* Products */,
 				E9432FF62C0D638200362862 /* Frameworks */,
 			);
@@ -85,6 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				E9432FC22C0D612000362862 /* RuntimeViewerUsingUIKit.app */,
+				E9038F982C31A81F0051B6AC /* RuntimeViewerUsingVision.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -127,6 +174,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		E9038F972C31A81F0051B6AC /* RuntimeViewerUsingVision */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E9038FA82C31A8200051B6AC /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingVision" */;
+			buildPhases = (
+				E9038F942C31A81F0051B6AC /* Sources */,
+				E9038F952C31A81F0051B6AC /* Frameworks */,
+				E9038F962C31A81F0051B6AC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RuntimeViewerUsingVision;
+			packageProductDependencies = (
+				E9038FBC2C31A8810051B6AC /* RuntimeViewerApplication */,
+				E9038FBE2C31A8810051B6AC /* RuntimeViewerArchitectures */,
+				E9038FC02C31A8810051B6AC /* RuntimeViewerCore */,
+				E9038FC22C31A8810051B6AC /* RuntimeViewerUI */,
+			);
+			productName = RuntimeViewerUsingVision;
+			productReference = E9038F982C31A81F0051B6AC /* RuntimeViewerUsingVision.app */;
+			productType = "com.apple.product-type.application";
+		};
 		E9432FC12C0D612000362862 /* RuntimeViewerUsingUIKit */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E9432FD62C0D612100362862 /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingUIKit" */;
@@ -160,6 +230,9 @@
 				LastSwiftUpdateCheck = 1540;
 				LastUpgradeCheck = 1540;
 				TargetAttributes = {
+					E9038F972C31A81F0051B6AC = {
+						CreatedOnToolsVersion = 15.4;
+					};
 					E9432FC12C0D612000362862 = {
 						CreatedOnToolsVersion = 15.4;
 					};
@@ -181,11 +254,20 @@
 			projectRoot = "";
 			targets = (
 				E9432FC12C0D612000362862 /* RuntimeViewerUsingUIKit */,
+				E9038F972C31A81F0051B6AC /* RuntimeViewerUsingVision */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		E9038F962C31A81F0051B6AC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9038FA32C31A8200051B6AC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E9432FC02C0D612000362862 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -198,6 +280,30 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		E9038F942C31A81F0051B6AC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9038FAB2C31A8500051B6AC /* SidebarRootViewController.swift in Sources */,
+				E9038FAC2C31A8500051B6AC /* MainSplitViewController.swift in Sources */,
+				E9038FAD2C31A8500051B6AC /* ContentCoordinator.swift in Sources */,
+				E9038FAE2C31A8500051B6AC /* ContentNavigationController.swift in Sources */,
+				E9038FAF2C31A8500051B6AC /* SceneDelegate.swift in Sources */,
+				E9038FB02C31A8500051B6AC /* SidebarCoordinator.swift in Sources */,
+				E9038FB12C31A8500051B6AC /* Then.swift in Sources */,
+				E9038FB22C31A8500051B6AC /* MainViewModel.swift in Sources */,
+				E9038FB32C31A8500051B6AC /* InspectorViewController.swift in Sources */,
+				E9038FB42C31A8500051B6AC /* SidebarImageViewController.swift in Sources */,
+				E9038FB52C31A8500051B6AC /* AppDelegate.swift in Sources */,
+				E9038FB62C31A8500051B6AC /* SidebarNavigationController.swift in Sources */,
+				E9038FB72C31A8500051B6AC /* ContentPlaceholderViewController.swift in Sources */,
+				E9038FB82C31A8500051B6AC /* ContentTextViewController.swift in Sources */,
+				E9038FB92C31A8500051B6AC /* ViewController.swift in Sources */,
+				E9038FBA2C31A8500051B6AC /* InspectorCoordinator.swift in Sources */,
+				E9038FBB2C31A8500051B6AC /* MainCoordinator.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E9432FBE2C0D612000362862 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -225,6 +331,66 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		E9038FA92C31A8200051B6AC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 1.0;
+			};
+			name = Debug;
+		};
+		E9038FAA2C31A8200051B6AC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				XROS_DEPLOYMENT_TARGET = 1.0;
+			};
+			name = Release;
+		};
 		E9432FD42C0D612100362862 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -283,8 +449,10 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Debug;
 		};
@@ -339,8 +507,10 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
+				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Release;
 		};
@@ -369,13 +539,14 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2";
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Debug;
@@ -405,13 +576,14 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator xros xrsimulator";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2";
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Release;
@@ -419,6 +591,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		E9038FA82C31A8200051B6AC /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingVision" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9038FA92C31A8200051B6AC /* Debug */,
+				E9038FAA2C31A8200051B6AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		E9432FBD2C0D612000362862 /* Build configuration list for PBXProject "RuntimeViewerUsingUIKit" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -440,6 +621,22 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		E9038FBC2C31A8810051B6AC /* RuntimeViewerApplication */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerApplication;
+		};
+		E9038FBE2C31A8810051B6AC /* RuntimeViewerArchitectures */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerArchitectures;
+		};
+		E9038FC02C31A8810051B6AC /* RuntimeViewerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCore;
+		};
+		E9038FC22C31A8810051B6AC /* RuntimeViewerUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUI;
+		};
 		E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerApplication;

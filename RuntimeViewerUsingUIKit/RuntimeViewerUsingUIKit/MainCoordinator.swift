@@ -24,7 +24,7 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
     lazy var contentCoordinator = ContentCoordinator(appServices: appServices)
 
     lazy var compactSidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
-    
+
     lazy var inspectorCoordinator = InspectorCoordinator(appServices: appServices)
 
     init(appServices: AppServices) {
@@ -46,8 +46,6 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
         }
     }
 
-    
-    
     override func completeTransition(for route: MainRoute) {
 //        switch route {
 //        case .initial:
@@ -59,7 +57,9 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
 }
 
 extension MainCoordinator: UISplitViewControllerDelegate {
-    func splitViewController(_ svc: UISplitViewController, topColumnForCollapsingToProposedTopColumn proposedTopColumn: UISplitViewController.Column) -> UISplitViewController.Column {
+    func splitViewController(_ svc: UISplitViewController,
+                             topColumnForCollapsingToProposedTopColumn proposedTopColumn: UISplitViewController.Column)
+        -> UISplitViewController.Column {
         return .primary
     }
 }

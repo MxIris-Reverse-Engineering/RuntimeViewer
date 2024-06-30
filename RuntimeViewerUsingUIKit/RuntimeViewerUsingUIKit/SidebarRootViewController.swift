@@ -6,7 +6,12 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 class SidebarRootViewController: ViewController<SidebarRootViewModel> {
-    let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .sidebar)))
+    let collectionView: UICollectionView = {
+        var configuration = UICollectionLayoutListConfiguration(appearance: .sidebar)
+        configuration.backgroundColor = UIDevice.current.userInterfaceIdiom == .phone ? .systemBackground : .secondarySystemBackground
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
+        return collectionView
+    }()
 
     let searchBar = UISearchBar()
 
@@ -14,17 +19,18 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
         super.viewDidLoad()
 
         hierarchy {
-            searchBar
+//            searchBar
             collectionView
         }
 
-        searchBar.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide)
-            make.left.right.equalTo(view.safeAreaLayoutGuide).inset(15)
-        }
+//        searchBar.snp.makeConstraints { make in
+//            make.top.equalTo(view.safeAreaLayoutGuide)
+//            make.left.right.equalTo(view.safeAreaLayoutGuide).inset(15)
+//        }
 
         collectionView.snp.makeConstraints { make in
-            make.top.equalTo(searchBar.snp.bottom)
+//            make.top.equalTo(searchBar.snp.bottom)
+            make.top.equalTo(view.safeAreaLayoutGuide)
             make.bottom.equalTo(view.safeAreaLayoutGuide)
             make.left.right.equalToSuperview()
         }
@@ -33,7 +39,13 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
             $0.backgroundImage = .image(withColor: .clear)
         }
 
-        view.backgroundColor = .secondarySystemBackground
+        if traitCollection.userInterfaceIdiom == .phone {
+            view.backgroundColor = .systemBackground
+            collectionView.backgroundColor = .systemBackground
+        } else {
+            view.backgroundColor = .secondarySystemBackground
+            collectionView.backgroundColor = .secondarySystemBackground
+        }
     }
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
@@ -51,7 +63,7 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
             cell.indentationWidth = 8
         }
         .disposed(by: rx.disposeBag)
-        
+
         output.filteredNodes.drive(collectionView.rx.filteredNodes).disposed(by: rx.disposeBag)
     }
 }
