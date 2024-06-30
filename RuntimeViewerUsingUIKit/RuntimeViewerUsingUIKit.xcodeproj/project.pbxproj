@@ -51,11 +51,11 @@
 		E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */; };
 		E95441BA2C26E94700DFFD40 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B92C26E94700DFFD40 /* RuntimeViewerCore */; };
 		E95441BC2C26E99400DFFD40 /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */; };
-		E9AA36242C318A7300A9B2E4 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */; };
+		E9AA36242C318A7300A9B2E4 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */; platformFilter = ios; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		E9038F982C31A81F0051B6AC /* RuntimeViewerUsingVision.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerUsingVision.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9038F982C31A81F0051B6AC /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9038FA22C31A8200051B6AC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E9038FA72C31A8200051B6AC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainCoordinator.swift; sourceTree = "<group>"; };
@@ -131,7 +131,7 @@
 			isa = PBXGroup;
 			children = (
 				E9432FC22C0D612000362862 /* RuntimeViewerUsingUIKit.app */,
-				E9038F982C31A81F0051B6AC /* RuntimeViewerUsingVision.app */,
+				E9038F982C31A81F0051B6AC /* RuntimeViewer.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -194,7 +194,7 @@
 				E9038FC22C31A8810051B6AC /* RuntimeViewerUI */,
 			);
 			productName = RuntimeViewerUsingVision;
-			productReference = E9038F982C31A81F0051B6AC /* RuntimeViewerUsingVision.app */;
+			productReference = E9038F982C31A81F0051B6AC /* RuntimeViewer.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E9432FC12C0D612000362862 /* RuntimeViewerUsingUIKit */ = {
@@ -351,7 +351,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = RuntimeViewer;
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -381,7 +381,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = RuntimeViewer;
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
