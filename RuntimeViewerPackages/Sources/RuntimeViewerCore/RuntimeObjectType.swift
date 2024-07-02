@@ -43,7 +43,7 @@ extension RuntimeObjectType {
     func hierarchy() -> [String] {
         switch self {
         case .class(let named):
-            if let cls = NSClassFromString(name) {
+            if let cls = NSClassFromString(named) {
                 return getClassHierarchy(cls).map { NSStringFromClass($0) }
             } else {
                 return []

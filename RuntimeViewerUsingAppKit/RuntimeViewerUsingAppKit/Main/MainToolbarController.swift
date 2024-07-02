@@ -10,13 +10,16 @@ import RuntimeViewerUI
 
 extension NSToolbarItem.Identifier {
     enum Main {
-        static let back: NSToolbarItem.Identifier = "back"
+        static let sidebarBack: NSToolbarItem.Identifier = "sidebarBack"
+        static let contentBack: NSToolbarItem.Identifier = "contentBack"
         static let share: NSToolbarItem.Identifier = "share"
         static let save: NSToolbarItem.Identifier = "save"
         static let inspector: NSToolbarItem.Identifier = "inspector"
         static let switchSource: NSToolbarItem.Identifier = "switchSource"
         static let inspectorTrackingSeparator: NSToolbarItem.Identifier = "inspectorTrackingSeparator"
         static let generationOptions: NSToolbarItem.Identifier = "generationOptions"
+        static let fontSizeSmaller: NSToolbarItem.Identifier = "fontSizeSmaller"
+        static let fontSizeLarger: NSToolbarItem.Identifier = "fontSizeLarger"
     }
 }
 
@@ -25,14 +28,14 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
         var splitView: NSSplitView { get }
     }
 
-    class BackToolbarItem: NSToolbarItem {
-        let backButton = ToolbarButton()
+    class IconButtonToolbarItem: NSToolbarItem {
+        let button = ToolbarButton()
 
-        init() {
-            super.init(itemIdentifier: .Main.back)
-            view = backButton
-            backButton.title = ""
-            backButton.image = SFSymbol(systemName: .chevronBackward).nsImage
+        init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbol.SystemSymbolName) {
+            super.init(itemIdentifier: itemIdentifier)
+            view = button
+            button.title = ""
+            button.image = SFSymbol(systemName: icon).nsImage
         }
     }
 
@@ -47,17 +50,6 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
-    class SaveToolbarItem: NSToolbarItem {
-        let saveButton = ToolbarButton()
-
-        init() {
-            super.init(itemIdentifier: .Main.save)
-            view = saveButton
-            saveButton.title = ""
-            saveButton.image = SFSymbol(systemName: .squareAndArrowDown).nsImage
-        }
-    }
-    
     class SwitchSourceToolbarItem: NSToolbarItem {
         let segmentedControl = NSSegmentedControl(labels: ["Native", "Mac Catalyst"], trackingMode: .selectOne, target: nil, action: nil)
         init() {
@@ -67,34 +59,31 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
-    class GenerationOptionsToolbarItem: NSToolbarItem {
-        let button = ToolbarButton()
-        
-        init() {
-            super.init(itemIdentifier: .Main.generationOptions)
-            view = button
-            button.title = ""
-            button.image = SFSymbol(systemName: .ellipsisCurlybraces).nsImage
-        }
-    }
-    
     let toolbar: NSToolbar
 
     unowned let delegate: Delegate
 
-    let backItem = BackToolbarItem()
+    let sidebarBackItem = IconButtonToolbarItem(itemIdentifier: .Main.sidebarBack, icon: .chevronBackward)
+
+    let contentBackItem = IconButtonToolbarItem(itemIdentifier: .Main.contentBack, icon: .chevronBackward).then {
+        $0.isNavigational = true
+    }
 
     let inspectorItem = InspectorToolbarItem()
 
-    let saveItem = SaveToolbarItem()
+    let saveItem = IconButtonToolbarItem(itemIdentifier: .Main.save, icon: .squareAndArrowDown)
 
     let switchSourceItem = SwitchSourceToolbarItem()
-    
-    let generationOptionsItem = GenerationOptionsToolbarItem()
-    
+
+    let generationOptionsItem = IconButtonToolbarItem(itemIdentifier: .Main.generationOptions, icon: .ellipsisCurlybraces)
+
     lazy var inspectorTrackingSeparatorItem = NSTrackingSeparatorToolbarItem(identifier: .Main.inspectorTrackingSeparator, splitView: delegate.splitView, dividerIndex: 1)
 
     let sharingServicePickerItem = NSSharingServicePickerToolbarItem(itemIdentifier: .Main.share)
+
+    let fontSizeSmallerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeSmaller, icon: .textformatSizeSmaller)
+
+    let fontSizeLargerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeLarger, icon: .textformatSizeLarger)
 
     init(delegate: Delegate) {
         self.delegate = delegate
@@ -106,17 +95,45 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.toggleSidebar, .Main.back, .flexibleSpace, .sidebarTrackingSeparator, .Main.switchSource, .Main.generationOptions, .Main.save, .Main.share, .Main.inspectorTrackingSeparator, .flexibleSpace, .Main.inspector]
+        [
+            .toggleSidebar,
+            .Main.sidebarBack,
+            .flexibleSpace,
+            .sidebarTrackingSeparator,
+            .Main.contentBack,
+            .Main.switchSource,
+            .Main.fontSizeSmaller,
+            .Main.fontSizeLarger,
+            .Main.generationOptions,
+            .Main.save,
+            .Main.share,
+            .Main.inspectorTrackingSeparator,
+            .flexibleSpace,
+            .Main.inspector,
+        ]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.Main.back, .flexibleSpace, .toggleSidebar, .sidebarTrackingSeparator, .Main.inspectorTrackingSeparator, .Main.inspector, .Main.share, .Main.save, .Main.switchSource, .Main.generationOptions]
+        [
+            .Main.sidebarBack,
+            .flexibleSpace,
+            .toggleSidebar,
+            .sidebarTrackingSeparator,
+            .Main.inspectorTrackingSeparator,
+            .Main.inspector,
+            .Main.share,
+            .Main.save,
+            .Main.switchSource,
+            .Main.generationOptions,
+            .Main.fontSizeSmaller,
+            .Main.fontSizeLarger,
+        ]
     }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
-        case .Main.back:
-            return backItem
+        case .Main.sidebarBack:
+            return sidebarBackItem
         case .Main.inspector:
             return inspectorItem
         case .Main.inspectorTrackingSeparator:
@@ -129,6 +146,12 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             return switchSourceItem
         case .Main.generationOptions:
             return generationOptionsItem
+        case .Main.contentBack:
+            return contentBackItem
+        case .Main.fontSizeSmaller:
+            return fontSizeSmallerItem
+        case .Main.fontSizeLarger:
+            return fontSizeLargerItem
         default:
             return nil
         }

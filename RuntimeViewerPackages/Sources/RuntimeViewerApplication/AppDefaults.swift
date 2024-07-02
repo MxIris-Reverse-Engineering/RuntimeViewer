@@ -10,8 +10,10 @@ public class AppDefaults {
     public var isInitialSetupSplitView: Bool
 
     @UserDefault(key: "generationOptions", defaultValue: .init())
-    ///    @Observed
     public var options: CDGenerationOptions
+
+    @UserDefault(key: "themeProfile", defaultValue: XcodePresentationTheme())
+    public var themeProfile: XcodePresentationTheme
 
     public static subscript<Value>(keyPath: ReferenceWritableKeyPath<AppDefaults, Value>) -> Value {
         set {

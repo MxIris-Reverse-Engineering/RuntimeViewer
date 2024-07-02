@@ -29,14 +29,18 @@ class MainWindowController: XiblessWindowController<MainWindow> {
         self.viewModel = viewModel
 
         let input = MainViewModel.Input(
-            sidebarBackClick: toolbarController.backItem.backButton.rx.click.asSignal(),
-            saveClick: toolbarController.saveItem.saveButton.rx.click.asSignal(),
+            sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
+            contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
+            saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
             switchSource: toolbarController.switchSourceItem.segmentedControl.rx.selectedSegment.asSignal(),
-            generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 }
+            generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
+            fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
+            fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal()
         )
         let output = viewModel.transform(input)
         output.sharingServiceItems.bind(to: toolbarController.sharingServicePickerItem.rx.items).disposed(by: rx.disposeBag)
-        output.isSavable.drive(toolbarController.saveItem.saveButton.rx.isEnabled).disposed(by: rx.disposeBag)
+        output.isSavable.drive(toolbarController.saveItem.button.rx.isEnabled).disposed(by: rx.disposeBag)
+        output.isSidebarBackHidden.drive(toolbarController.sidebarBackItem.button.rx.isHidden).disposed(by: rx.disposeBag)
     }
 
     init() {

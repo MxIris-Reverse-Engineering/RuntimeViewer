@@ -29,4 +29,10 @@ class ContentPlaceholderViewController: UXKitViewController<ContentPlaceholderVi
             $0.textColor = .secondaryLabelColor
         }
     }
+    
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        
+        view.window?.title = "Runtime Viewer"
+    }
 }

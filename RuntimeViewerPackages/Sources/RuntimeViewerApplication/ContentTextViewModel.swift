@@ -12,13 +12,13 @@ import RuntimeViewerArchitectures
 
 public class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
-    private var theme: ThemeProfile
+    public private(set) var theme: ThemeProfile
 
     @Observed
-    private var runtimeObject: RuntimeObjectType
+    public private(set) var runtimeObject: RuntimeObjectType
 
     @Observed
-    private var attributedString: NSAttributedString?
+    public private(set) var attributedString: NSAttributedString?
 
     public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
@@ -26,13 +26,15 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         self.theme = theme
         super.init(appServices: appServices, router: router)
         
-        Observable.combineLatest($runtimeObject, AppDefaults[\.$options])
-            .flatMap { runtimeObject, options -> NSAttributedString? in
+        Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
+            .observeOnMainScheduler()
+            .flatMap { runtimeObject, options, theme -> NSAttributedString? in
                 let semanticString = try await appServices.runtimeListings.semanticString(for: runtimeObject, options: options)
-                return semanticString.attributedString(for: theme)
+                return await MainActor.run {
+                    semanticString.attributedString(for: theme)
+                }
             }
             .catchAndReturn(nil)
-            .observeOnMainScheduler()
             .bind(to: $attributedString)
             .disposed(by: rx.disposeBag)
     }
@@ -82,3 +84,5 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         )
     }
 }
+
+extension NSAttributedString: @unchecked Sendable {}

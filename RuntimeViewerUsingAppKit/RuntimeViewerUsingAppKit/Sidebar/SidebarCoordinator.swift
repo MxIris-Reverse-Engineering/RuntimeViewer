@@ -13,16 +13,17 @@ import RuntimeViewerApplication
 
 typealias SidebarTransition = Transition<Void, SidebarNavigationController>
 
-protocol SidebarCoordinatorDelegate: AnyObject {
-    func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition: SidebarRoute)
-}
+
 
 class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
+    protocol Delegate: AnyObject {
+        func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition: SidebarRoute)
+    }
     let appServices: AppServices
 
-    weak var delegate: SidebarCoordinatorDelegate?
+    weak var delegate: Delegate?
 
-    init(appServices: AppServices, delegate: SidebarCoordinatorDelegate? = nil) {
+    init(appServices: AppServices, delegate: Delegate? = nil) {
         self.appServices = appServices
         self.delegate = delegate
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
@@ -48,6 +49,7 @@ class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
     }
 
     override func completeTransition(for route: SidebarRoute) {
+        super.completeTransition(for: route)
         delegate?.sidebarCoordinator(self, completeTransition: route)
     }
 }

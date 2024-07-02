@@ -72,7 +72,7 @@ extension Then where Self: AnyObject {
     ///     }
     @inlinable
     @discardableResult
-    func then(_ block: @Sendable (Self) throws -> Void) rethrows -> Self {
+    func then(_ block: (Self) throws -> Void) rethrows -> Self {
         try block(self)
         return self
     }

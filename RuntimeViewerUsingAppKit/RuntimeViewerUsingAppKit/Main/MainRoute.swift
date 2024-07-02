@@ -16,5 +16,6 @@ public enum MainRoute: Routable {
     case select(RuntimeObjectType)
     case inspect(InspectableObject)
     case sidebarBack
+    case contentBack
     case generationOptions(sender: NSView)
 }

@@ -14,14 +14,18 @@ import RuntimeViewerApplication
 class MainViewModel: ViewModel<MainRoute> {
     struct Input {
         let sidebarBackClick: Signal<Void>
+        let contentBackClick: Signal<Void>
         let saveClick: Signal<Void>
         let switchSource: Signal<Int>
         let generationOptionsClick: Signal<NSView>
+        let fontSizeSmallerClick: Signal<Void>
+        let fontSizeLargerClick: Signal<Void>
     }
 
     struct Output {
         let sharingServiceItems: Observable<[Any]>
         let isSavable: Driver<Bool>
+        let isSidebarBackHidden: Driver<Bool>
     }
 
     let completeTransition: Observable<SidebarRoute>
@@ -30,7 +34,16 @@ class MainViewModel: ViewModel<MainRoute> {
     var selectedRuntimeObject: RuntimeObjectType?
 
     func transform(_ input: Input) -> Output {
+        input.fontSizeSmallerClick.emitOnNext {
+            AppDefaults[\.themeProfile].fontSizeSmaller()
+        }
+        .disposed(by: rx.disposeBag)
+        input.fontSizeLargerClick.emitOnNext {
+            AppDefaults[\.themeProfile].fontSizeLarger()
+        }
+        .disposed(by: rx.disposeBag)
         input.sidebarBackClick.emit(to: router.rx.trigger(.sidebarBack)).disposed(by: rx.disposeBag)
+        input.contentBackClick.emit(to: router.rx.trigger(.contentBack)).disposed(by: rx.disposeBag)
         input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
         input.saveClick.withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete()).filterNil()
             .emitOnNext { runtimeObject in
@@ -87,7 +100,10 @@ class MainViewModel: ViewModel<MainRoute> {
 
         return Output(
             sharingServiceItems: sharingServiceItems,
-            isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil }
+            isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
+            isSidebarBackHidden: completeTransition.map {
+                if case .clickedNode = $0 { false } else if case .selectedObject = $0 { false } else { true }
+            }.asDriver(onErrorJustReturn: true)
         )
     }
 

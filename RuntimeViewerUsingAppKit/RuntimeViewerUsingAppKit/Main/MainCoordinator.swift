@@ -16,11 +16,11 @@ typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewCo
 class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     let appServices: AppServices
 
-    let completeTransition: PublishRelay<SidebarRoute> = .init()
+//    let completeTransition: PublishRelay<SidebarRoute> = .init()
 
     lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
 
-    lazy var contentCoordinator = ContentCoordinator(appServices: appServices)
+    lazy var contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
 
     lazy var inspectorCoordinator = InspectorCoordinator(appServices: appServices)
 
@@ -35,9 +35,9 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         case let .main(runtimeListings):
             appServices.runtimeListings = runtimeListings
             sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
-            contentCoordinator = ContentCoordinator(appServices: appServices)
+            contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
             inspectorCoordinator = InspectorCoordinator(appServices: appServices)
-            let viewModel = MainViewModel(appServices: appServices, router: self, completeTransition: completeTransition.asObservable())
+            let viewModel = MainViewModel(appServices: appServices, router: self, completeTransition: sidebarCoordinator.rx.didCompleteTransition())
             windowController.setupBindings(for: viewModel)
             return .multiple(
                 .show(windowController.splitViewController),
@@ -52,6 +52,8 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             return .route(on: inspectorCoordinator, to: .select(inspectableType))
         case .sidebarBack:
             return .route(on: sidebarCoordinator, to: .back)
+        case .contentBack:
+            return .route(on: contentCoordinator, to: .back)
         case .generationOptions(let sender):
             let viewController = GenerationOptionsViewController()
             let viewModel = GenerationOptionsViewModel(appServices: appServices, router: self)
@@ -70,7 +72,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     }
 }
 
-extension MainCoordinator: SidebarCoordinatorDelegate {
+extension MainCoordinator: SidebarCoordinator.Delegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
         switch route {
         case let .selectedNode(runtimeNamedNode):
@@ -78,14 +80,32 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
         case let .clickedNode(runtimeNamedNode):
             windowController.window?.title = runtimeNamedNode.name
         case let .selectedObject(runtimeObjectType):
+//            windowController.window?.title = runtimeObjectType.name
             contentCoordinator.contextTrigger(.root(runtimeObjectType))
         case .back:
-            windowController.window?.title = "Runtime Viewer"
+//            windowController.window?.title = "Runtime Viewer"
             contentCoordinator.contextTrigger(.placeholder)
         default:
             break
         }
-        windowController.toolbarController.backItem.backButton.isHidden = sidebarCoordinator.rootViewController.viewControllers.count < 2
-        completeTransition.accept(route)
+//        windowController.toolbarController.sidebarBackItem.backButton.isHidden = sidebarCoordinator.rootViewController.viewControllers.count < 2
+    }
+}
+
+extension MainCoordinator: ContentCoordinator.Delegate {
+    func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition route: ContentRoute) {
+        if contentCoordinator.rootViewController.viewControllers.count < 2 {
+            windowController.toolbarController.toolbar.removeItem(at: .Main.contentBack)
+        } else {
+            windowController.toolbarController.toolbar.insertItem(withItemIdentifier: .Main.contentBack, at: 0)
+        }
+    }
+}
+
+extension NSToolbar {
+    func removeItem(at itemIdentifier: NSToolbarItem.Identifier) {
+        if let index = items.firstIndex(where: { $0.itemIdentifier == itemIdentifier }) {
+            removeItem(at: index)
+        }
     }
 }
