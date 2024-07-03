@@ -576,7 +576,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cp -R \"${BUILT_PRODUCTS_DIR}/${TARGET_NAME}.app\" \"${SRCROOT}\"\n";
+			shellScript = "cp -f -R \"${BUILT_PRODUCTS_DIR}/${TARGET_NAME}.app\" \"${SRCROOT}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
