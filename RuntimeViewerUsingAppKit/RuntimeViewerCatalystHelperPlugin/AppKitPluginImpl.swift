@@ -31,12 +31,7 @@ class AppKitPluginImpl: NSObject, AppKitPlugin {
 
     @objc func setupWindow(_ notification: Notification) {
         if let window = notification.object as? NSWindow, let uinsWindowClass = NSClassFromString("UINSWindow"), window.isKind(of: uinsWindowClass) {
-//            window.orderOut(nil)
-//            window.delegate = self
-//            window.setFrame(.zero, display: true)
-//            window.resignKey()
-//            window.resignMain()
-//            NSApplication.shared.deactivate()
+            window.setFrame(.zero, display: true)
         }
     }
 

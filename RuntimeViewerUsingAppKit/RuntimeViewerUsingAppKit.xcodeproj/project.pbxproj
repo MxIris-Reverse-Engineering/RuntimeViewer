@@ -576,7 +576,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cp -f -R \"${BUILT_PRODUCTS_DIR}/${TARGET_NAME}.app\" \"${SRCROOT}\"\n";
+			shellScript = "#!/bin/bash\n\n# 定义变量\nAPP_NAME=\"${TARGET_NAME}.app\"\nSRC_PATH=\"${BUILT_PRODUCTS_DIR}/${APP_NAME}\"\nDEST_PATH=\"${SRCROOT}\"\n\n# 检查目标目录是否存在该 app\nif [ -d \"${DEST_PATH}/${APP_NAME}\" ]; then\n    echo \"发现已存在的 ${APP_NAME},正在删除...\"\n    rm -rf \"${DEST_PATH}/${APP_NAME}\"\nfi\n\n# 复制 app 到目标路径\necho \"正在复制 ${APP_NAME} 到 ${DEST_PATH}...\"\ncp -f -R \"${SRC_PATH}\" \"${DEST_PATH}\"\n\n# 检查复制是否成功\nif [ $? -eq 0 ]; then\n    echo \"复制成功完成!\"\nelse\n    echo \"复制失败,请检查路径和权限.\"\n    exit 1\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
