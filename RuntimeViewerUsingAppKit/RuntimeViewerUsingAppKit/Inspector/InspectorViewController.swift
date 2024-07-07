@@ -16,13 +16,15 @@ class InspectorViewController: NSTabViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
-            visualEffectView.hierarchy {}
-        }
-
-        visualEffectView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
+//        hierarchy {
+//            visualEffectView.hierarchy {}
+//        }
+//
+//        visualEffectView.snp.makeConstraints { make in
+//            make.edges.equalToSuperview()
+//        }
+        
+        tabStyle = .unspecified
     }
 }
 

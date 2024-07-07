@@ -16,7 +16,7 @@
 //@_exported import UXKitCoordinator
 #endif
 
-#if canImport(UIKit)
+#if canImport(UIKit) && !os(macOS)
 @_exported import RxUIKit
 @_exported import XCoordinator
 @_exported import XCoordinatorRx

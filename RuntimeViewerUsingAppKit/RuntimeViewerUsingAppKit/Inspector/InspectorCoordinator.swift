@@ -28,7 +28,20 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
             viewController.setupBindings(for: viewModel)
             return .set([viewController])
         case let .select(inspectableType):
-            return .none()
+            switch inspectableType {
+            case .node(let runtimeNamedNode):
+                return .set([])
+            case .object(let runtimeObjectType):
+                switch runtimeObjectType {
+                case .class(let named):
+                    let viewModel = InspectorClassViewModel(runtimeClassName: named, appServices: appServices, router: self)
+                    let viewController = InspectorClassViewController()
+                    viewController.setupBindings(for: viewModel)
+                    return .set([viewController])
+                case .protocol(let named):
+                    return .set([])
+                }
+            }
         }
     }
 }

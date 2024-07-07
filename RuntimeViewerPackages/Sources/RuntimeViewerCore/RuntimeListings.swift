@@ -17,14 +17,6 @@ public enum RuntimeSource {
     case macCatalyst(isSender: Bool)
 }
 
-struct RuntimeInfo: Codable, Hashable {
-    public var classList: [String]
-    public var protocolList: [String]
-    public var imageList: [String]
-    public var protocolToImage: [String: String]
-    public var imageToProtocols: [String: [String]]
-}
-
 public final class RuntimeListings {
     public static let shared = RuntimeListings()
 
@@ -112,13 +104,13 @@ public final class RuntimeListings {
         }
     }
 
-    @Published public private(set) var dyldSharedCacheImageNodes: [RuntimeNamedNode] = [] {
+    @Published public private(set) var imageNodes: [RuntimeNamedNode] = [] {
         didSet {
             #if os(macOS)
             if case let .macCatalyst(isSender) = source, isSender, let receiverConnection {
                 Task {
                     do {
-                        try await receiverConnection.sendMessage(name: ListingsCommandSet.dyldSharedCacheImageNodes, request: CDUtilities.dyldSharedCacheImagePaths())
+                        try await receiverConnection.sendMessage(name: ListingsCommandSet.imageNodes, request: CDUtilities.dyldSharedCacheImagePaths())
                     } catch {
                         Self.logger.error("\(error)")
                     }
@@ -129,19 +121,21 @@ public final class RuntimeListings {
     }
 
     private enum ListingsCommandSet {
-        static let classList = "com.JH.RuntimeViewer.RuntimeListings.classList"
-        static let protocolList = "com.JH.RuntimeViewer.RuntimeListings.protocolList"
-        static let imageList = "com.JH.RuntimeViewer.RuntimeListings.imageList"
-        static let protocolToImage = "com.JH.RuntimeViewer.RuntimeListings.protocolToImage"
-        static let imageToProtocols = "com.JH.RuntimeViewer.RuntimeListings.imageToProtocols"
-        static let loadImage = "com.JH.RuntimeViewer.RuntimeListings.loadImage"
-        static let senderLaunched = "com.JH.RuntimeViewer.RuntimeListings.senderLaunched"
-        static let isImageLoaded = "com.JH.RuntimeViewer.RuntimeListings.isImageLoaded"
-        static let classNamesInImage = "com.JH.RuntimeViewer.RuntimeListings.classNamesInImage"
-        static let patchImagePathForDyld = "com.JH.RuntimeViewer.RuntimeListings.patchImagePathForDyld"
-        static let semanticStringForRuntimeObjectWithOptions = "com.JH.RuntimeViewer.RuntimeListings.semanticStringForRuntimeObjectWithOptions"
-        static let dyldSharedCacheImageNodes = "com.JH.RuntimeViewer.RuntimeListings.dyldSharedCacheImageNodes"
-        static let runtimeObjectHierarchy = "com.JH.RuntimeViewer.RuntimeListings.runtimeObjectHierarchy"
+        static let classList = command("classList")
+        static let protocolList = command("protocolList")
+        static let imageList = command("imageList")
+        static let protocolToImage = command("protocolToImage")
+        static let imageToProtocols = command("imageToProtocols")
+        static let loadImage = command("loadImage")
+        static let senderLaunched = command("senderLaunched")
+        static let isImageLoaded = command("isImageLoaded")
+        static let classNamesInImage = command("classNamesInImage")
+        static let patchImagePathForDyld = command("patchImagePathForDyld")
+        static let semanticStringForRuntimeObjectWithOptions = command("semanticStringForRuntimeObjectWithOptions")
+        static let imageNodes = command("imageNodes")
+        static let runtimeObjectHierarchy = command("runtimeObjectHierarchy")
+        static let runtimeObjectInfo = command("runtimeObjectInfo")
+        static func command(_ command: String) -> String { "com.JH.RuntimeViewer.RuntimeListings.\(command)" }
     }
 
     private let shouldReload = PassthroughSubject<Void, Never>()
@@ -239,8 +233,8 @@ public final class RuntimeListings {
                             self.imageToProtocols = imageToProtocols
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.dyldSharedCacheImageNodes) { [unowned self] (connection: XPCConnection, dyldSharedCacheImagePaths: [String]) in
-                            self.dyldSharedCacheImageNodes = [CDUtilities.dyldSharedCacheImageRootNode(for: dyldSharedCacheImagePaths)]
+                        listener.setMessageHandler(name: ListingsCommandSet.imageNodes) { [unowned self] (connection: XPCConnection, dyldSharedCacheImagePaths: [String]) in
+                            self.imageNodes = [.rootNode(for: dyldSharedCacheImagePaths, name: "Dyld Shared Cache")]
                         }
 
                         listener.setMessageHandler(name: ListingsCommandSet.senderLaunched) { [unowned self] (connection: XPCConnection) in
@@ -284,7 +278,7 @@ public final class RuntimeListings {
         ) ?? ([:], [:])
         self.protocolToImage = protocolToImage
         self.imageToProtocols = imageToProtocols
-        dyldSharedCacheImageNodes = [CDUtilities.dyldSharedCacheImageRootNode]
+        imageNodes = [CDUtilities.dyldSharedCacheImageRootNode, CDUtilities.otherImageRootNode]
 
         RuntimeListings.sharedIfExists = self
 
@@ -346,7 +340,14 @@ public final class RuntimeListings {
 #if !os(macOS)
 typealias XPCConnection = Void
 #endif
+
+// MARK: - Requests
+
 extension RuntimeListings {
+    enum RequestError: Error {
+        case senderConnectionIsLose
+    }
+
     private func request<T>(local: () throws -> T, remote: (_ senderConnection: XPCConnection) async throws -> T) async throws -> T {
         switch source {
         case .native:
@@ -434,10 +435,6 @@ extension RuntimeListings {
         return semanticString
     }
 
-    enum RequestError: Error {
-        case senderConnectionIsLose
-    }
-
     public func runtimeObjectHierarchy(_ runtimeObject: RuntimeObjectType) async throws -> [String] {
         try await request {
             runtimeObject.hierarchy()
@@ -449,25 +446,16 @@ extension RuntimeListings {
             #endif
         }
     }
-}
 
-extension RuntimeObjectType {
-    fileprivate func semanticString(for options: CDGenerationOptions) -> CDSemanticString? {
-        switch self {
-        case let .class(named):
-            if let cls = NSClassFromString(named) {
-                let classModel = CDClassModel(with: cls)
-                return classModel.semanticLines(with: options)
-            } else {
-                return nil
-            }
-        case let .protocol(named):
-            if let proto = NSProtocolFromString(named) {
-                let protocolModel = CDProtocolModel(with: proto)
-                return protocolModel.semanticLines(with: options)
-            } else {
-                return nil
-            }
+    public func runtimeObjectInfo(_ runtimeObject: RuntimeObjectType) async throws -> RuntimeObjectInfo {
+        try await request {
+            try runtimeObject.info()
+        } remote: { senderConnection in
+            #if os(macOS)
+            try await senderConnection.sendMessage(name: ListingsCommandSet.runtimeObjectInfo, request: runtimeObject)
+            #else
+            fatalError()
+            #endif
         }
     }
 }
@@ -567,30 +555,18 @@ extension CDUtilities {
     }
 
     fileprivate class var dyldSharedCacheImageRootNode: RuntimeNamedNode {
-        return dyldSharedCacheImageRootNode(for: CDUtilities.dyldSharedCacheImagePaths())
+        return .rootNode(for: dyldSharedCacheImagePaths(), name: "Dyld Shared Cache")
     }
 
-    fileprivate class func dyldSharedCacheImageRootNode(for imagePaths: [String]) -> RuntimeNamedNode {
-        let root = RuntimeNamedNode("")
-        for path in imagePaths {
-            var current = root
-            for pathComponent in path.split(separator: "/") {
-                switch pathComponent {
-                case ".":
-                    break // current
-                case "..":
-                    if let parent = current.parent {
-                        current = parent
-                    }
-                default:
-                    current = current.child(named: String(pathComponent))
-                }
-            }
-        }
-        return root
+    fileprivate class var otherImageRootNode: RuntimeNamedNode {
+        let dyldSharedCacheImagePaths = dyldSharedCacheImagePaths()
+        let allImagePaths = imageNames()
+        let otherImagePaths = allImagePaths.filter { !dyldSharedCacheImagePaths.contains($0) }
+        return .rootNode(for: otherImagePaths, name: "Others")
     }
 }
 
 public struct DlOpenError: Error {
     public let message: String?
 }
+

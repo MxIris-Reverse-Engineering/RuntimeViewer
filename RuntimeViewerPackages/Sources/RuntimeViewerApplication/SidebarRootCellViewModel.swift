@@ -52,8 +52,9 @@ public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType
 
     public init(node: RuntimeNamedNode, parent: SidebarRootCellViewModel?) {
         self.node = node
+        self.parent = parent
         self.name = NSAttributedString {
-            AText(node.name.isEmpty ? "Dyld Shared Cache" : node.name)
+            AText(node.name)
                 .foregroundColor(.labelColor)
                 .font(.systemFont(ofSize: 13))
         }

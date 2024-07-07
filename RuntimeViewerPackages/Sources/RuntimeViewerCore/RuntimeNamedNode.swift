@@ -20,7 +20,7 @@ public final class RuntimeNamedNode: Codable {
     }
 
     public lazy var path: String = {
-        guard let parent else { return name }
+        guard let parent else { return "" }
         let directory = parent.path
         return directory + "/" + name
     }()
@@ -34,6 +34,26 @@ public final class RuntimeNamedNode: Codable {
         let child = RuntimeNamedNode(name, parent: self)
         children.append(child)
         return child
+    }
+    
+    public class func rootNode(for imagePaths: [String], name: String = "") -> RuntimeNamedNode {
+        let root = RuntimeNamedNode(name)
+        for path in imagePaths {
+            var current = root
+            for pathComponent in path.split(separator: "/") {
+                switch pathComponent {
+                case ".":
+                    break // current
+                case "..":
+                    if let parent = current.parent {
+                        current = parent
+                    }
+                default:
+                    current = current.child(named: String(pathComponent))
+                }
+            }
+        }
+        return root
     }
 }
 

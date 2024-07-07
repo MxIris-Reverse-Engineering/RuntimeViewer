@@ -46,7 +46,8 @@ class MainViewModel: ViewModel<MainRoute> {
         input.contentBackClick.emit(to: router.rx.trigger(.contentBack)).disposed(by: rx.disposeBag)
         input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
         input.saveClick.withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete()).filterNil()
-            .emitOnNext { runtimeObject in
+            .emitOnNext { [weak self] runtimeObject in
+                guard let self else { return }
                 Task { @MainActor in
                     let savePanel = NSSavePanel()
                     savePanel.allowedContentTypes = [.cHeader]
@@ -65,17 +66,17 @@ class MainViewModel: ViewModel<MainRoute> {
             }
             .disposed(by: rx.disposeBag)
 
-        input.switchSource.emit(with: self) { $0.router.trigger(.main($1 == .zero ? .shared : .macCatalystReceiver)) }.disposed(by: rx.disposeBag)
+        input.switchSource.emit(with: self) {
+            print("switchSource:", $1)
+            $0.router.trigger(.main($1 == .zero ? .shared : .macCatalystReceiver))
+        }.disposed(by: rx.disposeBag)
 
-        let sharingServiceItems = completeTransition.map { router -> [Any] in
+        let sharingServiceItems = completeTransition.map { [weak self] router -> [Any] in
+            guard let self else { return [] }
             switch router {
             case let .selectedObject(runtimeObjectType):
                 let item = NSItemProvider()
-                item.registerDataRepresentation(forTypeIdentifier: UTType.cHeader.identifier, visibility: .all) { [weak self] completion in
-                    guard let self else {
-                        completion(nil, CocoaError.error(.featureUnsupported))
-                        return nil
-                    }
+                item.registerDataRepresentation(forTypeIdentifier: UTType.cHeader.identifier, visibility: .all) { completion in
                     Task {
                         do {
                             let semanticString = try await self.appServices.runtimeListings.semanticString(for: runtimeObjectType, options: AppDefaults[\.options])

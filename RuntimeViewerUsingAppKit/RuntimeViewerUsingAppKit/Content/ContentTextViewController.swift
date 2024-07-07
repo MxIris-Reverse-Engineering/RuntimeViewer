@@ -72,7 +72,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel> {
             $0.scrollView.backgroundColor = $1.backgroundColor
         })
         .disposed(by: rx.disposeBag)
-        
+
         rx.viewDidAppear.asDriver().flatMapLatest { output.runtimeObjectName }.drive(with: self) { $0.view.window?.title = $1 }.disposed(by: rx.disposeBag)
 
         eventMonitor.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
@@ -87,9 +87,5 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel> {
             }
             return event
         }
-    }
-    
-    deinit {
-        print("\(Self.self) is deinit")
     }
 }

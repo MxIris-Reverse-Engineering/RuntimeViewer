@@ -14,15 +14,14 @@ import RuntimeViewerApplication
 typealias ContentTransition = Transition<Void, ContentNavigationController>
 
 class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
-    
     protocol Delegate: AnyObject {
         func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition: ContentRoute)
     }
-    
+
     let appServices: AppServices
-    
+
     weak var delegate: Delegate?
-    
+
     init(appServices: AppServices, delegate: Delegate) {
         self.delegate = delegate
         self.appServices = appServices
@@ -50,7 +49,7 @@ class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
             return .pop(animated: true)
         }
     }
-    
+
     override func completeTransition(for route: ContentRoute) {
         delegate?.contentCoordinator(self, completeTransition: route)
     }

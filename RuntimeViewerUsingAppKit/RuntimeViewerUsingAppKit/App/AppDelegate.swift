@@ -28,7 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             _ = RuntimeListings.shared
         }
         
-        RuntimeListings.macCatalystReceiver.$dyldSharedCacheImageNodes
+        RuntimeListings.macCatalystReceiver.$imageNodes
             .sink { imageList in
                 print(imageList)
             }
@@ -51,58 +51,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         return true
     }
-}
-
-class CatalystHelperLauncher {
-    static let appName = "RuntimeViewerCatalystHelper"
-
-    static let shared = CatalystHelperLauncher()
-
-    enum LaunchError: Swift.Error {
-        case helperNotFound
-    }
-
-    private var process: Process?
-
-    func terminate() {
-        do {
-            let process = Process()
-            process.executableURL = .init(fileURLWithPath: "/usr/bin/killall")
-            process.arguments = [CatalystHelperLauncher.appName]
-            process.environment = [
-                "__CFBundleIdentifier": "com.apple.Terminal",
-            ]
-            try process.run()
-        } catch {
-            print(error)
-        }
-    }
-
-    func launch(completion: @escaping (Result<Void, Swift.Error>) -> Void) {
-        DispatchQueue.global(qos: .userInteractive).async {
-            let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents").appendingPathComponent("Applications").appendingPathComponent("\(CatalystHelperLauncher.appName).app")
-
-            guard FileManager.default.fileExists(atPath: helperURL.path) else {
-                completion(.failure(LaunchError.helperNotFound))
-                return
-            }
-
-            do {
-                let process = Process()
-                process.executableURL = .init(fileURLWithPath: "/usr/bin/open")
-                process.arguments = ["-a", CatalystHelperLauncher.appName, helperURL.path]
-                process.environment = [
-                    "__CFBundleIdentifier": "com.apple.Terminal",
-                ]
-                try process.run()
-                completion(.success(()))
-                self.process = process
-            } catch {
-                completion(.failure(error))
-            }
-        }
+    
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return true
     }
 }
+
 
 extension RuntimeListings {
     static let macCatalystReceiver = RuntimeListings(source: .macCatalyst(isSender: false))

@@ -108,10 +108,6 @@ class SidebarImageViewController: UXKitViewController<SidebarImageViewModel> {
         }
         .disposed(by: rx.disposeBag)
     }
-
-    deinit {
-        print("\(Self.self) is deinit")
-    }
 }
 
 extension Void?: Error {}

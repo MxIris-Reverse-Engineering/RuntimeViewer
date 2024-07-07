@@ -21,6 +21,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     private lazy var allNodes: [String: SidebarRootCellViewModel] = {
         var allNodes: [String: SidebarRootCellViewModel] = [:]
         for rootNode in nodes {
+            allNodes[rootNode.node.name] = rootNode
             for node in rootNode {
                 allNodes[node.node.path] = node
             }
@@ -33,7 +34,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 
     public override init(appServices: AppServices, router: any Router<SidebarRoute>) {
         super.init(appServices: appServices, router: router)
-        appServices.runtimeListings.$dyldSharedCacheImageNodes.asObservable().observe(on: MainScheduler.instance).map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }.bind(to: $nodes).disposed(by: rx.disposeBag)
+        appServices.runtimeListings.$imageNodes.asObservable().observe(on: MainScheduler.instance).map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }.bind(to: $nodes).disposed(by: rx.disposeBag)
     }
     
     public struct Input {
@@ -87,6 +88,10 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
         
         #endif
     }
+    
+//    deinit {
+//        print("\(Self.self) deinit")
+//    }
 }
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
@@ -98,7 +103,8 @@ extension SidebarRootViewModel: NSOutlineViewDataSource {
 
     public func outlineView(_ outlineView: NSOutlineView, persistentObjectForItem item: Any?) -> Any? {
         guard let item = item as? SidebarRootCellViewModel else { return nil }
-        return item.node.path
+        let returnObject = item.node.parent != nil ? item.node.path : item.node.name
+        return returnObject
     }
 }
 #endif

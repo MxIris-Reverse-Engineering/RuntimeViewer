@@ -26,8 +26,9 @@ class MainWindowController: XiblessWindowController<MainWindow> {
     var viewModel: MainViewModel?
 
     func setupBindings(for viewModel: MainViewModel) {
+        rx.disposeBag = DisposeBag()
         self.viewModel = viewModel
-
+        
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),

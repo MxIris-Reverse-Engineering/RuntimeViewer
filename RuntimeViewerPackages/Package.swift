@@ -5,7 +5,7 @@ import PackageDescription
 
 let appkitPlatforms: [Platform] = [.macOS]
 
-let uikitPlatforms: [Platform] = [.iOS, .tvOS, .macCatalyst, .visionOS]
+let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
 
 let package = Package(
@@ -71,10 +71,10 @@ let package = Package(
             url: "https://github.com/Mx-Iris/RxSwiftPlus",
             branch: "main"
         ),
-        .package(
-            url: "https://github.com/RxSwiftCommunity/RxSwiftExt.git",
-            .upToNextMajor(from: "6.0.0")
-        ),
+//        .package(
+//            url: "https://github.com/RxSwiftCommunity/RxSwiftExt.git",
+//            .upToNextMajor(from: "6.0.0")
+//        ),
 //        .package(
 //            path: "/Volumes/Repositories/Private/Personal/Library/Multi/RxSwiftPlus"
 //        ),

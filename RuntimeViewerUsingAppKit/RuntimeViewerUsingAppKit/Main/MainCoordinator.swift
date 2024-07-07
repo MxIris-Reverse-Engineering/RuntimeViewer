@@ -34,6 +34,9 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         switch route {
         case let .main(runtimeListings):
             appServices.runtimeListings = runtimeListings
+            removeChild(sidebarCoordinator)
+            removeChild(contentCoordinator)
+            removeChild(inspectorCoordinator)
             sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
             contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
             inspectorCoordinator = InspectorCoordinator(appServices: appServices)
@@ -66,6 +69,8 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         switch route {
         case .main:
             windowController.splitViewController.setupSplitViewItems()
+            
+            break
         default:
             break
         }
@@ -81,6 +86,7 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
             windowController.window?.title = runtimeNamedNode.name
         case let .selectedObject(runtimeObjectType):
 //            windowController.window?.title = runtimeObjectType.name
+            inspectorCoordinator.contextTrigger(.select(.object(runtimeObjectType)))
             contentCoordinator.contextTrigger(.root(runtimeObjectType))
         case .back:
 //            windowController.window?.title = "Runtime Viewer"

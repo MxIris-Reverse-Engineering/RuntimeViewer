@@ -79,6 +79,7 @@ class SidebarRootViewController: UXKitViewController<SidebarRootViewModel> {
             return cellView
         }
         .disposed(by: rx.disposeBag)
+        
         outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
     }
 }

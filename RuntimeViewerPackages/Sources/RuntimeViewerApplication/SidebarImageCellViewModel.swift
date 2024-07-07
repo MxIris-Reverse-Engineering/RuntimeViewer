@@ -10,7 +10,7 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-public class SidebarImageCellViewModel: ViewModel<SidebarRoute> {
+public class SidebarImageCellViewModel: NSObject {
     let runtimeObject: RuntimeObjectType
 
     @Observed
@@ -19,7 +19,7 @@ public class SidebarImageCellViewModel: ViewModel<SidebarRoute> {
     @Observed
     public private(set) var name: NSAttributedString
 
-    public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<SidebarRoute>) {
+    public init(runtimeObject: RuntimeObjectType) {
         self.runtimeObject = runtimeObject
         self.icon = runtimeObject.icon
         self.name = NSAttributedString {
@@ -27,7 +27,7 @@ public class SidebarImageCellViewModel: ViewModel<SidebarRoute> {
                 .font(.systemFont(ofSize: 13))
                 .foregroundColor(.labelColor)
         }
-        super.init(appServices: appServices, router: router)
+        super.init()
     }
 
     public override var hash: Int {

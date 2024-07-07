@@ -128,7 +128,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @MainActor
     public func transform(_ input: Input) -> Output {
         input.runtimeObjectClicked.map { $0.runtimeObject }.emit(to: appServices.$selectedRuntimeObject).disposed(by: rx.disposeBag)
-        
+
         input.searchString.emit(to: $searchString).disposed(by: rx.disposeBag)
 
         input.runtimeObjectClicked.emitOnNextMainActor { [weak self] viewModel in
@@ -145,10 +145,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
         let runtimeObjects = $runtimeObjects.asDriver()
             .map {
-                $0.compactMap { [weak self] runtimeObject -> SidebarImageCellViewModel? in
-                    guard let self else { return nil }
-                    return SidebarImageCellViewModel(runtimeObject: runtimeObject, appServices: appServices, router: router)
-                }
+                $0.map { SidebarImageCellViewModel(runtimeObject: $0) }
             }
 
         let errorText = $loadState
@@ -202,4 +199,3 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         }
     }
 }
-
