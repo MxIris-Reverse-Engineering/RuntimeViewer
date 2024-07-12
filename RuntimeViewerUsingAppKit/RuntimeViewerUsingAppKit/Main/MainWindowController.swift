@@ -36,7 +36,8 @@ class MainWindowController: XiblessWindowController<MainWindow> {
             switchSource: toolbarController.switchSourceItem.segmentedControl.rx.selectedSegment.asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
             fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
-            fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal()
+            fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
+            loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal()
         )
         let output = viewModel.transform(input)
         output.sharingServiceItems.bind(to: toolbarController.sharingServicePickerItem.rx.items).disposed(by: rx.disposeBag)

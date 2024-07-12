@@ -20,6 +20,7 @@ class MainViewModel: ViewModel<MainRoute> {
         let generationOptionsClick: Signal<NSView>
         let fontSizeSmallerClick: Signal<Void>
         let fontSizeLargerClick: Signal<Void>
+        let loadFrameworksClick: Signal<Void>
     }
 
     struct Output {
@@ -34,6 +35,25 @@ class MainViewModel: ViewModel<MainRoute> {
     var selectedRuntimeObject: RuntimeObjectType?
 
     func transform(_ input: Input) -> Output {
+        input.loadFrameworksClick.emitOnNext { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                let openPanel = NSOpenPanel()
+                openPanel.allowedContentTypes = [.framework]
+                openPanel.allowsMultipleSelection = true
+                openPanel.canChooseDirectories = true
+                let result = await openPanel.begin()
+                guard result == .OK else { return }
+                openPanel.urls.forEach { url in
+                    do {
+                        try Bundle(url: url)?.loadAndReturnError()
+                    } catch {
+                        print(error)
+                    }
+                }
+            }
+        }
+        .disposed(by: rx.disposeBag)
         input.fontSizeSmallerClick.emitOnNext {
             AppDefaults[\.themeProfile].fontSizeSmaller()
         }

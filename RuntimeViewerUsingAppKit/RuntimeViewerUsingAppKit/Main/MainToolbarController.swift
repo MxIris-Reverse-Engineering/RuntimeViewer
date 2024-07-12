@@ -20,6 +20,7 @@ extension NSToolbarItem.Identifier {
         static let generationOptions: NSToolbarItem.Identifier = "generationOptions"
         static let fontSizeSmaller: NSToolbarItem.Identifier = "fontSizeSmaller"
         static let fontSizeLarger: NSToolbarItem.Identifier = "fontSizeLarger"
+        static let loadFrameworks: NSToolbarItem.Identifier = "loadFrameworks"
     }
 }
 
@@ -85,6 +86,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
 
     let fontSizeLargerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeLarger, icon: .textformatSizeLarger)
 
+    let loadFrameworksItem = IconButtonToolbarItem(itemIdentifier: .Main.loadFrameworks, icon: .latch2Case)
+    
     init(delegate: Delegate) {
         self.delegate = delegate
         self.toolbar = NSToolbar()
@@ -102,6 +105,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             .sidebarTrackingSeparator,
             .Main.contentBack,
             .Main.switchSource,
+            .Main.loadFrameworks,
             .Main.fontSizeSmaller,
             .Main.fontSizeLarger,
             .Main.generationOptions,
@@ -127,6 +131,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.generationOptions,
             .Main.fontSizeSmaller,
             .Main.fontSizeLarger,
+            .Main.loadFrameworks,
         ]
     }
 
@@ -152,6 +157,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             return fontSizeSmallerItem
         case .Main.fontSizeLarger:
             return fontSizeLargerItem
+        case .Main.loadFrameworks:
+            return loadFrameworksItem
         default:
             return nil
         }

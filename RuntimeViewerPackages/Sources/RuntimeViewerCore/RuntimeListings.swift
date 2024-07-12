@@ -290,6 +290,7 @@ public final class RuntimeListings {
                 self.classList = CDUtilities.classNames()
                 self.protocolList = CDUtilities.protocolNames()
                 self.imageList = CDUtilities.imageNames()
+                self.imageNodes = [CDUtilities.dyldSharedCacheImageRootNode, CDUtilities.otherImageRootNode]
                 Self.logger.debug("End reload")
             }
             .store(in: &subscriptions)
