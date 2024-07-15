@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
@@ -22,25 +23,39 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
 
     override func prepareTransition(for route: InspectorRoute) -> InspectorTransition {
         switch route {
-        case .root:
+        case .placeholder:
             let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
-            return .set([viewController])
-        case let .select(inspectableType):
-            switch inspectableType {
-            case .node(let runtimeNamedNode):
-                return .set([])
-            case .object(let runtimeObjectType):
-                switch runtimeObjectType {
-                case .class(let named):
-                    let viewModel = InspectorClassViewModel(runtimeClassName: named, appServices: appServices, router: self)
-                    let viewController = InspectorClassViewController()
-                    viewController.setupBindings(for: viewModel)
-                    return .set([viewController])
-                case .protocol(let named):
-                    return .set([])
-                }
+            return .set([viewController], animated: false)
+        case let .root(inspectableObject):
+            return .set([makeTransition(for: inspectableObject)], animated: false)
+        case let .next(inspectableObject):
+            return .push(makeTransition(for: inspectableObject), animated: false)
+        case .back:
+            return .pop(animated: false)
+        }
+    }
+
+    func makeTransition(for inspectableObject: InspectableObject) -> UXViewController {
+        switch inspectableObject {
+        case let .node(runtimeNamedNode):
+            let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
+            let viewController = InspectorPlaceholderViewController()
+            viewController.setupBindings(for: viewModel)
+            return viewController
+        case let .object(runtimeObjectType):
+            switch runtimeObjectType {
+            case let .class(named):
+                let viewModel = InspectorClassViewModel(runtimeClassName: named, appServices: appServices, router: self)
+                let viewController = InspectorClassViewController()
+                viewController.setupBindings(for: viewModel)
+                return viewController
+            case let .protocol(named):
+                let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
+                let viewController = InspectorPlaceholderViewController()
+                viewController.setupBindings(for: viewModel)
+                return viewController
             }
         }
     }

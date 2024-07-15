@@ -80,6 +80,15 @@ class SidebarRootViewController: UXKitViewController<SidebarRootViewModel> {
         }
         .disposed(by: rx.disposeBag)
         
+        output.nodes.mapToVoid().drive(with: self) { $0.outlineView.setNeedsReloadAutosaveExpandedItems() }.disposed(by: rx.disposeBag)
+        
         outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
+    }
+}
+
+extension NSOutlineView {
+    func setNeedsReloadAutosaveExpandedItems() {
+        autosaveExpandedItems = !autosaveExpandedItems
+        autosaveExpandedItems = !autosaveExpandedItems
     }
 }

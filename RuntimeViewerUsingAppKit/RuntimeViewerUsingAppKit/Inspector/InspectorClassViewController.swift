@@ -163,7 +163,7 @@ class InspectorClassHierarchyView: InspectorDisclosureView<Label> {
     }
 }
 
-class InspectorClassViewController: AppKitViewController<InspectorClassViewModel> {
+class InspectorClassViewController: UXKitViewController<InspectorClassViewModel> {
     let classHierarchyView = InspectorClassHierarchyView()
 
     lazy var contentStackView = VStackView {

@@ -49,6 +49,7 @@ class MainViewModel: ViewModel<MainRoute> {
                         try Bundle(url: url)?.loadAndReturnError()
                     } catch {
                         print(error)
+                        NSAlert(error: error).runModal()
                     }
                 }
             }

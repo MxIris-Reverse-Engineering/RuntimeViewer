@@ -47,12 +47,12 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
                 .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator),
                 .route(on: sidebarCoordinator, to: .root),
                 .route(on: contentCoordinator, to: .placeholder),
-                .route(on: inspectorCoordinator, to: .root)
+                .route(on: inspectorCoordinator, to: .placeholder)
             )
         case let .select(runtimeObject):
             return .route(on: contentCoordinator, to: .root(runtimeObject))
-        case let .inspect(inspectableType):
-            return .route(on: inspectorCoordinator, to: .select(inspectableType))
+//        case let .inspect(inspectableType):
+//            return .route(on: inspectorCoordinator, to: .select(inspectableType))
         case .sidebarBack:
             return .route(on: sidebarCoordinator, to: .back)
         case .contentBack:
@@ -62,6 +62,8 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             let viewModel = GenerationOptionsViewModel(appServices: appServices, router: self)
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
+        case .loadFramework:
+            return .none()
         }
     }
 
@@ -81,12 +83,12 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
         switch route {
         case let .selectedNode(runtimeNamedNode):
-            inspectorCoordinator.contextTrigger(.select(.node(runtimeNamedNode)))
+            break
         case let .clickedNode(runtimeNamedNode):
             windowController.window?.title = runtimeNamedNode.name
         case let .selectedObject(runtimeObjectType):
 //            windowController.window?.title = runtimeObjectType.name
-            inspectorCoordinator.contextTrigger(.select(.object(runtimeObjectType)))
+            
             contentCoordinator.contextTrigger(.root(runtimeObjectType))
         case .back:
 //            windowController.window?.title = "Runtime Viewer"
@@ -102,8 +104,18 @@ extension MainCoordinator: ContentCoordinator.Delegate {
     func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition route: ContentRoute) {
         if contentCoordinator.rootViewController.viewControllers.count < 2 {
             windowController.toolbarController.toolbar.removeItem(at: .Main.contentBack)
-        } else {
+        } else if !windowController.toolbarController.toolbar.items.contains(where: { $0.itemIdentifier == .Main.contentBack }) {
             windowController.toolbarController.toolbar.insertItem(withItemIdentifier: .Main.contentBack, at: 0)
+        }
+        switch route {
+        case .placeholder:
+            inspectorCoordinator.contextTrigger(.placeholder)
+        case .root(let runtimeObjectType):
+            inspectorCoordinator.contextTrigger(.root(.object(runtimeObjectType)))
+        case .next(let runtimeObjectType):
+            inspectorCoordinator.contextTrigger(.next(.object(runtimeObjectType)))
+        case .back:
+            inspectorCoordinator.contextTrigger(.back)
         }
     }
 }

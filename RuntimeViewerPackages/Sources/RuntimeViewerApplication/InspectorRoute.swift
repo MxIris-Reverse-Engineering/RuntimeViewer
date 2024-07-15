@@ -8,6 +8,8 @@ public enum InspectableObject {
 }
 
 public enum InspectorRoute: Routable {
-    case root
-    case select(InspectableObject)
+    case placeholder
+    case root(InspectableObject)
+    case next(InspectableObject)
+    case back
 }

@@ -17,24 +17,32 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 
     @Observed
     private var filteredNodes: [SidebarRootCellViewModel]? = nil
-
-    private lazy var allNodes: [String: SidebarRootCellViewModel] = {
-        var allNodes: [String: SidebarRootCellViewModel] = [:]
-        for rootNode in nodes {
-            allNodes[rootNode.node.name] = rootNode
-            for node in rootNode {
-                allNodes[node.node.path] = node
-            }
-        }
-        return allNodes
-    }()
+    
+    private var allNodes: [String: SidebarRootCellViewModel] = [:]
 
     @Observed
     private var searchString: String = ""
 
     public override init(appServices: AppServices, router: any Router<SidebarRoute>) {
         super.init(appServices: appServices, router: router)
-        appServices.runtimeListings.$imageNodes.asObservable().observe(on: MainScheduler.instance).map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }.bind(to: $nodes).disposed(by: rx.disposeBag)
+        appServices.runtimeListings.$imageNodes
+            .asObservable()
+            .observe(on: MainScheduler.instance)
+            .map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }
+            .bind(to: $nodes)
+            .disposed(by: rx.disposeBag)
+        $nodes.asDriver().driveOnNext { [weak self] nodes in
+            guard let self else { return }
+            var allNodes: [String: SidebarRootCellViewModel] = [:]
+            for rootNode in nodes {
+                allNodes[rootNode.node.name] = rootNode
+                for node in rootNode {
+                    allNodes[node.node.path] = node
+                }
+            }
+            self.allNodes = allNodes
+        }
+        .disposed(by: rx.disposeBag)
     }
     
     public struct Input {
@@ -98,7 +106,8 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 extension SidebarRootViewModel: NSOutlineViewDataSource {
     public func outlineView(_ outlineView: NSOutlineView, itemForPersistentObject object: Any) -> Any? {
         guard let path = object as? String else { return nil }
-        return allNodes[path]
+        let item = allNodes[path]
+        return item
     }
 
     public func outlineView(_ outlineView: NSOutlineView, persistentObjectForItem item: Any?) -> Any? {

@@ -10,21 +10,16 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class InspectorViewController: NSTabViewController {
-    let visualEffectView = NSVisualEffectView()
 
+class InspectorViewController: UXNavigationController {
+    
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-
-//        hierarchy {
-//            visualEffectView.hierarchy {}
-//        }
-//
-//        visualEffectView.snp.makeConstraints { make in
-//            make.edges.equalToSuperview()
-//        }
+            
+        isToolbarHidden = true
+        isNavigationBarHidden = true
         
-        tabStyle = .unspecified
     }
 }
 
