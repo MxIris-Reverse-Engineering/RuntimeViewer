@@ -11,11 +11,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class ContentTextView: NSTextView {
-    override func clicked(onLink link: Any, at charIndex: Int) {
-        print(link, charIndex)
-    }
-}
+class ContentTextView: NSTextView {}
 
 class ContentTextViewController: UXKitViewController<ContentTextViewModel> {
     override var acceptsFirstResponder: Bool { true }

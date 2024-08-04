@@ -35,8 +35,7 @@ class MainViewModel: ViewModel<MainRoute> {
     var selectedRuntimeObject: RuntimeObjectType?
 
     func transform(_ input: Input) -> Output {
-        input.loadFrameworksClick.emitOnNext { [weak self] in
-            guard let self = self else { return }
+        input.loadFrameworksClick.emitOnNext {
             Task { @MainActor in
                 let openPanel = NSOpenPanel()
                 openPanel.allowedContentTypes = [.framework]

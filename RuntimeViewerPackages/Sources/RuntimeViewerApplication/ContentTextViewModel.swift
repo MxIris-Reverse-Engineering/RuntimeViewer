@@ -22,14 +22,12 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
 
     public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
-        let theme = XcodePresentationTheme()
-        self.theme = theme
+        self.theme = XcodePresentationTheme()
         super.init(appServices: appServices, router: router)
-        
         Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
             .observeOnMainScheduler()
-            .flatMap { runtimeObject, options, theme -> NSAttributedString? in
-                let semanticString = try await appServices.runtimeListings.semanticString(for: runtimeObject, options: options)
+            .flatMap { [unowned self] runtimeObject, options, theme -> NSAttributedString? in
+                let semanticString = try await self.appServices.runtimeListings.semanticString(for: runtimeObject, options: options)
                 return await MainActor.run {
                     semanticString.attributedString(for: theme)
                 }
