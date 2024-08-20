@@ -21,7 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         CatalystHelperLauncher.shared.terminate()
-//        try? HelperInstaller.install()
+        try? HelperInstaller.install()
         _ = mainCoordinator
 
         DispatchQueue.global().async {

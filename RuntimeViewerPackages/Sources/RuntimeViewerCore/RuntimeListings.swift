@@ -237,7 +237,8 @@ public final class RuntimeListings {
                             self.imageNodes = [.rootNode(for: dyldSharedCacheImagePaths, name: "Dyld Shared Cache")]
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.senderLaunched) { [unowned self] (connection: XPCConnection) in
+                        listener.setMessageHandler(name: ListingsCommandSet.senderLaunched) { [unowned self, weak serviceConnection] (connection: XPCConnection) in
+                            guard let serviceConnection else { return }
                             let endpoint: XPCEndpoint? = try await serviceConnection.sendMessage(name: CommandSet.fetchSenderEndpoint)
                             if let endpoint {
                                 let senderConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
@@ -314,27 +315,27 @@ public final class RuntimeListings {
             }
             .store(in: &subscriptions)
 
-        Timer.publish(every: 15, on: .main, in: .default)
-            .autoconnect()
-            .sink { [weak self] _ in
-                guard let self else { return }
-
-                let classList = CDUtilities.classNames()
-                let protocolList = CDUtilities.protocolNames()
-
-                let refClassList = self.classList
-                let refProtocolList = self.protocolList
-
-                if classList != refClassList {
-                    Self.logger.error("Watchdog: classList is out-of-date")
-                    self.classList = classList
-                }
-                if protocolList != refProtocolList {
-                    Self.logger.error("Watchdog: protocolList is out-of-date")
-                    self.protocolList = protocolList
-                }
-            }
-            .store(in: &subscriptions)
+//        Timer.publish(every: 15, on: .main, in: .default)
+//            .autoconnect()
+//            .sink { [weak self] _ in
+//                guard let self else { return }
+//
+//                let classList = CDUtilities.classNames()
+//                let protocolList = CDUtilities.protocolNames()
+//
+//                let refClassList = self.classList
+//                let refProtocolList = self.protocolList
+//
+//                if classList != refClassList {
+//                    Self.logger.error("Watchdog: classList is out-of-date")
+//                    self.classList = classList
+//                }
+//                if protocolList != refProtocolList {
+//                    Self.logger.error("Watchdog: protocolList is out-of-date")
+//                    self.protocolList = protocolList
+//                }
+//            }
+//            .store(in: &subscriptions)
     }
 }
 

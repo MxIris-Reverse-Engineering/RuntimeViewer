@@ -7,11 +7,10 @@ let appkitPlatforms: [Platform] = [.macOS]
 
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
-
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
-        .iOS(.v14), .macOS(.v12), .macCatalyst(.v14), .tvOS(.v14), .visionOS(.v1)
+        .iOS(.v14), .macOS(.v12), .macCatalyst(.v14), .tvOS(.v14), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -117,9 +116,12 @@ let package = Package(
             branch: "main"
         ),
         .package(
-            url: "https://github.com/CharlesJS/SwiftyXPC",
-            .upToNextMajor(from: "0.5.3")
+            url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
+             branch: "main"
         ),
+//        .package(
+//            path: "/Volumes/Repositories/Private/Fork/Library/SwiftyXPC"
+//        ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
             branch: "main"
@@ -157,7 +159,7 @@ let package = Package(
                 .target(name: "RuntimeViewerService", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
-                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms))
+                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
         .target(
@@ -172,7 +174,7 @@ let package = Package(
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbol", package: "SFSymbol"),
                 .product(name: "IDEIcons", package: "ide-icons"),
-                .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms))
+                .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
         .target(
@@ -186,8 +188,8 @@ let package = Package(
         .target(
             name: "RuntimeViewerService",
             dependencies: [
-                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms))
+                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
             ]
-        )
+        ),
     ]
 )

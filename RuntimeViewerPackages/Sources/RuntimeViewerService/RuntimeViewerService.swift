@@ -51,8 +51,10 @@ public final class RuntimeViewerService {
     }
 
     public static func main() throws {
-        _ = try RuntimeViewerService()
-        RunLoop.current.run()
+        try autoreleasepool {
+            _ = try RuntimeViewerService()
+            RunLoop.current.run()
+        }
     }
 }
 #endif

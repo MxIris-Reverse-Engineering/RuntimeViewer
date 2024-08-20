@@ -386,11 +386,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E9432FEF2C0D614A00362862 /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingAppKit" */;
 			buildPhases = (
-				E9C9E9E72C2D20D800C4AA34 /* Run Script */,
 				E9432FDE2C0D614900362862 /* Sources */,
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
+				E9C9E9E72C2D20D800C4AA34 /* Run Script */,
 				E9C9E9EB2C2D33F500C4AA34 /* CopyFiles */,
 			);
 			buildRules = (
@@ -562,7 +562,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#xcodebuild -workspace ../RuntimeViewer.xcworkspace -scheme \"RuntimeViewerCatalystHelper\" -sdk \"macosx\" -destination 'platform=macOS,variant=Mac Catalyst,name=Any Mac'\n";
+			shellScript = "#xcodebuild -workspace ../RuntimeViewer.xcworkspace -scheme \"RuntimeViewerCatalystHelper\" -sdk \"macosx\" -destination 'platform=macOS,variant=Mac Catalyst,name=Any Mac' -derivedDataPath /tmp/CustomDerivedData\n";
 		};
 		E9C9E9E92C2D296E00C4AA34 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
