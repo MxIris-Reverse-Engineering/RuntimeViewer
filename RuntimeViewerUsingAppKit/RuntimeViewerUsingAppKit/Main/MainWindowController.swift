@@ -37,7 +37,8 @@ class MainWindowController: XiblessWindowController<MainWindow> {
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
             fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
             fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
-            loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal()
+            loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
+            installHelperClick: toolbarController.installHelperItem.button.rx.click.asSignal()
         )
         let output = viewModel.transform(input)
         output.sharingServiceItems.bind(to: toolbarController.sharingServicePickerItem.rx.items).disposed(by: rx.disposeBag)

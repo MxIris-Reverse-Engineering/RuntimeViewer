@@ -10,6 +10,7 @@ import RuntimeViewerCore
 import UniformTypeIdentifiers
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import RuntimeViewerService
 
 class MainViewModel: ViewModel<MainRoute> {
     struct Input {
@@ -21,6 +22,7 @@ class MainViewModel: ViewModel<MainRoute> {
         let fontSizeSmallerClick: Signal<Void>
         let fontSizeLargerClick: Signal<Void>
         let loadFrameworksClick: Signal<Void>
+        let installHelperClick: Signal<Void>
     }
 
     struct Output {
@@ -54,6 +56,11 @@ class MainViewModel: ViewModel<MainRoute> {
             }
         }
         .disposed(by: rx.disposeBag)
+        input.installHelperClick.emitOnNext {
+            try? HelperInstaller.install()
+        }
+        .disposed(by: rx.disposeBag)
+        
         input.fontSizeSmallerClick.emitOnNext {
             AppDefaults[\.themeProfile].fontSizeSmaller()
         }
