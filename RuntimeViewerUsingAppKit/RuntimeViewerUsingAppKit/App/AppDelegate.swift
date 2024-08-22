@@ -21,18 +21,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         CatalystHelperLauncher.shared.terminate()
-        try? HelperInstaller.install()
+        
         _ = mainCoordinator
 
         DispatchQueue.global().async {
             _ = RuntimeListings.shared
         }
         
-        RuntimeListings.macCatalystReceiver.$imageNodes
-            .sink { imageList in
-                print(imageList)
-            }
-            .store(in: &cancellables)
+        _ = RuntimeListings.macCatalystReceiver
         
         CatalystHelperLauncher.shared.launch { result in
             switch result {
