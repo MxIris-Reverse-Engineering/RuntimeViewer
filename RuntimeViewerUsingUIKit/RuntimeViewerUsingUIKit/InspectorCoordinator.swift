@@ -11,17 +11,17 @@ class InspectorCoordinator: BaseCoordinator<InspectorRoute, InspectorTransition>
     let appServices: AppServices
     init(appServices: AppServices) {
         self.appServices = appServices
-        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .root)
+        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
     }
 
     override func prepareTransition(for route: InspectorRoute) -> InspectorTransition {
         switch route {
-        case .root:
+        case .placeholder:
             let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
             return .set([viewController])
-        case let .select(inspectableType):
+        default:
             return .none()
         }
     }

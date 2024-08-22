@@ -42,7 +42,7 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
         case let .select(runtimeObject):
             return .multiple(.route(.root(runtimeObject), on: contentCoordinator), .showDetail(contentCoordinator))
         case let .inspect(inspectableType):
-            return .route(.select(inspectableType), on: inspectorCoordinator)
+            return .route(.root(inspectableType), on: inspectorCoordinator)
         }
     }
 
@@ -68,7 +68,7 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
         switch route {
         case let .selectedNode(runtimeNamedNode):
-            inspectorCoordinator.trigger(.select(.node(runtimeNamedNode)))
+            inspectorCoordinator.trigger(.root(.node(runtimeNamedNode)))
         case let .clickedNode(runtimeNamedNode):
             break
         case let .selectedObject(runtimeObjectType):
