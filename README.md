@@ -6,5 +6,5 @@ Powered by [ClassDumpRuntime](https://github.com/leptos-null/ClassDumpRuntime)
 
 ## Highlights: 
 - Support for native frameworks under macOS and frameworks in the iOSSupport directory
-- for easy export of header files
-- fast loading of frameworks other than dsc
+- Easy export of header files
+- Fast loading of frameworks other than dsc
