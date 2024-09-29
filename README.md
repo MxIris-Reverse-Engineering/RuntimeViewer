@@ -2,7 +2,7 @@
 
 Alternative to RuntimeBrowser with a more modern UI and more functionality
 
-Powered by ClassDumpRuntime 
+Powered by [ClassDumpRuntime](https://github.com/leptos-null/ClassDumpRuntime)
 
 ## Highlights: 
 - Support for native frameworks under macOS and frameworks in the iOSSupport directory
