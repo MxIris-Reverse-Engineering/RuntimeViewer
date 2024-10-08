@@ -55,10 +55,6 @@ let package = Package(
 //            path: "/Volumes/Repositories/Private/Fork/Library/ClassDumpRuntime"
 //        ),
         .package(
-            url: "https://github.com/Mx-Iris/ViewHierarchyBuilder",
-            branch: "main"
-        ),
-        .package(
             url: "https://github.com/SnapKit/SnapKit",
             .upToNextMajor(from: "5.0.0")
         ),
@@ -167,7 +163,6 @@ let package = Package(
             dependencies: [
                 .product(name: "UIFoundation", package: "UIFoundation"),
                 .product(name: "UIFoundationToolbox", package: "UIFoundation"),
-                .product(name: "ViewHierarchyBuilder", package: "ViewHierarchyBuilder"),
                 .product(name: "SnapKit", package: "SnapKit"),
                 .product(name: "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
 //                .product(name: "UXKit", package: "OpenUXKit"),

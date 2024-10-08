@@ -12,8 +12,6 @@ import RuntimeViewerCore
 import RuntimeViewerApplication
 
 class SidebarImageViewController: UXKitViewController<SidebarImageViewModel> {
-    let visualEffectView = NSVisualEffectView()
-
     let tabView = NSTabView()
 
     let imageNotLoadedView = ImageLoadableView()
@@ -32,15 +30,9 @@ class SidebarImageViewController: UXKitViewController<SidebarImageViewModel> {
         super.viewDidLoad()
 
         hierarchy {
-            visualEffectView.hierarchy {
-                tabView
-                bottomSeparatorView
-                filterSearchField
-            }
-        }
-
-        visualEffectView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            tabView
+            bottomSeparatorView
+            filterSearchField
         }
 
         tabView.snp.makeConstraints { make in

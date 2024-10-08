@@ -111,8 +111,6 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
 
         setupContentViewConstraints(for: headerView.disclosureButton.state)
 
-        print(headerView.disclosureButton.state.rawValue)
-
         headerView.disclosureButton.box.setAction { [weak self] button in
             guard let self, let button else { return }
             setupContentViewConstraints(for: button.state)
@@ -130,11 +128,6 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
             default:
                 break
             }
-        }
-
-        NSAnimationContext.runAnimationGroup {
-            $0.duration = 0.2
-            layoutSubtreeIfNeeded()
         }
     }
 }

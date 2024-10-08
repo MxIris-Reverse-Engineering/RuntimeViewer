@@ -13,8 +13,6 @@ import RuntimeViewerApplication
 class SidebarRootViewController: UXKitViewController<SidebarRootViewModel> {
     let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
 
-    let visualEffectView = NSVisualEffectView()
-
     let filterSearchField = FilterSearchField()
 
     let bottomSeparatorView = NSBox()
@@ -23,15 +21,9 @@ class SidebarRootViewController: UXKitViewController<SidebarRootViewModel> {
         super.viewDidLoad()
 
         hierarchy {
-            visualEffectView.hierarchy {
-                scrollView
-                bottomSeparatorView
-                filterSearchField
-            }
-        }
-
-        visualEffectView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            scrollView
+            bottomSeparatorView
+            filterSearchField
         }
 
         scrollView.snp.makeConstraints { make in
@@ -79,9 +71,9 @@ class SidebarRootViewController: UXKitViewController<SidebarRootViewModel> {
             return cellView
         }
         .disposed(by: rx.disposeBag)
-        
+
         output.nodes.mapToVoid().drive(with: self) { $0.outlineView.setNeedsReloadAutosaveExpandedItems() }.disposed(by: rx.disposeBag)
-        
+
         outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
     }
 }

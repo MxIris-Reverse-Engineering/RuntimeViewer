@@ -10,8 +10,4 @@ open class ViewModel<Route: Routable>: NSObject {
         self.appServices = appServices
         self.router = router
     }
-    
-    deinit {
-        print("\(Self.self) deinit")
-    }
 }
