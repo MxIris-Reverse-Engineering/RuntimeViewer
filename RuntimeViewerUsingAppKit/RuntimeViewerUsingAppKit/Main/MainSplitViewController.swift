@@ -26,14 +26,6 @@ class MainSplitViewController: NSSplitViewController {
         }
     }
 
-    @objc func transitionCoordinator() -> Any? {
-        return nil
-    }
-
-    @objc func _ancestorViewControllerOfClass(_ class: Any?) -> Any? {
-        return nil
-    }
-
     func setupSplitViewItems() {
         splitViewItems[0].do {
             $0.minimumThickness = 250
@@ -59,3 +51,15 @@ class MainSplitViewController: NSSplitViewController {
         inspectorItem.animator().isCollapsed = !inspectorItem.isCollapsed
     }
 }
+
+/* Fix UXKit Exception
+extension NSViewController {
+    @objc func transitionCoordinator() -> Any? {
+        return nil
+    }
+
+    @objc func _ancestorViewControllerOfClass(_ class: Any?) -> Any? {
+        return nil
+    }
+}
+*/

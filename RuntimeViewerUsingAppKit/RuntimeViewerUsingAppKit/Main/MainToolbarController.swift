@@ -58,6 +58,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             super.init(itemIdentifier: .Main.switchSource)
             view = segmentedControl
             segmentedControl.selectedSegment = 0
+            segmentedControl.segmentDistribution = .fillEqually
         }
     }
 
