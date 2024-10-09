@@ -11,6 +11,6 @@ import RuntimeViewerArchitectures
 
 
 
-class InspectorPlaceholderViewController: UXKitViewController<InspectorPlaceholderViewModel> {
+class InspectorPlaceholderViewController: UXVisualEffectViewController<InspectorPlaceholderViewModel> {
     
 }

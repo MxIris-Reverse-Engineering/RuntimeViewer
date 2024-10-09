@@ -10,7 +10,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootViewController: UXKitViewController<SidebarRootViewModel> {
+class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewModel> {
     let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
 
     let filterSearchField = FilterSearchField()
@@ -20,7 +20,7 @@ class SidebarRootViewController: UXKitViewController<SidebarRootViewModel> {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             scrollView
             bottomSeparatorView
             filterSearchField

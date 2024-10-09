@@ -11,7 +11,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SidebarImageViewController: UXKitViewController<SidebarImageViewModel> {
+class SidebarImageViewController: UXVisualEffectViewController<SidebarImageViewModel> {
     let tabView = NSTabView()
 
     let imageNotLoadedView = ImageLoadableView()
@@ -29,7 +29,7 @@ class SidebarImageViewController: UXKitViewController<SidebarImageViewModel> {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             tabView
             bottomSeparatorView
             filterSearchField
