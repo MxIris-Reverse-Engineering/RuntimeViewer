@@ -187,23 +187,28 @@ public final class RuntimeListings {
                             return "Ping sender successfully."
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.isImageLoaded) { [unowned self] (connection: XPCConnection, imagePath: String) -> Bool in
-                            try await isImageLoaded(path: imagePath)
+                        listener.setMessageHandler(name: ListingsCommandSet.isImageLoaded) { [weak self] (connection: XPCConnection, imagePath: String) -> Bool in
+                            guard let self else { return false }
+                            return try await isImageLoaded(path: imagePath)
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.loadImage) { [unowned self] (connection: XPCConnection, imagePath: String) in
+                        listener.setMessageHandler(name: ListingsCommandSet.loadImage) { [weak self] (connection: XPCConnection, imagePath: String) in
+                            guard let self else { return }
                             try await loadImage(at: imagePath)
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.classNamesInImage) { [unowned self] (connection: XPCConnection, image: String) -> [String] in
-                            try await classNamesIn(image: image)
+                        listener.setMessageHandler(name: ListingsCommandSet.classNamesInImage) { [weak self] (connection: XPCConnection, image: String) -> [String] in
+                            guard let self else { return [] }
+                            return try await classNamesIn(image: image)
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.patchImagePathForDyld) { [unowned self] (connection: XPCConnection, imagePath: String) -> String in
-                            try await patchImagePathForDyld(imagePath)
+                        listener.setMessageHandler(name: ListingsCommandSet.patchImagePathForDyld) { [weak self] (connection: XPCConnection, imagePath: String) -> String in
+                            guard let self else { return "" }
+                            return try await patchImagePathForDyld(imagePath)
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.semanticStringForRuntimeObjectWithOptions) { [unowned self] (connection: XPCConnection, request: SemanticStringRequest) -> Data? in
+                        listener.setMessageHandler(name: ListingsCommandSet.semanticStringForRuntimeObjectWithOptions) { [weak self] (connection: XPCConnection, request: SemanticStringRequest) -> Data? in
+                            guard let self else { return nil }
                             let semanticString = try await semanticString(for: request.runtimeObject, options: request.options)
                             return try NSKeyedArchiver.archivedData(withRootObject: semanticString, requiringSecureCoding: true)
                         }
@@ -213,31 +218,38 @@ public final class RuntimeListings {
                         try await receiverConnection?.sendMessage(name: ListingsCommandSet.senderLaunched)
 
                     } else {
-                        listener.setMessageHandler(name: ListingsCommandSet.classList) { [unowned self] (connection: XPCConnection, classList: [String]) in
+                        listener.setMessageHandler(name: ListingsCommandSet.classList) { [weak self] (connection: XPCConnection, classList: [String]) in
+                            guard let self else { return }
                             self.classList = classList
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.protocolList) { [unowned self] (connection: XPCConnection, protocolList: [String]) in
+                        listener.setMessageHandler(name: ListingsCommandSet.protocolList) { [weak self] (connection: XPCConnection, protocolList: [String]) in
+                            guard let self else { return }
                             self.protocolList = protocolList
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.imageList) { [unowned self] (connection: XPCConnection, imageList: [String]) in
+                        listener.setMessageHandler(name: ListingsCommandSet.imageList) { [weak self] (connection: XPCConnection, imageList: [String]) in
+                            guard let self else { return }
                             self.imageList = imageList
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.protocolToImage) { [unowned self] (connection: XPCConnection, protocolToImage: [String: String]) in
+                        listener.setMessageHandler(name: ListingsCommandSet.protocolToImage) { [weak self] (connection: XPCConnection, protocolToImage: [String: String]) in
+                            guard let self else { return }
                             self.protocolToImage = protocolToImage
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.imageToProtocols) { [unowned self] (connection: XPCConnection, imageToProtocols: [String: [String]]) in
+                        listener.setMessageHandler(name: ListingsCommandSet.imageToProtocols) { [weak self] (connection: XPCConnection, imageToProtocols: [String: [String]]) in
+                            guard let self else { return }
                             self.imageToProtocols = imageToProtocols
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.imageNodes) { [unowned self] (connection: XPCConnection, dyldSharedCacheImagePaths: [String]) in
+                        listener.setMessageHandler(name: ListingsCommandSet.imageNodes) { [weak self] (connection: XPCConnection, dyldSharedCacheImagePaths: [String]) in
+                            guard let self else { return }
                             self.imageNodes = [.rootNode(for: dyldSharedCacheImagePaths, name: "Dyld Shared Cache")]
                         }
 
-                        listener.setMessageHandler(name: ListingsCommandSet.senderLaunched) { [unowned self, weak serviceConnection] (connection: XPCConnection) in
+                        listener.setMessageHandler(name: ListingsCommandSet.senderLaunched) { [weak self, weak serviceConnection] (connection: XPCConnection) in
+                            guard let self else { return }
                             guard let serviceConnection else { return }
                             let endpoint: XPCEndpoint? = try await serviceConnection.sendMessage(name: CommandSet.fetchSenderEndpoint)
                             if let endpoint {
@@ -306,7 +318,8 @@ public final class RuntimeListings {
 
         $protocolList
             .combineLatest($protocolToImage, $imageToProtocols)
-            .sink { [unowned self] in
+            .sink { [weak self] in
+                guard let self else { return }
                 guard let (protocolToImage, imageToProtocols) = Self.protocolImageTrackingFor(
                     protocolList: $0, protocolToImage: $1, imageToProtocols: $2
                 ) else { return }
@@ -518,7 +531,7 @@ extension CDUtilities {
         let names = sequence(first: protocolList) { $0.successor() }
             .prefix(Int(protocolCount))
             .map { NSStringFromProtocol($0.pointee) }
-
+        
         return names
     }
 
@@ -571,4 +584,3 @@ extension CDUtilities {
 public struct DlOpenError: Error {
     public let message: String?
 }
-
