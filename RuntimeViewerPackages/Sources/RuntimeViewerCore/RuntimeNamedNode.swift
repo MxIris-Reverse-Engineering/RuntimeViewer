@@ -59,11 +59,11 @@ public final class RuntimeNamedNode: Codable {
 
 extension RuntimeNamedNode: Hashable {
     public static func == (lhs: RuntimeNamedNode, rhs: RuntimeNamedNode) -> Bool {
-        lhs.name == rhs.name && lhs.parent === rhs.parent
+        lhs.name == rhs.name && lhs.children == rhs.children
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(name)
-        hasher.combine(parent)
+        hasher.combine(children)
     }
 }
