@@ -15,14 +15,12 @@ import Combine
 class AppDelegate: NSObject, NSApplicationDelegate {
     let appServices = AppServices()
 
-    lazy var mainCoordinator = MainCoordinator(appServices: appServices)
 
     var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         CatalystHelperLauncher.shared.terminate()
         
-        _ = mainCoordinator
 
         DispatchQueue.global().async {
             _ = RuntimeListings.shared

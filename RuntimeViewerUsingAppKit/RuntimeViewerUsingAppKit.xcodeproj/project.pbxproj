@@ -22,6 +22,7 @@
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
 		E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */; };
 		E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */; };
+		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */; };
 		E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825372C0E085200D9A85D /* MainCoordinator.swift */; };
@@ -131,6 +132,7 @@
 		E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadFrameworksViewController.swift; sourceTree = "<group>"; };
 		E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = LoadFrameworksViewController.xib; sourceTree = "<group>"; };
 		E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewModel.swift; sourceTree = "<group>"; };
+		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
 		E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCoordinator.swift; sourceTree = "<group>"; };
@@ -356,6 +358,7 @@
 			children = (
 				E9432FE52C0D614900362862 /* AppDelegate.swift */,
 				E9366CD82C3965E7006F5841 /* CatalystHelperLauncher.swift */,
+				E99AE0BB2CBD4A840028B11E /* Document.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -593,6 +596,7 @@
 				E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */,
 				E9A8253A2C0E095500D9A85D /* SidebarImageViewController.swift in Sources */,
 				E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */,
+				E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */,
 				E943301C2C0DB75B00362862 /* Then.swift in Sources */,
 				E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
