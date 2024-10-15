@@ -111,13 +111,13 @@ let package = Package(
             url: "https://github.com/Mx-Iris/RxUIKit",
             branch: "main"
         ),
-//        .package(
-//            url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-//             branch: "main"
-//        ),
         .package(
-            path: "/Volumes/Repositories/Private/Fork/Library/SwiftyXPC"
+            url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
+             branch: "main"
         ),
+//        .package(
+//            path: "/Volumes/Repositories/Private/Fork/Library/SwiftyXPC"
+//        ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
             branch: "main"

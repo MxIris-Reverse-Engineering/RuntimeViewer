@@ -28,7 +28,7 @@ class MainWindowController: XiblessWindowController<MainWindow> {
     func setupBindings(for viewModel: MainViewModel) {
         rx.disposeBag = DisposeBag()
         self.viewModel = viewModel
-        
+
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
@@ -57,6 +57,20 @@ class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
         contentWindow.box.positionCenter()
         contentWindow.setFrameAutosaveName(MainWindow.frameAutosaveName)
+    }
+}
+
+extension NSResponder {
+    private weak static var _currentFirstResponder: NSResponder?
+
+    public static var current: NSResponder? {
+        NSResponder._currentFirstResponder = nil
+        NSApplication.shared.sendAction(#selector(findFirstResponder(sender:)), to: nil, from: nil)
+        return NSResponder._currentFirstResponder
+    }
+
+    @objc func findFirstResponder(sender: AnyObject) {
+        NSResponder._currentFirstResponder = self
     }
 }
 
