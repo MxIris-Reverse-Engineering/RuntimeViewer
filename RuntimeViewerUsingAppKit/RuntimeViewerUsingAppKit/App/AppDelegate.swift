@@ -51,6 +51,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+extension AppDelegate: NSMenuItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(NSDocument.save(_:)) || menuItem.action == #selector(NSDocument.saveAs(_:)) || menuItem.action == #selector(NSDocument.revertToSaved(_:)) {
+            return false
+        }
+        return true
+    }
+}
 
 extension RuntimeListings {
     static let macCatalystReceiver = RuntimeListings(source: .macCatalyst(isSender: false))
