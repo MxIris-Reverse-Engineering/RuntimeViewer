@@ -1,12 +1,11 @@
 #if os(macOS)
-import Foundation
+import AppKit
 import SwiftyXPC
 
 public enum CommandSet {
-    public static let registerReceiverEndpoint = "com.JH.RuntimeViewerService.CommandSet.registerReceiverEndpoint"
-    public static let registerSenderEndpoint = "com.JH.RuntimeViewerService.CommandSet.registerSenderEndpoint"
-    public static let fetchReceiverEndpoint = "com.JH.RuntimeViewerService.CommandSet.fetchReceiverEndpoint"
-    public static let fetchSenderEndpoint = "com.JH.RuntimeViewerService.CommandSet.fetchSenderEndpoint"
+    public static let updateEndpoint = "com.JH.RuntimeViewerService.CommandSet.updateEndpoint"
+    public static let fetchEndpoint = "com.JH.RuntimeViewerService.CommandSet.fetchEndpoint"
+    public static let launchCatalystHelper = "com.JH.RuntimeViewerService.CommandSet.launchCatalystHelper"
     public static let ping = "com.JH.RuntimeViewerService.CommandSet.ping"
 }
 
@@ -15,17 +14,16 @@ public final class RuntimeViewerService {
     public static let serviceName = "com.JH.RuntimeViewerService"
 
     private let listener: SwiftyXPC.XPCListener
-
-    private var receiverEndpoint: XPCEndpoint?
     
-    private var senderEndpoint: XPCEndpoint?
+    private var endpoint: XPCEndpoint?
 
+    private var catalystHelperApplication: NSRunningApplication?
+    
     private init() throws {
         self.listener = try .init(type: .machService(name: Self.serviceName), codeSigningRequirement: nil)
-        listener.setMessageHandler(name: CommandSet.registerReceiverEndpoint, handler: registerReceiverEndpoint(_:endpoint:))
-        listener.setMessageHandler(name: CommandSet.fetchReceiverEndpoint, handler: fetchReceiverEndpoint(_:))
-        listener.setMessageHandler(name: CommandSet.registerSenderEndpoint, handler: registerSenderEndpoint(_:endpoint:))
-        listener.setMessageHandler(name: CommandSet.fetchSenderEndpoint, handler: fetchSenderEndpoint(_:))
+        listener.setMessageHandler(name: CommandSet.updateEndpoint, handler: updateEndpoint)
+        listener.setMessageHandler(name: CommandSet.fetchEndpoint, handler: fetchEndpoint)
+        listener.setMessageHandler(name: CommandSet.launchCatalystHelper, handler: launchCatalystHelper)
         listener.setMessageHandler(name: CommandSet.ping, handler: ping(_:))
         listener.activate()
     }
@@ -34,22 +32,25 @@ public final class RuntimeViewerService {
         return "Ping service successfully"
     }
 
-    private func fetchSenderEndpoint(_ connection: XPCConnection) async throws -> XPCEndpoint? {
-        return senderEndpoint
-    }
-
-    private func registerSenderEndpoint(_ connection: XPCConnection, endpoint: XPCEndpoint?) async throws {
-        self.senderEndpoint = endpoint
+    private func fetchEndpoint(_ connection: XPCConnection) async throws -> XPCEndpoint {
+        guard let endpoint = self.endpoint else {
+            throw XPCError.unknown("No endpoint available")
+        }
+        return endpoint
     }
     
-    private func fetchReceiverEndpoint(_ connection: XPCConnection) async throws -> XPCEndpoint? {
-        return receiverEndpoint
+    private func updateEndpoint(_ connection: XPCConnection, endpoint: XPCEndpoint?) async throws {
+        self.endpoint = endpoint
     }
 
-    private func registerReceiverEndpoint(_ connection: XPCConnection, endpoint: XPCEndpoint?) async throws {
-        self.receiverEndpoint = endpoint
+    private func launchCatalystHelper(_ connection: XPCConnection, helperURL: URL) async throws {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = false
+        configuration.addsToRecentItems = false
+        configuration.activates = false
+        catalystHelperApplication = try await NSWorkspace.shared.openApplication(at: helperURL, configuration: configuration)
     }
-
+    
     public static func main() throws {
         try autoreleasepool {
             _ = try RuntimeViewerService()

@@ -61,16 +61,16 @@ public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType
         self.icon = node.icon
     }
 
-    public override var hash: Int {
-        var hasher = Hasher()
-        hasher.combine(node)
-        return hasher.finalize()
-    }
-
-    public override func isEqual(_ object: Any?) -> Bool {
-        guard let object = object as? Self else { return false }
-        return node == object.node
-    }
+//    public override var hash: Int {
+//        var hasher = Hasher()
+//        hasher.combine(node)
+//        return hasher.finalize()
+//    }
+//
+//    public override func isEqual(_ object: Any?) -> Bool {
+//        guard let object = object as? Self else { return false }
+//        return node == object.node
+//    }
 
     public func makeIterator() -> Iterator {
         return Iterator(node: self)

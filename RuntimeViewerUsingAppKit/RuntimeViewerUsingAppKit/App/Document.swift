@@ -8,10 +8,8 @@
 import AppKit
 
 class Document: NSDocument {
-
-    
     lazy var mainCoordinator = MainCoordinator(appServices: .shared)
-    
+
     override init() {
         super.init()
         // Add your subclass-specific initialization here.
@@ -21,11 +19,9 @@ class Document: NSDocument {
         return false
     }
 
-    
     override func makeWindowControllers() {
         addWindowController(mainCoordinator.windowController)
     }
-    
 
     override func data(ofType typeName: String) throws -> Data {
         // Insert code here to write your document to data of the specified type, throwing an error in case of failure.
@@ -39,9 +35,4 @@ class Document: NSDocument {
         // If you do, you should also override isEntireFileLoaded to return false if the contents are lazily loaded.
         throw NSError(domain: NSOSStatusErrorDomain, code: unimpErr, userInfo: nil)
     }
-
-
-    
-    
 }
-
