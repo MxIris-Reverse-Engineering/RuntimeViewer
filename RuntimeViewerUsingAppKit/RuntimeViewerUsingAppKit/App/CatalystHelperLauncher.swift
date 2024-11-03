@@ -9,7 +9,7 @@ import Foundation
 
 class CatalystHelperLauncher {
     static let appName = "RuntimeViewerCatalystHelper"
-
+    static let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents").appendingPathComponent("Applications").appendingPathComponent("\(appName).app")
     static let shared = CatalystHelperLauncher()
 
     enum LaunchError: Swift.Error {

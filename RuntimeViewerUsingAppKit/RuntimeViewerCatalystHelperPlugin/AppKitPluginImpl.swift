@@ -16,6 +16,8 @@ extension NSObject {
 class AppKitPluginImpl: NSObject, AppKitPlugin {
     var plugin: RuntimeViewerCatalystHelperPlugin?
 
+    var observation: NSKeyValueObservation?
+    
     override required init() {
         super.init()
         NSApplication.shared.setActivationPolicy(.prohibited)
@@ -37,6 +39,24 @@ class AppKitPluginImpl: NSObject, AppKitPlugin {
 
     func launch() {
         plugin = RuntimeViewerCatalystHelperPlugin()
+        Task {
+            // The host application quits, check if any of the two is running.
+            // If none, quit the XPC service.
+
+            let sequence = NSWorkspace.shared.notificationCenter
+                .notifications(named: NSWorkspace.didTerminateApplicationNotification)
+            for await notification in sequence {
+                try Task.checkCancellation()
+                guard let app = notification
+                    .userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                    app.isUserOfService
+                else { continue }
+                if NSWorkspace.shared.runningApplications.contains(where: \.isUserOfService) {
+                    continue
+                }
+                await NSApplication.shared.terminate(nil)
+            }
+        }
     }
 }
 
@@ -44,4 +64,12 @@ extension AppKitPluginImpl: NSWindowDelegate {
 //    func windowDidBecomeKey(_ notification: Notification) {
 //        NSApplication.shared.hide(nil)
 //    }
+}
+
+extension NSRunningApplication {
+    var isUserOfService: Bool {
+        [
+            "com.JH.RuntimeViewer",
+        ].contains(bundleIdentifier)
+    }
 }

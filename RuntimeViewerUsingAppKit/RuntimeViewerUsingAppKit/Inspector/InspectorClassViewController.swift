@@ -23,7 +23,12 @@ class InspectorClassViewModel: ViewModel<InspectorRoute> {
     func transform(_ input: Input) -> Output {
         return Output(
             classHierarchy: $runtimeClassName.flatMapLatest { [unowned self] runtimeClassName in
-                try await appServices.runtimeListings.runtimeObjectHierarchy(.class(named: runtimeClassName)).joined(separator: "\n")
+                do {
+                    return try await appServices.runtimeListings.runtimeObjectHierarchy(.class(named: runtimeClassName)).joined(separator: "\n")
+                } catch {
+                    print(error.localizedDescription)
+                    return runtimeClassName
+                }
             }.catchAndReturn(runtimeClassName).observeOnMainScheduler().asDriverOnErrorJustComplete()
         )
     }

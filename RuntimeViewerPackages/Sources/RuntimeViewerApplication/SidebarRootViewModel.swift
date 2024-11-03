@@ -37,7 +37,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
             for rootNode in nodes {
                 allNodes[rootNode.node.name] = rootNode
                 for node in rootNode {
-                    allNodes[node.node.path] = node
+                    allNodes[node.node.absolutePath] = node
                 }
             }
             self.allNodes = allNodes
@@ -112,7 +112,7 @@ extension SidebarRootViewModel: NSOutlineViewDataSource {
 
     public func outlineView(_ outlineView: NSOutlineView, persistentObjectForItem item: Any?) -> Any? {
         guard let item = item as? SidebarRootCellViewModel else { return nil }
-        let returnObject = item.node.parent != nil ? item.node.path : item.node.name
+        let returnObject = item.node.parent != nil ? item.node.absolutePath : item.node.name
         return returnObject
     }
 }

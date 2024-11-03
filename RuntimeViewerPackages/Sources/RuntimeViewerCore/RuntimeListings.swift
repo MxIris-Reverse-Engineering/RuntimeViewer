@@ -8,29 +8,39 @@ import RuntimeViewerService
 import SwiftyXPC
 #endif
 
-public enum RuntimeSource {
+enum DyldRegisterNotifications {
+    static let addImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
+    static let removeImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
+}
+
+public enum RuntimeSource: CustomStringConvertible {
     case native
     @available(iOS, unavailable)
     @available(tvOS, unavailable)
     @available(watchOS, unavailable)
     @available(visionOS, unavailable)
     case macCatalyst(isSender: Bool)
+    
+    public var description: String {
+        switch self {
+        case .native: return "Native"
+        case .macCatalyst: return "MacCatalyst"
+        }
+    }
 }
 
 public final class RuntimeListings {
     public static let shared = RuntimeListings()
-
-    private static var sharedIfExists: RuntimeListings?
 
     private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeListings")
 
     @Published public private(set) var classList: [String] = [] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let receiverConnection {
+            if case let .macCatalyst(isSender) = source, isSender, let connection {
                 Task {
                     do {
-                        try await receiverConnection.sendMessage(name: ListingsCommandSet.classList, request: classList)
+                        try await connection.sendMessage(name: ListingsCommandSet.classList, request: classList)
                     } catch {
                         Self.logger.error("\(error)")
                     }
@@ -43,10 +53,10 @@ public final class RuntimeListings {
     @Published public private(set) var protocolList: [String] = [] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let receiverConnection {
+            if case let .macCatalyst(isSender) = source, isSender, let connection {
                 Task {
                     do {
-                        try await receiverConnection.sendMessage(name: ListingsCommandSet.protocolList, request: protocolList)
+                        try await connection.sendMessage(name: ListingsCommandSet.protocolList, request: protocolList)
                     } catch {
                         Self.logger.error("\(error)")
                     }
@@ -59,10 +69,10 @@ public final class RuntimeListings {
     @Published public private(set) var imageList: [String] = [] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let receiverConnection {
+            if case let .macCatalyst(isSender) = source, isSender, let connection {
                 Task {
                     do {
-                        try await receiverConnection.sendMessage(name: ListingsCommandSet.imageList, request: imageList)
+                        try await connection.sendMessage(name: ListingsCommandSet.imageList, request: imageList)
                     } catch {
                         Self.logger.error("\(error)")
                     }
@@ -75,10 +85,10 @@ public final class RuntimeListings {
     @Published public private(set) var protocolToImage: [String: String] = [:] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let receiverConnection {
+            if case let .macCatalyst(isSender) = source, isSender, let connection {
                 Task {
                     do {
-                        try await receiverConnection.sendMessage(name: ListingsCommandSet.protocolToImage, request: protocolToImage)
+                        try await connection.sendMessage(name: ListingsCommandSet.protocolToImage, request: protocolToImage)
                     } catch {
                         Self.logger.error("\(error)")
                     }
@@ -91,10 +101,10 @@ public final class RuntimeListings {
     @Published public private(set) var imageToProtocols: [String: [String]] = [:] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let receiverConnection {
+            if case let .macCatalyst(isSender) = source, isSender, let connection {
                 Task {
                     do {
-                        try await receiverConnection.sendMessage(name: ListingsCommandSet.imageToProtocols, request: imageToProtocols)
+                        try await connection.sendMessage(name: ListingsCommandSet.imageToProtocols, request: imageToProtocols)
                     } catch {
                         Self.logger.error("\(error)")
                     }
@@ -107,10 +117,10 @@ public final class RuntimeListings {
     @Published public private(set) var imageNodes: [RuntimeNamedNode] = [] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let receiverConnection {
+            if case let .macCatalyst(isSender) = source, isSender, let connection {
                 Task {
                     do {
-                        try await receiverConnection.sendMessage(name: ListingsCommandSet.imageNodes, request: CDUtilities.dyldSharedCacheImagePaths())
+                        try await connection.sendMessage(name: ListingsCommandSet.imageNodes, request: imageNodes)
                     } catch {
                         Self.logger.error("\(error)")
                     }
@@ -138,21 +148,20 @@ public final class RuntimeListings {
         static func command(_ command: String) -> String { "com.JH.RuntimeViewer.RuntimeListings.\(command)" }
     }
 
+    public let source: RuntimeSource
+
     private let shouldReload = PassthroughSubject<Void, Never>()
 
     private var subscriptions: Set<AnyCancellable> = []
+
     #if os(macOS)
-    private var senderListener: SwiftyXPC.XPCListener?
-
-    private var receiverListener: SwiftyXPC.XPCListener?
-
+    /// The connection to communicate with the mach service
     private var serviceConnection: SwiftyXPC.XPCConnection?
-
-    private var receiverConnection: SwiftyXPC.XPCConnection?
-
-    private var senderConnection: SwiftyXPC.XPCConnection?
+    /// The listener for the sender or receiver
+    private var listener: SwiftyXPC.XPCListener?
+    /// The connection to the sender or receiver
+    private var connection: SwiftyXPC.XPCConnection?
     #endif
-    private let source: RuntimeSource
 
     public init(source: RuntimeSource = .native) {
         self.source = source
@@ -163,113 +172,11 @@ public final class RuntimeListings {
         case let .macCatalyst(isSender):
             Task {
                 do {
-                    let serviceConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerService.serviceName, isPrivilegedHelperTool: true))
-                    serviceConnection.activate()
-                    self.serviceConnection = serviceConnection
-                    let ping: String = try await serviceConnection.sendMessage(name: CommandSet.ping)
-                    Self.logger.info("\(ping)")
-                    let listener = try XPCListener(type: .anonymous, codeSigningRequirement: nil)
+                    let serviceConnection = try await connectToMachService()
                     if isSender {
-                        let endpoint: XPCEndpoint? = try await serviceConnection.sendMessage(name: CommandSet.fetchReceiverEndpoint)
-                        if let endpoint {
-                            let receiverConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
-                            receiverConnection.activate()
-                            self.receiverConnection = receiverConnection
-                            try await serviceConnection.sendMessage(name: CommandSet.registerSenderEndpoint, request: listener.endpoint)
-                            let ping: String = try await receiverConnection.sendMessage(name: CommandSet.ping)
-                            Self.logger.info("\(ping)")
-                            observeRuntime()
-                        } else {
-                            Self.logger.error("Fetch endpoint from machService failed.")
-                        }
-
-                        listener.setMessageHandler(name: CommandSet.ping) { connection in
-                            return "Ping sender successfully."
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.isImageLoaded) { [weak self] (connection: XPCConnection, imagePath: String) -> Bool in
-                            guard let self else { return false }
-                            return try await isImageLoaded(path: imagePath)
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.loadImage) { [weak self] (connection: XPCConnection, imagePath: String) in
-                            guard let self else { return }
-                            try await loadImage(at: imagePath)
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.classNamesInImage) { [weak self] (connection: XPCConnection, image: String) -> [String] in
-                            guard let self else { return [] }
-                            return try await classNamesIn(image: image)
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.patchImagePathForDyld) { [weak self] (connection: XPCConnection, imagePath: String) -> String in
-                            guard let self else { return "" }
-                            return try await patchImagePathForDyld(imagePath)
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.semanticStringForRuntimeObjectWithOptions) { [weak self] (connection: XPCConnection, request: SemanticStringRequest) -> Data? in
-                            guard let self else { return nil }
-                            let semanticString = try await semanticString(for: request.runtimeObject, options: request.options)
-                            return try NSKeyedArchiver.archivedData(withRootObject: semanticString, requiringSecureCoding: true)
-                        }
-
-                        listener.activate()
-                        self.senderListener = listener
-                        try await receiverConnection?.sendMessage(name: ListingsCommandSet.senderLaunched)
-
+                        try await setupMessageHandlerForSender(with: serviceConnection)
                     } else {
-                        listener.setMessageHandler(name: ListingsCommandSet.classList) { [weak self] (connection: XPCConnection, classList: [String]) in
-                            guard let self else { return }
-                            self.classList = classList
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.protocolList) { [weak self] (connection: XPCConnection, protocolList: [String]) in
-                            guard let self else { return }
-                            self.protocolList = protocolList
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.imageList) { [weak self] (connection: XPCConnection, imageList: [String]) in
-                            guard let self else { return }
-                            self.imageList = imageList
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.protocolToImage) { [weak self] (connection: XPCConnection, protocolToImage: [String: String]) in
-                            guard let self else { return }
-                            self.protocolToImage = protocolToImage
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.imageToProtocols) { [weak self] (connection: XPCConnection, imageToProtocols: [String: [String]]) in
-                            guard let self else { return }
-                            self.imageToProtocols = imageToProtocols
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.imageNodes) { [weak self] (connection: XPCConnection, dyldSharedCacheImagePaths: [String]) in
-                            guard let self else { return }
-                            self.imageNodes = [.rootNode(for: dyldSharedCacheImagePaths, name: "Dyld Shared Cache")]
-                        }
-
-                        listener.setMessageHandler(name: ListingsCommandSet.senderLaunched) { [weak self, weak serviceConnection] (connection: XPCConnection) in
-                            guard let self else { return }
-                            guard let serviceConnection else { return }
-                            let endpoint: XPCEndpoint? = try await serviceConnection.sendMessage(name: CommandSet.fetchSenderEndpoint)
-                            if let endpoint {
-                                let senderConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
-                                senderConnection.activate()
-                                self.senderConnection = senderConnection
-                                let ping: String = try await senderConnection.sendMessage(name: CommandSet.ping)
-                                Self.logger.info("\(ping)")
-                            } else {
-                                Self.logger.error("Fetch endpoint from machService failed.")
-                            }
-                        }
-
-                        listener.setMessageHandler(name: CommandSet.ping) { connection in
-                            return "Ping receiver successfully."
-                        }
-
-                        listener.activate()
-                        self.receiverListener = listener
-                        try await serviceConnection.sendMessage(name: CommandSet.registerReceiverEndpoint, request: listener.endpoint)
+                        try await setupMessageHandlerForReceiver(with: serviceConnection)
                     }
                 } catch {
                     Self.logger.error("\(error)")
@@ -279,13 +186,108 @@ public final class RuntimeListings {
         }
     }
 
+    #if os(macOS)
+    private func connectToMachService() async throws -> SwiftyXPC.XPCConnection {
+        let serviceConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerService.serviceName, isPrivilegedHelperTool: true))
+        serviceConnection.activate()
+        self.serviceConnection = serviceConnection
+        let ping: String = try await serviceConnection.sendMessage(name: CommandSet.ping)
+        Self.logger.info("\(ping)")
+        return serviceConnection
+    }
+
+    private func setupMessageHandlerForSender(with serviceConnection: XPCConnection) async throws {
+        let listener = try XPCListener(type: .anonymous, codeSigningRequirement: nil)
+        self.listener = listener
+        let endpoint: XPCEndpoint = try await serviceConnection.sendMessage(name: CommandSet.fetchEndpoint)
+        let receiverConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
+        receiverConnection.activate()
+        connection = receiverConnection
+        let ping: String = try await receiverConnection.sendMessage(name: CommandSet.ping)
+        Self.logger.info("\(ping)")
+        observeRuntime()
+        listener.setMessageHandler(name: CommandSet.ping) { connection in
+            return "Ping sender successfully."
+        }
+        setMessageHandlerBinding(forName: ListingsCommandSet.isImageLoaded, of: self) { $0.isImageLoaded(path:) }
+        setMessageHandlerBinding(forName: ListingsCommandSet.loadImage, of: self) { $0.loadImage(at:) }
+        setMessageHandlerBinding(forName: ListingsCommandSet.classNamesInImage, of: self) { $0.classNamesIn(image:) }
+        setMessageHandlerBinding(forName: ListingsCommandSet.patchImagePathForDyld, of: self) { $0.patchImagePathForDyld(_:) }
+        setMessageHandlerBinding(forName: ListingsCommandSet.runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(_:) }
+
+        listener.setMessageHandler(name: ListingsCommandSet.semanticStringForRuntimeObjectWithOptions) { [weak self] (connection: XPCConnection, request: SemanticStringRequest) -> Data? in
+            guard let self else { return nil }
+            let semanticString = try await semanticString(for: request.runtimeObject, options: request.options)
+            return try NSKeyedArchiver.archivedData(withRootObject: semanticString, requiringSecureCoding: true)
+        }
+
+        listener.activate()
+
+        try await receiverConnection.sendMessage(name: ListingsCommandSet.senderLaunched, request: listener.endpoint)
+    }
+    private func setupMessageHandlerForReceiver(with serviceConnection: XPCConnection) async throws {
+        let listener = try XPCListener(type: .anonymous, codeSigningRequirement: nil)
+        self.listener = listener
+        setMessageHandlerBinding(forName: ListingsCommandSet.classList, to: \.classList)
+        setMessageHandlerBinding(forName: ListingsCommandSet.protocolList, to: \.protocolList)
+        setMessageHandlerBinding(forName: ListingsCommandSet.imageList, to: \.imageList)
+        setMessageHandlerBinding(forName: ListingsCommandSet.protocolToImage, to: \.protocolToImage)
+        setMessageHandlerBinding(forName: ListingsCommandSet.imageToProtocols, to: \.imageToProtocols)
+        setMessageHandlerBinding(forName: ListingsCommandSet.imageNodes, to: \.imageNodes)
+
+        listener.setMessageHandler(name: ListingsCommandSet.senderLaunched) { [weak self] (connection: XPCConnection, endpoint: XPCEndpoint) in
+            guard let self else { return }
+            let senderConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
+            senderConnection.activate()
+            self.connection = senderConnection
+            let ping: String = try await senderConnection.sendMessage(name: CommandSet.ping)
+            Self.logger.info("\(ping)")
+        }
+
+        listener.setMessageHandler(name: CommandSet.ping) { connection in
+            return "Ping receiver successfully."
+        }
+
+        listener.activate()
+        try await serviceConnection.sendMessage(name: CommandSet.updateEndpoint, request: listener.endpoint)
+        try await serviceConnection.sendMessage(name: CommandSet.launchCatalystHelper, request: RuntimeViewerCatalystHelperLauncher.helperURL)
+    }
+    private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: String, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
+        listener?.setMessageHandler(name: name) { [unowned object] (connection: XPCConnection, request: Request) in
+            try await function(object)(request)
+        }
+    }
+
+    private func setMessageHandlerBinding<Object: AnyObject, Request: Codable, Response: Codable>(forName name: String, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Response)) {
+        listener?.setMessageHandler(name: name) { [unowned object] (connection: XPCConnection, request: Request) -> Response in
+            let result = try await function(object)(request)
+            return result
+        }
+    }
+
+    private func setMessageHandlerBinding<Response: Codable>(forName name: String, to keyPath: ReferenceWritableKeyPath<RuntimeListings, Response>) {
+        listener?.setMessageHandler(name: name) { [weak self] (connection: XPCConnection, value: Response) in
+            guard let self else { return }
+            self[keyPath: keyPath] = value
+        }
+    }
+
+    
+    #endif
+
+    private func reloadData() {
+        Self.logger.debug("Start reload")
+        classList = CDUtilities.classNames()
+        protocolList = CDUtilities.protocolNames()
+        imageList = CDUtilities.imageNames()
+        imageNodes = [CDUtilities.dyldSharedCacheImageRootNode, CDUtilities.otherImageRootNode]
+        Self.logger.debug("End reload")
+    }
+
     private func observeRuntime() {
-        let classList = CDUtilities.classNames()
-        let protocolList = CDUtilities.protocolNames()
-        let imageList = CDUtilities.imageNames()
-        self.classList = classList
-        self.protocolList = protocolList
-        self.imageList = imageList
+        classList = CDUtilities.classNames()
+        protocolList = CDUtilities.protocolNames()
+        imageList = CDUtilities.imageNames()
         let (protocolToImage, imageToProtocols) = Self.protocolImageTrackingFor(
             protocolList: protocolList, protocolToImage: [:], imageToProtocols: [:]
         ) ?? ([:], [:])
@@ -293,28 +295,13 @@ public final class RuntimeListings {
         self.imageToProtocols = imageToProtocols
         imageNodes = [CDUtilities.dyldSharedCacheImageRootNode, CDUtilities.otherImageRootNode]
 
-        RuntimeListings.sharedIfExists = self
-
         shouldReload
             .debounce(for: .milliseconds(15), scheduler: DispatchQueue.main)
             .sink { [weak self] in
                 guard let self else { return }
-                Self.logger.debug("Start reload")
-                self.classList = CDUtilities.classNames()
-                self.protocolList = CDUtilities.protocolNames()
-                self.imageList = CDUtilities.imageNames()
-                self.imageNodes = [CDUtilities.dyldSharedCacheImageRootNode, CDUtilities.otherImageRootNode]
-                Self.logger.debug("End reload")
+                reloadData()
             }
             .store(in: &subscriptions)
-
-        _dyld_register_func_for_add_image { _, _ in
-            RuntimeListings.sharedIfExists?.shouldReload.send()
-        }
-
-        _dyld_register_func_for_remove_image { _, _ in
-            RuntimeListings.sharedIfExists?.shouldReload.send()
-        }
 
         $protocolList
             .combineLatest($protocolToImage, $imageToProtocols)
@@ -327,28 +314,56 @@ public final class RuntimeListings {
                 self.imageToProtocols = imageToProtocols
             }
             .store(in: &subscriptions)
+    }
 
-//        Timer.publish(every: 15, on: .main, in: .default)
-//            .autoconnect()
-//            .sink { [weak self] _ in
-//                guard let self else { return }
-//
-//                let classList = CDUtilities.classNames()
-//                let protocolList = CDUtilities.protocolNames()
-//
-//                let refClassList = self.classList
-//                let refProtocolList = self.protocolList
-//
-//                if classList != refClassList {
-//                    Self.logger.error("Watchdog: classList is out-of-date")
-//                    self.classList = classList
-//                }
-//                if protocolList != refProtocolList {
-//                    Self.logger.error("Watchdog: protocolList is out-of-date")
-//                    self.protocolList = protocolList
-//                }
-//            }
-//            .store(in: &subscriptions)
+    private func observeDyldRegister() {
+        _dyld_register_func_for_add_image { _, _ in
+            NotificationCenter.default.post(name: DyldRegisterNotifications.addImage, object: nil)
+        }
+
+        _dyld_register_func_for_remove_image { _, _ in
+            NotificationCenter.default.post(name: DyldRegisterNotifications.removeImage, object: nil)
+        }
+
+        NotificationCenter.default.publisher(for: DyldRegisterNotifications.addImage)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.shouldReload.send()
+            }
+            .store(in: &subscriptions)
+
+        NotificationCenter.default.publisher(for: DyldRegisterNotifications.removeImage)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.shouldReload.send()
+            }
+            .store(in: &subscriptions)
+    }
+
+    private func startTimingReload() {
+        Timer.publish(every: 15, on: .main, in: .default)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self else { return }
+
+                let classList = CDUtilities.classNames()
+                let protocolList = CDUtilities.protocolNames()
+
+                let refClassList = self.classList
+                let refProtocolList = self.protocolList
+
+                if classList != refClassList {
+                    Self.logger.error("Watchdog: classList is out-of-date")
+                    self.classList = classList
+                }
+                if protocolList != refProtocolList {
+                    Self.logger.error("Watchdog: protocolList is out-of-date")
+                    self.protocolList = protocolList
+                }
+            }
+            .store(in: &subscriptions)
     }
 }
 
@@ -372,8 +387,8 @@ extension RuntimeListings {
             if isSender {
                 return try local()
             } else {
-                guard let senderConnection else { throw RequestError.senderConnectionIsLose }
-                return try await remote(senderConnection)
+                guard let connection else { throw RequestError.senderConnectionIsLose }
+                return try await remote(connection)
             }
         #endif
         }
@@ -384,7 +399,7 @@ extension RuntimeListings {
             imageList.contains(CDUtilities.patchImagePathForDyld(path))
         } remote: {
             #if os(macOS)
-            try await $0.sendMessage(name: ListingsCommandSet.isImageLoaded, request: path)
+            return try await $0.sendMessage(name: ListingsCommandSet.isImageLoaded, request: path)
             #else
             fatalError()
             #endif
@@ -406,7 +421,7 @@ extension RuntimeListings {
             CDUtilities.classNamesIn(image: image)
         } remote: {
             #if os(macOS)
-            try await $0.sendMessage(name: ListingsCommandSet.classNamesInImage, request: image)
+            return try await $0.sendMessage(name: ListingsCommandSet.classNamesInImage, request: image)
             #else
             fatalError()
             #endif
@@ -418,7 +433,7 @@ extension RuntimeListings {
             CDUtilities.patchImagePathForDyld(imagePath)
         } remote: {
             #if os(macOS)
-            try await $0.sendMessage(name: ListingsCommandSet.patchImagePathForDyld, request: imagePath)
+            return try await $0.sendMessage(name: ListingsCommandSet.patchImagePathForDyld, request: imagePath)
             #else
             fatalError()
             #endif
@@ -455,7 +470,7 @@ extension RuntimeListings {
             runtimeObject.hierarchy()
         } remote: {
             #if os(macOS)
-            try await $0.sendMessage(name: ListingsCommandSet.runtimeObjectHierarchy, request: runtimeObject)
+            return try await $0.sendMessage(name: ListingsCommandSet.runtimeObjectHierarchy, request: runtimeObject)
             #else
             fatalError()
             #endif
@@ -465,9 +480,9 @@ extension RuntimeListings {
     public func runtimeObjectInfo(_ runtimeObject: RuntimeObjectType) async throws -> RuntimeObjectInfo {
         try await request {
             try runtimeObject.info()
-        } remote: { senderConnection in
+        } remote: {
             #if os(macOS)
-            try await senderConnection.sendMessage(name: ListingsCommandSet.runtimeObjectInfo, request: runtimeObject)
+            return try await $0.sendMessage(name: ListingsCommandSet.runtimeObjectInfo, request: runtimeObject)
             #else
             fatalError()
             #endif
@@ -531,7 +546,7 @@ extension CDUtilities {
         let names = sequence(first: protocolList) { $0.successor() }
             .prefix(Int(protocolCount))
             .map { NSStringFromProtocol($0.pointee) }
-        
+
         return names
     }
 

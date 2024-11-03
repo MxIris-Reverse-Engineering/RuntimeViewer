@@ -19,7 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        CatalystHelperLauncher.shared.terminate()
+//        CatalystHelperLauncher.shared.terminate()
         
 
         DispatchQueue.global().async {
@@ -28,18 +28,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         _ = RuntimeListings.macCatalystReceiver
         
-        CatalystHelperLauncher.shared.launch { result in
-            switch result {
-            case .success:
-                print("launch success")
-            case let .failure(failure):
-                print(failure)
-            }
-        }
+//        CatalystHelperLauncher.shared.launch { result in
+//            switch result {
+//            case .success:
+//                print("launch success")
+//            case let .failure(failure):
+//                print(failure)
+//            }
+//        }
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
-        CatalystHelperLauncher.shared.terminate()
+//        CatalystHelperLauncher.shared.terminate()
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {

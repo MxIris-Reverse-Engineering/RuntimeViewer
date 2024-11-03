@@ -48,15 +48,13 @@ class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewMod
         outlineView.do {
             $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
             $0.headerView = nil
-            $0.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName"
-            $0.autosaveExpandedItems = true
-            $0.identifier = .init("com.JH.RuntimeViewer.SidebarRootViewController.identifier")
         }
     }
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
         super.setupBindings(for: viewModel)
-
+        
+        
         let input = SidebarRootViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
@@ -72,9 +70,15 @@ class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewMod
         }
         .disposed(by: rx.disposeBag)
 
-        output.nodes.mapToVoid().drive(with: self) { $0.outlineView.setNeedsReloadAutosaveExpandedItems() }.disposed(by: rx.disposeBag)
+//        output.nodes.mapToVoid().drive(with: self) { $0.outlineView.setNeedsReloadAutosaveExpandedItems() }.disposed(by: rx.disposeBag)
+        
+        
 
         outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
+        outlineView.autosaveExpandedItems = true
+        outlineView.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName.\(viewModel.appServices.runtimeListings.source.description)"
+        outlineView.identifier = "com.JH.RuntimeViewer.SidebarRootViewController.identifier.\(viewModel.appServices.runtimeListings.source.description)"
+        
     }
 }
 
