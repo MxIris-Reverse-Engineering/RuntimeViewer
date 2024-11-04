@@ -96,10 +96,6 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
         
         #endif
     }
-    
-//    deinit {
-//        print("\(Self.self) deinit")
-//    }
 }
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)

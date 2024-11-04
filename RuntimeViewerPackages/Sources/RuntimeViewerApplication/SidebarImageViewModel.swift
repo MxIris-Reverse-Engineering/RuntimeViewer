@@ -123,6 +123,8 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         public let errorText: Driver<String>
         public let emptyText: Driver<String>
         public let isEmpty: Driver<Bool>
+        public let windowInitialTitles: Driver<(title: String, subtitle: String)>
+        public let windowSubtitle: Signal<String>
     }
 
     @MainActor
@@ -157,14 +159,17 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 }
             }
             .asDriver(onErrorJustReturn: "")
-
+        let runtimeNodeName = namedNode.name
         return Output(
             runtimeObjects: runtimeObjects,
             loadState: $loadState.asDriver(),
             notLoadedText: .just("\(imageName) is not yet loaded"),
             errorText: errorText,
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
-            isEmpty: .combineLatest($classNames.asDriver(), $protocolNames.asDriver(), resultSelector: { $0.isEmpty && $1.isEmpty }).startWith(classNames.isEmpty && protocolNames.isEmpty)
+            isEmpty: .combineLatest($classNames.asDriver(), $protocolNames.asDriver(), resultSelector: { $0.isEmpty && $1.isEmpty }).startWith(classNames.isEmpty && protocolNames.isEmpty),
+            windowInitialTitles: .combineLatest($classNames.asDriver(), $protocolNames.asDriver(), resultSelector: { (runtimeNodeName, "Classes: \($0.count) Protocols: \($1.count)") }),
+            windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.name)" }
+            
         )
     }
 
