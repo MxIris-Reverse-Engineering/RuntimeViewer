@@ -69,7 +69,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel> {
         })
         .disposed(by: rx.disposeBag)
 
-        rx.viewDidAppear.asDriver().flatMapLatest { output.runtimeObjectName }.drive(with: self) { $0.view.window?.title = $1 }.disposed(by: rx.disposeBag)
+//        rx.viewDidAppear.asDriver().flatMapLatest { output.runtimeObjectName }.drive(with: self) { $0.view.window?.title = $1 }.disposed(by: rx.disposeBag)
 
         eventMonitor.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
             guard let self = self else { return event }
