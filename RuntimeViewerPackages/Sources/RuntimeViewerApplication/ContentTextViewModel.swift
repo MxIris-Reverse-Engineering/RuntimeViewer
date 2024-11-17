@@ -29,7 +29,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
             .flatMap { [unowned self] runtimeObject, options, theme -> NSAttributedString? in
                 let semanticString = try await self.appServices.runtimeListings.semanticString(for: runtimeObject, options: options)
                 return await MainActor.run {
-                    semanticString.attributedString(for: theme)
+                    semanticString?.attributedString(for: theme)
                 }
             }
             .catchAndReturn(nil)
@@ -83,4 +83,4 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
     }
 }
 
-extension NSAttributedString: @unchecked Sendable {}
+extension NSAttributedString: @unchecked @retroactive Sendable {}

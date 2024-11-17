@@ -20,7 +20,7 @@ public enum RuntimeSource: CustomStringConvertible {
     @available(watchOS, unavailable)
     @available(visionOS, unavailable)
     case macCatalyst(isSender: Bool)
-    
+
     public var description: String {
         switch self {
         case .native: return "Native"
@@ -145,6 +145,7 @@ public final class RuntimeListings {
         static let imageNodes = command("imageNodes")
         static let runtimeObjectHierarchy = command("runtimeObjectHierarchy")
         static let runtimeObjectInfo = command("runtimeObjectInfo")
+        static let imageNameOfClassName = command("imageNameOfClassName")
         static func command(_ command: String) -> String { "com.JH.RuntimeViewer.RuntimeListings.\(command)" }
     }
 
@@ -214,17 +215,17 @@ public final class RuntimeListings {
         setMessageHandlerBinding(forName: ListingsCommandSet.classNamesInImage, of: self) { $0.classNamesIn(image:) }
         setMessageHandlerBinding(forName: ListingsCommandSet.patchImagePathForDyld, of: self) { $0.patchImagePathForDyld(_:) }
         setMessageHandlerBinding(forName: ListingsCommandSet.runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(_:) }
-
-        listener.setMessageHandler(name: ListingsCommandSet.semanticStringForRuntimeObjectWithOptions) { [weak self] (connection: XPCConnection, request: SemanticStringRequest) -> Data? in
-            guard let self else { return nil }
-            let semanticString = try await semanticString(for: request.runtimeObject, options: request.options)
-            return try NSKeyedArchiver.archivedData(withRootObject: semanticString, requiringSecureCoding: true)
+        setMessageHandlerBinding(forName: ListingsCommandSet.imageNameOfClassName, of: self) { $0.imageName(ofClass:) }
+        
+        listener.setMessageHandler(name: ListingsCommandSet.semanticStringForRuntimeObjectWithOptions) { [unowned self] (connection: XPCConnection, request: SemanticStringRequest) -> Data? in
+            try await semanticString(for: request.runtimeObject, options: request.options).map { try NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true) }
         }
 
         listener.activate()
 
         try await receiverConnection.sendMessage(name: ListingsCommandSet.senderLaunched, request: listener.endpoint)
     }
+
     private func setupMessageHandlerForReceiver(with serviceConnection: XPCConnection) async throws {
         let listener = try XPCListener(type: .anonymous, codeSigningRequirement: nil)
         self.listener = listener
@@ -252,6 +253,7 @@ public final class RuntimeListings {
         try await serviceConnection.sendMessage(name: CommandSet.updateEndpoint, request: listener.endpoint)
         try await serviceConnection.sendMessage(name: CommandSet.launchCatalystHelper, request: RuntimeViewerCatalystHelperLauncher.helperURL)
     }
+
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: String, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
         listener?.setMessageHandler(name: name) { [unowned object] (connection: XPCConnection, request: Request) in
             try await function(object)(request)
@@ -272,7 +274,6 @@ public final class RuntimeListings {
         }
     }
 
-    
     #endif
 
     private func reloadData() {
@@ -440,16 +441,25 @@ extension RuntimeListings {
         }
     }
 
+    public func imageName(ofClass className: String) async throws -> String? {
+        try await request {
+            CDUtilities.imageName(ofClass: className)
+        } remote: {
+            #if os(macOS)
+            return try await $0.sendMessage(name: ListingsCommandSet.imageNameOfClassName, request: className)
+            #else
+            fatalError()
+            #endif
+        }
+    }
+
     private struct SemanticStringRequest: Codable {
         let runtimeObject: RuntimeObjectType
         let options: CDGenerationOptions
     }
 
-    public func semanticString(for runtimeObject: RuntimeObjectType, options: CDGenerationOptions) async throws -> CDSemanticString {
-        enum NullError: Error {
-            case objectIsNull
-        }
-        let semanticString = try await request {
+    public func semanticString(for runtimeObject: RuntimeObjectType, options: CDGenerationOptions) async throws -> CDSemanticString? {
+        try await request {
             runtimeObject.semanticString(for: options)
         } remote: {
             #if os(macOS)
@@ -459,10 +469,6 @@ extension RuntimeListings {
             fatalError()
             #endif
         }
-        guard let semanticString else {
-            throw NullError.objectIsNull
-        }
-        return semanticString
     }
 
     public func runtimeObjectHierarchy(_ runtimeObject: RuntimeObjectType) async throws -> [String] {
@@ -548,6 +554,10 @@ extension CDUtilities {
             .map { NSStringFromProtocol($0.pointee) }
 
         return names
+    }
+
+    fileprivate class func imageName(ofClass className: String) -> String? {
+        class_getImageName(NSClassFromString(className)).map { String(cString: $0) }
     }
 
     fileprivate class func classNamesIn(image: String) -> [String] {

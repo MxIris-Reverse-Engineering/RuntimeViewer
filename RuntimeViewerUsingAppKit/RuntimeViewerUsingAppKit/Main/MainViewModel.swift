@@ -84,7 +84,7 @@ class MainViewModel: ViewModel<MainRoute> {
                     Task {
                         do {
                             let semanticString = try await self.appServices.runtimeListings.semanticString(for: runtimeObject, options: AppDefaults[\.options])
-                            try semanticString.string().write(to: url, atomically: true, encoding: .utf8)
+                            try semanticString?.string().write(to: url, atomically: true, encoding: .utf8)
                         } catch {
                             print(error)
                         }
@@ -107,7 +107,7 @@ class MainViewModel: ViewModel<MainRoute> {
                     Task {
                         do {
                             let semanticString = try await self.appServices.runtimeListings.semanticString(for: runtimeObjectType, options: AppDefaults[\.options])
-                            completion(semanticString.string().data(using: .utf8), nil)
+                            completion(semanticString?.string().data(using: .utf8), nil)
                         } catch {
                             completion(nil, error)
                         }

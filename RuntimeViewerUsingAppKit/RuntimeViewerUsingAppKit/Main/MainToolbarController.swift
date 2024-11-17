@@ -173,7 +173,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 }
 
-extension NSToolbarItem.Identifier: ExpressibleByStringLiteral {
+extension NSToolbarItem.Identifier: @retroactive ExpressibleByStringLiteral {
     public init(stringLiteral value: StringLiteralType) {
         self.init(value)
     }
