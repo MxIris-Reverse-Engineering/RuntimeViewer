@@ -132,6 +132,7 @@
 		E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadFrameworksViewController.swift; sourceTree = "<group>"; };
 		E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = LoadFrameworksViewController.xib; sourceTree = "<group>"; };
 		E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewModel.swift; sourceTree = "<group>"; };
+		E98A2A492CD8CAE800E78CEF /* NotificationViewer */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = NotificationViewer; path = /Volumes/Repositories/Private/Personal/Library/Multi/NotificationViewer; sourceTree = "<absolute>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
@@ -209,6 +210,7 @@
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
+				E98A2A492CD8CAE800E78CEF /* NotificationViewer */,
 				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
 				E9432FE42C0D614900362862 /* RuntimeViewerUsingAppKit */,
 				E947C3682C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
