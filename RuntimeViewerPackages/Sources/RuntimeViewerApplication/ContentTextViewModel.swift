@@ -18,12 +18,30 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
     public private(set) var runtimeObject: RuntimeObjectType
 
     @Observed
+    public private(set) var imageNameOfRuntimeObject: String?
+    
+    @Observed
     public private(set) var attributedString: NSAttributedString?
 
     public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
         super.init(appServices: appServices, router: router)
+        Task {
+            do {
+                switch runtimeObject {
+                case .class(let named):
+                    let imageName = try await appServices.runtimeListings.imageName(ofClass: named)
+                    await MainActor.run {
+                        self.imageNameOfRuntimeObject = imageName
+                    }
+                case .protocol(let named):
+                    self.imageNameOfRuntimeObject = appServices.runtimeListings.protocolToImage[named]
+                }
+            } catch {
+                print(error)
+            }
+        }
         Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
             .observeOnMainScheduler()
             .flatMap { [unowned self] runtimeObject, options, theme -> NSAttributedString? in
@@ -48,6 +66,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         public let attributedString: Driver<NSAttributedString>
         public let runtimeObjectName: Driver<String>
         public let theme: Driver<ThemeProfile>
+        public let imageNameOfRuntimeObject: Driver<String?>
     }
 
 //    private func setAttributedString(for options: CDGenerationOptions) {
@@ -78,7 +97,8 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         return Output(
             attributedString: $attributedString.asDriver().compactMap { $0 },
             runtimeObjectName: $runtimeObject.asDriver().map { $0.name },
-            theme: $theme.asDriver()
+            theme: $theme.asDriver(),
+            imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver().map { $0?.box.lastPathComponent.box.deletingPathExtension }
         )
     }
 }

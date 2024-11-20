@@ -18,12 +18,12 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
     private let runtimeListings: RuntimeListings
 
-    @MainActor @Observed private var searchString: String = ""
-    @MainActor @Observed private var searchScope: RuntimeTypeSearchScope = .all
-    @MainActor @Observed private var classNames: [String] = []
-    @MainActor @Observed private var protocolNames: [String] = []
-    @MainActor @Observed private var runtimeObjects: [RuntimeObjectType] = []
-    @MainActor @Observed private var loadState: RuntimeImageLoadState = .notLoaded
+    @Observed private var searchString: String = ""
+    @Observed private var searchScope: RuntimeTypeSearchScope = .all
+    @Observed private var classNames: [String] = []
+    @Observed private var protocolNames: [String] = []
+    @Observed private var runtimeObjects: [RuntimeObjectType] = []
+    @Observed private var loadState: RuntimeImageLoadState = .notLoaded
 
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
         self.runtimeListings = appServices.runtimeListings

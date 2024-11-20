@@ -34,5 +34,6 @@ class ContentPlaceholderViewController: UXKitViewController<ContentPlaceholderVi
         super.viewDidAppear()
         
         view.window?.title = "Runtime Viewer"
+        view.window?.subtitle = ""
     }
 }

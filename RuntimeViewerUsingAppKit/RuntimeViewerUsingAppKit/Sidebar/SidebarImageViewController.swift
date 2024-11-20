@@ -98,13 +98,13 @@ class SidebarImageViewController: UXVisualEffectViewController<SidebarImageViewM
 
         output.isEmpty.not().drive(imageLoadedView.emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
 
-        rx.viewWillDisappear.asDriver().driveOnNext { [weak self] in
-            guard let self else { return }
-            view.window?.title = previousWindowTitle
-            view.window?.subtitle = previousWindowSubtitle
-        }
-        .disposed(by: rx.disposeBag)
-        
+//        rx.viewWillDisappear.asDriver().driveOnNext { [weak self] in
+//            guard let self else { return }
+//            view.window?.title = previousWindowTitle
+//            view.window?.subtitle = previousWindowSubtitle
+//        }
+//        .disposed(by: rx.disposeBag)
+//        
         output.windowInitialTitles.driveOnNext { [weak self] in
             guard let self, let window = view.window else { return }
             previousWindowTitle = window.title
@@ -113,11 +113,11 @@ class SidebarImageViewController: UXVisualEffectViewController<SidebarImageViewM
             window.subtitle = $0.subtitle
         }
         .disposed(by: rx.disposeBag)
-        
-        rx.viewWillAppear.asSignal().flatMapLatest { output.windowSubtitle }.emitOnNext { [weak self] in
-            guard let self, let window = view.window else { return }
-            window.subtitle = $0
-        }.disposed(by:rx.disposeBag)
+//        
+//        rx.viewWillAppear.asSignal().flatMapLatest { output.windowSubtitle }.emitOnNext { [weak self] in
+//            guard let self, let window = view.window else { return }
+//            window.subtitle = $0
+//        }.disposed(by:rx.disposeBag)
         
         output.loadState.driveOnNextMainActor { [weak self] loadState in
             guard let self else { return }
