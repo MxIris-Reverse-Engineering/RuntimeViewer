@@ -126,6 +126,10 @@ let package = Package(
             url: "https://github.com/TrGiLong/RxConcurrency",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
+            branch: "main"
+        ),
     ],
     targets: [
         .target(
@@ -156,6 +160,7 @@ let package = Package(
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "FoundationToolbox", package: "FrameworkToolbox")
             ]
         ),
         .target(

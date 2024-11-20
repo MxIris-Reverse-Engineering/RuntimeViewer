@@ -7,6 +7,7 @@ import OSLog
 import RuntimeViewerService
 import SwiftyXPC
 #endif
+import FoundationToolbox
 
 enum DyldRegisterNotifications {
     static let addImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
