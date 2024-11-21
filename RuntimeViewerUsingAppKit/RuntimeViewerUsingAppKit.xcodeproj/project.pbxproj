@@ -129,10 +129,11 @@
 		E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		E947C3722C2A4D0500296B2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E947C3772C2A4D0500296B2E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E9668FFB2CEF7140007B344A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E9668FFC2CEF7140007B344A /* launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = launchd.plist; sourceTree = "<group>"; };
 		E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadFrameworksViewController.swift; sourceTree = "<group>"; };
 		E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = LoadFrameworksViewController.xib; sourceTree = "<group>"; };
 		E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewModel.swift; sourceTree = "<group>"; };
-		E98A2A492CD8CAE800E78CEF /* NotificationViewer */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = NotificationViewer; path = /Volumes/Repositories/Private/Personal/Library/Multi/NotificationViewer; sourceTree = "<absolute>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
@@ -210,7 +211,6 @@
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
-				E98A2A492CD8CAE800E78CEF /* NotificationViewer */,
 				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
 				E9432FE42C0D614900362862 /* RuntimeViewerUsingAppKit */,
 				E947C3682C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
@@ -380,6 +380,8 @@
 			children = (
 				E9E900EA2C2D0D5B00FADDCC /* main.swift */,
 				E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */,
+				E9668FFB2CEF7140007B344A /* Info.plist */,
+				E9668FFC2CEF7140007B344A /* launchd.plist */,
 			);
 			path = com.JH.RuntimeViewerService;
 			sourceTree = "<group>";
