@@ -14,5 +14,6 @@ class ContentNavigationController: UXNavigationController {
         
         isToolbarHidden = true
         isNavigationBarHidden = true
+        view.canDrawSubviewsIntoLayer = true
     }
 }
