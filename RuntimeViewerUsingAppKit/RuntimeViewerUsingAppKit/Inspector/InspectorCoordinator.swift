@@ -11,7 +11,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-typealias InspectorTransition = Transition<Void, InspectorViewController>
+typealias InspectorTransition = Transition<Void, InspectorNavigationController>
 
 class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition> {
     let appServices: AppServices

@@ -144,14 +144,6 @@ extension RuntimeImageLoadState {
     }
 }
 
-class SidebarImageCellView: ImageTextTableCellView {
-    func bind(to viewModel: SidebarImageCellViewModel) {
-        rx.disposeBag = DisposeBag()
-        viewModel.$icon.asDriver().drive(_imageView.rx.image).disposed(by: rx.disposeBag)
-        viewModel.$name.asDriver().drive(_textField.rx.attributedStringValue).disposed(by: rx.disposeBag)
-    }
-}
-
 extension SidebarImageViewController {
     class ImageLoadedView: XiblessView {
         let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
