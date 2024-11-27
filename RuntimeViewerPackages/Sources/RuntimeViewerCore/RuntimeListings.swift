@@ -14,20 +14,45 @@ enum DyldRegisterNotifications {
     static let removeImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
 }
 
+
+
+
+
 public enum RuntimeSource: CustomStringConvertible {
-    case native
+    public enum Role {
+        case client
+        case server
+        var isClient: Bool { self == .client }
+        var isServer: Bool { self == .server }
+    }
+    public struct Identifier: RawRepresentable, ExpressibleByStringLiteral {
+        public let rawValue: String
+        
+        public init(rawValue: String) {
+            self.rawValue = rawValue
+        }
+        
+        public init(stringLiteral value: StringLiteralType) {
+            self.init(rawValue: value)
+        }
+    }
+    case local
     @available(iOS, unavailable)
     @available(tvOS, unavailable)
     @available(watchOS, unavailable)
     @available(visionOS, unavailable)
-    case macCatalyst(isSender: Bool)
+    case remote(name: String, identifier: Identifier, role: Role)
 
     public var description: String {
         switch self {
-        case .native: return "Native"
-        case .macCatalyst: return "MacCatalyst"
+        case .local: return "Local"
+        case let .remote(name, _, _): return name
         }
     }
+}
+
+extension RuntimeSource.Identifier {
+    public static let macCatalyst: Self = "com.JH.RuntimeViewer.MacCatalyst"
 }
 
 public final class RuntimeListings {
@@ -38,7 +63,7 @@ public final class RuntimeListings {
     @Published public private(set) var classList: [String] = [] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let connection {
+            if case let .remote(_, _, role) = source, role.isServer, let connection {
                 Task {
                     do {
                         try await connection.sendMessage(name: ListingsCommandSet.classList, request: classList)
@@ -54,7 +79,7 @@ public final class RuntimeListings {
     @Published public private(set) var protocolList: [String] = [] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let connection {
+            if case let .remote(_, _, role) = source, role.isServer, let connection {
                 Task {
                     do {
                         try await connection.sendMessage(name: ListingsCommandSet.protocolList, request: protocolList)
@@ -70,7 +95,7 @@ public final class RuntimeListings {
     @Published public private(set) var imageList: [String] = [] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let connection {
+            if case let .remote(_, _, role) = source, role.isServer, let connection {
                 Task {
                     do {
                         try await connection.sendMessage(name: ListingsCommandSet.imageList, request: imageList)
@@ -86,7 +111,7 @@ public final class RuntimeListings {
     @Published public private(set) var protocolToImage: [String: String] = [:] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let connection {
+            if case let .remote(_, _, role) = source, role.isServer, let connection {
                 Task {
                     do {
                         try await connection.sendMessage(name: ListingsCommandSet.protocolToImage, request: protocolToImage)
@@ -102,7 +127,7 @@ public final class RuntimeListings {
     @Published public private(set) var imageToProtocols: [String: [String]] = [:] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let connection {
+            if case let .remote(_, _, role) = source, role.isServer, let connection {
                 Task {
                     do {
                         try await connection.sendMessage(name: ListingsCommandSet.imageToProtocols, request: imageToProtocols)
@@ -118,7 +143,7 @@ public final class RuntimeListings {
     @Published public private(set) var imageNodes: [RuntimeNamedNode] = [] {
         didSet {
             #if os(macOS)
-            if case let .macCatalyst(isSender) = source, isSender, let connection {
+            if case let .remote(_, _, role) = source, role.isServer, let connection {
                 Task {
                     do {
                         try await connection.sendMessage(name: ListingsCommandSet.imageNodes, request: imageNodes)
@@ -165,17 +190,17 @@ public final class RuntimeListings {
     private var connection: SwiftyXPC.XPCConnection?
     #endif
 
-    public init(source: RuntimeSource = .native) {
+    public init(source: RuntimeSource = .local) {
         self.source = source
         switch source {
-        case .native:
+        case .local:
             observeRuntime()
         #if os(macOS)
-        case let .macCatalyst(isSender):
+        case let .remote(_, _, role):
             Task {
                 do {
                     let serviceConnection = try await connectToMachService()
-                    if isSender {
+                    if role.isServer {
                         try await setupMessageHandlerForSender(with: serviceConnection)
                     } else {
                         try await setupMessageHandlerForReceiver(with: serviceConnection)
@@ -382,11 +407,11 @@ extension RuntimeListings {
 
     private func request<T>(local: () throws -> T, remote: (_ senderConnection: XPCConnection) async throws -> T) async throws -> T {
         switch source {
-        case .native:
+        case .local:
             return try local()
         #if os(macOS)
-        case let .macCatalyst(isSender):
-            if isSender {
+        case let .remote(_, _, role):
+            if role.isServer {
                 return try local()
             } else {
                 guard let connection else { throw RequestError.senderConnectionIsLose }

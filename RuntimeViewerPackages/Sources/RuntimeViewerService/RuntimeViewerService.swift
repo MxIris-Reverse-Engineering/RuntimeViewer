@@ -10,6 +10,26 @@ public enum CommandSet {
 }
 
 
+public struct RegisterEndpointRequest: Codable {
+    public let name: String
+    
+    public let endpoint: XPCEndpoint
+    
+    public init(name: String, endpoint: XPCEndpoint) {
+        self.name = name
+        self.endpoint = endpoint
+    }
+}
+
+public struct FetchEndpointRequest: Codable {
+    
+    public let name: String
+    
+    public init(name: String) {
+        self.name = name
+    }
+}
+
 public final class RuntimeViewerService {
     public static let serviceName = "com.JH.RuntimeViewerService"
 

@@ -10,9 +10,9 @@ import RuntimeViewerCore
 import RuntimeViewerService
 
 class RuntimeViewerCatalystHelperPlugin {
-    let runtimeListingsSender = RuntimeListings(source: .macCatalyst(isSender: true))
+    let runtimeListingsServer = RuntimeListings(source: .remote(name: "MacCatalyst", identifier: .macCatalyst, role: .server))
 
     init() {
-        _ = runtimeListingsSender
+        _ = runtimeListingsServer
     }
 }
