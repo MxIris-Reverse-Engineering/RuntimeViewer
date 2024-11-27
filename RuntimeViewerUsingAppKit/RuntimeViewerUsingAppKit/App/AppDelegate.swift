@@ -26,7 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             _ = RuntimeListings.shared
         }
         
-        _ = RuntimeListings.macCatalystReceiver
+        _ = RuntimeListings.macCatalystClient
         
 //        CatalystHelperLauncher.shared.launch { result in
 //            switch result {
@@ -61,5 +61,5 @@ extension AppDelegate: NSMenuItemValidation {
 }
 
 extension RuntimeListings {
-    static let macCatalystReceiver = RuntimeListings(source: .macCatalyst(isSender: false))
+    static let macCatalystClient = RuntimeListings(source: .remote(name: "MacCatalyst", identifier: .macCatalyst, role: .client))
 }

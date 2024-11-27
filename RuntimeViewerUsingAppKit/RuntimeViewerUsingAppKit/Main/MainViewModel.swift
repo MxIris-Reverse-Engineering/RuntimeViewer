@@ -95,7 +95,7 @@ class MainViewModel: ViewModel<MainRoute> {
 
         input.switchSource.emit(with: self) {
             print("switchSource:", $1)
-            $0.router.trigger(.main($1 == .zero ? .shared : .macCatalystReceiver))
+            $0.router.trigger(.main($1 == .zero ? .shared : .macCatalystClient))
         }.disposed(by: rx.disposeBag)
 
         let sharingServiceItems = completeTransition.map { [weak self] router -> [Any] in
