@@ -1,76 +1,50 @@
 #if os(macOS)
 import AppKit
 import SwiftyXPC
-
-public enum CommandSet {
-    public static let updateEndpoint = "com.JH.RuntimeViewerService.CommandSet.updateEndpoint"
-    public static let fetchEndpoint = "com.JH.RuntimeViewerService.CommandSet.fetchEndpoint"
-    public static let launchCatalystHelper = "com.JH.RuntimeViewerService.CommandSet.launchCatalystHelper"
-    public static let ping = "com.JH.RuntimeViewerService.CommandSet.ping"
-}
-
-
-public struct RegisterEndpointRequest: Codable {
-    public let name: String
-    
-    public let endpoint: XPCEndpoint
-    
-    public init(name: String, endpoint: XPCEndpoint) {
-        self.name = name
-        self.endpoint = endpoint
-    }
-}
-
-public struct FetchEndpointRequest: Codable {
-    
-    public let name: String
-    
-    public init(name: String) {
-        self.name = name
-    }
-}
+import RuntimeViewerCommunication
 
 public final class RuntimeViewerService {
-    public static let serviceName = "com.JH.RuntimeViewerService"
 
     private let listener: SwiftyXPC.XPCListener
-    
-    private var endpoint: XPCEndpoint?
 
     private var catalystHelperApplication: NSRunningApplication?
-    
+
+    private var endpointByIdentifier: [String: XPCEndpoint] = [:]
+
     private init() throws {
-        self.listener = try .init(type: .machService(name: Self.serviceName), codeSigningRequirement: nil)
-        listener.setMessageHandler(name: CommandSet.updateEndpoint, handler: updateEndpoint)
-        listener.setMessageHandler(name: CommandSet.fetchEndpoint, handler: fetchEndpoint)
-        listener.setMessageHandler(name: CommandSet.launchCatalystHelper, handler: launchCatalystHelper)
-        listener.setMessageHandler(name: CommandSet.ping, handler: ping(_:))
+        self.listener = try .init(type: .machService(name: RuntimeViewerMachServiceName), codeSigningRequirement: nil)
+        listener.setMessageHandler(handler: registerEndpoint)
+        listener.setMessageHandler(handler: fetchEndpoint)
+        listener.setMessageHandler(handler: launchCatalystHelper)
+        listener.setMessageHandler(handler: ping)
         listener.activate()
     }
-    
-    private func ping(_ connection: XPCConnection) async throws -> String {
-        return "Ping service successfully"
+
+    private func ping(_ connection: XPCConnection, request: PingRequest) async throws -> PingRequest.Response {
+        return .empty
     }
 
-    private func fetchEndpoint(_ connection: XPCConnection) async throws -> XPCEndpoint {
-        guard let endpoint = self.endpoint else {
+    private func fetchEndpoint(_ connection: XPCConnection, request: FetchEndpointRequest) async throws -> FetchEndpointRequest.Response {
+        guard let endpoint = endpointByIdentifier[request.identifier] else {
             throw XPCError.unknown("No endpoint available")
         }
-        return endpoint
-    }
-    
-    private func updateEndpoint(_ connection: XPCConnection, endpoint: XPCEndpoint?) async throws {
-        self.endpoint = endpoint
+        return .init(endpoint: endpoint)
     }
 
-    private func launchCatalystHelper(_ connection: XPCConnection, helperURL: URL) async throws {
+    private func registerEndpoint(_ connection: XPCConnection, request: RegisterEndpointRequest) async throws -> RegisterEndpointRequest.Response {
+        endpointByIdentifier[request.identifier] = request.endpoint
+        return .empty
+    }
+
+    private func launchCatalystHelper(_ connection: XPCConnection, request: LaunchCatalystHelperRequest) async throws -> LaunchCatalystHelperRequest.Response {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = false
         configuration.addsToRecentItems = false
         configuration.activates = false
-        catalystHelperApplication = try await NSWorkspace.shared.openApplication(at: helperURL, configuration: configuration)
+        catalystHelperApplication = try await NSWorkspace.shared.openApplication(at: request.helperURL, configuration: configuration)
+        return .empty
     }
-    
+
     public static func main() throws {
         try autoreleasepool {
             _ = try RuntimeViewerService()

@@ -31,7 +31,7 @@ public enum HelperInstaller {
         var authRights = AuthorizationRights(count: 1, items: withUnsafeMutablePointer(to: &authItem) { $0 })
 
         let authRef = try authorizationRef(&authRights, nil, [.interactionAllowed, .extendRights, .preAuthorize])
-        SMJobBless(kSMDomainSystemLaunchd, RuntimeViewerService.serviceName as CFString, authRef, &cfError)
+        SMJobBless(kSMDomainSystemLaunchd, RuntimeViewerMachServiceName as CFString, authRef, &cfError)
         if let error = cfError?.takeRetainedValue() {
             throw error
         }

@@ -10,7 +10,7 @@ import RuntimeViewerCore
 import UniformTypeIdentifiers
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
-import RuntimeViewerService
+import RuntimeViewerCommunication
 
 class MainViewModel: ViewModel<MainRoute> {
     struct Input {

@@ -38,17 +38,15 @@
 		E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */; };
 		E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825572C0E202600D9A85D /* MainViewModel.swift */; };
 		E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */; };
-		E9C9E9CB2C2D0F1500C4AA34 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9C9E9CA2C2D0F1500C4AA34 /* RuntimeViewerService */; };
 		E9C9E9CD2C2D0F2100C4AA34 /* com.JH.RuntimeViewerService in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E9C9E9D22C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9D12C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift */; };
 		E9C9E9D42C2D160100C4AA34 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9C9E9D32C2D160100C4AA34 /* RuntimeViewerCore */; };
-		E9C9E9D62C2D160100C4AA34 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9C9E9D52C2D160100C4AA34 /* RuntimeViewerService */; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9C9E9DD2C2D169D00C4AA34 /* AppKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */; };
 		E9C9E9DE2C2D169D00C4AA34 /* AppKitPluginImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */; };
 		E9C9E9DF2C2D16B000C4AA34 /* AppKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */; };
 		E9C9E9E02C2D172600C4AA34 /* AppKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */; };
-		E9C9E9F02C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app in CopyFiles */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E9C9E9F02C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app in Embed Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E9CBCC162C13685400169ABF /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC152C13685400169ABF /* RuntimeViewerArchitectures */; };
 		E9CBCC182C13685400169ABF /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC172C13685400169ABF /* RuntimeViewerCore */; };
 		E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC192C13685400169ABF /* RuntimeViewerUI */; };
@@ -59,6 +57,11 @@
 		E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */; };
 		E9F0A57E2C305C01001C36FB /* GenerationOptionsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */; };
 		E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */; };
+		E9F7595F2CF76B1A00BE7A5F /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9F7595E2CF76B1A00BE7A5F /* RuntimeViewerCore */; };
+		E9F759622CF76B2200BE7A5F /* RuntimeViewerServer.h in Headers */ = {isa = PBXBuildFile; fileRef = E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		E9F759642CF76B3300BE7A5F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E9F759632CF76B3300BE7A5F /* main.m */; };
+		E9F759682CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */; };
+		E9F759692CF7817200BE7A5F /* RuntimeViewerServer.framework in Resources */ = {isa = PBXBuildFile; fileRef = E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */; };
 		E9FD73CA2C16042F00E391F5 /* LineNumberGutter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */; };
 /* End PBXBuildFile section */
 
@@ -76,6 +79,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = E9E900E72C2D0D5B00FADDCC;
 			remoteInfo = com.JH.RuntimeViewerService;
+		};
+		E9F7596A2CF7817A00BE7A5F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E9F759502CF76B0F00BE7A5F;
+			remoteInfo = RuntimeViewerServer;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -102,14 +112,15 @@
 			name = "Embed PlugIns";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		E9C9E9EB2C2D33F500C4AA34 /* CopyFiles */ = {
+		E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = ../Applications;
 			dstSubfolderSpec = 6;
 			files = (
-				E9C9E9F02C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app in CopyFiles */,
+				E9C9E9F02C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app in Embed Helpers */,
 			);
+			name = "Embed Helpers";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -167,6 +178,10 @@
 		E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassViewController.swift; sourceTree = "<group>"; };
 		E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewController.swift; sourceTree = "<group>"; };
 		E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageCellView.swift; sourceTree = "<group>"; };
+		E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerServer.h; sourceTree = "<group>"; };
+		E9F759632CF76B3300BE7A5F /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerServerLoader.swift; sourceTree = "<group>"; };
 		E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LineNumberGutter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -177,7 +192,6 @@
 			files = (
 				E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */,
 				E9CBCC182C13685400169ABF /* RuntimeViewerCore in Frameworks */,
-				E9C9E9CB2C2D0F1500C4AA34 /* RuntimeViewerService in Frameworks */,
 				E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */,
 				E9CBCC162C13685400169ABF /* RuntimeViewerArchitectures in Frameworks */,
 			);
@@ -195,7 +209,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				E9C9E9D42C2D160100C4AA34 /* RuntimeViewerCore in Frameworks */,
-				E9C9E9D62C2D160100C4AA34 /* RuntimeViewerService in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -204,6 +217,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				E9E900F02C2D0D9E00FADDCC /* RuntimeViewerService in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9F7594E2CF76B0F00BE7A5F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9F7595F2CF76B1A00BE7A5F /* RuntimeViewerCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,6 +239,7 @@
 				E947C3682C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
 				E9E900E02C2CF9B000FADDCC /* RuntimeViewerCatalystHelperPlugin */,
 				E9E900E92C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
+				E9F759612CF76B2200BE7A5F /* RuntimeViewerServer */,
 				E9432FE32C0D614900362862 /* Products */,
 				E9432FF32C0D637500362862 /* Frameworks */,
 			);
@@ -230,6 +252,7 @@
 				E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */,
 				E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */,
 				E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
+				E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -389,7 +412,28 @@
 			path = com.JH.RuntimeViewerService;
 			sourceTree = "<group>";
 		};
+		E9F759612CF76B2200BE7A5F /* RuntimeViewerServer */ = {
+			isa = PBXGroup;
+			children = (
+				E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */,
+				E9F759632CF76B3300BE7A5F /* main.m */,
+				E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */,
+			);
+			path = RuntimeViewerServer;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		E9F7594C2CF76B0F00BE7A5F /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9F759622CF76B2200BE7A5F /* RuntimeViewerServer.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
 		E9432FE12C0D614900362862 /* RuntimeViewerUsingAppKit */ = {
@@ -400,12 +444,13 @@
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
+				E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */,
 				E9C9E9E72C2D20D800C4AA34 /* Run Script */,
-				E9C9E9EB2C2D33F500C4AA34 /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E9F7596B2CF7817A00BE7A5F /* PBXTargetDependency */,
 				E9C9E9E52C2D1E2700C4AA34 /* PBXTargetDependency */,
 			);
 			name = RuntimeViewerUsingAppKit;
@@ -414,7 +459,6 @@
 				E9CBCC172C13685400169ABF /* RuntimeViewerCore */,
 				E9CBCC192C13685400169ABF /* RuntimeViewerUI */,
 				E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */,
-				E9C9E9CA2C2D0F1500C4AA34 /* RuntimeViewerService */,
 			);
 			productName = RuntimeViewerUsingAppKit;
 			productReference = E9432FE22C0D614900362862 /* RuntimeViewer.app */;
@@ -455,7 +499,6 @@
 			name = RuntimeViewerCatalystHelperPlugin;
 			packageProductDependencies = (
 				E9C9E9D32C2D160100C4AA34 /* RuntimeViewerCore */,
-				E9C9E9D52C2D160100C4AA34 /* RuntimeViewerService */,
 			);
 			productName = RuntimeViewerCatalystHelperPlugin;
 			productReference = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */;
@@ -480,6 +523,27 @@
 			productReference = E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */;
 			productType = "com.apple.product-type.tool";
 		};
+		E9F759502CF76B0F00BE7A5F /* RuntimeViewerServer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E9F7595A2CF76B0F00BE7A5F /* Build configuration list for PBXNativeTarget "RuntimeViewerServer" */;
+			buildPhases = (
+				E9F7594C2CF76B0F00BE7A5F /* Headers */,
+				E9F7594D2CF76B0F00BE7A5F /* Sources */,
+				E9F7594E2CF76B0F00BE7A5F /* Frameworks */,
+				E9F7594F2CF76B0F00BE7A5F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RuntimeViewerServer;
+			packageProductDependencies = (
+				E9F7595E2CF76B1A00BE7A5F /* RuntimeViewerCore */,
+			);
+			productName = RuntimeViewerServer;
+			productReference = E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */;
+			productType = "com.apple.product-type.framework";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -502,6 +566,10 @@
 					E9E900E72C2D0D5B00FADDCC = {
 						CreatedOnToolsVersion = 15.4;
 					};
+					E9F759502CF76B0F00BE7A5F = {
+						CreatedOnToolsVersion = 16.1;
+						LastSwiftMigration = 1610;
+					};
 				};
 			};
 			buildConfigurationList = E9432FDD2C0D614900362862 /* Build configuration list for PBXProject "RuntimeViewerUsingAppKit" */;
@@ -523,6 +591,7 @@
 				E947C3662C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
 				E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */,
 				E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
+				E9F759502CF76B0F00BE7A5F /* RuntimeViewerServer */,
 			);
 		};
 /* End PBXProject section */
@@ -532,6 +601,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E9F759692CF7817200BE7A5F /* RuntimeViewerServer.framework in Resources */,
 				E9432FE82C0D614A00362862 /* Assets.xcassets in Resources */,
 				E9432FEB2C0D614A00362862 /* Base in Resources */,
 				E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */,
@@ -547,6 +617,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E9E900DA2C2CF9A500FADDCC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9F7594F2CF76B0F00BE7A5F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -661,6 +738,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E9F7594D2CF76B0F00BE7A5F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9F759682CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift in Sources */,
+				E9F759642CF76B3300BE7A5F /* main.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -674,6 +760,11 @@
 			isa = PBXTargetDependency;
 			target = E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */;
 			targetProxy = E9C9E9E42C2D1E2700C4AA34 /* PBXContainerItemProxy */;
+		};
+		E9F7596B2CF7817A00BE7A5F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E9F759502CF76B0F00BE7A5F /* RuntimeViewerServer */;
+			targetProxy = E9F7596A2CF7817A00BE7A5F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1036,6 +1127,81 @@
 			};
 			name = Release;
 		};
+		E9F7595B2CF76B0F00BE7A5F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerServer;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Debug;
+		};
+		E9F7595C2CF76B0F00BE7A5F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				ENABLE_MODULE_VERIFIER = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MARKETING_VERSION = 1.0;
+				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
+				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
+				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerServer;
+				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_INSTALL_OBJC_HEADER = NO;
+				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
+				VERSION_INFO_PREFIX = "";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1084,6 +1250,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		E9F7595A2CF76B0F00BE7A5F /* Build configuration list for PBXNativeTarget "RuntimeViewerServer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9F7595B2CF76B0F00BE7A5F /* Debug */,
+				E9F7595C2CF76B0F00BE7A5F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1091,17 +1266,9 @@
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerApplication;
 		};
-		E9C9E9CA2C2D0F1500C4AA34 /* RuntimeViewerService */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerService;
-		};
 		E9C9E9D32C2D160100C4AA34 /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCore;
-		};
-		E9C9E9D52C2D160100C4AA34 /* RuntimeViewerService */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerService;
 		};
 		E9CBCC152C13685400169ABF /* RuntimeViewerArchitectures */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1118,6 +1285,10 @@
 		E9E900EF2C2D0D9E00FADDCC /* RuntimeViewerService */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerService;
+		};
+		E9F7595E2CF76B1A00BE7A5F /* RuntimeViewerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

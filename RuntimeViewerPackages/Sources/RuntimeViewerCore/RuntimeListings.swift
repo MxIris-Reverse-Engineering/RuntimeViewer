@@ -3,59 +3,18 @@ import Combine
 import ClassDumpRuntime
 import MachO.dyld
 import OSLog
+import FoundationToolbox
 #if os(macOS)
-import RuntimeViewerService
+import RuntimeViewerCommunication
 import SwiftyXPC
 #endif
-import FoundationToolbox
-
-enum DyldRegisterNotifications {
-    static let addImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
-    static let removeImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
-}
-
-
-
-
-
-public enum RuntimeSource: CustomStringConvertible {
-    public enum Role {
-        case client
-        case server
-        var isClient: Bool { self == .client }
-        var isServer: Bool { self == .server }
-    }
-    public struct Identifier: RawRepresentable, ExpressibleByStringLiteral {
-        public let rawValue: String
-        
-        public init(rawValue: String) {
-            self.rawValue = rawValue
-        }
-        
-        public init(stringLiteral value: StringLiteralType) {
-            self.init(rawValue: value)
-        }
-    }
-    case local
-    @available(iOS, unavailable)
-    @available(tvOS, unavailable)
-    @available(watchOS, unavailable)
-    @available(visionOS, unavailable)
-    case remote(name: String, identifier: Identifier, role: Role)
-
-    public var description: String {
-        switch self {
-        case .local: return "Local"
-        case let .remote(name, _, _): return name
-        }
-    }
-}
-
-extension RuntimeSource.Identifier {
-    public static let macCatalyst: Self = "com.JH.RuntimeViewer.MacCatalyst"
-}
 
 public final class RuntimeListings {
+    private enum DyldRegisterNotifications {
+        static let addImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
+        static let removeImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
+    }
+
     public static let shared = RuntimeListings()
 
     private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeListings")
@@ -196,14 +155,15 @@ public final class RuntimeListings {
         case .local:
             observeRuntime()
         #if os(macOS)
-        case let .remote(_, _, role):
+        case let .remote(_, identifier, role):
             Task {
                 do {
                     let serviceConnection = try await connectToMachService()
-                    if role.isServer {
-                        try await setupMessageHandlerForSender(with: serviceConnection)
-                    } else {
-                        try await setupMessageHandlerForReceiver(with: serviceConnection)
+                    switch role {
+                    case .server:
+                        try await setupMessageHandlerForServer(with: serviceConnection, identifier: identifier)
+                    case .client:
+                        try await setupMessageHandlerForClient(with: serviceConnection, identifier: identifier)
                     }
                 } catch {
                     Self.logger.error("\(error)")
@@ -215,26 +175,26 @@ public final class RuntimeListings {
 
     #if os(macOS)
     private func connectToMachService() async throws -> SwiftyXPC.XPCConnection {
-        let serviceConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerService.serviceName, isPrivilegedHelperTool: true))
+        let serviceConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
         serviceConnection.activate()
         self.serviceConnection = serviceConnection
-        let ping: String = try await serviceConnection.sendMessage(name: CommandSet.ping)
-        Self.logger.info("\(ping)")
+        try await serviceConnection.sendMessage(request: PingRequest())
+        Self.logger.info("Ping successfully")
         return serviceConnection
     }
 
-    private func setupMessageHandlerForSender(with serviceConnection: XPCConnection) async throws {
+    private func setupMessageHandlerForServer(with serviceConnection: XPCConnection, identifier: RuntimeSource.Identifier) async throws {
         let listener = try XPCListener(type: .anonymous, codeSigningRequirement: nil)
         self.listener = listener
-        let endpoint: XPCEndpoint = try await serviceConnection.sendMessage(name: CommandSet.fetchEndpoint)
-        let receiverConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
-        receiverConnection.activate()
-        connection = receiverConnection
-        let ping: String = try await receiverConnection.sendMessage(name: CommandSet.ping)
-        Self.logger.info("\(ping)")
+        let response = try await serviceConnection.sendMessage(request: FetchEndpointRequest(identifier: identifier.rawValue))
+        let clientConnection = try XPCConnection(type: .remoteServiceFromEndpoint(response.endpoint))
+        clientConnection.activate()
+        connection = clientConnection
+        try await clientConnection.sendMessage(request: PingRequest())
+        Self.logger.info("Ping client successfully")
         observeRuntime()
-        listener.setMessageHandler(name: CommandSet.ping) { connection in
-            return "Ping sender successfully."
+        listener.setMessageHandler(name: PingRequest.identifier) { (connection: XPCConnection, request: PingRequest) -> PingRequest.Response in
+            return .empty
         }
         setMessageHandlerBinding(forName: ListingsCommandSet.isImageLoaded, of: self) { $0.isImageLoaded(path:) }
         setMessageHandlerBinding(forName: ListingsCommandSet.loadImage, of: self) { $0.loadImage(at:) }
@@ -242,17 +202,17 @@ public final class RuntimeListings {
         setMessageHandlerBinding(forName: ListingsCommandSet.patchImagePathForDyld, of: self) { $0.patchImagePathForDyld(_:) }
         setMessageHandlerBinding(forName: ListingsCommandSet.runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(_:) }
         setMessageHandlerBinding(forName: ListingsCommandSet.imageNameOfClassName, of: self) { $0.imageName(ofClass:) }
-        
+
         listener.setMessageHandler(name: ListingsCommandSet.semanticStringForRuntimeObjectWithOptions) { [unowned self] (connection: XPCConnection, request: SemanticStringRequest) -> Data? in
             try await semanticString(for: request.runtimeObject, options: request.options).map { try NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true) }
         }
 
         listener.activate()
 
-        try await receiverConnection.sendMessage(name: ListingsCommandSet.senderLaunched, request: listener.endpoint)
+        try await clientConnection.sendMessage(name: ListingsCommandSet.senderLaunched, request: listener.endpoint)
     }
 
-    private func setupMessageHandlerForReceiver(with serviceConnection: XPCConnection) async throws {
+    private func setupMessageHandlerForClient(with serviceConnection: XPCConnection, identifier: RuntimeSource.Identifier) async throws {
         let listener = try XPCListener(type: .anonymous, codeSigningRequirement: nil)
         self.listener = listener
         setMessageHandlerBinding(forName: ListingsCommandSet.classList, to: \.classList)
@@ -264,20 +224,22 @@ public final class RuntimeListings {
 
         listener.setMessageHandler(name: ListingsCommandSet.senderLaunched) { [weak self] (connection: XPCConnection, endpoint: XPCEndpoint) in
             guard let self else { return }
-            let senderConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
-            senderConnection.activate()
-            self.connection = senderConnection
-            let ping: String = try await senderConnection.sendMessage(name: CommandSet.ping)
-            Self.logger.info("\(ping)")
+            let serverConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
+            serverConnection.activate()
+            self.connection = serverConnection
+            _ = try await serverConnection.sendMessage(request: PingRequest())
+            Self.logger.info("Ping server successfully")
         }
 
-        listener.setMessageHandler(name: CommandSet.ping) { connection in
-            return "Ping receiver successfully."
+        listener.setMessageHandler(name: PingRequest.identifier) { (connection: XPCConnection, request: PingRequest) -> PingRequest.Response in
+            return .empty
         }
 
         listener.activate()
-        try await serviceConnection.sendMessage(name: CommandSet.updateEndpoint, request: listener.endpoint)
-        try await serviceConnection.sendMessage(name: CommandSet.launchCatalystHelper, request: RuntimeViewerCatalystHelperLauncher.helperURL)
+        try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
+        if identifier == .macCatalyst {
+            try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
+        }
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: String, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
@@ -304,23 +266,23 @@ public final class RuntimeListings {
 
     private func reloadData() {
         Self.logger.debug("Start reload")
-        classList = CDUtilities.classNames()
-        protocolList = CDUtilities.protocolNames()
-        imageList = CDUtilities.imageNames()
-        imageNodes = [CDUtilities.dyldSharedCacheImageRootNode, CDUtilities.otherImageRootNode]
+        classList = Self.classNames()
+        protocolList = Self.protocolNames()
+        imageList = Self.imageNames()
+        imageNodes = [Self.dyldSharedCacheImageRootNode, Self.otherImageRootNode]
         Self.logger.debug("End reload")
     }
 
     private func observeRuntime() {
-        classList = CDUtilities.classNames()
-        protocolList = CDUtilities.protocolNames()
-        imageList = CDUtilities.imageNames()
+        classList = Self.classNames()
+        protocolList = Self.protocolNames()
+        imageList = Self.imageNames()
         let (protocolToImage, imageToProtocols) = Self.protocolImageTrackingFor(
             protocolList: protocolList, protocolToImage: [:], imageToProtocols: [:]
         ) ?? ([:], [:])
         self.protocolToImage = protocolToImage
         self.imageToProtocols = imageToProtocols
-        imageNodes = [CDUtilities.dyldSharedCacheImageRootNode, CDUtilities.otherImageRootNode]
+        imageNodes = [Self.dyldSharedCacheImageRootNode, Self.otherImageRootNode]
 
         shouldReload
             .debounce(for: .milliseconds(15), scheduler: DispatchQueue.main)
@@ -375,8 +337,8 @@ public final class RuntimeListings {
             .sink { [weak self] _ in
                 guard let self else { return }
 
-                let classList = CDUtilities.classNames()
-                let protocolList = CDUtilities.protocolNames()
+                let classList = Self.classNames()
+                let protocolList = Self.protocolNames()
 
                 let refClassList = self.classList
                 let refProtocolList = self.protocolList
@@ -423,7 +385,7 @@ extension RuntimeListings {
 
     public func isImageLoaded(path: String) async throws -> Bool {
         try await request {
-            imageList.contains(CDUtilities.patchImagePathForDyld(path))
+            imageList.contains(Self.patchImagePathForDyld(path))
         } remote: {
             #if os(macOS)
             return try await $0.sendMessage(name: ListingsCommandSet.isImageLoaded, request: path)
@@ -435,7 +397,7 @@ extension RuntimeListings {
 
     public func loadImage(at path: String) async throws {
         try await request {
-            try CDUtilities.loadImage(at: path)
+            try Self.loadImage(at: path)
         } remote: {
             #if os(macOS)
             try await $0.sendMessage(name: ListingsCommandSet.isImageLoaded, request: path)
@@ -445,7 +407,7 @@ extension RuntimeListings {
 
     public func classNamesIn(image: String) async throws -> [String] {
         try await request {
-            CDUtilities.classNamesIn(image: image)
+            Self.classNamesIn(image: image)
         } remote: {
             #if os(macOS)
             return try await $0.sendMessage(name: ListingsCommandSet.classNamesInImage, request: image)
@@ -457,7 +419,7 @@ extension RuntimeListings {
 
     public func patchImagePathForDyld(_ imagePath: String) async throws -> String {
         try await request {
-            CDUtilities.patchImagePathForDyld(imagePath)
+            Self.patchImagePathForDyld(imagePath)
         } remote: {
             #if os(macOS)
             return try await $0.sendMessage(name: ListingsCommandSet.patchImagePathForDyld, request: imagePath)
@@ -469,7 +431,7 @@ extension RuntimeListings {
 
     public func imageName(ofClass className: String) async throws -> String? {
         try await request {
-            CDUtilities.imageName(ofClass: className)
+            Self.imageName(ofClass: className)
         } remote: {
             #if os(macOS)
             return try await $0.sendMessage(name: ListingsCommandSet.imageNameOfClassName, request: className)
@@ -523,7 +485,7 @@ extension RuntimeListings {
 }
 
 extension RuntimeListings {
-    fileprivate static func protocolImageTrackingFor(
+    private static func protocolImageTrackingFor(
         protocolList: [String], protocolToImage: [String: String], imageToProtocols: [String: [String]]
     ) -> ([String: String], [String: [String]])? {
         var protocolToImageCopy = protocolToImage
@@ -561,8 +523,12 @@ extension RuntimeListings {
     }
 }
 
-extension CDUtilities {
-    fileprivate class func imageNames() -> [String] {
+extension RuntimeListings {
+    private class func classNames() -> [String] {
+        CDUtilities.classNames()
+    }
+
+    private class func imageNames() -> [String] {
         (0...)
             .lazy
             .map(_dyld_get_image_name)
@@ -571,7 +537,7 @@ extension CDUtilities {
             .map { String(cString: $0) }
     }
 
-    fileprivate class func protocolNames() -> [String] {
+    private class func protocolNames() -> [String] {
         var protocolCount: UInt32 = 0
         guard let protocolList = objc_copyProtocolList(&protocolCount) else { return [] }
 
@@ -582,11 +548,11 @@ extension CDUtilities {
         return names
     }
 
-    fileprivate class func imageName(ofClass className: String) -> String? {
+    private class func imageName(ofClass className: String) -> String? {
         class_getImageName(NSClassFromString(className)).map { String(cString: $0) }
     }
 
-    fileprivate class func classNamesIn(image: String) -> [String] {
+    private class func classNamesIn(image: String) -> [String] {
         patchImagePathForDyld(image).withCString { cString in
             var classCount: UInt32 = 0
             guard let classNames = objc_copyClassNamesForImage(cString, &classCount) else { return [] }
@@ -601,14 +567,14 @@ extension CDUtilities {
         }
     }
 
-    fileprivate class func patchImagePathForDyld(_ imagePath: String) -> String {
+    private class func patchImagePathForDyld(_ imagePath: String) -> String {
         guard imagePath.starts(with: "/") else { return imagePath }
         let rootPath = ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]
         guard let rootPath else { return imagePath }
         return rootPath.appending(imagePath)
     }
 
-    fileprivate class func loadImage(at path: String) throws {
+    private class func loadImage(at path: String) throws {
         try path.withCString { cString in
             let handle = dlopen(cString, RTLD_LAZY)
             // get the error and copy it into an object we control since the error is shared
@@ -620,12 +586,12 @@ extension CDUtilities {
         }
     }
 
-    fileprivate class var dyldSharedCacheImageRootNode: RuntimeNamedNode {
-        return .rootNode(for: dyldSharedCacheImagePaths(), name: "Dyld Shared Cache")
+    private class var dyldSharedCacheImageRootNode: RuntimeNamedNode {
+        return .rootNode(for: CDUtilities.dyldSharedCacheImagePaths(), name: "Dyld Shared Cache")
     }
 
-    fileprivate class var otherImageRootNode: RuntimeNamedNode {
-        let dyldSharedCacheImagePaths = dyldSharedCacheImagePaths()
+    private class var otherImageRootNode: RuntimeNamedNode {
+        let dyldSharedCacheImagePaths = CDUtilities.dyldSharedCacheImagePaths()
         let allImagePaths = imageNames()
         let otherImagePaths = allImagePaths.filter { !dyldSharedCacheImagePaths.contains($0) }
         return .rootNode(for: otherImagePaths, name: "Others")
