@@ -4,7 +4,7 @@ import UIKit
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class InspectorNavigationController: UITabBarController {}
+class InspectorViewController: UITabBarController {}
 
 class InspectorPlaceholderViewController: ViewController<InspectorPlaceholderViewModel> {}
 

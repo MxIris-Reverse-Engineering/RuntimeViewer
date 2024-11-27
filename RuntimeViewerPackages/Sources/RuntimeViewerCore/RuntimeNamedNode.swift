@@ -1,10 +1,3 @@
-//
-//  NamedNode.swift
-//  HeaderViewer
-//
-//  Created by Leptos on 2/18/24.
-//
-
 import Foundation
 
 public final class RuntimeNamedNode: Codable {

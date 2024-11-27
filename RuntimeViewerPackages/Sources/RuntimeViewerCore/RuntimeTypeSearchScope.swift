@@ -1,10 +1,3 @@
-//
-//  File.swift
-//  
-//
-//  Created by JH on 2024/6/3.
-//
-
 import Foundation
 
 public enum RuntimeTypeSearchScope: Hashable {

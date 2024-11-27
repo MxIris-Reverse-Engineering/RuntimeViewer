@@ -130,6 +130,10 @@ let package = Package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
+            branch: "main"
+        ),
     ],
     targets: [
         .target(
@@ -156,7 +160,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerCore",
             dependencies: [
-                .target(name: "RuntimeViewerService", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerCommunication", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
@@ -175,6 +179,7 @@ let package = Package(
                 .product(name: "SFSymbol", package: "SFSymbol"),
                 .product(name: "IDEIcons", package: "ide-icons"),
                 .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "MachInjectorUI", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
         .target(
@@ -187,6 +192,14 @@ let package = Package(
         ),
         .target(
             name: "RuntimeViewerService",
+            dependencies: [
+                "RuntimeViewerCommunication",
+                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
+            ]
+        ),
+        .target(
+            name: "RuntimeViewerCommunication",
             dependencies: [
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
             ]
