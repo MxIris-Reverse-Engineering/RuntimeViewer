@@ -36,6 +36,11 @@ public enum RuntimeSource: CustomStringConvertible {
     }
 }
 
+extension RuntimeSource {
+    public static let macCatalystClient: Self = .remote(name: "Mac Catalyst", identifier: .macCatalyst, role: .client)
+    public static let macCatalystServer: Self = .remote(name: "Mac Catalyst", identifier: .macCatalyst, role: .server)
+}
+
 extension RuntimeSource.Identifier {
     public static let macCatalyst: Self = "com.JH.RuntimeViewer.MacCatalyst"
 }

@@ -23,16 +23,20 @@ class MainViewModel: ViewModel<MainRoute> {
         let fontSizeLargerClick: Signal<Void>
         let loadFrameworksClick: Signal<Void>
         let installHelperClick: Signal<Void>
+        let attachToProcessClick: Signal<Void>
     }
 
     struct Output {
         let sharingServiceItems: Observable<[Any]>
         let isSavable: Driver<Bool>
         let isSidebarBackHidden: Driver<Bool>
+        let runtimeSources: Driver<[String]>
     }
 
     let completeTransition: Observable<SidebarRoute>
 
+    let runtimeEngineManager = RuntimeEngineManager.shared
+    
     @Observed
     var selectedRuntimeObject: RuntimeObjectType?
 
@@ -69,6 +73,7 @@ class MainViewModel: ViewModel<MainRoute> {
             AppDefaults[\.themeProfile].fontSizeLarger()
         }
         .disposed(by: rx.disposeBag)
+        input.attachToProcessClick.emit(to: router.rx.trigger(.attachToProcess)).disposed(by: rx.disposeBag)
         input.sidebarBackClick.emit(to: router.rx.trigger(.sidebarBack)).disposed(by: rx.disposeBag)
         input.contentBackClick.emit(to: router.rx.trigger(.contentBack)).disposed(by: rx.disposeBag)
         input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
@@ -94,8 +99,7 @@ class MainViewModel: ViewModel<MainRoute> {
             .disposed(by: rx.disposeBag)
 
         input.switchSource.emit(with: self) {
-            print("switchSource:", $1)
-            $0.router.trigger(.main($1 == .zero ? .shared : .macCatalystClient))
+            $0.router.trigger(.main($0.runtimeEngineManager.runtimeEngines[$1]))
         }.disposed(by: rx.disposeBag)
 
         let sharingServiceItems = completeTransition.map { [weak self] router -> [Any] in
@@ -131,7 +135,8 @@ class MainViewModel: ViewModel<MainRoute> {
             isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
             isSidebarBackHidden: completeTransition.map {
                 if case .clickedNode = $0 { false } else if case .selectedObject = $0 { false } else { true }
-            }.asDriver(onErrorJustReturn: true)
+            }.asDriver(onErrorJustReturn: true),
+            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map(\.source.description) }
         )
     }
 

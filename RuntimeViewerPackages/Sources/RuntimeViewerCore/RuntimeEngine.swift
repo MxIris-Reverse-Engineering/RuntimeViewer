@@ -9,6 +9,8 @@ import SwiftyXPC
 import RuntimeViewerCommunication
 #endif
 
+
+
 public final class RuntimeEngine {
     private enum DyldRegisterNotifications {
         static let addImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
@@ -17,7 +19,7 @@ public final class RuntimeEngine {
 
     public static let shared = RuntimeEngine()
 
-    private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeListings")
+    private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeEngine")
 
     @Published public private(set) var classList: [String] = [] {
         didSet {
@@ -149,37 +151,39 @@ public final class RuntimeEngine {
     private var connection: SwiftyXPC.XPCConnection?
     #endif
 
-    public init(source: RuntimeSource = .local) {
-        self.source = source
-        switch source {
-        case .local:
-            observeRuntime()
-        #if os(macOS)
-        case let .remote(_, identifier, role):
-            Task {
-                do {
-                    let serviceConnection = try await connectToMachService()
-                    switch role {
-                    case .server:
-                        try await setupMessageHandlerForServer(with: serviceConnection, identifier: identifier)
-                    case .client:
-                        try await setupMessageHandlerForClient(with: serviceConnection, identifier: identifier)
-                    }
-                } catch {
-                    Self.logger.error("\(error)")
-                }
-            }
-        #endif
-        }
+    public init() {
+        self.source = .local
+        observeRuntime()
     }
 
     #if os(macOS)
+
+    public static func macCatalystClient() async throws -> Self {
+        try await Self(name: "Mac Catalyst", identifier: .macCatalyst, role: .client)
+    }
+
+    public static func macCatalystServer() async throws -> Self {
+        try await Self(name: "Mac Catalyst", identifier: .macCatalyst, role: .server)
+    }
+
+    public init(name: String, identifier: RuntimeSource.Identifier, role: RuntimeSource.Role) async throws {
+        self.source = .remote(name: name, identifier: identifier, role: role)
+        let serviceConnection = try await connectToMachService()
+        switch role {
+        case .server:
+            try await setupMessageHandlerForServer(with: serviceConnection, identifier: identifier)
+        case .client:
+            try await setupMessageHandlerForClient(with: serviceConnection, identifier: identifier)
+        }
+    }
+
+    @discardableResult
     private func connectToMachService() async throws -> SwiftyXPC.XPCConnection {
         let serviceConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
         serviceConnection.activate()
         self.serviceConnection = serviceConnection
         try await serviceConnection.sendMessage(request: PingRequest())
-        Self.logger.info("Ping successfully")
+        Self.logger.info("Ping mach service successfully")
         return serviceConnection
     }
 
@@ -481,15 +485,6 @@ extension RuntimeEngine {
             fatalError()
             #endif
         }
-    }
-
-    public func injectApplication(pid: pid_t, dylibURL: URL) async throws {
-        enum Error: Swift.Error {
-            case noMachServiceConnection
-        }
-
-        guard let serviceConnection else { throw Error.noMachServiceConnection }
-        try await serviceConnection.sendMessage(request: InjectApplicationRequest(pid: pid, dylibURL: dylibURL))
     }
 }
 

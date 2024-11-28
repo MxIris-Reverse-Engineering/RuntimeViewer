@@ -62,12 +62,17 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 
     class SwitchSourceToolbarItem: NSToolbarItem {
-        let segmentedControl = NSSegmentedControl(labels: ["Native", "Mac Catalyst"], trackingMode: .selectOne, target: nil, action: nil)
+//        let segmentedControl = NSSegmentedControl(labels: ["Native", "Mac Catalyst"], trackingMode: .selectOne, target: nil, action: nil)
+        
+        let popUpButton = NSPopUpButton()
+        
         init() {
             super.init(itemIdentifier: .Main.switchSource)
-            view = segmentedControl
-            segmentedControl.selectedSegment = 0
-            segmentedControl.segmentDistribution = .fillEqually
+            view = popUpButton
+            popUpButton.controlSize = .large
+            popUpButton.bezelStyle = .toolbar
+//            segmentedControl.selectedSegment = 0
+//            segmentedControl.segmentDistribution = .fillEqually
         }
     }
 
@@ -180,6 +185,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             return loadFrameworksItem
         case .Main.installHelper:
             return installHelperItem
+        case .Main.attach:
+            return attachItem
         default:
             return nil
         }

@@ -48,7 +48,9 @@ public final class RuntimeViewerService {
     }
     
     private func injectApplication(_ connection: XPCConnection, request: InjectApplicationRequest) async throws -> InjectApplicationRequest.Response {
-        try MachInjector.inject(pid: request.pid, dylibPath: request.dylibURL.path)
+        try await MainActor.run {
+            try MachInjector.inject(pid: request.pid, dylibPath: request.dylibURL.path)
+        }
         return .empty
     }
 
