@@ -16,7 +16,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     private let imagePath: String
     private let imageName: String
 
-    private let runtimeListings: RuntimeListings
+    private let runtimeEngine: RuntimeEngine
 
     @Observed private var searchString: String = ""
     @Observed private var searchScope: RuntimeTypeSearchScope = .all
@@ -26,16 +26,16 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @Observed private var loadState: RuntimeImageLoadState = .notLoaded
 
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
-        self.runtimeListings = appServices.runtimeListings
+        self.runtimeEngine = appServices.runtimeEngine
         self.namedNode = namedNode
         let imagePath = namedNode.path
         self.imagePath = imagePath
         self.imageName = namedNode.name
         super.init(appServices: appServices, router: router)
         Task {
-            let classNames = try await runtimeListings.classNamesIn(image: imagePath)
-            let protocolNames = try runtimeListings.imageToProtocols[await runtimeListings.patchImagePathForDyld(imagePath)] ?? []
-            let loadState: RuntimeImageLoadState = try await runtimeListings.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
+            let classNames = try await runtimeEngine.classNamesIn(image: imagePath)
+            let protocolNames = try runtimeEngine.imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
+            let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
             await MainActor.run {
                 self.classNames = classNames
                 self.protocolNames = protocolNames
@@ -54,20 +54,20 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 self.loadState = loadState
             }
 
-            runtimeListings.$classList
+            runtimeEngine.$classList
                 .asObservable()
                 .flatMap { [unowned self] _ in
-                    try await runtimeListings.classNamesIn(image: imagePath)
+                    try await runtimeEngine.classNamesIn(image: imagePath)
                 }
                 .catchAndReturn([])
                 .observeOnMainScheduler()
                 .bind(to: $classNames)
                 .disposed(by: rx.disposeBag)
 
-            runtimeListings.$imageToProtocols
+            runtimeEngine.$imageToProtocols
                 .asObservable()
                 .flatMap { [unowned self] imageToProtocols in
-                    try imageToProtocols[await runtimeListings.patchImagePathForDyld(imagePath)] ?? []
+                    try imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
                 }
                 .catchAndReturn([])
                 .observeOnMainScheduler()
@@ -91,10 +91,10 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 .bind(to: $runtimeObjects)
                 .disposed(by: rx.disposeBag)
 
-            runtimeListings.$imageList
+            runtimeEngine.$imageList
                 .asObservable()
                 .flatMap { [unowned self] imageList in
-                    try imageList.contains(await runtimeListings.patchImagePathForDyld(imagePath))
+                    try imageList.contains(await runtimeEngine.patchImagePathForDyld(imagePath))
                 }
                 .catchAndReturn(false)
                 .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
@@ -191,7 +191,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 await MainActor.run {
                     loadState = .loading
                 }
-                try await runtimeListings.loadImage(at: imagePath)
+                try await runtimeEngine.loadImage(at: imagePath)
                 await MainActor.run {
                     loadState = .loaded
                 }

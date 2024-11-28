@@ -2,6 +2,7 @@
 import AppKit
 import SwiftyXPC
 import RuntimeViewerCommunication
+import MachInjector
 
 public final class RuntimeViewerService {
 
@@ -17,6 +18,7 @@ public final class RuntimeViewerService {
         listener.setMessageHandler(handler: fetchEndpoint)
         listener.setMessageHandler(handler: launchCatalystHelper)
         listener.setMessageHandler(handler: ping)
+        listener.setMessageHandler(handler: injectApplication)
         listener.activate()
     }
 
@@ -42,6 +44,11 @@ public final class RuntimeViewerService {
         configuration.addsToRecentItems = false
         configuration.activates = false
         catalystHelperApplication = try await NSWorkspace.shared.openApplication(at: request.helperURL, configuration: configuration)
+        return .empty
+    }
+    
+    private func injectApplication(_ connection: XPCConnection, request: InjectApplicationRequest) async throws -> InjectApplicationRequest.Response {
+        try MachInjector.inject(pid: request.pid, dylibPath: request.dylibURL.path)
         return .empty
     }
 

@@ -32,7 +32,7 @@ public class InspectorRuntimeObjectViewModel: ViewModel<InspectorRoute> {
     init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<InspectorRoute>) {
         self.runtimeObject = runtimeObject
         super.init(appServices: appServices, router: router)
-//        $runtimeObject.flatMap { appServices.runtimeListings. }
+//        $runtimeObject.flatMap { appServices.runtimeEngine. }
     }
 }
 

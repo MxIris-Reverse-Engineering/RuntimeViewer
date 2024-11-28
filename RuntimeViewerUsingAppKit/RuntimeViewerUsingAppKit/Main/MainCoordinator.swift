@@ -16,8 +16,6 @@ typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewCo
 class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     let appServices: AppServices
 
-//    let completeTransition: PublishRelay<SidebarRoute> = .init()
-
     lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
 
     lazy var contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
@@ -27,13 +25,12 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     init(appServices: AppServices) {
         self.appServices = appServices
         super.init(windowController: .init(), initialRoute: .main(.shared))
-        windowController.window?.title = "Runtime Viewer"
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
-        case let .main(runtimeListings):
-            appServices.runtimeListings = runtimeListings
+        case let .main(runtimeEngine):
+            appServices.runtimeEngine = runtimeEngine
             removeChild(sidebarCoordinator)
             removeChild(contentCoordinator)
             removeChild(inspectorCoordinator)
@@ -96,7 +93,6 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
         default:
             break
         }
-//        windowController.toolbarController.sidebarBackItem.backButton.isHidden = sidebarCoordinator.rootViewController.viewControllers.count < 2
     }
 }
 

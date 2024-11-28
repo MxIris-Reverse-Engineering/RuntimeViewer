@@ -31,12 +31,12 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
             do {
                 switch runtimeObject {
                 case .class(let named):
-                    let imageName = try await appServices.runtimeListings.imageName(ofClass: named)
+                    let imageName = try await appServices.runtimeEngine.imageName(ofClass: named)
                     await MainActor.run {
                         self.imageNameOfRuntimeObject = imageName
                     }
                 case .protocol(let named):
-                    self.imageNameOfRuntimeObject = appServices.runtimeListings.protocolToImage[named]
+                    self.imageNameOfRuntimeObject = appServices.runtimeEngine.protocolToImage[named]
                 }
             } catch {
                 print(error)
@@ -45,7 +45,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
             .observeOnMainScheduler()
             .flatMap { [unowned self] runtimeObject, options, theme -> NSAttributedString? in
-                let semanticString = try await self.appServices.runtimeListings.semanticString(for: runtimeObject, options: options)
+                let semanticString = try await self.appServices.runtimeEngine.semanticString(for: runtimeObject, options: options)
                 return await MainActor.run {
                     semanticString?.attributedString(for: theme)
                 }
