@@ -83,7 +83,7 @@ class MainViewModel: ViewModel<MainRoute> {
                     guard result == .OK, let url = savePanel.url else { return }
                     Task {
                         do {
-                            let semanticString = try await self.appServices.runtimeListings.semanticString(for: runtimeObject, options: AppDefaults[\.options])
+                            let semanticString = try await self.appServices.runtimeEngine.semanticString(for: runtimeObject, options: AppDefaults[\.options])
                             try semanticString?.string().write(to: url, atomically: true, encoding: .utf8)
                         } catch {
                             print(error)
@@ -106,7 +106,7 @@ class MainViewModel: ViewModel<MainRoute> {
                 item.registerDataRepresentation(forTypeIdentifier: UTType.cHeader.identifier, visibility: .all) { completion in
                     Task {
                         do {
-                            let semanticString = try await self.appServices.runtimeListings.semanticString(for: runtimeObjectType, options: AppDefaults[\.options])
+                            let semanticString = try await self.appServices.runtimeEngine.semanticString(for: runtimeObjectType, options: AppDefaults[\.options])
                             completion(semanticString?.string().data(using: .utf8), nil)
                         } catch {
                             completion(nil, error)

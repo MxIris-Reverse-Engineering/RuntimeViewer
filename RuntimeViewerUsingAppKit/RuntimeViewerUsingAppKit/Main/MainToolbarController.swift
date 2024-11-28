@@ -22,6 +22,7 @@ extension NSToolbarItem.Identifier {
         static let fontSizeLarger: NSToolbarItem.Identifier = "fontSizeLarger"
         static let loadFrameworks: NSToolbarItem.Identifier = "loadFrameworks"
         static let installHelper: NSToolbarItem.Identifier = "installHelper"
+        static let attach: NSToolbarItem.Identifier = "attach"
     }
 }
 
@@ -33,11 +34,19 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     class IconButtonToolbarItem: NSToolbarItem {
         let button = ToolbarButton()
 
-        init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbol.SystemSymbolName) {
+        convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbol.SystemSymbolName) {
+            self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbol.SymbolName)
+        }
+        
+        convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: RuntimeViewerSymbols) {
+            self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbol.SymbolName)
+        }
+        
+        init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbol.SymbolName) {
             super.init(itemIdentifier: itemIdentifier)
             view = button
             button.title = ""
-            button.image = SFSymbol(systemName: icon).nsImage
+            button.image = SFSymbol(name: icon).nsImage
         }
     }
 
@@ -72,6 +81,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
         $0.isNavigational = true
     }
 
+    let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject)
+    
     let inspectorItem = InspectorToolbarItem()
 
     let saveItem = IconButtonToolbarItem(itemIdentifier: .Main.save, icon: .squareAndArrowDown)
@@ -109,6 +120,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             .sidebarTrackingSeparator,
             .Main.contentBack,
             .Main.switchSource,
+            .Main.attach,
             .Main.installHelper,
             .Main.loadFrameworks,
             .Main.fontSizeSmaller,
@@ -138,6 +150,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.fontSizeLarger,
             .Main.loadFrameworks,
             .Main.installHelper,
+            .Main.attach
         ]
     }
 

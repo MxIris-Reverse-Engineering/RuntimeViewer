@@ -12,7 +12,7 @@ import RuntimeViewerCore
 class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         DispatchQueue.global().async {
-            _ = RuntimeListings.shared
+            _ = RuntimeEngine.shared
         }
         return true
     }

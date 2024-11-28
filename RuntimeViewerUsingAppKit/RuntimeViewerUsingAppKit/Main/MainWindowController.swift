@@ -52,6 +52,7 @@ class MainWindowController: XiblessWindowController<MainWindow> {
 
     override func windowDidLoad() {
         super.windowDidLoad()
+        contentWindow.title = "Runtime Viewer"
         contentWindow.toolbar = toolbarController.toolbar
         contentWindow.identifier = MainWindow.identifier
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
