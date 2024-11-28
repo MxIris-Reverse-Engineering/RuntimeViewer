@@ -8,20 +8,18 @@
 import Cocoa
 import RuntimeViewerCore
 import RuntimeViewerApplication
-import Combine
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
-    let appServices = AppServices()
-
-    var cancellables: Set<AnyCancellable> = []
-
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        DispatchQueue.global().async {
-            _ = RuntimeEngine.shared
+        Task {
+            do {
+                try await RuntimeEngineManager.shared.launchSystemRuntimeEngines()
+            } catch {
+                NSLog("%@", error as NSError)
+                NSAlert(error: error).runModal()
+            }
         }
-
-        _ = RuntimeEngine.macCatalystClient
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {}
@@ -42,8 +40,4 @@ extension AppDelegate: NSMenuItemValidation {
         }
         return true
     }
-}
-
-extension RuntimeEngine {
-    static let macCatalystClient = RuntimeEngine(source: .remote(name: "MacCatalyst", identifier: .macCatalyst, role: .client))
 }

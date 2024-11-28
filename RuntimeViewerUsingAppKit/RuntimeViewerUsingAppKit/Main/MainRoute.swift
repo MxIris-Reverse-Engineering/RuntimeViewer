@@ -18,4 +18,6 @@ public enum MainRoute: Routable {
     case contentBack
     case generationOptions(sender: NSView)
     case loadFramework
+    case attachToProcess
+    case dismiss
 }

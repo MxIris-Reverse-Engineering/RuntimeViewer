@@ -14,10 +14,10 @@ extension NSObject {
 
 @objc(AppKitPluginImpl)
 class AppKitPluginImpl: NSObject, AppKitPlugin {
-    var plugin: RuntimeViewerCatalystHelperPlugin?
-
     var observation: NSKeyValueObservation?
-    
+
+    var runtimeEngine: RuntimeEngine?
+
     override required init() {
         super.init()
         NSApplication.shared.setActivationPolicy(.prohibited)
@@ -38,8 +38,8 @@ class AppKitPluginImpl: NSObject, AppKitPlugin {
     }
 
     func launch() {
-        plugin = RuntimeViewerCatalystHelperPlugin()
         Task {
+            runtimeEngine = try await .macCatalystServer()
             // The host application quits, check if any of the two is running.
             // If none, quit the XPC service.
 

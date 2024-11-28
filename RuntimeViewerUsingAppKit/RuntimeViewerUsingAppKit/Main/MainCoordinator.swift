@@ -61,6 +61,14 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         case .loadFramework:
             return .none()
+        case .attachToProcess:
+            let viewController = AttachToProcessViewController()
+            let viewModel = AttachToProcessViewModel(appServices: appServices, router: self)
+            viewController.setupBindings(for: viewModel)
+            viewController.preferredContentSize = .init(width: 800, height: 600)
+            return .presentOnRoot(viewController, mode: .asSheet)
+        case .dismiss:
+            return .dismiss()
         }
     }
 

@@ -15,6 +15,8 @@ public final class RuntimeViewerServerLoader: NSObject {
 
     @objc public static func main() {
         let name = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String
-        runtimeEngine = RuntimeEngine(source: .remote(name: name ?? Bundle.main.name, identifier: .init(rawValue: Bundle.main.bundleIdentifier!), role: .server))
+        Task {
+            runtimeEngine = try await RuntimeEngine(name: name ?? Bundle.main.name, identifier: .init(rawValue: Bundle.main.bundleIdentifier!), role: .server)
+        }
     }
 }

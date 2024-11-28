@@ -18,7 +18,7 @@
 		E947C36A2C2A4D0400296B2E /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C3692C2A4D0400296B2E /* AppDelegate.swift */; };
 		E947C36C2C2A4D0400296B2E /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */; };
 		E947C3732C2A4D0500296B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E947C3722C2A4D0500296B2E /* Assets.xcassets */; };
-		E94E36C62CF84AF8006101C8 /* AttachViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachViewController.swift */; };
+		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
 		E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */; };
@@ -40,7 +40,6 @@
 		E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825572C0E202600D9A85D /* MainViewModel.swift */; };
 		E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */; };
 		E9C9E9CD2C2D0F2100C4AA34 /* com.JH.RuntimeViewerService in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		E9C9E9D22C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9D12C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift */; };
 		E9C9E9D42C2D160100C4AA34 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9C9E9D32C2D160100C4AA34 /* RuntimeViewerCore */; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9C9E9DD2C2D169D00C4AA34 /* AppKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */; };
@@ -63,6 +62,7 @@
 		E9F759642CF76B3300BE7A5F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E9F759632CF76B3300BE7A5F /* main.m */; };
 		E9F759682CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */; };
 		E9F759692CF7817200BE7A5F /* RuntimeViewerServer.framework in Resources */ = {isa = PBXBuildFile; fileRef = E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */; };
+		E9F7596D2CF89BB000BE7A5F /* RuntimeEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F7596C2CF89BB000BE7A5F /* RuntimeEngineManager.swift */; };
 		E9FD73CA2C16042F00E391F5 /* LineNumberGutter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */; };
 /* End PBXBuildFile section */
 
@@ -141,7 +141,7 @@
 		E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		E947C3722C2A4D0500296B2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E947C3772C2A4D0500296B2E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		E94E36C52CF84AF8006101C8 /* AttachViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachViewController.swift; sourceTree = "<group>"; };
+		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
 		E9668FFB2CEF7140007B344A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9668FFC2CEF7140007B344A /* launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = launchd.plist; sourceTree = "<group>"; };
@@ -167,7 +167,6 @@
 		E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPlaceholderViewController.swift; sourceTree = "<group>"; };
 		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		E9C9E9CE2C2D10C600C4AA34 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		E9C9E9D12C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerCatalystHelperPlugin.swift; sourceTree = "<group>"; };
 		E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitPlugin.swift; sourceTree = "<group>"; };
 		E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitPluginImpl.swift; sourceTree = "<group>"; };
 		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
@@ -184,6 +183,7 @@
 		E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerServer.h; sourceTree = "<group>"; };
 		E9F759632CF76B3300BE7A5F /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerServerLoader.swift; sourceTree = "<group>"; };
+		E9F7596C2CF89BB000BE7A5F /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
 		E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LineNumberGutter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -304,7 +304,7 @@
 		E94E36C42CF84A9F006101C8 /* Attach Process */ = {
 			isa = PBXGroup;
 			children = (
-				E94E36C52CF84AF8006101C8 /* AttachViewController.swift */,
+				E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */,
 			);
 			path = "Attach Process";
 			sourceTree = "<group>";
@@ -406,6 +406,7 @@
 			children = (
 				E9432FE52C0D614900362862 /* AppDelegate.swift */,
 				E99AE0BB2CBD4A840028B11E /* Document.swift */,
+				E9F7596C2CF89BB000BE7A5F /* RuntimeEngineManager.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -415,7 +416,6 @@
 			children = (
 				E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */,
 				E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */,
-				E9C9E9D12C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift */,
 			);
 			path = RuntimeViewerCatalystHelperPlugin;
 			sourceTree = "<group>";
@@ -705,6 +705,7 @@
 				E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
+				E9F7596D2CF89BB000BE7A5F /* RuntimeEngineManager.swift in Sources */,
 				E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */,
 				E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */,
 				E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */,
@@ -725,7 +726,7 @@
 				E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */,
 				E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */,
 				E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */,
-				E94E36C62CF84AF8006101C8 /* AttachViewController.swift in Sources */,
+				E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -746,7 +747,6 @@
 			files = (
 				E9C9E9DE2C2D169D00C4AA34 /* AppKitPluginImpl.swift in Sources */,
 				E9C9E9DD2C2D169D00C4AA34 /* AppKitPlugin.swift in Sources */,
-				E9C9E9D22C2D15EE00C4AA34 /* RuntimeViewerCatalystHelperPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1169,7 +1169,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
@@ -1207,7 +1207,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
