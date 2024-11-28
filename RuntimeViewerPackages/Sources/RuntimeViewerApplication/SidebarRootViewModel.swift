@@ -25,7 +25,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 
     public override init(appServices: AppServices, router: any Router<SidebarRoute>) {
         super.init(appServices: appServices, router: router)
-        appServices.runtimeListings.$imageNodes
+        appServices.runtimeEngine.$imageNodes
             .asObservable()
             .observe(on: MainScheduler.instance)
             .map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }

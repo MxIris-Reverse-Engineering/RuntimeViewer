@@ -11,10 +11,10 @@ internal import RuntimeViewerCore
 
 @objc
 public final class RuntimeViewerServerLoader: NSObject {
-    private static var runtimeListings: RuntimeListings?
+    private static var runtimeEngine: RuntimeEngine?
 
     @objc public static func main() {
         let name = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String
-        runtimeListings = RuntimeListings(source: .remote(name: name ?? Bundle.main.name, identifier: .init(rawValue: Bundle.main.bundleIdentifier!), role: .server))
+        runtimeEngine = RuntimeEngine(source: .remote(name: name ?? Bundle.main.name, identifier: .init(rawValue: Bundle.main.bundleIdentifier!), role: .server))
     }
 }

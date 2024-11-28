@@ -9,7 +9,7 @@ import Foundation
 import RuntimeViewerCore
 
 class RuntimeViewerCatalystHelperPlugin {
-    let runtimeListingsServer = RuntimeListings(source: .remote(name: "MacCatalyst", identifier: .macCatalyst, role: .server))
+    let runtimeListingsServer = RuntimeEngine(source: .remote(name: "MacCatalyst", identifier: .macCatalyst, role: .server))
 
     init() {
         _ = runtimeListingsServer
