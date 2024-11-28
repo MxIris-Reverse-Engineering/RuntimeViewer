@@ -7,6 +7,16 @@ public class AppServices: NSObject {
     public static let shared = AppServices()
     
     @Observed
-    public var runtimeListings: RuntimeListings = .shared
+    public var runtimeEngine: RuntimeEngine = .shared
+    
+}
+
+
+public class RuntimeListingsManager {
+    public static let shared = RuntimeListingsManager()
+    
+    public private(set) var systemListings: [RuntimeEngine] = []
+    
+    public private(set) var attachedListings: [RuntimeEngine] = []
     
 }

@@ -24,7 +24,7 @@ class InspectorClassViewModel: ViewModel<InspectorRoute> {
         return Output(
             classHierarchy: $runtimeClassName.flatMapLatest { [unowned self] runtimeClassName in
                 do {
-                    return try await appServices.runtimeListings.runtimeObjectHierarchy(.class(named: runtimeClassName)).joined(separator: "\n")
+                    return try await appServices.runtimeEngine.runtimeObjectHierarchy(.class(named: runtimeClassName)).joined(separator: "\n")
                 } catch {
                     print(error.localizedDescription)
                     return runtimeClassName

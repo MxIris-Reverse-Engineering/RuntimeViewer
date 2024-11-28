@@ -18,10 +18,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         DispatchQueue.global().async {
-            _ = RuntimeListings.shared
+            _ = RuntimeEngine.shared
         }
 
-        _ = RuntimeListings.macCatalystClient
+        _ = RuntimeEngine.macCatalystClient
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {}
@@ -44,6 +44,6 @@ extension AppDelegate: NSMenuItemValidation {
     }
 }
 
-extension RuntimeListings {
-    static let macCatalystClient = RuntimeListings(source: .remote(name: "MacCatalyst", identifier: .macCatalyst, role: .client))
+extension RuntimeEngine {
+    static let macCatalystClient = RuntimeEngine(source: .remote(name: "MacCatalyst", identifier: .macCatalyst, role: .client))
 }

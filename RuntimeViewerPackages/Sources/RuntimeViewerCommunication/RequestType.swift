@@ -1,5 +1,5 @@
-import Foundation
 import SwiftyXPC
+import Foundation
 
 public let RuntimeViewerMachServiceName = "com.JH.RuntimeViewerService"
 
@@ -83,7 +83,22 @@ extension SwiftyXPC.XPCListener {
         handler: @escaping (XPCConnection, Request) async throws -> Request.Response
     ) {
         setMessageHandler(name: Request.identifier) { connection, request in
-            return try await handler(connection, request)
+            try await handler(connection, request)
         }
+    }
+}
+
+public struct InjectApplicationRequest: Codable, RequestType {
+    public typealias Response = VoidResponse
+
+    public static let identifier: String = "com.JH.RuntimeViewerService.InjectApplication"
+
+    public let pid: pid_t
+
+    public let dylibURL: URL
+
+    public init(pid: pid_t, dylibURL: URL) {
+        self.pid = pid
+        self.dylibURL = dylibURL
     }
 }
