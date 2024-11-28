@@ -131,10 +131,18 @@ extension SidebarImageViewController {
     }
 
     class ImageLoadedView: XiblessView {
+        #if os(tvOS)
+        let searchBar = UISearchBar.make()
+        #else
         let searchBar = UISearchBar()
+        #endif
 
         let listView: UICollectionView = {
+            #if os(tvOS)
+            var configuration = UICollectionLayoutListConfiguration(appearance: .grouped)
+            #else
             var configuration = UICollectionLayoutListConfiguration(appearance: .sidebar)
+            #endif
             configuration.backgroundColor = UIDevice.current.userInterfaceIdiom == .phone ? .systemBackground : .secondarySystemBackground
             let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
             return collectionView
@@ -228,5 +236,14 @@ extension UIImage {
         }
     }
 }
+
+#if os(tvOS)
+extension Reactive where Base: UIButton {
+    /// Reactive wrapper for target action pattern on `self`.
+    public var tap: ControlEvent<Void> {
+        primaryAction
+    }
+}
+#endif
 
 #endif
