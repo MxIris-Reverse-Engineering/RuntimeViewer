@@ -8,9 +8,9 @@ import RuntimeViewerArchitectures
 
 class ContentTextViewController: ViewController<ContentTextViewModel> {
     let textView = UITextView()
-    
+
     let runtimeObjectClicked = PublishRelay<RuntimeObjectType>()
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -24,7 +24,9 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
 
         textView.do {
             $0.isSelectable = true
+            #if !os(tvOS)
             $0.isEditable = false
+            #endif
             $0.linkTextAttributes = [:]
             $0.delegate = self
             $0.textContainerInset = .init(top: 0, left: 15, bottom: 0, right: 15)
@@ -42,6 +44,7 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
 }
 
 extension ContentTextViewController: UITextViewDelegate {
+    #if !os(tvOS)
     @available(iOS 17.0, *)
     func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
         return UIAction { _ in
@@ -75,6 +78,7 @@ extension ContentTextViewController: UITextViewDelegate {
             return nil
         }
     }
+    #endif
 }
 
 #endif

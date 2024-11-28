@@ -7,13 +7,21 @@ import RuntimeViewerApplication
 
 class SidebarRootViewController: ViewController<SidebarRootViewModel> {
     let collectionView: UICollectionView = {
+        #if os(tvOS)
+        var configuration = UICollectionLayoutListConfiguration(appearance: .grouped)
+        #else
         var configuration = UICollectionLayoutListConfiguration(appearance: .sidebar)
+        #endif
         configuration.backgroundColor = UIDevice.current.userInterfaceIdiom == .phone ? .systemBackground : .secondarySystemBackground
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
         return collectionView
     }()
 
+    #if os(tvOS)
+    let searchBar = UISearchBar.make()
+    #else
     let searchBar = UISearchBar()
+    #endif
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -67,5 +75,29 @@ class SidebarRootViewController: ViewController<SidebarRootViewModel> {
         output.filteredNodes.drive(collectionView.rx.filteredNodes).disposed(by: rx.disposeBag)
     }
 }
+
+#if os(tvOS)
+extension UIColor {
+    static var systemBackground: UIColor {
+        .init { traitCollection in
+            traitCollection.userInterfaceStyle == .light ? "#FFFFFFFF".uiColor : "#000000FF".uiColor
+        }
+    }
+
+    static var secondarySystemBackground: UIColor {
+        .init { traitCollection in
+            traitCollection.userInterfaceStyle == .light ? "#F2F2F7FF".uiColor : "#1C1C1EFF".uiColor
+        }
+    }
+}
+
+extension UISearchBar {
+    static func make() -> UISearchBar {
+        let UISearchBarClass = NSClassFromString("UISearchBar") as! UIView.Type
+        return UISearchBarClass.init(frame: .zero) as! UISearchBar
+    }
+}
+
+#endif
 
 #endif

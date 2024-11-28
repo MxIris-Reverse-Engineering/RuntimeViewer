@@ -11,7 +11,7 @@ class ContentPlaceholderViewController: ViewController<ContentPlaceholderViewMod
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        if #available(iOS 17.0, *) {
+        if #available(iOS 17.0, tvOS 17.0, *) {
             var contentUnavailableConfiguration = UIContentUnavailableConfiguration.empty()
             contentUnavailableConfiguration.text = "Select a runtime object"
             contentUnavailableConfiguration.textProperties.font = .systemFont(ofSize: 25, weight: .regular)
