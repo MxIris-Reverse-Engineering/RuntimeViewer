@@ -41,7 +41,8 @@ class MainViewModel: ViewModel<MainRoute> {
     var selectedRuntimeObject: RuntimeObjectType?
 
     func transform(_ input: Input) -> Output {
-        input.loadFrameworksClick.emitOnNext {
+        input.loadFrameworksClick.emitOnNext { [weak self] in
+            guard let self else { return }
             Task { @MainActor in
                 let openPanel = NSOpenPanel()
                 openPanel.allowedContentTypes = [.framework]
@@ -52,6 +53,7 @@ class MainViewModel: ViewModel<MainRoute> {
                 openPanel.urls.forEach { url in
                     do {
                         try Bundle(url: url)?.loadAndReturnError()
+                        self.appServices.runtimeEngine.reloadData()
                     } catch {
                         print(error)
                         NSAlert(error: error).runModal()

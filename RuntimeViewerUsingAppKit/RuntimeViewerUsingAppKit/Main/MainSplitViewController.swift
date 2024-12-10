@@ -30,7 +30,7 @@ class MainSplitViewController: NSSplitViewController {
         splitViewItems[0].do {
             $0.minimumThickness = 250
             $0.maximumThickness = 400
-        }
+        } 
 
         splitViewItems[1].do {
             $0.minimumThickness = 600

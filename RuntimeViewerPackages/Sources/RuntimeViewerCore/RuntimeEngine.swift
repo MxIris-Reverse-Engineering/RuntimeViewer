@@ -268,7 +268,7 @@ public final class RuntimeEngine {
 
     #endif
 
-    private func reloadData() {
+    public func reloadData() {
         Self.logger.debug("Start reload")
         classList = Self.classNames()
         protocolList = Self.protocolNames()
