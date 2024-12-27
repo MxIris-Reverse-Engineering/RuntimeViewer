@@ -9,6 +9,7 @@
 @_exported import OpenUXKit
 @_exported import FilterUI
 @_exported import MachInjectorUI
+@_exported import Rearrange
 //@_exported import UXKit
 //@_exported import STTextView
 #endif
