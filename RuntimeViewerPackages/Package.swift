@@ -36,6 +36,10 @@ let package = Package(
     ],
     dependencies: [
         .package(
+            url: "https://github.com/ChimeHQ/Rearrange.git",
+            .upToNextMajor(from: "1.6.0")
+        ),
+        .package(
             url: "https://github.com/Mx-Iris/UIFoundation",
             branch: "main"
         ),
@@ -113,7 +117,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-             branch: "main"
+            branch: "main"
         ),
 //        .package(
 //            path: "/Volumes/Repositories/Private/Fork/Library/SwiftyXPC"
@@ -164,7 +168,7 @@ let package = Package(
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "FoundationToolbox", package: "FrameworkToolbox")
+                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
             ]
         ),
         .target(
@@ -179,6 +183,7 @@ let package = Package(
                 .product(name: "SFSymbol", package: "SFSymbol"),
                 .product(name: "IDEIcons", package: "ide-icons"),
                 .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "MachInjectorUI", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
             ]
         ),

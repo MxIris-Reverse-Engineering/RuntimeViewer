@@ -6,15 +6,14 @@
 //
 
 import AppKit
-import RuntimeViewerCore
 import RuntimeViewerUI
-import RuntimeViewerArchitectures
+import RuntimeViewerCore
 import RuntimeViewerApplication
+import RuntimeViewerArchitectures
 
 class ContentTextView: NSTextView {
     override func clicked(onLink link: Any, at charIndex: Int) {}
     override var acceptableDragTypes: [NSPasteboard.PasteboardType] { [] }
-
 }
 
 class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTextViewDelegate {
@@ -29,7 +28,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
     let eventMonitor = EventMonitor()
 
     let jumpToDefinitionRelay = PublishRelay<RuntimeObjectType>()
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -54,7 +53,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
             $0.delegate = self
         }
     }
-    
+
     var isPressedCommand: Bool = false
 
     override func setupBindings(for viewModel: ContentTextViewModel) {
@@ -91,7 +90,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
             return event
         }
     }
-    
+
     func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
         var newMenuItems: [NSMenuItem] = []
         if let runtimeObjectType = view.attributedString().attributes(at: charIndex, effectiveRange: nil)[.link] as? RuntimeObjectType {
@@ -104,8 +103,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
         menu.items = newMenuItems
         return menu
     }
-    
-    
+
     @objc func jumpToDefinitionAction(_ sender: JumpToDefinitionMenuItem) {
         jumpToDefinitionRelay.accept(sender.runtimeObjectType)
     }
@@ -113,11 +111,13 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
 
 class JumpToDefinitionMenuItem: NSMenuItem {
     let runtimeObjectType: RuntimeObjectType
-    
+
     init(runtimeObjectType: RuntimeObjectType) {
         self.runtimeObjectType = runtimeObjectType
         super.init(title: "Jump to Definition", action: nil, keyEquivalent: "")
     }
+
+    @available(*, unavailable)
     required init(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
