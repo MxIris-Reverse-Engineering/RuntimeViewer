@@ -14,3 +14,7 @@ Powered by [ClassDumpRuntime](https://github.com/leptos-null/ClassDumpRuntime)
 The first time you use it you need to install the XPC helper program, this is used to communicate with other apps, click on the icon of the similar tool on the toolbar to install it.
 
 If the Catalyst side and code injection applications do not appear in any directory, try restarting the application.
+
+## Screenshots
+![](./Screenshots/001.png)
+![](./Screenshots/002.png)
