@@ -1,3 +1,5 @@
+<img width="30%" src= "Resources/AppIcon.png">
+
 # Runtime Viewer
 
 Alternative to RuntimeBrowser with a more modern UI and more functionality
@@ -17,5 +19,5 @@ The first time you use it you need to install the XPC helper program, this is us
 If the Catalyst side and code injection applications do not appear in any directory, try restarting the application.
 
 ## Screenshots
-![](./Screenshots/001.png)
-![](./Screenshots/002.png)
+![](./Resources/Screenshot-001.png)
+![](./Resources/Screenshot-002.png)
