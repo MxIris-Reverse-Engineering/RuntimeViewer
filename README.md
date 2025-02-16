@@ -5,7 +5,7 @@ Alternative to RuntimeBrowser with a more modern UI and more functionality
 Powered by [ClassDumpRuntime](https://github.com/leptos-null/ClassDumpRuntime)
 
 ## Highlights
-- Written entirely in AppKit/UIKit, the text view supports type-defined jumps and the exact same highlighting style as Xcode.
+- Written full in AppKit/UIKit, the text view supports type-defined jumps and the exact same highlighting style as Xcode.
 - Support for native frameworks under macOS and frameworks in the iOSSupport directory
 - Easy export of header files
 - Fast loading of frameworks other than dsc
