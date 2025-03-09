@@ -20,7 +20,18 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
         public let stripDtorMethodChecked: Signal<Bool>
         public let addSymbolImageCommentsChecked: Signal<Bool>
         public let addIvarOffsetCommentsChecked: Signal<Bool>
-        public init(stripProtocolConformanceChecked: Signal<Bool>, stripOverridesChecked: Signal<Bool>, stripDuplicatesChecked: Signal<Bool>, stripSynthesizedChecked: Signal<Bool>, stripCtorMethodChecked: Signal<Bool>, stripDtorMethodChecked: Signal<Bool>, addSymbolImageCommentsChecked: Signal<Bool>, addIvarOffsetCommentsChecked: Signal<Bool>) {
+        public let expandIvarRecordTypeMembersChecked: Signal<Bool>
+        public init(
+            stripProtocolConformanceChecked: Signal<Bool>,
+            stripOverridesChecked: Signal<Bool>,
+            stripDuplicatesChecked: Signal<Bool>,
+            stripSynthesizedChecked: Signal<Bool>,
+            stripCtorMethodChecked: Signal<Bool>,
+            stripDtorMethodChecked: Signal<Bool>,
+            addSymbolImageCommentsChecked: Signal<Bool>,
+            addIvarOffsetCommentsChecked: Signal<Bool>,
+            expandIvarRecordTypeMembersChecked: Signal<Bool>
+        ) {
             self.stripProtocolConformanceChecked = stripProtocolConformanceChecked
             self.stripOverridesChecked = stripOverridesChecked
             self.stripDuplicatesChecked = stripDuplicatesChecked
@@ -29,6 +40,7 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
             self.stripDtorMethodChecked = stripDtorMethodChecked
             self.addSymbolImageCommentsChecked = addSymbolImageCommentsChecked
             self.addIvarOffsetCommentsChecked = addIvarOffsetCommentsChecked
+            self.expandIvarRecordTypeMembersChecked = expandIvarRecordTypeMembersChecked
         }
     }
 
@@ -41,6 +53,7 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
         public let stripDtorMethodChecked: Driver<Bool>
         public let addSymbolImageCommentsChecked: Driver<Bool>
         public let addIvarOffsetCommentsChecked: Driver<Bool>
+        public let expandIvarRecordTypeMembersChecked: Driver<Bool>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -52,7 +65,7 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
         input.stripDtorMethodChecked.emitOnNext { AppDefaults[\.options].stripDtorMethod = $0 }.disposed(by: rx.disposeBag)
         input.addSymbolImageCommentsChecked.emitOnNext { AppDefaults[\.options].addSymbolImageComments = $0 }.disposed(by: rx.disposeBag)
         input.addIvarOffsetCommentsChecked.emitOnNext { AppDefaults[\.options].addIvarOffsetComments = $0 }.disposed(by: rx.disposeBag)
-
+        input.expandIvarRecordTypeMembersChecked.emitOnNext { AppDefaults[\.options].expandIvarRecordTypeMembers = $0 }.disposed(by: rx.disposeBag)
         return Output(
             stripProtocolConformanceChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripProtocolConformance),
             stripOverridesChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripOverrides),
@@ -61,7 +74,8 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
             stripCtorMethodChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripCtorMethod),
             stripDtorMethodChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripDtorMethod),
             addSymbolImageCommentsChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.addSymbolImageComments),
-            addIvarOffsetCommentsChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.addIvarOffsetComments)
+            addIvarOffsetCommentsChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.addIvarOffsetComments),
+            expandIvarRecordTypeMembersChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.expandIvarRecordTypeMembers)
         )
     }
 }

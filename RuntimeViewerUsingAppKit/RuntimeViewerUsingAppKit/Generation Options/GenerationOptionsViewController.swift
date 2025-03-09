@@ -29,6 +29,8 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
 
     let addIvarOffsetCommentsCheckbox = CheckboxButton(title: "Add Ivar Offset Comments")
 
+    let expandIvarRecordTypeMembersCheckbox = CheckboxButton(title: "Expand Ivar Record Type Members")
+    
     lazy var generationOptionsView = VStackView(alignment: .left, spacing: 10) {
         generationOptionsLabel
         stripProtocolConformanceCheckbox
@@ -39,6 +41,7 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
         stripDtorMethodCheckbox
         addSymbolImageCommentsCheckbox
         addIvarOffsetCommentsCheckbox
+        expandIvarRecordTypeMembersCheckbox
     }
 
     override func viewDidLoad() {
@@ -66,7 +69,8 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
             stripCtorMethodChecked: stripCtorMethodCheckbox.rx.state.asSignal().map { $0 == .on },
             stripDtorMethodChecked: stripDtorMethodCheckbox.rx.state.asSignal().map { $0 == .on },
             addSymbolImageCommentsChecked: addSymbolImageCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
-            addIvarOffsetCommentsChecked: addIvarOffsetCommentsCheckbox.rx.state.asSignal().map { $0 == .on }
+            addIvarOffsetCommentsChecked: addIvarOffsetCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
+            expandIvarRecordTypeMembersChecked: expandIvarRecordTypeMembersCheckbox.rx.state.asSignal().map { $0 == .on }
         )
         let output = viewModel.transform(input)
 
@@ -78,6 +82,7 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
         output.stripDtorMethodChecked.drive(stripDtorMethodCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
         output.addSymbolImageCommentsChecked.drive(addSymbolImageCommentsCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
         output.addIvarOffsetCommentsChecked.drive(addIvarOffsetCommentsCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
+        output.expandIvarRecordTypeMembersChecked.drive(expandIvarRecordTypeMembersCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
     }
 }
 
