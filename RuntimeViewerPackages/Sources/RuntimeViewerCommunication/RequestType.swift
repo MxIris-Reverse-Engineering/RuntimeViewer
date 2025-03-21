@@ -17,6 +17,21 @@ public struct VoidResponse: ResponseType, Codable {
     public static var empty: VoidResponse { VoidResponse() }
 }
 
+public protocol RuntimeConnection {
+    func sendMessage<Request: Codable, Response: Codable>(name: String, request: Request) async throws -> Response
+}
+
+public protocol RuntimeListener {
+    func setMessageHandler<Request: Codable, Response: Codable>(
+        name: String,
+        handler: @escaping (Request) async throws -> Response
+    )
+}
+
+public protocol RuntimeEndpoint {
+    
+}
+
 extension XPCConnection {
     @discardableResult
     public func sendMessage<Request: RequestType>(request: Request) async throws -> Request.Response {
