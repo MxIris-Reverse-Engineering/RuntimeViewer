@@ -5,13 +5,14 @@
 //  Created by JH on 11/30/24.
 //
 
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import Foundation
 import SwiftyXPC
 
-public struct FetchEndpointRequest: Codable, RequestType {
+public struct FetchEndpointRequest: Codable, RuntimeRequest {
     public static let identifier: String = "com.JH.RuntimeViewerService.FetchEndpoint"
 
-    public struct Response: ResponseType, Codable {
+    public struct Response: RuntimeResponse, Codable {
         public let endpoint: XPCEndpoint
 
         public init(endpoint: XPCEndpoint) {
@@ -25,3 +26,4 @@ public struct FetchEndpointRequest: Codable, RequestType {
         self.identifier = identifier
     }
 }
+#endif

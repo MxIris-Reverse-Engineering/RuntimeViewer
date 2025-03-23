@@ -4,12 +4,8 @@ import Foundation
 import MachO.dyld
 import ClassDumpRuntime
 import FoundationToolbox
-#if os(macOS)
-import SwiftyXPC
 import RuntimeViewerCommunication
-#endif
-
-
+import Queue
 
 public final class RuntimeEngine {
     private enum DyldRegisterNotifications {
@@ -21,99 +17,65 @@ public final class RuntimeEngine {
 
     private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeEngine")
 
+    private let queue = AsyncQueue()
+
     @Published public private(set) var classList: [String] = [] {
         didSet {
-            #if os(macOS)
-            if case let .remote(_, _, role) = source, role.isServer, let connection {
-                Task {
-                    do {
-                        try await connection.sendMessage(name: CommandIdentifiers.classList, request: classList)
-                    } catch {
-                        Self.logger.error("\(error)")
-                    }
-                }
-            }
-            #endif
+//            if let role = source.remoteRole, role.isServer, let connection {
+//                queue.addOperation {
+//                    try await connection.sendMessage(name: CommandIdentifiers.classList, request: self.classList)
+//                }
+//            }
         }
     }
 
     @Published public private(set) var protocolList: [String] = [] {
         didSet {
-            #if os(macOS)
-            if case let .remote(_, _, role) = source, role.isServer, let connection {
-                Task {
-                    do {
-                        try await connection.sendMessage(name: CommandIdentifiers.protocolList, request: protocolList)
-                    } catch {
-                        Self.logger.error("\(error)")
-                    }
-                }
-            }
-            #endif
+//            if let role = source.remoteRole, role.isServer, let connection {
+//                queue.addOperation {
+//                    try await connection.sendMessage(name: CommandIdentifiers.protocolList, request: self.protocolList)
+//                }
+//            }
         }
     }
 
     @Published public private(set) var imageList: [String] = [] {
         didSet {
-            #if os(macOS)
-            if case let .remote(_, _, role) = source, role.isServer, let connection {
-                Task {
-                    do {
-                        try await connection.sendMessage(name: CommandIdentifiers.imageList, request: imageList)
-                    } catch {
-                        Self.logger.error("\(error)")
-                    }
-                }
-            }
-            #endif
+//            if let role = source.remoteRole, role.isServer, let connection {
+//                queue.addOperation {
+//                    try await connection.sendMessage(name: CommandIdentifiers.imageList, request: self.imageList)
+//                }
+//            }
         }
     }
 
     @Published public private(set) var protocolToImage: [String: String] = [:] {
         didSet {
-            #if os(macOS)
-            if case let .remote(_, _, role) = source, role.isServer, let connection {
-                Task {
-                    do {
-                        try await connection.sendMessage(name: CommandIdentifiers.protocolToImage, request: protocolToImage)
-                    } catch {
-                        Self.logger.error("\(error)")
-                    }
-                }
-            }
-            #endif
+//            if let role = source.remoteRole, role.isServer, let connection {
+//                queue.addOperation {
+//                    try await connection.sendMessage(name: CommandIdentifiers.protocolToImage, request: self.protocolToImage)
+//                }
+//            }
         }
     }
 
     @Published public private(set) var imageToProtocols: [String: [String]] = [:] {
         didSet {
-            #if os(macOS)
-            if case let .remote(_, _, role) = source, role.isServer, let connection {
-                Task {
-                    do {
-                        try await connection.sendMessage(name: CommandIdentifiers.imageToProtocols, request: imageToProtocols)
-                    } catch {
-                        Self.logger.error("\(error)")
-                    }
-                }
-            }
-            #endif
+//            if let role = source.remoteRole, role.isServer, let connection {
+//                queue.addOperation {
+//                    try await connection.sendMessage(name: CommandIdentifiers.imageToProtocols, request: self.imageToProtocols)
+//                }
+//            }
         }
     }
 
     @Published public private(set) var imageNodes: [RuntimeNamedNode] = [] {
         didSet {
-            #if os(macOS)
-            if case let .remote(_, _, role) = source, role.isServer, let connection {
-                Task {
-                    do {
-                        try await connection.sendMessage(name: CommandIdentifiers.imageNodes, request: imageNodes)
-                    } catch {
-                        Self.logger.error("\(error)")
-                    }
-                }
-            }
-            #endif
+//            if let role = source.remoteRole, role.isServer, let connection {
+//                queue.addOperation {
+//                    try await connection.sendMessage(name: CommandIdentifiers.imageNodes, request: self.imageNodes)
+//                }
+//            }
         }
     }
 
@@ -124,7 +86,7 @@ public final class RuntimeEngine {
         static let protocolToImage = command("protocolToImage")
         static let imageToProtocols = command("imageToProtocols")
         static let loadImage = command("loadImage")
-        static let senderLaunched = command("senderLaunched")
+        static let serverLaunched = command("serverLaunched")
         static let isImageLoaded = command("isImageLoaded")
         static let classNamesInImage = command("classNamesInImage")
         static let patchImagePathForDyld = command("patchImagePathForDyld")
@@ -133,6 +95,7 @@ public final class RuntimeEngine {
         static let runtimeObjectHierarchy = command("runtimeObjectHierarchy")
         static let runtimeObjectInfo = command("runtimeObjectInfo")
         static let imageNameOfClassName = command("imageNameOfClassName")
+        static let observeRuntime = command("observeRuntime")
         static func command(_ command: String) -> String { "com.JH.RuntimeViewer.RuntimeListings.\(command)" }
     }
 
@@ -140,133 +103,87 @@ public final class RuntimeEngine {
 
     private let shouldReload = PassthroughSubject<Void, Never>()
 
+    private let communicator = RuntimeCommunicator()
+
     private var subscriptions: Set<AnyCancellable> = []
 
-    #if os(macOS)
-    /// The connection to communicate with the mach service
-    private var serviceConnection: SwiftyXPC.XPCConnection?
-    /// The listener for the sender or receiver
-    private var listener: SwiftyXPC.XPCListener?
     /// The connection to the sender or receiver
-    private var connection: SwiftyXPC.XPCConnection?
-    #endif
+    private var connection: RuntimeConnection?
 
     public init() {
         self.source = .local
         observeRuntime()
     }
 
-    #if os(macOS)
-
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
     public static func macCatalystClient() async throws -> Self {
-        try await Self(name: "Mac Catalyst", identifier: .macCatalyst, role: .client)
+        try await Self(source: .macCatalystClient)
     }
 
     public static func macCatalystServer() async throws -> Self {
-        try await Self(name: "Mac Catalyst", identifier: .macCatalyst, role: .server)
+        try await Self(source: .macCatalystServer)
     }
+    #endif
 
-    public init(name: String, identifier: RuntimeSource.Identifier, role: RuntimeSource.Role) async throws {
-        self.source = .remote(name: name, identifier: identifier, role: role)
-        let serviceConnection = try await connectToMachService()
-        switch role {
-        case .server:
-            try await setupMessageHandlerForServer(with: serviceConnection, identifier: identifier)
-        case .client:
-            try await setupMessageHandlerForClient(with: serviceConnection, identifier: identifier)
+    public init(source: RuntimeSource) async throws {
+        self.source = source
+        if let role = source.remoteRole {
+            switch role {
+            case .server:
+                self.connection = try await communicator.connect(to: source)
+                setupMessageHandlerForServer()
+                observeRuntime()
+            case .client:
+                self.connection = try await communicator.connect(to: source) { connection in
+                    self.connection = connection
+                    self.setupMessageHandlerForClient()
+                }
+            }
+        } else {
+            observeRuntime()
         }
     }
 
-    @discardableResult
-    private func connectToMachService() async throws -> SwiftyXPC.XPCConnection {
-        let serviceConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
-        serviceConnection.activate()
-        self.serviceConnection = serviceConnection
-        try await serviceConnection.sendMessage(request: PingRequest())
-        Self.logger.info("Ping mach service successfully")
-        return serviceConnection
-    }
-
-    private func setupMessageHandlerForServer(with serviceConnection: XPCConnection, identifier: RuntimeSource.Identifier) async throws {
-        let listener = try XPCListener(type: .anonymous, codeSigningRequirement: nil)
-        self.listener = listener
-        let response = try await serviceConnection.sendMessage(request: FetchEndpointRequest(identifier: identifier.rawValue))
-        let clientConnection = try XPCConnection(type: .remoteServiceFromEndpoint(response.endpoint))
-        clientConnection.activate()
-        connection = clientConnection
-        try await clientConnection.sendMessage(request: PingRequest())
-        Self.logger.info("Ping client successfully")
-        observeRuntime()
-        listener.setMessageHandler(name: PingRequest.identifier) { (_: XPCConnection, _: PingRequest) -> PingRequest.Response in
-            return .empty
-        }
+    private func setupMessageHandlerForServer() {
         setMessageHandlerBinding(forName: CommandIdentifiers.isImageLoaded, of: self) { $0.isImageLoaded(path:) }
         setMessageHandlerBinding(forName: CommandIdentifiers.loadImage, of: self) { $0.loadImage(at:) }
         setMessageHandlerBinding(forName: CommandIdentifiers.classNamesInImage, of: self) { $0.classNamesIn(image:) }
         setMessageHandlerBinding(forName: CommandIdentifiers.patchImagePathForDyld, of: self) { $0.patchImagePathForDyld(_:) }
         setMessageHandlerBinding(forName: CommandIdentifiers.runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(_:) }
         setMessageHandlerBinding(forName: CommandIdentifiers.imageNameOfClassName, of: self) { $0.imageName(ofClass:) }
-
-        listener.setMessageHandler(name: CommandIdentifiers.semanticStringForRuntimeObjectWithOptions) { [unowned self] (_: XPCConnection, request: SemanticStringRequest) -> Data? in
+        connection?.setMessageHandler(name: CommandIdentifiers.semanticStringForRuntimeObjectWithOptions) { [unowned self] (request: SemanticStringRequest) -> Data? in
             try await semanticString(for: request.runtimeObject, options: request.options).map { try NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true) }
         }
-
-        listener.activate()
-
-        try await clientConnection.sendMessage(name: CommandIdentifiers.senderLaunched, request: listener.endpoint)
     }
 
-    private func setupMessageHandlerForClient(with serviceConnection: XPCConnection, identifier: RuntimeSource.Identifier) async throws {
-        let listener = try XPCListener(type: .anonymous, codeSigningRequirement: nil)
-        self.listener = listener
+    private func setupMessageHandlerForClient() {
         setMessageHandlerBinding(forName: CommandIdentifiers.classList, to: \.classList)
         setMessageHandlerBinding(forName: CommandIdentifiers.protocolList, to: \.protocolList)
         setMessageHandlerBinding(forName: CommandIdentifiers.imageList, to: \.imageList)
         setMessageHandlerBinding(forName: CommandIdentifiers.protocolToImage, to: \.protocolToImage)
         setMessageHandlerBinding(forName: CommandIdentifiers.imageToProtocols, to: \.imageToProtocols)
         setMessageHandlerBinding(forName: CommandIdentifiers.imageNodes, to: \.imageNodes)
-
-        listener.setMessageHandler(name: CommandIdentifiers.senderLaunched) { [weak self] (_: XPCConnection, endpoint: XPCEndpoint) in
-            guard let self else { return }
-            let serverConnection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
-            serverConnection.activate()
-            self.connection = serverConnection
-            _ = try await serverConnection.sendMessage(request: PingRequest())
-            Self.logger.info("Ping server successfully")
-        }
-
-        listener.setMessageHandler(name: PingRequest.identifier) { (_: XPCConnection, _: PingRequest) -> PingRequest.Response in
-            return .empty
-        }
-
-        listener.activate()
-        try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
-        if identifier == .macCatalyst {
-            try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
-        }
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: String, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
-        listener?.setMessageHandler(name: name) { [unowned object] (_: XPCConnection, request: Request) in
+        connection?.setMessageHandler(name: name) { [unowned object] (request: Request) in
             try await function(object)(request)
         }
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable, Response: Codable>(forName name: String, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Response)) {
-        listener?.setMessageHandler(name: name) { [unowned object] (_: XPCConnection, request: Request) -> Response in
+        connection?.setMessageHandler(name: name) { [unowned object] (request: Request) -> Response in
             let result = try await function(object)(request)
             return result
         }
     }
 
     private func setMessageHandlerBinding<Response: Codable>(forName name: String, to keyPath: ReferenceWritableKeyPath<RuntimeEngine, Response>) {
-        listener?.setMessageHandler(name: name) { [weak self] (_: XPCConnection, value: Response) in
+        connection?.setMessageHandler(name: name) { [weak self] (response: Response) in
             guard let self else { return }
-            self[keyPath: keyPath] = value
+            self[keyPath: keyPath] = response
         }
     }
-
-    #endif
 
     public func reloadData() {
         Self.logger.debug("Start reload")
@@ -275,6 +192,7 @@ public final class RuntimeEngine {
         imageList = Self.imageNames()
         imageNodes = [Self.dyldSharedCacheImageRootNode, Self.otherImageRootNode]
         Self.logger.debug("End reload")
+        sendRemoteDataIfNeeded()
     }
 
     private func observeRuntime() {
@@ -307,6 +225,20 @@ public final class RuntimeEngine {
                 self.imageToProtocols = imageToProtocols
             }
             .store(in: &subscriptions)
+
+        sendRemoteDataIfNeeded()
+    }
+
+    private func sendRemoteDataIfNeeded() {
+        guard let role = source.remoteRole, role.isServer, let connection else { return }
+        Task {
+            try await connection.sendMessage(name: CommandIdentifiers.classList, request: self.classList)
+            try await connection.sendMessage(name: CommandIdentifiers.protocolList, request: self.protocolList)
+            try await connection.sendMessage(name: CommandIdentifiers.imageList, request: self.imageList)
+            try await connection.sendMessage(name: CommandIdentifiers.imageNodes, request: self.imageNodes)
+            try await connection.sendMessage(name: CommandIdentifiers.protocolToImage, request: self.protocolToImage)
+            try await connection.sendMessage(name: CommandIdentifiers.imageToProtocols, request: self.imageToProtocols)
+        }
     }
 
     private func observeDyldRegister() {
@@ -360,10 +292,6 @@ public final class RuntimeEngine {
     }
 }
 
-#if !os(macOS)
-typealias XPCConnection = Void
-#endif
-
 // MARK: - Requests
 
 extension RuntimeEngine {
@@ -371,19 +299,12 @@ extension RuntimeEngine {
         case senderConnectionIsLose
     }
 
-    private func request<T>(local: () throws -> T, remote: (_ senderConnection: XPCConnection) async throws -> T) async throws -> T {
-        switch source {
-        case .local:
+    private func request<T>(local: () throws -> T, remote: (_ senderConnection: RuntimeConnection) async throws -> T) async throws -> T {
+        if let remoteRole = source.remoteRole, remoteRole.isClient {
+            guard let connection else { throw RequestError.senderConnectionIsLose }
+            return try await remote(connection)
+        } else {
             return try local()
-        #if os(macOS)
-        case let .remote(_, _, role):
-            if role.isServer {
-                return try local()
-            } else {
-                guard let connection else { throw RequestError.senderConnectionIsLose }
-                return try await remote(connection)
-            }
-        #endif
         }
     }
 
@@ -391,11 +312,7 @@ extension RuntimeEngine {
         try await request {
             imageList.contains(Self.patchImagePathForDyld(path))
         } remote: {
-            #if os(macOS)
             return try await $0.sendMessage(name: CommandIdentifiers.isImageLoaded, request: path)
-            #else
-            fatalError()
-            #endif
         }
     }
 
@@ -403,9 +320,7 @@ extension RuntimeEngine {
         try await request {
             try Self.loadImage(at: path)
         } remote: {
-            #if os(macOS)
-            try await $0.sendMessage(name: CommandIdentifiers.isImageLoaded, request: path)
-            #endif
+            try await $0.sendMessage(name: CommandIdentifiers.loadImage, request: path)
         }
     }
 
@@ -413,11 +328,7 @@ extension RuntimeEngine {
         try await request {
             Self.classNamesIn(image: image)
         } remote: {
-            #if os(macOS)
             return try await $0.sendMessage(name: CommandIdentifiers.classNamesInImage, request: image)
-            #else
-            fatalError()
-            #endif
         }
     }
 
@@ -425,11 +336,7 @@ extension RuntimeEngine {
         try await request {
             Self.patchImagePathForDyld(imagePath)
         } remote: {
-            #if os(macOS)
             return try await $0.sendMessage(name: CommandIdentifiers.patchImagePathForDyld, request: imagePath)
-            #else
-            fatalError()
-            #endif
         }
     }
 
@@ -437,11 +344,7 @@ extension RuntimeEngine {
         try await request {
             Self.imageName(ofClass: className)
         } remote: {
-            #if os(macOS)
             return try await $0.sendMessage(name: CommandIdentifiers.imageNameOfClassName, request: className)
-            #else
-            fatalError()
-            #endif
         }
     }
 
@@ -454,12 +357,8 @@ extension RuntimeEngine {
         try await request {
             runtimeObject.semanticString(for: options)
         } remote: {
-            #if os(macOS)
             let semanticStringData: Data? = try await $0.sendMessage(name: CommandIdentifiers.semanticStringForRuntimeObjectWithOptions, request: SemanticStringRequest(runtimeObject: runtimeObject, options: options))
             return try semanticStringData.flatMap { try NSKeyedUnarchiver.unarchivedObject(ofClass: CDSemanticString.self, from: $0) }
-            #else
-            fatalError()
-            #endif
         }
     }
 
@@ -467,11 +366,7 @@ extension RuntimeEngine {
         try await request {
             runtimeObject.hierarchy()
         } remote: {
-            #if os(macOS)
             return try await $0.sendMessage(name: CommandIdentifiers.runtimeObjectHierarchy, request: runtimeObject)
-            #else
-            fatalError()
-            #endif
         }
     }
 
@@ -479,11 +374,7 @@ extension RuntimeEngine {
         try await request {
             try runtimeObject.info()
         } remote: {
-            #if os(macOS)
             return try await $0.sendMessage(name: CommandIdentifiers.runtimeObjectInfo, request: runtimeObject)
-            #else
-            fatalError()
-            #endif
         }
     }
 }
@@ -502,17 +393,17 @@ extension RuntimeEngine {
             guard protocolToImageCopy[protocolName] == nil else { continue } // happy path
 
             guard let prtcl = NSProtocolFromString(protocolName) else {
-                logger.error("Failed to find protocol named '\(protocolName, privacy: .public)'")
+//                logger.error("Failed to find protocol named '\(protocolName, privacy: .public)'")
                 continue
             }
 
             guard dladdr(protocol_getName(prtcl), &dlInfo) != 0 else {
-                logger.warning("Failed to get dl_info for protocol named '\(protocolName, privacy: .public)'")
+//                logger.warning("Failed to get dl_info for protocol named '\(protocolName, privacy: .public)'")
                 continue
             }
 
             guard let abc = dlInfo.dli_fname else {
-                logger.error("Failed to get dli_fname for protocol named '\(protocolName, privacy: .public)'")
+//                logger.error("Failed to get dli_fname for protocol named '\(protocolName, privacy: .public)'")
                 continue
             }
 

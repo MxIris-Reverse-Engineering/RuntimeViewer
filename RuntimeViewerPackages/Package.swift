@@ -138,6 +138,18 @@ let package = Package(
             url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/mattmassicotte/Queue",
+            from: "0.1.0"
+        ),
+        .package(
+            url: "https://github.com/reddavis/Asynchrone",
+            from: "0.1.0"
+        ),
+        .package(
+            url: "https://github.com/groue/Semaphore",
+            from: "0.1.0"
+        ),
     ],
     targets: [
         .target(
@@ -164,11 +176,11 @@ let package = Package(
         .target(
             name: "RuntimeViewerCore",
             dependencies: [
-                .target(name: "RuntimeViewerCommunication", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerCommunication"),
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
-                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
+                .product(name: "Queue", package: "Queue"),
             ]
         ),
         .target(
@@ -207,6 +219,8 @@ let package = Package(
             name: "RuntimeViewerCommunication",
             dependencies: [
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "Asynchrone", package: "Asynchrone"),
+                .product(name: "Semaphore", package: "Semaphore"),
             ]
         ),
     ]
