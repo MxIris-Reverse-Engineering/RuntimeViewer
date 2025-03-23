@@ -1,5 +1,7 @@
 #if os(macOS)
+import Foundation
 import ServiceManagement
+import RuntimeViewerCommunication
 
 public enum HelperAuthorizationError: Error {
     case message(String)
