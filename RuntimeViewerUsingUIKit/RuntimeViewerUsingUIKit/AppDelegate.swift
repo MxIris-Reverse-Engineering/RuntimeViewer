@@ -7,12 +7,20 @@
 
 import UIKit
 import RuntimeViewerCore
+import RuntimeViewerCommunication
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+    
+    var remoteRuntimeEngine: RuntimeEngine?
+    
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         DispatchQueue.global().async {
             _ = RuntimeEngine.shared
+            
+        }
+        Task {
+            remoteRuntimeEngine = try await RuntimeEngine(source: .bonjourServer(name: UIDevice.current.name, identifier: .init(rawValue: UIDevice.current.name)))
         }
         return true
     }

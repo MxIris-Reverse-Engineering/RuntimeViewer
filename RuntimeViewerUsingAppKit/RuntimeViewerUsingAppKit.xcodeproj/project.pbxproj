@@ -949,6 +949,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Allow authorization to launch other apps";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Runtime Viewer requires local network permissions to use the Bonjour discovery service";
 				INFOPLIST_KEY_NSMainNibFile = MainMenu;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -983,6 +984,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Allow authorization to launch other apps";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Runtime Viewer requires local network permissions to use the Bonjour discovery service";
 				INFOPLIST_KEY_NSMainNibFile = MainMenu;
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
 				LD_RUNPATH_SEARCH_PATHS = (

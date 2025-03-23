@@ -62,6 +62,9 @@ extension MainCoordinator: UISplitViewControllerDelegate {
         -> UISplitViewController.Column {
         return .primary
     }
+    
+    func splitViewControllerDidCollapse(_ svc: UISplitViewController) {
+    }
 }
 
 extension MainCoordinator: SidebarCoordinatorDelegate {

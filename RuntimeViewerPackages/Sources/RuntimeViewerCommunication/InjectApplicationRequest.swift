@@ -5,10 +5,9 @@
 //  Created by JH on 11/30/24.
 //
 
-
 import Foundation
 
-public struct InjectApplicationRequest: Codable, RequestType {
+public struct InjectApplicationRequest: Codable, RuntimeRequest {
     public typealias Response = VoidResponse
 
     public static let identifier: String = "com.JH.RuntimeViewerService.InjectApplication"
