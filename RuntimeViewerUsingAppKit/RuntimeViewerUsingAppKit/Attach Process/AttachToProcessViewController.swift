@@ -24,13 +24,13 @@ class AttachToProcessViewModel: ViewModel<MainRoute> {
         input.attachToProcess.emit(onNext: { [weak self] app in
             guard let self,
                   let name = app.localizedName,
-                  let bundleIdentifier = app.bundleIdentifier,
-                  let serverFrameworkURL = Bundle.main.url(forResource: "RuntimeViewerServer", withExtension: "framework"),
-                  let dylibURL = Bundle(url: serverFrameworkURL)?.executableURL
+                  let bundleIdentifier = app.bundleIdentifier
             else { return }
 
             Task {
                 do {
+                    try await RuntimeInjectClient.shared.installServerFrameworkIfNeeded()
+                    guard let dylibURL = Bundle(url: RuntimeInjectClient.shared.serverFrameworkDestinationURL)?.executableURL else { return }
                     try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier)
                     try await RuntimeInjectClient.shared.injectApplication(pid: app.processIdentifier, dylibURL: dylibURL)
                 } catch {

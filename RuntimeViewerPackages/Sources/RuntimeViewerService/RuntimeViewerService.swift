@@ -5,7 +5,6 @@ import RuntimeViewerCommunication
 import MachInjector
 
 public final class RuntimeViewerService {
-
     private let listener: SwiftyXPC.XPCListener
 
     private var catalystHelperApplication: NSRunningApplication?
@@ -19,6 +18,7 @@ public final class RuntimeViewerService {
         listener.setMessageHandler(handler: launchCatalystHelper)
         listener.setMessageHandler(handler: ping)
         listener.setMessageHandler(handler: injectApplication)
+        listener.setMessageHandler(handler: fileOperation)
         listener.activate()
     }
 
@@ -46,7 +46,27 @@ public final class RuntimeViewerService {
         catalystHelperApplication = try await NSWorkspace.shared.openApplication(at: request.helperURL, configuration: configuration)
         return .empty
     }
-    
+
+    private func fileOperation(_ connection: XPCConnection, request: FileOperationRequest) async throws -> FileOperationRequest.Response {
+        let fileManager = FileManager.default
+        switch request.operation {
+        case let .createDirectory(url, isIntermediateDirectories):
+            try fileManager.createDirectory(at: url, withIntermediateDirectories: isIntermediateDirectories)
+        case let .remove(url: url):
+            try fileManager.removeItem(at: url)
+        case let .move(from: from, to: to):
+            try fileManager.moveItem(at: from, to: to)
+        case let .copy(from: from, to: to):
+            if fileManager.fileExists(atPath: to.path) {
+                try fileManager.removeItem(at: to)
+            }
+            try fileManager.copyItem(at: from, to: to)
+        case let .write(url: url, data: data):
+            try data.write(to: url)
+        }
+        return .empty
+    }
+
     private func injectApplication(_ connection: XPCConnection, request: InjectApplicationRequest) async throws -> InjectApplicationRequest.Response {
         try await MainActor.run {
             try MachInjector.inject(pid: request.pid, dylibPath: request.dylibURL.path)

@@ -17,7 +17,14 @@ class RuntimeXPCConnection: RuntimeConnection {
 
     fileprivate let serviceConnection: SwiftyXPC.XPCConnection
 
-    fileprivate var connection: SwiftyXPC.XPCConnection?
+    fileprivate var connection: SwiftyXPC.XPCConnection? {
+        didSet {
+            guard let connection else { return }
+            connection.errorHandler = { connection, error in
+                print(error)
+            }
+        }
+    }
 
     fileprivate static let logger = Logger(subsystem: "com.JH.RuntimeCommunication", category: "RuntimeXPCConnection")
 
@@ -27,6 +34,9 @@ class RuntimeXPCConnection: RuntimeConnection {
         listener.activate()
         listener.setMessageHandler(requestType: PingRequest.self) { connection, request in
             return .empty
+        }
+        listener.errorHandler = { connection, error in
+            print(error)
         }
         self.listener = listener
         self.serviceConnection = try await Self.connectToMachService()
@@ -122,23 +132,26 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection {
         try await super.init(identifier: identifier, modify: modify)
         try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
 
-        if identifier == .macCatalyst {
-            try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
-        }
-        connection = try await withCheckedThrowingContinuation { continuation in
-            listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { (_: XPCConnection, endpoint: XPCEndpoint) in
-                do {
-                    let connection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
-                    connection.activate()
-                    _ = try await connection.sendMessage(request: PingRequest())
-                    continuation.resume(returning: connection)
-                } catch {
-                    continuation.resume(throwing: error)
-                    throw error
-                }
+//        if identifier == .macCatalyst {
+//            try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
+//        }
+//        connection = try await withCheckedThrowingContinuation { continuation in
+            listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { [weak self] (_: XPCConnection, endpoint: XPCEndpoint) in
+//                do {
+                guard let self else { return }
+                let connection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
+                connection.activate()
+                _ = try await connection.sendMessage(request: PingRequest())
+                self.connection = connection
+                Self.logger.info("Ping server successfully")
+//                    continuation.resume(returning: connection)
+//                } catch {
+//                    continuation.resume(throwing: error)
+//                    throw error
+//                }
             }
-        }
-        Self.logger.info("Ping server successfully")
+//        }
+        
     }
 }
 
