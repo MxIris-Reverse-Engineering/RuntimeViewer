@@ -33,75 +33,79 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         self.imageName = namedNode.name
         super.init(appServices: appServices, router: router)
         Task {
-            let classNames = try await runtimeEngine.classNamesIn(image: imagePath)
-            let protocolNames = try runtimeEngine.imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
-            let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
-            await MainActor.run {
-                self.classNames = classNames
-                self.protocolNames = protocolNames
+            do {
+                let classNames = try await runtimeEngine.classNamesIn(image: imagePath)
+                let protocolNames = try runtimeEngine.imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
+                let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
+                await MainActor.run {
+                    self.classNames = classNames
+                    self.protocolNames = protocolNames
 
-                let searchString = ""
-                let searchScope: RuntimeTypeSearchScope = .all
+                    let searchString = ""
+                    let searchScope: RuntimeTypeSearchScope = .all
 
-                self.searchString = searchString
-                self.searchScope = searchScope
+                    self.searchString = searchString
+                    self.searchScope = searchScope
 
-                self.runtimeObjects = Self.runtimeObjectsFor(
-                    classNames: classNames, protocolNames: protocolNames,
-                    searchString: searchString, searchScope: searchScope
-                )
-
-                self.loadState = loadState
-            }
-
-            runtimeEngine.$classList
-                .asObservable()
-                .flatMap { [unowned self] _ in
-                    try await runtimeEngine.classNamesIn(image: imagePath)
-                }
-                .catchAndReturn([])
-                .observeOnMainScheduler()
-                .bind(to: $classNames)
-                .disposed(by: rx.disposeBag)
-
-            runtimeEngine.$imageToProtocols
-                .asObservable()
-                .flatMap { [unowned self] imageToProtocols in
-                    try imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
-                }
-                .catchAndReturn([])
-                .observeOnMainScheduler()
-                .bind(to: $protocolNames)
-                .disposed(by: rx.disposeBag)
-
-            let debouncedSearch = $searchString
-                .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
-                .asObservable()
-
-            $searchScope
-                .asPublisher()
-                .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
-                    Self.runtimeObjectsFor(
-                        classNames: $2, protocolNames: $3,
-                        searchString: $1, searchScope: $0
+                    self.runtimeObjects = Self.runtimeObjectsFor(
+                        classNames: classNames, protocolNames: protocolNames,
+                        searchString: searchString, searchScope: searchScope
                     )
-                }
-                .asObservable()
-                .map { $0.sorted() }
-                .bind(to: $runtimeObjects)
-                .disposed(by: rx.disposeBag)
 
-            runtimeEngine.$imageList
-                .asObservable()
-                .flatMap { [unowned self] imageList in
-                    try imageList.contains(await runtimeEngine.patchImagePathForDyld(imagePath))
+                    self.loadState = loadState
                 }
-                .catchAndReturn(false)
-                .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
-                .map { _ in RuntimeImageLoadState.loaded }
-                .observeOnMainScheduler()
-                .bind(to: $loadState)
-                .disposed(by: rx.disposeBag)
+
+                runtimeEngine.$classList
+                    .asObservable()
+                    .flatMap { [unowned self] _ in
+                        try await runtimeEngine.classNamesIn(image: imagePath)
+                    }
+                    .catchAndReturn([])
+                    .observeOnMainScheduler()
+                    .bind(to: $classNames)
+                    .disposed(by: rx.disposeBag)
+
+                runtimeEngine.$imageToProtocols
+                    .asObservable()
+                    .flatMap { [unowned self] imageToProtocols in
+                        try imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
+                    }
+                    .catchAndReturn([])
+                    .observeOnMainScheduler()
+                    .bind(to: $protocolNames)
+                    .disposed(by: rx.disposeBag)
+
+                let debouncedSearch = $searchString
+                    .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
+                    .asObservable()
+
+                $searchScope
+                    .asPublisher()
+                    .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
+                        Self.runtimeObjectsFor(
+                            classNames: $2, protocolNames: $3,
+                            searchString: $1, searchScope: $0
+                        )
+                    }
+                    .asObservable()
+                    .map { $0.sorted() }
+                    .bind(to: $runtimeObjects)
+                    .disposed(by: rx.disposeBag)
+
+                runtimeEngine.$imageList
+                    .asObservable()
+                    .flatMap { [unowned self] imageList in
+                        try imageList.contains(await runtimeEngine.patchImagePathForDyld(imagePath))
+                    }
+                    .catchAndReturn(false)
+                    .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
+                    .map { _ in RuntimeImageLoadState.loaded }
+                    .observeOnMainScheduler()
+                    .bind(to: $loadState)
+                    .disposed(by: rx.disposeBag)
+            } catch {
+                print(error)
+            }
         }
     }
 
