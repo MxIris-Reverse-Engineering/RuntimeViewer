@@ -5,7 +5,7 @@ import MachO.dyld
 import ClassDumpRuntime
 import FoundationToolbox
 import RuntimeViewerCommunication
-import Queue
+
 
 public final class RuntimeEngine {
     private enum DyldRegisterNotifications {
@@ -17,7 +17,7 @@ public final class RuntimeEngine {
 
     private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeEngine")
 
-    private let queue = AsyncQueue()
+//    private let queue = AsyncQueue()
 
     @Published public private(set) var classList: [String] = [] {
         didSet {

@@ -26,8 +26,7 @@ public enum RuntimeSource: CustomStringConvertible {
     case remote(name: String, identifier: Identifier, role: Role)
     case bonjourClient(endpoint: RuntimeNetworkEndpoint)
     case bonjourServer(name: String, identifier: Identifier)
-    
-    
+
     public var description: String {
         switch self {
         case .local: return "My Mac"
@@ -40,7 +39,8 @@ public enum RuntimeSource: CustomStringConvertible {
     public var isRemote: Bool {
         switch self {
         case .remote: return true
-        case .bonjourClient, .bonjourServer: return true
+        case .bonjourClient,
+             .bonjourServer: return true
         default: return false
         }
     }

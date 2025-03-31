@@ -78,7 +78,7 @@ class AttachToProcessViewController: AppKitViewController<AttachToProcessViewMod
 
         let input = AttachToProcessViewModel.Input(attachToProcess: attachRelay.asSignal(), cancel: cancelRelay.asSignal())
 
-        let output = viewModel.transform(input)
+        _ = viewModel.transform(input)
     }
 }
 

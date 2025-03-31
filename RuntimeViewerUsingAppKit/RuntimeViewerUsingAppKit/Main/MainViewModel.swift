@@ -30,13 +30,16 @@ class MainViewModel: ViewModel<MainRoute> {
         let sharingServiceItems: Observable<[Any]>
         let isSavable: Driver<Bool>
         let isSidebarBackHidden: Driver<Bool>
-        let runtimeSources: Driver<[String]>
+        let runtimeSources: Driver<[RuntimeSource]>
+        let selectedRuntimeSourceIndex: Driver<Int>
     }
 
     let completeTransition: Observable<SidebarRoute>
 
+    let selectedRuntimeSourceIndex = BehaviorRelay(value: 0)
+
     let runtimeEngineManager = RuntimeEngineManager.shared
-    
+
     @Observed
     var selectedRuntimeObject: RuntimeObjectType?
 
@@ -66,7 +69,7 @@ class MainViewModel: ViewModel<MainRoute> {
             try? HelperInstaller.install()
         }
         .disposed(by: rx.disposeBag)
-        
+
         input.fontSizeSmallerClick.emitOnNext {
             AppDefaults[\.themeProfile].fontSizeSmaller()
         }
@@ -99,9 +102,9 @@ class MainViewModel: ViewModel<MainRoute> {
                 }
             }
             .disposed(by: rx.disposeBag)
-
         input.switchSource.emit(with: self) {
             $0.router.trigger(.main($0.runtimeEngineManager.runtimeEngines[$1]))
+            $0.selectedRuntimeSourceIndex.accept($1)
         }.disposed(by: rx.disposeBag)
 
         let sharingServiceItems = completeTransition.map { [weak self] router -> [Any] in
@@ -138,7 +141,8 @@ class MainViewModel: ViewModel<MainRoute> {
             isSidebarBackHidden: completeTransition.map {
                 if case .clickedNode = $0 { false } else if case .selectedObject = $0 { false } else { true }
             }.asDriver(onErrorJustReturn: true),
-            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map(\.source.description) }
+            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map(\.source) },
+            selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver()
         )
     }
 

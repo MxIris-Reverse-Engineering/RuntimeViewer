@@ -256,7 +256,7 @@ extension NSTextLayoutManager {
 
         // FIXME: Ensure that all the tasks with `renderingAttributesValidator` have complete before running the following.
         // FIXME: Well actually, only those within the viewport, for better responsiveness!
-        let visibleTextRange = if let viewportRange = textViewportLayoutController.viewportRange
+        _ = if let viewportRange = textViewportLayoutController.viewportRange
         { textRange.intersection(viewportRange) ?? textRange } else { textRange }
         // NB: Setting rendering attributes does not trigger redrawing of the affected area. We need to do that explicitly.
         Task { @MainActor in // The non-sendable warnings are bogus as this goes to the `MainActor`.

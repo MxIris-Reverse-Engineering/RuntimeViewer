@@ -27,6 +27,8 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         super.init(windowController: .init(), initialRoute: .main(.shared))
     }
 
+    lazy var viewModel = MainViewModel(appServices: appServices, router: self, completeTransition: sidebarCoordinator.rx.didCompleteTransition())
+
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
         case let .main(runtimeEngine):
@@ -37,7 +39,6 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
             contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
             inspectorCoordinator = InspectorCoordinator(appServices: appServices)
-            let viewModel = MainViewModel(appServices: appServices, router: self, completeTransition: sidebarCoordinator.rx.didCompleteTransition())
             windowController.setupBindings(for: viewModel)
             return .multiple(
                 .show(windowController.splitViewController),
@@ -87,7 +88,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
 extension MainCoordinator: SidebarCoordinator.Delegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
         switch route {
-        case let .selectedNode(runtimeNamedNode):
+        case .selectedNode(_):
             break
         case let .clickedNode(runtimeNamedNode):
             windowController.window?.title = runtimeNamedNode.name

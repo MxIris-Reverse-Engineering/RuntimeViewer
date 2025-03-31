@@ -105,6 +105,7 @@ class RuntimeNetworkConnection {
         connectionStateContinuation?.finish()
         receivedDataContinuation?.finish()
         didStop?(self)
+        didStop = nil
         Self.logger.info("Connection did stop")
     }
 
@@ -191,6 +192,7 @@ class RuntimeNetworkConnection {
             logger.info("Connection is ready")
 
             didReady?(self)
+            didReady = nil
         case let .failed(error):
             logger.info("Connection is failed, error: \(error)")
             stop()
@@ -402,6 +404,7 @@ final class RuntimeNetworkServerConnection: RuntimeNetworkBaseConnection {
                             try await self.start()
                         }
                     }
+                    listener.newConnectionHandler = nil
                     listener.cancel()
                 } catch {
                     continuation.resume(throwing: error)

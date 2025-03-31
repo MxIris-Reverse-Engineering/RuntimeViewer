@@ -39,7 +39,7 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
 
     func makeTransition(for inspectableObject: InspectableObject) -> UXViewController {
         switch inspectableObject {
-        case let .node(runtimeNamedNode):
+        case .node(_):
             let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
@@ -51,7 +51,7 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
                 let viewController = InspectorClassViewController()
                 viewController.setupBindings(for: viewModel)
                 return viewController
-            case let .protocol(named):
+            case .protocol(_):
                 let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
                 let viewController = InspectorPlaceholderViewController()
                 viewController.setupBindings(for: viewModel)

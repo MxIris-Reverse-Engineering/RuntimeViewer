@@ -30,7 +30,9 @@ public final class RuntimeCommunicator {
             try await modify?(runtimeConnection)
             return runtimeConnection
         case let .bonjourServer(name, _):
-            return try await RuntimeNetworkServerConnection(name: name)
+            let runtimeConnection = try await RuntimeNetworkServerConnection(name: name)
+            try await modify?(runtimeConnection)
+            return runtimeConnection
         }
     }
 }
