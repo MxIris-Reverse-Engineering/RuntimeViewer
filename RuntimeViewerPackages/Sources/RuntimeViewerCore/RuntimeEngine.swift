@@ -130,8 +130,11 @@ public final class RuntimeEngine {
         if let role = source.remoteRole {
             switch role {
             case .server:
-                self.connection = try await communicator.connect(to: source)
-                setupMessageHandlerForServer()
+                self.connection = try await communicator.connect(to: source) { connection in
+                    self.connection = connection
+                    self.setupMessageHandlerForServer()
+                }
+                
                 observeRuntime()
             case .client:
                 self.connection = try await communicator.connect(to: source) { connection in

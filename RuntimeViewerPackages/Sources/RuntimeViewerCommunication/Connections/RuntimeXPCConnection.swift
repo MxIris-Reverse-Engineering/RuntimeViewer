@@ -31,7 +31,6 @@ class RuntimeXPCConnection: RuntimeConnection {
     init(identifier: RuntimeSource.Identifier, modify: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         self.identifier = identifier
         let listener = try SwiftyXPC.XPCListener(type: .anonymous, codeSigningRequirement: nil)
-        listener.activate()
         listener.setMessageHandler(requestType: PingRequest.self) { connection, request in
             return .empty
         }
@@ -41,6 +40,7 @@ class RuntimeXPCConnection: RuntimeConnection {
         self.listener = listener
         self.serviceConnection = try await Self.connectToMachService()
         try await modify?(self)
+        listener.activate()
     }
 
     private static func connectToMachService() async throws -> SwiftyXPC.XPCConnection {
@@ -132,9 +132,9 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection {
         try await super.init(identifier: identifier, modify: modify)
         try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
 
-//        if identifier == .macCatalyst {
-//            try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
-//        }
+        if identifier == .macCatalyst {
+            try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
+        }
 //        connection = try await withCheckedThrowingContinuation { continuation in
             listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { [weak self] (_: XPCConnection, endpoint: XPCEndpoint) in
 //                do {
