@@ -32,7 +32,7 @@ extension RuntimeObjectType {
     }
 }
 
-extension RuntimeObjectType: Comparable {
+extension RuntimeObjectType: @retroactive Comparable {
     public static func < (lhs: RuntimeObjectType, rhs: RuntimeObjectType) -> Bool {
         switch (lhs, rhs) {
         case (.class, .protocol):
@@ -47,7 +47,7 @@ extension RuntimeObjectType: Comparable {
     }
 }
 
-extension RuntimeImageLoadState: CaseAccessible {}
+extension RuntimeImageLoadState: @retroactive CaseAccessible {}
 
 #if canImport(UIKit)
 
@@ -57,7 +57,7 @@ extension UIColor {
 
 #endif
 
-extension RuntimeNamedNode: Sequence {
+extension RuntimeNamedNode: @retroactive Sequence {
     public func makeIterator() -> Iterator {
         return Iterator(node: self)
     }

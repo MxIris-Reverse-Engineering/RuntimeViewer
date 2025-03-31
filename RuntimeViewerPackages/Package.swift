@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 5.10
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -13,10 +13,6 @@ let package = Package(
         .iOS(.v14), .macOS(.v12), .macCatalyst(.v14), .tvOS(.v14), .visionOS(.v1),
     ],
     products: [
-        .library(
-            name: "RuntimeViewerCore",
-            targets: ["RuntimeViewerCore"]
-        ),
         .library(
             name: "RuntimeViewerUI",
             targets: ["RuntimeViewerUI"]
@@ -50,10 +46,6 @@ let package = Package(
         .package(
             url: "https://github.com/Mx-Iris/CocoaCoordinator",
             branch: "main"
-        ),
-        .package(
-            url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
-            branch: "master"
         ),
 //        .package(
 //            path: "/Volumes/Repositories/Private/Fork/Library/ClassDumpRuntime"
@@ -115,10 +107,6 @@ let package = Package(
             url: "https://github.com/Mx-Iris/RxUIKit",
             branch: "main"
         ),
-        .package(
-            url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-            branch: "main"
-        ),
 //        .package(
 //            path: "/Volumes/Repositories/Private/Fork/Library/SwiftyXPC"
 //        ),
@@ -131,25 +119,14 @@ let package = Package(
             branch: "main"
         ),
         .package(
-            url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
-            branch: "main"
-        ),
-        .package(
             url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
             branch: "main"
         ),
         .package(
-            url: "https://github.com/mattmassicotte/Queue",
-            from: "0.1.0"
+            url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
+            branch: "main"
         ),
-        .package(
-            url: "https://github.com/reddavis/Asynchrone",
-            from: "0.1.0"
-        ),
-        .package(
-            url: "https://github.com/groue/Semaphore",
-            from: "0.1.0"
-        ),
+        .package(path: "../Core"),
     ],
     targets: [
         .target(
@@ -174,16 +151,6 @@ let package = Package(
             ]
         ),
         .target(
-            name: "RuntimeViewerCore",
-            dependencies: [
-                .target(name: "RuntimeViewerCommunication"),
-                .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
-                .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
-                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
-                .product(name: "Queue", package: "Queue"),
-            ]
-        ),
-        .target(
             name: "RuntimeViewerUI",
             dependencies: [
                 .product(name: "UIFoundation", package: "UIFoundation"),
@@ -202,25 +169,18 @@ let package = Package(
         .target(
             name: "RuntimeViewerApplication",
             dependencies: [
-                "RuntimeViewerCore",
+                .product(name: "RuntimeViewerCore", package: "Core"),
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
             ]
         ),
+
         .target(
             name: "RuntimeViewerService",
             dependencies: [
-                "RuntimeViewerCommunication",
+                .product(name: "RuntimeViewerCommunication", package: "Core"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
-            ]
-        ),
-        .target(
-            name: "RuntimeViewerCommunication",
-            dependencies: [
-                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "Asynchrone", package: "Asynchrone"),
-                .product(name: "Semaphore", package: "Semaphore"),
             ]
         ),
     ]

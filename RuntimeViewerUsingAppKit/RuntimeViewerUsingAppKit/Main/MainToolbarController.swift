@@ -7,6 +7,31 @@
 
 import AppKit
 import RuntimeViewerUI
+import RxAppKit
+import RuntimeViewerCommunication
+
+extension RuntimeSource: @retroactive RxMenuItemRepresentable {}
+extension RuntimeSource: MainMenuItemRepresentable {
+
+    public var title: String { description }
+
+    var icon: NSImage {
+        switch self {
+        case .local:
+            return .symbol(systemName: .display)
+        case .remote(_, let identifier, _):
+            if identifier == .macCatalyst {
+                return .symbol(systemName: .display)
+            } else {
+                return .symbol(systemName: .app)
+            }
+        case .bonjourClient(_):
+            return .symbol(systemName: .bonjour)
+        case .bonjourServer(_, _):
+            return .symbol(systemName: .bonjour)
+        }
+    }
+}
 
 extension NSToolbarItem.Identifier {
     enum Main {
@@ -22,6 +47,7 @@ extension NSToolbarItem.Identifier {
         static let fontSizeLarger: NSToolbarItem.Identifier = "fontSizeLarger"
         static let loadFrameworks: NSToolbarItem.Identifier = "loadFrameworks"
         static let installHelper: NSToolbarItem.Identifier = "installHelper"
+        static let helperStatus: NSToolbarItem.Identifier = "helperStatus"
         static let attach: NSToolbarItem.Identifier = "attach"
     }
 }
@@ -62,17 +88,13 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 
     class SwitchSourceToolbarItem: NSToolbarItem {
-//        let segmentedControl = NSSegmentedControl(labels: ["Native", "Mac Catalyst"], trackingMode: .selectOne, target: nil, action: nil)
-        
         let popUpButton = NSPopUpButton()
-        
+
         init() {
             super.init(itemIdentifier: .Main.switchSource)
             view = popUpButton
             popUpButton.controlSize = .large
             popUpButton.bezelStyle = .toolbar
-//            segmentedControl.selectedSegment = 0
-//            segmentedControl.segmentDistribution = .fillEqually
         }
     }
 
