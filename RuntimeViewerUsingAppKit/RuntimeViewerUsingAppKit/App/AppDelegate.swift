@@ -17,7 +17,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 try await RuntimeEngineManager.shared.launchSystemRuntimeEngines()
             } catch {
                 NSLog("%@", error as NSError)
-                NSAlert(error: error).runModal()
             }
         }
     }
