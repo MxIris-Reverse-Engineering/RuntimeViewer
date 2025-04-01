@@ -8,16 +8,10 @@
 import Foundation
 import SFSymbol
 
-enum RuntimeViewerSymbols: SFSymbol.SymbolName {
+enum RuntimeViewerSymbols: String, SFSymbol.SymbolName {
     case inject
-    
-    
-    var rawValue: String {
-        switch self {
-        case .inject:
-            "inject"
-        }
-    }
-    
+    case app
+    case appFill = "app.fill"
+
     var bundle: Bundle? { .main }
 }
