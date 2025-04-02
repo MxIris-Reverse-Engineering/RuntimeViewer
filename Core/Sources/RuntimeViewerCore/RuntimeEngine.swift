@@ -141,6 +141,7 @@ public final class RuntimeEngine {
                     self.connection = connection
                     self.setupMessageHandlerForClient()
                 }
+                print("Client connected")
             }
         } else {
             observeRuntime()

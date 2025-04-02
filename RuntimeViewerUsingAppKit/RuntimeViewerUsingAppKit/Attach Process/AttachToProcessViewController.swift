@@ -34,7 +34,7 @@ class AttachToProcessViewModel: ViewModel<MainRoute> {
                     try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier)
                     try await RuntimeInjectClient.shared.injectApplication(pid: app.processIdentifier, dylibURL: dylibURL)
                 } catch {
-                    print(error)
+                    print(error, error.localizedDescription)
                 }
 
                 await MainActor.run {

@@ -1,2 +1,2 @@
-OTHER_LDFLAGS = $(inherited) -sectcreate __TEXT __info_plist "$(SRCROOT)/com.JH.RuntimeViewerService/Info.plist" -sectcreate __TEXT __launchd_plist "$(SRCROOT)/com.JH.RuntimeViewerService/launchd.plist"
+OTHER_LDFLAGS = $(inherited) -sectcreate __TEXT __launchd_plist "$(SRCROOT)/com.JH.RuntimeViewerService/launchd.plist"
 
