@@ -11,7 +11,6 @@
 		E924302C2D1EA96300246445 /* NSTextLayoutManager+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E924302B2D1EA96300246445 /* NSTextLayoutManager+.swift */; };
 		E924302E2D1EA99800246445 /* NSTextContentStorage+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E924302D2D1EA99800246445 /* NSTextContentStorage+.swift */; };
 		E92430302D1EAF5200246445 /* MinimapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E924302F2D1EAF5200246445 /* MinimapView.swift */; };
-		E9401C502D9AC808007646F6 /* MainMenuItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9401C4F2D9AC808007646F6 /* MainMenuItemView.swift */; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACBE2C28865100A2F3D3 /* MainRoute.swift */; };
 		E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FE52C0D614900362862 /* AppDelegate.swift */; };
@@ -24,6 +23,7 @@
 		E947C3732C2A4D0500296B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E947C3722C2A4D0500296B2E /* Assets.xcassets */; };
 		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
+		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
 		E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */; };
 		E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */; };
@@ -62,7 +62,6 @@
 		E9E900EB2C2D0D5B00FADDCC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E900EA2C2D0D5B00FADDCC /* main.swift */; };
 		E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */; };
 		E9F0A57E2C305C01001C36FB /* GenerationOptionsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */; };
-		E9F6CD072D9A7B2C00DBFB50 /* com.JH.RuntimeViewerService.plist in Embed LaunchDaemon */ = {isa = PBXBuildFile; fileRef = E9F6CD062D9A7B2600DBFB50 /* com.JH.RuntimeViewerService.plist */; };
 		E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */; };
 		E9F759622CF76B2200BE7A5F /* RuntimeViewerServer.h in Headers */ = {isa = PBXBuildFile; fileRef = E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		E9F759642CF76B3300BE7A5F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E9F759632CF76B3300BE7A5F /* main.m */; };
@@ -136,7 +135,6 @@
 			dstPath = Contents/Library/LaunchDaemons;
 			dstSubfolderSpec = 1;
 			files = (
-				E9F6CD072D9A7B2C00DBFB50 /* com.JH.RuntimeViewerService.plist in Embed LaunchDaemon */,
 			);
 			name = "Embed LaunchDaemon";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -148,7 +146,6 @@
 		E924302B2D1EA96300246445 /* NSTextLayoutManager+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSTextLayoutManager+.swift"; sourceTree = "<group>"; };
 		E924302D2D1EA99800246445 /* NSTextContentStorage+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSTextContentStorage+.swift"; sourceTree = "<group>"; };
 		E924302F2D1EAF5200246445 /* MinimapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinimapView.swift; sourceTree = "<group>"; };
-		E9401C4F2D9AC808007646F6 /* MainMenuItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainMenuItemView.swift; sourceTree = "<group>"; };
 		E942ACBE2C28865100A2F3D3 /* MainRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRoute.swift; sourceTree = "<group>"; };
 		E9432FE22C0D614900362862 /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FE52C0D614900362862 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -164,6 +161,7 @@
 		E947C3772C2A4D0500296B2E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
+		E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIPChecker.swift; sourceTree = "<group>"; };
 		E9668FFB2CEF7140007B344A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9668FFC2CEF7140007B344A /* launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = launchd.plist; sourceTree = "<group>"; };
 		E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadFrameworksViewController.swift; sourceTree = "<group>"; };
@@ -200,7 +198,6 @@
 		E9E900EA2C2D0D5B00FADDCC /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassViewController.swift; sourceTree = "<group>"; };
 		E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewController.swift; sourceTree = "<group>"; };
-		E9F6CD062D9A7B2600DBFB50 /* com.JH.RuntimeViewerService.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = com.JH.RuntimeViewerService.plist; sourceTree = "<group>"; };
 		E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageCellView.swift; sourceTree = "<group>"; };
 		E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerServer.h; sourceTree = "<group>"; };
@@ -286,7 +283,6 @@
 			isa = PBXGroup;
 			children = (
 				E9C9E9CE2C2D10C600C4AA34 /* Info.plist */,
-				E9F6CD062D9A7B2600DBFB50 /* com.JH.RuntimeViewerService.plist */,
 				E9CE07C02C1498280070A6E8 /* App */,
 				E9CE07BA2C1497EA0070A6E8 /* Base */,
 				E9CE07BB2C1497F10070A6E8 /* Main */,
@@ -373,7 +369,6 @@
 				E942ACBE2C28865100A2F3D3 /* MainRoute.swift */,
 				E9A825372C0E085200D9A85D /* MainCoordinator.swift */,
 				E9A825412C0E0B2300D9A85D /* MainWindowController.swift */,
-				E9401C4F2D9AC808007646F6 /* MainMenuItemView.swift */,
 				E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */,
 				E9A825432C0E0B2800D9A85D /* MainSplitViewController.swift */,
 				E9A825572C0E202600D9A85D /* MainViewModel.swift */,
@@ -426,6 +421,7 @@
 				E943301B2C0DB75B00362862 /* Then.swift */,
 				E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */,
 				E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */,
+				E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -732,12 +728,12 @@
 				E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */,
 				E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */,
 				E943301C2C0DB75B00362862 /* Then.swift in Sources */,
-				E9401C502D9AC808007646F6 /* MainMenuItemView.swift in Sources */,
 				E985F5A42D8FF14800C3E5EE /* HelperInstaller.swift in Sources */,
 				E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */,
 				E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
+				E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */,
 				E9F7596D2CF89BB000BE7A5F /* RuntimeEngineManager.swift in Sources */,
 				E924302E2D1EA99800246445 /* NSTextContentStorage+.swift in Sources */,
 				E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */,

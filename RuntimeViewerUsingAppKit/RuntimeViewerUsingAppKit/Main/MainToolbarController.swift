@@ -23,7 +23,7 @@ extension RuntimeSource: MainMenuItemRepresentable {
             if identifier == .macCatalyst {
                 return .symbol(systemName: .display)
             } else {
-                return .symbol(name: RuntimeViewerSymbols.app)
+                return .symbol(name: RuntimeViewerSymbols.appFill)
             }
         case .bonjourClient(_):
             return .symbol(systemName: .bonjour)
