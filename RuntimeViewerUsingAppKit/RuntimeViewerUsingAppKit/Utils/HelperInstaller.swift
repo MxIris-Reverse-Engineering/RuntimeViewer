@@ -2,28 +2,63 @@
 import Foundation
 import ServiceManagement
 import RuntimeViewerCommunication
+import SwiftyXPC
+import OSLog
 
-public enum HelperAuthorizationError: Error {
-    case message(String)
-}
+public final class RuntimeHelperClient {
+    public enum Error: LocalizedError {
+        case message(String)
 
-public enum HelperInstaller {
-//    private static let daemonService = SMAppService.daemon(plistName: "com.JH.RuntimeViewerService.plist")
+        public var errorDescription: String? {
+            switch self {
+            case .message(let message):
+                return message
+            }
+        }
+    }
 
-    public static func install() throws {
-//        try daemonService.register()
-//        print(daemonService.status.rawValue)
-//        return
+    private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeInjectClient")
+
+    public static let shared = RuntimeHelperClient()
+
+    private var connection: XPCConnection?
+
+    private func connectionIfNeeded() throws -> XPCConnection {
+        let connection: XPCConnection
+        if let currentConnection = self.connection {
+            connection = currentConnection
+        } else {
+            connection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
+            connection.activate()
+            self.connection = connection
+        }
+        return connection
+    }
+
+    public func isInstalled() async -> Bool {
+        do {
+            let connection = try connectionIfNeeded()
+            try await connection.sendMessage(request: PingRequest())
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    public func install() async throws {
+        guard await !isInstalled() else { throw Error.message("Helper already installed") }
         func executeAuthorizationFunction(_ authorizationFunction: () -> (OSStatus)) throws {
             let osStatus = authorizationFunction()
             guard osStatus == errAuthorizationSuccess else {
-                throw HelperAuthorizationError.message(String(describing: SecCopyErrorMessageString(osStatus, nil)))
+                throw Error.message(String(describing: SecCopyErrorMessageString(osStatus, nil)))
             }
         }
 
-        func authorizationRef(_ rights: UnsafePointer<AuthorizationRights>?,
-                              _ environment: UnsafePointer<AuthorizationEnvironment>?,
-                              _ flags: AuthorizationFlags) throws -> AuthorizationRef? {
+        func authorizationRef(
+            _ rights: UnsafePointer<AuthorizationRights>?,
+            _ environment: UnsafePointer<AuthorizationEnvironment>?,
+            _ flags: AuthorizationFlags
+        ) throws -> AuthorizationRef? {
             var authRef: AuthorizationRef?
             try executeAuthorizationFunction { AuthorizationCreate(rights, environment, flags, &authRef) }
             return authRef

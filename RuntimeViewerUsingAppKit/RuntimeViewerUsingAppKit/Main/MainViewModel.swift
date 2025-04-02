@@ -12,6 +12,17 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
 
+enum MessageError: LocalizedError {
+    case message(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .message(let message):
+            return message
+        }
+    }
+}
+
 class MainViewModel: ViewModel<MainRoute> {
     struct Input {
         let sidebarBackClick: Signal<Void>
@@ -65,8 +76,15 @@ class MainViewModel: ViewModel<MainRoute> {
             }
         }
         .disposed(by: rx.disposeBag)
-        input.installHelperClick.emitOnNext {
-            try? HelperInstaller.install()
+        input.installHelperClick.emitOnNext { [weak self] in
+            guard let self else { return }
+            Task {
+                do {
+                    try await RuntimeHelperClient.shared.install()
+                } catch {
+                    self.errorRelay.accept(error)
+                }
+            }
         }
         .disposed(by: rx.disposeBag)
 
@@ -78,7 +96,15 @@ class MainViewModel: ViewModel<MainRoute> {
             AppDefaults[\.themeProfile].fontSizeLarger()
         }
         .disposed(by: rx.disposeBag)
-        input.attachToProcessClick.emit(to: router.rx.trigger(.attachToProcess)).disposed(by: rx.disposeBag)
+        input.attachToProcessClick.emitOnNextMainActor { [weak self] in
+            guard let self else { return }
+            if SIPChecker.isDisabled() {
+                router.trigger(.attachToProcess)
+            } else {
+                errorRelay.accept(MessageError.message("SIP is enabled. Please disable SIP to attach to process."))
+            }
+        }
+        .disposed(by: rx.disposeBag)
         input.sidebarBackClick.emit(to: router.rx.trigger(.sidebarBack)).disposed(by: rx.disposeBag)
         input.contentBackClick.emit(to: router.rx.trigger(.contentBack)).disposed(by: rx.disposeBag)
         input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
