@@ -75,8 +75,7 @@ class MainWindowController: XiblessWindowController<MainWindow> {
         output.isSidebarBackHidden.drive(toolbarController.sidebarBackItem.button.rx.isHidden).disposed(by: rx.disposeBag)
         output.selectedRuntimeSourceIndex.drive(toolbarController.switchSourceItem.popUpButton.rx.selectedIndex()).disposed(by: rx.disposeBag)
         output.runtimeSources.drive(toolbarController.switchSourceItem.popUpButton.rx.items()).disposed(by: rx.disposeBag)
-        viewModel.errorRelay.asSignal().emitOnNextMainActor { [weak self] error in
-            guard let self else { return }
+        viewModel.errorRelay.asSignal().emitOnNextMainActor { error in
             NSAlert(error: error).runModal()
         }
         .disposed(by: rx.disposeBag)
