@@ -17,7 +17,7 @@ enum MessageError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .message(let message):
+        case let .message(message):
             return message
         }
     }
@@ -45,8 +45,15 @@ class MainViewModel: ViewModel<MainRoute> {
         let selectedRuntimeSourceIndex: Driver<Int>
     }
 
-    let completeTransition: Observable<SidebarRoute>
+    var completeTransition: Observable<SidebarRoute>? {
+        didSet {
+            completeTransitionDisposable?.dispose()
+            completeTransitionDisposable = completeTransition?.map { if case let .selectedObject(runtimeObject) = $0 { runtimeObject } else { nil } }.bind(to: $selectedRuntimeObject)
+        }
+    }
 
+    var completeTransitionDisposable: Disposable?
+    
     let selectedRuntimeSourceIndex = BehaviorRelay(value: 0)
 
     let runtimeEngineManager = RuntimeEngineManager.shared
@@ -55,6 +62,8 @@ class MainViewModel: ViewModel<MainRoute> {
     var selectedRuntimeObject: RuntimeObjectType?
 
     func transform(_ input: Input) -> Output {
+        rx.disposeBag = DisposeBag()
+
         input.loadFrameworksClick.emitOnNext { [weak self] in
             guard let self else { return }
             Task { @MainActor in
@@ -133,7 +142,7 @@ class MainViewModel: ViewModel<MainRoute> {
             $0.selectedRuntimeSourceIndex.accept($1)
         }.disposed(by: rx.disposeBag)
 
-        let sharingServiceItems = completeTransition.map { [weak self] router -> [Any] in
+        let sharingServiceItems = completeTransition?.map { [weak self] router -> [Any] in
             guard let self else { return [] }
             switch router {
             case let .selectedObject(runtimeObjectType):
@@ -162,19 +171,13 @@ class MainViewModel: ViewModel<MainRoute> {
         }
 
         return Output(
-            sharingServiceItems: sharingServiceItems,
+            sharingServiceItems: sharingServiceItems ?? .empty(),
             isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
-            isSidebarBackHidden: completeTransition.map {
+            isSidebarBackHidden: completeTransition?.map {
                 if case .clickedNode = $0 { false } else if case .selectedObject = $0 { false } else { true }
-            }.asDriver(onErrorJustReturn: true),
+            }.asDriver(onErrorJustReturn: true) ?? .empty(),
             runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map(\.source) },
             selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver()
         )
-    }
-
-    init(appServices: AppServices, router: any Router<MainRoute>, completeTransition: Observable<SidebarRoute>) {
-        self.completeTransition = completeTransition
-        super.init(appServices: appServices, router: router)
-        completeTransition.map { if case let .selectedObject(runtimeObject) = $0 { runtimeObject } else { nil } }.bind(to: $selectedRuntimeObject).disposed(by: rx.disposeBag)
     }
 }

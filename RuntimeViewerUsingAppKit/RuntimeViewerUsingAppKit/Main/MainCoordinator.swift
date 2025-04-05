@@ -27,7 +27,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         super.init(windowController: .init(), initialRoute: .main(.shared))
     }
 
-    lazy var viewModel = MainViewModel(appServices: appServices, router: self, completeTransition: sidebarCoordinator.rx.didCompleteTransition())
+    lazy var viewModel = MainViewModel(appServices: appServices, router: self)
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
@@ -39,6 +39,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
             contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
             inspectorCoordinator = InspectorCoordinator(appServices: appServices)
+            viewModel.completeTransition = sidebarCoordinator.rx.didCompleteTransition()
             windowController.setupBindings(for: viewModel)
             return .multiple(
                 .show(windowController.splitViewController),
@@ -55,7 +56,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             return .route(on: sidebarCoordinator, to: .back)
         case .contentBack:
             return .route(on: contentCoordinator, to: .back)
-        case .generationOptions(let sender):
+        case let .generationOptions(sender):
             let viewController = GenerationOptionsViewController()
             let viewModel = GenerationOptionsViewModel(appServices: appServices, router: self)
             viewController.setupBindings(for: viewModel)
@@ -77,8 +78,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         switch route {
         case .main:
             windowController.splitViewController.setupSplitViewItems()
-            
-            break
+
         default:
             break
         }
@@ -87,17 +87,19 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
 
 extension MainCoordinator: SidebarCoordinator.Delegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
+//        if sidebarCoordinator.rootViewController.viewControllers.count < 2 {
+//            windowController.toolbarController.toolbar.removeItem(at: .Main.sidebarBack)
+//        } else if !windowController.toolbarController.toolbar.items.contains(where: { $0.itemIdentifier == .Main.sidebarBack }) {
+//            windowController.toolbarController.toolbar.insertItem(withItemIdentifier: .Main.sidebarBack, at: 0)
+//        }
         switch route {
-        case .selectedNode(_):
+        case .selectedNode:
             break
         case let .clickedNode(runtimeNamedNode):
             windowController.window?.title = runtimeNamedNode.name
         case let .selectedObject(runtimeObjectType):
-//            windowController.window?.title = runtimeObjectType.name
-            
             contentCoordinator.contextTrigger(.root(runtimeObjectType))
         case .back:
-//            windowController.window?.title = "Runtime Viewer"
             contentCoordinator.contextTrigger(.placeholder)
         default:
             break
@@ -115,9 +117,9 @@ extension MainCoordinator: ContentCoordinator.Delegate {
         switch route {
         case .placeholder:
             inspectorCoordinator.contextTrigger(.placeholder)
-        case .root(let runtimeObjectType):
+        case let .root(runtimeObjectType):
             inspectorCoordinator.contextTrigger(.root(.object(runtimeObjectType)))
-        case .next(let runtimeObjectType):
+        case let .next(runtimeObjectType):
             inspectorCoordinator.contextTrigger(.next(.object(runtimeObjectType)))
         case .back:
             inspectorCoordinator.contextTrigger(.back)
