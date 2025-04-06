@@ -83,17 +83,11 @@ class AttachToProcessViewController: AppKitViewController<AttachToProcessViewMod
 }
 
 extension AttachToProcessViewController: RunningApplicationPickerViewController.Delegate {
-    func runningApplicationPickerViewController(_ viewController: MachInjectorUI.RunningApplicationPickerViewController, shouldSelectApplication application: NSRunningApplication) -> Bool {
-        true
-    }
-
-    func runningApplicationPickerViewController(_ viewController: MachInjectorUI.RunningApplicationPickerViewController, didSelectApplication application: NSRunningApplication) {}
-
-    func runningApplicationPickerViewController(_ viewController: MachInjectorUI.RunningApplicationPickerViewController, didConfirmApplication application: NSRunningApplication) {
+    func runningApplicationPickerViewController(_ viewController: RunningApplicationPickerViewController, didConfirmApplication application: NSRunningApplication) {
         attachRelay.accept(application)
     }
 
-    func runningApplicationPickerViewControllerWasCancel(_ viewController: MachInjectorUI.RunningApplicationPickerViewController) {
+    func runningApplicationPickerViewControllerWasCancel(_ viewController: RunningApplicationPickerViewController) {
         cancelRelay.accept(())
     }
 }

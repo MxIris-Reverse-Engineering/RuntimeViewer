@@ -126,6 +126,10 @@ let package = Package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/Mx-Iris/RunningApplicationKit",
+            branch: "main"
+        ),
         .package(path: "../Core"),
     ],
     targets: [
@@ -163,7 +167,8 @@ let package = Package(
                 .product(name: "IDEIcons", package: "ide-icons"),
                 .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "MachInjectorUI", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
+//                .product(name: "MachInjectorUI", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
         .target(

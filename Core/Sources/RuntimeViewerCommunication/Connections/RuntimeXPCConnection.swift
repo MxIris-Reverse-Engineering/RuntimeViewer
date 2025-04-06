@@ -161,6 +161,7 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection {
         let response = try await serviceConnection.sendMessage(request: FetchEndpointRequest(identifier: identifier.rawValue))
         let connection = try XPCConnection(type: .remoteServiceFromEndpoint(response.endpoint))
         connection.activate()
+        try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
         try await connection.sendMessage(name: CommandIdentifiers.serverLaunched, request: listener.endpoint)
         self.connection = connection
         Self.logger.info("Ping client successfully")
