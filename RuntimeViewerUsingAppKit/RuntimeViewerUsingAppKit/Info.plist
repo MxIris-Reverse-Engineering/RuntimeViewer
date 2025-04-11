@@ -26,7 +26,7 @@
 	<key>SMPrivilegedExecutables</key>
 	<dict>
 		<key>com.JH.RuntimeViewerService</key>
-		<string>anchor apple generic and identifier "com.JH.RuntimeViewerService" and (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = D5Q73692VW)</string>
+		<string>identifier "com.JH.RuntimeViewerService" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: JieHui Lai (4ZZALU97YZ)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */</string>
 	</dict>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
