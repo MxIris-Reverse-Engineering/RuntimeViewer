@@ -91,6 +91,7 @@ class MainViewModel: ViewModel<MainRoute> {
                 do {
                     try await RuntimeHelperClient.shared.install()
                 } catch {
+                    print(error)
                     self.errorRelay.accept(error)
                 }
             }

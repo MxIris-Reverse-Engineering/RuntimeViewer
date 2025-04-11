@@ -46,7 +46,7 @@ public final class RuntimeHelperClient {
     }
 
     public func install() async throws {
-        guard await !isInstalled() else { throw Error.message("Helper already installed") }
+//        guard await !isInstalled() else { throw Error.message("Helper already installed") }
         func executeAuthorizationFunction(_ authorizationFunction: () -> (OSStatus)) throws {
             let osStatus = authorizationFunction()
             guard osStatus == errAuthorizationSuccess else {
