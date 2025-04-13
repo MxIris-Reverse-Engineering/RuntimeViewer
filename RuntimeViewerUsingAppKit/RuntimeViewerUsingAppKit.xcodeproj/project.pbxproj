@@ -162,6 +162,10 @@
 		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
 		E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIPChecker.swift; sourceTree = "<group>"; };
+		E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		E95CDA662DAA6FA900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		E95CDA672DAA970300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		E95CDA682DAA970900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		E9668FFB2CEF7140007B344A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9668FFC2CEF7140007B344A /* launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = launchd.plist; sourceTree = "<group>"; };
 		E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadFrameworksViewController.swift; sourceTree = "<group>"; };
@@ -297,6 +301,8 @@
 				E9432FE72C0D614A00362862 /* Assets.xcassets */,
 				E9432FE92C0D614A00362862 /* MainMenu.xib */,
 				E9432FEC2C0D614A00362862 /* RuntimeViewerUsingAppKit.entitlements */,
+				E95CDA672DAA970300D97B03 /* Debug.xcconfig */,
+				E95CDA682DAA970900D97B03 /* Release.xcconfig */,
 			);
 			path = RuntimeViewerUsingAppKit;
 			sourceTree = "<group>";
@@ -450,6 +456,8 @@
 			children = (
 				E9E900EA2C2D0D5B00FADDCC /* main.swift */,
 				E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */,
+				E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */,
+				E95CDA662DAA6FA900D97B03 /* Release.xcconfig */,
 				E9668FFB2CEF7140007B344A /* Info.plist */,
 				E9668FFC2CEF7140007B344A /* launchd.plist */,
 			);
@@ -490,7 +498,6 @@
 				E9F6CD052D9A7B1700DBFB50 /* Embed LaunchDaemon */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */,
-				E9C9E9E72C2D20D800C4AA34 /* Run Script */,
 			);
 			buildRules = (
 			);
@@ -678,25 +685,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		E9C9E9E72C2D20D800C4AA34 /* Run Script */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Run Script";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "#xcodebuild -workspace ../RuntimeViewer.xcworkspace -scheme \"RuntimeViewerCatalystHelper\" -sdk \"macosx\" -destination 'platform=macOS,variant=Mac Catalyst,name=Any Mac' -derivedDataPath /tmp/CustomDerivedData\n";
-		};
 		E9C9E9E92C2D296E00C4AA34 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -952,6 +940,7 @@
 		};
 		E9432FF02C0D614A00362862 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E95CDA672DAA970300D97B03 /* Debug.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -987,8 +976,10 @@
 		};
 		E9432FF12C0D614A00362862 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E95CDA682DAA970900D97B03 /* Release.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
+				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
@@ -1159,7 +1150,7 @@
 		};
 		E9E900ED2C2D0D5B00FADDCC /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */;
+			baseConfigurationReference = E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
@@ -1175,7 +1166,7 @@
 		};
 		E9E900EE2C2D0D5B00FADDCC /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */;
+			baseConfigurationReference = E95CDA662DAA6FA900D97B03 /* Release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
