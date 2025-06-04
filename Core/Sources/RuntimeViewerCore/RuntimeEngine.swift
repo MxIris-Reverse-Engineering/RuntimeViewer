@@ -230,6 +230,7 @@ public final class RuntimeEngine {
             }
             .store(in: &subscriptions)
 
+//        observeDyldRegister()
         sendRemoteDataIfNeeded()
     }
 
@@ -323,6 +324,7 @@ extension RuntimeEngine {
     public func loadImage(at path: String) async throws {
         try await request {
             try Self.loadImage(at: path)
+            reloadData()
         } remote: {
             try await $0.sendMessage(name: CommandIdentifiers.loadImage, request: path)
         }

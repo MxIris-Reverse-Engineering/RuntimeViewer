@@ -14,7 +14,7 @@ development_mode="Release"
 build_path=${project_path}/build
 
 #plist文件所在路径
-exportOptionsPlistPath=${project_path}/exportTest.plist
+exportOptionsPlistPath=${project_path}/ArchiveExportConfig.plist
 
 #导出App文件所在路径
 exportAppPath=${project_path}/archive
@@ -26,8 +26,8 @@ echo '///-----------'
 xcodebuild \
 archive -workspace ${project_path}/${project_name}.xcworkspace \
 -scheme ${scheme_name} \
--destination 'platform=macOS,arch=arm64e' \
--destination 'platform=macOS,arch=x86_64' \
+-arch x86_64 \
+-arch arm64e \
 -configuration ${development_mode} \
 -skipPackagePluginValidation -skipMacroValidation \
 -archivePath ${build_path}/${project_name}.xcarchive  -quiet  || exit
