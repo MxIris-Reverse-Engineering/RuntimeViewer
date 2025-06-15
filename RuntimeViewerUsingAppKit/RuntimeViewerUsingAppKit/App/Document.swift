@@ -35,4 +35,26 @@ class Document: NSDocument {
         // If you do, you should also override isEntireFileLoaded to return false if the contents are lazily loaded.
         throw NSError(domain: NSOSStatusErrorDomain, code: unimpErr, userInfo: nil)
     }
+    
+    override func updateChangeCount(_ change: NSDocument.ChangeType) {}
+    override func runPageLayout(_ sender: Any?) {}
+    override func printDocument(_ sender: Any?) {}
+    override func saveAs(_ sender: Any?) {}
+    override func saveTo(_ sender: Any?) {}
+    override func save(_ sender: Any?) {}
+    override func revertToSaved(_ sender: Any?) {}
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        switch item.action {
+        case #selector(revertToSaved(_:)),
+             #selector(save(_:)),
+             #selector(saveAs(_:)),
+             #selector(saveTo(_:)),
+             #selector(printDocument(_:)),
+             #selector(runPageLayout(_:)):
+            return false
+        default:
+            return super.validateUserInterfaceItem(item)
+        }
+    }
 }

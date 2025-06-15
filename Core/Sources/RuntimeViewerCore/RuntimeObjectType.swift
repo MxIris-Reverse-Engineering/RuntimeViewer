@@ -1,6 +1,10 @@
 import Foundation
 import ClassDumpRuntime
 
+
+
+
+
 public enum RuntimeObjectType: Codable, Hashable, Identifiable {
     case `class`(named: String)
     case `protocol`(named: String)
@@ -11,9 +15,9 @@ public enum RuntimeObjectType: Codable, Hashable, Identifiable {
 extension RuntimeObjectType {
     public var name: String {
         switch self {
-        case let .class(name):
+        case .class(let name):
             return name
-        case let .protocol(name):
+        case .protocol(let name):
             return name
         }
     }
@@ -34,13 +38,13 @@ private func getClassHierarchy(_ cls: AnyClass) -> [AnyClass] {
 extension RuntimeObjectType {
     func hierarchy() -> [String] {
         switch self {
-        case let .class(named):
+        case .class(let named):
             if let cls = NSClassFromString(named) {
                 return getClassHierarchy(cls).map { NSStringFromClass($0) }
             } else {
                 return []
             }
-        case let .protocol(named):
+        case .protocol(let named):
             if let proto = NSProtocolFromString(named) {
                 return (CDProtocolModel(with: proto).protocols ?? []).map { $0.name }
             } else {
@@ -57,14 +61,14 @@ extension RuntimeObjectType {
 
     func semanticString(for options: CDGenerationOptions) -> CDSemanticString? {
         switch self {
-        case let .class(named):
+        case .class(let named):
             if let cls = NSClassFromString(named) {
                 let classModel = CDClassModel(with: cls)
                 return classModel.semanticLines(with: options)
             } else {
                 return nil
             }
-        case let .protocol(named):
+        case .protocol(let named):
             if let proto = NSProtocolFromString(named) {
                 let protocolModel = CDProtocolModel(with: proto)
                 return protocolModel.semanticLines(with: options)
@@ -76,14 +80,14 @@ extension RuntimeObjectType {
 
     private func requestRuntimeObject<T>(class: (CDClassModel) throws -> T, protocol: (CDProtocolModel) throws -> T) throws -> T {
         switch self {
-        case let .class(named):
+        case .class(let named):
             if let cls = NSClassFromString(named) {
                 let classModel = CDClassModel(with: cls)
                 return try `class`(classModel)
             } else {
                 throw RuntimeError.fetchRuntimeObjectFailed
             }
-        case let .protocol(named):
+        case .protocol(let named):
             if let proto = NSProtocolFromString(named) {
                 let protocolModel = CDProtocolModel(with: proto)
                 return try `protocol`(protocolModel)

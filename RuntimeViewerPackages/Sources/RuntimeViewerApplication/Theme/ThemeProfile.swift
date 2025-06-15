@@ -27,10 +27,8 @@ public protocol ThemeProfile {
 }
 
 public struct XcodePresentationTheme: ThemeProfile, Codable {
-    @SecureCodingCodable
     public var selectionBackgroundColor: NSUIColor = #colorLiteral(red: 0.3904261589, green: 0.4343567491, blue: 0.5144847631, alpha: 1)
     
-    @SecureCodingCodable
     public var backgroundColor: NSUIColor = .init(light: #colorLiteral(red: 1, green: 0.9999999404, blue: 1, alpha: 1), dark: #colorLiteral(red: 0.1251632571, green: 0.1258862913, blue: 0.1465735137, alpha: 1))
 
     public var fontSize: CGFloat = 13

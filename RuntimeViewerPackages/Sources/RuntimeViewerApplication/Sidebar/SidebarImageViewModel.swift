@@ -156,7 +156,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         let errorText = $loadState
             .capture(case: RuntimeImageLoadState.loadError).map { [weak self] error in
                 guard let self else { return "" }
-                if let dlOpenError = error as? DlOpenError, let message = dlOpenError.message {
+                if let dyldOpenError = error as? DyldOpenError, let message = dyldOpenError.message {
                     return message
                 } else {
                     return "An unknown error occured trying to load '\(imagePath)'"

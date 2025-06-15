@@ -1,4 +1,4 @@
-import SwiftUI
+import AppKit
 
 extension NSTextContentStorage {
     /// Convert a text location to a character location within this text content storage.
