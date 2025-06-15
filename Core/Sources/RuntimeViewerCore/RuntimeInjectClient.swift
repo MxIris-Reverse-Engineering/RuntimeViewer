@@ -1,10 +1,3 @@
-//
-//  RuntimeInjectClient.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 11/29/24.
-//
-
 #if os(macOS)
 
 import OSLog
@@ -61,7 +54,7 @@ public final class RuntimeInjectClient {
 //        guard !isInstalledServerFramework else { return }
         try await installServerFramework()
     }
-    
+
     public func installServerFramework() async throws {
         guard let serverFrameworkSourceURL else {
             throw Error.serverFrameworkNotFound

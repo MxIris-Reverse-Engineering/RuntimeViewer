@@ -33,11 +33,11 @@ let package = Package(
     dependencies: [
         .package(
             url: "https://github.com/ChimeHQ/Rearrange.git",
-            .upToNextMajor(from: "1.6.0")
+            from: "2.0.0"
         ),
         .package(
             url: "https://github.com/Mx-Iris/UIFoundation",
-            branch: "main"
+            from: "0.1.0"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/XCoordinator",
@@ -45,36 +45,28 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/CocoaCoordinator",
+//            from: "0.2.0"
             branch: "main"
         ),
-//        .package(
-//            path: "/Volumes/Repositories/Private/Fork/Library/ClassDumpRuntime"
-//        ),
         .package(
             url: "https://github.com/SnapKit/SnapKit",
-            .upToNextMajor(from: "5.0.0")
+            from: "5.0.0"
         ),
         .package(
             url: "https://github.com/ReactiveX/RxSwift",
-            .upToNextMajor(from: "6.0.0")
+            from: "6.0.0"
         ),
         .package(
             url: "https://github.com/Mx-Iris/RxSwiftPlus",
-            branch: "main"
+            from: "0.1.0"
         ),
-//        .package(
-//            url: "https://github.com/RxSwiftCommunity/RxSwiftExt.git",
-//            .upToNextMajor(from: "6.0.0")
-//        ),
-//        .package(
-//            path: "/Volumes/Repositories/Private/Personal/Library/Multi/RxSwiftPlus"
-//        ),
         .package(
             url: "https://github.com/Mx-Iris/RxAppKit",
-            branch: "main"
+            from: "0.2.0"
         ),
         .package(
             url: "https://github.com/OpenUXKit/OpenUXKit",
+//            from: "0.2.0"
             branch: "main"
         ),
         .package(
@@ -83,44 +75,36 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/SFSymbol",
-            branch: "main"
+            from: "0.1.0"
         ),
-//        .package(path: "/Volumes/Code/Personal/SFSymbol"),
         .package(
             url: "https://github.com/CombineCommunity/RxCombine",
-            .upToNextMajor(from: "2.0.0")
+            from: "2.0.1"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/ide-icons",
-            branch: "main"
+            from: "0.1.0"
         ),
-//            .package(path: "/Volumes/Code/Personal/ide-icons"),
-//        .package(
-//            url: "https://github.com/krzyzanowskim/STTextView",
-//            from: "0.9.5"
-//        ),
         .package(
             url: "https://github.com/gringoireDM/RxEnumKit",
-            branch: "master"
+            from: "2.0.0"
         ),
         .package(
             url: "https://github.com/Mx-Iris/RxUIKit",
-            branch: "main"
+            from: "0.1.0"
         ),
-//        .package(
-//            path: "/Volumes/Repositories/Private/Fork/Library/SwiftyXPC"
-//        ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
+//            from: "0.1.0"
             branch: "main"
         ),
         .package(
             url: "https://github.com/TrGiLong/RxConcurrency",
-            branch: "main"
+            from: "0.1.1"
         ),
         .package(
             url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
-            branch: "main"
+            from: "0.1.0"
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
@@ -128,7 +112,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/RunningApplicationKit",
-            branch: "main"
+            from: "0.1.0"
         ),
         .package(path: "../Core"),
     ],
