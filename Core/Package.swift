@@ -10,25 +10,26 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
 extension Package.Dependency {
     
-    enum Development {
-        case local(path: String, isRelative: Bool)
+    enum LocalSearchPath {
+        case package(path: String, isRelative: Bool)
     }
     
-    static func package(development: Development, remote: Package.Dependency) -> Package.Dependency {
-        switch development {
-        case .local(let path, let isRelative):
-            let url = if isRelative, let resolvedURL = URL(string: path, relativeTo: URL(fileURLWithPath: #filePath)) {
-                resolvedURL
-            } else {
-                URL(fileURLWithPath: path)
-            }
-            
-            if FileManager.default.fileExists(atPath: url.path) {
-                return .package(path: url.path)
-            } else {
-                return remote
+    static func package(local localSearchPaths: LocalSearchPath..., remote: Package.Dependency) -> Package.Dependency {
+        for local in localSearchPaths {
+            switch local {
+            case .package(let path, let isRelative):
+                let url = if isRelative, let resolvedURL = URL(string: path, relativeTo: URL(fileURLWithPath: #filePath)) {
+                    resolvedURL
+                } else {
+                    URL(fileURLWithPath: path)
+                }
+                
+                if FileManager.default.fileExists(atPath: url.path) {
+                    return .package(path: url.path)
+                }
             }
         }
+        return remote
     }
 }
 
@@ -50,8 +51,12 @@ let package = Package(
     ],
     dependencies: [
         .package(
-            development: .local(
+            local: .package(
                 path: "../../../../Fork/Library/ClassDumpRuntime",
+                isRelative: true
+            ),
+            .package(
+                path: "../../ClassDumpRuntime",
                 isRelative: true
             ),
             remote: .package(
@@ -60,8 +65,12 @@ let package = Package(
             )
         ),
         .package(
-            development: .local(
+            local: .package(
                 path: "../../../../Personal/Library/macOS/MachOSwiftSection",
+                isRelative: true
+            ),
+            .package(
+                path: "../../TestingLibraries/MachOSwiftSection",
                 isRelative: true
             ),
             remote: .package(
@@ -83,7 +92,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
-            from: "0.1.0"
+            from: "0.2.0"
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
