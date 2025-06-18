@@ -10,7 +10,7 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
-        .iOS(.v14), .macOS(.v12), .macCatalyst(.v14), .tvOS(.v14), .visionOS(.v1),
+        .iOS(.v15), .macOS(.v12), .macCatalyst(.v15), .tvOS(.v15), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -37,7 +37,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/UIFoundation",
-            from: "0.1.0"
+            from: "0.2.0"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/XCoordinator",

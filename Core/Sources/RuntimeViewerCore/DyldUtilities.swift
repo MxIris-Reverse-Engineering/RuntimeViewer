@@ -1,5 +1,5 @@
 import Foundation
-
+import MachO.dyld
 public struct DyldOpenError: Error {
     public let message: String?
 }
