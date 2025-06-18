@@ -73,10 +73,10 @@ class MainViewModel: ViewModel<MainRoute> {
                 openPanel.canChooseDirectories = true
                 let result = await openPanel.begin()
                 guard result == .OK else { return }
-                openPanel.urls.forEach { url in
+                for url in openPanel.urls {
                     do {
                         try Bundle(url: url)?.loadAndReturnError()
-                        self.appServices.runtimeEngine.reloadData()
+                        await self.appServices.runtimeEngine.reloadData()
                     } catch {
                         print(error)
                         NSAlert(error: error).runModal()
@@ -177,7 +177,7 @@ class MainViewModel: ViewModel<MainRoute> {
             isSidebarBackHidden: completeTransition?.map {
                 if case .clickedNode = $0 { false } else if case .selectedObject = $0 { false } else { true }
             }.asDriver(onErrorJustReturn: true) ?? .empty(),
-            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map(\.source) },
+            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map { $0.source } },
             selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver()
         )
     }

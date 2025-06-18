@@ -36,7 +36,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
                         self.imageNameOfRuntimeObject = imageName
                     }
                 case .protocol(let named):
-                    self.imageNameOfRuntimeObject = appServices.runtimeEngine.protocolToImage[named]
+                    self.imageNameOfRuntimeObject = await appServices.runtimeEngine.protocolToImage[named]
                 }
             } catch {
                 print(error)

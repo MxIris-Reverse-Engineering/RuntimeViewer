@@ -58,7 +58,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/RxSwiftPlus",
-            from: "0.1.0"
+            from: "0.2.0"
         ),
         .package(
             url: "https://github.com/Mx-Iris/RxAppKit",

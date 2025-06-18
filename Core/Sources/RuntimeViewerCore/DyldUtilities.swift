@@ -1,10 +1,15 @@
 import Foundation
 import MachO.dyld
+
 public struct DyldOpenError: Error {
     public let message: String?
 }
 
 package enum DyldUtilities {
+    package static let addImageNotification = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
+    
+    package static let removeImageNotification = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
+    
     package static func patchImagePathForDyld(_ imagePath: String) -> String {
         guard imagePath.starts(with: "/") else { return imagePath }
         let rootPath = ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]
@@ -12,6 +17,16 @@ package enum DyldUtilities {
         return rootPath.appending(imagePath)
     }
 
+    package static func observeDyldRegisterEvents() {
+        _dyld_register_func_for_add_image { _, _ in
+            NotificationCenter.default.post(name: Self.addImageNotification, object: nil)
+        }
+
+        _dyld_register_func_for_remove_image { _, _ in
+            NotificationCenter.default.post(name: Self.removeImageNotification, object: nil)
+        }
+    }
+    
     package static func imageNames() -> [String] {
         (0...)
             .lazy

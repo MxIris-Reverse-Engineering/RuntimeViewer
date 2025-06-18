@@ -37,7 +37,7 @@ public final class RuntimeEngineManager {
         systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines
     }
     
-    public nonisolated func launchSystemRuntimeEngines() async throws {
+    public func launchSystemRuntimeEngines() async throws {
         systemRuntimeEngines.append(.shared)
         systemRuntimeEngines.append(try await .macCatalystClient())
     }
