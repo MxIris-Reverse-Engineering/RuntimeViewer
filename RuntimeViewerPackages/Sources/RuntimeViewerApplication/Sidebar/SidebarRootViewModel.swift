@@ -17,7 +17,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 
     @Observed
     private var filteredNodes: [SidebarRootCellViewModel]? = nil
-    
+
     private var allNodes: [String: SidebarRootCellViewModel] = [:]
 
     @Observed
@@ -25,26 +25,30 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 
     public override init(appServices: AppServices, router: any Router<SidebarRoute>) {
         super.init(appServices: appServices, router: router)
-        appServices.runtimeEngine.$imageNodes
-            .asObservable()
-            .observe(on: MainScheduler.instance)
-            .map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }
-            .bind(to: $nodes)
-            .disposed(by: rx.disposeBag)
+        Task {
+            await appServices.runtimeEngine.$imageNodes
+                .asObservable()
+                .observe(on: MainScheduler.instance)
+                .map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }
+                .bind(to: $nodes)
+                .disposed(by: rx.disposeBag)
+        }
         $nodes.asDriver().driveOnNext { [weak self] nodes in
             guard let self else { return }
-            var allNodes: [String: SidebarRootCellViewModel] = [:]
-            for rootNode in nodes {
-                allNodes[rootNode.node.name] = rootNode
-                for node in rootNode {
-                    allNodes[node.node.absolutePath] = node
+            Task.detached {
+                var allNodes: [String: SidebarRootCellViewModel] = [:]
+                for rootNode in nodes {
+                    allNodes[rootNode.node.name] = rootNode
+                    for node in rootNode {
+                        allNodes[node.node.absolutePath] = node
+                    }
                 }
+                self.allNodes = allNodes
             }
-            self.allNodes = allNodes
         }
         .disposed(by: rx.disposeBag)
     }
-    
+
     public struct Input {
         public let clickedNode: Signal<SidebarRootCellViewModel>
         public let selectedNode: Signal<SidebarRootCellViewModel>
@@ -91,9 +95,9 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 //                target.filteredNodes = rootNode
 //            }
 //        }.disposed(by: rx.disposeBag)
-        
+
         return Output(nodes: $nodes.asDriver(), filteredNodes: $filteredNodes.asDriver())
-        
+
         #endif
     }
 }
@@ -113,5 +117,3 @@ extension SidebarRootViewModel: NSOutlineViewDataSource {
     }
 }
 #endif
-
-

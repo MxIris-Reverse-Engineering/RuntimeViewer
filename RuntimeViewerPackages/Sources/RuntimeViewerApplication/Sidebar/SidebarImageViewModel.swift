@@ -35,7 +35,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         Task {
             do {
                 let classNames = try await runtimeEngine.classNamesIn(image: imagePath)
-                let protocolNames = try runtimeEngine.imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
+                let protocolNames = try await runtimeEngine.imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
                 let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
                 await MainActor.run {
                     self.classNames = classNames
@@ -55,7 +55,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     self.loadState = loadState
                 }
 
-                runtimeEngine.$classList
+                await runtimeEngine.$classList
                     .asObservable()
                     .flatMap { [unowned self] _ in
                         try await runtimeEngine.classNamesIn(image: imagePath)
@@ -65,7 +65,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     .bind(to: $classNames)
                     .disposed(by: rx.disposeBag)
 
-                runtimeEngine.$imageToProtocols
+                await runtimeEngine.$imageToProtocols
                     .asObservable()
                     .flatMap { [unowned self] imageToProtocols in
                         try imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
@@ -92,7 +92,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     .bind(to: $runtimeObjects)
                     .disposed(by: rx.disposeBag)
 
-                runtimeEngine.$imageList
+                await runtimeEngine.$imageList
                     .asObservable()
                     .flatMap { [unowned self] imageList in
                         try imageList.contains(await runtimeEngine.patchImagePathForDyld(imagePath))

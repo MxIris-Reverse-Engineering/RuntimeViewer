@@ -75,8 +75,8 @@ class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewMod
         
 
         outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
-        outlineView.autosaveExpandedItems = true
-        outlineView.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
+//        outlineView.autosaveExpandedItems = true
+//        outlineView.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
         outlineView.identifier = "com.JH.RuntimeViewer.SidebarRootViewController.identifier.\(viewModel.appServices.runtimeEngine.source.description)"
         
     }

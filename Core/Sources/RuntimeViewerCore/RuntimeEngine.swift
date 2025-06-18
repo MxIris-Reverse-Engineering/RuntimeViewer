@@ -1,22 +1,14 @@
 import OSLog
 import Combine
 import Foundation
-import MachO.dyld
 import ClassDumpRuntime
 import FoundationToolbox
 import RuntimeViewerCommunication
 
-public final class RuntimeEngine: @unchecked Sendable {
-    private enum DyldRegisterNotifications {
-        static let addImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
-        static let removeImage = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
-    }
-
+public final actor RuntimeEngine {
     public static let shared = RuntimeEngine()
 
     private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeEngine")
-
-//    private let queue = AsyncQueue()
 
     @Published public private(set) var classList: [String] = []
 
@@ -31,7 +23,7 @@ public final class RuntimeEngine: @unchecked Sendable {
     @Published public private(set) var imageNodes: [RuntimeNamedNode] = []
 
     @Published public private(set) var imageToSwiftSections: [String: RuntimeSwiftSections] = [:]
-
+    
     fileprivate enum CommandNames: String, CaseIterable {
         case classList
         case protocolList
@@ -54,7 +46,7 @@ public final class RuntimeEngine: @unchecked Sendable {
         var commandName: String { "com.JH.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
     }
 
-    public let source: RuntimeSource
+    public nonisolated let source: RuntimeSource
 
     private let shouldReload = PassthroughSubject<Void, Never>()
 
@@ -67,7 +59,9 @@ public final class RuntimeEngine: @unchecked Sendable {
 
     public init() {
         self.source = .local
-        observeRuntime()
+        Task {
+            try await observeRuntime()
+        }
     }
 
     #if canImport(AppKit) && !targetEnvironment(macCatalyst)
@@ -90,7 +84,7 @@ public final class RuntimeEngine: @unchecked Sendable {
                     self.setupMessageHandlerForServer()
                 }
 
-                observeRuntime()
+                try await observeRuntime()
             case .client:
                 self.connection = try await communicator.connect(to: source) { connection in
                     self.connection = connection
@@ -99,7 +93,7 @@ public final class RuntimeEngine: @unchecked Sendable {
                 print("Client connected")
             }
         } else {
-            observeRuntime()
+            try await observeRuntime()
         }
     }
 
@@ -116,12 +110,12 @@ public final class RuntimeEngine: @unchecked Sendable {
     }
 
     private func setupMessageHandlerForClient() {
-        setMessageHandlerBinding(forName: .classList, to: \.classList)
-        setMessageHandlerBinding(forName: .protocolList, to: \.protocolList)
-        setMessageHandlerBinding(forName: .imageList, to: \.imageList)
-        setMessageHandlerBinding(forName: .protocolToImage, to: \.protocolToImage)
-        setMessageHandlerBinding(forName: .imageToProtocols, to: \.imageToProtocols)
-        setMessageHandlerBinding(forName: .imageNodes, to: \.imageNodes)
+        setMessageHandlerBinding(forName: .classList) { $0.classList = $1 }
+        setMessageHandlerBinding(forName: .protocolList) { $0.protocolList = $1 }
+        setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
+        setMessageHandlerBinding(forName: .protocolToImage) { $0.protocolToImage = $1 }
+        setMessageHandlerBinding(forName: .imageToProtocols) { $0.imageToProtocols = $1 }
+        setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
@@ -137,10 +131,11 @@ public final class RuntimeEngine: @unchecked Sendable {
         }
     }
 
-    private func setMessageHandlerBinding<Response: Codable>(forName name: CommandNames, to keyPath: ReferenceWritableKeyPath<RuntimeEngine, Response>) {
+    private func setMessageHandlerBinding<Response: Codable>(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine, Response) async throws -> Void) {
         connection?.setMessageHandler(name: name.commandName) { [weak self] (response: Response) in
             guard let self else { return }
-            self[keyPath: keyPath] = response
+//            self[keyPath: keyPath] = response
+            try await perform(self, response)
         }
     }
 
@@ -154,7 +149,7 @@ public final class RuntimeEngine: @unchecked Sendable {
         sendRemoteDataIfNeeded()
     }
 
-    private func observeRuntime() {
+    private func observeRuntime() async throws {
         classList = ObjCRuntime.classNames()
         protocolList = ObjCRuntime.protocolNames()
         imageList = DyldUtilities.imageNames()
@@ -164,12 +159,30 @@ public final class RuntimeEngine: @unchecked Sendable {
         self.protocolToImage = protocolToImage
         self.imageToProtocols = imageToProtocols
         imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
+//        Task.detached { [self] in
+//            await withTaskGroup { group in
+//                for imagePath in await imageList {
+//                    group.addTask {
+//                        let imageName = imagePath.lastPathComponent.deletingPathExtension
+//                        do {
+//                            let section = try RuntimeSwiftSections(imageName: imageName)
+//                            await self.setSwiftSection(section, forImage: imageName)
+//                        } catch {
+////                            print(imageName)
+//                        }
+//                    }
+//                }
+//                await group.waitForAll()
+//            }
+//        }
 
         shouldReload
             .debounce(for: .milliseconds(15), scheduler: DispatchQueue.main)
             .sink { [weak self] in
                 guard let self else { return }
-                reloadData()
+                Task {
+                    await self.reloadData()
+                }
             }
             .store(in: &subscriptions)
 
@@ -180,13 +193,31 @@ public final class RuntimeEngine: @unchecked Sendable {
                 guard let (protocolToImage, imageToProtocols) = ObjCRuntime.protocolImageTrackingFor(
                     protocolList: $0, protocolToImage: $1, imageToProtocols: $2
                 ) else { return }
-                self.protocolToImage = protocolToImage
-                self.imageToProtocols = imageToProtocols
+                Task {
+                    await self.setProtocolToImage(protocolToImage)
+                    await self.setImageToProtocols(imageToProtocols)
+                }
             }
             .store(in: &subscriptions)
 
 //        observeDyldRegister()
         sendRemoteDataIfNeeded()
+    }
+
+    private func setImageNodes(_ imageNodes: [RuntimeNamedNode]) async {
+        self.imageNodes = imageNodes
+    }
+    
+    private func setSwiftSection(_ section: RuntimeSwiftSections, forImage image: String) async {
+        imageToSwiftSections[image] = section
+    }
+
+    private func setImageToProtocols(_ imageToProtocols: [String: [String]]) async {
+        self.imageToProtocols = imageToProtocols
+    }
+
+    private func setProtocolToImage(_ protocolToImage: [String: String]) async {
+        self.protocolToImage = protocolToImage
     }
 
     private func sendRemoteDataIfNeeded() {
@@ -202,54 +233,52 @@ public final class RuntimeEngine: @unchecked Sendable {
     }
 
     private func observeDyldRegister() {
-        _dyld_register_func_for_add_image { _, _ in
-            NotificationCenter.default.post(name: DyldRegisterNotifications.addImage, object: nil)
-        }
+        DyldUtilities.observeDyldRegisterEvents()
 
-        _dyld_register_func_for_remove_image { _, _ in
-            NotificationCenter.default.post(name: DyldRegisterNotifications.removeImage, object: nil)
-        }
-
-        NotificationCenter.default.publisher(for: DyldRegisterNotifications.addImage)
+        NotificationCenter.default.publisher(for: DyldUtilities.addImageNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
-                self.shouldReload.send()
-            }
-            .store(in: &subscriptions)
-
-        NotificationCenter.default.publisher(for: DyldRegisterNotifications.removeImage)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                self.shouldReload.send()
-            }
-            .store(in: &subscriptions)
-    }
-
-    private func startTimingReload() {
-        Timer.publish(every: 15, on: .main, in: .default)
-            .autoconnect()
-            .sink { [weak self] _ in
-                guard let self else { return }
-
-                let classList = ObjCRuntime.classNames()
-                let protocolList = ObjCRuntime.protocolNames()
-
-                let refClassList = self.classList
-                let refProtocolList = self.protocolList
-
-                if classList != refClassList {
-                    Self.logger.error("Watchdog: classList is out-of-date")
-                    self.classList = classList
+                Task {
+                    await self.shouldReload.send()
                 }
-                if protocolList != refProtocolList {
-                    Self.logger.error("Watchdog: protocolList is out-of-date")
-                    self.protocolList = protocolList
+            }
+            .store(in: &subscriptions)
+
+        NotificationCenter.default.publisher(for: DyldUtilities.removeImageNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task {
+                    await self.shouldReload.send()
                 }
             }
             .store(in: &subscriptions)
     }
+
+//    private func startTimingReload() {
+//        Timer.publish(every: 15, on: .main, in: .default)
+//            .autoconnect()
+//            .sink { [weak self] _ in
+//                guard let self else { return }
+//
+//                let classList = ObjCRuntime.classNames()
+//                let protocolList = ObjCRuntime.protocolNames()
+//
+//                let refClassList = self.classList
+//                let refProtocolList = self.protocolList
+//
+//                if classList != refClassList {
+//                    Self.logger.error("Watchdog: classList is out-of-date")
+//                    self.classList = classList
+//                }
+//                if protocolList != refProtocolList {
+//                    Self.logger.error("Watchdog: protocolList is out-of-date")
+//                    self.protocolList = protocolList
+//                }
+//            }
+//            .store(in: &subscriptions)
+//    }
 
     private func _interface(for name: RuntimeObjectName, in image: String, options: RuntimeObjectInterface.GenerationOptions) -> RuntimeObjectInterface? {
         switch name.kind {
