@@ -42,6 +42,7 @@ public final actor RuntimeEngine {
         case imageNameOfClassName
         case observeRuntime
         case interfaceForRuntimeObjectInImageWithOptions
+        case namesOfKindInImage
 
         var commandName: String { "com.JH.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
     }
@@ -159,22 +160,22 @@ public final actor RuntimeEngine {
         self.protocolToImage = protocolToImage
         self.imageToProtocols = imageToProtocols
         imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
-//        Task.detached { [self] in
-//            await withTaskGroup { group in
-//                for imagePath in await imageList {
-//                    group.addTask {
-//                        let imageName = imagePath.lastPathComponent.deletingPathExtension
-//                        do {
-//                            let section = try RuntimeSwiftSections(imageName: imageName)
-//                            await self.setSwiftSection(section, forImage: imageName)
-//                        } catch {
-////                            print(imageName)
-//                        }
-//                    }
-//                }
-//                await group.waitForAll()
-//            }
-//        }
+        
+        Task.detached { [self] in
+            await withTaskGroup { group in
+                for imagePath in await imageList {
+                    group.addTask {
+                        do {
+                            let section = try RuntimeSwiftSections(imagePath: imagePath)
+                            await self.setSwiftSection(section, forImage: imagePath)
+                        } catch {
+                            print(imagePath)
+                        }
+                    }
+                }
+                await group.waitForAll()
+            }
+        }
 
         shouldReload
             .debounce(for: .milliseconds(15), scheduler: DispatchQueue.main)
@@ -280,10 +281,10 @@ public final actor RuntimeEngine {
 //            .store(in: &subscriptions)
 //    }
 
-    private func _interface(for name: RuntimeObjectName, in image: String, options: RuntimeObjectInterface.GenerationOptions) -> RuntimeObjectInterface? {
+    private func _interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) -> RuntimeObjectInterface? {
         switch name.kind {
         case .swift:
-            return try? imageToSwiftSections[image]?.interface(for: name, options: options.swiftDemangleOptions)
+            return try? imageToSwiftSections[name.imagePath]?.interface(for: name, options: options.swiftDemangleOptions)
         case .objc(let kindOfObjC):
             switch kindOfObjC {
             case .class:
@@ -297,6 +298,32 @@ public final actor RuntimeEngine {
             fatalError()
         }
     }
+    
+    private func _names(of kind: RuntimeObjectKind, in image: String) -> [RuntimeObjectName] {
+        switch kind {
+        case .c:
+            fatalError()
+        case .objc(let kindOfObjC):
+            switch kindOfObjC {
+            case .class:
+                return ObjCRuntime.classNamesIn(image: image).map { .init(name: $0, kind: .objc(.class), imagePath: image) }
+            case .protocol:
+                return (imageToProtocols[DyldUtilities.patchImagePathForDyld(image)] ?? []).map { .init(name: $0, kind: .objc(.protocol), imagePath: image) }
+            }
+        case .swift(let kindOfSwift):
+            switch kindOfSwift {
+            case .enum:
+                return (try? imageToSwiftSections[image]?.enumNames()) ?? []
+            case .struct:
+                return (try? imageToSwiftSections[image]?.structNames()) ?? []
+            case .class:
+                return (try? imageToSwiftSections[image]?.classNames()) ?? []
+            case .protocol:
+                return (try? imageToSwiftSections[image]?.protocolNames()) ?? []
+            }
+        }
+    }
+    
 }
 
 // MARK: - Requests
@@ -358,15 +385,22 @@ extension RuntimeEngine {
 
     private struct InterfaceRequest: Codable {
         let name: RuntimeObjectName
-        let image: String
         let options: RuntimeObjectInterface.GenerationOptions
     }
 
-    public func interface(for name: RuntimeObjectName, in image: String, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+    public func interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
         try await request {
-            _interface(for: name, in: image, options: options)
+            _interface(for: name, options: options)
         } remote: { senderConnection in
-            return try await senderConnection.sendMessage(name: .interfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(name: name, image: image, options: options))
+            return try await senderConnection.sendMessage(name: .interfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(name: name, options: options))
+        }
+    }
+    
+    public func names(of kind: RuntimeObjectKind, in image: String) async throws -> [RuntimeObjectName] {
+        try await request {
+            _names(of: kind, in: image)
+        } remote: {
+            return try await $0.sendMessage(name: .namesOfKindInImage, request: image)
         }
     }
 

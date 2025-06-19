@@ -17,7 +17,7 @@ public final class RuntimeSwiftSections {
         case invalidRuntimeObjectName
     }
 
-    public let imageName: String
+    public let imagePath: String
 
     private let machO: MachOImage
 
@@ -41,12 +41,12 @@ public final class RuntimeSwiftSections {
 
     private var interfaceByName: OrderedDictionary<RuntimeObjectName, RuntimeObjectInterface> = [:]
     
-    public init(imageName: String) throws {
-        guard let machO = MachOImage(name: imageName) else { throw Error.invalidMachOImage }
+    public init(imagePath: String) throws {
+        guard let machO = MachOImage(name: imagePath.lastPathComponent.deletingPathExtension) else { throw Error.invalidMachOImage }
 
-        var classes: [MachOSwiftSection.Class] = []
-        var structs: [MachOSwiftSection.Struct] = []
         var enums: [MachOSwiftSection.Enum] = []
+        var structs: [MachOSwiftSection.Struct] = []
+        var classes: [MachOSwiftSection.Class] = []
         var protocols: [MachOSwiftSection.`Protocol`] = []
         var protocolConformances: [MachOSwiftSection.ProtocolConformance] = []
         for type in try machO.swift.typeContextDescriptors {
@@ -73,7 +73,7 @@ public final class RuntimeSwiftSections {
             try protocolConformances.append(MachOSwiftSection.ProtocolConformance(descriptor: protocolConformanceDescriptor, in: machO))
         }
 
-        self.imageName = imageName
+        self.imagePath = imagePath
         self.machO = machO
         self.classes = classes
         self.structs = structs
@@ -84,50 +84,50 @@ public final class RuntimeSwiftSections {
 
     public func enumNames() throws -> [RuntimeObjectName] {
         enumByName.removeAll()
-        var names: [RuntimeObjectName] = []
+        var names: OrderedSet<RuntimeObjectName> = []
         for `enum` in enums {
             let name = try name(for: `enum`, kind: .swift(.enum))
             enumByName[name] = `enum`
             names.append(name)
         }
-        return names
+        return names.elements
     }
 
     public func structNames() throws -> [RuntimeObjectName] {
         structByName.removeAll()
-        var names: [RuntimeObjectName] = []
+        var names: OrderedSet<RuntimeObjectName> = []
         for `struct` in structs {
             let name = try name(for: `struct`, kind: .swift(.struct))
             structByName[name] = `struct`
             names.append(name)
         }
-        return names
+        return names.elements
     }
 
     public func classNames() throws -> [RuntimeObjectName] {
         classByName.removeAll()
-        var names: [RuntimeObjectName] = []
+        var names: OrderedSet<RuntimeObjectName> = []
         for `class` in classes {
             let name = try name(for: `class`, kind: .swift(.class))
             classByName[name] = `class`
             names.append(name)
         }
-        return names
+        return names.elements
     }
 
     public func protocolNames() throws -> [RuntimeObjectName] {
         protocolByName.removeAll()
-        var names: [RuntimeObjectName] = []
+        var names: OrderedSet<RuntimeObjectName> = []
         for `protocol` in protocols {
             let name = try name(for: `protocol`, kind: .swift(.protocol))
             protocolByName[name] = `protocol`
             names.append(name)
         }
-        return names
+        return names.elements
     }
     
     private func name<T: NamedDumpable>(for dumpable: T, kind: RuntimeObjectKind) throws -> RuntimeObjectName {
-        try .init(name: dumpable.dumpName(using: .interface, in: machO).string, kind: kind)
+        try .init(name: dumpable.dumpName(using: .interface, in: machO).string, kind: kind, imagePath: imagePath)
     }
 
     public func interface(for name: RuntimeObjectName, options: DemangleOptions) throws -> RuntimeObjectInterface {

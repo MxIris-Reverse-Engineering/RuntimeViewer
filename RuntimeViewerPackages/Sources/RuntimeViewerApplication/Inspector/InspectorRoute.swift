@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 
 public enum InspectableObject {
     case node(RuntimeNamedNode)
-    case object(RuntimeObjectType)
+    case object(RuntimeObjectName)
 }
 
 public enum InspectorRoute: Routable {

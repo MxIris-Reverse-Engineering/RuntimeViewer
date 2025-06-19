@@ -7,6 +7,6 @@ public enum SidebarRoute: Routable {
     case root
     case selectedNode(RuntimeNamedNode)
     case clickedNode(RuntimeNamedNode)
-    case selectedObject(RuntimeObjectType)
+    case selectedObject(RuntimeObjectName)
     case back
 }

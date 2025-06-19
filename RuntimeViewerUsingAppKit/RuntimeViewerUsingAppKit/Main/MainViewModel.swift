@@ -59,7 +59,7 @@ class MainViewModel: ViewModel<MainRoute> {
     let runtimeEngineManager = RuntimeEngineManager.shared
 
     @Observed
-    var selectedRuntimeObject: RuntimeObjectType?
+    var selectedRuntimeObject: RuntimeObjectName?
 
     func transform(_ input: Input) -> Output {
         rx.disposeBag = DisposeBag()
@@ -129,8 +129,8 @@ class MainViewModel: ViewModel<MainRoute> {
                     guard result == .OK, let url = savePanel.url else { return }
                     Task {
                         do {
-                            let semanticString = try await self.appServices.runtimeEngine.semanticString(for: runtimeObject, options: AppDefaults[\.options])
-                            try semanticString?.string().write(to: url, atomically: true, encoding: .utf8)
+                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .interface))?.interfaceString
+                            try semanticString?.string.write(to: url, atomically: true, encoding: .utf8)
                         } catch {
                             print(error)
                         }
@@ -151,8 +151,8 @@ class MainViewModel: ViewModel<MainRoute> {
                 item.registerDataRepresentation(forTypeIdentifier: UTType.cHeader.identifier, visibility: .all) { completion in
                     Task {
                         do {
-                            let semanticString = try await self.appServices.runtimeEngine.semanticString(for: runtimeObjectType, options: AppDefaults[\.options])
-                            completion(semanticString?.string().data(using: .utf8), nil)
+                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObjectType, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .interface))?.interfaceString
+                            completion(semanticString?.string.data(using: .utf8), nil)
                         } catch {
                             completion(nil, error)
                         }

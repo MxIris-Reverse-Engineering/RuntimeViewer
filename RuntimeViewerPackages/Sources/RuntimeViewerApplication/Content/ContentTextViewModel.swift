@@ -6,6 +6,7 @@ import AppKit
 import UIKit
 #endif
 
+import Demangle
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -15,7 +16,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
     public private(set) var theme: ThemeProfile
 
     @Observed
-    public private(set) var runtimeObject: RuntimeObjectType
+    public private(set) var runtimeObject: RuntimeObjectName
 
     @Observed
     public private(set) var imageNameOfRuntimeObject: String?
@@ -23,29 +24,29 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
     public private(set) var attributedString: NSAttributedString?
 
-    public init(runtimeObject: RuntimeObjectType, appServices: AppServices, router: any Router<ContentRoute>) {
+    public init(runtimeObject: RuntimeObjectName, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
         super.init(appServices: appServices, router: router)
-        Task {
-            do {
-                switch runtimeObject {
-                case .class(let named):
-                    let imageName = try await appServices.runtimeEngine.imageName(ofClass: named)
-                    await MainActor.run {
-                        self.imageNameOfRuntimeObject = imageName
-                    }
-                case .protocol(let named):
-                    self.imageNameOfRuntimeObject = await appServices.runtimeEngine.protocolToImage[named]
-                }
-            } catch {
-                print(error)
-            }
-        }
+//        Task {
+//            do {
+//                switch runtimeObject {
+//                case .class(let named):
+//                    let imageName = try await appServices.runtimeEngine.imageName(ofClass: named)
+//                    await MainActor.run {
+//                        self.imageNameOfRuntimeObject = imageName
+//                    }
+//                case .protocol(let named):
+//                    self.imageNameOfRuntimeObject = await appServices.runtimeEngine.protocolToImage[named]
+//                }
+//            } catch {
+//                print(error)
+//            }
+//        }
         Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
             .observeOnMainScheduler()
             .flatMap { [unowned self] runtimeObject, options, theme -> NSAttributedString? in
-                let semanticString = try await self.appServices.runtimeEngine.semanticString(for: runtimeObject, options: options)
+                let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: options, swiftDemangleOptions: .interface))?.interfaceString
                 return await MainActor.run {
                     semanticString?.attributedString(for: theme)
                 }
@@ -56,8 +57,8 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
     }
 
     public struct Input {
-        public let runtimeObjectClicked: Signal<RuntimeObjectType>
-        public init(runtimeObjectClicked: Signal<RuntimeObjectType>) {
+        public let runtimeObjectClicked: Signal<RuntimeObjectName>
+        public init(runtimeObjectClicked: Signal<RuntimeObjectName>) {
             self.runtimeObjectClicked = runtimeObjectClicked
         }
     }

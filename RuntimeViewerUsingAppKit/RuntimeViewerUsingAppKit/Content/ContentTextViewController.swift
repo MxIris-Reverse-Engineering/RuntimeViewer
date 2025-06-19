@@ -27,7 +27,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
 
     let eventMonitor = EventMonitor()
 
-    let jumpToDefinitionRelay = PublishRelay<RuntimeObjectType>()
+    let jumpToDefinitionRelay = PublishRelay<RuntimeObjectName>()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -60,7 +60,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
         super.setupBindings(for: viewModel)
 
         let input = ContentTextViewModel.Input(
-            runtimeObjectClicked: Signal.of(textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObjectType }.asSignalOnErrorJustComplete().filter { [unowned self] _ in isPressedCommand }, jumpToDefinitionRelay.asSignal()).merge()
+            runtimeObjectClicked: Signal.of(textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObjectName }.asSignalOnErrorJustComplete().filter { [unowned self] _ in isPressedCommand }, jumpToDefinitionRelay.asSignal()).merge()
         )
         let output = viewModel.transform(input)
 
@@ -93,8 +93,8 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
 
     func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
         var newMenuItems: [NSMenuItem] = []
-        if let runtimeObjectType = view.attributedString().attributes(at: charIndex, effectiveRange: nil)[.link] as? RuntimeObjectType {
-            let menuItem = JumpToDefinitionMenuItem(runtimeObjectType: runtimeObjectType)
+        if let runtimeObject = view.attributedString().attributes(at: charIndex, effectiveRange: nil)[.link] as? RuntimeObjectName {
+            let menuItem = JumpToDefinitionMenuItem(runtimeObject: runtimeObject)
             menuItem.target = self
             menuItem.action = #selector(jumpToDefinitionAction(_:))
             newMenuItems.append(menuItem)
@@ -105,15 +105,15 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
     }
 
     @objc func jumpToDefinitionAction(_ sender: JumpToDefinitionMenuItem) {
-        jumpToDefinitionRelay.accept(sender.runtimeObjectType)
+        jumpToDefinitionRelay.accept(sender.runtimeObject)
     }
 }
 
 class JumpToDefinitionMenuItem: NSMenuItem {
-    let runtimeObjectType: RuntimeObjectType
+    let runtimeObject: RuntimeObjectName
 
-    init(runtimeObjectType: RuntimeObjectType) {
-        self.runtimeObjectType = runtimeObjectType
+    init(runtimeObject: RuntimeObjectName) {
+        self.runtimeObject = runtimeObject
         super.init(title: "Jump to Definition", action: nil, keyEquivalent: "")
     }
 

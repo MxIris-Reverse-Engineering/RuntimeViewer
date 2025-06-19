@@ -22,7 +22,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @Observed private var searchScope: RuntimeTypeSearchScope = .all
     @Observed private var classNames: [String] = []
     @Observed private var protocolNames: [String] = []
-    @Observed private var runtimeObjects: [RuntimeObjectType] = []
+    @Observed private var runtimeObjects: [RuntimeObjectName] = []
     @Observed private var loadState: RuntimeImageLoadState = .notLoaded
 
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
@@ -35,8 +35,14 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         Task {
             do {
                 let classNames = try await runtimeEngine.classNamesIn(image: imagePath)
-                let protocolNames = try await runtimeEngine.imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
+                let protocolNames = try await runtimeEngine.imageToProtocols[runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
                 let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
+                let objcClassNames = try await runtimeEngine.names(of: .objc(.class), in: imagePath).sorted()
+                let objcProtocolNames = try await runtimeEngine.names(of: .objc(.protocol), in: imagePath).sorted()
+                let swiftClassNames = try await runtimeEngine.names(of: .swift(.class), in: imagePath).sorted()
+                let swiftProtocolNames = try await runtimeEngine.names(of: .swift(.protocol), in: imagePath).sorted()
+                let swiftEnumNames = try await runtimeEngine.names(of: .swift(.enum), in: imagePath).sorted()
+                let swiftStructNames = try await runtimeEngine.names(of: .swift(.struct), in: imagePath).sorted()
                 await MainActor.run {
                     self.classNames = classNames
                     self.protocolNames = protocolNames
@@ -46,11 +52,13 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
                     self.searchString = searchString
                     self.searchScope = searchScope
-
-                    self.runtimeObjects = Self.runtimeObjectsFor(
-                        classNames: classNames, protocolNames: protocolNames,
-                        searchString: searchString, searchScope: searchScope
-                    )
+                    
+                    self.runtimeObjects = objcClassNames + objcProtocolNames + swiftEnumNames + swiftStructNames + swiftClassNames + swiftProtocolNames
+                    
+//                    self.runtimeObjects = Self.runtimeObjectsFor(
+//                        classNames: classNames, protocolNames: protocolNames,
+//                        searchString: searchString, searchScope: searchScope
+//                    )
 
                     self.loadState = loadState
                 }
@@ -79,18 +87,18 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
                     .asObservable()
 
-                $searchScope
-                    .asPublisher()
-                    .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
-                        Self.runtimeObjectsFor(
-                            classNames: $2, protocolNames: $3,
-                            searchString: $1, searchScope: $0
-                        )
-                    }
-                    .asObservable()
-                    .map { $0.sorted() }
-                    .bind(to: $runtimeObjects)
-                    .disposed(by: rx.disposeBag)
+//                $searchScope
+//                    .asPublisher()
+//                    .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
+//                        Self.runtimeObjectsFor(
+//                            classNames: $2, protocolNames: $3,
+//                            searchString: $1, searchScope: $0
+//                        )
+//                    }
+//                    .asObservable()
+//                    .map { $0.sorted() }
+//                    .bind(to: $runtimeObjects)
+//                    .disposed(by: rx.disposeBag)
 
                 await runtimeEngine.$imageList
                     .asObservable()
