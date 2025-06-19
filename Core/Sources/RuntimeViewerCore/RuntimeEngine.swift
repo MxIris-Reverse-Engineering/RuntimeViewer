@@ -23,7 +23,7 @@ public final actor RuntimeEngine {
     @Published public private(set) var imageNodes: [RuntimeNamedNode] = []
 
     @Published public private(set) var imageToSwiftSections: [String: RuntimeSwiftSections] = [:]
-    
+
     fileprivate enum CommandNames: String, CaseIterable {
         case classList
         case protocolList
@@ -105,9 +105,8 @@ public final actor RuntimeEngine {
         setMessageHandlerBinding(forName: .patchImagePathForDyld, of: self) { $0.patchImagePathForDyld(_:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(_:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofClass:) }
-        connection?.setMessageHandler(name: CommandNames.semanticStringForRuntimeObjectWithOptions.commandName) { [unowned self] (request: SemanticStringRequest) -> Data? in
-            try await semanticString(for: request.runtimeObject, options: request.options).map { try NSKeyedArchiver.archivedData(withRootObject: $0, requiringSecureCoding: true) }
-        }
+        setMessageHandlerBinding(forName: .namesOfKindInImage, of: self) { $0.names(for:) }
+        setMessageHandlerBinding(forName: .interfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
     }
 
     private func setupMessageHandlerForClient() {
@@ -135,7 +134,6 @@ public final actor RuntimeEngine {
     private func setMessageHandlerBinding<Response: Codable>(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine, Response) async throws -> Void) {
         connection?.setMessageHandler(name: name.commandName) { [weak self] (response: Response) in
             guard let self else { return }
-//            self[keyPath: keyPath] = response
             try await perform(self, response)
         }
     }
@@ -160,7 +158,7 @@ public final actor RuntimeEngine {
         self.protocolToImage = protocolToImage
         self.imageToProtocols = imageToProtocols
         imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
-        
+
         Task.detached { [self] in
             await withTaskGroup { group in
                 for imagePath in await imageList {
@@ -208,7 +206,7 @@ public final actor RuntimeEngine {
     private func setImageNodes(_ imageNodes: [RuntimeNamedNode]) async {
         self.imageNodes = imageNodes
     }
-    
+
     private func setSwiftSection(_ section: RuntimeSwiftSections, forImage image: String) async {
         imageToSwiftSections[image] = section
     }
@@ -298,7 +296,7 @@ public final actor RuntimeEngine {
             fatalError()
         }
     }
-    
+
     private func _names(of kind: RuntimeObjectKind, in image: String) -> [RuntimeObjectName] {
         switch kind {
         case .c:
@@ -323,7 +321,6 @@ public final actor RuntimeEngine {
             }
         }
     }
-    
 }
 
 // MARK: - Requests
@@ -389,18 +386,31 @@ extension RuntimeEngine {
     }
 
     public func interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        try await request {
-            _interface(for: name, options: options)
+        return try await interface(for: .init(name: name, options: options))
+    }
+
+    private func interface(for request: InterfaceRequest) async throws -> RuntimeObjectInterface? {
+        try await self.request {
+            _interface(for: request.name, options: request.options)
         } remote: { senderConnection in
-            return try await senderConnection.sendMessage(name: .interfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(name: name, options: options))
+            return try await senderConnection.sendMessage(name: .interfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(name: request.name, options: request.options))
         }
     }
-    
+
+    private struct NamesRequest: Codable {
+        let kind: RuntimeObjectKind
+        let image: String
+    }
+
     public func names(of kind: RuntimeObjectKind, in image: String) async throws -> [RuntimeObjectName] {
-        try await request {
-            _names(of: kind, in: image)
+        return try await names(for: .init(kind: kind, image: image))
+    }
+
+    private func names(for request: NamesRequest) async throws -> [RuntimeObjectName] {
+        try await self.request {
+            _names(of: request.kind, in: request.image)
         } remote: {
-            return try await $0.sendMessage(name: .namesOfKindInImage, request: image)
+            return try await $0.sendMessage(name: .namesOfKindInImage, request: NamesRequest(kind: request.kind, image: request.image))
         }
     }
 
