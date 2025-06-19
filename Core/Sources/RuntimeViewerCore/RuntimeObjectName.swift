@@ -5,8 +5,10 @@ public struct RuntimeObjectName: Codable, Hashable, Identifiable {
     public var id: Self { self }
 }
 
-extension RuntimeObjectName: Comparable {
-    public static func < (lhs: RuntimeObjectName, rhs: RuntimeObjectName) -> Bool {
-        lhs.name < rhs.name
+extension RuntimeObjectName: ComparableBuildable {
+    public static let comparableDefinition = makeComparable {
+        compare(\.imagePath)
+        compare(\.kind)
+        compare(\.name)
     }
 }

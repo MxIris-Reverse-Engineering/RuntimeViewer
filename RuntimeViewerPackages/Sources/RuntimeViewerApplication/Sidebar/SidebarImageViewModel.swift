@@ -20,9 +20,8 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
     @Observed private var searchString: String = ""
     @Observed private var searchScope: RuntimeTypeSearchScope = .all
-    @Observed private var classNames: [String] = []
-    @Observed private var protocolNames: [String] = []
     @Observed private var runtimeObjects: [RuntimeObjectName] = []
+    @Observed private var filteredRuntimeObjects: [RuntimeObjectName] = []
     @Observed private var loadState: RuntimeImageLoadState = .notLoaded
 
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
@@ -32,20 +31,17 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         self.imagePath = imagePath
         self.imageName = namedNode.name
         super.init(appServices: appServices, router: router)
+        
         Task {
             do {
-                let classNames = try await runtimeEngine.classNamesIn(image: imagePath)
-                let protocolNames = try await runtimeEngine.imageToProtocols[runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
                 let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
-                let objcClassNames = try await runtimeEngine.names(of: .objc(.class), in: imagePath).sorted()
-                let objcProtocolNames = try await runtimeEngine.names(of: .objc(.protocol), in: imagePath).sorted()
-                let swiftClassNames = try await runtimeEngine.names(of: .swift(.class), in: imagePath).sorted()
-                let swiftProtocolNames = try await runtimeEngine.names(of: .swift(.protocol), in: imagePath).sorted()
-                let swiftEnumNames = try await runtimeEngine.names(of: .swift(.enum), in: imagePath).sorted()
-                let swiftStructNames = try await runtimeEngine.names(of: .swift(.struct), in: imagePath).sorted()
+                let objcClassNames = try await runtimeEngine.names(of: .objc(.class), in: imagePath)
+                let objcProtocolNames = try await runtimeEngine.names(of: .objc(.protocol), in: imagePath)
+                let swiftClassNames = try await runtimeEngine.names(of: .swift(.class), in: imagePath)
+                let swiftProtocolNames = try await runtimeEngine.names(of: .swift(.protocol), in: imagePath)
+                let swiftEnumNames = try await runtimeEngine.names(of: .swift(.enum), in: imagePath)
+                let swiftStructNames = try await runtimeEngine.names(of: .swift(.struct), in: imagePath)
                 await MainActor.run {
-                    self.classNames = classNames
-                    self.protocolNames = protocolNames
 
                     let searchString = ""
                     let searchScope: RuntimeTypeSearchScope = .all
@@ -54,7 +50,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     self.searchScope = searchScope
                     
                     self.runtimeObjects = objcClassNames + objcProtocolNames + swiftEnumNames + swiftStructNames + swiftClassNames + swiftProtocolNames
-                    
+                    self.filteredRuntimeObjects = self.runtimeObjects.sorted()
 //                    self.runtimeObjects = Self.runtimeObjectsFor(
 //                        classNames: classNames, protocolNames: protocolNames,
 //                        searchString: searchString, searchScope: searchScope
@@ -63,30 +59,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     self.loadState = loadState
                 }
 
-                await runtimeEngine.$classList
-                    .asObservable()
-                    .flatMap { [unowned self] _ in
-                        try await runtimeEngine.classNamesIn(image: imagePath)
-                    }
-                    .catchAndReturn([])
-                    .observeOnMainScheduler()
-                    .bind(to: $classNames)
-                    .disposed(by: rx.disposeBag)
-
-                await runtimeEngine.$imageToProtocols
-                    .asObservable()
-                    .flatMap { [unowned self] imageToProtocols in
-                        try imageToProtocols[await runtimeEngine.patchImagePathForDyld(imagePath)] ?? []
-                    }
-                    .catchAndReturn([])
-                    .observeOnMainScheduler()
-                    .bind(to: $protocolNames)
-                    .disposed(by: rx.disposeBag)
-
-                let debouncedSearch = $searchString
-                    .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
-                    .asObservable()
-
+                
 //                $searchScope
 //                    .asPublisher()
 //                    .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
@@ -100,6 +73,23 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 //                    .bind(to: $runtimeObjects)
 //                    .disposed(by: rx.disposeBag)
 
+                let debouncedSearch = $searchString
+                    .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
+                    .asObservable()
+                
+                
+                
+                debouncedSearch
+                    .withLatestFrom($runtimeObjects.asObservable()) { (searchString: String, runtimeObjects: [RuntimeObjectName]) -> [RuntimeObjectName] in
+                        if searchString.isEmpty {
+                            return runtimeObjects.sorted()
+                        } else {
+                            return runtimeObjects.filter { $0.name.localizedCaseInsensitiveContains(searchString) }.sorted()
+                        }
+                    }
+                    .bind(to: $filteredRuntimeObjects)
+                    .disposed(by: rx.disposeBag)
+                
                 await runtimeEngine.$imageList
                     .asObservable()
                     .flatMap { [unowned self] imageList in
@@ -156,7 +146,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        let runtimeObjects = $runtimeObjects.asDriver()
+        let runtimeObjects = $filteredRuntimeObjects.asDriver()
             .map {
                 $0.map { SidebarImageCellViewModel(runtimeObject: $0) }
             }
@@ -178,8 +168,8 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
             notLoadedText: .just("\(imageName) is not yet loaded"),
             errorText: errorText,
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
-            isEmpty: .combineLatest($classNames.asDriver(), $protocolNames.asDriver(), resultSelector: { $0.isEmpty && $1.isEmpty }).startWith(classNames.isEmpty && protocolNames.isEmpty),
-            windowInitialTitles: .combineLatest($classNames.asDriver(), $protocolNames.asDriver(), resultSelector: { (runtimeNodeName, "Classes: \($0.count) Protocols: \($1.count)") }),
+            isEmpty: $runtimeObjects.asDriver().map { $0.isEmpty },
+            windowInitialTitles: .just((runtimeNodeName, "")),
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.name)" }
             
         )
