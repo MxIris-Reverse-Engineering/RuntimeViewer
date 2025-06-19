@@ -10,7 +10,7 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-extension RuntimeObjectType {
+extension RuntimeObjectKind {
     #if canImport(AppKit) && !targetEnvironment(macCatalyst)
     private static let iconSize: CGFloat = 16
     #endif
@@ -19,15 +19,33 @@ extension RuntimeObjectType {
     private static let iconSize: CGFloat = 24
     #endif
 
-    public static let classIcon = IDEIcon("C", color: .yellow, style: .default, size: iconSize).image
-    public static let protocolIcon = IDEIcon("Pr", color: .purple, style: .default, size: iconSize).image
+    public static let objcClassIcon = IDEIcon("C", color: .yellow, style: .default, size: iconSize).image
+    public static let objcProtocolIcon = IDEIcon("Pr", color: .purple, style: .default, size: iconSize).image
+
+    public static let swiftEnumIcon = IDEIcon("E", color: .blue, style: .default, size: iconSize).image
+    public static let swiftStructIcon = IDEIcon("S", color: .blue, style: .default, size: iconSize).image
+    public static let swiftClassIcon = IDEIcon("C", color: .blue, style: .default, size: iconSize).image
+    public static let swiftProtocolIcon = IDEIcon("Pr", color: .blue, style: .default, size: iconSize).image
+
 //    public static let classIcon = SFSymbol(systemName: .cSquare).nsuiImage
 //    public static let protocolIcon = SFSymbol(systemName: .pSquare).nsuiImage
 
     public var icon: NSUIImage {
         switch self {
-        case .class: return Self.classIcon
-        case .protocol: return Self.protocolIcon
+        case let .objc(kindOfObjC):
+            switch kindOfObjC {
+            case .class: return Self.objcClassIcon
+            case .protocol: return Self.objcProtocolIcon
+            }
+        case let .swift(kindOfSwift):
+            switch kindOfSwift {
+            case .enum: return Self.swiftEnumIcon
+            case .struct: return Self.swiftStructIcon
+            case .class: return Self.swiftClassIcon
+            case .protocol: return Self.swiftProtocolIcon
+            }
+        default:
+            fatalError()
         }
     }
 }
@@ -78,7 +96,6 @@ extension RuntimeNamedNode: @retroactive Sequence {
         }
     }
 }
-
 
 extension RuntimeNamedNode {
     public static let frameworkIcon = SFSymbol(systemName: .latch2Case).nsuiImage

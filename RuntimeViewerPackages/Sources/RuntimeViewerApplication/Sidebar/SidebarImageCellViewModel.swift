@@ -11,7 +11,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
 public class SidebarImageCellViewModel: NSObject {
-    let runtimeObject: RuntimeObjectType
+    let runtimeObject: RuntimeObjectName
 
     @Observed
     public private(set) var icon: NSUIImage?
@@ -19,9 +19,9 @@ public class SidebarImageCellViewModel: NSObject {
     @Observed
     public private(set) var name: NSAttributedString
 
-    public init(runtimeObject: RuntimeObjectType) {
+    public init(runtimeObject: RuntimeObjectName) {
         self.runtimeObject = runtimeObject
-        self.icon = runtimeObject.icon
+        self.icon = runtimeObject.kind.icon
         self.name = NSAttributedString {
             AText(runtimeObject.name)
                 .font(.systemFont(ofSize: 13))

@@ -6,19 +6,24 @@ import AppKit
 import UIKit
 #endif
 
+import Semantic
 import RuntimeViewerCore
 
-public extension CDSemanticString {
+public extension SemanticString {
     func attributedString(for provider: ThemeProfile) -> NSAttributedString {
         let attributedString = NSMutableAttributedString(string: "")
-        enumerateTypes { string, type in
+        
+        for component in self.components {
+            let string = component.string
+            let type = component.type
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: provider.font(for: type),
                 .foregroundColor: provider.color(for: type),
             ]
             #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-            if type == .class || type == .protocol {
-                attributes.updateValue(type == .class ? RuntimeObjectType.class(named: string) : RuntimeObjectType.protocol(named: string), forKey: .link)
+            if type == .typeName {
+                #warning("FIXME")
+                attributes.updateValue(string, forKey: .link)
             }
             #endif
 
@@ -33,6 +38,7 @@ public extension CDSemanticString {
             #endif
             attributedString.append(NSAttributedString(string: string, attributes: attributes))
         }
+        
         return attributedString
     }
 }

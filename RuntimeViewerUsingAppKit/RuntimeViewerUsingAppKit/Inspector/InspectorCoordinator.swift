@@ -44,14 +44,15 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
             return viewController
-        case let .object(runtimeObjectType):
-            switch runtimeObjectType {
-            case let .class(named):
-                let viewModel = InspectorClassViewModel(runtimeClassName: named, appServices: appServices, router: self)
+        case let .object(runtimeObjectName):
+            switch runtimeObjectName.kind {
+            case .objc(.class):
+                let viewModel = InspectorClassViewModel(runtimeClassName: runtimeObjectName.name, appServices: appServices, router: self)
                 let viewController = InspectorClassViewController()
                 viewController.setupBindings(for: viewModel)
                 return viewController
-            case .protocol(_):
+//            case .protocol:
+            default:
                 let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
                 let viewController = InspectorPlaceholderViewController()
                 viewController.setupBindings(for: viewModel)

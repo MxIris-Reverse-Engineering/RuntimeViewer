@@ -13,7 +13,7 @@ import RuntimeViewerApplication
 
 public enum MainRoute: Routable {
     case main(RuntimeEngine)
-    case select(RuntimeObjectType)
+    case select(RuntimeObjectName)
     case sidebarBack
     case contentBack
     case generationOptions(sender: NSView)

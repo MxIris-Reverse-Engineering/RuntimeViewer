@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 
 public enum ContentRoute: Routable {
     case placeholder
-    case root(RuntimeObjectType)
-    case next(RuntimeObjectType)
+    case root(RuntimeObjectName)
+    case next(RuntimeObjectName)
     case back
 }
