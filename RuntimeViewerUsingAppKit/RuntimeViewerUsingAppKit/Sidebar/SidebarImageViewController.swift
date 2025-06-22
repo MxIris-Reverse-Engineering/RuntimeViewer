@@ -1,10 +1,3 @@
-//
-//  SidebarImageViewController.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -27,9 +20,9 @@ class SidebarImageViewController: UXVisualEffectViewController<SidebarImageViewM
     let bottomSeparatorView = NSBox()
 
     private var previousWindowSubtitle: String = ""
-    
+
     private var previousWindowTitle: String = ""
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -104,7 +97,7 @@ class SidebarImageViewController: UXVisualEffectViewController<SidebarImageViewM
 //            view.window?.subtitle = previousWindowSubtitle
 //        }
 //        .disposed(by: rx.disposeBag)
-//        
+//
         output.windowInitialTitles.driveOnNext { [weak self] in
             guard let self, let window = view.window else { return }
             previousWindowTitle = window.title
@@ -113,12 +106,12 @@ class SidebarImageViewController: UXVisualEffectViewController<SidebarImageViewM
             window.subtitle = $0.subtitle
         }
         .disposed(by: rx.disposeBag)
-//        
+//
 //        rx.viewWillAppear.asSignal().flatMapLatest { output.windowSubtitle }.emitOnNext { [weak self] in
 //            guard let self, let window = view.window else { return }
 //            window.subtitle = $0
 //        }.disposed(by:rx.disposeBag)
-        
+
         output.loadState.driveOnNextMainActor { [weak self] loadState in
             guard let self else { return }
             tabView.selectTabViewItem(withIdentifier: loadState.tabViewItemIdentifier)

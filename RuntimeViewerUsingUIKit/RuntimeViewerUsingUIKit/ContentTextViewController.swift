@@ -9,7 +9,7 @@ import RuntimeViewerArchitectures
 class ContentTextViewController: ViewController<ContentTextViewModel> {
     let textView = UITextView()
 
-    let runtimeObjectClicked = PublishRelay<RuntimeObjectType>()
+    let runtimeObjectClicked = PublishRelay<RuntimeObjectName>()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -68,9 +68,10 @@ extension ContentTextViewController: UITextViewDelegate {
                     default:
                         break
                     }
-                    if let runtimeObject {
-                        runtimeObjectClicked.accept(runtimeObject)
-                    }
+                    #warning("RuntimeObjectType is not used in this context, consider using RuntimeObjectName")
+//                    if let runtimeObject {
+//                        runtimeObjectClicked.accept(runtimeObject)
+//                    }
                 }
             }
             return .init(menu: UIMenu(children: [jumpToDefinitionAction]))

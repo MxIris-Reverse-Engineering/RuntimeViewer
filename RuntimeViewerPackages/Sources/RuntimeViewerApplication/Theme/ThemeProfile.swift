@@ -10,14 +10,15 @@ import Semantic
 import UIFoundation
 import RuntimeViewerCore
 
-public struct AnyThemeProfile<Theme: ThemeProfile & Codable>: Codable {
+@propertyWrapper
+public struct AnyThemeProfile<Theme: ThemeProfile>: Codable {
     public var wrappedValue: Theme
     public init(wrappedValue: Theme) {
         self.wrappedValue = wrappedValue
     }
 }
 
-public protocol ThemeProfile {
+public protocol ThemeProfile: Codable {
     var selectionBackgroundColor: NSUIColor { set get }
     var backgroundColor: NSUIColor { set get }
     var fontSize: CGFloat { set get }
@@ -27,13 +28,13 @@ public protocol ThemeProfile {
     mutating func fontSizeLarger()
 }
 
-public struct XcodePresentationTheme: ThemeProfile, Codable {
+public struct XcodePresentationTheme: ThemeProfile {
     public var selectionBackgroundColor: NSUIColor = #colorLiteral(red: 0.3904261589, green: 0.4343567491, blue: 0.5144847631, alpha: 1)
-    
+
     public var backgroundColor: NSUIColor = .init(light: #colorLiteral(red: 1, green: 0.9999999404, blue: 1, alpha: 1), dark: #colorLiteral(red: 0.1251632571, green: 0.1258862913, blue: 0.1465735137, alpha: 1))
 
     public var fontSize: CGFloat = 13
-    
+
     public func font(for type: SemanticType) -> NSUIFont {
         switch type {
         case .keyword:
@@ -44,7 +45,7 @@ public struct XcodePresentationTheme: ThemeProfile, Codable {
     }
 
     private static var colorCache: [SemanticType: NSUIColor] = [:]
-    
+
     public func color(for type: SemanticType) -> NSUIColor {
         if let existColor = Self.colorCache[type] {
             return existColor
@@ -59,13 +60,14 @@ public struct XcodePresentationTheme: ThemeProfile, Codable {
             light = #colorLiteral(red: 0.7660875916, green: 0.1342913806, blue: 0.4595085979, alpha: 0.8)
             dark = #colorLiteral(red: 0.9686241746, green: 0.2627249062, blue: 0.6156817079, alpha: 1)
         case .variable,
-             .functionDeclaration,
-             .memberDeclaration,
-             .typeDeclaration:
+             .function(.declaration),
+             .member(.declaration),
+             .type(_, .declaration):
             light = #colorLiteral(red: 0.01979870349, green: 0.4877431393, blue: 0.6895453334, alpha: 1)
             dark = #colorLiteral(red: 0.2426597476, green: 0.7430019975, blue: 0.8773110509, alpha: 1)
-        case .typeName,
-             .memberName:
+        case .type(_, .name),
+             .function(.name),
+             .member(.name):
             light = #colorLiteral(red: 0.2404940426, green: 0.115125142, blue: 0.5072092414, alpha: 1)
             dark = #colorLiteral(red: 0.853918612, green: 0.730949223, blue: 1, alpha: 1)
         case .numeric:
@@ -81,14 +83,12 @@ public struct XcodePresentationTheme: ThemeProfile, Codable {
         Self.colorCache[type] = color
         return color
     }
-    
+
     public mutating func fontSizeSmaller() {
         fontSize -= 1
     }
-    
+
     public mutating func fontSizeLarger() {
         fontSize += 1
     }
 }
-
-

@@ -8,7 +8,7 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import Foundation
 import SwiftyXPC
-import OSLog
+import Logging
 
 class RuntimeXPCConnection: RuntimeConnection {
     fileprivate let identifier: RuntimeSource.Identifier
@@ -26,7 +26,7 @@ class RuntimeXPCConnection: RuntimeConnection {
         }
     }
 
-    fileprivate static let logger = Logger(subsystem: "com.JH.RuntimeCommunication", category: "RuntimeXPCConnection")
+    fileprivate static let logger = Logger(label: "RuntimeXPCConnection")
 
     init(identifier: RuntimeSource.Identifier, modify: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         self.identifier = identifier

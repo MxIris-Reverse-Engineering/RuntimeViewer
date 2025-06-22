@@ -4,18 +4,13 @@ import AppKit
 import RuntimeViewerUI
 import RuntimeViewerApplication
 
-class LoadFrameworksViewModel: ViewModel<MainRoute> {
-    
-}
-
+class LoadFrameworksViewModel: ViewModel<MainRoute> {}
 
 class LoadFrameworksViewController: AppKitViewController<LoadFrameworksViewModel> {
-
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do view setup here.
     }
-    
 }
 
 #endif

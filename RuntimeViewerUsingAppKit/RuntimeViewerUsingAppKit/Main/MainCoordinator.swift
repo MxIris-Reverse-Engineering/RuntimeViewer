@@ -1,10 +1,3 @@
-//
-//  MainCoordinator.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
 import RuntimeViewerCore
 import RuntimeViewerUI
@@ -31,7 +24,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
-        case let .main(runtimeEngine):
+        case .main(let runtimeEngine):
             appServices.runtimeEngine = runtimeEngine
             removeChild(sidebarCoordinator)
             removeChild(contentCoordinator)
@@ -48,7 +41,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
                 .route(on: contentCoordinator, to: .placeholder),
                 .route(on: inspectorCoordinator, to: .placeholder)
             )
-        case let .select(runtimeObject):
+        case .select(let runtimeObject):
             return .route(on: contentCoordinator, to: .root(runtimeObject))
 //        case let .inspect(inspectableType):
 //            return .route(on: inspectorCoordinator, to: .select(inspectableType))
@@ -56,7 +49,7 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             return .route(on: sidebarCoordinator, to: .back)
         case .contentBack:
             return .route(on: contentCoordinator, to: .back)
-        case let .generationOptions(sender):
+        case .generationOptions(let sender):
             let viewController = GenerationOptionsViewController()
             let viewModel = GenerationOptionsViewModel(appServices: appServices, router: self)
             viewController.setupBindings(for: viewModel)
@@ -95,9 +88,9 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
         switch route {
         case .selectedNode:
             break
-        case let .clickedNode(runtimeNamedNode):
+        case .clickedNode(let runtimeNamedNode):
             windowController.window?.title = runtimeNamedNode.name
-        case let .selectedObject(runtimeObjectType):
+        case .selectedObject(let runtimeObjectType):
             contentCoordinator.contextTrigger(.root(runtimeObjectType))
         case .back:
             contentCoordinator.contextTrigger(.placeholder)
@@ -117,9 +110,9 @@ extension MainCoordinator: ContentCoordinator.Delegate {
         switch route {
         case .placeholder:
             inspectorCoordinator.contextTrigger(.placeholder)
-        case let .root(runtimeObjectType):
+        case .root(let runtimeObjectType):
             inspectorCoordinator.contextTrigger(.root(.object(runtimeObjectType)))
-        case let .next(runtimeObjectType):
+        case .next(let runtimeObjectType):
             inspectorCoordinator.contextTrigger(.next(.object(runtimeObjectType)))
         case .back:
             inspectorCoordinator.contextTrigger(.back)

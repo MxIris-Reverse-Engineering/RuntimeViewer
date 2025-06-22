@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -10,7 +10,7 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
-        .iOS(.v15), .macOS(.v12), .macCatalyst(.v15), .tvOS(.v15), .visionOS(.v1),
+        .iOS(.v17), .macOS(.v14), .macCatalyst(.v17), .tvOS(.v17), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -32,6 +32,9 @@ let package = Package(
     ],
     dependencies: [
         .package(
+            path: "../Core"
+        ),
+        .package(
             url: "https://github.com/ChimeHQ/Rearrange.git",
             from: "2.0.0"
         ),
@@ -45,8 +48,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/CocoaCoordinator",
-//            from: "0.2.0"
-            branch: "main"
+            from: "0.3.0"
         ),
         .package(
             url: "https://github.com/SnapKit/SnapKit",
@@ -66,8 +68,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/OpenUXKit/OpenUXKit",
-//            from: "0.2.0"
-            branch: "main"
+            from: "0.10.0"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/NSAttributedStringBuilder",
@@ -114,7 +115,14 @@ let package = Package(
             url: "https://github.com/Mx-Iris/RunningApplicationKit",
             from: "0.1.0"
         ),
-        .package(path: "../Core"),
+        .package(
+            url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
+            from: "0.5.3-fork"
+        ),
+        .package(
+            url: "https://github.com/dagronf/DSFInspectorPanes",
+            from: "3.0.0"
+        ),
     ],
     targets: [
         .target(
@@ -129,7 +137,6 @@ let package = Package(
                 .product(name: "RxCombine", package: "RxCombine"),
                 .product(name: "RxEnumKit", package: "RxEnumKit"),
                 .product(name: "RxConcurrency", package: "RxConcurrency"),
-//                .product(name: "RxSwiftExt", package: "RxSwiftExt"),
                 .product(name: "XCoordinator", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "XCoordinatorRx", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
@@ -151,7 +158,6 @@ let package = Package(
                 .product(name: "IDEIcons", package: "ide-icons"),
                 .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
-//                .product(name: "MachInjectorUI", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
@@ -161,6 +167,7 @@ let package = Package(
                 .product(name: "RuntimeViewerCore", package: "Core"),
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
+                .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
             ]
         ),
 
@@ -172,5 +179,6 @@ let package = Package(
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )

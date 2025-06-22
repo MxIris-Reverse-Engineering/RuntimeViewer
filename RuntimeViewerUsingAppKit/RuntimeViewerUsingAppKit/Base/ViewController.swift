@@ -1,20 +1,41 @@
-//
-//  ViewController.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
+import RuntimeViewerApplication
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
-class UXKitViewController<ViewModelType>: UXViewController {
-    var viewModel: ViewModelType?
+class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
+    var viewModel: ViewModel?
 
-    init(viewModel: ViewModelType? = nil) {
+    private let commonLoadingView = CommonLoadingView()
+
+    var shouldDisplayCommonLoading: Bool { false }
+
+    private(set) var contentView = NSView()
+
+    init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        hierarchy {
+            contentView
+            if shouldDisplayCommonLoading {
+                commonLoadingView
+            }
+        }
+
+        contentView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+
+        if shouldDisplayCommonLoading {
+            commonLoadingView.snp.makeConstraints { make in
+                make.edges.equalTo(view.safeAreaLayoutGuide)
+            }
+        }
     }
 
     @available(*, unavailable)
@@ -22,25 +43,22 @@ class UXKitViewController<ViewModelType>: UXViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func setupBindings(for viewModel: ViewModelType) {
+    func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
         self.viewModel = viewModel
+        if shouldDisplayCommonLoading {
+            viewModel.commonLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
+        }
     }
 }
 
-class UXVisualEffectViewController<ViewModelType>: UXKitViewController<ViewModelType> {
-    let contentView = NSVisualEffectView()
+class UXVisualEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<ViewModel> {
+    private let visualEffectView = NSVisualEffectView()
+
+    override var contentView: NSView { visualEffectView }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        hierarchy {
-            contentView
-        }
-
-        contentView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
     }
 }
 

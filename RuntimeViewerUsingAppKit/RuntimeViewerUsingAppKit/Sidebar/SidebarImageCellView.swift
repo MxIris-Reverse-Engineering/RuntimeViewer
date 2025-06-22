@@ -1,10 +1,3 @@
-//
-//  SidebarImageCellView.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 11/26/24.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures

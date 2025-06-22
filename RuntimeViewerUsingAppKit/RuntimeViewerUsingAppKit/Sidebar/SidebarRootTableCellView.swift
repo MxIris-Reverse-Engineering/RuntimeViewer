@@ -1,10 +1,3 @@
-//
-//  SidebarRootTableCellView.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/8.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures

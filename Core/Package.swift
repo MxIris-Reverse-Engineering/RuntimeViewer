@@ -1,4 +1,4 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -36,7 +36,7 @@ extension Package.Dependency {
 let package = Package(
     name: "Core",
     platforms: [
-        .iOS(.v14), .macOS(.v12), .macCatalyst(.v14), .tvOS(.v14), .watchOS(.v6), .visionOS(.v1),
+        .iOS(.v13), .macOS(.v10_15), .macCatalyst(.v13), .tvOS(.v13), .watchOS(.v6), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -83,8 +83,8 @@ let package = Package(
             from: "1.2.0"
         ),
         .package(
-            url: "https://github.com/reddavis/Asynchrone",
-            from: "0.1.0"
+            url: "https://github.com/MxIris-Library-Forks/Asynchrone",
+            from: "0.23.0-fork"
         ),
         .package(
             url: "https://github.com/groue/Semaphore",
@@ -98,6 +98,14 @@ let package = Package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/apple/swift-log",
+            from: "1.6.3"
+        ),
+        .package(
+            url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
+            from: "0.5.3-fork"
+        ),
     ],
     targets: [
         .target(
@@ -110,6 +118,8 @@ let package = Package(
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
                 .product(name: "SwiftDump", package: "MachOSwiftSection"),
                 .product(name: "OrderedCollections", package: "swift-collections"),
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
             ]
         ),
         .target(
@@ -118,7 +128,10 @@ let package = Package(
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Asynchrone", package: "Asynchrone"),
                 .product(name: "Semaphore", package: "Semaphore"),
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
             ]
         ),
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )

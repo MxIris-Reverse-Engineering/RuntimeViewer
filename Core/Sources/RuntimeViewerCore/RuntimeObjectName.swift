@@ -1,8 +1,16 @@
+import MemberwiseInit
+
+@MemberwiseInit(.public)
 public struct RuntimeObjectName: Codable, Hashable, Identifiable {
     public let name: String
+
     public let kind: RuntimeObjectKind
+
     public let imagePath: String
+
     public var id: Self { self }
+
+    public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
 }
 
 extension RuntimeObjectName: ComparableBuildable {

@@ -32,12 +32,12 @@ extension RuntimeObjectKind {
 
     public var icon: NSUIImage {
         switch self {
-        case let .objc(kindOfObjC):
+        case .objc(let kindOfObjC):
             switch kindOfObjC {
             case .class: return Self.objcClassIcon
             case .protocol: return Self.objcProtocolIcon
             }
-        case let .swift(kindOfSwift):
+        case .swift(let kindOfSwift):
             switch kindOfSwift {
             case .enum: return Self.swiftEnumIcon
             case .struct: return Self.swiftStructIcon
@@ -57,9 +57,9 @@ extension RuntimeObjectType: @retroactive Comparable {
             return true
         case (.protocol, .class):
             return false
-        case let (.class(className1), .class(className2)):
+        case (.class(let className1), .class(let className2)):
             return className1 < className2
-        case let (.protocol(protocolName1), .protocol(protocolName2)):
+        case (.protocol(let protocolName1), .protocol(let protocolName2)):
             return protocolName1 < protocolName2
         }
     }

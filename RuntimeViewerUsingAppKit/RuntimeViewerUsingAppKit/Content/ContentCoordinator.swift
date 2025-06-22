@@ -1,10 +1,3 @@
-//
-//  EditorCoordinator.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
 import RuntimeViewerCore
 import RuntimeViewerUI
@@ -35,12 +28,12 @@ class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
             let contentPlaceholderViewModel = ContentPlaceholderViewModel(appServices: appServices, router: self)
             contentPlaceholderViewController.setupBindings(for: contentPlaceholderViewModel)
             return .set([contentPlaceholderViewController], animated: false)
-        case let .root(runtimeObjectType):
+        case .root(let runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
             return .set([contentTextViewController], animated: false)
-        case let .next(runtimeObjectType):
+        case .next(let runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)

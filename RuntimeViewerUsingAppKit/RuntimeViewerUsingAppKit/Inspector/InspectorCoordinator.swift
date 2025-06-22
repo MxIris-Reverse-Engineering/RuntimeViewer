@@ -1,10 +1,3 @@
-//
-//  InspectorCoordinator.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerCore
@@ -28,9 +21,9 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
             return .set([viewController], animated: false)
-        case let .root(inspectableObject):
+        case .root(let inspectableObject):
             return .set([makeTransition(for: inspectableObject)], animated: false)
-        case let .next(inspectableObject):
+        case .next(let inspectableObject):
             return .push(makeTransition(for: inspectableObject), animated: false)
         case .back:
             return .pop(animated: false)
@@ -39,12 +32,12 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
 
     func makeTransition(for inspectableObject: InspectableObject) -> UXViewController {
         switch inspectableObject {
-        case .node(_):
+        case .node:
             let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
             return viewController
-        case let .object(runtimeObjectName):
+        case .object(let runtimeObjectName):
             switch runtimeObjectName.kind {
             case .objc(.class):
                 let viewModel = InspectorClassViewModel(runtimeClassName: runtimeObjectName.name, appServices: appServices, router: self)

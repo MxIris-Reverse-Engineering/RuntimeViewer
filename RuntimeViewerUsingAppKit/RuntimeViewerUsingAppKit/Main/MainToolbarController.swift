@@ -1,10 +1,3 @@
-//
-//  MainToolbarController.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/8.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RxAppKit
@@ -12,7 +5,6 @@ import RuntimeViewerCommunication
 
 extension RuntimeSource: @retroactive RxMenuItemRepresentable {}
 extension RuntimeSource: MainMenuItemRepresentable {
-
     public var title: String { description }
 
     var icon: NSImage {
@@ -25,9 +17,9 @@ extension RuntimeSource: MainMenuItemRepresentable {
             } else {
                 return .symbol(name: RuntimeViewerSymbols.appFill)
             }
-        case .bonjourClient(_):
+        case .bonjourClient:
             return .symbol(systemName: .bonjour)
-        case .bonjourServer(_, _):
+        case .bonjourServer:
             return .symbol(systemName: .bonjour)
         }
     }
@@ -63,11 +55,11 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
         convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbol.SystemSymbolName) {
             self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbol.SymbolName)
         }
-        
+
         convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: RuntimeViewerSymbols) {
             self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbol.SymbolName)
         }
-        
+
         init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbol.SymbolName) {
             super.init(itemIdentifier: itemIdentifier)
             view = button
@@ -109,7 +101,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     }
 
     let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject)
-    
+
     let inspectorItem = InspectorToolbarItem()
 
     let saveItem = IconButtonToolbarItem(itemIdentifier: .Main.save, icon: .squareAndArrowDown)
@@ -127,9 +119,9 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     let fontSizeLargerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeLarger, icon: .textformatSizeLarger)
 
     let loadFrameworksItem = IconButtonToolbarItem(itemIdentifier: .Main.loadFrameworks, icon: .latch2Case)
-    
-    let installHelperItem =  IconButtonToolbarItem(itemIdentifier: .Main.installHelper, icon: .wrenchAndScrewdriver)
-    
+
+    let installHelperItem = IconButtonToolbarItem(itemIdentifier: .Main.installHelper, icon: .wrenchAndScrewdriver)
+
     init(delegate: Delegate) {
         self.delegate = delegate
         self.toolbar = NSToolbar()
@@ -177,7 +169,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.fontSizeLarger,
             .Main.loadFrameworks,
             .Main.installHelper,
-            .Main.attach
+            .Main.attach,
         ]
     }
 

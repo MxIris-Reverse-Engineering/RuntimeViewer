@@ -1,10 +1,3 @@
-//
-//  SidebarCoordinator.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
 import RuntimeViewerCore
 import RuntimeViewerUI
@@ -35,7 +28,7 @@ class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
             let viewModel = SidebarRootViewModel(appServices: appServices, router: self)
             viewController.setupBindings(for: viewModel)
             return .push(viewController, animated: false)
-        case let .clickedNode(clickedNode):
+        case .clickedNode(let clickedNode):
             let imageViewController = SidebarImageViewController()
             let imageViewModel = SidebarImageViewModel(node: clickedNode, appServices: appServices, router: self)
             imageViewController.setupBindings(for: imageViewModel)

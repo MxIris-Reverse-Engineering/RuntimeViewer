@@ -9,36 +9,76 @@ import UIKit
 import Semantic
 import RuntimeViewerCore
 
-public extension SemanticString {
-    func attributedString(for provider: ThemeProfile) -> NSAttributedString {
+extension SemanticString {
+    public func attributedString(for provider: ThemeProfile, runtimeObject: RuntimeObjectName) -> NSAttributedString {
         let attributedString = NSMutableAttributedString(string: "")
-        
-        for component in self.components {
+
+        for component in components {
             let string = component.string
             let type = component.type
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: provider.font(for: type),
                 .foregroundColor: provider.color(for: type),
             ]
+
             #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-            if type == .typeName {
-                #warning("FIXME")
-                attributes.updateValue(string, forKey: .link)
+
+            var targetKind: RuntimeObjectKind?
+            switch runtimeObject.kind {
+            case .c:
+                break
+            case .objc:
+                switch type {
+                case .type(let kind, .name):
+                    switch kind {
+                    case .class:
+                        targetKind = .objc(.class)
+                    case .protocol:
+                        targetKind = .objc(.protocol)
+                    default:
+                        break
+                    }
+
+                default:
+                    break
+                }
+            case .swift: break
+//                switch type {
+//                case .type(let kind, .name):
+//                    switch kind {
+//                    case .enum:
+//                        targetKind = .swift(.enum)
+//                    case .struct:
+//                        targetKind = .swift(.struct)
+//                    case .class:
+//                        targetKind = .swift(.class)
+//                    case .protocol:
+//                        targetKind = .swift(.protocol)
+//                    default:
+//                        break
+//                    }
+//                default:
+//                    break
+//                }
+            }
+
+            if let targetKind {
+                attributes.updateValue(RuntimeObjectName(name: string, kind: targetKind, imagePath: runtimeObject.imagePath), forKey: .link)
             }
             #endif
 
             #if canImport(UIKit)
-            if type == .class || type == .protocol {
-                let scheme = type == .class ? "class" : "protocol"
-                let host = string
-                if let url = URL(string: "\(scheme)://\(host)") {
-                    attributes.updateValue(url, forKey: .link)
-                }
-            }
+//            if type == .class || type == .protocol {
+//                let scheme = type == .class ? "class" : "protocol"
+//                let host = string
+//                if let url = URL(string: "\(scheme)://\(host)") {
+//                    attributes.updateValue(url, forKey: .link)
+//                }
+//            }
             #endif
             attributedString.append(NSAttributedString(string: string, attributes: attributes))
         }
-        
+
         return attributedString
     }
 }

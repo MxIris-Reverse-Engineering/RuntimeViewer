@@ -1,10 +1,3 @@
-//
-//  MainSplitViewController.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerApplication
@@ -30,7 +23,7 @@ class MainSplitViewController: NSSplitViewController {
         splitViewItems[0].do {
             $0.minimumThickness = 250
             $0.maximumThickness = 400
-        } 
+        }
 
         splitViewItems[1].do {
             $0.minimumThickness = 600
@@ -52,14 +45,13 @@ class MainSplitViewController: NSSplitViewController {
     }
 }
 
-/* Fix UXKit Exception
-extension NSViewController {
-    @objc func transitionCoordinator() -> Any? {
-        return nil
-    }
-
-    @objc func _ancestorViewControllerOfClass(_ class: Any?) -> Any? {
-        return nil
-    }
-}
-*/
+// Fix UXKit Exception
+// extension NSViewController {
+//    @objc func transitionCoordinator() -> Any? {
+//        return nil
+//    }
+//
+//    @objc func _ancestorViewControllerOfClass(_ class: Any?) -> Any? {
+//        return nil
+//    }
+// }

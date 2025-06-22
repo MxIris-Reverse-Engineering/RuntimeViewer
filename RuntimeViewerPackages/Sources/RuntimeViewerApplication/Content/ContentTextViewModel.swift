@@ -10,6 +10,7 @@ import Demangle
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
+import MemberwiseInit
 
 public class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
@@ -28,39 +29,26 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
         super.init(appServices: appServices, router: router)
-//        Task {
-//            do {
-//                switch runtimeObject {
-//                case .class(let named):
-//                    let imageName = try await appServices.runtimeEngine.imageName(ofClass: named)
-//                    await MainActor.run {
-//                        self.imageNameOfRuntimeObject = imageName
-//                    }
-//                case .protocol(let named):
-//                    self.imageNameOfRuntimeObject = await appServices.runtimeEngine.protocolToImage[named]
-//                }
-//            } catch {
-//                print(error)
-//            }
-//        }
+        
+        imageNameOfRuntimeObject = runtimeObject.imageName
+        
         Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
-            .observeOnMainScheduler()
-            .flatMap { [unowned self] runtimeObject, options, theme -> NSAttributedString? in
-                let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: options, swiftDemangleOptions: .interface))?.interfaceString
-                return await MainActor.run {
-                    semanticString?.attributedString(for: theme)
+            .flatMapLatest { [unowned self] runtimeObject, options, theme in
+                Observable.async {
+                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: options, swiftDemangleOptions: .interface)).map { ($0.interfaceString, theme, runtimeObject) }
                 }
+                .trackActivity(_commonLoading)
             }
             .catchAndReturn(nil)
+            .observeOnMainScheduler()
+            .map { $0.map { $0.attributedString(for: $1, runtimeObject: $2) } }
             .bind(to: $attributedString)
             .disposed(by: rx.disposeBag)
     }
 
+    @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<RuntimeObjectName>
-        public init(runtimeObjectClicked: Signal<RuntimeObjectName>) {
-            self.runtimeObjectClicked = runtimeObjectClicked
-        }
     }
 
     public struct Output {
@@ -99,7 +87,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
             attributedString: $attributedString.asDriver().compactMap { $0 },
             runtimeObjectName: $runtimeObject.asDriver().map { $0.name },
             theme: $theme.asDriver(),
-            imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver().map { $0?.box.lastPathComponent.box.deletingPathExtension }
+            imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver()
         )
     }
 }

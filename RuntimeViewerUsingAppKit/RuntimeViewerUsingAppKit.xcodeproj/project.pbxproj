@@ -8,9 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
-		E924302C2D1EA96300246445 /* NSTextLayoutManager+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E924302B2D1EA96300246445 /* NSTextLayoutManager+.swift */; };
-		E924302E2D1EA99800246445 /* NSTextContentStorage+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E924302D2D1EA99800246445 /* NSTextContentStorage+.swift */; };
-		E92430302D1EAF5200246445 /* MinimapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E924302F2D1EAF5200246445 /* MinimapView.swift */; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACBE2C28865100A2F3D3 /* MainRoute.swift */; };
 		E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FE52C0D614900362862 /* AppDelegate.swift */; };
@@ -61,6 +58,14 @@
 		E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */; };
 		E9E900EB2C2D0D5B00FADDCC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E900EA2C2D0D5B00FADDCC /* main.swift */; };
 		E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */; };
+		E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */; };
+		E9EEE8DD2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEE8DC2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift */; };
+		E9EEF7612E084D7D008D85D1 /* SidebarImageCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7602E084D7D008D85D1 /* SidebarImageCoordinator.swift */; };
+		E9EEF7632E084D87008D85D1 /* SidebarImageRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7622E084D87008D85D1 /* SidebarImageRoute.swift */; };
+		E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7642E08540B008D85D1 /* ContentTextView.swift */; };
+		E9EEF7672E085420008D85D1 /* InspectorDisclosureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */; };
+		E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7682E085426008D85D1 /* InspectorClassHierarchyView.swift */; };
+		E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7702E086841008D85D1 /* AttachToProcessViewModel.swift */; };
 		E9F0A57E2C305C01001C36FB /* GenerationOptionsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */; };
 		E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */; };
 		E9F759622CF76B2200BE7A5F /* RuntimeViewerServer.h in Headers */ = {isa = PBXBuildFile; fileRef = E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -68,7 +73,6 @@
 		E9F759682CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */; };
 		E9F759692CF7817200BE7A5F /* RuntimeViewerServer.framework in Resources */ = {isa = PBXBuildFile; fileRef = E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */; };
 		E9F7596D2CF89BB000BE7A5F /* RuntimeEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F7596C2CF89BB000BE7A5F /* RuntimeEngineManager.swift */; };
-		E9FD73CA2C16042F00E391F5 /* LineNumberGutter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -143,9 +147,6 @@
 
 /* Begin PBXFileReference section */
 		E91CD9962C2127AD00C989CC /* EventMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
-		E924302B2D1EA96300246445 /* NSTextLayoutManager+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSTextLayoutManager+.swift"; sourceTree = "<group>"; };
-		E924302D2D1EA99800246445 /* NSTextContentStorage+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSTextContentStorage+.swift"; sourceTree = "<group>"; };
-		E924302F2D1EAF5200246445 /* MinimapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinimapView.swift; sourceTree = "<group>"; };
 		E942ACBE2C28865100A2F3D3 /* MainRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRoute.swift; sourceTree = "<group>"; };
 		E9432FE22C0D614900362862 /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FE52C0D614900362862 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -201,6 +202,14 @@
 		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900EA2C2D0D5B00FADDCC /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassViewController.swift; sourceTree = "<group>"; };
+		E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonLoadingView.swift; sourceTree = "<group>"; };
+		E9EEE8DC2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeObjectKindFilterViewController.swift; sourceTree = "<group>"; };
+		E9EEF7602E084D7D008D85D1 /* SidebarImageCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageCoordinator.swift; sourceTree = "<group>"; };
+		E9EEF7622E084D87008D85D1 /* SidebarImageRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageRoute.swift; sourceTree = "<group>"; };
+		E9EEF7642E08540B008D85D1 /* ContentTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextView.swift; sourceTree = "<group>"; };
+		E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorDisclosureView.swift; sourceTree = "<group>"; };
+		E9EEF7682E085426008D85D1 /* InspectorClassHierarchyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassHierarchyView.swift; sourceTree = "<group>"; };
+		E9EEF7702E086841008D85D1 /* AttachToProcessViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewModel.swift; sourceTree = "<group>"; };
 		E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewController.swift; sourceTree = "<group>"; };
 		E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageCellView.swift; sourceTree = "<group>"; };
 		E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -208,7 +217,6 @@
 		E9F759632CF76B3300BE7A5F /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerServerLoader.swift; sourceTree = "<group>"; };
 		E9F7596C2CF89BB000BE7A5F /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
-		E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = LineNumberGutter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -331,6 +339,7 @@
 			isa = PBXGroup;
 			children = (
 				E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */,
+				E9EEF7702E086841008D85D1 /* AttachToProcessViewModel.swift */,
 			);
 			path = "Attach Process";
 			sourceTree = "<group>";
@@ -365,6 +374,7 @@
 			isa = PBXGroup;
 			children = (
 				E9A825452C0E0B4900D9A85D /* ViewController.swift */,
+				E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */,
 			);
 			path = Base;
 			sourceTree = "<group>";
@@ -391,6 +401,9 @@
 				E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */,
 				E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */,
 				E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */,
+				E9EEF7602E084D7D008D85D1 /* SidebarImageCoordinator.swift */,
+				E9EEF7622E084D87008D85D1 /* SidebarImageRoute.swift */,
+				E9EEE8DC2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift */,
 			);
 			path = Sidebar;
 			sourceTree = "<group>";
@@ -402,9 +415,7 @@
 				E9A825512C0E0F9F00D9A85D /* ContentNavigationController.swift */,
 				E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */,
 				E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */,
-				E924302F2D1EAF5200246445 /* MinimapView.swift */,
-				E924302D2D1EA99800246445 /* NSTextContentStorage+.swift */,
-				E924302B2D1EA96300246445 /* NSTextLayoutManager+.swift */,
+				E9EEF7642E08540B008D85D1 /* ContentTextView.swift */,
 			);
 			path = Content;
 			sourceTree = "<group>";
@@ -416,6 +427,8 @@
 				E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */,
 				E9A8254F2C0E0EB400D9A85D /* InspectorNavigationController.swift */,
 				E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */,
+				E9EEF7682E085426008D85D1 /* InspectorClassHierarchyView.swift */,
+				E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */,
 			);
 			path = Inspector;
 			sourceTree = "<group>";
@@ -425,7 +438,6 @@
 			children = (
 				E91CD9962C2127AD00C989CC /* EventMonitor.swift */,
 				E943301B2C0DB75B00362862 /* Then.swift */,
-				E9FD73C92C16042F00E391F5 /* LineNumberGutter.swift */,
 				E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */,
 				E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */,
 			);
@@ -723,29 +735,33 @@
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
 				E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */,
 				E9F7596D2CF89BB000BE7A5F /* RuntimeEngineManager.swift in Sources */,
-				E924302E2D1EA99800246445 /* NSTextContentStorage+.swift in Sources */,
 				E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */,
 				E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */,
 				E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */,
+				E9EEF7672E085420008D85D1 /* InspectorDisclosureView.swift in Sources */,
 				E9A825462C0E0B4900D9A85D /* ViewController.swift in Sources */,
 				E9A825522C0E0F9F00D9A85D /* ContentNavigationController.swift in Sources */,
 				E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */,
-				E92430302D1EAF5200246445 /* MinimapView.swift in Sources */,
+				E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */,
+				E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorNavigationController.swift in Sources */,
 				E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */,
+				E9EEE8DD2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
+				E9EEF7612E084D7D008D85D1 /* SidebarImageCoordinator.swift in Sources */,
 				E9F0A57E2C305C01001C36FB /* GenerationOptionsViewController.swift in Sources */,
 				E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */,
+				E9EEF7632E084D87008D85D1 /* SidebarImageRoute.swift in Sources */,
 				E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */,
 				E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */,
 				E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,
+				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
-				E9FD73CA2C16042F00E391F5 /* LineNumberGutter.swift in Sources */,
+				E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */,
 				E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */,
 				E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */,
 				E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */,
-				E924302C2D1EA96300246445 /* NSTextLayoutManager+.swift in Sources */,
 				E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -969,7 +985,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = RuntimeViewer;
@@ -1006,7 +1022,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = RuntimeViewer;
@@ -1038,7 +1054,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1082,7 +1098,7 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1116,7 +1132,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelperPlugin;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1139,7 +1155,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Bundles";
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelperPlugin;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1159,7 +1175,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/$(TARGETNAME)/Info.plist";
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1176,7 +1192,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/$(TARGETNAME)/Info.plist";
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1207,7 +1223,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
@@ -1246,7 +1262,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";

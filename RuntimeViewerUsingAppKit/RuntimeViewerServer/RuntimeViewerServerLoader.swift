@@ -6,11 +6,10 @@
 //
 
 import AppKit
-import OSLog
-
+internal import Logging
 internal import RuntimeViewerCore
 
-let logger = Logger(subsystem: "com.JH.RumtimeViewerServer", category: "RumtimeViewerServer")
+let logger = Logger(label: "RumtimeViewerServer")
 
 @objc
 public final class RuntimeViewerServerLoader: NSObject {
