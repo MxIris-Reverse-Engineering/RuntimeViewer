@@ -1,3 +1,4 @@
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
 
 // MARK: -
@@ -326,3 +327,5 @@ extension NSTextView {
         return CGRect(x: 0, y: y, width: bounds.size.width, height: height)
     }
 }
+
+#endif

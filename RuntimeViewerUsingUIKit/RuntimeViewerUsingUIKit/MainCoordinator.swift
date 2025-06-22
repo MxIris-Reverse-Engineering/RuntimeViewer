@@ -8,7 +8,7 @@ import RuntimeViewerApplication
 
 public enum MainRoute: Routable {
     case initial
-    case select(RuntimeObjectType)
+    case select(RuntimeObjectName)
     case inspect(InspectableObject)
 }
 

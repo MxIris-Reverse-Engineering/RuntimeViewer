@@ -1,3 +1,4 @@
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
 
 // MARK: -
@@ -276,3 +277,5 @@ extension NSTextLayoutManager {
         }
     }
 }
+
+#endif

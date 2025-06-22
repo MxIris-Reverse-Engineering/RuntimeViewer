@@ -1,10 +1,3 @@
-//
-//  GenerationOptionsViewController.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/29.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -30,7 +23,7 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
     let addIvarOffsetCommentsCheckbox = CheckboxButton(title: "Add Ivar Offset Comments")
 
     let expandIvarRecordTypeMembersCheckbox = CheckboxButton(title: "Expand Ivar Record Type Members")
-    
+
     lazy var generationOptionsView = VStackView(alignment: .left, spacing: 10) {
         generationOptionsLabel
         stripProtocolConformanceCheckbox

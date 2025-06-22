@@ -1,4 +1,4 @@
-import OSLog
+import Logging
 import Combine
 import Foundation
 import ClassDumpRuntime
@@ -8,17 +8,17 @@ import RuntimeViewerCommunication
 public final actor RuntimeEngine {
     public static let shared = RuntimeEngine()
 
-    private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeEngine")
+    private static let logger = Logger(label: "RuntimeEngine")
 
-    @Published public private(set) var classList: [String] = []
+    @Published private var classList: [String] = []
 
-    @Published public private(set) var protocolList: [String] = []
+    @Published private var protocolList: [String] = []
+
+    @Published private var protocolToImage: [String: String] = [:]
+    
+    @Published private var imageToProtocols: [String: [String]] = [:]
 
     @Published public private(set) var imageList: [String] = []
-
-    @Published public private(set) var protocolToImage: [String: String] = [:]
-
-    @Published public private(set) var imageToProtocols: [String: [String]] = [:]
 
     @Published public private(set) var imageNodes: [RuntimeNamedNode] = []
 
@@ -157,7 +157,9 @@ public final actor RuntimeEngine {
         ) ?? ([:], [:])
         self.protocolToImage = protocolToImage
         self.imageToProtocols = imageToProtocols
-        imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
+        Task.detached {
+            await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
+        }
 
         Task.detached { [self] in
             await withTaskGroup { group in
@@ -298,6 +300,7 @@ public final actor RuntimeEngine {
     }
 
     private func _names(of kind: RuntimeObjectKind, in image: String) -> [RuntimeObjectName] {
+        let image = DyldUtilities.patchImagePathForDyld(image)
         switch kind {
         case .c:
             fatalError()

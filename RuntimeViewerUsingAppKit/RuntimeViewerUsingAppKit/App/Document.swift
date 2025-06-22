@@ -1,10 +1,3 @@
-//
-//  Document.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/10/14.
-//
-
 import AppKit
 
 class Document: NSDocument {
@@ -35,7 +28,7 @@ class Document: NSDocument {
         // If you do, you should also override isEntireFileLoaded to return false if the contents are lazily loaded.
         throw NSError(domain: NSOSStatusErrorDomain, code: unimpErr, userInfo: nil)
     }
-    
+
     override func updateChangeCount(_ change: NSDocument.ChangeType) {}
     override func runPageLayout(_ sender: Any?) {}
     override func printDocument(_ sender: Any?) {}

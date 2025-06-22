@@ -1,12 +1,12 @@
 #if os(macOS)
 
-import OSLog
+import Logging
 import SwiftyXPC
 import Foundation
 import RuntimeViewerCommunication
 
 public final class RuntimeInjectClient {
-    private static let logger = Logger(subsystem: "com.JH.RuntimeViewerCore", category: "RuntimeInjectClient")
+    private static let logger = Logger(label: "RuntimeInjectClient")
 
     public static let shared = RuntimeInjectClient()
 

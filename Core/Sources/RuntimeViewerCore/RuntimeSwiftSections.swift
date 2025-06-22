@@ -53,7 +53,12 @@ public final class RuntimeSwiftSections {
     private var interfaceByName: OrderedDictionary<RuntimeObjectName, RuntimeObjectInterface> = [:]
 
     public init(imagePath: String) throws {
-        guard let machO = MachOImage(name: imagePath.lastPathComponent.deletingPathExtension) else { throw Error.invalidMachOImage }
+        
+        let imageName = imagePath.lastPathComponent.deletingPathExtension
+        guard !imageName.starts(with: "libswift") else {
+            throw Error.invalidMachOImage
+        }
+        guard let machO = MachOImage(name: imageName) else { throw Error.invalidMachOImage }
 
         var enums: [MachOSwiftSection.Enum] = []
         var structs: [MachOSwiftSection.Struct] = []

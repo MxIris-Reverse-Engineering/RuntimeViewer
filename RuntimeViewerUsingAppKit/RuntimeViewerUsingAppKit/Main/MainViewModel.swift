@@ -1,10 +1,3 @@
-//
-//  MainViewModel.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/4.
-//
-
 import AppKit
 import RuntimeViewerCore
 import UniformTypeIdentifiers
@@ -17,7 +10,7 @@ enum MessageError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case let .message(message):
+        case .message(let message):
             return message
         }
     }
@@ -48,12 +41,12 @@ class MainViewModel: ViewModel<MainRoute> {
     var completeTransition: Observable<SidebarRoute>? {
         didSet {
             completeTransitionDisposable?.dispose()
-            completeTransitionDisposable = completeTransition?.map { if case let .selectedObject(runtimeObject) = $0 { runtimeObject } else { nil } }.bind(to: $selectedRuntimeObject)
+            completeTransitionDisposable = completeTransition?.map { if case .selectedObject(let runtimeObject) = $0 { runtimeObject } else { nil } }.bind(to: $selectedRuntimeObject)
         }
     }
 
     var completeTransitionDisposable: Disposable?
-    
+
     let selectedRuntimeSourceIndex = BehaviorRelay(value: 0)
 
     let runtimeEngineManager = RuntimeEngineManager.shared
@@ -146,7 +139,7 @@ class MainViewModel: ViewModel<MainRoute> {
         let sharingServiceItems = completeTransition?.map { [weak self] router -> [Any] in
             guard let self else { return [] }
             switch router {
-            case let .selectedObject(runtimeObjectType):
+            case .selectedObject(let runtimeObjectType):
                 let item = NSItemProvider()
                 item.registerDataRepresentation(forTypeIdentifier: UTType.cHeader.identifier, visibility: .all) { completion in
                     Task {
@@ -159,13 +152,9 @@ class MainViewModel: ViewModel<MainRoute> {
                     }
                     return nil
                 }
-                if #available(macOS 13.0, *) {
-                    let icon = NSWorkspace.shared.icon(for: .cHeader)
-                    let previewItem = NSPreviewRepresentingActivityItem(item: item, title: runtimeObjectType.name + ".h", image: nil, icon: icon)
-                    return [previewItem]
-                } else {
-                    return [item]
-                }
+                let icon = NSWorkspace.shared.icon(for: .cHeader)
+                let previewItem = NSPreviewRepresentingActivityItem(item: item, title: runtimeObjectType.name + ".h", image: nil, icon: icon)
+                return [previewItem]
             default:
                 return []
             }

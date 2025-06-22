@@ -1,10 +1,3 @@
-//
-//  SidebarViewController.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -16,6 +9,8 @@ class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewMod
     let filterSearchField = FilterSearchField()
 
     let bottomSeparatorView = NSBox()
+
+    override var shouldDisplayCommonLoading: Bool { true }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -53,8 +48,7 @@ class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewMod
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
         super.setupBindings(for: viewModel)
-        
-        
+
         let input = SidebarRootViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
@@ -71,14 +65,15 @@ class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewMod
         .disposed(by: rx.disposeBag)
 
 //        output.nodes.mapToVoid().drive(with: self) { $0.outlineView.setNeedsReloadAutosaveExpandedItems() }.disposed(by: rx.disposeBag)
-        
-        
 
-        outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
-//        outlineView.autosaveExpandedItems = true
-//        outlineView.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
-        outlineView.identifier = "com.JH.RuntimeViewer.SidebarRootViewController.identifier.\(viewModel.appServices.runtimeEngine.source.description)"
-        
+        output.nodesIndexed.asObservable().first().asObservable().subscribeOnNext { [weak self] _ in
+            guard let self else { return }
+            outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
+            outlineView.autosaveExpandedItems = true
+            outlineView.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
+            outlineView.identifier = "com.JH.RuntimeViewer.SidebarRootViewController.identifier.\(viewModel.appServices.runtimeEngine.source.description)"
+        }
+        .disposed(by: rx.disposeBag)
     }
 }
 

@@ -1,10 +1,3 @@
-//
-//  ContentPlaceholderViewController.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/3.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerCore
@@ -16,7 +9,8 @@ class ContentPlaceholderViewController: UXKitViewController<ContentPlaceholderVi
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        hierarchy {
+
+        contentView.hierarchy {
             placeholderLabel
         }
 
@@ -29,10 +23,10 @@ class ContentPlaceholderViewController: UXKitViewController<ContentPlaceholderVi
             $0.textColor = .secondaryLabelColor
         }
     }
-    
+
     override func viewDidAppear() {
         super.viewDidAppear()
-        
+
         view.window?.title = "Runtime Viewer"
         view.window?.subtitle = ""
     }

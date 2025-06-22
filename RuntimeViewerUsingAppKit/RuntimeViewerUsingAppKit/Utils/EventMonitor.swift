@@ -1,10 +1,3 @@
-//
-//  EventMonitor.swift
-//  XMLViewer
-//
-//  Created by JH on 2024/3/21.
-//
-
 import AppKit
 
 class EventMonitor {

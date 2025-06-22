@@ -1,3 +1,4 @@
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
 
 extension NSTextContentStorage {
@@ -47,3 +48,5 @@ extension NSTextContentStorage {
         } else { return nil }
     }
 }
+
+#endif

@@ -1,20 +1,8 @@
-//
-//  ContentTextViewController.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/6/7.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
-
-class ContentTextView: NSTextView {
-    override func clicked(onLink link: Any, at charIndex: Int) {}
-    override var acceptableDragTypes: [NSPasteboard.PasteboardType] { [] }
-}
 
 class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTextViewDelegate {
     override var acceptsFirstResponder: Bool { true }
@@ -23,7 +11,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
 
     var textView: ContentTextView { scrollView.documentView as! ContentTextView }
 
-//    lazy var lineNumberGutter = LineNumberGutter(withTextView: textView, foregroundColor: .secondaryLabelColor, backgroundColor: .clear)
+    override var shouldDisplayCommonLoading: Bool { true }
 
     let eventMonitor = EventMonitor()
 
@@ -32,7 +20,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             scrollView
         }
 

@@ -1,10 +1,6 @@
 import Foundation
 import ClassDumpRuntime
 
-
-
-
-
 public enum RuntimeObjectType: Codable, Hashable, Identifiable {
     case `class`(named: String)
     case `protocol`(named: String)

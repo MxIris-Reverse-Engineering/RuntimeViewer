@@ -1,15 +1,8 @@
-//
-//  RuntimeNetworkConnection.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 2025/3/22.
-//
-
 import Foundation
 import Network
-import OSLog
 import Asynchrone
 import Semaphore
+import Logging
 
 class RuntimeNetworkConnection {
     private class MessageHandler {
@@ -40,7 +33,7 @@ class RuntimeNetworkConnection {
 
     private let connection: NWConnection
 
-    private static let logger = Logger(subsystem: "com.JH.LocalizationStudioCommunication", category: "Connection")
+    private static let logger = Logger(label: "RuntimeNetworkConnection")
 
     private static let endMarkerData = "\nOK".data(using: .utf8)!
 
@@ -63,7 +56,7 @@ class RuntimeNetworkConnection {
     private let semaphore = AsyncSemaphore(value: 1)
 
     private var messageHandlers: [String: MessageHandler] = [:]
-    
+
     /// outgoing connection
     public init(endpoint: NWEndpoint) throws {
         Self.logger.info("RuntimeNetworkConnection outgoing endpoint: \(endpoint.debugDescription)")
@@ -108,7 +101,6 @@ class RuntimeNetworkConnection {
         didStop = nil
         Self.logger.info("Connection did stop")
     }
-
 
     public func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping ((Request) async throws -> Response)) {
         messageHandlers[name] = .init(closure: handler)
@@ -183,7 +175,7 @@ class RuntimeNetworkConnection {
         switch state {
         case .setup:
             logger.info("Connection is setup")
-        case let .waiting(error):
+        case .waiting(let error):
             logger.info("Connection is waiting, error: \(error)")
             stop()
         case .preparing:
@@ -193,7 +185,7 @@ class RuntimeNetworkConnection {
 
             didReady?(self)
             didReady = nil
-        case let .failed(error):
+        case .failed(let error):
             logger.info("Connection is failed, error: \(error)")
             stop()
         case .cancelled:

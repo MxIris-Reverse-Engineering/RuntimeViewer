@@ -1,14 +1,6 @@
-//
-//  SIPChecker.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2025/4/2.
-//
-
 import Foundation
 
 enum SIPChecker {
-
     static func isDisabled() -> Bool {
         let task = Process()
         task.launchPath = "/usr/bin/csrutil"

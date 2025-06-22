@@ -3,7 +3,7 @@ import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
-public enum SidebarRoute: Routable {
+public enum SidebarImageRoute: Routable {
     case root
     case back
     case selectedNode(RuntimeNamedNode)

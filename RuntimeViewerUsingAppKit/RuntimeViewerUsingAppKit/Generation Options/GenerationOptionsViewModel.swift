@@ -1,10 +1,3 @@
-//
-//  GenerationOptionsViewModel.swift
-//  RuntimeViewerUsingAppKit
-//
-//  Created by JH on 2024/7/13.
-//
-
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
