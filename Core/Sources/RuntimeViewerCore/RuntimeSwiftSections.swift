@@ -12,7 +12,7 @@ public final class RuntimeSwiftSections {
     private typealias SwiftProtocol = MachOSwiftSection.`Protocol`
     private typealias SwiftProtocolConformance = MachOSwiftSection.ProtocolConformance
     private typealias SwiftAssociatedType = MachOSwiftSection.AssociatedType
-    
+
     public enum Error: Swift.Error {
         case invalidMachOImage
         case invalidRuntimeObjectName
@@ -31,9 +31,9 @@ public final class RuntimeSwiftSections {
     private let protocols: [SwiftProtocol]
 
     private let protocolConformances: [SwiftProtocolConformance]
-    
+
     private let associatedTypes: [AssociatedType]
-    
+
     private var enumByName: OrderedDictionary<RuntimeObjectName, SwiftEnum> = [:]
 
     private var structByName: OrderedDictionary<RuntimeObjectName, SwiftStruct> = [:]
@@ -45,15 +45,14 @@ public final class RuntimeSwiftSections {
     private var protocolConformanceByTypeName: OrderedDictionary<String, [SwiftProtocolConformance]> = [:]
 
     private var protocolConformanceByProtocolName: OrderedDictionary<String, [SwiftProtocolConformance]> = [:]
-    
+
     private var associatedTypeByTypeName: OrderedDictionary<String, [SwiftAssociatedType]> = [:]
-    
+
     private var associatedTypeByProtocolName: OrderedDictionary<String, [SwiftAssociatedType]> = [:]
-    
+
     private var interfaceByName: OrderedDictionary<RuntimeObjectName, RuntimeObjectInterface> = [:]
 
     public init(imagePath: String) throws {
-        
         let imageName = imagePath.lastPathComponent.deletingPathExtension
         guard !imageName.starts(with: "libswift") else {
             throw Error.invalidMachOImage
@@ -66,19 +65,14 @@ public final class RuntimeSwiftSections {
         var protocols: [MachOSwiftSection.`Protocol`] = []
         var protocolConformances: [MachOSwiftSection.ProtocolConformance] = []
         var associatedTypes: [MachOSwiftSection.AssociatedType] = []
-        for type in try machO.swift.typeContextDescriptors {
-            switch type {
-            case .type(let typeContextDescriptorWrapper):
-                switch typeContextDescriptorWrapper {
-                case .enum(let enumDescriptor):
-                    try enums.append(Enum(descriptor: enumDescriptor, in: machO))
-                case .struct(let structDescriptor):
-                    try structs.append(Struct(descriptor: structDescriptor, in: machO))
-                case .class(let classDescriptor):
-                    try classes.append(Class(descriptor: classDescriptor, in: machO))
-                }
-            default:
-                continue
+        for typeContextDescriptor in try machO.swift.typeContextDescriptors {
+            switch typeContextDescriptor {
+            case .enum(let enumDescriptor):
+                try enums.append(Enum(descriptor: enumDescriptor, in: machO))
+            case .struct(let structDescriptor):
+                try structs.append(Struct(descriptor: structDescriptor, in: machO))
+            case .class(let classDescriptor):
+                try classes.append(Class(descriptor: classDescriptor, in: machO))
             }
         }
 
@@ -89,7 +83,7 @@ public final class RuntimeSwiftSections {
         for protocolConformanceDescriptor in try machO.swift.protocolConformanceDescriptors {
             try protocolConformances.append(MachOSwiftSection.ProtocolConformance(descriptor: protocolConformanceDescriptor, in: machO))
         }
-        
+
         for associatedTypeDescriptor in try machO.swift.associatedTypeDescriptors {
             try associatedTypes.append(MachOSwiftSection.AssociatedType(descriptor: associatedTypeDescriptor, in: machO))
         }
@@ -102,12 +96,12 @@ public final class RuntimeSwiftSections {
         self.protocols = protocols
         self.protocolConformances = protocolConformances
         self.associatedTypes = associatedTypes
-        
+
         for protocolConformance in protocolConformances {
             try protocolConformanceByTypeName[protocolConformance.dumpTypeName(using: .interface, in: machO).string, default: []].append(protocolConformance)
             try protocolConformanceByProtocolName[protocolConformance.dumpProtocolName(using: .interface, in: machO).string, default: []].append(protocolConformance)
         }
-        
+
         for associatedType in associatedTypes {
             try associatedTypeByTypeName[associatedType.dumpTypeName(using: .interface, in: machO).string, default: []].append(associatedType)
             try associatedTypeByProtocolName[associatedType.dumpProtocolName(using: .interface, in: machO).string, default: []].append(associatedType)
@@ -203,14 +197,16 @@ public final class RuntimeSwiftSections {
         }
         if var newInterfaceString {
             switch swift {
-            case .enum, .struct, .class:
+            case .enum,
+                 .struct,
+                 .class:
                 if let protocolConformances = protocolConformanceByTypeName[name.name] {
                     for protocolConformance in protocolConformances {
                         newInterfaceString.append("\n\n", type: .standard)
                         try newInterfaceString.append(protocolConformance.dump(using: options, in: machO))
                     }
                 }
-                
+
                 if let associatedTypes = associatedTypeByTypeName[name.name] {
                     for associatedType in associatedTypes {
                         newInterfaceString.append("\n\n", type: .standard)
@@ -224,7 +220,7 @@ public final class RuntimeSwiftSections {
                         try newInterfaceString.append(protocolConformance.dump(using: options, in: machO))
                     }
                 }
-                
+
                 if let associatedTypes = associatedTypeByProtocolName[name.name] {
                     for associatedType in associatedTypes {
                         newInterfaceString.append("\n\n", type: .standard)
