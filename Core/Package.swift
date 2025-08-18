@@ -11,13 +11,14 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 extension Package.Dependency {
     
     enum LocalSearchPath {
-        case package(path: String, isRelative: Bool)
+        case package(path: String, isRelative: Bool, isEnabled: Bool)
     }
     
     static func package(local localSearchPaths: LocalSearchPath..., remote: Package.Dependency) -> Package.Dependency {
         for local in localSearchPaths {
             switch local {
-            case .package(let path, let isRelative):
+            case .package(let path, let isRelative, let isEnabled):
+                guard isEnabled else { continue }
                 let url = if isRelative, let resolvedURL = URL(string: path, relativeTo: URL(fileURLWithPath: #filePath)) {
                     resolvedURL
                 } else {
@@ -53,11 +54,13 @@ let package = Package(
         .package(
             local: .package(
                 path: "../../../../Fork/Library/ClassDumpRuntime",
-                isRelative: true
+                isRelative: true,
+                isEnabled: true,
             ),
             .package(
                 path: "../../ClassDumpRuntime",
-                isRelative: true
+                isRelative: true,
+                isEnabled: true,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
@@ -67,15 +70,18 @@ let package = Package(
         .package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/MachOSwiftSection",
-                isRelative: true
+                isRelative: true,
+                isEnabled: false,
             ),
             .package(
                 path: "../../TestingLibraries/MachOSwiftSection",
-                isRelative: true
+                isRelative: true,
+                isEnabled: true,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                from: "0.4.0"
+//                from: "0.6.0"
+                branch: "feature/swift-interface",
             )
         ),
         .package(
