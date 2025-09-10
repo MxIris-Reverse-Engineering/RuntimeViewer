@@ -37,7 +37,7 @@ extension Package.Dependency {
 let package = Package(
     name: "Core",
     platforms: [
-        .iOS(.v13), .macOS(.v10_15), .macCatalyst(.v13), .tvOS(.v13), .watchOS(.v6), .visionOS(.v1),
+        .iOS(.v17), .macOS(.v14), .macCatalyst(.v17), .watchOS(.v10), .tvOS(.v17), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -98,7 +98,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
-            from: "0.2.0"
+            branch: "main"
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",

@@ -40,7 +40,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/UIFoundation",
-            from: "0.2.0"
+            from: "0.3.0"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/XCoordinator",
