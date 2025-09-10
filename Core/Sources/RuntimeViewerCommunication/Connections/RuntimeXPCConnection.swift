@@ -136,7 +136,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection {
             try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
         }
 //        connection = try await withCheckedThrowingContinuation { continuation in
-            listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { [weak self] (_: XPCConnection, endpoint: XPCEndpoint) in
+        listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { [weak self] (_: XPCConnection, endpoint: SwiftyXPC.XPCEndpoint) in
 //                do {
                 guard let self else { return }
                 let connection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
