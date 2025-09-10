@@ -26,11 +26,11 @@ echo '///-----------'
 xcodebuild \
 archive -workspace ${project_path}/${project_name}.xcworkspace \
 -scheme ${scheme_name} \
--arch x86_64 \
--arch arm64e \
+-destination 'generic/platform=macOS' \
 -configuration ${development_mode} \
 -skipPackagePluginValidation -skipMacroValidation \
--archivePath ${build_path}/${project_name}.xcarchive  -quiet  || exit
+-archivePath ${build_path}/${project_name}.xcarchive \
+ARCHS="x86_64 arm64e" || exit
 
 echo '///--------'
 echo '/// 编译完成'

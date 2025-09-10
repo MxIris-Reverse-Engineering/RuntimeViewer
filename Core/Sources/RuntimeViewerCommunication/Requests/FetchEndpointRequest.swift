@@ -13,9 +13,9 @@ public struct FetchEndpointRequest: Codable, RuntimeRequest {
     public static let identifier: String = "com.JH.RuntimeViewerService.FetchEndpoint"
 
     public struct Response: RuntimeResponse, Codable {
-        public let endpoint: XPCEndpoint
+        public let endpoint: SwiftyXPC.XPCEndpoint
 
-        public init(endpoint: XPCEndpoint) {
+        public init(endpoint: SwiftyXPC.XPCEndpoint) {
             self.endpoint = endpoint
         }
     }
