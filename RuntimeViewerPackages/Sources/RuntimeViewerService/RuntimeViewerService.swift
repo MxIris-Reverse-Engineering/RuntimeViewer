@@ -9,7 +9,7 @@ public final class RuntimeViewerService {
 
     private var catalystHelperApplication: NSRunningApplication?
 
-    private var endpointByIdentifier: [String: XPCEndpoint] = [:]
+    private var endpointByIdentifier: [String: SwiftyXPC.XPCEndpoint] = [:]
 
     private init() throws {
         self.listener = try .init(type: .machService(name: RuntimeViewerMachServiceName), codeSigningRequirement: nil)

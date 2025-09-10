@@ -16,9 +16,9 @@ public struct RegisterEndpointRequest: Codable, RuntimeRequest {
 
     public let identifier: String
 
-    public let endpoint: XPCEndpoint
+    public let endpoint: SwiftyXPC.XPCEndpoint
 
-    public init(identifier: String, endpoint: XPCEndpoint) {
+    public init(identifier: String, endpoint: SwiftyXPC.XPCEndpoint) {
         self.identifier = identifier
         self.endpoint = endpoint
     }
