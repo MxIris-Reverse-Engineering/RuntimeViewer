@@ -39,9 +39,9 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
             let viewModel = MainViewModel(appServices: appServices, router: self)
             rootViewController.setupBindings(for: viewModel)
             return .multiple(.set(sidebarCoordinator, for: .primary), .set(contentCoordinator, for: .secondary), .set(sidebarCoordinator, for: .compact))
-        case let .select(runtimeObject):
-            return .multiple(.route(.root(runtimeObject), on: contentCoordinator), .showDetail(contentCoordinator))
-        case let .inspect(inspectableType):
+        case .select(let runtimeObject):
+            return .multiple(.route(.root(runtimeObject), on: contentCoordinator), .show(column: .secondary))
+        case .inspect(let inspectableType):
             return .route(.root(inspectableType), on: inspectorCoordinator)
         }
     }
@@ -57,24 +57,25 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
 }
 
 extension MainCoordinator: UISplitViewControllerDelegate {
-    func splitViewController(_ svc: UISplitViewController,
-                             topColumnForCollapsingToProposedTopColumn proposedTopColumn: UISplitViewController.Column)
+    func splitViewController(
+        _ svc: UISplitViewController,
+        topColumnForCollapsingToProposedTopColumn proposedTopColumn: UISplitViewController.Column
+    )
         -> UISplitViewController.Column {
         return .primary
     }
-    
-    func splitViewControllerDidCollapse(_ svc: UISplitViewController) {
-    }
+
+    func splitViewControllerDidCollapse(_ svc: UISplitViewController) {}
 }
 
 extension MainCoordinator: SidebarCoordinatorDelegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
         switch route {
-        case let .selectedNode(runtimeNamedNode):
+        case .selectedNode(let runtimeNamedNode):
             inspectorCoordinator.trigger(.root(.node(runtimeNamedNode)))
-        case let .clickedNode(runtimeNamedNode):
+        case .clickedNode(let runtimeNamedNode):
             break
-        case let .selectedObject(runtimeObjectType):
+        case .selectedObject(let runtimeObjectType):
             trigger(.select(runtimeObjectType), with: .init(animated: false))
         case .back:
             contentCoordinator.trigger(.placeholder)
@@ -82,6 +83,38 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
             break
         }
         completeTransition.accept(route)
+    }
+}
+
+extension Transition where RootViewController: UISplitViewController {
+    @available(iOS 14, tvOS 14, *)
+    public static func show(column: UISplitViewController.Column) -> Transition {
+        Transition {
+            SplitShowColumn(column)
+        }
+    }
+}
+
+@available(iOS 14, tvOS 14, *)
+public struct SplitShowColumn<RootViewController> {
+    // MARK: Stored Properties
+
+    private let column: UISplitViewController.Column
+
+    // MARK: Initialization
+
+    public init(_ column: UISplitViewController.Column) {
+        self.column = column
+    }
+}
+
+@available(iOS 14, tvOS 14, *)
+extension SplitShowColumn: TransitionComponent where RootViewController: UISplitViewController {
+    public func build() -> Transition<RootViewController> {
+        return Transition(presentables: [], animationInUse: nil) { rootViewController, _, completion in
+            rootViewController.show(column)
+            completion?()
+        }
     }
 }
 

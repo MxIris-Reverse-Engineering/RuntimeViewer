@@ -41,7 +41,11 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
 //            make.left.right.equalToSuperview()
         }
 
-        imageTabBarController.tabBar.isHidden = true
+        if #available(iOS 18.0, *) {
+            imageTabBarController.isTabBarHidden = true
+        } else {
+            imageTabBarController.tabBar.isHidden = true
+        }
 
         imageTabBarController.viewControllers = [
             UIViewController(view: imageNotLoadedView),

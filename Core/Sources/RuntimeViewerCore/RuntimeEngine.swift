@@ -161,21 +161,21 @@ public final actor RuntimeEngine {
             await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
         }
 
-        Task.detached { [self] in
-            await withTaskGroup { group in
-                for imagePath in await imageList {
-                    group.addTask {
-                        do {
-                            let section = try RuntimeSwiftSections(imagePath: imagePath)
-                            await self.setSwiftSection(section, forImage: imagePath)
-                        } catch {
-                            print(imagePath)
-                        }
-                    }
-                }
-                await group.waitForAll()
-            }
-        }
+//        Task.detached { [self] in
+//            await withTaskGroup { group in
+//                for imagePath in await imageList {
+//                    group.addTask {
+//                        do {
+//                            let section = try RuntimeSwiftSections(imagePath: imagePath)
+//                            await self.setSwiftSection(section, forImage: imagePath)
+//                        } catch {
+//                            print(imagePath)
+//                        }
+//                    }
+//                }
+//                await group.waitForAll()
+//            }
+//        }
 
         shouldReload
             .debounce(for: .milliseconds(15), scheduler: DispatchQueue.main)
@@ -299,7 +299,7 @@ public final actor RuntimeEngine {
         }
     }
 
-    private func _names(of kind: RuntimeObjectKind, in image: String) -> [RuntimeObjectName] {
+    private func _names(of kind: RuntimeObjectKind, in image: String) async throws -> [RuntimeObjectName] {
         let image = DyldUtilities.patchImagePathForDyld(image)
         switch kind {
         case .c:
@@ -312,16 +312,27 @@ public final actor RuntimeEngine {
                 return (imageToProtocols[DyldUtilities.patchImagePathForDyld(image)] ?? []).map { .init(name: $0, kind: .objc(.protocol), imagePath: image) }
             }
         case .swift(let kindOfSwift):
+            let swiftSections = try await getOrCreateSwiftSections(for: image)
             switch kindOfSwift {
             case .enum:
-                return (try? imageToSwiftSections[image]?.enumNames()) ?? []
+                return (try? swiftSections.enumNames()) ?? []
             case .struct:
-                return (try? imageToSwiftSections[image]?.structNames()) ?? []
+                return (try? swiftSections.structNames()) ?? []
             case .class:
-                return (try? imageToSwiftSections[image]?.classNames()) ?? []
+                return (try? swiftSections.classNames()) ?? []
             case .protocol:
-                return (try? imageToSwiftSections[image]?.protocolNames()) ?? []
+                return (try? swiftSections.protocolNames()) ?? []
             }
+        }
+    }
+    
+    private func getOrCreateSwiftSections(for imagePath: String) async throws -> RuntimeSwiftSections {
+        if let swiftSections = imageToSwiftSections[imagePath] {
+            return swiftSections
+        } else {
+            let swiftSections = try RuntimeSwiftSections(imagePath: imagePath)
+            await setSwiftSection(swiftSections, forImage: imagePath)
+            return swiftSections
         }
     }
 }
@@ -333,12 +344,12 @@ extension RuntimeEngine {
         case senderConnectionIsLose
     }
 
-    private func request<T>(local: () throws -> T, remote: (_ senderConnection: RuntimeConnection) async throws -> T) async throws -> T {
+    private func request<T>(local: () async throws -> T, remote: (_ senderConnection: RuntimeConnection) async throws -> T) async throws -> T {
         if let remoteRole = source.remoteRole, remoteRole.isClient {
             guard let connection else { throw RequestError.senderConnectionIsLose }
             return try await remote(connection)
         } else {
-            return try local()
+            return try await local()
         }
     }
 
@@ -353,6 +364,8 @@ extension RuntimeEngine {
     public func loadImage(at path: String) async throws {
         try await request {
             try DyldUtilities.loadImage(at: path)
+            let section = try RuntimeSwiftSections(imagePath: path)
+            await setSwiftSection(section, forImage: path)
             reloadData()
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
@@ -411,7 +424,7 @@ extension RuntimeEngine {
 
     private func names(for request: NamesRequest) async throws -> [RuntimeObjectName] {
         try await self.request {
-            _names(of: request.kind, in: request.image)
+            try await _names(of: request.kind, in: request.image)
         } remote: {
             return try await $0.sendMessage(name: .namesOfKindInImage, request: NamesRequest(kind: request.kind, image: request.image))
         }

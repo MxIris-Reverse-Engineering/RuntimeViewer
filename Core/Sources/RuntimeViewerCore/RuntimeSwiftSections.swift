@@ -65,7 +65,7 @@ public final class RuntimeSwiftSections {
         var protocols: [MachOSwiftSection.`Protocol`] = []
         var protocolConformances: [MachOSwiftSection.ProtocolConformance] = []
         var associatedTypes: [MachOSwiftSection.AssociatedType] = []
-        for typeContextDescriptor in try machO.swift.typeContextDescriptors {
+        for typeContextDescriptor in (try? machO.swift.typeContextDescriptors) ?? [] {
             switch typeContextDescriptor {
             case .enum(let enumDescriptor):
                 try enums.append(Enum(descriptor: enumDescriptor, in: machO))
@@ -76,15 +76,15 @@ public final class RuntimeSwiftSections {
             }
         }
 
-        for protocolDescriptor in try machO.swift.protocolDescriptors {
+        for protocolDescriptor in (try? machO.swift.protocolDescriptors) ?? [] {
             try protocols.append(MachOSwiftSection.`Protocol`(descriptor: protocolDescriptor, in: machO))
         }
 
-        for protocolConformanceDescriptor in try machO.swift.protocolConformanceDescriptors {
+        for protocolConformanceDescriptor in (try? machO.swift.protocolConformanceDescriptors) ?? [] {
             try protocolConformances.append(MachOSwiftSection.ProtocolConformance(descriptor: protocolConformanceDescriptor, in: machO))
         }
 
-        for associatedTypeDescriptor in try machO.swift.associatedTypeDescriptors {
+        for associatedTypeDescriptor in (try? machO.swift.associatedTypeDescriptors) ?? [] {
             try associatedTypes.append(MachOSwiftSection.AssociatedType(descriptor: associatedTypeDescriptor, in: machO))
         }
 

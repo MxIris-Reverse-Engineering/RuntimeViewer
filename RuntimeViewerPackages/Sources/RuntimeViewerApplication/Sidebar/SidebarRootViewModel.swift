@@ -109,7 +109,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
 //            }
 //        }.disposed(by: rx.disposeBag)
 
-        return Output(nodes: $nodes.asDriver(), filteredNodes: $filteredNodes.asDriver())
+        return Output(nodes: $nodes.asDriver(), nodesIndexed: nodesIndexed, filteredNodes: $filteredNodes.asDriver())
 
         #endif
     }
