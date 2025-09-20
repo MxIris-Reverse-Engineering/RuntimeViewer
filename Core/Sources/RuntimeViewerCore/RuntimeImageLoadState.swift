@@ -5,4 +5,5 @@ public enum RuntimeImageLoadState {
     case loading
     case loaded
     case loadError(Error)
+    case unknown
 }

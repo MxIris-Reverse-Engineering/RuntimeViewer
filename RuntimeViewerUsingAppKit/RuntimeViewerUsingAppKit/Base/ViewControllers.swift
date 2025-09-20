@@ -52,20 +52,28 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
     }
 }
 
-class UXVisualEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<ViewModel> {
-    private let visualEffectView = NSVisualEffectView()
+class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<ViewModel> {
+    private lazy var effectView: NSView = {
+        if #available(macOS 26.0, *) {
+            let view = UXView()
+//            view.backgroundColor = .windowBackgroundColor
+            return view
+        } else {
+            return NSVisualEffectView()
+        }
+    }()
 
-    override var contentView: NSView { visualEffectView }
+    override var contentView: NSView { effectView }
 
     override func viewDidLoad() {
         super.viewDidLoad()
     }
 }
 
-class AppKitViewController<ViewModelType>: NSViewController {
-    var viewModel: ViewModelType?
+class AppKitViewController<ViewModel>: NSViewController {
+    var viewModel: ViewModel?
 
-    init(viewModel: ViewModelType? = nil) {
+    init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
     }
@@ -75,7 +83,7 @@ class AppKitViewController<ViewModelType>: NSViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func setupBindings(for viewModel: ViewModelType) {
+    func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
         self.viewModel = viewModel
     }

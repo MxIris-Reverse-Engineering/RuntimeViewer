@@ -4,20 +4,22 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SidebarImageViewController: UXVisualEffectViewController<SidebarImageViewModel> {
-    let tabView = NSTabView()
+class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> {
+    private let tabView = NSTabView()
 
-    let imageNotLoadedView = ImageLoadableView()
+    private let imageNotLoadedView = ImageLoadableView()
 
-    let imageLoadingView = ImageLoadingView()
+    private let imageLoadingView = ImageLoadingView()
 
-    let imageLoadedView = ImageLoadedView()
+    private let imageLoadedView = ImageLoadedView()
 
-    let imageLoadErrorView = ImageLoadableView()
+    private let imageLoadErrorView = ImageLoadableView()
 
-    let filterSearchField = FilterSearchField()
+    private let imageUnknownView = ImageUnknownView()
 
-    let bottomSeparatorView = NSBox()
+    private let filterSearchField = FilterSearchField()
+
+    private let bottomSeparatorView = NSBox()
 
     private var previousWindowSubtitle: String = ""
 
@@ -56,6 +58,7 @@ class SidebarImageViewController: UXVisualEffectViewController<SidebarImageViewM
             $0.addTabViewItem(NSTabViewItem(view: imageLoadingView, loadState: .loading))
             $0.addTabViewItem(NSTabViewItem(view: imageLoadedView, loadState: .loaded))
             $0.addTabViewItem(NSTabViewItem(view: imageLoadErrorView, loadState: .loadError(Optional.none)))
+            $0.addTabViewItem(NSTabViewItem(view: imageUnknownView, loadState: .unknown))
             $0.tabViewType = .noTabsNoBorder
             $0.tabPosition = .none
             $0.tabViewBorderType = .none
@@ -133,11 +136,15 @@ extension RuntimeImageLoadState {
             return "loaded"
         case .loadError:
             return "loadError"
+        case .unknown:
+            return "unknown"
         }
     }
 }
 
 extension SidebarImageViewController {
+    class ImageUnknownView: XiblessView {}
+
     class ImageLoadedView: XiblessView {
         let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
 

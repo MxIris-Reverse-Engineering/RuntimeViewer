@@ -23,6 +23,9 @@ class MainSplitViewController: NSSplitViewController {
         splitViewItems[0].do {
             $0.minimumThickness = 250
             $0.maximumThickness = 400
+            if #available(macOS 26.0, *) {
+                $0.automaticallyAdjustsSafeAreaInsets = true
+            }
         }
 
         splitViewItems[1].do {
@@ -31,6 +34,9 @@ class MainSplitViewController: NSSplitViewController {
 
         splitViewItems[2].do {
             $0.minimumThickness = 200
+            if #available(macOS 26.0, *) {
+                $0.automaticallyAdjustsSafeAreaInsets = true
+            }
         }
 
         if AppDefaults[\.isInitialSetupSplitView] {
@@ -44,14 +50,3 @@ class MainSplitViewController: NSSplitViewController {
         inspectorItem.animator().isCollapsed = !inspectorItem.isCollapsed
     }
 }
-
-// Fix UXKit Exception
-// extension NSViewController {
-//    @objc func transitionCoordinator() -> Any? {
-//        return nil
-//    }
-//
-//    @objc func _ancestorViewControllerOfClass(_ class: Any?) -> Any? {
-//        return nil
-//    }
-// }

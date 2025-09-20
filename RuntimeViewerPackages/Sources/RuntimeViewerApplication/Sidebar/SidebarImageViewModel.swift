@@ -22,7 +22,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @Observed private var searchScope: RuntimeTypeSearchScope = .all
     @Observed private var runtimeObjects: [RuntimeObjectName] = []
     @Observed private var filteredRuntimeObjects: [RuntimeObjectName] = []
-    @Observed private var loadState: RuntimeImageLoadState = .notLoaded
+    @Observed private var loadState: RuntimeImageLoadState = .unknown
 
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
         self.runtimeEngine = appServices.runtimeEngine
@@ -31,7 +31,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         self.imagePath = imagePath
         self.imageName = namedNode.name
         super.init(appServices: appServices, router: router)
-        
+
         Task {
             do {
                 let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
@@ -42,43 +42,22 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 let swiftEnumNames = try await runtimeEngine.names(of: .swift(.enum), in: imagePath)
                 let swiftStructNames = try await runtimeEngine.names(of: .swift(.struct), in: imagePath)
                 await MainActor.run {
-
                     let searchString = ""
                     let searchScope: RuntimeTypeSearchScope = .all
 
                     self.searchString = searchString
                     self.searchScope = searchScope
-                    
+
                     self.runtimeObjects = objcClassNames + objcProtocolNames + swiftEnumNames + swiftStructNames + swiftClassNames + swiftProtocolNames
                     self.filteredRuntimeObjects = self.runtimeObjects.sorted()
-//                    self.runtimeObjects = Self.runtimeObjectsFor(
-//                        classNames: classNames, protocolNames: protocolNames,
-//                        searchString: searchString, searchScope: searchScope
-//                    )
 
                     self.loadState = loadState
                 }
 
-                
-//                $searchScope
-//                    .asPublisher()
-//                    .combineLatest(debouncedSearch.asPublisher(), $classNames.asPublisher(), $protocolNames.asPublisher()) {
-//                        Self.runtimeObjectsFor(
-//                            classNames: $2, protocolNames: $3,
-//                            searchString: $1, searchScope: $0
-//                        )
-//                    }
-//                    .asObservable()
-//                    .map { $0.sorted() }
-//                    .bind(to: $runtimeObjects)
-//                    .disposed(by: rx.disposeBag)
-
                 let debouncedSearch = $searchString
                     .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
                     .asObservable()
-                
-                
-                
+
                 debouncedSearch
                     .withLatestFrom($runtimeObjects.asObservable()) { (searchString: String, runtimeObjects: [RuntimeObjectName]) -> [RuntimeObjectName] in
                         if searchString.isEmpty {
@@ -89,7 +68,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     }
                     .bind(to: $filteredRuntimeObjects)
                     .disposed(by: rx.disposeBag)
-                
+
                 await runtimeEngine.$imageList
                     .asObservable()
                     .flatMap { [unowned self] imageList in
@@ -102,6 +81,7 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     .bind(to: $loadState)
                     .disposed(by: rx.disposeBag)
             } catch {
+                loadState = .loadError(error)
                 print(error)
             }
         }
@@ -131,7 +111,6 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
     @MainActor
     public func transform(_ input: Input) -> Output {
-
         input.searchString.emit(to: $searchString).disposed(by: rx.disposeBag)
 
         input.runtimeObjectClicked.emitOnNextMainActor { [weak self] viewModel in
@@ -171,7 +150,6 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
             isEmpty: $runtimeObjects.asDriver().map { $0.isEmpty },
             windowInitialTitles: .just((runtimeNodeName, "")),
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.name)" }
-            
         )
     }
 

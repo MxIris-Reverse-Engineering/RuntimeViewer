@@ -16,7 +16,13 @@ class CommonLoadingView: XiblessView {
         }
     }
 
-    private let contentView = NSVisualEffectView()
+    private lazy var contentView: NSView = {
+        if #available(macOS 26.0, *) {
+            NSView()
+        } else {
+            NSVisualEffectView()
+        }
+    }()
 
     private let loadingIndicator: MaterialLoadingIndicator = .init(radius: 25, color: .controlAccentColor)
 

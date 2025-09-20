@@ -1,0 +1,6 @@
+framework module UXKit {
+  umbrella "."
+
+  export *
+  module * { export * }
+}

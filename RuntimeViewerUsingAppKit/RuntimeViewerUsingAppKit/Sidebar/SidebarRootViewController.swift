@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewModel> {
+final class SidebarRootViewController: UXEffectViewController<SidebarRootViewModel> {
     let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
 
     let filterSearchField = FilterSearchField()
@@ -57,14 +57,18 @@ class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewMod
 
         let output = viewModel.transform(input)
 
-        output.nodes.drive(outlineView.rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: SidebarRootCellViewModel) -> NSView? in
+        output.nodes.drive(outlineView.rx.nodes)({ (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: SidebarRootCellViewModel) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: SidebarRootTableCellView.self, owner: nil)
             cellView.bind(to: node)
             return cellView
-        }
+        }, { outlineView, _ -> NSTableRowView? in
+            if #available(macOS 26.0, *) {
+                return outlineView.box.makeView(ofClass: SidebarRootTableRowView.self)
+            } else {
+                return nil
+            }
+        })
         .disposed(by: rx.disposeBag)
-
-//        output.nodes.mapToVoid().drive(with: self) { $0.outlineView.setNeedsReloadAutosaveExpandedItems() }.disposed(by: rx.disposeBag)
 
         output.nodesIndexed.asObservable().first().asObservable().subscribeOnNext { [weak self] _ in
             guard let self else { return }
@@ -74,12 +78,5 @@ class SidebarRootViewController: UXVisualEffectViewController<SidebarRootViewMod
             outlineView.identifier = "com.JH.RuntimeViewer.SidebarRootViewController.identifier.\(viewModel.appServices.runtimeEngine.source.description)"
         }
         .disposed(by: rx.disposeBag)
-    }
-}
-
-extension NSOutlineView {
-    func setNeedsReloadAutosaveExpandedItems() {
-        autosaveExpandedItems = !autosaveExpandedItems
-        autosaveExpandedItems = !autosaveExpandedItems
     }
 }
