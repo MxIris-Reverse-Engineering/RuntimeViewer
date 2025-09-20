@@ -7,6 +7,14 @@ let appkitPlatforms: [Platform] = [.macOS]
 
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
+let usingSystemUXKit = true
+
+var sharedSwiftSettings: [SwiftSetting] = []
+
+if usingSystemUXKit {
+    sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
+}
+
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
@@ -48,7 +56,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/CocoaCoordinator",
-            from: "0.3.0"
+            branch: "main"
         ),
         .package(
             url: "https://github.com/SnapKit/SnapKit",
@@ -64,11 +72,11 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/RxAppKit",
-            from: "0.2.0"
+            branch: "main"
         ),
         .package(
             url: "https://github.com/OpenUXKit/OpenUXKit",
-            from: "0.10.0"
+            branch: "main"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/NSAttributedStringBuilder",
@@ -141,9 +149,9 @@ let package = Package(
                 .product(name: "XCoordinatorRx", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
-//                .product(name: "UXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: [.macOS])),
-            ]
+                .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
+            ],
+            swiftSettings: sharedSwiftSettings,
         ),
         .target(
             name: "RuntimeViewerUI",
@@ -151,15 +159,16 @@ let package = Package(
                 .product(name: "UIFoundation", package: "UIFoundation"),
                 .product(name: "UIFoundationToolbox", package: "UIFoundation"),
                 .product(name: "SnapKit", package: "SnapKit"),
-                .product(name: "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
-//                .product(name: "UXKit", package: "OpenUXKit"),
+                .product(name: usingSystemUXKit ? "UXKit" : "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbol", package: "SFSymbol"),
                 .product(name: "IDEIcons", package: "ide-icons"),
                 .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
-            ]
+                .product(name: "UIFoundationAppleInternalObjC", package: "UIFoundation"),
+            ],
+            swiftSettings: sharedSwiftSettings,
         ),
         .target(
             name: "RuntimeViewerApplication",

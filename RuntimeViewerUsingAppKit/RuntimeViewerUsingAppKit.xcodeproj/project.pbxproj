@@ -18,6 +18,9 @@
 		E947C36A2C2A4D0400296B2E /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C3692C2A4D0400296B2E /* AppDelegate.swift */; };
 		E947C36C2C2A4D0400296B2E /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */; };
 		E947C3732C2A4D0500296B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E947C3722C2A4D0500296B2E /* Assets.xcassets */; };
+		E94BA6942E7EE09A006B553D /* UXKitFixups.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94BA6932E7EE09A006B553D /* UXKitFixups.swift */; };
+		E94BA6962E7EEB64006B553D /* SidebarRootTableRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */; };
+		E94BA6982E7EFBC3006B553D /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E94BA6972E7EFBC3006B553D /* AppIcon.icon */; };
 		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
 		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
@@ -36,7 +39,7 @@
 		E9A8253A2C0E095500D9A85D /* SidebarImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */; };
 		E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825412C0E0B2300D9A85D /* MainWindowController.swift */; };
 		E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825432C0E0B2800D9A85D /* MainSplitViewController.swift */; };
-		E9A825462C0E0B4900D9A85D /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825452C0E0B4900D9A85D /* ViewController.swift */; };
+		E9A825462C0E0B4900D9A85D /* ViewControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825452C0E0B4900D9A85D /* ViewControllers.swift */; };
 		E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825492C0E0E9F00D9A85D /* ContentCoordinator.swift */; };
 		E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8254B2C0E0EA600D9A85D /* InspectorCoordinator.swift */; };
 		E9A825502C0E0EB400D9A85D /* InspectorNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8254F2C0E0EB400D9A85D /* InspectorNavigationController.swift */; };
@@ -100,6 +103,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		E94BA6902E7EA992006B553D /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -160,6 +173,10 @@
 		E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		E947C3722C2A4D0500296B2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E947C3772C2A4D0500296B2E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E94BA68D2E7EA992006B553D /* UXKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = UXKit.xcframework; path = RuntimeViewerUsingAppKit/UXKit.xcframework; sourceTree = "<group>"; };
+		E94BA6932E7EE09A006B553D /* UXKitFixups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UXKitFixups.swift; sourceTree = "<group>"; };
+		E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTableRowView.swift; sourceTree = "<group>"; };
+		E94BA6972E7EFBC3006B553D /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
 		E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIPChecker.swift; sourceTree = "<group>"; };
@@ -181,7 +198,7 @@
 		E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageViewController.swift; sourceTree = "<group>"; };
 		E9A825412C0E0B2300D9A85D /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
 		E9A825432C0E0B2800D9A85D /* MainSplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitViewController.swift; sourceTree = "<group>"; };
-		E9A825452C0E0B4900D9A85D /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		E9A825452C0E0B4900D9A85D /* ViewControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewControllers.swift; sourceTree = "<group>"; };
 		E9A825492C0E0E9F00D9A85D /* ContentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentCoordinator.swift; sourceTree = "<group>"; };
 		E9A8254B2C0E0EA600D9A85D /* InspectorCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorCoordinator.swift; sourceTree = "<group>"; };
 		E9A8254F2C0E0EB400D9A85D /* InspectorNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorNavigationController.swift; sourceTree = "<group>"; };
@@ -318,6 +335,7 @@
 		E9432FF32C0D637500362862 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				E94BA68D2E7EA992006B553D /* UXKit.xcframework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -347,6 +365,7 @@
 		E94E36C72CF87BBC006101C8 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				E94BA6972E7EFBC3006B553D /* AppIcon.icon */,
 				E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */,
 			);
 			path = Resources;
@@ -373,7 +392,7 @@
 		E9CE07BA2C1497EA0070A6E8 /* Base */ = {
 			isa = PBXGroup;
 			children = (
-				E9A825452C0E0B4900D9A85D /* ViewController.swift */,
+				E9A825452C0E0B4900D9A85D /* ViewControllers.swift */,
 				E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */,
 			);
 			path = Base;
@@ -398,6 +417,7 @@
 				E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */,
 				E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */,
 				E94330172C0DA62500362862 /* SidebarRootViewController.swift */,
+				E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */,
 				E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */,
 				E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */,
 				E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */,
@@ -436,6 +456,7 @@
 		E9CE07BF2C14981D0070A6E8 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				E94BA6932E7EE09A006B553D /* UXKitFixups.swift */,
 				E91CD9962C2127AD00C989CC /* EventMonitor.swift */,
 				E943301B2C0DB75B00362862 /* Then.swift */,
 				E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */,
@@ -510,6 +531,7 @@
 				E9F6CD052D9A7B1700DBFB50 /* Embed LaunchDaemon */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */,
+				E94BA6902E7EA992006B553D /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -665,6 +687,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E94BA6982E7EFBC3006B553D /* AppIcon.icon in Resources */,
 				E9F759692CF7817200BE7A5F /* RuntimeViewerServer.framework in Resources */,
 				E9432FE82C0D614A00362862 /* Assets.xcassets in Resources */,
 				E9432FEB2C0D614A00362862 /* Base in Resources */,
@@ -737,9 +760,10 @@
 				E9F7596D2CF89BB000BE7A5F /* RuntimeEngineManager.swift in Sources */,
 				E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */,
 				E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */,
+				E94BA6962E7EEB64006B553D /* SidebarRootTableRowView.swift in Sources */,
 				E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */,
 				E9EEF7672E085420008D85D1 /* InspectorDisclosureView.swift in Sources */,
-				E9A825462C0E0B4900D9A85D /* ViewController.swift in Sources */,
+				E9A825462C0E0B4900D9A85D /* ViewControllers.swift in Sources */,
 				E9A825522C0E0F9F00D9A85D /* ContentNavigationController.swift in Sources */,
 				E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */,
 				E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */,
@@ -759,6 +783,7 @@
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
 				E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */,
+				E94BA6942E7EE09A006B553D /* UXKitFixups.swift in Sources */,
 				E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */,
 				E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */,
 				E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */,
@@ -965,12 +990,14 @@
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -986,7 +1013,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = RuntimeViewer;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1002,12 +1029,14 @@
 				ARCHS = "$(ARCHS_STANDARD)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1023,7 +1052,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.2.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = RuntimeViewer;
 				SWIFT_EMIT_LOC_STRINGS = YES;

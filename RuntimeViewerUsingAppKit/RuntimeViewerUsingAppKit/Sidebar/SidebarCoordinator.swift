@@ -45,3 +45,4 @@ class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
         delegate?.sidebarCoordinator(self, completeTransition: route)
     }
 }
+
