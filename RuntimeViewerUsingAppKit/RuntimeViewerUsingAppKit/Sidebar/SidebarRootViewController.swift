@@ -4,11 +4,13 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 final class SidebarRootViewController: UXEffectViewController<SidebarRootViewModel> {
-    let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
+    private let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
 
-    let filterSearchField = FilterSearchField()
+    private let filterSearchField = FilterSearchField()
 
-    let bottomSeparatorView = NSBox()
+    private let bottomSeparatorView = NSBox()
+    
+    private var dataSource: SidebarRootOutlineViewDataSource?
 
     override var shouldDisplayCommonLoading: Bool { true }
 
@@ -48,7 +50,9 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
         super.setupBindings(for: viewModel)
-
+        
+        dataSource = .init(viewModel: viewModel)
+        
         let input = SidebarRootViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
@@ -71,8 +75,8 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         .disposed(by: rx.disposeBag)
 
         output.nodesIndexed.asObservable().first().asObservable().subscribeOnNext { [weak self] _ in
-            guard let self else { return }
-            outlineView.rx.setDataSource(viewModel).disposed(by: rx.disposeBag)
+            guard let self, let dataSource else { return }
+            outlineView.rx.setDataSource(dataSource).disposed(by: rx.disposeBag)
             outlineView.autosaveExpandedItems = true
             outlineView.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
             outlineView.identifier = "com.JH.RuntimeViewer.SidebarRootViewController.identifier.\(viewModel.appServices.runtimeEngine.source.description)"

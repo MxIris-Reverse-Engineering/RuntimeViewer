@@ -1,16 +1,8 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
-#endif
-
-import RuntimeViewerUI
+import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-public class SidebarImageViewModel: ViewModel<SidebarRoute> {
+public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     private let namedNode: RuntimeNamedNode
 
     private let imagePath: String

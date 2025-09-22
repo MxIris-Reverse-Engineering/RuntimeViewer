@@ -10,8 +10,8 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-public class SidebarImageCellViewModel: NSObject {
-    let runtimeObject: RuntimeObjectName
+public final class SidebarImageCellViewModel: NSObject {
+    public let runtimeObject: RuntimeObjectName
 
     @Observed
     public private(set) var icon: NSUIImage?

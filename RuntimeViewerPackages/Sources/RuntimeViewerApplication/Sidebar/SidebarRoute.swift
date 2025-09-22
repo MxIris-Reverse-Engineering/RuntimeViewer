@@ -1,6 +1,5 @@
 import Foundation
 import RuntimeViewerCore
-import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
 public enum SidebarRoute: Routable {
