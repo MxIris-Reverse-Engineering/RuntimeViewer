@@ -1,28 +1,19 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-import AppKit
-import RxAppKit
-#endif
-
-#if canImport(UIKit)
-import UIKit
-#endif
-
+import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import RuntimeViewerUI
 
 public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     @Observed
-    private var nodes: [SidebarRootCellViewModel] = []
+    public private(set) var nodes: [SidebarRootCellViewModel] = []
 
     @Observed
-    private var filteredNodes: [SidebarRootCellViewModel]? = nil
+    public private(set) var filteredNodes: [SidebarRootCellViewModel]? = nil
 
     @Observed
-    private var allNodes: [String: SidebarRootCellViewModel] = [:]
+    public private(set) var allNodes: [String: SidebarRootCellViewModel] = [:]
 
     @Observed
-    private var searchString: String = ""
+    public private(set) var searchString: String = ""
 
     private var nodesIndexed: Signal<Void> = .empty()
 
@@ -114,19 +105,3 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
         #endif
     }
 }
-
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-extension SidebarRootViewModel: NSOutlineViewDataSource {
-    public func outlineView(_ outlineView: NSOutlineView, itemForPersistentObject object: Any) -> Any? {
-        guard let path = object as? String else { return nil }
-        let item = allNodes[path]
-        return item
-    }
-
-    public func outlineView(_ outlineView: NSOutlineView, persistentObjectForItem item: Any?) -> Any? {
-        guard let item = item as? SidebarRootCellViewModel else { return nil }
-        let returnObject = item.node.parent != nil ? item.node.absolutePath : item.node.name
-        return returnObject
-    }
-}
-#endif

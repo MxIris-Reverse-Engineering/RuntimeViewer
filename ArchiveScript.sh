@@ -1,22 +1,15 @@
-#工程绝对路径
 project_path=$(cd `dirname $0`; pwd)
 
-#工程名 将XXX替换成自己的工程名
 project_name="RuntimeViewer"
 
-#scheme名 将XXX替换成自己的sheme名
 scheme_name="RuntimeViewerUsingAppKit"
 
-#打包模式 Debug/Release
 development_mode="Release"
 
-#build文件夹路径
 build_path=${project_path}/build
 
-#plist文件所在路径
 exportOptionsPlistPath=${project_path}/ArchiveExportConfig.plist
 
-#导出App文件所在路径
 exportAppPath=${project_path}/archive
 
 

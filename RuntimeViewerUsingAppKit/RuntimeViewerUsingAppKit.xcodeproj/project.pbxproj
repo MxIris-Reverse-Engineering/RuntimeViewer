@@ -59,6 +59,7 @@
 		E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC192C13685400169ABF /* RuntimeViewerUI */; };
 		E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */; };
 		E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */; };
+		E9D5359B2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D5359A2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift */; };
 		E9E900EB2C2D0D5B00FADDCC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E900EA2C2D0D5B00FADDCC /* main.swift */; };
 		E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */; };
 		E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */; };
@@ -214,6 +215,7 @@
 		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
 		E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainToolbarController.swift; sourceTree = "<group>"; };
 		E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTableCellView.swift; sourceTree = "<group>"; };
+		E9D5359A2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootOutlineViewDataSource.swift; sourceTree = "<group>"; };
 		E9E900D72C2CF96500FADDCC /* RuntimeViewerCatalystHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerCatalystHelper.entitlements; sourceTree = "<group>"; };
 		E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerCatalystHelperPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -416,6 +418,7 @@
 			children = (
 				E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */,
 				E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */,
+				E9D5359A2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift */,
 				E94330172C0DA62500362862 /* SidebarRootViewController.swift */,
 				E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */,
 				E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */,
@@ -766,6 +769,7 @@
 				E9A825462C0E0B4900D9A85D /* ViewControllers.swift in Sources */,
 				E9A825522C0E0F9F00D9A85D /* ContentNavigationController.swift in Sources */,
 				E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */,
+				E9D5359B2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift in Sources */,
 				E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */,
 				E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorNavigationController.swift in Sources */,
@@ -994,7 +998,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
@@ -1033,7 +1037,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
