@@ -34,26 +34,6 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
         Task {
             do {
-                let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
-                let objcClassNames = try await runtimeEngine.names(of: .objc(.class), in: imagePath)
-                let objcProtocolNames = try await runtimeEngine.names(of: .objc(.protocol), in: imagePath)
-                let swiftClassNames = try await runtimeEngine.names(of: .swift(.class), in: imagePath)
-                let swiftProtocolNames = try await runtimeEngine.names(of: .swift(.protocol), in: imagePath)
-                let swiftEnumNames = try await runtimeEngine.names(of: .swift(.enum), in: imagePath)
-                let swiftStructNames = try await runtimeEngine.names(of: .swift(.struct), in: imagePath)
-                await MainActor.run {
-                    let searchString = ""
-                    let searchScope: RuntimeTypeSearchScope = .all
-
-                    self.searchString = searchString
-                    self.searchScope = searchScope
-
-                    self.runtimeObjects = objcClassNames + objcProtocolNames + swiftEnumNames + swiftStructNames + swiftClassNames + swiftProtocolNames
-                    self.filteredRuntimeObjects = self.runtimeObjects.sorted()
-
-                    self.loadState = loadState
-                }
-
                 let debouncedSearch = $searchString
                     .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
                     .asObservable()
@@ -69,6 +49,16 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     .bind(to: $filteredRuntimeObjects)
                     .disposed(by: rx.disposeBag)
 
+                await runtimeEngine.reloadDataPublisher
+                    .asObservable()
+                    .subscribeOnNext { [weak self] in
+                        guard let self else { return }
+                        Task {
+                            try await self.reloadData()
+                        }
+                    }
+                    .disposed(by: rx.disposeBag)
+
                 await runtimeEngine.$imageList
                     .asObservable()
                     .flatMap { [unowned self] imageList in
@@ -80,8 +70,10 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     .observeOnMainScheduler()
                     .bind(to: $loadState)
                     .disposed(by: rx.disposeBag)
+
+                try await reloadData()
             } catch {
-                loadState = .loadError(error)
+                self.loadState = .loadError(error)
                 print(error)
             }
         }
@@ -107,6 +99,34 @@ public class SidebarImageViewModel: ViewModel<SidebarRoute> {
         public let isEmpty: Driver<Bool>
         public let windowInitialTitles: Driver<(title: String, subtitle: String)>
         public let windowSubtitle: Signal<String>
+    }
+
+    private func reloadData() async throws {
+        let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
+        if case .notLoaded = loadState {
+            await MainActor.run {
+                self.loadState = loadState
+            }
+            return
+        }
+        let objcClassNames = try await runtimeEngine.names(of: .objc(.class), in: imagePath)
+        let objcProtocolNames = try await runtimeEngine.names(of: .objc(.protocol), in: imagePath)
+        let swiftClassNames = try await runtimeEngine.names(of: .swift(.class), in: imagePath)
+        let swiftProtocolNames = try await runtimeEngine.names(of: .swift(.protocol), in: imagePath)
+        let swiftEnumNames = try await runtimeEngine.names(of: .swift(.enum), in: imagePath)
+        let swiftStructNames = try await runtimeEngine.names(of: .swift(.struct), in: imagePath)
+        await MainActor.run {
+            let searchString = ""
+            let searchScope: RuntimeTypeSearchScope = .all
+
+            self.searchString = searchString
+            self.searchScope = searchScope
+
+            self.runtimeObjects = objcClassNames + objcProtocolNames + swiftEnumNames + swiftStructNames + swiftClassNames + swiftProtocolNames
+            self.filteredRuntimeObjects = self.runtimeObjects.sorted()
+
+            self.loadState = loadState
+        }
     }
 
     @MainActor

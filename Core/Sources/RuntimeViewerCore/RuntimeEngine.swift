@@ -5,7 +5,7 @@ import ClassDumpRuntime
 import FoundationToolbox
 import RuntimeViewerCommunication
 
-public final actor RuntimeEngine {
+public actor RuntimeEngine {
     public static let shared = RuntimeEngine()
 
     private static let logger = Logger(label: "RuntimeEngine")
@@ -15,7 +15,7 @@ public final actor RuntimeEngine {
     @Published private var protocolList: [String] = []
 
     @Published private var protocolToImage: [String: String] = [:]
-    
+
     @Published private var imageToProtocols: [String: [String]] = [:]
 
     @Published public private(set) var imageList: [String] = []
@@ -24,6 +24,10 @@ public final actor RuntimeEngine {
 
     @Published public private(set) var imageToSwiftSections: [String: RuntimeSwiftSections] = [:]
 
+    private let reloadDataSubject = PassthroughSubject<Void, Never>()
+    
+    public var reloadDataPublisher: some Publisher<Void, Never> { reloadDataSubject.eraseToAnyPublisher() }
+    
     fileprivate enum CommandNames: String, CaseIterable {
         case classList
         case protocolList
@@ -43,6 +47,7 @@ public final actor RuntimeEngine {
         case observeRuntime
         case interfaceForRuntimeObjectInImageWithOptions
         case namesOfKindInImage
+        case reloadData
 
         var commandName: String { "com.JH.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
     }
@@ -137,13 +142,20 @@ public final actor RuntimeEngine {
             try await perform(self, response)
         }
     }
+    
+    private func setMessageHandlerBinding(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine) async throws -> Void) {
+        connection?.setMessageHandler(name: name.commandName) { [weak self] in
+            guard let self else { return }
+            try await perform(self)
+        }
+    }
 
     public func reloadData() {
         Self.logger.debug("Start reload")
         classList = ObjCRuntime.classNames()
         protocolList = ObjCRuntime.protocolNames()
         imageList = DyldUtilities.imageNames()
-        imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
+//        imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
         Self.logger.debug("End reload")
         sendRemoteDataIfNeeded()
     }
@@ -157,25 +169,10 @@ public final actor RuntimeEngine {
         ) ?? ([:], [:])
         self.protocolToImage = protocolToImage
         self.imageToProtocols = imageToProtocols
-        Task.detached {
-            await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
-        }
 
-//        Task.detached { [self] in
-//            await withTaskGroup { group in
-//                for imagePath in await imageList {
-//                    group.addTask {
-//                        do {
-//                            let section = try RuntimeSwiftSections(imagePath: imagePath)
-//                            await self.setSwiftSection(section, forImage: imagePath)
-//                        } catch {
-//                            print(imagePath)
-//                        }
-//                    }
-//                }
-//                await group.waitForAll()
-//            }
-//        }
+        await Task.detached {
+            await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
+        }.value
 
         shouldReload
             .debounce(for: .milliseconds(15), scheduler: DispatchQueue.main)
@@ -325,7 +322,7 @@ public final actor RuntimeEngine {
             }
         }
     }
-    
+
     private func getOrCreateSwiftSections(for imagePath: String) async throws -> RuntimeSwiftSections {
         if let swiftSections = imageToSwiftSections[imagePath] {
             return swiftSections
@@ -367,8 +364,10 @@ extension RuntimeEngine {
             let section = try RuntimeSwiftSections(imagePath: path)
             await setSwiftSection(section, forImage: path)
             reloadData()
+            reloadDataSubject.send(())
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
+            reloadDataSubject.send(())
         }
     }
 
