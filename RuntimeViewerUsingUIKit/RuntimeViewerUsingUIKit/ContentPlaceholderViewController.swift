@@ -16,14 +16,6 @@ class ContentPlaceholderViewController: ViewController<ContentPlaceholderViewMod
             contentUnavailableConfiguration.text = "Select a runtime object"
             contentUnavailableConfiguration.textProperties.font = .systemFont(ofSize: 25, weight: .regular)
             contentUnavailableConfiguration.textProperties.color = .secondaryLabel
-            contentUnavailableConfiguration.button = .bordered()
-            contentUnavailableConfiguration.button.title = "Reload Data"
-            contentUnavailableConfiguration.buttonProperties.primaryAction = .init(handler: { _ in
-
-                let appDelegate = UIApplication.shared.delegate as! AppDelegate
-                appDelegate.remoteRuntimeEngine?.reloadData()
-            })
-            
             self.contentUnavailableConfiguration = contentUnavailableConfiguration
         } else {
             hierarchy {

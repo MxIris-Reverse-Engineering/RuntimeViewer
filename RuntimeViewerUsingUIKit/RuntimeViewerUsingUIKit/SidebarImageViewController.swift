@@ -110,6 +110,8 @@ extension RuntimeImageLoadState {
             2
         case .loadError:
             3
+        case .unknown:
+            4
         }
     }
 }

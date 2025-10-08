@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -28,6 +28,11 @@
 		E9038FBD2C31A8810051B6AC /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E9038FBC2C31A8810051B6AC /* RuntimeViewerApplication */; };
 		E9038FBF2C31A8810051B6AC /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E9038FBE2C31A8810051B6AC /* RuntimeViewerArchitectures */; };
 		E9038FC32C31A8810051B6AC /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9038FC22C31A8810051B6AC /* RuntimeViewerUI */; };
+		E927C2252E94449200084A7B /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E927C2212E94449200084A7B /* main.m */; };
+		E927C2262E94449200084A7B /* RuntimeViewerServerLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E927C2232E94449200084A7B /* RuntimeViewerServerLoader.swift */; };
+		E927C2272E94449200084A7B /* RuntimeViewerMobileServer.h in Headers */ = {isa = PBXBuildFile; fileRef = E927C2222E94449200084A7B /* RuntimeViewerMobileServer.h */; settings = {ATTRIBUTES = (Public, ); }; };
+		E927C2302E94450700084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E94450700084A7B /* AppIcon.icon */; };
+		E927C2312E94450700084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E94450700084A7B /* AppIcon.icon */; };
 		E942AC772C270C0000A2F3D3 /* MainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */; };
 		E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */; };
 		E942AC8C2C27CF0A00A2F3D3 /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */; };
@@ -59,6 +64,10 @@
 		E9038F982C31A81F0051B6AC /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9038FA22C31A8200051B6AC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E9038FA72C31A8200051B6AC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		E927C2212E94449200084A7B /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		E927C2222E94449200084A7B /* RuntimeViewerMobileServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerMobileServer.h; sourceTree = "<group>"; };
+		E927C2232E94449200084A7B /* RuntimeViewerServerLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerServerLoader.swift; sourceTree = "<group>"; };
+		E927C22F2E94450700084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		E9401C562D9ADC33007646F6 /* RuntimeViewerMobileServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerMobileServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E942AC762C270C0000A2F3D3 /* MainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainCoordinator.swift; sourceTree = "<group>"; };
 		E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCoordinator.swift; sourceTree = "<group>"; };
@@ -83,20 +92,6 @@
 		E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitViewController.swift; sourceTree = "<group>"; };
 		E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E9401C5C2D9ADC33007646F6 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			publicHeaders = (
-				RuntimeViewerMobileServer.h,
-			);
-			target = E9401C552D9ADC33007646F6 /* RuntimeViewerMobileServer */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		E9401C572D9ADC33007646F6 /* RuntimeViewerMobileServer */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E9401C5C2D9ADC33007646F6 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = RuntimeViewerMobileServer; sourceTree = "<group>"; };
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		E9038F952C31A81F0051B6AC /* Frameworks */ = {
@@ -141,12 +136,23 @@
 			path = RuntimeViewerUsingVision;
 			sourceTree = "<group>";
 		};
+		E927C2242E94449200084A7B /* RuntimeViewerMobileServer */ = {
+			isa = PBXGroup;
+			children = (
+				E927C2212E94449200084A7B /* main.m */,
+				E927C2222E94449200084A7B /* RuntimeViewerMobileServer.h */,
+				E927C2232E94449200084A7B /* RuntimeViewerServerLoader.swift */,
+			);
+			path = RuntimeViewerMobileServer;
+			sourceTree = "<group>";
+		};
 		E9432FB92C0D612000362862 = {
 			isa = PBXGroup;
 			children = (
+				E927C22F2E94450700084A7B /* AppIcon.icon */,
 				E9432FC42C0D612000362862 /* RuntimeViewerUsingUIKit */,
 				E9038F992C31A81F0051B6AC /* RuntimeViewerUsingVision */,
-				E9401C572D9ADC33007646F6 /* RuntimeViewerMobileServer */,
+				E927C2242E94449200084A7B /* RuntimeViewerMobileServer */,
 				E9432FC32C0D612000362862 /* Products */,
 				E9432FF62C0D638200362862 /* Frameworks */,
 			);
@@ -204,6 +210,7 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E927C2272E94449200084A7B /* RuntimeViewerMobileServer.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,9 +252,6 @@
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				E9401C572D9ADC33007646F6 /* RuntimeViewerMobileServer */,
 			);
 			name = RuntimeViewerMobileServer;
 			packageProductDependencies = (
@@ -329,6 +333,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E9038FA32C31A8200051B6AC /* Assets.xcassets in Resources */,
+				E927C2312E94450700084A7B /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,6 +350,7 @@
 			files = (
 				E9432FCF2C0D612100362862 /* Assets.xcassets in Resources */,
 				E9AA36242C318A7300A9B2E4 /* LaunchScreen.storyboard in Resources */,
+				E927C2302E94450700084A7B /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -379,6 +385,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E927C2252E94449200084A7B /* main.m in Sources */,
+				E927C2262E94449200084A7B /* RuntimeViewerServerLoader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -482,7 +490,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -500,10 +508,10 @@
 				SWIFT_INSTALL_OBJC_HEADER = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3,4,7";
-				TVOS_DEPLOYMENT_TARGET = 13.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
-				WATCHOS_DEPLOYMENT_TARGET = 6.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Debug;
 		};
@@ -522,7 +530,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				IPHONEOS_DEPLOYMENT_TARGET = 13.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -540,10 +548,10 @@
 				SWIFT_INSTALL_OBJC_HEADER = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3,4,7";
-				TVOS_DEPLOYMENT_TARGET = 13.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_PREFIX = "";
-				WATCHOS_DEPLOYMENT_TARGET = 6.0;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Release;
 		};

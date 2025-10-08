@@ -1,7 +1,7 @@
 import Foundation
-import SFSymbol
+import SFSymbols
 
-enum RuntimeViewerSymbols: String, SFSymbol.SymbolName {
+enum RuntimeViewerSymbols: String, SFSymbols.SymbolName {
     case inject
     case app
     case appFill = "app.fill"

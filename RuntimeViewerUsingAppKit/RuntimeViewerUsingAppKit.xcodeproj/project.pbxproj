@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
+		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACBE2C28865100A2F3D3 /* MainRoute.swift */; };
 		E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FE52C0D614900362862 /* AppDelegate.swift */; };
@@ -20,7 +21,6 @@
 		E947C3732C2A4D0500296B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E947C3722C2A4D0500296B2E /* Assets.xcassets */; };
 		E94BA6942E7EE09A006B553D /* UXKitFixups.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94BA6932E7EE09A006B553D /* UXKitFixups.swift */; };
 		E94BA6962E7EEB64006B553D /* SidebarRootTableRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */; };
-		E94BA6982E7EFBC3006B553D /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E94BA6972E7EFBC3006B553D /* AppIcon.icon */; };
 		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
 		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
@@ -161,6 +161,7 @@
 
 /* Begin PBXFileReference section */
 		E91CD9962C2127AD00C989CC /* EventMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
+		E927C22D2E9444F300084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		E942ACBE2C28865100A2F3D3 /* MainRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRoute.swift; sourceTree = "<group>"; };
 		E9432FE22C0D614900362862 /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FE52C0D614900362862 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -177,7 +178,6 @@
 		E94BA68D2E7EA992006B553D /* UXKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = UXKit.xcframework; path = RuntimeViewerUsingAppKit/UXKit.xcframework; sourceTree = "<group>"; };
 		E94BA6932E7EE09A006B553D /* UXKitFixups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UXKitFixups.swift; sourceTree = "<group>"; };
 		E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTableRowView.swift; sourceTree = "<group>"; };
-		E94BA6972E7EFBC3006B553D /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
 		E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIPChecker.swift; sourceTree = "<group>"; };
@@ -287,6 +287,7 @@
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
+				E927C22D2E9444F300084A7B /* AppIcon.icon */,
 				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
 				E9432FE42C0D614900362862 /* RuntimeViewerUsingAppKit */,
 				E947C3682C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
@@ -367,7 +368,6 @@
 		E94E36C72CF87BBC006101C8 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				E94BA6972E7EFBC3006B553D /* AppIcon.icon */,
 				E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */,
 			);
 			path = Resources;
@@ -690,11 +690,11 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E94BA6982E7EFBC3006B553D /* AppIcon.icon in Resources */,
 				E9F759692CF7817200BE7A5F /* RuntimeViewerServer.framework in Resources */,
 				E9432FE82C0D614A00362862 /* Assets.xcassets in Resources */,
 				E9432FEB2C0D614A00362862 /* Base in Resources */,
 				E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */,
+				E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

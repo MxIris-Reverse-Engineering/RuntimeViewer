@@ -2,7 +2,7 @@
 @_exported import UIFoundationToolbox
 @_exported import SnapKit
 @_exported import NSAttributedStringBuilder
-@_exported import SFSymbol
+@_exported import SFSymbols
 @_exported import IDEIcons
 @_exported import UIFoundationAppleInternalObjC
 

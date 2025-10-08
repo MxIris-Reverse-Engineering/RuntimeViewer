@@ -17,7 +17,6 @@ class SidebarRootOutlineViewDataSource: NSObject, NSOutlineViewDataSource {
             return nil
         }
         let item = viewModel.allNodes[path]
-        print(object, item)
         return item
     }
 

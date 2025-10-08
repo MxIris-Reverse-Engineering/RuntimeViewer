@@ -1,4 +1,4 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -9,11 +9,10 @@ let appkitPlatforms: [Platform] = [.macOS]
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
 extension Package.Dependency {
-    
     enum LocalSearchPath {
         case package(path: String, isRelative: Bool, isEnabled: Bool)
     }
-    
+
     static func package(local localSearchPaths: LocalSearchPath..., remote: Package.Dependency) -> Package.Dependency {
         for local in localSearchPaths {
             switch local {
@@ -24,7 +23,7 @@ extension Package.Dependency {
                 } else {
                     URL(fileURLWithPath: path)
                 }
-                
+
                 if FileManager.default.fileExists(atPath: url.path) {
                     return .package(path: url.path)
                 }
