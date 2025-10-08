@@ -27,8 +27,8 @@ extension RuntimeObjectKind {
     public static let swiftClassIcon = IDEIcon("C", color: .blue, style: .default, size: iconSize).image
     public static let swiftProtocolIcon = IDEIcon("Pr", color: .blue, style: .default, size: iconSize).image
 
-//    public static let classIcon = SFSymbol(systemName: .cSquare).nsuiImage
-//    public static let protocolIcon = SFSymbol(systemName: .pSquare).nsuiImage
+//    public static let classIcon = SFSymbols(systemName: .cSquare).nsuiImage
+//    public static let protocolIcon = SFSymbols(systemName: .pSquare).nsuiImage
 
     public var icon: NSUIImage {
         switch self {
@@ -97,14 +97,15 @@ extension RuntimeNamedNode: @retroactive Sequence {
     }
 }
 
+
 extension RuntimeNamedNode {
-    public static let frameworkIcon = SFSymbol(systemName: .latch2Case).nsuiImage
+    public static let frameworkIcon = SFSymbols(systemName: .latch2Case).nsuiImage
 
-    public static let bundleIcon = SFSymbol(systemName: .shippingbox).nsuiImage
+    public static let bundleIcon = SFSymbols(systemName: .shippingbox).nsuiImage
 
-    public static let imageIcon = SFSymbol(systemName: .doc).nsuiImage
+    public static let imageIcon = SFSymbols(systemName: .doc).nsuiImage
 
-    public static let folderIcon = SFSymbol(systemName: .folder).nsuiImage
+    public static let folderIcon = SFSymbols(systemName: .folder).nsuiImage
 
     public var icon: NSUIImage {
         if name.hasSuffix("framework") {
@@ -119,7 +120,7 @@ extension RuntimeNamedNode {
     }
 }
 
-extension SFSymbol {
+extension SFSymbols {
     public var nsuiImage: NSUIImage {
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         return nsImage

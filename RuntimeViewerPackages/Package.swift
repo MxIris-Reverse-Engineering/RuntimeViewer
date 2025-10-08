@@ -1,4 +1,4 @@
-// swift-tools-version: 6.1
+// swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -84,7 +84,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/SFSymbol",
-            from: "0.1.0"
+            branch: "main"
         ),
         .package(
             url: "https://github.com/CombineCommunity/RxCombine",
@@ -161,7 +161,7 @@ let package = Package(
                 .product(name: "SnapKit", package: "SnapKit"),
                 .product(name: usingSystemUXKit ? "UXKit" : "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
-                .product(name: "SFSymbol", package: "SFSymbol"),
+                .product(name: "SFSymbols", package: "SFSymbol"),
                 .product(name: "IDEIcons", package: "ide-icons"),
                 .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),

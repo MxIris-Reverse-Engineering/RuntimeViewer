@@ -22,7 +22,7 @@ public final class RuntimeNamedNode: Codable {
         let directory = parent.absolutePath
         return directory + "/" + name
     }()
-    
+
     public var path: String { absolutePath.removeFirstPathComponent() }
 
     public var isLeaf: Bool { children.isEmpty }
@@ -85,28 +85,20 @@ extension RuntimeNamedNode: Hashable {
 }
 
 extension String {
-    /// 移除路径中的第一个组件，保持原始路径的绝对/相对特性
-    /// 例如:
-    /// - "/path/to/file" -> "/to/file"
-    /// - "path/to/file" -> "to/file"
-    /// - "/path" -> "/"
-    /// - "path" -> ""
-    /// - "/" -> "/"
-    /// - "" -> ""
     func removeFirstPathComponent() -> String {
-        let isAbsolute = self.hasPrefix("/")
-        var components = self.split(separator: "/", omittingEmptySubsequences: true)
-        
+        let isAbsolute = hasPrefix("/")
+        var components = split(separator: "/", omittingEmptySubsequences: true)
+
         guard !components.isEmpty else {
             return isAbsolute ? "/" : ""
         }
-        
+
         components.removeFirst()
-        
+
         if components.isEmpty {
             return isAbsolute ? "/" : ""
         }
-        
+
         return isAbsolute ? "/" + components.joined(separator: "/") : components.joined(separator: "/")
     }
 }

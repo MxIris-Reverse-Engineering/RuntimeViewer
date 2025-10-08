@@ -52,19 +52,19 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
     class IconButtonToolbarItem: NSToolbarItem {
         let button = ToolbarButton()
 
-        convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbol.SystemSymbolName) {
-            self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbol.SymbolName)
+        convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbols.SystemSymbolName) {
+            self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbols.SymbolName)
         }
 
         convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: RuntimeViewerSymbols) {
-            self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbol.SymbolName)
+            self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbols.SymbolName)
         }
 
-        init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbol.SymbolName) {
+        init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbols.SymbolName) {
             super.init(itemIdentifier: itemIdentifier)
             view = button
             button.title = ""
-            button.image = SFSymbol(name: icon).nsImage
+            button.image = SFSymbols(name: icon).nsImage
         }
     }
 
@@ -74,7 +74,7 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             super.init(itemIdentifier: .Main.inspector)
             view = inspectorButton
             inspectorButton.title = ""
-            inspectorButton.image = SFSymbol(systemName: .sidebarRight).nsImage
+            inspectorButton.image = SFSymbols(systemName: .sidebarRight).nsImage
             inspectorButton.action = #selector(MainSplitViewController._toggleInspector(_:))
         }
     }

@@ -13,7 +13,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     public private(set) var allNodes: [String: SidebarRootCellViewModel] = [:]
 
     @Observed
-    public private(set) var searchString: String = ""
+    public private(set) var isFiltering: Bool = false
 
     private var nodesIndexed: Signal<Void> = .empty()
 
@@ -63,7 +63,11 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     public struct Output {
         public let nodes: Driver<[SidebarRootCellViewModel]>
         public let nodesIndexed: Signal<Void>
-        #if canImport(UIKit)
+        #if os(macOS)
+        public let didBeginFiltering: Signal<Void>
+        public let didChangeFiltering: Signal<Void>
+        public let didEndFiltering: Signal<Void>
+        #else
         public let filteredNodes: Driver<[SidebarRootCellViewModel]?>
         #endif
     }
@@ -77,14 +81,28 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
             }
         }
         .disposed(by: rx.disposeBag)
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        #if os(macOS)
         input.searchString.emit(with: self) {
-            $0.nodes.first?.filter = $1
+            for node in $0.nodes {
+                node.filter = $1
+            }
             $0.nodes = $0.nodes
+            if $1.isEmpty {
+                if $0.isFiltering {
+                    $0.isFiltering = false
+                }
+            } else {
+                if !$0.isFiltering {
+                    $0.isFiltering = true
+                }
+            }
         }.disposed(by: rx.disposeBag)
         return Output(
             nodes: $nodes.asDriver(),
             nodesIndexed: nodesIndexed,
+            didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
+            didChangeFiltering: input.searchString.mapToVoid(),
+            didEndFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
         )
         #endif
 

@@ -38,7 +38,7 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
         case .initial:
             let viewModel = MainViewModel(appServices: appServices, router: self)
             rootViewController.setupBindings(for: viewModel)
-            return .multiple(.set(sidebarCoordinator, for: .primary), .set(contentCoordinator, for: .secondary), .set(sidebarCoordinator, for: .compact))
+            return .multiple(.set(sidebarCoordinator, for: .primary), .set(contentCoordinator, for: .secondary))
         case .select(let runtimeObject):
             return .multiple(.route(.root(runtimeObject), on: contentCoordinator), .show(column: .secondary))
         case .inspect(let inspectableType):
@@ -73,7 +73,7 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
         switch route {
         case .selectedNode(let runtimeNamedNode):
             inspectorCoordinator.trigger(.root(.node(runtimeNamedNode)))
-        case .clickedNode(let runtimeNamedNode):
+        case .clickedNode/*(let runtimeNamedNode)*/:
             break
         case .selectedObject(let runtimeObjectType):
             trigger(.select(runtimeObjectType), with: .init(animated: false))

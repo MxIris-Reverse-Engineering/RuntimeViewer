@@ -4,12 +4,12 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 final class SidebarRootViewController: UXEffectViewController<SidebarRootViewModel> {
-    private let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
+    private let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
     private let filterSearchField = FilterSearchField()
 
     private let bottomSeparatorView = NSBox()
-    
+
     private var dataSource: SidebarRootOutlineViewDataSource?
 
     override var shouldDisplayCommonLoading: Bool { true }
@@ -35,11 +35,15 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         }
 
         filterSearchField.snp.makeConstraints { make in
-            make.left.right.bottom.equalToSuperview().inset(5)
+            make.left.right.bottom.equalToSuperview().inset(8)
         }
 
         bottomSeparatorView.do {
             $0.boxType = .separator
+        }
+
+        filterSearchField.do {
+            $0.controlSize = .large
         }
 
         outlineView.do {
@@ -50,9 +54,9 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
 
     override func setupBindings(for viewModel: SidebarRootViewModel) {
         super.setupBindings(for: viewModel)
-        
+
         dataSource = .init(viewModel: viewModel)
-        
+
         let input = SidebarRootViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
@@ -72,6 +76,24 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
                 return nil
             }
         })
+        .disposed(by: rx.disposeBag)
+
+        output.didBeginFiltering.emitOnNext { [weak self] in
+            guard let self else { return }
+            outlineView.beginFiltering()
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.didChangeFiltering.emitOnNext { [weak self, weak viewModel] in
+            guard let self, let viewModel, viewModel.isFiltering else { return }
+            outlineView.expandItem(nil, expandChildren: true)
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.didEndFiltering.emitOnNext { [weak self] in
+            guard let self else { return }
+            outlineView.endFiltering()
+        }
         .disposed(by: rx.disposeBag)
 
         output.nodesIndexed.asObservable().first().asObservable().subscribeOnNext { [weak self] _ in

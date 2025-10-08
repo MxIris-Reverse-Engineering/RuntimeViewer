@@ -103,6 +103,9 @@ class JumpToDefinitionMenuItem: NSMenuItem {
     init(runtimeObject: RuntimeObjectName) {
         self.runtimeObject = runtimeObject
         super.init(title: "Jump to Definition", action: nil, keyEquivalent: "")
+        if #available(macOS 26.0, *) {
+//            image = 
+        }
     }
 
     @available(*, unavailable)
