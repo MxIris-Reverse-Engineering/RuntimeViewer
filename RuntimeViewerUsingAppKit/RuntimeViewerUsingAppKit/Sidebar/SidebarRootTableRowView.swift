@@ -4,8 +4,10 @@ import RuntimeViewerArchitectures
 import RuntimeViewerUI
 
 final class SidebarRootTableRowView: NSTableRowView {
-    override var isEmphasized: Bool {
+    override var backgroundColor: NSColor {
         set {}
-        get { false }
+        get { Self.backgroundColor }
     }
+
+    static let backgroundColor = NSColor.controlAccentColor.withSystemEffect(.deepPressed)
 }
