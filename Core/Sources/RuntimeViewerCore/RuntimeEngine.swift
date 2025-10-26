@@ -22,12 +22,12 @@ public actor RuntimeEngine {
 
     @Published public private(set) var imageNodes: [RuntimeNamedNode] = []
 
-    @Published public private(set) var imageToSwiftSections: [String: RuntimeSwiftSections] = [:]
+    @Published public private(set) var imageToSwiftSection: [String: RuntimeSwiftSection] = [:]
 
     private let reloadDataSubject = PassthroughSubject<Void, Never>()
-    
+
     public var reloadDataPublisher: some Publisher<Void, Never> { reloadDataSubject.eraseToAnyPublisher() }
-    
+
     fileprivate enum CommandNames: String, CaseIterable {
         case classList
         case protocolList
@@ -47,6 +47,7 @@ public actor RuntimeEngine {
         case observeRuntime
         case interfaceForRuntimeObjectInImageWithOptions
         case namesOfKindInImage
+        case namesInImage
         case reloadData
 
         var commandName: String { "com.JH.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
@@ -110,7 +111,8 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .patchImagePathForDyld, of: self) { $0.patchImagePathForDyld(_:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(_:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofClass:) }
-        setMessageHandlerBinding(forName: .namesOfKindInImage, of: self) { $0.names(for:) }
+//        setMessageHandlerBinding(forName: .namesOfKindInImage, of: self) { $0.names(for:) }
+        setMessageHandlerBinding(forName: .namesInImage, of: self) { $0.names(in:) }
         setMessageHandlerBinding(forName: .interfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
     }
 
@@ -142,7 +144,7 @@ public actor RuntimeEngine {
             try await perform(self, response)
         }
     }
-    
+
     private func setMessageHandlerBinding(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine) async throws -> Void) {
         connection?.setMessageHandler(name: name.commandName) { [weak self] in
             guard let self else { return }
@@ -206,8 +208,8 @@ public actor RuntimeEngine {
         self.imageNodes = imageNodes
     }
 
-    private func setSwiftSection(_ section: RuntimeSwiftSections, forImage image: String) async {
-        imageToSwiftSections[image] = section
+    private func setSwiftSection(_ section: RuntimeSwiftSection, forImage image: String) async {
+        imageToSwiftSection[image] = section
     }
 
     private func setImageToProtocols(_ imageToProtocols: [String: [String]]) async {
@@ -281,7 +283,7 @@ public actor RuntimeEngine {
     private func _interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) -> RuntimeObjectInterface? {
         switch name.kind {
         case .swift:
-            return try? imageToSwiftSections[name.imagePath]?.interface(for: name, options: options.swiftDemangleOptions)
+            return try? imageToSwiftSection[name.imagePath]?.interface(for: name, options: options.swiftDemangleOptions)
         case .objc(let kindOfObjC):
             switch kindOfObjC {
             case .class:
@@ -296,38 +298,29 @@ public actor RuntimeEngine {
         }
     }
 
-    private func _names(of kind: RuntimeObjectKind, in image: String) async throws -> [RuntimeObjectName] {
+    private func _objcNames(of kind: RuntimeObjectKind.ObjectiveC, in image: String) async throws -> [RuntimeObjectName] {
         let image = DyldUtilities.patchImagePathForDyld(image)
         switch kind {
-        case .c:
-            fatalError()
-        case .objc(let kindOfObjC):
-            switch kindOfObjC {
-            case .class:
-                return ObjCRuntime.classNamesIn(image: image).map { .init(name: $0, kind: .objc(.class), imagePath: image) }
-            case .protocol:
-                return (imageToProtocols[DyldUtilities.patchImagePathForDyld(image)] ?? []).map { .init(name: $0, kind: .objc(.protocol), imagePath: image) }
-            }
-        case .swift(let kindOfSwift):
-            let swiftSections = try await getOrCreateSwiftSections(for: image)
-            switch kindOfSwift {
-            case .enum:
-                return (try? swiftSections.enumNames()) ?? []
-            case .struct:
-                return (try? swiftSections.structNames()) ?? []
-            case .class:
-                return (try? swiftSections.classNames()) ?? []
-            case .protocol:
-                return (try? swiftSections.protocolNames()) ?? []
-            }
+        case .class:
+            return ObjCRuntime.classNamesIn(image: image).map { .init(name: $0, kind: .objc(.class), imagePath: image, children: []) }
+        case .protocol:
+            return (imageToProtocols[DyldUtilities.patchImagePathForDyld(image)] ?? []).map { .init(name: $0, kind: .objc(.protocol), imagePath: image, children: []) }
         }
     }
 
-    private func getOrCreateSwiftSections(for imagePath: String) async throws -> RuntimeSwiftSections {
-        if let swiftSections = imageToSwiftSections[imagePath] {
+    private func _names(in image: String) async throws -> [RuntimeObjectName] {
+        let image = DyldUtilities.patchImagePathForDyld(image)
+        let objcClasses = try await _objcNames(of: .class, in: image)
+        let objcProtocols = try await _objcNames(of: .protocol, in: image)
+        let swiftNames = try imageToSwiftSection[image]?.allNames() ?? []
+        return objcClasses + objcProtocols + swiftNames
+    }
+
+    private func getOrCreateSwiftSections(for imagePath: String) async throws -> RuntimeSwiftSection {
+        if let swiftSections = imageToSwiftSection[imagePath] {
             return swiftSections
         } else {
-            let swiftSections = try RuntimeSwiftSections(imagePath: imagePath)
+            let swiftSections = try RuntimeSwiftSection(imagePath: imagePath)
             await setSwiftSection(swiftSections, forImage: imagePath)
             return swiftSections
         }
@@ -361,7 +354,7 @@ extension RuntimeEngine {
     public func loadImage(at path: String) async throws {
         try await request {
             try DyldUtilities.loadImage(at: path)
-            let section = try RuntimeSwiftSections(imagePath: path)
+            let section = try RuntimeSwiftSection(imagePath: path)
             await setSwiftSection(section, forImage: path)
             reloadData()
             reloadDataSubject.send(())
@@ -412,20 +405,28 @@ extension RuntimeEngine {
         }
     }
 
-    private struct NamesRequest: Codable {
-        let kind: RuntimeObjectKind
-        let image: String
-    }
+//    private struct NamesOfKindRequest: Codable {
+//        let kind: RuntimeObjectKind
+//        let image: String
+//    }
+//
+//    public func names(of kind: RuntimeObjectKind, in image: String) async throws -> [RuntimeObjectName] {
+//        return try await names(for: .init(kind: kind, image: image))
+//    }
 
-    public func names(of kind: RuntimeObjectKind, in image: String) async throws -> [RuntimeObjectName] {
-        return try await names(for: .init(kind: kind, image: image))
-    }
+//    private func names(for request: NamesOfKindRequest) async throws -> [RuntimeObjectName] {
+//        try await self.request {
+//            try await _names(of: request.kind, in: request.image)
+//        } remote: {
+//            return try await $0.sendMessage(name: .namesOfKindInImage, request: NamesOfKindRequest(kind: request.kind, image: request.image))
+//        }
+//    }
 
-    private func names(for request: NamesRequest) async throws -> [RuntimeObjectName] {
-        try await self.request {
-            try await _names(of: request.kind, in: request.image)
+    public func names(in image: String) async throws -> [RuntimeObjectName] {
+        try await request {
+            try await _names(in: image)
         } remote: {
-            return try await $0.sendMessage(name: .namesOfKindInImage, request: NamesRequest(kind: request.kind, image: request.image))
+            return try await $0.sendMessage(name: .namesInImage, request: image)
         }
     }
 

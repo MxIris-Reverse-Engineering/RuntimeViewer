@@ -101,12 +101,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             }
             return
         }
-        let objcClassNames = try await runtimeEngine.names(of: .objc(.class), in: imagePath)
-        let objcProtocolNames = try await runtimeEngine.names(of: .objc(.protocol), in: imagePath)
-        let swiftClassNames = try await runtimeEngine.names(of: .swift(.class), in: imagePath)
-        let swiftProtocolNames = try await runtimeEngine.names(of: .swift(.protocol), in: imagePath)
-        let swiftEnumNames = try await runtimeEngine.names(of: .swift(.enum), in: imagePath)
-        let swiftStructNames = try await runtimeEngine.names(of: .swift(.struct), in: imagePath)
+        let names = try await runtimeEngine.names(in: imagePath)
         await MainActor.run {
             let searchString = ""
             let searchScope: RuntimeTypeSearchScope = .all
@@ -114,7 +109,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             self.searchString = searchString
             self.searchScope = searchScope
 
-            self.runtimeObjects = objcClassNames + objcProtocolNames + swiftEnumNames + swiftStructNames + swiftClassNames + swiftProtocolNames
+            self.runtimeObjects = names
             self.filteredRuntimeObjects = self.runtimeObjects.sorted()
 
             self.loadState = loadState

@@ -16,12 +16,14 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         case `struct`
         case `class`
         case `protocol`
+        case `typeAlias`
         public var id: Self { self }
     }
 
     case c(C)
     case objc(ObjectiveC)
     case swift(Swift)
+    case swiftExtension(Swift)
 
     public var id: Self { self }
 
@@ -51,6 +53,21 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
                 6
             case .protocol:
                 7
+            case .typeAlias:
+                8
+            }
+        case .swiftExtension(let swift):
+            switch swift {
+            case .enum:
+                9
+            case .struct:
+                10
+            case .class:
+                11
+            case .protocol:
+                12
+            case .typeAlias:
+                13
             }
         }
     }
@@ -64,6 +81,7 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         cases.append(contentsOf: C.allCases.map { RuntimeObjectKind.c($0) })
         cases.append(contentsOf: ObjectiveC.allCases.map { RuntimeObjectKind.objc($0) })
         cases.append(contentsOf: Swift.allCases.map { RuntimeObjectKind.swift($0) })
+        cases.append(contentsOf: Swift.allCases.map { RuntimeObjectKind.swiftExtension($0) })
         return cases
     }()
     
@@ -93,6 +111,21 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
                 "Swift Class"
             case .protocol:
                 "Swift Protocol"
+            case .typeAlias:
+                "Swift TypeAlias"
+            }
+        case .swiftExtension(let swift):
+            switch swift {
+            case .enum:
+                "Swift Enum Extension"
+            case .struct:
+                "Swift Struct Extension"
+            case .class:
+                "Swift Class Extension"
+            case .protocol:
+                "Swift Protocol Extension"
+            case .typeAlias:
+                "Swift TypeAlias Extension"
             }
         }
     }

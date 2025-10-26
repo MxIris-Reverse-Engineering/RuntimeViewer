@@ -122,7 +122,7 @@ class MainViewModel: ViewModel<MainRoute> {
                     guard result == .OK, let url = savePanel.url else { return }
                     Task {
                         do {
-                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .interface))?.interfaceString
+                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .default))?.interfaceString
                             try semanticString?.string.write(to: url, atomically: true, encoding: .utf8)
                         } catch {
                             print(error)
@@ -144,7 +144,7 @@ class MainViewModel: ViewModel<MainRoute> {
                 item.registerDataRepresentation(forTypeIdentifier: UTType.cHeader.identifier, visibility: .all) { completion in
                     Task {
                         do {
-                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObjectType, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .interface))?.interfaceString
+                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObjectType, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .default))?.interfaceString
                             completion(semanticString?.string.data(using: .utf8), nil)
                         } catch {
                             completion(nil, error)

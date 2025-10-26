@@ -6,7 +6,7 @@ import RuntimeViewerApplication
 final class SidebarRootViewController: UXEffectViewController<SidebarRootViewModel> {
     private let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
-    private let filterSearchField = FilterSearchField()
+    private let filterSearchField = FilterTokenField()
 
     private let bottomSeparatorView = NSBox()
 
@@ -30,12 +30,17 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
 
         bottomSeparatorView.snp.makeConstraints { make in
             make.left.right.equalToSuperview()
-            make.bottom.equalTo(filterSearchField.snp.top).offset(-5)
+            make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
             make.height.equalTo(1)
         }
 
         filterSearchField.snp.makeConstraints { make in
-            make.left.right.bottom.equalToSuperview().inset(8)
+            make.left.right.equalToSuperview().inset(10)
+            if #available(macOS 26.0, *) {
+                make.bottom.equalTo(view.layoutGuide(for: .safeArea())).inset(8)
+            } else {
+                make.bottom.equalToSuperview().inset(8)
+            }
         }
 
         bottomSeparatorView.do {
@@ -43,7 +48,14 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         }
 
         filterSearchField.do {
-            $0.controlSize = .large
+            if #available(macOS 26.0, *) {
+                $0.controlSize = .extraLarge
+                $0.font = .systemFont(ofSize: NSFont.systemFontSize)
+                $0.cell?.font = .systemFont(ofSize: NSFont.systemFontSize)
+                ($0.cell as? NSTextFieldCell)?.placeholderString = nil
+            } else {
+                $0.controlSize = .large
+            }
         }
 
         outlineView.do {

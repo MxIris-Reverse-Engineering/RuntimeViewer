@@ -1,14 +1,18 @@
 import MemberwiseInit
+import SwiftStdlibToolbox
 
+@Equatable
 @MemberwiseInit(.public)
-public struct RuntimeObjectName: Codable, Hashable, Identifiable {
+public final class RuntimeObjectName: Codable, Hashable, Identifiable {
     public let name: String
 
     public let kind: RuntimeObjectKind
 
     public let imagePath: String
 
-    public var id: Self { self }
+    public let children: [RuntimeObjectName]
+    
+    public var id: RuntimeObjectName { self }
 
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
 }

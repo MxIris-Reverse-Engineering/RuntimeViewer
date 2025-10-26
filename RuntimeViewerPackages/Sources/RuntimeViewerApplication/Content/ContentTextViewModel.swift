@@ -6,7 +6,7 @@ import AppKit
 import UIKit
 #endif
 
-import Demangle
+import Demangling
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -35,13 +35,13 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
             .flatMapLatest { [unowned self] runtimeObject, options, theme in
                 Observable.async {
-                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: options, swiftDemangleOptions: .interface)).map { ($0.interfaceString, theme, runtimeObject) }
+                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: options, swiftDemangleOptions: .default)).map { ($0.interfaceString, theme, runtimeObject) }
                 }
                 .trackActivity(_commonLoading)
             }
             .catchAndReturn(nil)
             .observeOnMainScheduler()
-            .map { $0.map { $0.attributedString(for: $1, runtimeObject: $2) } }
+            .map { $0.map { $0.attributedString(for: $1, runtimeObjectName: $2) } }
             .bind(to: $attributedString)
             .disposed(by: rx.disposeBag)
     }
