@@ -41,18 +41,27 @@ class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> 
 
         bottomSeparatorView.snp.makeConstraints { make in
             make.left.right.equalToSuperview()
-            make.bottom.equalTo(filterSearchField.snp.top).offset(-5)
+            make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
             make.height.equalTo(1)
         }
 
         filterSearchField.snp.makeConstraints { make in
-            make.left.right.bottom.equalToSuperview().inset(5)
+            make.left.right.equalToSuperview().inset(10)
+            make.bottom.equalToSuperview().inset(8)
         }
 
         bottomSeparatorView.do {
             $0.boxType = .separator
         }
 
+        filterSearchField.do {
+            if #available(macOS 26.0, *) {
+                $0.controlSize = .extraLarge
+            } else {
+                $0.controlSize = .large
+            }
+        }
+        
         tabView.do {
             $0.addTabViewItem(NSTabViewItem(view: imageNotLoadedView, loadState: .notLoaded))
             $0.addTabViewItem(NSTabViewItem(view: imageLoadingView, loadState: .loading))

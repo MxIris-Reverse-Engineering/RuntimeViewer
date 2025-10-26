@@ -26,10 +26,12 @@ extension RuntimeObjectKind {
     public static let swiftStructIcon = IDEIcon("S", color: .blue, style: .default, size: iconSize).image
     public static let swiftClassIcon = IDEIcon("C", color: .blue, style: .default, size: iconSize).image
     public static let swiftProtocolIcon = IDEIcon("Pr", color: .blue, style: .default, size: iconSize).image
+    public static let swiftExtensionIcon = IDEIcon("Ex", color: .blue, style: .default, size: iconSize).image
+    public static let swiftTypeAliasIcon = IDEIcon("T", color: .blue, style: .default, size: iconSize).image
 
 //    public static let classIcon = SFSymbols(systemName: .cSquare).nsuiImage
 //    public static let protocolIcon = SFSymbols(systemName: .pSquare).nsuiImage
-
+    
     public var icon: NSUIImage {
         switch self {
         case .objc(let kindOfObjC):
@@ -43,7 +45,10 @@ extension RuntimeObjectKind {
             case .struct: return Self.swiftStructIcon
             case .class: return Self.swiftClassIcon
             case .protocol: return Self.swiftProtocolIcon
+            case .typeAlias: return Self.swiftTypeAliasIcon
             }
+        case .swiftExtension:
+            return Self.swiftExtensionIcon
         default:
             fatalError()
         }

@@ -1,4 +1,4 @@
-// swift-tools-version: 6.2
+// swift-tools-version: 6.1
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -121,7 +121,7 @@ let package = Package(
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
-                .product(name: "SwiftDump", package: "MachOSwiftSection"),
+                .product(name: "SwiftInterface", package: "MachOSwiftSection"),
                 .product(name: "OrderedCollections", package: "swift-collections"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),

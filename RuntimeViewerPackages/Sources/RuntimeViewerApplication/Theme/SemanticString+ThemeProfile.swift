@@ -10,7 +10,7 @@ import Semantic
 import RuntimeViewerCore
 
 extension SemanticString {
-    public func attributedString(for provider: ThemeProfile, runtimeObject: RuntimeObjectName) -> NSAttributedString {
+    public func attributedString(for provider: ThemeProfile, runtimeObjectName: RuntimeObjectName) -> NSAttributedString {
         let attributedString = NSMutableAttributedString(string: "")
 
         for component in components {
@@ -24,7 +24,7 @@ extension SemanticString {
             #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
             var targetKind: RuntimeObjectKind?
-            switch runtimeObject.kind {
+            switch runtimeObjectName.kind {
             case .c:
                 break
             case .objc:
@@ -43,6 +43,7 @@ extension SemanticString {
                     break
                 }
             case .swift: break
+            case .swiftExtension: break
 //                switch type {
 //                case .type(let kind, .name):
 //                    switch kind {
@@ -63,7 +64,7 @@ extension SemanticString {
             }
 
             if let targetKind {
-                attributes.updateValue(RuntimeObjectName(name: string, kind: targetKind, imagePath: runtimeObject.imagePath), forKey: .link)
+                attributes.updateValue(RuntimeObjectName(name: string, kind: targetKind, imagePath: runtimeObjectName.imagePath, children: runtimeObjectName.children), forKey: .link)
             }
             #endif
 
