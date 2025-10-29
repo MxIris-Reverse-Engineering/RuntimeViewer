@@ -6,6 +6,8 @@ import SwiftStdlibToolbox
 public final class RuntimeObjectName: Codable, Hashable, Identifiable {
     public let name: String
 
+    public let displayName: String
+    
     public let kind: RuntimeObjectKind
 
     public let imagePath: String

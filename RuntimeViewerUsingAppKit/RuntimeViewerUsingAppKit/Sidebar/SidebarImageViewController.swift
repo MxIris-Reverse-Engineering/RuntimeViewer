@@ -78,7 +78,7 @@ class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> 
         super.setupBindings(for: viewModel)
 
         let input = SidebarImageViewModel.Input(
-            runtimeObjectClicked: imageLoadedView.tableView.rx.modelSelected().asSignal(),
+            runtimeObjectClicked: imageLoadedView.outlineView.rx.modelSelected().asSignal(),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal()
@@ -88,9 +88,9 @@ class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> 
 
         let output = viewModel.transform(input)
 
-        output.runtimeObjects.drive(imageLoadedView.tableView.rx.items) { tableView, _, _, item in
-            let cellView = tableView.box.makeView(ofClass: SidebarImageCellView.self, owner: nil)
-            cellView.bind(to: item)
+        output.runtimeObjects.drive(imageLoadedView.outlineView .rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarImageCellViewModel) -> NSView? in
+            let cellView = outlineView.box.makeView(ofClass: SidebarImageCellView.self, owner: nil)
+            cellView.bind(to: viewModel)
             return cellView
         }
         .disposed(by: rx.disposeBag)
@@ -155,7 +155,7 @@ extension SidebarImageViewController {
     class ImageUnknownView: XiblessView {}
 
     class ImageLoadedView: XiblessView {
-        let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
+        let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
 
         let emptyLabel = Label()
 
@@ -178,6 +178,11 @@ extension SidebarImageViewController {
 
             emptyLabel.do {
                 $0.alignment = .center
+            }
+            
+            outlineView.do {
+                $0.headerView = nil
+                $0.addTableColumn(.init(identifier: "Default Column"))
             }
         }
     }

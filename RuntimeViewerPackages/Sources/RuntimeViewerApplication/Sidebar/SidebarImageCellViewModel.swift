@@ -1,5 +1,6 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
+import RxAppKit
 #endif
 
 #if canImport(UIKit)
@@ -10,20 +11,50 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-public final class SidebarImageCellViewModel: NSObject {
+public final class SidebarImageCellViewModel: NSObject, OutlineNodeType {
     public let runtimeObject: RuntimeObjectName
 
+    public weak var parent: SidebarImageCellViewModel?
+    
+    public var children: [SidebarImageCellViewModel] { _filteredChildren }
+
+    public var isLeaf: Bool { children.isEmpty }
+
+    private lazy var _filteredChildren: [SidebarImageCellViewModel] = _children
+
+    private lazy var _children: [SidebarImageCellViewModel] = {
+        let children = runtimeObject.children.map { SidebarImageCellViewModel(runtimeObject: $0, parent: self) }
+        return children.sorted { $0.runtimeObject.name < $1.runtimeObject.name }
+    }()
+
+    private lazy var currentAndChildrenNames: String = {
+        let childrenNames = _children.map { $0.currentAndChildrenNames }.joined(separator: " ")
+        return "\(runtimeObject.name) \(childrenNames)"
+    }()
+
+    var filter: String = "" {
+        didSet {
+            if filter.isEmpty {
+                _children.forEach { $0.filter = filter }
+                _filteredChildren = _children
+            } else {
+                _children.forEach { $0.filter = filter }
+                _filteredChildren = _children.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
+            }
+        }
+    }
     @Observed
     public private(set) var icon: NSUIImage?
 
     @Observed
     public private(set) var name: NSAttributedString
 
-    public init(runtimeObject: RuntimeObjectName) {
+    public init(runtimeObject: RuntimeObjectName, parent: SidebarImageCellViewModel?) {
         self.runtimeObject = runtimeObject
+        self.parent = parent
         self.icon = runtimeObject.kind.icon
         self.name = NSAttributedString {
-            AText(runtimeObject.name)
+            AText(runtimeObject.displayName)
                 .font(.systemFont(ofSize: 13))
                 .foregroundColor(.labelColor)
         }
