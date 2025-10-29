@@ -6,7 +6,7 @@ import RuntimeViewerApplication
 final class SidebarRootViewController: UXEffectViewController<SidebarRootViewModel> {
     private let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
-    private let filterSearchField = FilterTokenField()
+    private let filterSearchField = FilterSearchField()
 
     private let bottomSeparatorView = NSBox()
 
