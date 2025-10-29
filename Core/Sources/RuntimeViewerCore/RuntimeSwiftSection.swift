@@ -34,15 +34,16 @@ public final class RuntimeSwiftSection {
 
     private var nameToInterfaceDefinitionName: [RuntimeObjectName: InterfaceDefinitionName] = [:]
 
-    public init(imagePath: String) throws {
+    public init(imagePath: String) async throws {
         let imageName = imagePath.lastPathComponent.deletingPathExtension
         guard !imageName.starts(with: "libswift") else {
             throw Error.invalidMachOImage
         }
         guard let machO = MachOImage(name: imageName) else { throw Error.invalidMachOImage }
-        self.imagePath = imageName
+        self.imagePath = imagePath
         self.machO = machO
         self.builder = try .init(configuration: .init(showCImportedTypes: false), in: machO)
+        try await self.builder.prepare()
     }
 
     func allNames() throws -> [RuntimeObjectName] {
@@ -59,14 +60,14 @@ public final class RuntimeSwiftSection {
         let typeChildren = try extensionDefintion.types.map { try makeRuntimeObjectName(for: $0, isChild: true) }
         let protocolChildren = try extensionDefintion.protocols.map { try makeRuntimeObjectName(for: $0, isChild: true) }
         let mangledName = try mangleAsString(extensionDefintion.extensionName.node)
-        let runtimeObjectName = RuntimeObjectName(name: mangledName, kind: extensionDefintion.extensionName.runtimeObjectKind, imagePath: imagePath, children: typeChildren + protocolChildren)
+        let runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: extensionDefintion.extensionName.name, kind: extensionDefintion.extensionName.runtimeObjectKind, imagePath: imagePath, children: typeChildren + protocolChildren)
         nameToInterfaceDefinitionName[runtimeObjectName] = definitionName
         return runtimeObjectName
     }
 
     private func makeRuntimeObjectName(for protocolDefintion: ProtocolDefinition, isChild: Bool) throws -> RuntimeObjectName {
         let mangledName = try mangleAsString(protocolDefintion.protocolName.node)
-        let runtimeObjectName = RuntimeObjectName(name: mangledName, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [])
+        let runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [])
         if isChild {
             nameToInterfaceDefinitionName[runtimeObjectName] = .childProtocol(protocolDefintion.protocolName)
         } else {
@@ -79,7 +80,7 @@ public final class RuntimeSwiftSection {
         let typeChildren = try typeDefinition.typeChildren.map { try makeRuntimeObjectName(for: $0, isChild: true) }
         let protocolChildren = try typeDefinition.protocolChildren.map { try makeRuntimeObjectName(for: $0, isChild: true) }
         let mangledName = try mangleAsString(typeDefinition.typeName.node)
-        let runtimeObjectName = RuntimeObjectName(name: mangledName, kind: typeDefinition.typeName.runtimeObjectKind, imagePath: imagePath, children: typeChildren + protocolChildren)
+        let runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: typeDefinition.typeName.name, kind: typeDefinition.typeName.runtimeObjectKind, imagePath: imagePath, children: typeChildren + protocolChildren)
         if isChild {
             nameToInterfaceDefinitionName[runtimeObjectName] = .childType(typeDefinition.typeName)
         } else {

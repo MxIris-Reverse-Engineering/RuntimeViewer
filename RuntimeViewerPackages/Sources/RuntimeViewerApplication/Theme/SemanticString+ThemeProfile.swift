@@ -64,7 +64,7 @@ extension SemanticString {
             }
 
             if let targetKind {
-                attributes.updateValue(RuntimeObjectName(name: string, kind: targetKind, imagePath: runtimeObjectName.imagePath, children: runtimeObjectName.children), forKey: .link)
+                attributes.updateValue(RuntimeObjectName(name: string, displayName: string, kind: targetKind, imagePath: runtimeObjectName.imagePath, children: runtimeObjectName.children), forKey: .link)
             }
             #endif
 

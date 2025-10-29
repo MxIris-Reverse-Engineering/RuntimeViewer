@@ -282,7 +282,7 @@ public actor RuntimeEngine {
 
     private func _interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) -> RuntimeObjectInterface? {
         switch name.kind {
-        case .swift:
+        case .swift, .swiftExtension:
             return try? imageToSwiftSection[name.imagePath]?.interface(for: name, options: options.swiftDemangleOptions)
         case .objc(let kindOfObjC):
             switch kindOfObjC {
@@ -302,9 +302,9 @@ public actor RuntimeEngine {
         let image = DyldUtilities.patchImagePathForDyld(image)
         switch kind {
         case .class:
-            return ObjCRuntime.classNamesIn(image: image).map { .init(name: $0, kind: .objc(.class), imagePath: image, children: []) }
+            return ObjCRuntime.classNamesIn(image: image).map { .init(name: $0, displayName: $0, kind: .objc(.class), imagePath: image, children: []) }
         case .protocol:
-            return (imageToProtocols[DyldUtilities.patchImagePathForDyld(image)] ?? []).map { .init(name: $0, kind: .objc(.protocol), imagePath: image, children: []) }
+            return (imageToProtocols[DyldUtilities.patchImagePathForDyld(image)] ?? []).map { .init(name: $0, displayName: $0, kind: .objc(.protocol), imagePath: image, children: []) }
         }
     }
 
@@ -312,7 +312,7 @@ public actor RuntimeEngine {
         let image = DyldUtilities.patchImagePathForDyld(image)
         let objcClasses = try await _objcNames(of: .class, in: image)
         let objcProtocols = try await _objcNames(of: .protocol, in: image)
-        let swiftNames = try imageToSwiftSection[image]?.allNames() ?? []
+        let swiftNames = try await getOrCreateSwiftSections(for: image).allNames()
         return objcClasses + objcProtocols + swiftNames
     }
 
@@ -320,7 +320,7 @@ public actor RuntimeEngine {
         if let swiftSections = imageToSwiftSection[imagePath] {
             return swiftSections
         } else {
-            let swiftSections = try RuntimeSwiftSection(imagePath: imagePath)
+            let swiftSections = try await RuntimeSwiftSection(imagePath: imagePath)
             await setSwiftSection(swiftSections, forImage: imagePath)
             return swiftSections
         }
@@ -354,7 +354,7 @@ extension RuntimeEngine {
     public func loadImage(at path: String) async throws {
         try await request {
             try DyldUtilities.loadImage(at: path)
-            let section = try RuntimeSwiftSection(imagePath: path)
+            let section = try await RuntimeSwiftSection(imagePath: path)
             await setSwiftSection(section, forImage: path)
             reloadData()
             reloadDataSubject.send(())

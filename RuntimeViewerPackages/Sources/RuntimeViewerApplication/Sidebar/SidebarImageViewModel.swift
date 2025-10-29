@@ -101,6 +101,9 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             }
             return
         }
+        await MainActor.run {
+            self.loadState = .loading
+        }
         let names = try await runtimeEngine.names(in: imagePath)
         await MainActor.run {
             let searchString = ""
@@ -110,7 +113,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             self.searchScope = searchScope
 
             self.runtimeObjects = names
-            self.filteredRuntimeObjects = self.runtimeObjects.sorted()
+            self.filteredRuntimeObjects = self.runtimeObjects
 
             self.loadState = loadState
         }
@@ -134,7 +137,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
         let runtimeObjects = $filteredRuntimeObjects.asDriver()
             .map {
-                $0.map { SidebarImageCellViewModel(runtimeObject: $0) }
+                $0.map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil) }
             }
 
         let errorText = $loadState
