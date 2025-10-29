@@ -51,17 +51,17 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     }
                     .disposed(by: rx.disposeBag)
 
-                await runtimeEngine.$imageList
-                    .asObservable()
-                    .flatMap { [unowned self] imageList in
-                        try imageList.contains(await runtimeEngine.patchImagePathForDyld(imagePath))
-                    }
-                    .catchAndReturn(false)
-                    .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
-                    .map { _ in RuntimeImageLoadState.loaded }
-                    .observeOnMainScheduler()
-                    .bind(to: $loadState)
-                    .disposed(by: rx.disposeBag)
+//                await runtimeEngine.$imageList
+//                    .asObservable()
+//                    .flatMap { [unowned self] imageList in
+//                        try imageList.contains(await runtimeEngine.patchImagePathForDyld(imagePath))
+//                    }
+//                    .catchAndReturn(false)
+//                    .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
+//                    .map { _ in RuntimeImageLoadState.loaded }
+//                    .observeOnMainScheduler()
+//                    .bind(to: $loadState)
+//                    .disposed(by: rx.disposeBag)
 
                 try await reloadData()
             } catch {
@@ -112,7 +112,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             self.searchString = searchString
             self.searchScope = searchScope
 
-            self.runtimeObjects = names
+            self.runtimeObjects = names.sorted()
             self.filteredRuntimeObjects = self.runtimeObjects
 
             self.loadState = loadState
