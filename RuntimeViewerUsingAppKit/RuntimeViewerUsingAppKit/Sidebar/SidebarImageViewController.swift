@@ -203,6 +203,7 @@ extension SidebarImageViewController {
             }
 
             loadingIndicator.startAnimating()
+            loadingIndicator.lineWidth = 5
         }
     }
 

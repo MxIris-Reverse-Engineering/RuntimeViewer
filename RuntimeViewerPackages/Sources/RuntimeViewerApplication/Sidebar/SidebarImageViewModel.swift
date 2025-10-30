@@ -12,8 +12,8 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
     @Observed private var searchString: String = ""
     @Observed private var searchScope: RuntimeTypeSearchScope = .all
-    @Observed private var runtimeObjects: [RuntimeObjectName] = []
-    @Observed private var filteredRuntimeObjects: [RuntimeObjectName] = []
+    @Observed private var nodes: [SidebarImageCellViewModel] = []
+    @Observed private var filteredNodes: [SidebarImageCellViewModel] = []
     @Observed private var loadState: RuntimeImageLoadState = .unknown
 
     public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
@@ -26,20 +26,21 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
         Task {
             do {
-                let debouncedSearch = $searchString
-                    .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
-                    .asObservable()
+//                let debouncedSearch = $searchString
+//                    .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
+//                    .asObservable()
 
-                debouncedSearch
-                    .withLatestFrom($runtimeObjects.asObservable()) { (searchString: String, runtimeObjects: [RuntimeObjectName]) -> [RuntimeObjectName] in
-                        if searchString.isEmpty {
-                            return runtimeObjects.sorted()
-                        } else {
-                            return runtimeObjects.filter { $0.name.localizedCaseInsensitiveContains(searchString) }.sorted()
-                        }
-                    }
-                    .bind(to: $filteredRuntimeObjects)
-                    .disposed(by: rx.disposeBag)
+//                debouncedSearch
+//                    .withLatestFrom($runtimeObjects.asObservable()) { (searchString: String, runtimeObjects: [RuntimeObjectName]) -> [RuntimeObjectName] in
+//                        if searchString.isEmpty {
+//                            return runtimeObjects.sorted()
+//                        } else {
+//                            return runtimeObjects.filter { $0.name.localizedCaseInsensitiveContains(searchString) }.sorted()
+//                        }
+//                        
+//                    }
+//                    .bind(to: $filteredRuntimeObjects)
+//                    .disposed(by: rx.disposeBag)
 
                 await runtimeEngine.reloadDataPublisher
                     .asObservable()
@@ -112,16 +113,27 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             self.searchString = searchString
             self.searchScope = searchScope
 
-            self.runtimeObjects = names.sorted()
-            self.filteredRuntimeObjects = self.runtimeObjects
-
+            self.nodes = names.sorted().map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil) }
+            self.filteredNodes = self.nodes
             self.loadState = loadState
         }
     }
 
     @MainActor
     public func transform(_ input: Input) -> Output {
-        input.searchString.emit(to: $searchString).disposed(by: rx.disposeBag)
+        input.searchString
+            .debounce(.milliseconds(80))
+            .emit(with: self) { target, filter in
+                for node in target.nodes {
+                    node.filter = filter
+                }
+                if filter.isEmpty {
+                    target.filteredNodes = target.nodes
+                } else {
+                    target.filteredNodes = target.nodes.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }.sorted(by: { $0.runtimeObject < $1.runtimeObject })
+                }
+            }
+            .disposed(by: rx.disposeBag)
 
         input.runtimeObjectClicked.emitOnNextMainActor { [weak self] viewModel in
             guard let self else { return }
@@ -135,11 +147,6 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        let runtimeObjects = $filteredRuntimeObjects.asDriver()
-            .map {
-                $0.map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil) }
-            }
-
         let errorText = $loadState
             .capture(case: RuntimeImageLoadState.loadError).map { [weak self] error in
                 guard let self else { return "" }
@@ -152,12 +159,12 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             .asDriver(onErrorJustReturn: "")
         let runtimeNodeName = namedNode.name
         return Output(
-            runtimeObjects: runtimeObjects,
+            runtimeObjects: $filteredNodes.asDriver(),
             loadState: $loadState.asDriver(),
             notLoadedText: .just("\(imageName) is not yet loaded"),
             errorText: errorText,
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
-            isEmpty: $runtimeObjects.asDriver().map { $0.isEmpty },
+            isEmpty: $nodes.asDriver().map { $0.isEmpty },
             windowInitialTitles: .just((runtimeNodeName, "")),
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" }
         )
