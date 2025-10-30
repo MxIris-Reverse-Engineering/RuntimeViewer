@@ -159,7 +159,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
             isEmpty: $runtimeObjects.asDriver().map { $0.isEmpty },
             windowInitialTitles: .just((runtimeNodeName, "")),
-            windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.name)" }
+            windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" }
         )
     }
 

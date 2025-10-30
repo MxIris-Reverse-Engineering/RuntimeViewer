@@ -105,39 +105,58 @@ public final class RuntimeSwiftSection {
             guard let typeDefinition = builder.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObjectName }
             try newInterfaceString.append(builder.printTypeDefinition(typeDefinition))
             if let typeExtensionDefinitions = builder.typeExtensionDefinitions[rootTypeName.extensionName] {
-                try newInterfaceString.append(typeExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+                newInterfaceString.append(.doubleBreakLine)
+                try newInterfaceString.append(typeExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
             if let conformanceExtensionDefinitions = builder.conformanceExtensionDefinitions[rootTypeName.extensionName] {
-                try newInterfaceString.append(conformanceExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+                newInterfaceString.append(.doubleBreakLine)
+                try newInterfaceString.append(conformanceExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .childType(let childTypeName):
             guard let typeDefinition = builder.allTypeDefinitions[childTypeName] else { throw Error.invalidRuntimeObjectName }
             try newInterfaceString.append(builder.printTypeDefinition(typeDefinition))
             if let typeExtensionDefinitions = builder.typeExtensionDefinitions[childTypeName.extensionName] {
-                try newInterfaceString.append(typeExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+                newInterfaceString.append(.doubleBreakLine)
+                try newInterfaceString.append(typeExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
             if let conformanceExtensionDefinitions = builder.conformanceExtensionDefinitions[childTypeName.extensionName] {
-                try newInterfaceString.append(conformanceExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+                newInterfaceString.append(.doubleBreakLine)
+                try newInterfaceString.append(conformanceExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .rootProtocol(let rootProtocolName):
             guard let definition = builder.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObjectName }
             try newInterfaceString.append(builder.printProtocolDefinition(definition))
-            try newInterfaceString.append(definition.defaultImplementationExtensions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+            if !definition.defaultImplementationExtensions.isEmpty {
+                newInterfaceString.append(.doubleBreakLine)
+                try newInterfaceString.append(definition.defaultImplementationExtensions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            }
+            if let protocolExtensionDefinitions = builder.protocolExtensionDefinitions[rootProtocolName.extensionName] {
+                newInterfaceString.append(.doubleBreakLine)
+                try newInterfaceString.append(protocolExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            }
         case .childProtocol(let childProtocolName):
             guard let definition = builder.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObjectName }
             try newInterfaceString.append(builder.printProtocolDefinition(definition))
+            if !definition.defaultImplementationExtensions.isEmpty {
+                newInterfaceString.append(.doubleBreakLine)
+                try newInterfaceString.append(definition.defaultImplementationExtensions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            }
+            if let protocolExtensionDefinitions = builder.protocolExtensionDefinitions[childProtocolName.extensionName] {
+                newInterfaceString.append(.doubleBreakLine)
+                try newInterfaceString.append(protocolExtensionDefinitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            }
         case .typeExtension(let typeExtensionName):
             guard let definitions = builder.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObjectName }
-            try newInterfaceString.append(definitions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+            try newInterfaceString.append(definitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .protocolExtension(let protocolExtensionName):
             guard let definitions = builder.protocolExtensionDefinitions[protocolExtensionName] else { throw Error.invalidRuntimeObjectName }
-            try newInterfaceString.append(definitions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+            try newInterfaceString.append(definitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .typeAliasExtension(let typeAliasExtensionName):
             guard let definitions = builder.typeAliasExtensionDefinitions[typeAliasExtensionName] else { throw Error.invalidRuntimeObjectName }
-            try newInterfaceString.append(definitions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+            try newInterfaceString.append(definitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .conformance(let conformanceExtensionName):
             guard let definitions = builder.conformanceExtensionDefinitions[conformanceExtensionName] else { throw Error.invalidRuntimeObjectName }
-            try newInterfaceString.append(definitions.map { try builder.printExtensionDefinition($0) }.join(separator: "\n\n"))
+            try newInterfaceString.append(definitions.map { try builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         }
 
         let newInterface = RuntimeObjectInterface(name: name, interfaceString: newInterfaceString)
@@ -222,5 +241,12 @@ extension ExtensionName {
         default:
             return nil
         }
+    }
+}
+
+extension SemanticString {
+    @inlinable
+    static var doubleBreakLine: SemanticString {
+        "\n\n"
     }
 }
