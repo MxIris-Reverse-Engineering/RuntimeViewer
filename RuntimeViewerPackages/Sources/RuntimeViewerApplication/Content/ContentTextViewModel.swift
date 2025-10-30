@@ -85,7 +85,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         input.runtimeObjectClicked.emit(with: self) { $0.router.trigger(.next($1)) }.disposed(by: rx.disposeBag)
         return Output(
             attributedString: $attributedString.asDriver().compactMap { $0 },
-            runtimeObjectName: $runtimeObject.asDriver().map { $0.name },
+            runtimeObjectName: $runtimeObject.asDriver().map { $0.displayName },
             theme: $theme.asDriver(),
             imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver()
         )
