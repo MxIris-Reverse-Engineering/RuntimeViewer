@@ -39,7 +39,7 @@ class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition>
             return viewController
         case .object(let runtimeObjectName):
             switch runtimeObjectName.kind {
-            case .objc(.class):
+            case .objc(.type(.class)):
                 let viewModel = InspectorClassViewModel(runtimeClassName: runtimeObjectName.name, appServices: appServices, router: self)
                 let viewController = InspectorClassViewController()
                 viewController.setupBindings(for: viewModel)

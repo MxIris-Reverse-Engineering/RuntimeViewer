@@ -49,18 +49,18 @@ public final class RuntimeSwiftSection {
     func allNames() throws -> [RuntimeObjectName] {
         let rootTypeName = try builder.rootTypeDefinitions.map { try makeRuntimeObjectName(for: $0.value, isChild: false) }
         let rootProtocolName = try builder.rootProtocolDefinitions.map { try makeRuntimeObjectName(for: $0.value, isChild: false) }
-        let typeExtensionName = try builder.typeExtensionDefinitions.filter { $0.key.typeName.map { builder.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, definitionName: .typeExtension($0.key)) }
-        let protocolExtensionName = try builder.protocolExtensionDefinitions.filter { $0.key.protocolName.map { builder.allProtocolDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, definitionName: .protocolExtension($0.key)) }
-        let typeAliasExtensionName = try builder.typeAliasExtensionDefinitions.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, definitionName: .typeAliasExtension($0.key)) }
-        let conformanceExtensionName = try builder.conformanceExtensionDefinitions.filter { $0.key.typeName.map { builder.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, definitionName: .conformance($0.key)) }
+        let typeExtensionName = try builder.typeExtensionDefinitions.filter { $0.key.typeName.map { builder.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
+        let protocolExtensionName = try builder.protocolExtensionDefinitions.filter { $0.key.protocolName.map { builder.allProtocolDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .protocolExtension($0.key)) }
+        let typeAliasExtensionName = try builder.typeAliasExtensionDefinitions.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeAliasExtension($0.key)) }
+        let conformanceExtensionName = try builder.conformanceExtensionDefinitions.filter { $0.key.typeName.map { builder.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
         return rootTypeName + rootProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName
     }
 
-    private func makeRuntimeObjectName(for extensionDefintions: [ExtensionDefinition], extensionName: ExtensionName, definitionName: InterfaceDefinitionName) throws -> RuntimeObjectName {
+    private func makeRuntimeObjectName(for extensionDefintions: [ExtensionDefinition], extensionName: ExtensionName, kind: RuntimeObjectKind, definitionName: InterfaceDefinitionName) throws -> RuntimeObjectName {
         let typeChildren = try extensionDefintions.flatMap { $0.types }.map { try makeRuntimeObjectName(for: $0, isChild: true) }
         let protocolChildren = try extensionDefintions.flatMap { $0.protocols }.map { try makeRuntimeObjectName(for: $0, isChild: true) }
         let mangledName = try mangleAsString(extensionName.node)
-        let runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: extensionName.name, kind: extensionName.runtimeObjectKind, imagePath: imagePath, children: typeChildren + protocolChildren)
+        let runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: extensionName.name, kind: kind, imagePath: imagePath, children: typeChildren + protocolChildren)
         nameToInterfaceDefinitionName[runtimeObjectName] = definitionName
         return runtimeObjectName
     }
@@ -169,37 +169,54 @@ extension SwiftInterface.TypeName {
     var runtimeObjectKind: RuntimeObjectKind {
         switch kind {
         case .enum:
-            return .swift(.enum)
+            return .swift(.type(.enum))
         case .struct:
-            return .swift(.struct)
+            return .swift(.type(.struct))
         case .class:
-            return .swift(.class)
+            return .swift(.type(.class))
         }
     }
 }
 
 extension SwiftInterface.ProtocolName {
     var runtimeObjectKind: RuntimeObjectKind {
-        return .swift(.protocol)
+        return .swift(.type(.protocol))
     }
 }
 
 extension SwiftInterface.ExtensionName {
-    var runtimeObjectKind: RuntimeObjectKind {
+    var runtimeObjectKindOfSwiftExtension: RuntimeObjectKind {
         switch kind {
         case .type(let type):
             switch type {
             case .enum:
-                return .swiftExtension(.enum)
+                return .swift(.extension(.enum))
             case .struct:
-                return .swiftExtension(.struct)
+                return .swift(.extension(.struct))
             case .class:
-                return .swiftExtension(.class)
+                return .swift(.extension(.class))
             }
         case .protocol:
-            return .swiftExtension(.protocol)
+            return .swift(.extension(.protocol))
         case .typeAlias:
-            return .swiftExtension(.typeAlias)
+            return .swift(.extension(.typeAlias))
+        }
+    }
+    var runtimeObjectKindOfSwiftConformance: RuntimeObjectKind {
+        switch kind {
+        case .type(let type):
+            switch type {
+            case .enum:
+                return .swift(.conformance(.enum))
+            case .struct:
+                return .swift(.conformance(.struct))
+            case .class:
+                return .swift(.conformance(.class))
+            }
+        case .protocol:
+            return .swift(.conformance(.protocol))
+        case .typeAlias:
+            return .swift(.conformance(.typeAlias))
         }
     }
 }

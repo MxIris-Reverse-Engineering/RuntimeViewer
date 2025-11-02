@@ -34,12 +34,12 @@ extension RuntimeObjectKind {
     
     public var icon: NSUIImage {
         switch self {
-        case .objc(let kindOfObjC):
+        case .objc(.type(let kindOfObjC)):
             switch kindOfObjC {
             case .class: return Self.objcClassIcon
             case .protocol: return Self.objcProtocolIcon
             }
-        case .swift(let kindOfSwift):
+        case .swift(.type(let kindOfSwift)):
             switch kindOfSwift {
             case .enum: return Self.swiftEnumIcon
             case .struct: return Self.swiftStructIcon
@@ -47,7 +47,7 @@ extension RuntimeObjectKind {
             case .protocol: return Self.swiftProtocolIcon
             case .typeAlias: return Self.swiftTypeAliasIcon
             }
-        case .swiftExtension:
+        case .swift(.extension(_)), .swift(.conformance(_)):
             return Self.swiftExtensionIcon
         default:
             fatalError()
