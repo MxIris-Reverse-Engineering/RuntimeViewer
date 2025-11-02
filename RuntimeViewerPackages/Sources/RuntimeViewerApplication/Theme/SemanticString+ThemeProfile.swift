@@ -32,9 +32,9 @@ extension SemanticString {
                 case .type(let kind, .name):
                     switch kind {
                     case .class:
-                        targetKind = .objc(.class)
+                        targetKind = .objc(.type(.class))
                     case .protocol:
-                        targetKind = .objc(.protocol)
+                        targetKind = .objc(.type(.protocol))
                     default:
                         break
                     }
@@ -43,7 +43,6 @@ extension SemanticString {
                     break
                 }
             case .swift: break
-            case .swiftExtension: break
 //                switch type {
 //                case .type(let kind, .name):
 //                    switch kind {

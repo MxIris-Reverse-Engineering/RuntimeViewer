@@ -48,7 +48,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/UIFoundation",
-            from: "0.3.0"
+            branch: "main"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/XCoordinator",
@@ -83,7 +83,7 @@ let package = Package(
             branch: "master"
         ),
         .package(
-            url: "https://github.com/Mx-Iris/SFSymbol",
+            url: "https://github.com/Mx-Iris/SFSymbols",
             branch: "main"
         ),
         .package(
@@ -104,7 +104,6 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
-//            from: "0.1.0"
             branch: "main"
         ),
         .package(
@@ -161,12 +160,12 @@ let package = Package(
                 .product(name: "SnapKit", package: "SnapKit"),
                 .product(name: usingSystemUXKit ? "UXKit" : "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
-                .product(name: "SFSymbols", package: "SFSymbol"),
+                .product(name: "SFSymbols", package: "SFSymbols"),
                 .product(name: "IDEIcons", package: "ide-icons"),
                 .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "UIFoundationAppleInternalObjC", package: "UIFoundation"),
+                .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
             ],
             swiftSettings: sharedSwiftSettings,
         ),

@@ -282,16 +282,21 @@ public actor RuntimeEngine {
 
     private func _interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) -> RuntimeObjectInterface? {
         switch name.kind {
-        case .swift, .swiftExtension:
+        case .swift:
             return try? imageToSwiftSection[name.imagePath]?.interface(for: name, options: options.swiftDemangleOptions)
         case .objc(let kindOfObjC):
             switch kindOfObjC {
-            case .class:
-                guard let interfaceString = RuntimeObjectType.class(named: name.name).semanticString(for: options.objcHeaderOptions)?.semanticString else { return nil }
-                return RuntimeObjectInterface(name: name, interfaceString: interfaceString)
-            case .protocol:
-                guard let interfaceString = RuntimeObjectType.protocol(named: name.name).semanticString(for: options.objcHeaderOptions)?.semanticString else { return nil }
-                return RuntimeObjectInterface(name: name, interfaceString: interfaceString)
+            case .type(let kind):
+                switch kind {
+                case .class:
+                    guard let interfaceString = RuntimeObjectType.class(named: name.name).semanticString(for: options.objcHeaderOptions)?.semanticString else { return nil }
+                    return RuntimeObjectInterface(name: name, interfaceString: interfaceString)
+                case .protocol:
+                    guard let interfaceString = RuntimeObjectType.protocol(named: name.name).semanticString(for: options.objcHeaderOptions)?.semanticString else { return nil }
+                    return RuntimeObjectInterface(name: name, interfaceString: interfaceString)
+                }
+            case .category:
+                fatalError()
             }
         default:
             fatalError()
@@ -301,17 +306,22 @@ public actor RuntimeEngine {
     private func _objcNames(of kind: RuntimeObjectKind.ObjectiveC, in image: String) async throws -> [RuntimeObjectName] {
         let image = DyldUtilities.patchImagePathForDyld(image)
         switch kind {
-        case .class:
-            return ObjCRuntime.classNamesIn(image: image).map { .init(name: $0, displayName: $0, kind: .objc(.class), imagePath: image, children: []) }
-        case .protocol:
-            return (imageToProtocols[DyldUtilities.patchImagePathForDyld(image)] ?? []).map { .init(name: $0, displayName: $0, kind: .objc(.protocol), imagePath: image, children: []) }
+        case .type(let kind):
+            switch kind {
+            case .class:
+                return ObjCRuntime.classNamesIn(image: image).map { .init(name: $0, displayName: $0, kind: .objc(.type(.class)), imagePath: image, children: []) }
+            case .protocol:
+                return (imageToProtocols[DyldUtilities.patchImagePathForDyld(image)] ?? []).map { .init(name: $0, displayName: $0, kind: .objc(.type(.protocol)), imagePath: image, children: []) }
+            }
+        case .category:
+            return []
         }
     }
 
     private func _names(in image: String) async throws -> [RuntimeObjectName] {
         let image = DyldUtilities.patchImagePathForDyld(image)
-        let objcClasses = try await _objcNames(of: .class, in: image)
-        let objcProtocols = try await _objcNames(of: .protocol, in: image)
+        let objcClasses = try await _objcNames(of: .type(.class), in: image)
+        let objcProtocols = try await _objcNames(of: .type(.protocol), in: image)
         let swiftNames = try await getOrCreateSwiftSections(for: image).allNames()
         return objcClasses + objcProtocols + swiftNames
     }
