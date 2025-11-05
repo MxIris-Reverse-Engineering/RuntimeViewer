@@ -6,8 +6,9 @@ import MachOSwiftSection
 import SwiftDump
 import SwiftInterface
 import Demangling
+import SwiftStdlibToolbox
 
-public final class RuntimeSwiftSection {
+public final class RuntimeSwiftSection: Sendable {
     public enum Error: Swift.Error {
         case invalidMachOImage
         case invalidRuntimeObjectName
@@ -17,9 +18,13 @@ public final class RuntimeSwiftSection {
 
     private let machO: MachOImage
 
+    private let builder: SwiftInterfaceBuilder<MachOImage>
+
+    @Mutex
     private var interfaceByName: OrderedDictionary<RuntimeObjectName, RuntimeObjectInterface> = [:]
 
-    private let builder: SwiftInterfaceBuilder<MachOImage>
+    @Mutex
+    private var nameToInterfaceDefinitionName: [RuntimeObjectName: InterfaceDefinitionName] = [:]
 
     private enum InterfaceDefinitionName {
         case rootType(SwiftInterface.TypeName)
@@ -31,8 +36,6 @@ public final class RuntimeSwiftSection {
         case typeAliasExtension(SwiftInterface.ExtensionName)
         case conformance(SwiftInterface.ExtensionName)
     }
-
-    private var nameToInterfaceDefinitionName: [RuntimeObjectName: InterfaceDefinitionName] = [:]
 
     public init(imagePath: String) async throws {
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
@@ -202,6 +205,7 @@ extension SwiftInterface.ExtensionName {
             return .swift(.extension(.typeAlias))
         }
     }
+
     var runtimeObjectKindOfSwiftConformance: RuntimeObjectKind {
         switch kind {
         case .type(let type):
