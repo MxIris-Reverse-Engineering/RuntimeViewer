@@ -280,10 +280,10 @@ public actor RuntimeEngine {
 //            .store(in: &subscriptions)
 //    }
 
-    private func _interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) -> RuntimeObjectInterface? {
+    private func _interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
         switch name.kind {
         case .swift:
-            return try? imageToSwiftSection[name.imagePath]?.interface(for: name, options: options.swiftDemangleOptions)
+            return try? await imageToSwiftSection[name.imagePath]?.interface(for: name, options: options.swiftDemangleOptions)
         case .objc(let kindOfObjC):
             switch kindOfObjC {
             case .type(let kind):
@@ -409,7 +409,7 @@ extension RuntimeEngine {
 
     private func interface(for request: InterfaceRequest) async throws -> RuntimeObjectInterface? {
         try await self.request {
-            _interface(for: request.name, options: request.options)
+            try await _interface(for: request.name, options: request.options)
         } remote: { senderConnection in
             return try await senderConnection.sendMessage(name: .interfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(name: request.name, options: request.options))
         }
