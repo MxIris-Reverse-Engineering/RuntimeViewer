@@ -9,6 +9,10 @@ public actor RuntimeEngine {
     public static let shared = RuntimeEngine()
 
     private static let logger = Logger(label: "RuntimeEngine")
+    
+    @Published public private(set) var imageList: [String] = []
+
+    @Published public private(set) var imageNodes: [RuntimeNamedNode] = []
 
     @Published private var classList: [String] = []
 
@@ -18,11 +22,7 @@ public actor RuntimeEngine {
 
     @Published private var imageToProtocols: [String: [String]] = [:]
 
-    @Published public private(set) var imageList: [String] = []
-
-    @Published public private(set) var imageNodes: [RuntimeNamedNode] = []
-
-    @Published public private(set) var imageToSwiftSection: [String: RuntimeSwiftSection] = [:]
+    @Published private var imageToSwiftSection: [String: RuntimeSwiftSection] = [:]
 
     private let reloadDataSubject = PassthroughSubject<Void, Never>()
 

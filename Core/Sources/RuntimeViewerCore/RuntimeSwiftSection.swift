@@ -8,13 +8,13 @@ import SwiftInterface
 import Demangling
 import SwiftStdlibToolbox
 
-public final class RuntimeSwiftSection: Sendable {
-    public enum Error: Swift.Error {
+final class RuntimeSwiftSection: Sendable {
+    enum Error: Swift.Error {
         case invalidMachOImage
         case invalidRuntimeObjectName
     }
 
-    public let imagePath: String
+    let imagePath: String
 
     private let machO: MachOImage
 
@@ -37,7 +37,7 @@ public final class RuntimeSwiftSection: Sendable {
         case conformance(SwiftInterface.ExtensionName)
     }
 
-    public init(imagePath: String) async throws {
+    init(imagePath: String) async throws {
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
 //        guard !imageName.starts(with: "libswift") else {
 //            throw Error.invalidMachOImage
@@ -96,7 +96,7 @@ public final class RuntimeSwiftSection: Sendable {
         return runtimeObjectName
     }
 
-    public func interface(for name: RuntimeObjectName, options: DemangleOptions) async throws -> RuntimeObjectInterface {
+    func interface(for name: RuntimeObjectName, options: DemangleOptions) async throws -> RuntimeObjectInterface {
         if let interface = interfaceByName[name] {
             return interface
         }
@@ -169,7 +169,7 @@ public final class RuntimeSwiftSection: Sendable {
 }
 
 extension SwiftInterface.TypeName {
-    var runtimeObjectKind: RuntimeObjectKind {
+    fileprivate var runtimeObjectKind: RuntimeObjectKind {
         switch kind {
         case .enum:
             return .swift(.type(.enum))
@@ -182,13 +182,13 @@ extension SwiftInterface.TypeName {
 }
 
 extension SwiftInterface.ProtocolName {
-    var runtimeObjectKind: RuntimeObjectKind {
+    fileprivate var runtimeObjectKind: RuntimeObjectKind {
         return .swift(.type(.protocol))
     }
 }
 
 extension SwiftInterface.ExtensionName {
-    var runtimeObjectKindOfSwiftExtension: RuntimeObjectKind {
+    fileprivate var runtimeObjectKindOfSwiftExtension: RuntimeObjectKind {
         switch kind {
         case .type(let type):
             switch type {
@@ -206,7 +206,7 @@ extension SwiftInterface.ExtensionName {
         }
     }
 
-    var runtimeObjectKindOfSwiftConformance: RuntimeObjectKind {
+    fileprivate var runtimeObjectKindOfSwiftConformance: RuntimeObjectKind {
         switch kind {
         case .type(let type):
             switch type {
@@ -239,7 +239,7 @@ extension Array where Element == SemanticString {
 }
 
 extension ExtensionName {
-    var typeName: SwiftInterface.TypeName? {
+    fileprivate var typeName: SwiftInterface.TypeName? {
         switch kind {
         case .type(let type):
             switch type {
@@ -255,7 +255,7 @@ extension ExtensionName {
         }
     }
 
-    var protocolName: SwiftInterface.ProtocolName? {
+    fileprivate var protocolName: SwiftInterface.ProtocolName? {
         switch kind {
         case .protocol:
             return .init(node: node)
@@ -266,8 +266,7 @@ extension ExtensionName {
 }
 
 extension SemanticString {
-    @inlinable
-    static var doubleBreakLine: SemanticString {
+    fileprivate static var doubleBreakLine: SemanticString {
         "\n\n"
     }
 }

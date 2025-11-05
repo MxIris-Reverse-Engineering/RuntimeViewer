@@ -126,10 +126,10 @@ let package = Package(
             url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
             from: "0.5.3-fork"
         ),
-        .package(
-            url: "https://github.com/dagronf/DSFInspectorPanes",
-            from: "3.0.0"
-        ),
+//        .package(
+//            url: "https://github.com/dagronf/DSFInspectorPanes",
+//            from: "3.0.0"
+//        ),
     ],
     targets: [
         .target(
