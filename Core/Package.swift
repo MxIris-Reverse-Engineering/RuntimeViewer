@@ -84,6 +84,10 @@ let package = Package(
             )
         ),
         .package(
+            url: "https://github.com/p-x9/MachOObjCSection",
+            from: "0.4.0"
+        ),
+        .package(
             url: "https://github.com/apple/swift-collections",
             from: "1.2.0"
         ),

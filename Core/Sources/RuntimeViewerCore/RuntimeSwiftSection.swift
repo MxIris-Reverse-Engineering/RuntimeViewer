@@ -35,6 +35,17 @@ final class RuntimeSwiftSection: Sendable {
         case protocolExtension(SwiftInterface.ExtensionName)
         case typeAliasExtension(SwiftInterface.ExtensionName)
         case conformance(SwiftInterface.ExtensionName)
+        
+        var typeName: SwiftInterface.TypeName? {
+            switch self {
+            case .rootType(let typeName):
+                return typeName
+            case .childType(let typeName):
+                return typeName
+            default:
+                return nil
+            }
+        }
     }
 
     init(imagePath: String) async throws {
@@ -166,6 +177,15 @@ final class RuntimeSwiftSection: Sendable {
         interfaceByName[name] = newInterface
         return newInterface
     }
+    
+//    func classHierarchy(for name: RuntimeObjectName) async throws -> [String] {
+//        guard case .swift(.type(.class)) = name.kind else { return [] }
+//        guard let classDefinitionName = nameToInterfaceDefinitionName[name]?.typeName,
+//              let classDefinition = builder.allTypeDefinitions[classDefinitionName],
+//              case let .class(`class`) = classDefinition.type  else { return [] }
+//        `class`.resilientSuperclass?.
+        
+//    }
 }
 
 extension SwiftInterface.TypeName {

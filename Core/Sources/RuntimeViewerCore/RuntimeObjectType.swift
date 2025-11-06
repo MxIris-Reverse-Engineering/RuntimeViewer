@@ -1,7 +1,7 @@
 import Foundation
 import ClassDumpRuntime
 
-public enum RuntimeObjectType: Codable, Hashable, Identifiable {
+public enum RuntimeObjectType: Codable, Hashable, Identifiable, Sendable {
     case `class`(named: String)
     case `protocol`(named: String)
 
@@ -123,12 +123,12 @@ extension RuntimeObjectType {
     }
 }
 
-public enum RuntimeObjectInfo: Codable {
+public enum RuntimeObjectInfo: Codable, Sendable {
     case `class`(RuntimeClassObjectInfo)
     case `protocol`(RuntimeProtocolObjectInfo)
 }
 
-public struct RuntimeClassObjectInfo: Codable {
+public struct RuntimeClassObjectInfo: Codable, Sendable {
     public let numberOfIvars: Int
     public let numberOfInstanceProperties: Int
     public let numberOfInstanceMethods: Int
@@ -137,7 +137,7 @@ public struct RuntimeClassObjectInfo: Codable {
     public let numberOfConformProtocols: Int
 }
 
-public struct RuntimeProtocolObjectInfo: Codable {
+public struct RuntimeProtocolObjectInfo: Codable, Sendable {
     public let numberOfRequiredInstanceProperties: Int
     public let numberOfRequiredInstanceMethods: Int
     public let numberOfRequiredClassProperties: Int

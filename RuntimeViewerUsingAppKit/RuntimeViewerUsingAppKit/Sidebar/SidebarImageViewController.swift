@@ -61,7 +61,7 @@ class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> 
                 $0.controlSize = .large
             }
         }
-        
+
         tabView.do {
             $0.addTabViewItem(NSTabViewItem(view: imageNotLoadedView, loadState: .notLoaded))
             $0.addTabViewItem(NSTabViewItem(view: imageLoadingView, loadState: .loading))
@@ -88,7 +88,7 @@ class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> 
 
         let output = viewModel.transform(input)
 
-        output.runtimeObjects.drive(imageLoadedView.outlineView .rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarImageCellViewModel) -> NSView? in
+        output.runtimeObjects.drive(imageLoadedView.outlineView.rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarImageCellViewModel) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: SidebarImageCellView.self, owner: nil)
             cellView.bind(to: viewModel)
             return cellView
@@ -155,7 +155,7 @@ extension SidebarImageViewController {
     class ImageUnknownView: XiblessView {}
 
     class ImageLoadedView: XiblessView {
-        let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableOutlineView()
+        let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
         let emptyLabel = Label()
 
@@ -179,9 +179,10 @@ extension SidebarImageViewController {
             emptyLabel.do {
                 $0.alignment = .center
             }
-            
+
             outlineView.do {
                 $0.headerView = nil
+                $0.style = .inset
                 $0.addTableColumn(.init(identifier: "Default Column"))
             }
         }
