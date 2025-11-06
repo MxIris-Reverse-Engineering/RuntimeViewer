@@ -1,27 +1,25 @@
-public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, CaseIterable, CustomStringConvertible {
-    public enum C: Codable, Hashable, Identifiable, CaseIterable {
+public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, CaseIterable, CustomStringConvertible, Sendable {
+    public enum C: Codable, Hashable, Identifiable, CaseIterable, Sendable {
         case `struct`
         case `union`
         public var id: Self { self }
     }
 
-    
-    public enum ObjectiveC: Codable, Hashable, Identifiable, CaseIterable {
-        public enum Kind: Codable, Hashable, Identifiable, CaseIterable {
+    public enum ObjectiveC: Codable, Hashable, Identifiable, CaseIterable, Sendable {
+        public enum Kind: Codable, Hashable, Identifiable, CaseIterable, Sendable {
             case `class`
             case `protocol`
             public var id: Self { self }
         }
+
         case type(Kind)
         case category(Kind)
         public var id: Self { self }
-        public static let allCases: [RuntimeObjectKind.ObjectiveC] = {
-            Kind.allCases.map { .type($0) } + Kind.allCases.map { .category($0) }
-        }()
+        public static let allCases: [RuntimeObjectKind.ObjectiveC] = Kind.allCases.map { .type($0) } + Kind.allCases.map { .category($0) }
     }
-    
-    public enum Swift: Codable, Hashable, Identifiable, CaseIterable {
-        public enum Kind: Codable, Hashable, Identifiable, CaseIterable {
+
+    public enum Swift: Codable, Hashable, Identifiable, CaseIterable, Sendable {
+        public enum Kind: Codable, Hashable, Identifiable, CaseIterable, Sendable {
             case `enum`
             case `struct`
             case `class`
@@ -29,16 +27,14 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
             case `typeAlias`
             public var id: Self { self }
         }
+
         case type(Kind)
         case `extension`(Kind)
         case conformance(Kind)
         public var id: Self { self }
-        public static let allCases: [RuntimeObjectKind.Swift] = {
-            Kind.allCases.map { .type($0) } + Kind.allCases.map { .extension($0) } + Kind.allCases.map { .conformance($0) }
-        }()
+        public static let allCases: [RuntimeObjectKind.Swift] = Kind.allCases.map { .type($0) } + Kind.allCases.map { .extension($0) } + Kind.allCases.map { .conformance($0) }
     }
-    
-    
+
     case c(C)
     case objc(ObjectiveC)
     case swift(Swift)
@@ -59,16 +55,16 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
             case .type(let kind):
                 switch kind {
                 case .class:
-                    10
+                    2
                 case .protocol:
-                    20
+                    3
                 }
             case .category(let kind):
                 switch kind {
                 case .class:
-                    11
+                    4
                 case .protocol:
-                    21
+                    5
                 }
             }
         case .swift(let swift):
@@ -76,41 +72,41 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
             case .type(let kind):
                 switch kind {
                 case .enum:
-                    30
+                    6
                 case .struct:
-                    40
+                    7
                 case .class:
-                    50
+                    8
                 case .protocol:
-                    60
+                    9
                 case .typeAlias:
-                    70
+                    10
                 }
             case .extension(let kind):
                 switch kind {
                 case .enum:
-                    31
+                    11
                 case .struct:
-                    41
+                    12
                 case .class:
-                    51
+                    13
                 case .protocol:
-                    61
+                    14
                 case .typeAlias:
-                    71
+                    15
                 }
             case .conformance(let kind):
                 switch kind {
                 case .enum:
-                    32
+                    16
                 case .struct:
-                    42
+                    17
                 case .class:
-                    52
+                    18
                 case .protocol:
-                    62
+                    19
                 case .typeAlias:
-                    72
+                    20
                 }
             }
         }
@@ -119,7 +115,7 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
     public static func < (lhs: RuntimeObjectKind, rhs: RuntimeObjectKind) -> Bool {
         lhs.level < rhs.level
     }
-    
+
     public static let allCases: [RuntimeObjectKind] = {
         var cases: [RuntimeObjectKind] = []
         cases.append(contentsOf: C.allCases.map { RuntimeObjectKind.c($0) })
@@ -127,7 +123,7 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         cases.append(contentsOf: Swift.allCases.map { RuntimeObjectKind.swift($0) })
         return cases
     }()
-    
+
     public var description: String {
         switch self {
         case .c(let c):

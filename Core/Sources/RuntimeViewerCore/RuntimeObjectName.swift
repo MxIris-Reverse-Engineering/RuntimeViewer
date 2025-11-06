@@ -3,7 +3,7 @@ import SwiftStdlibToolbox
 
 @Equatable
 @MemberwiseInit(.public)
-public final class RuntimeObjectName: Codable, Hashable, Identifiable {
+public final class RuntimeObjectName: Codable, Hashable, Identifiable, Sendable {
     public let name: String
 
     public let displayName: String
@@ -23,6 +23,6 @@ extension RuntimeObjectName: ComparableBuildable {
     public static let comparableDefinition = makeComparable {
         compare(\.imagePath)
         compare(\.kind)
-        compare(\.name)
+        compare(\.displayName)
     }
 }
