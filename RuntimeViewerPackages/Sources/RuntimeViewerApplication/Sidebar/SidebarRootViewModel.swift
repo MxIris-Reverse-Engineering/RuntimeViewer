@@ -47,6 +47,18 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
                 .bind(to: $nodes)
                 .disposed(by: rx.disposeBag)
         }
+        
+//        $nodes.asObservable()
+//            .subscribeOnNext { _ in
+//                print("nodes reload")
+//            }
+//            .disposed(by: rx.disposeBag)
+//        
+//        nodesIndexed.asObservable()
+//            .subscribeOnNext { _ in
+//                print("nodes indexed")
+//            }
+//            .disposed(by: rx.disposeBag)
     }
 
     public struct Input {

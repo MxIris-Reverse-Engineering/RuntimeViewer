@@ -104,15 +104,21 @@ extension RuntimeNamedNode: @retroactive Sequence {
 
 
 extension RuntimeNamedNode {
-    public static let frameworkIcon = SFSymbols(systemName: .latch2Case).nsuiImage
+    public static let frameworkIcon = SFSymbols(systemName: .latch2Case)
 
-    public static let bundleIcon = SFSymbols(systemName: .shippingbox).nsuiImage
+    public static let bundleIcon = SFSymbols(systemName: .shippingbox)
 
-    public static let imageIcon = SFSymbols(systemName: .doc).nsuiImage
+    public static let imageIcon = SFSymbols(systemName: .doc)
 
-    public static let folderIcon = SFSymbols(systemName: .folder).nsuiImage
+    public static let folderIcon = SFSymbols(systemName: .folder)
 
     public var icon: NSUIImage {
+        symbol
+            .hierarchicalColor(.controlAccentColor)
+            .nsuiImgae
+    }
+    
+    private var symbol: SFSymbols {
         if name.hasSuffix("framework") {
             Self.frameworkIcon
         } else if name.hasSuffix("bundle") {

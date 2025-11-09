@@ -9,7 +9,7 @@ public actor RuntimeEngine {
     public static let shared = RuntimeEngine()
 
     private static let logger = Logger(label: "RuntimeEngine")
-    
+
     @Published public private(set) var imageList: [String] = []
 
     @Published public private(set) var imageNodes: [RuntimeNamedNode] = []
@@ -109,7 +109,7 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .loadImage, of: self) { $0.loadImage(at:) }
         setMessageHandlerBinding(forName: .classNamesInImage, of: self) { $0.classNamesIn(image:) }
         setMessageHandlerBinding(forName: .patchImagePathForDyld, of: self) { $0.patchImagePathForDyld(_:) }
-        setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(_:) }
+        setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(for:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofClass:) }
 //        setMessageHandlerBinding(forName: .namesOfKindInImage, of: self) { $0.names(for:) }
         setMessageHandlerBinding(forName: .namesInImage, of: self) { $0.names(in:) }
@@ -123,6 +123,7 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .protocolToImage) { $0.protocolToImage = $1 }
         setMessageHandlerBinding(forName: .imageToProtocols) { $0.imageToProtocols = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
+        setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
@@ -159,7 +160,7 @@ public actor RuntimeEngine {
         imageList = DyldUtilities.imageNames()
 //        imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
         Self.logger.debug("End reload")
-        sendRemoteDataIfNeeded()
+        sendRemoteDataIfNeeded(isReloadImageNodes: false)
     }
 
     private func observeRuntime() async throws {
@@ -201,7 +202,7 @@ public actor RuntimeEngine {
             .store(in: &subscriptions)
 
 //        observeDyldRegister()
-        sendRemoteDataIfNeeded()
+        sendRemoteDataIfNeeded(isReloadImageNodes: true)
     }
 
     private func setImageNodes(_ imageNodes: [RuntimeNamedNode]) async {
@@ -220,15 +221,21 @@ public actor RuntimeEngine {
         self.protocolToImage = protocolToImage
     }
 
-    private func sendRemoteDataIfNeeded() {
-        guard let role = source.remoteRole, role.isServer, let connection else { return }
+    private func sendRemoteDataIfNeeded(isReloadImageNodes: Bool) {
         Task {
-            try await connection.sendMessage(name: .classList, request: self.classList)
-            try await connection.sendMessage(name: .protocolList, request: self.protocolList)
-            try await connection.sendMessage(name: .imageList, request: self.imageList)
-            try await connection.sendMessage(name: .imageNodes, request: self.imageNodes)
-            try await connection.sendMessage(name: .protocolToImage, request: self.protocolToImage)
-            try await connection.sendMessage(name: .imageToProtocols, request: self.imageToProtocols)
+            guard let role = source.remoteRole, role.isServer, let connection else {
+                reloadDataSubject.send()
+                return
+            }
+            try await connection.sendMessage(name: .classList, request: classList)
+            try await connection.sendMessage(name: .protocolList, request: protocolList)
+            try await connection.sendMessage(name: .imageList, request: imageList)
+            if isReloadImageNodes {
+                try await connection.sendMessage(name: .imageNodes, request: imageNodes)
+            }
+            try await connection.sendMessage(name: .protocolToImage, request: protocolToImage)
+            try await connection.sendMessage(name: .imageToProtocols, request: imageToProtocols)
+            try await connection.sendMessage(name: .reloadData)
         }
     }
 
@@ -367,10 +374,8 @@ extension RuntimeEngine {
             let section = try await RuntimeSwiftSection(imagePath: path)
             await setSwiftSection(section, forImage: path)
             reloadData()
-            reloadDataSubject.send(())
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
-            reloadDataSubject.send(())
         }
     }
 
@@ -415,23 +420,6 @@ extension RuntimeEngine {
         }
     }
 
-//    private struct NamesOfKindRequest: Codable {
-//        let kind: RuntimeObjectKind
-//        let image: String
-//    }
-//
-//    public func names(of kind: RuntimeObjectKind, in image: String) async throws -> [RuntimeObjectName] {
-//        return try await names(for: .init(kind: kind, image: image))
-//    }
-
-//    private func names(for request: NamesOfKindRequest) async throws -> [RuntimeObjectName] {
-//        try await self.request {
-//            try await _names(of: request.kind, in: request.image)
-//        } remote: {
-//            return try await $0.sendMessage(name: .namesOfKindInImage, request: NamesOfKindRequest(kind: request.kind, image: request.image))
-//        }
-//    }
-
     public func names(in image: String) async throws -> [RuntimeObjectName] {
         try await request {
             try await _names(in: image)
@@ -454,13 +442,38 @@ extension RuntimeEngine {
         }
     }
 
-    public func runtimeObjectHierarchy(_ runtimeObject: RuntimeObjectType) async throws -> [String] {
-        try await request {
-            runtimeObject.hierarchy()
+    public func runtimeObjectHierarchy(for name: RuntimeObjectName) async throws -> [String] {
+        try await request { () -> [String] in
+            switch name.kind {
+            case .c:
+                return []
+            case .objc(let objectiveC):
+                switch objectiveC {
+                case .type(let kind):
+                    switch kind {
+                    case .class:
+                        return RuntimeObjectType.class(named: name.name).hierarchy()
+                    case .protocol:
+                        return RuntimeObjectType.protocol(named: name.name).hierarchy()
+                    }
+                default:
+                    return []
+                }
+            case .swift:
+                return try await imageToSwiftSection[name.imagePath]?.classHierarchy(for: name) ?? []
+            }
         } remote: {
-            return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: runtimeObject)
+            return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: name)
         }
     }
+
+//    public func runtimeObjectHierarchy(_ runtimeObject: RuntimeObjectType) async throws -> [String] {
+//        try await request {
+//            runtimeObject.hierarchy()
+//        } remote: {
+//            return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: runtimeObject)
+//        }
+//    }
 
     public func runtimeObjectInfo(_ runtimeObject: RuntimeObjectType) async throws -> RuntimeObjectInfo {
         try await request {
