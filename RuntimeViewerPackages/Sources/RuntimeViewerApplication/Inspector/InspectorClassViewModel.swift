@@ -1,11 +1,12 @@
 import Foundation
+import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
 public class InspectorClassViewModel: ViewModel<InspectorRoute> {
     @Observed
-    private var runtimeClassName: String
+    private var runtimeObjectName: RuntimeObjectName
 
     @MemberwiseInit(.public)
     public struct Input {}
@@ -16,19 +17,19 @@ public class InspectorClassViewModel: ViewModel<InspectorRoute> {
 
     public func transform(_ input: Input) -> Output {
         return Output(
-            classHierarchy: $runtimeClassName.flatMapLatest { [unowned self] runtimeClassName in
+            classHierarchy: $runtimeObjectName.flatMapLatest { [unowned self] runtimeObjectName in
                 do {
-                    return try await appServices.runtimeEngine.runtimeObjectHierarchy(.class(named: runtimeClassName)).joined(separator: "\n")
+                    return try await appServices.runtimeEngine.runtimeObjectHierarchy(for: runtimeObjectName).joined(separator: "\n")
                 } catch {
                     print(error.localizedDescription)
-                    return runtimeClassName
+                    return runtimeObjectName.displayName
                 }
-            }.catchAndReturn(runtimeClassName).observeOnMainScheduler().asDriverOnErrorJustComplete()
+            }.catchAndReturn(runtimeObjectName.displayName).observeOnMainScheduler().asDriverOnErrorJustComplete()
         )
     }
 
-    public init(runtimeClassName: String, appServices: AppServices, router: any Router<InspectorRoute>) {
-        self.runtimeClassName = runtimeClassName
+    public init(runtimeObjectName: RuntimeObjectName, appServices: AppServices, router: any Router<InspectorRoute>) {
+        self.runtimeObjectName = runtimeObjectName
         super.init(appServices: appServices, router: router)
     }
 }

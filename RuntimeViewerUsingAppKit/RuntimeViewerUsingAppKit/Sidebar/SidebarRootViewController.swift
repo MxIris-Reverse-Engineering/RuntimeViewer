@@ -58,6 +58,10 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
             }
         }
 
+        scrollView.do {
+            $0.isHiddenVisualEffectView = true
+        }
+        
         outlineView.do {
             $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
             $0.headerView = nil

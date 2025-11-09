@@ -98,7 +98,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
         let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
         if case .notLoaded = loadState {
             await MainActor.run {
-                self.loadState = loadState
+                self.loadState = .notLoaded
             }
             return
         }
@@ -115,7 +115,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
             self.nodes = names.sorted().map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil) }
             self.filteredNodes = self.nodes
-            self.loadState = loadState
+            self.loadState = .loaded
         }
     }
 

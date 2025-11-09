@@ -69,7 +69,7 @@ class MainViewModel: ViewModel<MainRoute> {
                 for url in openPanel.urls {
                     do {
                         try Bundle(url: url)?.loadAndReturnError()
-                        await self.appServices.runtimeEngine.reloadData()
+                        try await self.appServices.runtimeEngine.reloadData()
                     } catch {
                         print(error)
                         NSAlert(error: error).runModal()

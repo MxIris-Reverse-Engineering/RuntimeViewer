@@ -178,14 +178,14 @@ final class RuntimeSwiftSection: Sendable {
         return newInterface
     }
     
-//    func classHierarchy(for name: RuntimeObjectName) async throws -> [String] {
-//        guard case .swift(.type(.class)) = name.kind else { return [] }
-//        guard let classDefinitionName = nameToInterfaceDefinitionName[name]?.typeName,
-//              let classDefinition = builder.allTypeDefinitions[classDefinitionName],
-//              case let .class(`class`) = classDefinition.type  else { return [] }
-//        `class`.resilientSuperclass?.
-        
-//    }
+    func classHierarchy(for name: RuntimeObjectName) async throws -> [String] {
+        guard case .swift(.type(.class)) = name.kind,
+              let classDefinitionName = nameToInterfaceDefinitionName[name]?.typeName,
+              let classDefinition = builder.allTypeDefinitions[classDefinitionName],
+              case let .class(`class`) = classDefinition.type
+        else { return [] }
+        return try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
+    }
 }
 
 extension SwiftInterface.TypeName {

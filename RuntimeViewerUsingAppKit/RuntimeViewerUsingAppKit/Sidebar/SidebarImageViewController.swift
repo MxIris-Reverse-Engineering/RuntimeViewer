@@ -180,6 +180,10 @@ extension SidebarImageViewController {
                 $0.alignment = .center
             }
 
+            scrollView.do {
+                $0.isHiddenVisualEffectView = true
+            }
+            
             outlineView.do {
                 $0.headerView = nil
                 $0.style = .inset

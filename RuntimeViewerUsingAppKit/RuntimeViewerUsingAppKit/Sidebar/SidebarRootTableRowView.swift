@@ -9,5 +9,10 @@ final class SidebarRootTableRowView: NSTableRowView {
         get { Self.backgroundColor }
     }
 
-    static let backgroundColor = NSColor.controlAccentColor.withSystemEffect(.deepPressed)
+    override var interiorBackgroundStyle: NSView.BackgroundStyle {
+        set {}
+        get { .emphasized }
+    }
+    
+    private static let backgroundColor = NSColor.controlAccentColor.withSystemEffect(.deepPressed)
 }
