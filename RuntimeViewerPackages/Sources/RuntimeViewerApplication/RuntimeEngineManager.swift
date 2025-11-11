@@ -4,7 +4,7 @@ import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
 
 public final class RuntimeEngineManager {
-//    public static let shared = RuntimeEngineManager()
+    public static let shared = RuntimeEngineManager()
 
     @Observed
     public private(set) var systemRuntimeEngines: [RuntimeEngine] = []
@@ -17,7 +17,7 @@ public final class RuntimeEngineManager {
 
     private let browser = RuntimeNetworkBrowser()
 
-    public init() {
+    private init() {
         browser.start { [weak self] endpoint in
             guard let self else { return }
             Task { @MainActor in

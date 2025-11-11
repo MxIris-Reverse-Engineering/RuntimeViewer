@@ -24,7 +24,7 @@ class AttachToProcessViewModel: ViewModel<MainRoute> {
                 do {
                     try await RuntimeInjectClient.shared.installServerFrameworkIfNeeded()
                     guard let dylibURL = Bundle(url: RuntimeInjectClient.shared.serverFrameworkDestinationURL)?.executableURL else { return }
-                    try await self.appServices.runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier)
+                    try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier)
                     try await RuntimeInjectClient.shared.injectApplication(pid: app.processIdentifier, dylibURL: dylibURL)
                 } catch {
                     print(error, error.localizedDescription)
