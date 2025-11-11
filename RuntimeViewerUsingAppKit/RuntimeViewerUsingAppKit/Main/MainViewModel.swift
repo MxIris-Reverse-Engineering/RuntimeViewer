@@ -114,8 +114,8 @@ class MainViewModel: ViewModel<MainRoute> {
                 guard let self else { return }
                 Task { @MainActor in
                     let savePanel = NSSavePanel()
-                    savePanel.allowedContentTypes = [.cHeader]
-                    savePanel.nameFieldStringValue = runtimeObject.name
+                    savePanel.allowedContentTypes = [runtimeObject.contentType]
+                    savePanel.nameFieldStringValue = runtimeObject.displayName
                     let result = await savePanel.begin()
                     guard result == .OK, let url = savePanel.url else { return }
                     Task {
@@ -130,7 +130,7 @@ class MainViewModel: ViewModel<MainRoute> {
             }
             .disposed(by: rx.disposeBag)
         input.switchSource.emit(with: self) {
-            $0.router.trigger(.main($0.appServices.runtimeEngineManager.runtimeEngines[$1]))
+            $0.router.trigger(.main(RuntimeEngineManager.shared.runtimeEngines[$1]))
             $0.selectedRuntimeSourceIndex.accept($1)
         }.disposed(by: rx.disposeBag)
 
@@ -139,7 +139,7 @@ class MainViewModel: ViewModel<MainRoute> {
             switch router {
             case .selectedObject(let runtimeObjectType):
                 let item = NSItemProvider()
-                item.registerDataRepresentation(forTypeIdentifier: UTType.cHeader.identifier, visibility: .all) { completion in
+                item.registerDataRepresentation(forTypeIdentifier: runtimeObjectType.contentType.identifier, visibility: .all) { completion in
                     Task {
                         do {
                             let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObjectType, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .default))?.interfaceString
@@ -150,8 +150,17 @@ class MainViewModel: ViewModel<MainRoute> {
                     }
                     return nil
                 }
-                let icon = NSWorkspace.shared.icon(for: .cHeader)
-                let previewItem = NSPreviewRepresentingActivityItem(item: item, title: runtimeObjectType.name + ".h", image: nil, icon: icon)
+                let icon: NSImage
+                let fileExtension: String
+                switch runtimeObjectType.kind {
+                case .c, .objc:
+                    fileExtension = "h"
+                    icon = NSWorkspace.shared.icon(for: .cHeader)
+                case .swift:
+                    fileExtension = "swiftinterface"
+                    icon = NSWorkspace.shared.icon(for: .swiftSource)
+                }
+                let previewItem = NSPreviewRepresentingActivityItem(item: item, title: runtimeObjectType.displayName + "." + fileExtension, image: nil, icon: icon)
                 return [previewItem]
             default:
                 return []
@@ -164,8 +173,23 @@ class MainViewModel: ViewModel<MainRoute> {
             isSidebarBackHidden: completeTransition?.map {
                 if case .clickedNode = $0 { false } else if case .selectedObject = $0 { false } else { true }
             }.asDriver(onErrorJustReturn: true) ?? .empty(),
-            runtimeSources: appServices.runtimeEngineManager.rx.runtimeEngines.map { $0.map { $0.source } },
+            runtimeSources: RuntimeEngineManager.shared.rx.runtimeEngines.map { $0.map { $0.source } },
             selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver()
         )
+    }
+}
+
+extension UTType {
+    fileprivate static let swiftInterface: Self = .init(filenameExtension: "swiftinterface") ?? .swiftSource
+}
+
+extension RuntimeObjectName {
+    fileprivate var contentType: UTType {
+        switch kind {
+        case .c, .objc:
+            return .cHeader
+        case .swift:
+            return .swiftInterface
+        }
     }
 }
