@@ -49,8 +49,6 @@ class MainViewModel: ViewModel<MainRoute> {
 
     let selectedRuntimeSourceIndex = BehaviorRelay(value: 0)
 
-    let runtimeEngineManager = RuntimeEngineManager.shared
-
     @Observed
     var selectedRuntimeObject: RuntimeObjectName?
 
@@ -69,7 +67,7 @@ class MainViewModel: ViewModel<MainRoute> {
                 for url in openPanel.urls {
                     do {
                         try Bundle(url: url)?.loadAndReturnError()
-                        try await self.appServices.runtimeEngine.reloadData()
+                        await self.appServices.runtimeEngine.reloadData()
                     } catch {
                         print(error)
                         NSAlert(error: error).runModal()
@@ -132,7 +130,7 @@ class MainViewModel: ViewModel<MainRoute> {
             }
             .disposed(by: rx.disposeBag)
         input.switchSource.emit(with: self) {
-            $0.router.trigger(.main($0.runtimeEngineManager.runtimeEngines[$1]))
+            $0.router.trigger(.main($0.appServices.runtimeEngineManager.runtimeEngines[$1]))
             $0.selectedRuntimeSourceIndex.accept($1)
         }.disposed(by: rx.disposeBag)
 
@@ -166,7 +164,7 @@ class MainViewModel: ViewModel<MainRoute> {
             isSidebarBackHidden: completeTransition?.map {
                 if case .clickedNode = $0 { false } else if case .selectedObject = $0 { false } else { true }
             }.asDriver(onErrorJustReturn: true) ?? .empty(),
-            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map { $0.source } },
+            runtimeSources: appServices.runtimeEngineManager.rx.runtimeEngines.map { $0.map { $0.source } },
             selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver()
         )
     }

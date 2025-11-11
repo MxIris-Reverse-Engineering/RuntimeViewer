@@ -5,13 +5,7 @@ import RuntimeViewerApplication
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        Task.detached {
-            do {
-                try await RuntimeEngineManager.shared.launchSystemRuntimeEngines()
-            } catch {
-                NSLog("%@", error as NSError)
-            }
-        }
+
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {}

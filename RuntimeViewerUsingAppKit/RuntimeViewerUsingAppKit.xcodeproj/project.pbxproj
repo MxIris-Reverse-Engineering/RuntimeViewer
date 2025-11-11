@@ -76,7 +76,6 @@
 		E9F759642CF76B3300BE7A5F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E9F759632CF76B3300BE7A5F /* main.m */; };
 		E9F759682CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */; };
 		E9F759692CF7817200BE7A5F /* RuntimeViewerServer.framework in Resources */ = {isa = PBXBuildFile; fileRef = E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */; };
-		E9F7596D2CF89BB000BE7A5F /* RuntimeEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F7596C2CF89BB000BE7A5F /* RuntimeEngineManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -235,7 +234,6 @@
 		E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerServer.h; sourceTree = "<group>"; };
 		E9F759632CF76B3300BE7A5F /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerServerLoader.swift; sourceTree = "<group>"; };
-		E9F7596C2CF89BB000BE7A5F /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -473,7 +471,6 @@
 			children = (
 				E9432FE52C0D614900362862 /* AppDelegate.swift */,
 				E99AE0BB2CBD4A840028B11E /* Document.swift */,
-				E9F7596C2CF89BB000BE7A5F /* RuntimeEngineManager.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -760,7 +757,6 @@
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
 				E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */,
-				E9F7596D2CF89BB000BE7A5F /* RuntimeEngineManager.swift in Sources */,
 				E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */,
 				E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */,
 				E94BA6962E7EEB64006B553D /* SidebarRootTableRowView.swift in Sources */,

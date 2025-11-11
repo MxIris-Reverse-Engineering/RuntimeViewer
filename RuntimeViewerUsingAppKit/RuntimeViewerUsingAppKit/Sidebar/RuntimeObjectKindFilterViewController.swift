@@ -53,7 +53,7 @@ class RuntimeObjectKindFilterViewController: NSHostingController<RuntimeObjectKi
 @available(macOS 14, *)
 #Preview {
     RuntimeObjectKindFilterView()
-        .environmentObject(RuntimeObjectKindFilterViewModel(appServices: .shared, router: TestCoordinator<EmptyRoute>(initialRoute: nil)))
+        .environmentObject(RuntimeObjectKindFilterViewModel(appServices: .init(), router: TestCoordinator<EmptyRoute>(initialRoute: nil)))
 }
 class TestCoordinator<Route: Routable>: Coordinator<Route, AppTransition> {
     

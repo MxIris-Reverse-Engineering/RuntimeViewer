@@ -21,7 +21,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
 
     @Observed
     public private(set) var imageNameOfRuntimeObject: String?
-    
+
     @Observed
     public private(set) var attributedString: NSAttributedString?
 
@@ -29,9 +29,9 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
         super.init(appServices: appServices, router: router)
-        
-        imageNameOfRuntimeObject = runtimeObject.imageName
-        
+
+        self.imageNameOfRuntimeObject = runtimeObject.imageName
+
         Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
             .flatMapLatest { [unowned self] runtimeObject, options, theme in
                 Observable.async {
@@ -82,7 +82,17 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
 //    }
 
     public func transform(_ input: Input) -> Output {
-        input.runtimeObjectClicked.emit(with: self) { $0.router.trigger(.next($1)) }.disposed(by: rx.disposeBag)
+        input.runtimeObjectClicked
+            .emit(with: self) { target, runtimeObjectName in
+                Task {
+                    if try await target.appServices.runtimeEngine.interface(for: runtimeObjectName, options: .init(objcHeaderOptions: .init(), swiftDemangleOptions: .default)) != nil {
+                        await MainActor.run {
+                            target.router.trigger(.next(runtimeObjectName))
+                        }
+                    }
+                }
+            }
+            .disposed(by: rx.disposeBag)
         return Output(
             attributedString: $attributedString.asDriver().compactMap { $0 },
             runtimeObjectName: $runtimeObject.asDriver().map { $0.displayName },
