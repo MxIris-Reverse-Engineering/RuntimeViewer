@@ -21,15 +21,12 @@ extension SemanticString {
                 .foregroundColor: provider.color(for: type),
             ]
 
-            #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-
             var targetKind: RuntimeObjectKind?
-            switch runtimeObjectName.kind {
-            case .c:
-                break
-            case .objc:
-                switch type {
-                case .type(let kind, .name):
+
+            switch type {
+            case .type(let kind, _):
+                switch runtimeObjectName.kind {
+                case .objc:
                     switch kind {
                     case .class:
                         targetKind = .objc(.type(.class))
@@ -38,30 +35,27 @@ extension SemanticString {
                     default:
                         break
                     }
-
+                case .swift:
+                    switch kind {
+                    case .enum:
+                        targetKind = .swift(.type(.enum))
+                    case .struct:
+                        targetKind = .swift(.type(.struct))
+                    case .class:
+                        targetKind = .swift(.type(.class))
+                    case .protocol:
+                        targetKind = .swift(.type(.protocol))
+                    default:
+                        break
+                    }
                 default:
                     break
                 }
-            case .swift: break
-//                switch type {
-//                case .type(let kind, .name):
-//                    switch kind {
-//                    case .enum:
-//                        targetKind = .swift(.enum)
-//                    case .struct:
-//                        targetKind = .swift(.struct)
-//                    case .class:
-//                        targetKind = .swift(.class)
-//                    case .protocol:
-//                        targetKind = .swift(.protocol)
-//                    default:
-//                        break
-//                    }
-//                default:
-//                    break
-//                }
+            default:
+                break
             }
-
+            
+            #if canImport(AppKit) && !targetEnvironment(macCatalyst)
             if let targetKind {
                 attributes.updateValue(RuntimeObjectName(name: string, displayName: string, kind: targetKind, imagePath: runtimeObjectName.imagePath, children: runtimeObjectName.children), forKey: .link)
             }

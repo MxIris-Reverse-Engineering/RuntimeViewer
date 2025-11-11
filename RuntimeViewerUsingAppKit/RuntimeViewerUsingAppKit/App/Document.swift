@@ -1,7 +1,7 @@
 import AppKit
 
 final class Document: NSDocument {
-    private lazy var mainCoordinator = MainCoordinator(appServices: .shared)
+    private lazy var mainCoordinator = MainCoordinator(appServices: .init())
 
     override init() {
         super.init()

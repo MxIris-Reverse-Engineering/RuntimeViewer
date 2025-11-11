@@ -62,8 +62,15 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
             $0.scrollView.backgroundColor = $1.backgroundColor
         })
         .disposed(by: rx.disposeBag)
-        rx.viewDidAppear.asDriver().flatMapLatest { output.imageNameOfRuntimeObject }.compactMap { $0 }.drive(with: self) { $0.view.window?.title = $1 }.disposed(by: rx.disposeBag)
-        rx.viewDidAppear.asDriver().flatMapLatest { output.runtimeObjectName }.drive(with: self) { $0.view.window?.subtitle = $1 }.disposed(by: rx.disposeBag)
+        rx.viewDidAppear.asDriver()
+            .flatMapLatest { output.imageNameOfRuntimeObject }
+            .compactMap { $0 }
+            .drive(with: self) { $0.view.window?.title = $1 }
+            .disposed(by: rx.disposeBag)
+        rx.viewDidAppear.asDriver()
+            .flatMapLatest { output.runtimeObjectName }
+            .drive(with: self) { $0.view.window?.subtitle = $1 }
+            .disposed(by: rx.disposeBag)
 
         eventMonitor.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
             guard let self = self else { return event }
