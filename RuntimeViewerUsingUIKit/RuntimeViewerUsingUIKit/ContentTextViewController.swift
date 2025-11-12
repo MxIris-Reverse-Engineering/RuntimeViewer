@@ -58,17 +58,17 @@ extension ContentTextViewController: UITextViewDelegate {
         case let .link(url):
             let jumpToDefinitionAction = UIAction(title: "Jump to Definition") { [weak self] _ in
                 guard let self = self else { return }
+//                #warning("RuntimeObjectType is not used in this context, consider using RuntimeObjectName")
                 if let scheme = url.scheme, let host = url.host {
-                    var runtimeObject: RuntimeObjectType?
-                    switch scheme {
-                    case "class":
-                        runtimeObject = .class(named: host)
-                    case "protocol":
-                        runtimeObject = .protocol(named: host)
-                    default:
-                        break
-                    }
-                    #warning("RuntimeObjectType is not used in this context, consider using RuntimeObjectName")
+//                    var runtimeObject: RuntimeObjCRuntimeObject?
+//                    switch scheme {
+//                    case "class":
+//                        runtimeObject = .class(named: host)
+//                    case "protocol":
+//                        runtimeObject = .protocol(named: host)
+//                    default:
+//                        break
+//                    }
 //                    if let runtimeObject {
 //                        runtimeObjectClicked.accept(runtimeObject)
 //                    }

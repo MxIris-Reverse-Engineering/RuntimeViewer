@@ -6,6 +6,7 @@ import MachOSwiftSection
 import SwiftDump
 import SwiftInterface
 import Demangling
+import FrameworkToolbox
 import SwiftStdlibToolbox
 
 final class RuntimeSwiftSection: Sendable {
@@ -120,57 +121,57 @@ final class RuntimeSwiftSection: Sendable {
             try await newInterfaceString.append(builder.printTypeDefinition(typeDefinition))
             if let typeExtensionDefinitions = builder.typeExtensionDefinitions[rootTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(typeExtensionDefinitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
             if let conformanceExtensionDefinitions = builder.conformanceExtensionDefinitions[rootTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(conformanceExtensionDefinitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .childType(let childTypeName):
             guard let typeDefinition = builder.allTypeDefinitions[childTypeName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(builder.printTypeDefinition(typeDefinition))
             if let typeExtensionDefinitions = builder.typeExtensionDefinitions[childTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(typeExtensionDefinitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
             if let conformanceExtensionDefinitions = builder.conformanceExtensionDefinitions[childTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(conformanceExtensionDefinitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .rootProtocol(let rootProtocolName):
             guard let definition = builder.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(builder.printProtocolDefinition(definition))
             if !definition.defaultImplementationExtensions.isEmpty {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(definition.defaultImplementationExtensions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
             if let protocolExtensionDefinitions = builder.protocolExtensionDefinitions[rootProtocolName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(protocolExtensionDefinitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .childProtocol(let childProtocolName):
             guard let definition = builder.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(builder.printProtocolDefinition(definition))
             if !definition.defaultImplementationExtensions.isEmpty {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(definition.defaultImplementationExtensions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
             if let protocolExtensionDefinitions = builder.protocolExtensionDefinitions[childProtocolName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(protocolExtensionDefinitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .typeExtension(let typeExtensionName):
             guard let definitions = builder.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObjectName }
-            try await newInterfaceString.append(definitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .protocolExtension(let protocolExtensionName):
             guard let definitions = builder.protocolExtensionDefinitions[protocolExtensionName] else { throw Error.invalidRuntimeObjectName }
-            try await newInterfaceString.append(definitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .typeAliasExtension(let typeAliasExtensionName):
             guard let definitions = builder.typeAliasExtensionDefinitions[typeAliasExtensionName] else { throw Error.invalidRuntimeObjectName }
-            try await newInterfaceString.append(definitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .conformance(let conformanceExtensionName):
             guard let definitions = builder.conformanceExtensionDefinitions[conformanceExtensionName] else { throw Error.invalidRuntimeObjectName }
-            try await newInterfaceString.append(definitions.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         }
 
         let newInterface = RuntimeObjectInterface(name: name, interfaceString: newInterfaceString)
@@ -290,3 +291,7 @@ extension SemanticString {
         "\n\n"
     }
 }
+
+
+@FrameworkToolboxExtension
+extension SwiftInterface.Definition {}

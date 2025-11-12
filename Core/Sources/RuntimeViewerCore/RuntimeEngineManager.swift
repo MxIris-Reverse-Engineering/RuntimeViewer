@@ -1,18 +1,16 @@
 import Foundation
-import RuntimeViewerCore
 import RuntimeViewerCommunication
-import RuntimeViewerArchitectures
 
 public final class RuntimeEngineManager {
     public static let shared = RuntimeEngineManager()
 
-    @Observed
+    @Published
     public private(set) var systemRuntimeEngines: [RuntimeEngine] = []
 
-    @Observed
+    @Published
     public private(set) var attachedRuntimeEngines: [RuntimeEngine] = []
 
-    @Observed
+    @Published
     public private(set) var bonjourRuntimeEngines: [RuntimeEngine] = []
 
     private let browser = RuntimeNetworkBrowser()
@@ -47,10 +45,4 @@ public final class RuntimeEngineManager {
     }
 }
 
-extension RuntimeEngineManager: ReactiveCompatible {}
 
-extension Reactive where Base == RuntimeEngineManager {
-    public var runtimeEngines: Driver<[RuntimeEngine]> {
-        Driver.combineLatest(base.$systemRuntimeEngines.asDriver(), base.$attachedRuntimeEngines.asDriver(), base.$bonjourRuntimeEngines.asDriver(), resultSelector: { $0 + $1 + $2 })
-    }
-}

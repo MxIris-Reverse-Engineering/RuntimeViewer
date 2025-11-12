@@ -6,7 +6,7 @@ import RuntimeViewerArchitectures
 public enum SidebarImageRoute: Routable {
     case root
     case back
-    case selectedNode(RuntimeNamedNode)
-    case clickedNode(RuntimeNamedNode)
+    case selectedNode(RuntimeImageNode)
+    case clickedNode(RuntimeImageNode)
     case selectedObject(RuntimeObjectName)
 }

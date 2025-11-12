@@ -3,7 +3,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
 public enum InspectableObject {
-    case node(RuntimeNamedNode)
+    case node(RuntimeImageNode)
     case object(RuntimeObjectName)
 }
 

@@ -48,11 +48,11 @@ package enum DyldUtilities {
         }
     }
 
-    package static var dyldSharedCacheImageRootNode: RuntimeNamedNode {
+    package static var dyldSharedCacheImageRootNode: RuntimeImageNode {
         return .rootNode(for: CDUtilities.dyldSharedCacheImagePaths(), name: "Dyld Shared Cache")
     }
 
-    package static var otherImageRootNode: RuntimeNamedNode {
+    package static var otherImageRootNode: RuntimeImageNode {
         let dyldSharedCacheImagePaths = CDUtilities.dyldSharedCacheImagePaths()
         let allImagePaths = imageNames()
         let otherImagePaths = allImagePaths.filter { !dyldSharedCacheImagePaths.contains($0) }
