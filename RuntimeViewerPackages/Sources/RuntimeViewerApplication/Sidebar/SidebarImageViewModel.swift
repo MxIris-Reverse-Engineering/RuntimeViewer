@@ -3,11 +3,9 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
 public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
-    private let namedNode: RuntimeNamedNode
-
+    private let imageNode: RuntimeImageNode
     private let imagePath: String
     private let imageName: String
-
     private let runtimeEngine: RuntimeEngine
 
     @Observed private var searchString: String = ""
@@ -16,12 +14,12 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @Observed private var filteredNodes: [SidebarImageCellViewModel] = []
     @Observed private var loadState: RuntimeImageLoadState = .unknown
 
-    public init(node namedNode: RuntimeNamedNode, appServices: AppServices, router: any Router<SidebarRoute>) {
+    public init(node imageNode: RuntimeImageNode, appServices: AppServices, router: any Router<SidebarRoute>) {
         self.runtimeEngine = appServices.runtimeEngine
-        self.namedNode = namedNode
-        let imagePath = namedNode.path
+        self.imageNode = imageNode
+        let imagePath = imageNode.path
         self.imagePath = imagePath
-        self.imageName = namedNode.name
+        self.imageName = imageNode.name
         super.init(appServices: appServices, router: router)
 
         Task {
@@ -157,7 +155,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 }
             }
             .asDriver(onErrorJustReturn: "")
-        let runtimeNodeName = namedNode.name
+        let runtimeImageName = imageNode.name
         return Output(
             runtimeObjects: $filteredNodes.asDriver(),
             loadState: $loadState.asDriver(),
@@ -165,22 +163,22 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             errorText: errorText,
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
             isEmpty: $nodes.asDriver().map { $0.isEmpty },
-            windowInitialTitles: .just((runtimeNodeName, "")),
+            windowInitialTitles: .just((runtimeImageName, "")),
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" }
         )
     }
 
-    private static func runtimeObjectsFor(classNames: [String], protocolNames: [String], searchString: String, searchScope: RuntimeTypeSearchScope) -> [RuntimeObjectType] {
-        var ret: [RuntimeObjectType] = []
-        if searchScope.includesClasses {
-            ret += classNames.map { .class(named: $0) }
-        }
-        if searchScope.includesProtocols {
-            ret += protocolNames.map { .protocol(named: $0) }
-        }
-        if searchString.isEmpty { return ret }
-        return ret.filter { $0.name.localizedCaseInsensitiveContains(searchString) }
-    }
+//    private static func runtimeObjectsFor(classNames: [String], protocolNames: [String], searchString: String, searchScope: RuntimeTypeSearchScope) -> [RuntimeObjCRuntimeObject] {
+//        var ret: [RuntimeObjCRuntimeObject] = []
+//        if searchScope.includesClasses {
+//            ret += classNames.map { .class(named: $0) }
+//        }
+//        if searchScope.includesProtocols {
+//            ret += protocolNames.map { .protocol(named: $0) }
+//        }
+//        if searchString.isEmpty { return ret }
+//        return ret.filter { $0.name.localizedCaseInsensitiveContains(searchString) }
+//    }
 
     private func tryLoadImage() {
         Task {

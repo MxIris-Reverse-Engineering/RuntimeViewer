@@ -71,7 +71,6 @@ class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         switch route {
         case .main:
             windowController.splitViewController.setupSplitViewItems()
-
         default:
             break
         }

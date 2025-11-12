@@ -12,7 +12,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerUI
 
 public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType {
-    public let node: RuntimeNamedNode
+    public let node: RuntimeImageNode
 
     public weak var parent: SidebarRootCellViewModel?
 
@@ -50,7 +50,7 @@ public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType
     @Observed
     public private(set) var name: NSAttributedString
 
-    public init(node: RuntimeNamedNode, parent: SidebarRootCellViewModel?) {
+    public init(node: RuntimeImageNode, parent: SidebarRootCellViewModel?) {
         self.node = node
         self.parent = parent
         self.name = NSAttributedString {

@@ -118,14 +118,18 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "RuntimeViewerObjC"
+        ),
+        .target(
             name: "RuntimeViewerCore",
             dependencies: [
-                .target(name: "RuntimeViewerCommunication"),
+                "RuntimeViewerObjC",
+                "RuntimeViewerCommunication",
                 .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
-                .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
+                .product(name: "MachOObjCSection", package: "MachOObjCSection"),
                 .product(name: "OrderedCollections", package: "swift-collections"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),

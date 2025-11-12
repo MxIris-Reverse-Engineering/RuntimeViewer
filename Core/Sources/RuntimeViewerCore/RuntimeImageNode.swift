@@ -1,18 +1,18 @@
 import Foundation
 
-public final class RuntimeNamedNode: Codable {
+public final class RuntimeImageNode: Codable {
     public let name: String
 
-    public weak var parent: RuntimeNamedNode?
+    public weak var parent: RuntimeImageNode?
 
-    public var children: [RuntimeNamedNode] = []
+    public var children: [RuntimeImageNode] = []
 
     private enum CodingKeys: CodingKey {
         case name
         case children
     }
 
-    public init(_ name: String, parent: RuntimeNamedNode? = nil) {
+    public init(_ name: String, parent: RuntimeImageNode? = nil) {
         self.parent = parent
         self.name = name
     }
@@ -27,17 +27,17 @@ public final class RuntimeNamedNode: Codable {
 
     public var isLeaf: Bool { children.isEmpty }
 
-    public func child(named name: String) -> RuntimeNamedNode {
+    public func child(named name: String) -> RuntimeImageNode {
         if let existing = children.first(where: { $0.name == name }) {
             return existing
         }
-        let child = RuntimeNamedNode(name, parent: self)
+        let child = RuntimeImageNode(name, parent: self)
         children.append(child)
         return child
     }
 
-    public class func rootNode(for imagePaths: [String], name: String = "") -> RuntimeNamedNode {
-        let root = RuntimeNamedNode(name)
+    public class func rootNode(for imagePaths: [String], name: String = "") -> RuntimeImageNode {
+        let root = RuntimeImageNode(name)
         for path in imagePaths {
             var current = root
             for pathComponent in path.split(separator: "/") {
@@ -65,7 +65,7 @@ public final class RuntimeNamedNode: Codable {
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.name = try container.decode(String.self, forKey: .name)
-        self.children = try container.decode([RuntimeNamedNode].self, forKey: .children)
+        self.children = try container.decode([RuntimeImageNode].self, forKey: .children)
 
         for child in children {
             child.parent = self
@@ -73,8 +73,8 @@ public final class RuntimeNamedNode: Codable {
     }
 }
 
-extension RuntimeNamedNode: Hashable {
-    public static func == (lhs: RuntimeNamedNode, rhs: RuntimeNamedNode) -> Bool {
+extension RuntimeImageNode: Hashable {
+    public static func == (lhs: RuntimeImageNode, rhs: RuntimeImageNode) -> Bool {
         lhs.name == rhs.name && lhs.children == rhs.children
     }
 

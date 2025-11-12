@@ -55,20 +55,20 @@ extension RuntimeObjectKind {
     }
 }
 
-extension RuntimeObjectType: @retroactive Comparable {
-    public static func < (lhs: RuntimeObjectType, rhs: RuntimeObjectType) -> Bool {
-        switch (lhs, rhs) {
-        case (.class, .protocol):
-            return true
-        case (.protocol, .class):
-            return false
-        case (.class(let className1), .class(let className2)):
-            return className1 < className2
-        case (.protocol(let protocolName1), .protocol(let protocolName2)):
-            return protocolName1 < protocolName2
-        }
-    }
-}
+//extension RuntimeObjCRuntimeObject: @retroactive Comparable {
+//    public static func < (lhs: RuntimeObjCRuntimeObject, rhs: RuntimeObjCRuntimeObject) -> Bool {
+//        switch (lhs, rhs) {
+//        case (.class, .protocol):
+//            return true
+//        case (.protocol, .class):
+//            return false
+//        case (.class(let className1), .class(let className2)):
+//            return className1 < className2
+//        case (.protocol(let protocolName1), .protocol(let protocolName2)):
+//            return protocolName1 < protocolName2
+//        }
+//    }
+//}
 
 extension RuntimeImageLoadState: @retroactive CaseAccessible {}
 
@@ -80,19 +80,19 @@ extension UIColor {
 
 #endif
 
-extension RuntimeNamedNode: @retroactive Sequence {
+extension RuntimeImageNode: @retroactive Sequence {
     public func makeIterator() -> Iterator {
         return Iterator(node: self)
     }
 
     public struct Iterator: IteratorProtocol {
-        var stack: [RuntimeNamedNode] = []
+        var stack: [RuntimeImageNode] = []
 
-        init(node: RuntimeNamedNode) {
+        init(node: RuntimeImageNode) {
             self.stack = [node]
         }
 
-        public mutating func next() -> RuntimeNamedNode? {
+        public mutating func next() -> RuntimeImageNode? {
             if let node = stack.popLast() {
                 stack.append(contentsOf: node.children.reversed())
                 return node
@@ -103,7 +103,7 @@ extension RuntimeNamedNode: @retroactive Sequence {
 }
 
 
-extension RuntimeNamedNode {
+extension RuntimeImageNode {
     public static let frameworkIcon = SFSymbols(systemName: .latch2Case)
 
     public static let bundleIcon = SFSymbols(systemName: .shippingbox)
@@ -131,17 +131,17 @@ extension RuntimeNamedNode {
     }
 }
 
-extension SFSymbols {
-    public var nsuiImage: NSUIImage {
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        return nsImage
-        #endif
-
-        #if canImport(UIKit)
-        return uiImage
-        #endif
-    }
-}
+//extension SFSymbols {
+//    public var nsuiImage: NSUIImage {
+//        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+//        return nsImage
+//        #endif
+//
+//        #if canImport(UIKit)
+//        return uiImage
+//        #endif
+//    }
+//}
 
 extension NSUIColor {
     convenience init(light: NSUIColor, dark: NSUIColor) {
