@@ -4,7 +4,7 @@
 @_exported import NSAttributedStringBuilder
 @_exported import SFSymbols
 @_exported import IDEIcons
-@_exported import UIFoundationAppleInternalObjC
+@_exported import UIFoundationAppleInternal
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 #if USING_SYSTEM_UXKIT

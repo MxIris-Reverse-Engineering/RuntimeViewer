@@ -8,7 +8,7 @@ typealias ContentTransition = NavigationTransition
 
 class ContentCoordinator: NavigationCoordinator<ContentRoute> {
     let appServices: AppServices
-    
+
     init(appServices: AppServices) {
         self.appServices = appServices
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
@@ -21,12 +21,12 @@ class ContentCoordinator: NavigationCoordinator<ContentRoute> {
             let contentPlaceholderViewModel = ContentPlaceholderViewModel(appServices: appServices, router: self)
             contentPlaceholderViewController.setupBindings(for: contentPlaceholderViewModel)
             return .set([contentPlaceholderViewController], animation: nil)
-        case let .root(runtimeObjectType):
+        case .root(let runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
             return .set([contentTextViewController], animation: .default)
-        case let .next(runtimeObjectType):
+        case .next(let runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)

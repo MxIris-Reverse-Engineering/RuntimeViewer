@@ -282,7 +282,6 @@ public actor RuntimeEngine {
     }
 
     private func _objcNames(of kind: RuntimeObjectKind.ObjectiveC, in image: String) async throws -> [RuntimeObjectName] {
-        let image = DyldUtilities.patchImagePathForDyld(image)
         switch kind {
         case .type(let kind):
             switch kind {

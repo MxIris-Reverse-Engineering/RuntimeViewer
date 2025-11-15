@@ -10,7 +10,7 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 
     var shouldDisplayCommonLoading: Bool { false }
 
-    private(set) var contentView = NSView()
+    private(set) var contentView: NSView = UXView()
 
     init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel

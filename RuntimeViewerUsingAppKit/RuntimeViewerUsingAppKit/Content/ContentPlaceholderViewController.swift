@@ -15,7 +15,7 @@ class ContentPlaceholderViewController: UXKitViewController<ContentPlaceholderVi
         }
 
         placeholderLabel.snp.makeConstraints { make in
-            make.center.equalToSuperview()
+            make.center.equalTo(view.safeAreaLayoutGuide)
         }
 
         placeholderLabel.do {

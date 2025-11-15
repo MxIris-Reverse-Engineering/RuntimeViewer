@@ -9,7 +9,6 @@ class InspectorNavigationController: UXNavigationController {
 
         isToolbarHidden = true
         isNavigationBarHidden = true
-        view.canDrawSubviewsIntoLayer = true
     }
 }
 

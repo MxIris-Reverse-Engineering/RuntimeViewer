@@ -6,18 +6,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class XiblessView: UIView {
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-}
-
-class SidebarImageViewController: ViewController<SidebarImageViewModel> {
+class SidebarImageViewController: UIKitViewController<SidebarImageViewModel> {
     @MagicViewLoading
     var imageTabBarController = UITabBarController()
 
@@ -38,7 +27,6 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
 
         imageTabBarController.view.snp.makeConstraints { make in
             make.edges.equalTo(view.safeAreaLayoutGuide)
-//            make.left.right.equalToSuperview()
         }
 
         if #available(iOS 18.0, *) {
@@ -47,6 +35,8 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
             imageTabBarController.tabBar.isHidden = true
         }
 
+        imageTabBarController.view.backgroundColor = .clear
+
         imageTabBarController.viewControllers = [
             UIViewController(view: imageNotLoadedView),
             UIViewController(view: imageLoadingView),
@@ -54,10 +44,12 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
             UIViewController(view: imageLoadErrorView),
         ]
 
-        if traitCollection.userInterfaceIdiom == .phone {
-            view.backgroundColor = .systemBackground
-        } else {
-            view.backgroundColor = .secondarySystemBackground
+        if #unavailable(iOS 26.0) {
+            if traitCollection.userInterfaceIdiom == .phone {
+                view.backgroundColor = .systemBackground
+            } else {
+                view.backgroundColor = .secondarySystemBackground
+            }
         }
     }
 
@@ -75,8 +67,10 @@ class SidebarImageViewController: ViewController<SidebarImageViewModel> {
         let output = viewModel.transform(input)
         let listCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarImageCellViewModel> { cell, indexPath, viewModel in
             var content = cell.defaultContentConfiguration()
+            content.textProperties.allowsDefaultTighteningForTruncation = false
             content.attributedText = viewModel.name
             content.image = viewModel.icon
+
             cell.contentConfiguration = content
         }
 
@@ -149,7 +143,11 @@ extension SidebarImageViewController {
             #else
             var configuration = UICollectionLayoutListConfiguration(appearance: .sidebar)
             #endif
-            configuration.backgroundColor = UIDevice.current.userInterfaceIdiom == .phone ? .systemBackground : .secondarySystemBackground
+            if #available(iOS 26.0, *) {
+                configuration.backgroundColor = .clear
+            } else {
+                configuration.backgroundColor = UIDevice.current.userInterfaceIdiom == .phone ? .systemBackground : .secondarySystemBackground
+            }
             let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
             return collectionView
         }()
@@ -225,31 +223,5 @@ extension SidebarImageViewController {
         }
     }
 }
-
-extension UIViewController {
-    convenience init(view: UIView) {
-        self.init()
-        self.view = view
-    }
-}
-
-extension UIImage {
-    static func image(withColor color: UIColor, size: CGSize = CGSize(width: 1, height: 1)) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { context in
-            color.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-        }
-    }
-}
-
-#if os(tvOS)
-extension Reactive where Base: UIButton {
-    /// Reactive wrapper for target action pattern on `self`.
-    public var tap: ControlEvent<Void> {
-        primaryAction
-    }
-}
-#endif
 
 #endif

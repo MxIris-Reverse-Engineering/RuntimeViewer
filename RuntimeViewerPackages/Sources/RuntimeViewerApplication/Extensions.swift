@@ -12,29 +12,29 @@ import RuntimeViewerArchitectures
 
 extension RuntimeObjectKind {
     #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-    private static let iconSize: CGFloat = 16
+    private static let iconSize: CGFloat = 18
     #endif
 
     #if canImport(UIKit)
     private static let iconSize: CGFloat = 24
     #endif
 
-    public static let objcClassIcon = IDEIcon("C", color: .yellow, style: .default, size: iconSize).image
-    public static let objcProtocolIcon = IDEIcon("Pr", color: .purple, style: .default, size: iconSize).image
+    private static let iconStyle: IDEIconStyle = .simple
 
-    public static let swiftEnumIcon = IDEIcon("E", color: .blue, style: .default, size: iconSize).image
-    public static let swiftStructIcon = IDEIcon("S", color: .blue, style: .default, size: iconSize).image
-    public static let swiftClassIcon = IDEIcon("C", color: .blue, style: .default, size: iconSize).image
-    public static let swiftProtocolIcon = IDEIcon("Pr", color: .blue, style: .default, size: iconSize).image
-    public static let swiftExtensionIcon = IDEIcon("Ex", color: .blue, style: .default, size: iconSize).image
-    public static let swiftTypeAliasIcon = IDEIcon("T", color: .blue, style: .default, size: iconSize).image
+    public static let objcClassIcon = IDEIcon("C", color: .yellow, style: iconStyle, size: iconSize).image
+    public static let objcProtocolIcon = IDEIcon("Pr", color: .purple, style: iconStyle, size: iconSize).image
 
-//    public static let classIcon = SFSymbols(systemName: .cSquare).nsuiImage
-//    public static let protocolIcon = SFSymbols(systemName: .pSquare).nsuiImage
-    
+    public static let swiftEnumIcon = IDEIcon("E", color: .blue, style: iconStyle, size: iconSize).image
+    public static let swiftStructIcon = IDEIcon("S", color: .blue, style: iconStyle, size: iconSize).image
+    public static let swiftClassIcon = IDEIcon("C", color: .blue, style: iconStyle, size: iconSize).image
+    public static let swiftProtocolIcon = IDEIcon("Pr", color: .blue, style: iconStyle, size: iconSize).image
+    public static let swiftExtensionIcon = IDEIcon("Ex", color: .blue, style: iconStyle, size: iconSize).image
+    public static let swiftTypeAliasIcon = IDEIcon("T", color: .blue, style: iconStyle, size: iconSize).image
+
     public var icon: NSUIImage {
         switch self {
-        case .objc(.type(let kindOfObjC)):
+        case .objc(.type(let kindOfObjC)),
+             .objc(.category(let kindOfObjC)):
             switch kindOfObjC {
             case .class: return Self.objcClassIcon
             case .protocol: return Self.objcProtocolIcon
@@ -47,28 +47,14 @@ extension RuntimeObjectKind {
             case .protocol: return Self.swiftProtocolIcon
             case .typeAlias: return Self.swiftTypeAliasIcon
             }
-        case .swift(.extension(_)), .swift(.conformance(_)):
+        case .swift(.extension(_)),
+             .swift(.conformance(_)):
             return Self.swiftExtensionIcon
         default:
             fatalError()
         }
     }
 }
-
-//extension RuntimeObjCRuntimeObject: @retroactive Comparable {
-//    public static func < (lhs: RuntimeObjCRuntimeObject, rhs: RuntimeObjCRuntimeObject) -> Bool {
-//        switch (lhs, rhs) {
-//        case (.class, .protocol):
-//            return true
-//        case (.protocol, .class):
-//            return false
-//        case (.class(let className1), .class(let className2)):
-//            return className1 < className2
-//        case (.protocol(let protocolName1), .protocol(let protocolName2)):
-//            return protocolName1 < protocolName2
-//        }
-//    }
-//}
 
 extension RuntimeImageLoadState: @retroactive CaseAccessible {}
 
@@ -102,7 +88,6 @@ extension RuntimeImageNode: @retroactive Sequence {
     }
 }
 
-
 extension RuntimeImageNode {
     public static let frameworkIcon = SFSymbols(systemName: .latch2Case)
 
@@ -113,11 +98,16 @@ extension RuntimeImageNode {
     public static let folderIcon = SFSymbols(systemName: .folder)
 
     public var icon: NSUIImage {
+        #if os(macOS)
         symbol
             .hierarchicalColor(.controlAccentColor)
             .nsuiImgae
+        #else
+        symbol
+            .nsuiImgae
+        #endif
     }
-    
+
     private var symbol: SFSymbols {
         if name.hasSuffix("framework") {
             Self.frameworkIcon
@@ -130,18 +120,6 @@ extension RuntimeImageNode {
         }
     }
 }
-
-//extension SFSymbols {
-//    public var nsuiImage: NSUIImage {
-//        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-//        return nsImage
-//        #endif
-//
-//        #if canImport(UIKit)
-//        return uiImage
-//        #endif
-//    }
-//}
 
 extension NSUIColor {
     convenience init(light: NSUIColor, dark: NSUIColor) {

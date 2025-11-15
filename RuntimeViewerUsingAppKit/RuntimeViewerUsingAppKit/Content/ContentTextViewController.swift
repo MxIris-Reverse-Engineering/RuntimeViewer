@@ -25,7 +25,8 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
         }
 
         scrollView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.top.equalToSuperview()
+            make.leading.trailing.bottom.equalTo(view.safeAreaLayoutGuide)
         }
 
         scrollView.do {
@@ -58,6 +59,7 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
         .disposed(by: rx.disposeBag)
 
         output.theme.drive(with: self, onNext: {
+            ($0.contentView as? UXView)?.backgroundColor = $1.backgroundColor
             $0.textView.backgroundColor = $1.backgroundColor
             $0.scrollView.backgroundColor = $1.backgroundColor
         })
