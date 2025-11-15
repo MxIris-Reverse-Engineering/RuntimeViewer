@@ -11,34 +11,6 @@ class MainWindow: NSWindow {
     }
 }
 
-extension Reactive where Base: NSMenu {
-    func selectedItemIndex() -> ControlEvent<Int> {
-        let source = itemSelected(Any?.self).compactMap { [weak base] menuItem, _ -> Int? in
-            guard let self = base else { return nil }
-            return self.items.firstIndex(of: menuItem)
-        }.share()
-        return ControlEvent(events: source)
-    }
-}
-
-protocol MainMenuItemRepresentable: RxMenuItemRepresentable {
-    var icon: NSImage { get }
-}
-
-extension Reactive where Base: NSPopUpButton {
-    func items<MenuItemRepresentable: MainMenuItemRepresentable>() -> Binder<[MenuItemRepresentable]> {
-        Binder(base) { (target: NSPopUpButton, items: [MenuItemRepresentable]) in
-            target.removeAllItems()
-            items.forEach { item in
-                target.addItem(withTitle: item.title)
-                if let menuItem = target.item(withTitle: item.title) {
-                    menuItem.image = item.icon
-                }
-            }
-        }
-    }
-}
-
 class MainWindowController: XiblessWindowController<MainWindow> {
     lazy var toolbarController = MainToolbarController(delegate: self)
 
@@ -89,8 +61,4 @@ class MainWindowController: XiblessWindowController<MainWindow> {
     }
 }
 
-extension MainWindowController: MainToolbarController.Delegate {
-    var splitView: NSSplitView {
-        splitViewController.splitView
-    }
-}
+extension MainWindowController: MainToolbarController.Delegate {}

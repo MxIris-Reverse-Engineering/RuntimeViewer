@@ -37,7 +37,9 @@ public final class RuntimeEngineManager {
 
     public func launchSystemRuntimeEngines() async throws {
         systemRuntimeEngines.append(.shared)
+        #if os(macOS)
         try systemRuntimeEngines.append(await .macCatalystClient())
+        #endif
     }
 
     public func launchAttachedRuntimeEngine(name: String, identifier: String) async throws {

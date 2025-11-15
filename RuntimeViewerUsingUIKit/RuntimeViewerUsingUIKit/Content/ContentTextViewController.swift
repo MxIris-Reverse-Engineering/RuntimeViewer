@@ -6,7 +6,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class ContentTextViewController: ViewController<ContentTextViewModel> {
+class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
     let textView = UITextView()
 
     let runtimeObjectClicked = PublishRelay<RuntimeObjectName>()
@@ -19,7 +19,7 @@ class ContentTextViewController: ViewController<ContentTextViewModel> {
         }
 
         textView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.edges.equalTo(view.safeAreaLayoutGuide)
         }
 
         textView.do {
@@ -55,7 +55,7 @@ extension ContentTextViewController: UITextViewDelegate {
     @available(iOS 17.0, *)
     func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
         switch textItem.content {
-        case let .link(url):
+        case .link(let url):
             let jumpToDefinitionAction = UIAction(title: "Jump to Definition") { [weak self] _ in
                 guard let self = self else { return }
 //                #warning("RuntimeObjectType is not used in this context, consider using RuntimeObjectName")

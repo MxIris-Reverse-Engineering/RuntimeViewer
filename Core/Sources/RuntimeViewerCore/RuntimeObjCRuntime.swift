@@ -114,7 +114,7 @@ final class RuntimeObjCRuntime {
     }
 
     static func classNames(inImage image: String) -> [String] {
-        DyldUtilities.patchImagePathForDyld(image).withCString { cString in
+        image.withCString { cString in
             var classCount: UInt32 = 0
             guard let classNames = objc_copyClassNamesForImage(cString, &classCount) else { return [] }
 
@@ -177,6 +177,6 @@ final class RuntimeObjCRuntime {
         guard let cls = NSClassFromString(className) else { return false }
         let objcClass = unsafeBitCast(cls, to: UnsafePointer<objc_class>.self).pointee
 
-        return (objcClass.bits & 1) == 1 || (objcClass.bits & 2) == 2
+        return /*(objcClass.bits & 1) == 1 ||*/ (objcClass.bits & 2) == 2
     }
 }

@@ -5,7 +5,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class ContentPlaceholderViewController: ViewController<ContentPlaceholderViewModel> {
+class ContentPlaceholderViewController: UIKitViewController<ContentPlaceholderViewModel> {
     let placeholerLabel = UILabel()
 
     override func viewDidLoad() {

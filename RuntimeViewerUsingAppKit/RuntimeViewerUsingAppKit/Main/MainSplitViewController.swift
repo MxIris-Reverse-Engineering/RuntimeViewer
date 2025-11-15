@@ -23,30 +23,22 @@ class MainSplitViewController: NSSplitViewController {
         splitViewItems[0].do {
             $0.minimumThickness = 250
             $0.maximumThickness = 400
-            if #available(macOS 26.0, *) {
-                $0.automaticallyAdjustsSafeAreaInsets = true
-            }
         }
 
         splitViewItems[1].do {
             $0.minimumThickness = 600
+            if #available(macOS 26.0, *) {
+                $0.automaticallyAdjustsSafeAreaInsets = true
+            }
         }
 
         splitViewItems[2].do {
             $0.minimumThickness = 200
-            if #available(macOS 26.0, *) {
-                $0.automaticallyAdjustsSafeAreaInsets = true
-            }
         }
 
         if AppDefaults[\.isInitialSetupSplitView] {
             splitView.setPosition(250, ofDividerAt: 0)
             AppDefaults[\.isInitialSetupSplitView] = false
         }
-    }
-
-    @objc func _toggleInspector(_ sender: Any?) {
-        guard let inspectorItem = splitViewItems.filter({ $0.behavior == .inspector }).first else { return }
-        inspectorItem.animator().isCollapsed = !inspectorItem.isCollapsed
     }
 }

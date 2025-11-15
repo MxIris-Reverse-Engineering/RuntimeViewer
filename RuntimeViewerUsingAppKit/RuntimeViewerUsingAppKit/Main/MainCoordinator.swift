@@ -6,21 +6,21 @@ import RuntimeViewerApplication
 
 typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewController>
 
-class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
+final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     let appServices: AppServices
 
-    lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
+    private lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
 
-    lazy var contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
+    private lazy var contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
 
-    lazy var inspectorCoordinator = InspectorCoordinator(appServices: appServices)
+    private lazy var inspectorCoordinator = InspectorCoordinator(appServices: appServices)
+
+    private lazy var viewModel = MainViewModel(appServices: appServices, router: self)
 
     init(appServices: AppServices) {
         self.appServices = appServices
         super.init(windowController: .init(), initialRoute: .main(.shared))
     }
-
-    lazy var viewModel = MainViewModel(appServices: appServices, router: self)
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {

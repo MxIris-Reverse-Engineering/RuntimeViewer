@@ -70,7 +70,7 @@ let package = Package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/MachOSwiftSection",
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: false,
             ),
 //            .package(
 //                path: "../../TestingLibraries/MachOSwiftSection",

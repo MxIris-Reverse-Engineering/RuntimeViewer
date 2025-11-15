@@ -4,7 +4,7 @@ import OrderedCollections
 import MachOKit
 import MachOSwiftSection
 import SwiftDump
-import SwiftInterface
+@_spi(Support) import SwiftInterface
 import Demangling
 import FrameworkToolbox
 import SwiftStdlibToolbox

@@ -1,6 +1,6 @@
 import RuntimeViewerArchitectures
 
-public protocol ViewModelProtocol: AnyObject {
+public protocol ViewModelProtocol<Route>: AnyObject {
     associatedtype Route: Routable
     var appServices: AppServices { get }
     var commonLoading: Driver<Bool> { get }

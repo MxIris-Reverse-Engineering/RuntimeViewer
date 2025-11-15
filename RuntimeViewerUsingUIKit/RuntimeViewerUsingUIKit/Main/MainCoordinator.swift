@@ -57,11 +57,7 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
 }
 
 extension MainCoordinator: UISplitViewControllerDelegate {
-    func splitViewController(
-        _ svc: UISplitViewController,
-        topColumnForCollapsingToProposedTopColumn proposedTopColumn: UISplitViewController.Column
-    )
-        -> UISplitViewController.Column {
+    func splitViewController(_ svc: UISplitViewController, topColumnForCollapsingToProposedTopColumn proposedTopColumn: UISplitViewController.Column) -> UISplitViewController.Column {
         return .primary
     }
 
@@ -73,7 +69,7 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
         switch route {
         case .selectedNode(let runtimeNamedNode):
             inspectorCoordinator.trigger(.root(.node(runtimeNamedNode)))
-        case .clickedNode/*(let runtimeNamedNode)*/:
+        case .clickedNode /* (let runtimeNamedNode) */:
             break
         case .selectedObject(let runtimeObjectType):
             trigger(.select(runtimeObjectType), with: .init(animated: false))

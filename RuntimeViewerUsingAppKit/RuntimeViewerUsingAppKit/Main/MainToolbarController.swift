@@ -1,53 +1,9 @@
 import AppKit
-import RuntimeViewerUI
 import RxAppKit
-import RuntimeViewerCommunication
+import RuntimeViewerUI
 
-extension RuntimeSource: @retroactive RxMenuItemRepresentable {}
-extension RuntimeSource: MainMenuItemRepresentable {
-    public var title: String { description }
-
-    var icon: NSImage {
-        switch self {
-        case .local:
-            return .symbol(systemName: .display)
-        case .remote(_, let identifier, _):
-            if identifier == .macCatalyst {
-                return .symbol(systemName: .display)
-            } else {
-                return .symbol(name: RuntimeViewerSymbols.appFill)
-            }
-        case .bonjourClient:
-            return .symbol(systemName: .bonjour)
-        case .bonjourServer:
-            return .symbol(systemName: .bonjour)
-        }
-    }
-}
-
-extension NSToolbarItem.Identifier {
-    enum Main {
-        static let sidebarBack: NSToolbarItem.Identifier = "sidebarBack"
-        static let contentBack: NSToolbarItem.Identifier = "contentBack"
-        static let share: NSToolbarItem.Identifier = "share"
-        static let save: NSToolbarItem.Identifier = "save"
-        static let inspector: NSToolbarItem.Identifier = "inspector"
-        static let switchSource: NSToolbarItem.Identifier = "switchSource"
-        static let inspectorTrackingSeparator: NSToolbarItem.Identifier = "inspectorTrackingSeparator"
-        static let generationOptions: NSToolbarItem.Identifier = "generationOptions"
-        static let fontSizeSmaller: NSToolbarItem.Identifier = "fontSizeSmaller"
-        static let fontSizeLarger: NSToolbarItem.Identifier = "fontSizeLarger"
-        static let loadFrameworks: NSToolbarItem.Identifier = "loadFrameworks"
-        static let installHelper: NSToolbarItem.Identifier = "installHelper"
-        static let helperStatus: NSToolbarItem.Identifier = "helperStatus"
-        static let attach: NSToolbarItem.Identifier = "attach"
-    }
-}
-
-class MainToolbarController: NSObject, NSToolbarDelegate {
-    protocol Delegate: AnyObject {
-        var splitView: NSSplitView { get }
-    }
+final class MainToolbarController: NSObject, NSToolbarDelegate {
+    protocol Delegate: AnyObject {}
 
     class IconButtonToolbarItem: NSToolbarItem {
         let button = ToolbarButton()
@@ -65,17 +21,6 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             view = button
             button.title = ""
             button.image = SFSymbols(name: icon).nsImage
-        }
-    }
-
-    class InspectorToolbarItem: NSToolbarItem {
-        let inspectorButton = ToolbarButton()
-        init() {
-            super.init(itemIdentifier: .Main.inspector)
-            view = inspectorButton
-            inspectorButton.title = ""
-            inspectorButton.image = SFSymbols(systemName: .sidebarRight).nsImage
-            inspectorButton.action = #selector(MainSplitViewController._toggleInspector(_:))
         }
     }
 
@@ -102,15 +47,11 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
 
     let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject)
 
-    let inspectorItem = InspectorToolbarItem()
-
     let saveItem = IconButtonToolbarItem(itemIdentifier: .Main.save, icon: .squareAndArrowDown)
 
     let switchSourceItem = SwitchSourceToolbarItem()
 
     let generationOptionsItem = IconButtonToolbarItem(itemIdentifier: .Main.generationOptions, icon: .ellipsisCurlybraces)
-
-    lazy var inspectorTrackingSeparatorItem = NSTrackingSeparatorToolbarItem(identifier: .Main.inspectorTrackingSeparator, splitView: delegate.splitView, dividerIndex: 1)
 
     let sharingServicePickerItem = NSSharingServicePickerToolbarItem(itemIdentifier: .Main.share)
 
@@ -147,9 +88,9 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.generationOptions,
             .Main.save,
             .Main.share,
-            .Main.inspectorTrackingSeparator,
+            .inspectorTrackingSeparator,
             .flexibleSpace,
-            .Main.inspector,
+            .toggleInspector,
         ]
     }
 
@@ -159,8 +100,8 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
             .flexibleSpace,
             .toggleSidebar,
             .sidebarTrackingSeparator,
-            .Main.inspectorTrackingSeparator,
-            .Main.inspector,
+            .inspectorTrackingSeparator,
+            .toggleInspector,
             .Main.share,
             .Main.save,
             .Main.switchSource,
@@ -177,10 +118,6 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
         switch itemIdentifier {
         case .Main.sidebarBack:
             return sidebarBackItem
-        case .Main.inspector:
-            return inspectorItem
-        case .Main.inspectorTrackingSeparator:
-            return inspectorTrackingSeparatorItem
         case .Main.share:
             return sharingServicePickerItem
         case .Main.save:
@@ -210,5 +147,22 @@ class MainToolbarController: NSObject, NSToolbarDelegate {
 extension NSToolbarItem.Identifier: @retroactive ExpressibleByStringLiteral {
     public init(stringLiteral value: StringLiteralType) {
         self.init(value)
+    }
+}
+
+extension NSToolbarItem.Identifier {
+    enum Main {
+        static let sidebarBack: NSToolbarItem.Identifier = "sidebarBack"
+        static let contentBack: NSToolbarItem.Identifier = "contentBack"
+        static let share: NSToolbarItem.Identifier = "share"
+        static let save: NSToolbarItem.Identifier = "save"
+        static let switchSource: NSToolbarItem.Identifier = "switchSource"
+        static let generationOptions: NSToolbarItem.Identifier = "generationOptions"
+        static let fontSizeSmaller: NSToolbarItem.Identifier = "fontSizeSmaller"
+        static let fontSizeLarger: NSToolbarItem.Identifier = "fontSizeLarger"
+        static let loadFrameworks: NSToolbarItem.Identifier = "loadFrameworks"
+        static let installHelper: NSToolbarItem.Identifier = "installHelper"
+        static let helperStatus: NSToolbarItem.Identifier = "helperStatus"
+        static let attach: NSToolbarItem.Identifier = "attach"
     }
 }
