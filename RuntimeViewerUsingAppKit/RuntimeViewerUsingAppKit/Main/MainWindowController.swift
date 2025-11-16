@@ -20,6 +20,7 @@ class MainWindowController: XiblessWindowController<MainWindow> {
 
     func setupBindings(for viewModel: MainViewModel) {
         rx.disposeBag = DisposeBag()
+        
         self.viewModel = viewModel
 
         let input = MainViewModel.Input(
@@ -37,13 +38,24 @@ class MainWindowController: XiblessWindowController<MainWindow> {
         let output = viewModel.transform(input)
         output.sharingServiceItems.bind(to: toolbarController.sharingServicePickerItem.rx.items).disposed(by: rx.disposeBag)
         output.isSavable.drive(toolbarController.saveItem.button.rx.isEnabled).disposed(by: rx.disposeBag)
-        output.isSidebarBackHidden.drive(toolbarController.sidebarBackItem.button.rx.isHidden).disposed(by: rx.disposeBag)
+        if #available(macOS 26.0, *) {
+            output.isSidebarBackHidden.drive(with: self, onNext: { $0.toolbarController.sidebarBackItem.isHidden = $1 }).disposed(by: rx.disposeBag)
+        } else {
+            output.isSidebarBackHidden.drive(toolbarController.sidebarBackItem.button.rx.isHidden).disposed(by: rx.disposeBag)
+        }
         output.selectedRuntimeSourceIndex.drive(toolbarController.switchSourceItem.popUpButton.rx.selectedIndex()).disposed(by: rx.disposeBag)
         output.runtimeSources.drive(toolbarController.switchSourceItem.popUpButton.rx.items()).disposed(by: rx.disposeBag)
-        viewModel.errorRelay.asSignal().emitOnNextMainActor { error in
-            NSAlert(error: error).runModal()
-        }
-        .disposed(by: rx.disposeBag)
+
+        viewModel.errorRelay
+            .asSignal()
+            .emitOnNextMainActor { [weak self] error in
+                guard let self else { return }
+                NSAlert(error: error).beginSheetModal(for: contentWindow)
+            }
+            .disposed(by: rx.disposeBag)
+        
+        contentWindow.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
+        contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)")
     }
 
     init() {
@@ -54,10 +66,8 @@ class MainWindowController: XiblessWindowController<MainWindow> {
         super.windowDidLoad()
         contentWindow.title = "Runtime Viewer"
         contentWindow.toolbar = toolbarController.toolbar
-        contentWindow.identifier = MainWindow.identifier
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
         contentWindow.box.positionCenter()
-        contentWindow.setFrameAutosaveName(MainWindow.frameAutosaveName)
     }
 }
 

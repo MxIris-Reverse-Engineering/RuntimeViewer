@@ -1,15 +1,21 @@
 import Foundation
+import FoundationToolbox
+import FrameworkToolbox
 import Semantic
 import OrderedCollections
+import Demangling
 import MachOKit
 import MachOSwiftSection
 import SwiftDump
 @_spi(Support) import SwiftInterface
-import Demangling
-import FrameworkToolbox
-import SwiftStdlibToolbox
 
-final class RuntimeSwiftSection: Sendable {
+public struct SwiftGenerationOptions: Sendable, Codable {
+    public var printStrippedSymbolicItem: Bool = true
+    public var emitOffsetComments: Bool = false
+}
+
+
+actor RuntimeSwiftSection {
     enum Error: Swift.Error {
         case invalidMachOImage
         case invalidRuntimeObjectName
@@ -21,10 +27,8 @@ final class RuntimeSwiftSection: Sendable {
 
     private let builder: SwiftInterfaceBuilder<MachOImage>
 
-    @Mutex
     private var interfaceByName: OrderedDictionary<RuntimeObjectName, RuntimeObjectInterface> = [:]
 
-    @Mutex
     private var nameToInterfaceDefinitionName: [RuntimeObjectName: InterfaceDefinitionName] = [:]
 
     private enum InterfaceDefinitionName {
@@ -36,7 +40,7 @@ final class RuntimeSwiftSection: Sendable {
         case protocolExtension(SwiftInterface.ExtensionName)
         case typeAliasExtension(SwiftInterface.ExtensionName)
         case conformance(SwiftInterface.ExtensionName)
-        
+
         var typeName: SwiftInterface.TypeName? {
             switch self {
             case .rootType(let typeName):
@@ -60,8 +64,29 @@ final class RuntimeSwiftSection: Sendable {
         self.builder = try .init(configuration: .init(showCImportedTypes: false), in: machO)
         try await builder.prepare()
     }
+    
+    func updateConfiguration(using options: SwiftGenerationOptions) async throws {
+        var configuration = builder.configuration
+        configuration.printStrippedSymbolicItem = options.printStrippedSymbolicItem
+        configuration.emitOffsetComments = options.emitOffsetComments
+        try await updateConfiguration(configuration)
+    }
 
-    func allNames() throws -> [RuntimeObjectName] {
+    private func updateConfiguration(_ newConfiguration: SwiftInterfaceBuilderConfiguration) async throws {
+        let oldConfiguration = builder.configuration
+        builder.configuration = newConfiguration
+
+        if newConfiguration.showCImportedTypes != oldConfiguration.showCImportedTypes {
+            try await builder.prepare()
+            nameToInterfaceDefinitionName.removeAll()
+        }
+
+        if newConfiguration.emitOffsetComments != oldConfiguration.emitOffsetComments || newConfiguration.printStrippedSymbolicItem != oldConfiguration.printStrippedSymbolicItem {
+            interfaceByName.removeAll()
+        }
+    }
+
+    func allNames() async throws -> [RuntimeObjectName] {
         let rootTypeName = try builder.rootTypeDefinitions.map { try makeRuntimeObjectName(for: $0.value, isChild: false) }
         let rootProtocolName = try builder.rootProtocolDefinitions.map { try makeRuntimeObjectName(for: $0.value, isChild: false) }
         let typeExtensionName = try builder.typeExtensionDefinitions.filter { $0.key.typeName.map { builder.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
@@ -108,7 +133,7 @@ final class RuntimeSwiftSection: Sendable {
         return runtimeObjectName
     }
 
-    func interface(for name: RuntimeObjectName, options: DemangleOptions) async throws -> RuntimeObjectInterface {
+    func interface(for name: RuntimeObjectName) async throws -> RuntimeObjectInterface {
         if let interface = interfaceByName[name] {
             return interface
         }
@@ -178,12 +203,12 @@ final class RuntimeSwiftSection: Sendable {
         interfaceByName[name] = newInterface
         return newInterface
     }
-    
+
     func classHierarchy(for name: RuntimeObjectName) async throws -> [String] {
         guard case .swift(.type(.class)) = name.kind,
               let classDefinitionName = nameToInterfaceDefinitionName[name]?.typeName,
               let classDefinition = builder.allTypeDefinitions[classDefinitionName],
-              case let .class(`class`) = classDefinition.type
+              case .class(let `class`) = classDefinition.type
         else { return [] }
         return try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
     }
@@ -291,7 +316,6 @@ extension SemanticString {
         "\n\n"
     }
 }
-
 
 @FrameworkToolboxExtension
 extension SwiftInterface.Definition {}

@@ -2,19 +2,20 @@ import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import Dependencies
 
 class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
-    public struct Input {
-        public let stripProtocolConformanceChecked: Signal<Bool>
-        public let stripOverridesChecked: Signal<Bool>
-        public let stripDuplicatesChecked: Signal<Bool>
-        public let stripSynthesizedChecked: Signal<Bool>
-        public let stripCtorMethodChecked: Signal<Bool>
-        public let stripDtorMethodChecked: Signal<Bool>
-        public let addSymbolImageCommentsChecked: Signal<Bool>
-        public let addIvarOffsetCommentsChecked: Signal<Bool>
-        public let expandIvarRecordTypeMembersChecked: Signal<Bool>
-        public init(
+    struct Input {
+        let stripProtocolConformanceChecked: Signal<Bool>
+        let stripOverridesChecked: Signal<Bool>
+        let stripDuplicatesChecked: Signal<Bool>
+        let stripSynthesizedChecked: Signal<Bool>
+        let stripCtorMethodChecked: Signal<Bool>
+        let stripDtorMethodChecked: Signal<Bool>
+        let addSymbolImageCommentsChecked: Signal<Bool>
+        let addIvarOffsetCommentsChecked: Signal<Bool>
+        let expandIvarRecordTypeMembersChecked: Signal<Bool>
+        init(
             stripProtocolConformanceChecked: Signal<Bool>,
             stripOverridesChecked: Signal<Bool>,
             stripDuplicatesChecked: Signal<Bool>,
@@ -37,38 +38,41 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
         }
     }
 
-    public struct Output {
-        public let stripProtocolConformanceChecked: Driver<Bool>
-        public let stripOverridesChecked: Driver<Bool>
-        public let stripDuplicatesChecked: Driver<Bool>
-        public let stripSynthesizedChecked: Driver<Bool>
-        public let stripCtorMethodChecked: Driver<Bool>
-        public let stripDtorMethodChecked: Driver<Bool>
-        public let addSymbolImageCommentsChecked: Driver<Bool>
-        public let addIvarOffsetCommentsChecked: Driver<Bool>
-        public let expandIvarRecordTypeMembersChecked: Driver<Bool>
+    struct Output {
+        let stripProtocolConformanceChecked: Driver<Bool>
+        let stripOverridesChecked: Driver<Bool>
+        let stripDuplicatesChecked: Driver<Bool>
+        let stripSynthesizedChecked: Driver<Bool>
+        let stripCtorMethodChecked: Driver<Bool>
+        let stripDtorMethodChecked: Driver<Bool>
+        let addSymbolImageCommentsChecked: Driver<Bool>
+        let addIvarOffsetCommentsChecked: Driver<Bool>
+        let expandIvarRecordTypeMembersChecked: Driver<Bool>
     }
 
-    public func transform(_ input: Input) -> Output {
-        input.stripProtocolConformanceChecked.emitOnNext { AppDefaults[\.options].stripProtocolConformance = $0 }.disposed(by: rx.disposeBag)
-        input.stripOverridesChecked.emitOnNext { AppDefaults[\.options].stripOverrides = $0 }.disposed(by: rx.disposeBag)
-        input.stripDuplicatesChecked.emitOnNext { AppDefaults[\.options].stripDuplicates = $0 }.disposed(by: rx.disposeBag)
-        input.stripSynthesizedChecked.emitOnNext { AppDefaults[\.options].stripSynthesized = $0 }.disposed(by: rx.disposeBag)
-        input.stripCtorMethodChecked.emitOnNext { AppDefaults[\.options].stripCtorMethod = $0 }.disposed(by: rx.disposeBag)
-        input.stripDtorMethodChecked.emitOnNext { AppDefaults[\.options].stripDtorMethod = $0 }.disposed(by: rx.disposeBag)
-        input.addSymbolImageCommentsChecked.emitOnNext { AppDefaults[\.options].addSymbolImageComments = $0 }.disposed(by: rx.disposeBag)
-        input.addIvarOffsetCommentsChecked.emitOnNext { AppDefaults[\.options].addIvarOffsetComments = $0 }.disposed(by: rx.disposeBag)
-        input.expandIvarRecordTypeMembersChecked.emitOnNext { AppDefaults[\.options].expandIvarRecordTypeMembers = $0 }.disposed(by: rx.disposeBag)
+    @Dependency(\.appDefaults)
+    var appDefaults
+
+    func transform(_ input: Input) -> Output {
+        input.stripProtocolConformanceChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.stripProtocolConformance = $0 }.disposed(by: rx.disposeBag)
+        input.stripOverridesChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.stripOverrides = $0 }.disposed(by: rx.disposeBag)
+        input.stripDuplicatesChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.stripDuplicates = $0 }.disposed(by: rx.disposeBag)
+        input.stripSynthesizedChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.stripSynthesized = $0 }.disposed(by: rx.disposeBag)
+        input.stripCtorMethodChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.stripCtorMethod = $0 }.disposed(by: rx.disposeBag)
+        input.stripDtorMethodChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.stripDtorMethod = $0 }.disposed(by: rx.disposeBag)
+        input.addSymbolImageCommentsChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.addSymbolImageComments = $0 }.disposed(by: rx.disposeBag)
+        input.addIvarOffsetCommentsChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.addIvarOffsetComments = $0 }.disposed(by: rx.disposeBag)
+        input.expandIvarRecordTypeMembersChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.expandIvarRecordTypeMembers = $0 }.disposed(by: rx.disposeBag)
         return Output(
-            stripProtocolConformanceChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripProtocolConformance),
-            stripOverridesChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripOverrides),
-            stripDuplicatesChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripDuplicates),
-            stripSynthesizedChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripSynthesized),
-            stripCtorMethodChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripCtorMethod),
-            stripDtorMethodChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.stripDtorMethod),
-            addSymbolImageCommentsChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.addSymbolImageComments),
-            addIvarOffsetCommentsChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.addIvarOffsetComments),
-            expandIvarRecordTypeMembersChecked: AppDefaults[\.$options].asDriverOnErrorJustComplete().map(\.expandIvarRecordTypeMembers)
+            stripProtocolConformanceChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripProtocolConformance),
+            stripOverridesChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripOverrides),
+            stripDuplicatesChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripDuplicates),
+            stripSynthesizedChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripSynthesized),
+            stripCtorMethodChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripCtorMethod),
+            stripDtorMethodChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripDtorMethod),
+            addSymbolImageCommentsChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.addSymbolImageComments),
+            addIvarOffsetCommentsChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.addIvarOffsetComments),
+            expandIvarRecordTypeMembersChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.expandIvarRecordTypeMembers)
         )
     }
 }

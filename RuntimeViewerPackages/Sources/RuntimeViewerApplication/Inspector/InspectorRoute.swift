@@ -1,4 +1,5 @@
 import Foundation
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
@@ -7,6 +8,8 @@ public enum InspectableObject {
     case object(RuntimeObjectName)
 }
 
+@AssociatedValue(.public)
+@CaseCheckable(.public)
 public enum InspectorRoute: Routable {
     case placeholder
     case root(InspectableObject)

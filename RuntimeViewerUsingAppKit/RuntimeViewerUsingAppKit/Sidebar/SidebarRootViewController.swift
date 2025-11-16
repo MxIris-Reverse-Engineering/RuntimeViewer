@@ -61,7 +61,7 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         scrollView.do {
             $0.isHiddenVisualEffectView = true
         }
-        
+
         outlineView.do {
             $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
             $0.headerView = nil
@@ -116,8 +116,8 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
             guard let self, let dataSource else { return }
             outlineView.rx.setDataSource(dataSource).disposed(by: rx.disposeBag)
             outlineView.autosaveExpandedItems = true
-            outlineView.autosaveName = "com.JH.RuntimeViewer.SidebarRootViewController.autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
-            outlineView.identifier = "com.JH.RuntimeViewer.SidebarRootViewController.identifier.\(viewModel.appServices.runtimeEngine.source.description)"
+            outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
+            outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
         }
         .disposed(by: rx.disposeBag)
     }

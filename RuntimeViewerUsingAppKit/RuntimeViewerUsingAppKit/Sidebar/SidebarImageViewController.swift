@@ -72,6 +72,8 @@ class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> 
             $0.tabPosition = .none
             $0.tabViewBorderType = .none
         }
+        
+        
     }
 
     override func setupBindings(for viewModel: SidebarImageViewModel) {
@@ -129,13 +131,17 @@ class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> 
             tabView.selectTabViewItem(withIdentifier: loadState.tabViewItemIdentifier)
         }
         .disposed(by: rx.disposeBag)
+        
+        
+        imageLoadedView.outlineView.identifier = "com.JH.RuntimeViewer.\(ImageLoadedView.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
+        imageLoadedView.outlineView.autosaveName = "com.JH.RuntimeViewer.\(ImageLoadedView.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
     }
 }
 
 extension Void?: @retroactive Error {}
 
 extension RuntimeImageLoadState {
-    var tabViewItemIdentifier: String {
+    fileprivate var tabViewItemIdentifier: String {
         switch self {
         case .notLoaded:
             return "notLoaded"
@@ -152,9 +158,9 @@ extension RuntimeImageLoadState {
 }
 
 extension SidebarImageViewController {
-    class ImageUnknownView: XiblessView {}
+    private class ImageUnknownView: XiblessView {}
 
-    class ImageLoadedView: XiblessView {
+    private class ImageLoadedView: XiblessView {
         let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
         let emptyLabel = Label()
@@ -192,7 +198,7 @@ extension SidebarImageViewController {
         }
     }
 
-    class ImageLoadingView: XiblessView {
+    private class ImageLoadingView: XiblessView {
         let loadingIndicator: MaterialLoadingIndicator = .init(radius: 25, color: .controlAccentColor)
 
         override init(frame frameRect: CGRect) {
@@ -212,7 +218,7 @@ extension SidebarImageViewController {
         }
     }
 
-    class ImageLoadableView: XiblessView {
+    private class ImageLoadableView: XiblessView {
         let titleLabel = Label()
 
         let loadImageButton = PushButton()
@@ -249,7 +255,7 @@ extension SidebarImageViewController {
 }
 
 extension NSTabViewItem {
-    convenience init(view: NSView, loadState: RuntimeImageLoadState) {
+    fileprivate convenience init(view: NSView, loadState: RuntimeImageLoadState) {
         self.init(identifier: loadState.tabViewItemIdentifier)
         let vc = NSViewController()
         vc.view = view

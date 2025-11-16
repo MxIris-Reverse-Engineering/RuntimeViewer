@@ -90,9 +90,9 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
         case .clickedNode(let runtimeNamedNode):
             windowController.window?.title = runtimeNamedNode.name
         case .selectedObject(let runtimeObjectType):
-            contentCoordinator.contextTrigger(.root(runtimeObjectType))
+            contentCoordinator.trigger(.root(runtimeObjectType))
         case .back:
-            contentCoordinator.contextTrigger(.placeholder)
+            contentCoordinator.trigger(.placeholder)
         default:
             break
         }
@@ -102,19 +102,27 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
 extension MainCoordinator: ContentCoordinator.Delegate {
     func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition route: ContentRoute) {
         if contentCoordinator.rootViewController.viewControllers.count < 2 {
-            windowController.toolbarController.toolbar.removeItem(at: .Main.contentBack)
+            if #available(macOS 26.0, *) {
+                windowController.toolbarController.contentBackItem.isHidden = true
+            } else {
+                windowController.toolbarController.toolbar.removeItem(at: .Main.contentBack)
+            }
         } else if !windowController.toolbarController.toolbar.items.contains(where: { $0.itemIdentifier == .Main.contentBack }) {
-            windowController.toolbarController.toolbar.insertItem(withItemIdentifier: .Main.contentBack, at: 0)
+            if #available(macOS 26.0, *) {
+                windowController.toolbarController.contentBackItem.isHidden = false
+            } else {
+                windowController.toolbarController.toolbar.insertItem(withItemIdentifier: .Main.contentBack, at: 0)
+            }
         }
         switch route {
         case .placeholder:
-            inspectorCoordinator.contextTrigger(.placeholder)
+            inspectorCoordinator.trigger(.placeholder)
         case .root(let runtimeObjectType):
-            inspectorCoordinator.contextTrigger(.root(.object(runtimeObjectType)))
+            inspectorCoordinator.trigger(.root(.object(runtimeObjectType)))
         case .next(let runtimeObjectType):
-            inspectorCoordinator.contextTrigger(.next(.object(runtimeObjectType)))
+            inspectorCoordinator.trigger(.next(.object(runtimeObjectType)))
         case .back:
-            inspectorCoordinator.contextTrigger(.back)
+            inspectorCoordinator.trigger(.back)
         }
     }
 }

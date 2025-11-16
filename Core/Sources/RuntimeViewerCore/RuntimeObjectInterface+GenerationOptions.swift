@@ -4,11 +4,16 @@ import SwiftDump
 
 extension RuntimeObjectInterface {
     public struct GenerationOptions: Codable {
-        public let objcHeaderOptions: CDGenerationOptions
-        public let swiftDemangleOptions: DemangleOptions
-        public init(objcHeaderOptions: CDGenerationOptions, swiftDemangleOptions: DemangleOptions) {
+        public var objcHeaderOptions: CDGenerationOptions
+        public var swiftInterfaceOptions: SwiftGenerationOptions
+        
+        public init() {
+            objcHeaderOptions = .init()
+            swiftInterfaceOptions = .init()
+        }
+        public init(objcHeaderOptions: CDGenerationOptions, swiftInterfaceOptions: SwiftGenerationOptions) {
             self.objcHeaderOptions = objcHeaderOptions
-            self.swiftDemangleOptions = swiftDemangleOptions
+            self.swiftInterfaceOptions = swiftInterfaceOptions
         }
     }
 }
