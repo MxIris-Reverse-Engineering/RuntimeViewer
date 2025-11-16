@@ -1,20 +1,18 @@
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerApplication
+import Dependencies
 
 class MainSplitViewController: NSSplitViewController {
     var viewModel: MainViewModel?
 
-    private static let autosaveName = "com.JH.RuntimeViewer.MainSplitViewController.autosaveName"
-
-    private static let identifier = "com.JH.RuntimeViewer.MainSplitViewController.identifier"
+    @Dependency(\.appDefaults)
+    private var appDefaults
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        splitView.identifier = .init(Self.identifier)
-        splitView.autosaveName = Self.autosaveName
 
-        if AppDefaults[\.isInitialSetupSplitView] {
+        if appDefaults.isInitialSetupSplitView {
             view.frame = .init(x: 0, y: 0, width: 1280, height: 800)
         }
     }
@@ -36,9 +34,12 @@ class MainSplitViewController: NSSplitViewController {
             $0.minimumThickness = 200
         }
 
-        if AppDefaults[\.isInitialSetupSplitView] {
+        if appDefaults.isInitialSetupSplitView {
             splitView.setPosition(250, ofDividerAt: 0)
-            AppDefaults[\.isInitialSetupSplitView] = false
+            appDefaults.isInitialSetupSplitView = false
         }
+
+        splitView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier\(".\(viewModel?.appServices.runtimeEngine.source.description ?? "")")"
+        splitView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName\(".\(viewModel?.appServices.runtimeEngine.source.description ?? "")")"
     }
 }

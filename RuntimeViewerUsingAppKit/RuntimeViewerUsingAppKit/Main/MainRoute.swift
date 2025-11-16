@@ -1,9 +1,12 @@
 import Foundation
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
+@AssociatedValue(.public)
+@CaseCheckable(.public)
 public enum MainRoute: Routable {
     case main(RuntimeEngine)
     case select(RuntimeObjectName)

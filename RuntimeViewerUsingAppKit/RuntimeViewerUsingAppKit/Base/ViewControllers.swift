@@ -45,7 +45,9 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 
     func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
+        
         self.viewModel = viewModel
+        
         if shouldDisplayCommonLoading {
             viewModel.commonLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
         }

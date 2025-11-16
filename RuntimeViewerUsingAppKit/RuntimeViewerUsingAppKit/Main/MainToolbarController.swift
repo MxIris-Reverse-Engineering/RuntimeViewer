@@ -39,29 +39,48 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 
     unowned let delegate: Delegate
 
-    let sidebarBackItem = IconButtonToolbarItem(itemIdentifier: .Main.sidebarBack, icon: .chevronBackward)
+    let sidebarBackItem = IconButtonToolbarItem(itemIdentifier: .Main.sidebarBack, icon: .chevronBackward).then {
+        $0.label = "Back"
+    }
 
     let contentBackItem = IconButtonToolbarItem(itemIdentifier: .Main.contentBack, icon: .chevronBackward).then {
         $0.isNavigational = true
+        $0.label = "Back"
     }
 
-    let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject)
+    let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject).then {
+        $0.label = "Attach Process"
+    }
 
-    let saveItem = IconButtonToolbarItem(itemIdentifier: .Main.save, icon: .squareAndArrowDown)
+    let saveItem = IconButtonToolbarItem(itemIdentifier: .Main.save, icon: .squareAndArrowDown).then {
+        $0.label = "Save"
+    }
 
-    let switchSourceItem = SwitchSourceToolbarItem()
+    let switchSourceItem = SwitchSourceToolbarItem().then {
+        $0.label = "Runtime Source"
+    }
 
-    let generationOptionsItem = IconButtonToolbarItem(itemIdentifier: .Main.generationOptions, icon: .ellipsisCurlybraces)
+    let generationOptionsItem = IconButtonToolbarItem(itemIdentifier: .Main.generationOptions, icon: .ellipsisCurlybraces).then {
+        $0.label = "Generation Options"
+    }
 
     let sharingServicePickerItem = NSSharingServicePickerToolbarItem(itemIdentifier: .Main.share)
 
-    let fontSizeSmallerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeSmaller, icon: .textformatSizeSmaller)
+    let fontSizeSmallerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeSmaller, icon: .textformatSizeSmaller).then {
+        $0.label = "Font Size Smaller"
+    }
 
-    let fontSizeLargerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeLarger, icon: .textformatSizeLarger)
+    let fontSizeLargerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeLarger, icon: .textformatSizeLarger).then {
+        $0.label = "Font Size Larger"
+    }
 
-    let loadFrameworksItem = IconButtonToolbarItem(itemIdentifier: .Main.loadFrameworks, icon: .latch2Case)
+    let loadFrameworksItem = IconButtonToolbarItem(itemIdentifier: .Main.loadFrameworks, icon: .latch2Case).then {
+        $0.label = "Load Frameworks"
+    }
 
-    let installHelperItem = IconButtonToolbarItem(itemIdentifier: .Main.installHelper, icon: .wrenchAndScrewdriver)
+    let installHelperItem = IconButtonToolbarItem(itemIdentifier: .Main.installHelper, icon: .wrenchAndScrewdriver).then {
+        $0.label = "Install Helper"
+    }
 
     init(delegate: Delegate) {
         self.delegate = delegate
@@ -70,6 +89,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
+        toolbar.allowsUserCustomization = false
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {

@@ -76,6 +76,7 @@ class MainViewModel: ViewModel<MainRoute> {
             }
         }
         .disposed(by: rx.disposeBag)
+        
         input.installHelperClick.emitOnNext { [weak self] in
             guard let self else { return }
             Task {
@@ -90,13 +91,15 @@ class MainViewModel: ViewModel<MainRoute> {
         .disposed(by: rx.disposeBag)
 
         input.fontSizeSmallerClick.emitOnNext {
-            AppDefaults[\.themeProfile].fontSizeSmaller()
+            AppDefaults.themeProfile.fontSizeSmaller()
         }
         .disposed(by: rx.disposeBag)
+        
         input.fontSizeLargerClick.emitOnNext {
-            AppDefaults[\.themeProfile].fontSizeLarger()
+            AppDefaults.themeProfile.fontSizeLarger()
         }
         .disposed(by: rx.disposeBag)
+        
         input.attachToProcessClick.emitOnNextMainActor { [weak self] in
             guard let self else { return }
             if SIPChecker.isDisabled() {
@@ -106,9 +109,13 @@ class MainViewModel: ViewModel<MainRoute> {
             }
         }
         .disposed(by: rx.disposeBag)
+        
         input.sidebarBackClick.emit(to: router.rx.trigger(.sidebarBack)).disposed(by: rx.disposeBag)
+        
         input.contentBackClick.emit(to: router.rx.trigger(.contentBack)).disposed(by: rx.disposeBag)
+        
         input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
+        
         input.saveClick.withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete()).filterNil()
             .emitOnNext { [weak self] runtimeObject in
                 guard let self else { return }
@@ -120,7 +127,7 @@ class MainViewModel: ViewModel<MainRoute> {
                     guard result == .OK, let url = savePanel.url else { return }
                     Task {
                         do {
-                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .default))?.interfaceString
+                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: AppDefaults[\.options])?.interfaceString
                             try semanticString?.string.write(to: url, atomically: true, encoding: .utf8)
                         } catch {
                             print(error)
@@ -129,6 +136,7 @@ class MainViewModel: ViewModel<MainRoute> {
                 }
             }
             .disposed(by: rx.disposeBag)
+        
         input.switchSource.emit(with: self) {
             $0.router.trigger(.main(RuntimeEngineManager.shared.runtimeEngines[$1]))
             $0.selectedRuntimeSourceIndex.accept($1)
@@ -142,7 +150,7 @@ class MainViewModel: ViewModel<MainRoute> {
                 item.registerDataRepresentation(forTypeIdentifier: runtimeObjectType.contentType.identifier, visibility: .all) { completion in
                     Task {
                         do {
-                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObjectType, options: .init(objcHeaderOptions: AppDefaults[\.options], swiftDemangleOptions: .default))?.interfaceString
+                            let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObjectType, options: AppDefaults[\.options])?.interfaceString
                             completion(semanticString?.string.data(using: .utf8), nil)
                         } catch {
                             completion(nil, error)
@@ -170,9 +178,7 @@ class MainViewModel: ViewModel<MainRoute> {
         return Output(
             sharingServiceItems: sharingServiceItems ?? .empty(),
             isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
-            isSidebarBackHidden: completeTransition?.map {
-                if case .clickedNode = $0 { false } else if case .selectedObject = $0 { false } else { true }
-            }.asDriver(onErrorJustReturn: true) ?? .empty(),
+            isSidebarBackHidden: completeTransition?.map { if $0.isClickedNode || $0.isSelectedObject { false } else { true } }.asDriver(onErrorJustReturn: true) ?? .empty(),
             runtimeSources: RuntimeEngineManager.shared.rx.runtimeEngines.map { $0.map { $0.source } },
             selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver()
         )

@@ -11,6 +11,7 @@ import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
+import Dependencies
 
 public class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
@@ -25,6 +26,9 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
     public private(set) var attributedString: NSAttributedString?
 
+    @Dependency(\.appDefaults)
+    private var appDefaults
+    
     public init(runtimeObject: RuntimeObjectName, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
@@ -32,10 +36,10 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
 
         self.imageNameOfRuntimeObject = runtimeObject.imageName
 
-        Observable.combineLatest($runtimeObject, AppDefaults[\.$options], AppDefaults[\.$themeProfile])
+        Observable.combineLatest($runtimeObject, appDefaults.$options, appDefaults.$themeProfile)
             .flatMapLatest { [unowned self] runtimeObject, options, theme in
                 Observable.async {
-                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init(objcHeaderOptions: options, swiftDemangleOptions: .default)).map { ($0.interfaceString, theme, runtimeObject) }
+                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: options).map { ($0.interfaceString, theme, runtimeObject) }
                 }
                 .trackActivity(_commonLoading)
             }
@@ -85,7 +89,7 @@ public class ContentTextViewModel: ViewModel<ContentRoute> {
         input.runtimeObjectClicked
             .emit(with: self) { target, runtimeObjectName in
                 Task {
-                    if try await target.appServices.runtimeEngine.interface(for: runtimeObjectName, options: .init(objcHeaderOptions: .init(), swiftDemangleOptions: .default)) != nil {
+                    if try await target.appServices.runtimeEngine.interface(for: runtimeObjectName, options: .init()) != nil {
                         await MainActor.run {
                             target.router.trigger(.next(runtimeObjectName))
                         }
