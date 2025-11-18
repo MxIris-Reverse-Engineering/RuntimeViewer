@@ -9,6 +9,7 @@ import MachOSwiftSection
 import SwiftDump
 @_spi(Support) import SwiftInterface
 
+
 public struct SwiftGenerationOptions: Sendable, Codable {
     public var printStrippedSymbolicItem: Bool = true
     public var emitOffsetComments: Bool = false

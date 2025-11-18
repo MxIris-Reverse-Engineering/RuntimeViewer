@@ -5,6 +5,10 @@ import RuntimeViewerApplication
 
 class GenerationOptionsViewController: AppKitViewController<GenerationOptionsViewModel<MainRoute>> {
     let generationOptionsLabel = Label("Generation Options")
+    
+    let objcSectionLabel = Label("ObjC").then {
+        $0.textColor = .secondaryLabelColor
+    }
 
     let stripProtocolConformanceCheckbox = CheckboxButton(title: "Strip Protocol Conformance")
 
@@ -24,8 +28,17 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
 
     let expandIvarRecordTypeMembersCheckbox = CheckboxButton(title: "Expand Ivar Record Type Members")
 
+    let swiftSectionLabel = Label("Swift").then {
+        $0.textColor = .secondaryLabelColor
+    }
+    
+    let printStrippedSymbolDescriptionCheckbox = CheckboxButton(title: "Print Stripped Symbol Description")
+    
+    let emitOffsetCommentsCheckbox = CheckboxButton(title: "Print Offset Comments")
+    
     lazy var generationOptionsView = VStackView(alignment: .left, spacing: 10) {
         generationOptionsLabel
+        objcSectionLabel
         stripProtocolConformanceCheckbox
         stripOverridesCheckbox
         stripDuplicatesCheckbox
@@ -35,6 +48,9 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
         addSymbolImageCommentsCheckbox
         addIvarOffsetCommentsCheckbox
         expandIvarRecordTypeMembersCheckbox
+        swiftSectionLabel
+        printStrippedSymbolDescriptionCheckbox
+        emitOffsetCommentsCheckbox
     }
 
     override func viewDidLoad() {
@@ -63,10 +79,12 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
             stripDtorMethodChecked: stripDtorMethodCheckbox.rx.state.asSignal().map { $0 == .on },
             addSymbolImageCommentsChecked: addSymbolImageCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
             addIvarOffsetCommentsChecked: addIvarOffsetCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
-            expandIvarRecordTypeMembersChecked: expandIvarRecordTypeMembersCheckbox.rx.state.asSignal().map { $0 == .on }
+            expandIvarRecordTypeMembersChecked: expandIvarRecordTypeMembersCheckbox.rx.state.asSignal().map { $0 == .on },
+            printStrippedSymbolDescriptionChcecked: printStrippedSymbolDescriptionCheckbox.rx.state.asSignal().map { $0 == .on },
+            emitOffsetCommentsChecked: emitOffsetCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
         )
+        
         let output = viewModel.transform(input)
-
         output.stripProtocolConformanceChecked.drive(stripProtocolConformanceCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
         output.stripOverridesChecked.drive(stripOverridesCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
         output.stripDuplicatesChecked.drive(stripDuplicatesCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
@@ -76,6 +94,8 @@ class GenerationOptionsViewController: AppKitViewController<GenerationOptionsVie
         output.addSymbolImageCommentsChecked.drive(addSymbolImageCommentsCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
         output.addIvarOffsetCommentsChecked.drive(addIvarOffsetCommentsCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
         output.expandIvarRecordTypeMembersChecked.drive(expandIvarRecordTypeMembersCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
+        output.printStrippedSymbolDescriptionChcecked.drive(printStrippedSymbolDescriptionCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
+        output.emitOffsetCommentsChecked.drive(emitOffsetCommentsCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
     }
 }
 
