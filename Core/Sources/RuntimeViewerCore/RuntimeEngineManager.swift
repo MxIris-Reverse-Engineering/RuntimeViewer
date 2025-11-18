@@ -19,7 +19,7 @@ public final class RuntimeEngineManager {
         browser.start { [weak self] endpoint in
             guard let self else { return }
             Task { @MainActor in
-                try self.bonjourRuntimeEngines.append(await .init(source: .bonjourClient(endpoint: endpoint)))
+                try await self.appendBonjourRuntimeEngine(.init(source: .bonjourClient(endpoint: endpoint)))
             }
         }
         Task.detached {
@@ -29,6 +29,10 @@ public final class RuntimeEngineManager {
                 NSLog("%@", error as NSError)
             }
         }
+    }
+    
+    private func appendBonjourRuntimeEngine(_ bonjourRuntimeEngine: RuntimeEngine) {
+        bonjourRuntimeEngines.append(bonjourRuntimeEngine)
     }
 
     public var runtimeEngines: [RuntimeEngine] {

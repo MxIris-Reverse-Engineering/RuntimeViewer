@@ -15,27 +15,8 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
         let addSymbolImageCommentsChecked: Signal<Bool>
         let addIvarOffsetCommentsChecked: Signal<Bool>
         let expandIvarRecordTypeMembersChecked: Signal<Bool>
-        init(
-            stripProtocolConformanceChecked: Signal<Bool>,
-            stripOverridesChecked: Signal<Bool>,
-            stripDuplicatesChecked: Signal<Bool>,
-            stripSynthesizedChecked: Signal<Bool>,
-            stripCtorMethodChecked: Signal<Bool>,
-            stripDtorMethodChecked: Signal<Bool>,
-            addSymbolImageCommentsChecked: Signal<Bool>,
-            addIvarOffsetCommentsChecked: Signal<Bool>,
-            expandIvarRecordTypeMembersChecked: Signal<Bool>
-        ) {
-            self.stripProtocolConformanceChecked = stripProtocolConformanceChecked
-            self.stripOverridesChecked = stripOverridesChecked
-            self.stripDuplicatesChecked = stripDuplicatesChecked
-            self.stripSynthesizedChecked = stripSynthesizedChecked
-            self.stripCtorMethodChecked = stripCtorMethodChecked
-            self.stripDtorMethodChecked = stripDtorMethodChecked
-            self.addSymbolImageCommentsChecked = addSymbolImageCommentsChecked
-            self.addIvarOffsetCommentsChecked = addIvarOffsetCommentsChecked
-            self.expandIvarRecordTypeMembersChecked = expandIvarRecordTypeMembersChecked
-        }
+        let printStrippedSymbolDescriptionChcecked: Signal<Bool>
+        let emitOffsetCommentsChecked: Signal<Bool>
     }
 
     struct Output {
@@ -48,6 +29,8 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
         let addSymbolImageCommentsChecked: Driver<Bool>
         let addIvarOffsetCommentsChecked: Driver<Bool>
         let expandIvarRecordTypeMembersChecked: Driver<Bool>
+        let printStrippedSymbolDescriptionChcecked: Driver<Bool>
+        let emitOffsetCommentsChecked: Driver<Bool>
     }
 
     @Dependency(\.appDefaults)
@@ -63,6 +46,8 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
         input.addSymbolImageCommentsChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.addSymbolImageComments = $0 }.disposed(by: rx.disposeBag)
         input.addIvarOffsetCommentsChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.addIvarOffsetComments = $0 }.disposed(by: rx.disposeBag)
         input.expandIvarRecordTypeMembersChecked.emitOnNext { AppDefaults.options.objcHeaderOptions.expandIvarRecordTypeMembers = $0 }.disposed(by: rx.disposeBag)
+        input.printStrippedSymbolDescriptionChcecked.emitOnNext { AppDefaults.options.swiftInterfaceOptions.printStrippedSymbolicItem = $0 }.disposed(by: rx.disposeBag)
+        input.emitOffsetCommentsChecked.emitOnNext { AppDefaults.options.swiftInterfaceOptions.emitOffsetComments = $0 }.disposed(by: rx.disposeBag)
         return Output(
             stripProtocolConformanceChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripProtocolConformance),
             stripOverridesChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripOverrides),
@@ -72,7 +57,9 @@ class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
             stripDtorMethodChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.stripDtorMethod),
             addSymbolImageCommentsChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.addSymbolImageComments),
             addIvarOffsetCommentsChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.addIvarOffsetComments),
-            expandIvarRecordTypeMembersChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.expandIvarRecordTypeMembers)
+            expandIvarRecordTypeMembersChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.objcHeaderOptions.expandIvarRecordTypeMembers),
+            printStrippedSymbolDescriptionChcecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.swiftInterfaceOptions.printStrippedSymbolicItem),
+            emitOffsetCommentsChecked: appDefaults.$options.asDriverOnErrorJustComplete().map(\.swiftInterfaceOptions.emitOffsetComments)
         )
     }
 }

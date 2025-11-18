@@ -13,15 +13,15 @@ public actor RuntimeEngine {
 
     private var logger: Logger { Self.logger }
 
-    @Published public private(set) var imageList: [String] = []
+    public private(set) var imageList: [String] = []
 
     @Published public private(set) var imageNodes: [RuntimeImageNode] = []
 
     private let objcRuntime: RuntimeObjCRuntime = .init()
 
-    @Published private var imageToObjCSection: [String: RuntimeObjCSection] = [:]
+    private var imageToObjCSection: [String: RuntimeObjCSection] = [:]
 
-    @Published private var imageToSwiftSection: [String: RuntimeSwiftSection] = [:]
+    private var imageToSwiftSection: [String: RuntimeSwiftSection] = [:]
 
     private let reloadDataSubject = PassthroughSubject<Void, Never>()
 
@@ -145,9 +145,9 @@ public actor RuntimeEngine {
         }
     }
 
-    public func reloadData(isReloadImageNodes: Bool) {
+    public func reloadData(isReloadImageNodes: Bool) async {
         logger.debug("Start reload")
-        objcRuntime.reloadData()
+        await objcRuntime.reloadData()
         imageList = DyldUtilities.imageNames()
         if isReloadImageNodes {
             imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
@@ -158,7 +158,7 @@ public actor RuntimeEngine {
 
     private func observeRuntime() async throws {
         imageList = DyldUtilities.imageNames()
-        objcRuntime.reloadData()
+        await objcRuntime.reloadData()
         await Task.detached {
             await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
         }.value
@@ -258,9 +258,11 @@ public actor RuntimeEngine {
     private func _interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
         switch name.kind {
         case .swift:
-            return try? await imageToSwiftSection[name.imagePath]?.interface(for: name)
+            let swiftSection = imageToSwiftSection[name.imagePath]
+            try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions)
+            return try await swiftSection?.interface(for: name)
         case .objc:
-            return objcRuntime.interface(for: name, options: options.objcHeaderOptions)
+            return await objcRuntime.interface(for: name, options: options.objcHeaderOptions)
         default:
             fatalError()
         }
@@ -271,9 +273,9 @@ public actor RuntimeEngine {
         case .type(let kind):
             switch kind {
             case .class:
-                return objcRuntime.classNames(in: image)
+                return await objcRuntime.classNames(in: image)
             case .protocol:
-                return objcRuntime.protocolNames(in: image)
+                return await objcRuntime.protocolNames(in: image)
             }
         case .category:
             return []
@@ -319,7 +321,7 @@ extension RuntimeEngine {
         try await request {
             try DyldUtilities.loadImage(at: path)
             _ = try await _swiftSection(for: path)
-            reloadData(isReloadImageNodes: false)
+            await reloadData(isReloadImageNodes: false)
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
         }
@@ -364,7 +366,7 @@ extension RuntimeEngine {
             case .c:
                 return []
             case .objc:
-                return objcRuntime.hierarchy(for: name)
+                return await objcRuntime.hierarchy(for: name)
             case .swift:
                 return try await imageToSwiftSection[name.imagePath]?.classHierarchy(for: name) ?? []
             }

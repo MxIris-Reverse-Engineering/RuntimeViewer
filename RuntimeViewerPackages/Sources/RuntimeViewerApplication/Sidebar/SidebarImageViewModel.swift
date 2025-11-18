@@ -9,7 +9,6 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     private let runtimeEngine: RuntimeEngine
 
     @Observed private var searchString: String = ""
-    @Observed private var searchScope: RuntimeTypeSearchScope = .all
     @Observed private var nodes: [SidebarImageCellViewModel] = []
     @Observed private var filteredNodes: [SidebarImageCellViewModel] = []
     @Observed private var loadState: RuntimeImageLoadState = .unknown
@@ -105,12 +104,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
         }
         let names = try await runtimeEngine.names(in: imagePath)
         await MainActor.run {
-            let searchString = ""
-            let searchScope: RuntimeTypeSearchScope = .all
-
-            self.searchString = searchString
-            self.searchScope = searchScope
-
+            self.searchString = ""
             self.nodes = names.sorted().map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil) }
             self.filteredNodes = self.nodes
             self.loadState = .loaded

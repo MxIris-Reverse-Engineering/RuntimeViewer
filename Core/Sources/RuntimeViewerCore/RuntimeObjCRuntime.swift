@@ -1,12 +1,14 @@
 import Foundation
 import Combine
+import Observation
+import SwiftStdlibToolbox
 
-final class RuntimeObjCRuntime {
-    @Published private var protocolList: [String] = []
+actor RuntimeObjCRuntime {
+    private var protocolList: [String] = []
 
-    @Published private var protocolToImage: [String: String] = [:]
+    private var protocolToImage: [String: String] = [:]
 
-    @Published private var imageToProtocols: [String: [String]] = [:]
+    private var imageToProtocols: [String: [String]] = [:]
 
     private var subscriptions: Set<AnyCancellable> = []
 
@@ -94,11 +96,11 @@ final class RuntimeObjCRuntime {
         return nil
     }
 
-    static func classNames() -> [String] {
+    private static func classNames() -> [String] {
         CDUtilities.classNames()
     }
 
-    static func protocolNames() -> [String] {
+    private static func protocolNames() -> [String] {
         var protocolCount: UInt32 = 0
         guard let protocolList = objc_copyProtocolList(&protocolCount) else { return [] }
 
@@ -113,7 +115,7 @@ final class RuntimeObjCRuntime {
         class_getImageName(NSClassFromString(className)).map { String(cString: $0) }
     }
 
-    static func classNames(inImage image: String) -> [String] {
+    private static func classNames(inImage image: String) -> [String] {
         image.withCString { cString in
             var classCount: UInt32 = 0
             guard let classNames = objc_copyClassNamesForImage(cString, &classCount) else { return [] }
@@ -128,7 +130,7 @@ final class RuntimeObjCRuntime {
         }
     }
 
-    static func protocolImageTrackingFor(
+    private static func protocolImageTrackingFor(
         protocolList: [String], protocolToImage: [String: String], imageToProtocols: [String: [String]]
     ) -> ([String: String], [String: [String]])? {
         var protocolToImageCopy = protocolToImage
@@ -165,7 +167,7 @@ final class RuntimeObjCRuntime {
         return (protocolToImageCopy, imageToProtocolsCopy)
     }
 
-    static func isSwiftClass(ofClassName className: String) -> Bool {
+    private static func isSwiftClass(ofClassName className: String) -> Bool {
         struct objc_class {
             let isa: UInt
             let superclass: UInt
