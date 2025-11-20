@@ -28,6 +28,9 @@
 public typealias Routable = Route
 #endif
 
+
+@_exported import Dependencies
+
 public extension ObservableType {
     func observeOnMainScheduler() -> Observable<Element> {
         observe(on: MainScheduler.instance)

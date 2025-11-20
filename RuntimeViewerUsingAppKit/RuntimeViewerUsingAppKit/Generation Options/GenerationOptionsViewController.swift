@@ -4,98 +4,101 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 class GenerationOptionsViewController: AppKitViewController<GenerationOptionsViewModel<MainRoute>> {
-    let generationOptionsLabel = Label("Generation Options")
-    
-    let objcSectionLabel = Label("ObjC").then {
-        $0.textColor = .secondaryLabelColor
+    private struct OptionItem {
+        let title: String
+        let keyPath: OptionKeyPath
     }
 
-    let stripProtocolConformanceCheckbox = CheckboxButton(title: "Strip Protocol Conformance")
-
-    let stripOverridesCheckbox = CheckboxButton(title: "Strip Overrides")
-
-    let stripDuplicatesCheckbox = CheckboxButton(title: "Strip Duplicates")
-
-    let stripSynthesizedCheckbox = CheckboxButton(title: "Strip Synthesized")
-
-    let stripCtorMethodCheckbox = CheckboxButton(title: "Strip Ctor Method")
-
-    let stripDtorMethodCheckbox = CheckboxButton(title: "Strip Dtor Method")
-
-    let addSymbolImageCommentsCheckbox = CheckboxButton(title: "Add Symbol Image Comments")
-
-    let addIvarOffsetCommentsCheckbox = CheckboxButton(title: "Add Ivar Offset Comments")
-
-    let expandIvarRecordTypeMembersCheckbox = CheckboxButton(title: "Expand Ivar Record Type Members")
-
-    let swiftSectionLabel = Label("Swift").then {
-        $0.textColor = .secondaryLabelColor
+    private struct Section {
+        let title: String?
+        let items: [OptionItem]
     }
-    
-    let printStrippedSymbolDescriptionCheckbox = CheckboxButton(title: "Print Stripped Symbol Description")
-    
-    let emitOffsetCommentsCheckbox = CheckboxButton(title: "Print Offset Comments")
-    
-    lazy var generationOptionsView = VStackView(alignment: .left, spacing: 10) {
+
+    private lazy var sections: [Section] = [
+        Section(title: "ObjC", items: [
+            OptionItem(title: "Strip Protocol Conformance", keyPath: \.objcHeaderOptions.stripProtocolConformance),
+            OptionItem(title: "Strip Overrides", keyPath: \.objcHeaderOptions.stripOverrides),
+            OptionItem(title: "Strip Duplicates", keyPath: \.objcHeaderOptions.stripDuplicates),
+            OptionItem(title: "Strip Synthesized", keyPath: \.objcHeaderOptions.stripSynthesized),
+            OptionItem(title: "Strip Ctor Method", keyPath: \.objcHeaderOptions.stripCtorMethod),
+            OptionItem(title: "Strip Dtor Method", keyPath: \.objcHeaderOptions.stripDtorMethod),
+            OptionItem(title: "Add Symbol Image Comments", keyPath: \.objcHeaderOptions.addSymbolImageComments),
+            OptionItem(title: "Add Ivar Offset Comments", keyPath: \.objcHeaderOptions.addIvarOffsetComments),
+            OptionItem(title: "Expand Ivar Record Type Members", keyPath: \.objcHeaderOptions.expandIvarRecordTypeMembers),
+        ]),
+        Section(title: "Swift", items: [
+            OptionItem(title: "Print Stripped Symbol Description", keyPath: \.swiftInterfaceOptions.printStrippedSymbolicItem),
+            OptionItem(title: "Print Offset Comments", keyPath: \.swiftInterfaceOptions.emitOffsetComments),
+        ]),
+    ]
+
+    private let generationOptionsLabel = Label("Generation Options")
+
+    private lazy var stackView = VStackView(alignment: .left, spacing: 10) {
         generationOptionsLabel
-        objcSectionLabel
-        stripProtocolConformanceCheckbox
-        stripOverridesCheckbox
-        stripDuplicatesCheckbox
-        stripSynthesizedCheckbox
-        stripCtorMethodCheckbox
-        stripDtorMethodCheckbox
-        addSymbolImageCommentsCheckbox
-        addIvarOffsetCommentsCheckbox
-        expandIvarRecordTypeMembersCheckbox
-        swiftSectionLabel
-        printStrippedSymbolDescriptionCheckbox
-        emitOffsetCommentsCheckbox
     }
+
+    private var checkboxMap: [OptionKeyPath: CheckboxButton] = [:]
+
+    private let updateRelay = PublishRelay<(OptionKeyPath, Bool)>()
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         hierarchy {
-            generationOptionsView
+            stackView
         }
 
-        generationOptionsView.snp.makeConstraints { make in
+        stackView.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(15)
         }
 
-        preferredContentSize = generationOptionsView.fittingSize.inset(15)
+        for section in sections {
+            if let title = section.title {
+                let label = Label(title).then {
+                    $0.textColor = .secondaryLabelColor
+                }
+                stackView.addArrangedSubview(label)
+            }
+
+            for item in section.items {
+                let checkbox = CheckboxButton(title: item.title)
+                stackView.addArrangedSubview(checkbox)
+
+                checkboxMap[item.keyPath] = checkbox
+            }
+        }
+
+        preferredContentSize = stackView.fittingSize.inset(15)
     }
 
     override func setupBindings(for viewModel: GenerationOptionsViewModel<MainRoute>) {
         super.setupBindings(for: viewModel)
 
+        for (keyPath, checkbox) in checkboxMap {
+            checkbox.rx.state.asSignal()
+                .map { $0 == .on }
+                .map { (keyPath, $0) }
+                .emit(to: updateRelay)
+                .disposed(by: rx.disposeBag)
+        }
+
         let input = GenerationOptionsViewModel<MainRoute>.Input(
-            stripProtocolConformanceChecked: stripProtocolConformanceCheckbox.rx.state.asSignal().map { $0 == .on },
-            stripOverridesChecked: stripOverridesCheckbox.rx.state.asSignal().map { $0 == .on },
-            stripDuplicatesChecked: stripDuplicatesCheckbox.rx.state.asSignal().map { $0 == .on },
-            stripSynthesizedChecked: stripSynthesizedCheckbox.rx.state.asSignal().map { $0 == .on },
-            stripCtorMethodChecked: stripCtorMethodCheckbox.rx.state.asSignal().map { $0 == .on },
-            stripDtorMethodChecked: stripDtorMethodCheckbox.rx.state.asSignal().map { $0 == .on },
-            addSymbolImageCommentsChecked: addSymbolImageCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
-            addIvarOffsetCommentsChecked: addIvarOffsetCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
-            expandIvarRecordTypeMembersChecked: expandIvarRecordTypeMembersCheckbox.rx.state.asSignal().map { $0 == .on },
-            printStrippedSymbolDescriptionChcecked: printStrippedSymbolDescriptionCheckbox.rx.state.asSignal().map { $0 == .on },
-            emitOffsetCommentsChecked: emitOffsetCommentsCheckbox.rx.state.asSignal().map { $0 == .on },
+            updateOption: updateRelay.asSignal()
         )
-        
+
         let output = viewModel.transform(input)
-        output.stripProtocolConformanceChecked.drive(stripProtocolConformanceCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.stripOverridesChecked.drive(stripOverridesCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.stripDuplicatesChecked.drive(stripDuplicatesCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.stripSynthesizedChecked.drive(stripSynthesizedCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.stripCtorMethodChecked.drive(stripCtorMethodCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.stripDtorMethodChecked.drive(stripDtorMethodCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.addSymbolImageCommentsChecked.drive(addSymbolImageCommentsCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.addIvarOffsetCommentsChecked.drive(addIvarOffsetCommentsCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.expandIvarRecordTypeMembersChecked.drive(expandIvarRecordTypeMembersCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.printStrippedSymbolDescriptionChcecked.drive(printStrippedSymbolDescriptionCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-        output.emitOffsetCommentsChecked.drive(emitOffsetCommentsCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
+
+        output.options
+            .drive(onNext: { [weak self] options in
+                guard let self = self else { return }
+
+                for (keyPath, checkbox) in self.checkboxMap {
+                    let isChecked = options[keyPath: keyPath]
+                    checkbox.state = isChecked ? .on : .off
+                }
+            })
+            .disposed(by: rx.disposeBag)
     }
 }
 

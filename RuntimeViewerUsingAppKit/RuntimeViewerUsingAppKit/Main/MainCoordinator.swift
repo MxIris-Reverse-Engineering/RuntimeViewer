@@ -52,6 +52,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
         case .generationOptions(let sender):
             let viewController = GenerationOptionsViewController()
             let viewModel = GenerationOptionsViewModel(appServices: appServices, router: self)
+            viewController.loadViewIfNeeded()
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         case .loadFramework:
@@ -79,11 +80,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
 
 extension MainCoordinator: SidebarCoordinator.Delegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
-//        if sidebarCoordinator.rootViewController.viewControllers.count < 2 {
-//            windowController.toolbarController.toolbar.removeItem(at: .Main.sidebarBack)
-//        } else if !windowController.toolbarController.toolbar.items.contains(where: { $0.itemIdentifier == .Main.sidebarBack }) {
-//            windowController.toolbarController.toolbar.insertItem(withItemIdentifier: .Main.sidebarBack, at: 0)
-//        }
         switch route {
         case .selectedNode:
             break
@@ -101,19 +97,13 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
 
 extension MainCoordinator: ContentCoordinator.Delegate {
     func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition route: ContentRoute) {
-        if contentCoordinator.rootViewController.viewControllers.count < 2 {
-            if #available(macOS 26.0, *) {
-                windowController.toolbarController.contentBackItem.isHidden = true
-            } else {
-                windowController.toolbarController.toolbar.removeItem(at: .Main.contentBack)
-            }
-        } else if !windowController.toolbarController.toolbar.items.contains(where: { $0.itemIdentifier == .Main.contentBack }) {
-            if #available(macOS 26.0, *) {
-                windowController.toolbarController.contentBackItem.isHidden = false
-            } else {
-                windowController.toolbarController.toolbar.insertItem(withItemIdentifier: .Main.contentBack, at: 0)
-            }
-        }
+//        if contentCoordinator.rootViewController.viewControllers.count < 2 {
+//            windowController.toolbarController.contentBackItem.isHidden = true
+//        } else if windowController.toolbarController.toolbar.items.first(where: { $0.itemIdentifier == .Main.contentBack })?.isHidden ?? false {
+//            windowController.toolbarController.contentBackItem.isHidden = false
+//        }
+        let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
+        viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
         switch route {
         case .placeholder:
             inspectorCoordinator.trigger(.placeholder)
