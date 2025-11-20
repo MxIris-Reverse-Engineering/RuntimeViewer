@@ -65,12 +65,10 @@ extension Then {
 
 extension NSObject: Then {}
 
-#if !os(Linux)
 extension CGPoint: Then {}
 extension CGRect: Then {}
 extension CGSize: Then {}
 extension CGVector: Then {}
-#endif
 
 extension Array: Then {}
 extension Dictionary: Then {}
@@ -78,13 +76,7 @@ extension Set: Then {}
 extension JSONDecoder: Then {}
 extension JSONEncoder: Then {}
 
-#if os(macOS) && !targetEnvironment(macCatalyst)
+#if os(macOS)
 extension NSEdgeInsets: Then {}
 extension NSRectEdge: Then {}
-#endif
-
-#if os(iOS) || os(tvOS)
-extension UIEdgeInsets: Then {}
-extension UIOffset: Then {}
-extension UIRectEdge: Then {}
 #endif

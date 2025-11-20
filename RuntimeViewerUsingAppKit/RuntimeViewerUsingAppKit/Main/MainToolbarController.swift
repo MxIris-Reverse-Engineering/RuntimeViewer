@@ -117,6 +117,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             .Main.sidebarBack,
+            .Main.contentBack,
             .flexibleSpace,
             .toggleSidebar,
             .sidebarTrackingSeparator,
@@ -138,6 +139,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         switch itemIdentifier {
         case .Main.sidebarBack:
             return sidebarBackItem
+        case .Main.contentBack:
+            return contentBackItem
         case .Main.share:
             return sharingServicePickerItem
         case .Main.save:
@@ -146,8 +149,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return switchSourceItem
         case .Main.generationOptions:
             return generationOptionsItem
-        case .Main.contentBack:
-            return contentBackItem
         case .Main.fontSizeSmaller:
             return fontSizeSmallerItem
         case .Main.fontSizeLarger:
