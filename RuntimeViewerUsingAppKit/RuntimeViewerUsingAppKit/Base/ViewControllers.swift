@@ -51,6 +51,18 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
         if shouldDisplayCommonLoading {
             viewModel.commonLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
         }
+        
+        viewModel.errorRelay
+            .asSignal()
+            .emitOnNextMainActor { [weak self] error in
+                guard let self else { return }
+                if let window = view.window {
+                    NSAlert(error: error).beginSheetModal(for: window)
+                } else {
+                    NSAlert(error: error).runModal()
+                }
+            }
+            .disposed(by: rx.disposeBag)
     }
 }
 
@@ -72,7 +84,7 @@ class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<
     }
 }
 
-class AppKitViewController<ViewModel>: NSViewController {
+class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController {
     var viewModel: ViewModel?
 
     init(viewModel: ViewModel? = nil) {
@@ -88,5 +100,18 @@ class AppKitViewController<ViewModel>: NSViewController {
     func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
         self.viewModel = viewModel
+        
+        
+        viewModel.errorRelay
+            .asSignal()
+            .emitOnNextMainActor { [weak self] error in
+                guard let self else { return }
+                if let window = view.window {
+                    NSAlert(error: error).beginSheetModal(for: window)
+                } else {
+                    NSAlert(error: error).runModal()
+                }
+            }
+            .disposed(by: rx.disposeBag)
     }
 }

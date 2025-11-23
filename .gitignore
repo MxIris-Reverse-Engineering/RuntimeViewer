@@ -1,8 +1,7 @@
 .DS_Store
 .swiftpm
-xcuserdata
-xcshareddata
-RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app/RuntimeViewerCatalystHelper.app
 RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
 archive
 build
+RuntimeViewer.xcworkspace/xcshareddata/swiftpm
+xcuserdata

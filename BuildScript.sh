@@ -4,7 +4,7 @@ project_name="RuntimeViewer"
 
 scheme_name="RuntimeViewerUsingAppKit"
 
-development_mode="Release"
+development_mode="Debug"
 
 build_path=${project_path}/build
 

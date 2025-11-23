@@ -1,11 +1,5 @@
-//
-//  RuntimeXPCConnection.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 2025/3/22.
-//
-
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+
 import Foundation
 import SwiftyXPC
 import Logging
@@ -34,13 +28,19 @@ class RuntimeXPCConnection: RuntimeConnection {
         listener.setMessageHandler(requestType: PingRequest.self) { connection, request in
             return .empty
         }
-        listener.errorHandler = { connection, error in
-            print(error)
-        }
         self.listener = listener
         self.serviceConnection = try await Self.connectToMachService()
+        self.listener.errorHandler = { [weak self] in
+            guard let self else { return }
+            handleListenerError(connection: $0, error: $1)
+        }
+        serviceConnection.errorHandler = { [weak self] in
+            guard let self else { return }
+            handleServiceConnectionError(connection: $0, error: $1)
+        }
         try await modify?(self)
-        listener.activate()
+
+        self.listener.activate()
     }
 
     private static func connectToMachService() async throws -> SwiftyXPC.XPCConnection {
@@ -49,6 +49,14 @@ class RuntimeXPCConnection: RuntimeConnection {
         try await serviceConnection.sendMessage(request: PingRequest())
         Self.logger.info("Ping mach service successfully")
         return serviceConnection
+    }
+
+    func handleServiceConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
+        print(connection, error)
+    }
+
+    func handleListenerError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
+        print(connection, error)
     }
 
     enum Error: Swift.Error {
@@ -135,23 +143,16 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection {
         if identifier == .macCatalyst {
             try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
         }
-//        connection = try await withCheckedThrowingContinuation { continuation in
+
         listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { [weak self] (_: XPCConnection, endpoint: SwiftyXPC.XPCEndpoint) in
 //                do {
-                guard let self else { return }
-                let connection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
-                connection.activate()
-                _ = try await connection.sendMessage(request: PingRequest())
-                self.connection = connection
-                Self.logger.info("Ping server successfully")
-//                    continuation.resume(returning: connection)
-//                } catch {
-//                    continuation.resume(throwing: error)
-//                    throw error
-//                }
-            }
-//        }
-        
+            guard let self else { return }
+            let connection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
+            connection.activate()
+            _ = try await connection.sendMessage(request: PingRequest())
+            self.connection = connection
+            Self.logger.info("Ping server successfully")
+        }
     }
 }
 

@@ -36,7 +36,7 @@ extension Package.Dependency {
 let package = Package(
     name: "Core",
     platforms: [
-        .iOS(.v17), .macOS(.v14), .macCatalyst(.v17), .watchOS(.v10), .tvOS(.v17), .visionOS(.v1),
+        .iOS(.v13), .macOS(.v10_15), .macCatalyst(.v13), .watchOS(.v6), .tvOS(.v13), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -70,7 +70,7 @@ let package = Package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/MachOSwiftSection",
                 isRelative: true,
-                isEnabled: false,
+                isEnabled: true,
             ),
 //            .package(
 //                path: "../../TestingLibraries/MachOSwiftSection",

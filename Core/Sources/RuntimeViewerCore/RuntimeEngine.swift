@@ -119,27 +119,43 @@ public actor RuntimeEngine {
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
-        connection?.setMessageHandler(name: name.commandName) { [unowned object] (request: Request) in
+        guard let connection else {
+            logger.warning("Connection is nil when setting message handler for \(name.commandName)")
+            return
+        }
+        connection.setMessageHandler(name: name.commandName) { [unowned object] (request: Request) in
             try await function(object)(request)
         }
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable, Response: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Response)) {
-        connection?.setMessageHandler(name: name.commandName) { [unowned object] (request: Request) -> Response in
+        guard let connection else {
+            logger.warning("Connection is nil when setting message handler for \(name.commandName)")
+            return
+        }
+        connection.setMessageHandler(name: name.commandName) { [unowned object] (request: Request) -> Response in
             let result = try await function(object)(request)
             return result
         }
     }
 
     private func setMessageHandlerBinding<Response: Codable>(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine, Response) async throws -> Void) {
-        connection?.setMessageHandler(name: name.commandName) { [weak self] (response: Response) in
+        guard let connection else {
+            logger.warning("Connection is nil when setting message handler for \(name.commandName)")
+            return
+        }
+        connection.setMessageHandler(name: name.commandName) { [weak self] (response: Response) in
             guard let self else { return }
             try await perform(self, response)
         }
     }
 
     private func setMessageHandlerBinding(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine) async throws -> Void) {
-        connection?.setMessageHandler(name: name.commandName) { [weak self] in
+        guard let connection else {
+            logger.warning("Connection is nil when setting message handler for \(name.commandName)")
+            return
+        }
+        connection.setMessageHandler(name: name.commandName) { [weak self] in
             guard let self else { return }
             try await perform(self)
         }

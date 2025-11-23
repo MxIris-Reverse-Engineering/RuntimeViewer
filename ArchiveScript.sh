@@ -10,20 +10,19 @@ build_path=${project_path}/build
 
 exportOptionsPlistPath=${project_path}/ArchiveExportConfig.plist
 
-exportAppPath=${project_path}/archive
+exportAppPath=${project_path}/Archives
 
 
 echo '///-----------'
 echo '/// 正在编译工程:'${development_mode}
 echo '///-----------'
 xcodebuild \
-archive -workspace ${project_path}/${project_name}.xcworkspace \
+archive \
 -scheme ${scheme_name} \
--arch x86_64 \
--arch arm64e \
 -configuration ${development_mode} \
--skipPackagePluginValidation -skipMacroValidation \
--archivePath ${build_path}/${project_name}.xcarchive  -quiet  || exit
+-destination 'generic/platform=macOS' \
+-archivePath ${build_path}/${project_name}.xcarchive \
+ARCHS="x86_64 arm64e" || exit
 
 echo '///--------'
 echo '/// 编译完成'
