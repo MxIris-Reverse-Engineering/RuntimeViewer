@@ -97,13 +97,9 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
 
 extension MainCoordinator: ContentCoordinator.Delegate {
     func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition route: ContentRoute) {
-//        if contentCoordinator.rootViewController.viewControllers.count < 2 {
-//            windowController.toolbarController.contentBackItem.isHidden = true
-//        } else if windowController.toolbarController.toolbar.items.first(where: { $0.itemIdentifier == .Main.contentBack })?.isHidden ?? false {
-//            windowController.toolbarController.contentBackItem.isHidden = false
-//        }
         let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
         viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
+        
         switch route {
         case .placeholder:
             inspectorCoordinator.trigger(.placeholder)

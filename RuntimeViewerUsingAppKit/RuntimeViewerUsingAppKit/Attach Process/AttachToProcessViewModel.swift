@@ -20,21 +20,26 @@ class AttachToProcessViewModel: ViewModel<MainRoute> {
                   let bundleIdentifier = app.bundleIdentifier
             else { return }
 
-            Task {
+            Task { [weak self] in
+                guard let self else { return }
+                
                 do {
                     try await RuntimeInjectClient.shared.installServerFrameworkIfNeeded()
                     guard let dylibURL = Bundle(url: RuntimeInjectClient.shared.serverFrameworkDestinationURL)?.executableURL else { return }
                     try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier)
                     try await RuntimeInjectClient.shared.injectApplication(pid: app.processIdentifier, dylibURL: dylibURL)
+                    await MainActor.run {
+                        self.router.trigger(.dismiss)
+                    }
                 } catch {
                     print(error, error.localizedDescription)
-                }
-
-                await MainActor.run {
-                    self.router.trigger(.dismiss)
+                    await MainActor.run {
+                        self.errorRelay.accept(error)
+                    }
                 }
             }
         }).disposed(by: rx.disposeBag)
+        
         return Output()
     }
 }

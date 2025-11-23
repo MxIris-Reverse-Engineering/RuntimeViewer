@@ -110,27 +110,7 @@ class MainViewModel: ViewModel<MainRoute> {
             }
         }).disposed(by: rx.disposeBag)
 
-        let requestSaveLocation = input.saveClick
-            .withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete())
-            .filterNil()
-            .map { (name: $0.displayName, type: $0.contentType) }
-
-        input.saveLocationSelected
-            .withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete()) { saveLocation, selectedRuntimeObject in
-                selectedRuntimeObject.map { (saveLocation, $0) }
-            }
-            .filterNil()
-            .emit(onNext: { [weak self] url, runtimeObject in
-                guard let self = self else { return }
-                Task {
-                    do {
-                        let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: self.appDefaults.options)?.interfaceString
-                        try semanticString?.string.write(to: url, atomically: true, encoding: .utf8)
-                    } catch {
-                        self.errorRelay.accept(error)
-                    }
-                }
-            }).disposed(by: rx.disposeBag)
+        
 
         input.installHelperClick.emitOnNext { [weak self] in
             guard let self else { return }
@@ -193,6 +173,28 @@ class MainViewModel: ViewModel<MainRoute> {
 //                }
 //            }
 //            .disposed(by: rx.disposeBag)
+        
+        let requestSaveLocation = input.saveClick
+            .withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete())
+            .filterNil()
+            .map { (name: $0.displayName, type: $0.contentType) }
+
+        input.saveLocationSelected
+            .withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete()) { saveLocation, selectedRuntimeObject in
+                selectedRuntimeObject.map { (saveLocation, $0) }
+            }
+            .filterNil()
+            .emit(onNext: { [weak self] url, runtimeObject in
+                guard let self = self else { return }
+                Task {
+                    do {
+                        let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: self.appDefaults.options)?.interfaceString
+                        try semanticString?.string.write(to: url, atomically: true, encoding: .utf8)
+                    } catch {
+                        self.errorRelay.accept(error)
+                    }
+                }
+            }).disposed(by: rx.disposeBag)
 
         input.switchSource.emit(with: self) {
             $0.router.trigger(.main(RuntimeEngineManager.shared.runtimeEngines[$1]))
@@ -237,10 +239,16 @@ class MainViewModel: ViewModel<MainRoute> {
             guard let self = self, case .selectedObject(let runtimeObjectType) = router else { return [] }
             
             let item = NSItemProvider()
-            item.registerDataRepresentation(forTypeIdentifier: runtimeObjectType.contentType.identifier, visibility: .all) { completion in
-                Task {
+            
+            item.registerDataRepresentation(forTypeIdentifier: runtimeObjectType.contentType.identifier, visibility: .all) { [weak self] completion in
+                guard let self else {
+                    completion(nil, nil)
+                    return nil
+                }
+                Task { [weak self] in
+                    guard let self else { return }
                     do {
-                        let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObjectType, options: self.appDefaults.options)?.interfaceString
+                        let semanticString = try await appServices.runtimeEngine.interface(for: runtimeObjectType, options: self.appDefaults.options)?.interfaceString
                         completion(semanticString?.string.data(using: .utf8), nil)
                     } catch {
                         completion(nil, error)

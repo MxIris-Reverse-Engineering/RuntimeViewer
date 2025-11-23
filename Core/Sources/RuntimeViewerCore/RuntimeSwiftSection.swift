@@ -62,14 +62,14 @@ actor RuntimeSwiftSection {
         guard let machO = MachOImage(name: imageName) else { throw Error.invalidMachOImage }
         self.imagePath = imagePath
         self.machO = machO
-        self.builder = try .init(configuration: .init(showCImportedTypes: false), in: machO)
+        self.builder = try .init(configuration: .init(indexConfiguration: .init(showCImportedTypes: false), printConfiguration: .init()), in: machO)
         try await builder.prepare()
     }
     
     func updateConfiguration(using options: SwiftGenerationOptions) async throws {
         var configuration = builder.configuration
-        configuration.printStrippedSymbolicItem = options.printStrippedSymbolicItem
-        configuration.emitOffsetComments = options.emitOffsetComments
+        configuration.printConfiguration.printStrippedSymbolicItem = options.printStrippedSymbolicItem
+        configuration.printConfiguration.emitOffsetComments = options.emitOffsetComments
         try await updateConfiguration(configuration)
     }
 
@@ -77,23 +77,23 @@ actor RuntimeSwiftSection {
         let oldConfiguration = builder.configuration
         builder.configuration = newConfiguration
 
-        if newConfiguration.showCImportedTypes != oldConfiguration.showCImportedTypes {
+        if newConfiguration.indexConfiguration.showCImportedTypes != oldConfiguration.indexConfiguration.showCImportedTypes {
             try await builder.prepare()
             nameToInterfaceDefinitionName.removeAll()
         }
 
-        if newConfiguration.emitOffsetComments != oldConfiguration.emitOffsetComments || newConfiguration.printStrippedSymbolicItem != oldConfiguration.printStrippedSymbolicItem {
+        if newConfiguration.printConfiguration.emitOffsetComments != oldConfiguration.printConfiguration.emitOffsetComments || newConfiguration.printConfiguration.printStrippedSymbolicItem != oldConfiguration.printConfiguration.printStrippedSymbolicItem {
             interfaceByName.removeAll()
         }
     }
 
     func allNames() async throws -> [RuntimeObjectName] {
-        let rootTypeName = try builder.rootTypeDefinitions.map { try makeRuntimeObjectName(for: $0.value, isChild: false) }
-        let rootProtocolName = try builder.rootProtocolDefinitions.map { try makeRuntimeObjectName(for: $0.value, isChild: false) }
-        let typeExtensionName = try builder.typeExtensionDefinitions.filter { $0.key.typeName.map { builder.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
-        let protocolExtensionName = try builder.protocolExtensionDefinitions.filter { $0.key.protocolName.map { builder.allProtocolDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .protocolExtension($0.key)) }
-        let typeAliasExtensionName = try builder.typeAliasExtensionDefinitions.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeAliasExtension($0.key)) }
-        let conformanceExtensionName = try builder.conformanceExtensionDefinitions.filter { $0.key.typeName.map { builder.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
+        let rootTypeName = try builder.indexer.rootTypeDefinitions.map { try makeRuntimeObjectName(for: $0.value, isChild: false) }
+        let rootProtocolName = try builder.indexer.rootProtocolDefinitions.map { try makeRuntimeObjectName(for: $0.value, isChild: false) }
+        let typeExtensionName = try builder.indexer.typeExtensionDefinitions.filter { $0.key.typeName.map { builder.indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
+        let protocolExtensionName = try builder.indexer.protocolExtensionDefinitions.filter { $0.key.protocolName.map { builder.indexer.allProtocolDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .protocolExtension($0.key)) }
+        let typeAliasExtensionName = try builder.indexer.typeAliasExtensionDefinitions.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeAliasExtension($0.key)) }
+        let conformanceExtensionName = try builder.indexer.conformanceExtensionDefinitions.filter { $0.key.typeName.map { builder.indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObjectName(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
         return rootTypeName + rootProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName
     }
 
@@ -143,60 +143,60 @@ actor RuntimeSwiftSection {
         var newInterfaceString: SemanticString = ""
         switch interfaceDefinitionName {
         case .rootType(let rootTypeName):
-            guard let typeDefinition = builder.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObjectName }
+            guard let typeDefinition = builder.indexer.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(builder.printTypeDefinition(typeDefinition))
-            if let typeExtensionDefinitions = builder.typeExtensionDefinitions[rootTypeName.extensionName] {
+            if let typeExtensionDefinitions = builder.indexer.typeExtensionDefinitions[rootTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
-            if let conformanceExtensionDefinitions = builder.conformanceExtensionDefinitions[rootTypeName.extensionName] {
+            if let conformanceExtensionDefinitions = builder.indexer.conformanceExtensionDefinitions[rootTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .childType(let childTypeName):
-            guard let typeDefinition = builder.allTypeDefinitions[childTypeName] else { throw Error.invalidRuntimeObjectName }
+            guard let typeDefinition = builder.indexer.allTypeDefinitions[childTypeName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(builder.printTypeDefinition(typeDefinition))
-            if let typeExtensionDefinitions = builder.typeExtensionDefinitions[childTypeName.extensionName] {
+            if let typeExtensionDefinitions = builder.indexer.typeExtensionDefinitions[childTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
-            if let conformanceExtensionDefinitions = builder.conformanceExtensionDefinitions[childTypeName.extensionName] {
+            if let conformanceExtensionDefinitions = builder.indexer.conformanceExtensionDefinitions[childTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .rootProtocol(let rootProtocolName):
-            guard let definition = builder.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObjectName }
+            guard let definition = builder.indexer.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(builder.printProtocolDefinition(definition))
             if !definition.defaultImplementationExtensions.isEmpty {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
-            if let protocolExtensionDefinitions = builder.protocolExtensionDefinitions[rootProtocolName.extensionName] {
+            if let protocolExtensionDefinitions = builder.indexer.protocolExtensionDefinitions[rootProtocolName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .childProtocol(let childProtocolName):
-            guard let definition = builder.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObjectName }
+            guard let definition = builder.indexer.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(builder.printProtocolDefinition(definition))
             if !definition.defaultImplementationExtensions.isEmpty {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
-            if let protocolExtensionDefinitions = builder.protocolExtensionDefinitions[childProtocolName.extensionName] {
+            if let protocolExtensionDefinitions = builder.indexer.protocolExtensionDefinitions[childProtocolName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
                 try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .typeExtension(let typeExtensionName):
-            guard let definitions = builder.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObjectName }
+            guard let definitions = builder.indexer.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .protocolExtension(let protocolExtensionName):
-            guard let definitions = builder.protocolExtensionDefinitions[protocolExtensionName] else { throw Error.invalidRuntimeObjectName }
+            guard let definitions = builder.indexer.protocolExtensionDefinitions[protocolExtensionName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .typeAliasExtension(let typeAliasExtensionName):
-            guard let definitions = builder.typeAliasExtensionDefinitions[typeAliasExtensionName] else { throw Error.invalidRuntimeObjectName }
+            guard let definitions = builder.indexer.typeAliasExtensionDefinitions[typeAliasExtensionName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .conformance(let conformanceExtensionName):
-            guard let definitions = builder.conformanceExtensionDefinitions[conformanceExtensionName] else { throw Error.invalidRuntimeObjectName }
+            guard let definitions = builder.indexer.conformanceExtensionDefinitions[conformanceExtensionName] else { throw Error.invalidRuntimeObjectName }
             try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         }
 
@@ -208,7 +208,7 @@ actor RuntimeSwiftSection {
     func classHierarchy(for name: RuntimeObjectName) async throws -> [String] {
         guard case .swift(.type(.class)) = name.kind,
               let classDefinitionName = nameToInterfaceDefinitionName[name]?.typeName,
-              let classDefinition = builder.allTypeDefinitions[classDefinitionName],
+              let classDefinition = builder.indexer.allTypeDefinitions[classDefinitionName],
               case .class(let `class`) = classDefinition.type
         else { return [] }
         return try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)

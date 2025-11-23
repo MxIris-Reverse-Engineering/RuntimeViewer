@@ -226,6 +226,9 @@
 		E9EEF7682E085426008D85D1 /* InspectorClassHierarchyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassHierarchyView.swift; sourceTree = "<group>"; };
 		E9EEF7702E086841008D85D1 /* AttachToProcessViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewModel.swift; sourceTree = "<group>"; };
 		E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewController.swift; sourceTree = "<group>"; };
+		E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Shared-Release.xcconfig"; sourceTree = "<group>"; };
+		E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Shared-Debug.xcconfig"; sourceTree = "<group>"; };
 		E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageCellView.swift; sourceTree = "<group>"; };
 		E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerServer.h; sourceTree = "<group>"; };
@@ -282,6 +285,9 @@
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
+				E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */,
+				E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */,
+				E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */,
 				E927C22D2E9444F300084A7B /* AppIcon.icon */,
 				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
 				E9432FE42C0D614900362862 /* RuntimeViewerUsingAppKit */,
@@ -558,7 +564,6 @@
 				E947C3642C2A4D0400296B2E /* Frameworks */,
 				E947C3652C2A4D0400296B2E /* Resources */,
 				E9C9E9DA2C2D161000C4AA34 /* Embed PlugIns */,
-				E9C9E9E92C2D296E00C4AA34 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -719,27 +724,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
-/* Begin PBXShellScriptBuildPhase section */
-		E9C9E9E92C2D296E00C4AA34 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 12;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\n\nAPP_NAME=\"${TARGET_NAME}.app\"\nSRC_PATH=\"${BUILT_PRODUCTS_DIR}/${APP_NAME}\"\nDEST_PATH=\"${SRCROOT}\"\n\nif [ -d \"${DEST_PATH}/${APP_NAME}\" ]; then\n    rm -rf \"${DEST_PATH}/${APP_NAME}\"\nfi\n\ncp -f -R \"${SRC_PATH}\" \"${DEST_PATH}\"\n\nif [ $? -eq 0 ]; then\n    exit 0\nelse\n    exit 1\nfi\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E9432FDE2C0D614900362862 /* Sources */ = {
@@ -991,7 +975,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E95CDA672DAA970300D97B03 /* Debug.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
@@ -999,7 +983,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
@@ -1020,6 +1004,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.0.0;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = RuntimeViewer;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1032,8 +1017,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E95CDA682DAA970900D97B03 /* Release.xcconfig */;
 			buildSettings = {
-				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ARCHS = "$(ARCHS_STANDARD)";
+				ALLOW_TARGET_PLATFORM_SPECIALIZATION = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
@@ -1041,10 +1025,10 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_POINTER_AUTHENTICATION = NO;
+				ENABLE_POINTER_AUTHENTICATION = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1064,6 +1048,7 @@
 				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
 				PRODUCT_NAME = RuntimeViewer;
+				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -1071,6 +1056,7 @@
 		};
 		E947C3782C2A4D0500296B2E /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -1083,6 +1069,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerCatalystHelper/Info.plist;
@@ -1115,6 +1102,7 @@
 		};
 		E947C3792C2A4D0500296B2E /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -1127,6 +1115,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerCatalystHelper/Info.plist;
@@ -1160,12 +1149,14 @@
 		};
 		E9E900DE2C2CF9A500FADDCC /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
@@ -1183,12 +1174,14 @@
 		};
 		E9E900DF2C2CF9A500FADDCC /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSPrincipalClass = AppKitPluginImpl;
@@ -1212,6 +1205,7 @@
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
 				INFOPLIST_FILE = "$(SRCROOT)/$(TARGETNAME)/Info.plist";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService;
@@ -1229,6 +1223,7 @@
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/$(TARGETNAME)/Info.plist";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService;
@@ -1240,6 +1235,7 @@
 		};
 		E9F7595B2CF76B0F00BE7A5F /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */;
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_MODULES = YES;
@@ -1253,6 +1249,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_POINTER_AUTHENTICATION = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
@@ -1261,7 +1258,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
@@ -1279,6 +1276,7 @@
 		};
 		E9F7595C2CF76B0F00BE7A5F /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */;
 			buildSettings = {
 				BUILD_LIBRARY_FOR_DISTRIBUTION = YES;
 				CLANG_ENABLE_MODULES = YES;
@@ -1292,6 +1290,7 @@
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				ENABLE_MODULE_VERIFIER = NO;
+				ENABLE_POINTER_AUTHENTICATION = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
@@ -1300,7 +1299,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 10.15;
 				MARKETING_VERSION = 1.0;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGES = "objective-c objective-c++";
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu17 gnu++20";
