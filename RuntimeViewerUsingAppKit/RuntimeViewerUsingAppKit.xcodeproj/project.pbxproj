@@ -983,7 +983,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
@@ -1025,7 +1025,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 12;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
@@ -1066,7 +1066,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 12;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
@@ -1084,7 +1084,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 2.0.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1111,7 +1111,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 12;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
@@ -1129,7 +1129,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 2.0.0;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
