@@ -3,10 +3,11 @@ import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import LateResponders
 
 typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewController>
 
-final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
+final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateResponderRegistering {
     let appServices: AppServices
 
     private lazy var sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
@@ -16,6 +17,8 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
     private lazy var inspectorCoordinator = InspectorCoordinator(appServices: appServices)
 
     private lazy var viewModel = MainViewModel(appServices: appServices, router: self)
+    
+    private(set) lazy var lateResponderRegistry = LateResponderRegistry()
 
     init(appServices: AppServices) {
         self.appServices = appServices
@@ -76,6 +79,15 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition> {
             break
         }
     }
+    
+    override var nextResponder: NSResponder? {
+        set {
+            lateResponderRegistry.lastResponder.nextResponder = newValue
+        }
+        get {
+            lateResponderRegistry.initialResponder
+        }
+    }
 }
 
 extension MainCoordinator: SidebarCoordinator.Delegate {
@@ -109,14 +121,6 @@ extension MainCoordinator: ContentCoordinator.Delegate {
             inspectorCoordinator.trigger(.next(.object(runtimeObjectType)))
         case .back:
             inspectorCoordinator.trigger(.back)
-        }
-    }
-}
-
-extension NSToolbar {
-    func removeItem(at itemIdentifier: NSToolbarItem.Identifier) {
-        if let index = items.firstIndex(where: { $0.itemIdentifier == itemIdentifier }) {
-            removeItem(at: index)
         }
     }
 }

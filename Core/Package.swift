@@ -72,11 +72,11 @@ let package = Package(
                 isRelative: true,
                 isEnabled: true,
             ),
-//            .package(
-//                path: "../../TestingLibraries/MachOSwiftSection",
-//                isRelative: true,
-//                isEnabled: true,
-//            ),
+            .package(
+                path: "../../TestingLibraries/MachOSwiftSection",
+                isRelative: true,
+                isEnabled: true,
+            ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
 //                from: "0.6.0"
