@@ -104,6 +104,27 @@ class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTe
     @objc func jumpToDefinitionAction(_ sender: JumpToDefinitionMenuItem) {
         jumpToDefinitionRelay.accept(sender.runtimeObject)
     }
+
+    override func lateResponderSelectors() -> [Selector] {
+        [
+            #selector(performTextFinderAction(_:)),
+        ]
+    }
+    
+    override func performTextFinderAction(_ sender: Any?) {
+        textView.performTextFinderAction(sender)
+    }
+}
+
+extension ContentTextViewController: NSMenuItemValidation {
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(performTextFinderAction(_:)):
+            return true
+        default:
+            return true
+        }
+    }
 }
 
 class JumpToDefinitionMenuItem: NSMenuItem {

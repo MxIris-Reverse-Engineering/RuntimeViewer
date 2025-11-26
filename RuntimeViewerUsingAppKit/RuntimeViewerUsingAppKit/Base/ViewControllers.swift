@@ -2,6 +2,7 @@ import AppKit
 import RuntimeViewerApplication
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
+import LateResponders
 
 class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
     var viewModel: ViewModel?
@@ -63,6 +64,39 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
                 }
             }
             .disposed(by: rx.disposeBag)
+    }
+    
+    open override func viewDidAppear() {
+        super.viewDidAppear()
+
+        registerLateResponders()
+    }
+
+    open override func viewDidDisappear() {
+        super.viewDidDisappear()
+
+        unregisterLateResponders()
+    }
+
+    open func lateResponderSelectors() -> [Selector] { [] }
+
+    private var lateResponder: LateResponder?
+
+    private func registerLateResponders() {
+        let lateResponderSelectors = lateResponderSelectors()
+        guard !lateResponderSelectors.isEmpty else { return }
+        guard let registry = lateResponderRegistering()?.lateResponderRegistry else { return }
+        lateResponder?.deregister()
+        let proxy = LateResponderProxy(for: self)
+        proxy.proxiedSelectorNames = lateResponderSelectors.map { NSStringFromSelector($0) }
+        registry.register(proxy)
+        lateResponder = proxy
+    }
+
+    private func unregisterLateResponders() {
+        guard let lateResponder else { return }
+        lateResponder.deregister()
+        self.lateResponder = nil
     }
 }
 

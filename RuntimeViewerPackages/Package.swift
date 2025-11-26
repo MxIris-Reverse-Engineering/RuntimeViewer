@@ -135,6 +135,11 @@ let package = Package(
 //            url: "https://github.com/dagronf/DSFInspectorPanes",
 //            from: "3.0.0"
 //        ),
+        
+        .package(
+            url: "https://github.com/MxIris-Library-Forks/LateResponders",
+            branch: "develop"
+        ),
     ],
     targets: [
         .target(
@@ -172,6 +177,7 @@ let package = Package(
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
+                "LateResponders",
             ],
             swiftSettings: sharedSwiftSettings,
         ),
