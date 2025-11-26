@@ -11,17 +11,12 @@ class RuntimeXPCConnection: RuntimeConnection {
 
     fileprivate let serviceConnection: SwiftyXPC.XPCConnection
 
-    fileprivate var connection: SwiftyXPC.XPCConnection? {
-        didSet {
-            guard let connection else { return }
-            connection.errorHandler = { connection, error in
-                print(error)
-            }
-        }
-    }
+    fileprivate var connection: SwiftyXPC.XPCConnection?
 
     fileprivate static let logger = Logger(label: "RuntimeXPCConnection")
 
+    fileprivate var logger: Logger { Self.logger }
+    
     init(identifier: RuntimeSource.Identifier, modify: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         self.identifier = identifier
         let listener = try SwiftyXPC.XPCListener(type: .anonymous, codeSigningRequirement: nil)
@@ -52,11 +47,15 @@ class RuntimeXPCConnection: RuntimeConnection {
     }
 
     func handleServiceConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
-        print(connection, error)
+        logger.error("\(connection) \(error)")
     }
 
     func handleListenerError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
-        print(connection, error)
+        logger.error("\(connection) \(error)")
+    }
+
+    func handleClientOrServerConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
+        logger.error("\(connection) \(error)")
     }
 
     enum Error: Swift.Error {
@@ -145,10 +144,13 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection {
         }
 
         listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { [weak self] (_: XPCConnection, endpoint: SwiftyXPC.XPCEndpoint) in
-//                do {
             guard let self else { return }
             let connection = try XPCConnection(type: .remoteServiceFromEndpoint(endpoint))
             connection.activate()
+            connection.errorHandler = { [weak self] in
+                guard let self else { return }
+                handleClientOrServerConnectionError(connection: $0, error: $1)
+            }
             _ = try await connection.sendMessage(request: PingRequest())
             self.connection = connection
             Self.logger.info("Ping server successfully")
@@ -162,6 +164,10 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection {
         let response = try await serviceConnection.sendMessage(request: FetchEndpointRequest(identifier: identifier.rawValue))
         let connection = try XPCConnection(type: .remoteServiceFromEndpoint(response.endpoint))
         connection.activate()
+        connection.errorHandler = { [weak self] in
+            guard let self else { return }
+            handleClientOrServerConnectionError(connection: $0, error: $1)
+        }
         try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
         try await connection.sendMessage(name: CommandIdentifiers.serverLaunched, request: listener.endpoint)
         self.connection = connection
