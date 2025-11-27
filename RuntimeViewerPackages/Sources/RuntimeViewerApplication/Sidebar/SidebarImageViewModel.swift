@@ -1,6 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
+import Ifrit
 
 public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     private let imageNode: RuntimeImageNode
@@ -120,9 +121,18 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     node.filter = filter
                 }
                 if filter.isEmpty {
-                    target.filteredNodes = target.nodes
+                    target.filteredNodes = target.nodes.map { $0.filterResult = nil; return $0 }
                 } else {
-                    target.filteredNodes = target.nodes.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }.sorted(by: { $0.runtimeObject < $1.runtimeObject })
+//                    target.filteredNodes = target.nodes.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }.sorted(by: { $0.runtimeObject < $1.runtimeObject })
+                    let fuse = Fuse()
+                    let results = fuse.searchSync(filter, in: target.nodes, by: \SidebarImageCellViewModel.searchableProperties).sorted(by: { $0.diffScore < $1.diffScore })
+                    var filteredNodes: [SidebarImageCellViewModel] = []
+                    for result in results {
+                        let cellViewModel = target.nodes[result.index]
+                        cellViewModel.filterResult = result
+                        filteredNodes.append(cellViewModel)
+                    }
+                    target.filteredNodes = filteredNodes
                 }
             }
             .disposed(by: rx.disposeBag)

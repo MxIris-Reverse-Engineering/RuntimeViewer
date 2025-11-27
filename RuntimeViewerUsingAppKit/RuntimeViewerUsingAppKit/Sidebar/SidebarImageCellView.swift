@@ -8,7 +8,8 @@ final class SidebarImageCellView: ImageTextTableCellView {
     
     override func setup() {
         super.setup()
-        
+        _textField.lineBreakMode = .byTruncatingTail
+        _textField.usesSingleLineMode = true
         _imageView.contentTintColor = .controlAccentColor
     }
     
