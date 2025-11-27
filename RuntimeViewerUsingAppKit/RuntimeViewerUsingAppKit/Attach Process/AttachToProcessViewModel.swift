@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class AttachToProcessViewModel: ViewModel<MainRoute> {
+final class AttachToProcessViewModel: ViewModel<MainRoute> {
     struct Input {
         let attachToProcess: Signal<NSRunningApplication>
         let cancel: Signal<Void>

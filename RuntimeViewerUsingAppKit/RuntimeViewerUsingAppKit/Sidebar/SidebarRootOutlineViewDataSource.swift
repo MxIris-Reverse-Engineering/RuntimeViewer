@@ -2,7 +2,7 @@ import AppKit
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SidebarRootOutlineViewDataSource: NSObject, NSOutlineViewDataSource {
+final class SidebarRootOutlineViewDataSource: NSObject, NSOutlineViewDataSource {
     weak var viewModel: SidebarRootViewModel?
 
     init(viewModel: SidebarRootViewModel) {

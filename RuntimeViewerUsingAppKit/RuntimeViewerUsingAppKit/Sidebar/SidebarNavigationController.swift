@@ -1,7 +1,7 @@
 import AppKit
 import RuntimeViewerUI
 
-class SidebarNavigationController: UXNavigationController {
+final class SidebarNavigationController: UXNavigationController {
     override func viewDidLoad() {
         super.viewDidLoad()
 

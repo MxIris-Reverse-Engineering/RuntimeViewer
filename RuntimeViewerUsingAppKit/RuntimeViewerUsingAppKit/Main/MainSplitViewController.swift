@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import Dependencies
 
-class MainSplitViewController: NSSplitViewController {
+final class MainSplitViewController: NSSplitViewController {
     var viewModel: MainViewModel?
 
     @Dependency(\.appDefaults)

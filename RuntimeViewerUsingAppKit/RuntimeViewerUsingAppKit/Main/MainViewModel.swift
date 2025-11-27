@@ -23,7 +23,7 @@ struct SharingData {
 }
 
 
-class MainViewModel: ViewModel<MainRoute> {
+final class MainViewModel: ViewModel<MainRoute> {
     struct Input {
         let sidebarBackClick: Signal<Void>
         let contentBackClick: Signal<Void>

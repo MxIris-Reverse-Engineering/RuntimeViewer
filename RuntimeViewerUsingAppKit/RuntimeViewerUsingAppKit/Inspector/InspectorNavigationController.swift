@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class InspectorNavigationController: UXNavigationController {
+final class InspectorNavigationController: UXNavigationController {
     override func viewDidLoad() {
         super.viewDidLoad()
 

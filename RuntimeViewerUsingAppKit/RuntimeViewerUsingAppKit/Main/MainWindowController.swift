@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import UniformTypeIdentifiers
 
-class MainWindow: NSWindow {
+final class MainWindow: NSWindow {
     static let identifier: NSUserInterfaceItemIdentifier = "com.JH.RuntimeViewer.MainWindow"
     static let frameAutosaveName = "com.JH.RuntimeViewer.MainWindow.FrameAutosaveName"
 
@@ -12,7 +12,7 @@ class MainWindow: NSWindow {
     }
 }
 
-class MainWindowController: XiblessWindowController<MainWindow> {
+final class MainWindowController: XiblessWindowController<MainWindow> {
     private(set) lazy var toolbarController = MainToolbarController(delegate: self)
 
     private(set) lazy var splitViewController = MainSplitViewController()

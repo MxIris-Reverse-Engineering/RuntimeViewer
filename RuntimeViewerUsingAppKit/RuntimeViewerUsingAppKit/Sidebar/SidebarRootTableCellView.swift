@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootTableCellView: ImageTextTableCellView {
+final class SidebarRootTableCellView: ImageTextTableCellView {
     func bind(to viewModel: SidebarRootCellViewModel) {
         rx.disposeBag = DisposeBag()
         viewModel.$icon.asDriver().drive(_imageView.rx.image).disposed(by: rx.disposeBag)

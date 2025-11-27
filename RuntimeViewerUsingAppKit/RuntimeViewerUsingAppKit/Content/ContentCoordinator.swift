@@ -6,7 +6,7 @@ import RuntimeViewerApplication
 
 typealias ContentTransition = Transition<Void, ContentNavigationController>
 
-class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
+final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
     protocol Delegate: AnyObject {
         func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition: ContentRoute)
     }

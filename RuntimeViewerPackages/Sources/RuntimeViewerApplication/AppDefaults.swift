@@ -4,7 +4,6 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import Dependencies
 
-
 public final class AppDefaults {
     fileprivate static let shared = AppDefaults()
 
