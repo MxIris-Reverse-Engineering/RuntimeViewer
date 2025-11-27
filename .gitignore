@@ -3,5 +3,5 @@
 RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
 archive
 build
-RuntimeViewer.xcworkspace/xcshareddata/swiftpm
+# RuntimeViewer.xcworkspace/xcshareddata/swiftpm
 xcuserdata

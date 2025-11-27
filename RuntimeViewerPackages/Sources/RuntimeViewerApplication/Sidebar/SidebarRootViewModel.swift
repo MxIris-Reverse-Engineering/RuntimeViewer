@@ -1,13 +1,21 @@
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
+import Ifrit
 
 public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
     @Observed
     public private(set) var nodes: [SidebarRootCellViewModel] = []
 
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
     @Observed
-    public private(set) var filteredNodes: [SidebarRootCellViewModel]? = nil
+    public private(set) var filteredNodes: [SidebarRootCellViewModel] = []
+#endif
+    
+#if canImport(UIKit)
+    @Observed
+    public private(set) var filteredNodes: [SidebarRootCellViewModel]?
+#endif
 
     @Observed
     public private(set) var allNodes: [String: SidebarRootCellViewModel] = [:]
@@ -26,7 +34,10 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
                 var allNodes: [String: SidebarRootCellViewModel] = [:]
                 for rootNode in nodes {
                     allNodes[rootNode.node.name] = rootNode
-                    for node in rootNode {
+                    let rootNodeSequence = AnySequence<SidebarRootCellViewModel> {
+                        SidebarRootCellViewModel.Iterator(node: rootNode)
+                    }
+                    for node in rootNodeSequence {
                         allNodes[node.node.absolutePath] = node
                     }
                 }
@@ -46,14 +57,18 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
                 .map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }
                 .bind(to: $nodes)
                 .disposed(by: rx.disposeBag)
+            
+            $nodes
+                .bind(to: $filteredNodes)
+                .disposed(by: rx.disposeBag)
         }
-        
+
 //        $nodes.asObservable()
 //            .subscribeOnNext { _ in
 //                print("nodes reload")
 //            }
 //            .disposed(by: rx.disposeBag)
-//        
+//
 //        nodesIndexed.asObservable()
 //            .subscribeOnNext { _ in
 //                print("nodes indexed")
@@ -94,27 +109,45 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
         }
         .disposed(by: rx.disposeBag)
         #if os(macOS)
-        input.searchString.emit(with: self) {
-            for node in $0.nodes {
-                node.filter = $1
-            }
-            $0.nodes = $0.nodes
-            if $1.isEmpty {
-                if $0.isFiltering {
-                    $0.isFiltering = false
+        input.searchString
+            .debounce(.milliseconds(80))
+            .emitOnNextMainActor { [weak self] filter in
+                guard let self else { return }
+                for node in nodes {
+                    node.filter = filter
                 }
-            } else {
-                if !$0.isFiltering {
-                    $0.isFiltering = true
+                if filter.isEmpty {
+                    if isFiltering {
+                        isFiltering = false
+                    }
+                    filteredNodes = nodes
+                } else {
+//                    var maxDistance: Int = 0
+//                    
+//                    for node in nodes {
+//                        maxDistance = max(maxDistance, node.currentAndChildrenNames.count)
+//                    }
+//                    
+//                    let fuse = Fuse(distance: maxDistance)
+//                    let results = fuse.searchSync(filter, in: nodes, by: \.searchableProperties).sorted { $0.diffScore < $1.diffScore }
+//                    var filteredNodes: [SidebarRootCellViewModel] = []
+//                    for result in results {
+//                        let cellViewModel = nodes[result.index]
+//                        cellViewModel.filterResult = result
+//                        filteredNodes.append(cellViewModel)
+//                    }
+                    if !isFiltering {
+                        isFiltering = true
+                    }
+                    filteredNodes = nodes.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
                 }
-            }
-        }.disposed(by: rx.disposeBag)
+            }.disposed(by: rx.disposeBag)
         return Output(
-            nodes: $nodes.asDriver(),
+            nodes: $filteredNodes.asDriver(),
             nodesIndexed: nodesIndexed,
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
-            didChangeFiltering: input.searchString.mapToVoid(),
-            didEndFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
+            didChangeFiltering: input.searchString.withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)) { !$0.isEmpty && $1 }.filter { $0 }.mapToVoid(),
+            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid()
         )
         #endif
 

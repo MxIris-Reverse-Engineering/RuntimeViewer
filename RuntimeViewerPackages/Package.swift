@@ -130,10 +130,10 @@ let package = Package(
             url: "https://github.com/pointfreeco/swift-dependencies",
             from: "1.9.4"
         ),
-        .package(
-            url: "https://github.com/dagronf/DSFInspectorPanes",
-            from: "3.0.0"
-        ),
+//        .package(
+//            url: "https://github.com/dagronf/DSFInspectorPanes",
+//            from: "3.0.0"
+//        ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/LateResponders",
             branch: "develop"
@@ -180,7 +180,7 @@ let package = Package(
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
                 "LateResponders",
-                "DSFInspectorPanes",
+//                .product(name: "DSFInspectorPanes", package: "DSFInspectorPanes", condition: .when(platforms: appkitPlatforms)),
             ],
             swiftSettings: sharedSwiftSettings,
         ),

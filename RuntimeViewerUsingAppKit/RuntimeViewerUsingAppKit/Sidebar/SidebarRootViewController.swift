@@ -97,11 +97,12 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         output.didBeginFiltering.emitOnNext { [weak self] in
             guard let self else { return }
             outlineView.beginFiltering()
+            outlineView.expandItem(nil, expandChildren: true)
         }
         .disposed(by: rx.disposeBag)
 
-        output.didChangeFiltering.emitOnNext { [weak self, weak viewModel] in
-            guard let self, let viewModel, viewModel.isFiltering else { return }
+        output.didChangeFiltering.emitOnNext { [weak self] in
+            guard let self else { return }
             outlineView.expandItem(nil, expandChildren: true)
         }
         .disposed(by: rx.disposeBag)

@@ -5,13 +5,15 @@ import RxAppKit
 
 #if canImport(UIKit)
 import UIKit
+import Foundation
 #endif
 
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerUI
+import Ifrit
 
-public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType {
+public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, Searchable, @unchecked Sendable {
     public let node: RuntimeImageNode
 
     public weak var parent: SidebarRootCellViewModel?
@@ -27,11 +29,51 @@ public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType
         return children.sorted { $0.node.name < $1.node.name }
     }()
 
-    private lazy var currentAndChildrenNames: String = {
+    public private(set) lazy var currentAndChildrenNames: String = {
         let childrenNames = _children.map { $0.currentAndChildrenNames }.joined(separator: " ")
-        return "\(node.name) \(childrenNames)"
+        if childrenNames.isEmpty {
+            return node.name
+        } else {
+            return "\(node.name) \(childrenNames)"
+        }
     }()
 
+    var filterResult: FuzzySrchResult? {
+        didSet {
+            if let filterResult {
+                let name = NSMutableAttributedString {
+                    AText(node.name)
+                        .font(.systemFont(ofSize: 13))
+                        .foregroundColor(.tertiaryLabelColor)
+                }
+                guard let range = currentAndChildrenNames.ranges(of: node.name).first else {
+                    self.name = name
+                    return
+                }
+                let currentNSRange = NSRange(currentAndChildrenNames.integerRange(from: range))
+                filterResult.results.flatMap { $0.ranges }.forEach { (range: CountableClosedRange<Int>) in
+                    let resultNSRange = NSRange(range)
+                    guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { return }
+                    name.addAttributes([
+                        .foregroundColor: NSUIColor.labelColor,
+                        .font: NSUIFont.systemFont(ofSize: 13, weight: .semibold),
+                    ], range: resultNSRange)
+                }
+                self.name = name
+            } else {
+                name = NSAttributedString {
+                    AText(node.name)
+                        .foregroundColor(.labelColor)
+                        .font(.systemFont(ofSize: 13))
+                }
+            }
+        }
+    }
+    var searchableProperties: [FuseProp] {
+        [
+            FuseProp(currentAndChildrenNames)
+        ]
+    }
     var filter: String = "" {
         didSet {
             if filter.isEmpty {
@@ -40,6 +82,15 @@ public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType
             } else {
                 _children.forEach { $0.filter = filter }
                 _filteredChildren = _children.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
+//                let fuse = Fuse(distance: currentAndChildrenNames.count, tokenize: true)
+//                let results = fuse.searchSync(filter, in: _children, by: \.searchableProperties).sorted { $0.diffScore < $1.diffScore }
+//                var filteredChildren: [SidebarRootCellViewModel] = []
+//                for result in results {
+//                    let cellViewModel = _children[result.index]
+//                    cellViewModel.filterResult = result
+//                    filteredChildren.append(cellViewModel)
+//                }
+//                _filteredChildren = filteredChildren
             }
         }
     }
@@ -60,17 +111,6 @@ public final class SidebarRootCellViewModel: NSObject, Sequence, OutlineNodeType
         }
         self.icon = node.icon
     }
-
-//    public override var hash: Int {
-//        var hasher = Hasher()
-//        hasher.combine(node)
-//        return hasher.finalize()
-//    }
-//
-//    public override func isEqual(_ object: Any?) -> Bool {
-//        guard let object = object as? Self else { return false }
-//        return node == object.node
-//    }
 
     public func makeIterator() -> Iterator {
         return Iterator(node: self)

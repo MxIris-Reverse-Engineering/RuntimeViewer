@@ -35,7 +35,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
 //                        } else {
 //                            return runtimeObjects.filter { $0.name.localizedCaseInsensitiveContains(searchString) }.sorted()
 //                        }
-//                        
+//
 //                    }
 //                    .bind(to: $filteredRuntimeObjects)
 //                    .disposed(by: rx.disposeBag)
@@ -116,23 +116,27 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     public func transform(_ input: Input) -> Output {
         input.searchString
             .debounce(.milliseconds(80))
-            .emit(with: self) { target, filter in
-                for node in target.nodes {
+            .emitOnNextMainActor { [weak self] filter in
+                guard let self else { return }
+                for node in nodes {
                     node.filter = filter
                 }
                 if filter.isEmpty {
-                    target.filteredNodes = target.nodes.map { $0.filterResult = nil; return $0 }
+                    filteredNodes = nodes.map {
+                        $0.filterResult = nil
+                        return $0
+                    }
                 } else {
 //                    target.filteredNodes = target.nodes.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }.sorted(by: { $0.runtimeObject < $1.runtimeObject })
                     let fuse = Fuse()
-                    let results = fuse.searchSync(filter, in: target.nodes, by: \SidebarImageCellViewModel.searchableProperties).sorted(by: { $0.diffScore < $1.diffScore })
+                    let results = fuse.searchSync(filter, in: nodes, by: \.searchableProperties).sorted { $0.diffScore < $1.diffScore }
                     var filteredNodes: [SidebarImageCellViewModel] = []
                     for result in results {
-                        let cellViewModel = target.nodes[result.index]
+                        let cellViewModel = nodes[result.index]
                         cellViewModel.filterResult = result
                         filteredNodes.append(cellViewModel)
                     }
-                    target.filteredNodes = filteredNodes
+                    self.filteredNodes = filteredNodes
                 }
             }
             .disposed(by: rx.disposeBag)
@@ -171,18 +175,6 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" }
         )
     }
-
-//    private static func runtimeObjectsFor(classNames: [String], protocolNames: [String], searchString: String, searchScope: RuntimeTypeSearchScope) -> [RuntimeObjCRuntimeObject] {
-//        var ret: [RuntimeObjCRuntimeObject] = []
-//        if searchScope.includesClasses {
-//            ret += classNames.map { .class(named: $0) }
-//        }
-//        if searchScope.includesProtocols {
-//            ret += protocolNames.map { .protocol(named: $0) }
-//        }
-//        if searchString.isEmpty { return ret }
-//        return ret.filter { $0.name.localizedCaseInsensitiveContains(searchString) }
-//    }
 
     private func tryLoadImage() {
         Task {
