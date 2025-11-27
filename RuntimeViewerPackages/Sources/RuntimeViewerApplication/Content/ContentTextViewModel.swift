@@ -13,7 +13,7 @@ import RuntimeViewerArchitectures
 import MemberwiseInit
 import Dependencies
 
-public class ContentTextViewModel: ViewModel<ContentRoute> {
+public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
     public private(set) var theme: ThemeProfile
 

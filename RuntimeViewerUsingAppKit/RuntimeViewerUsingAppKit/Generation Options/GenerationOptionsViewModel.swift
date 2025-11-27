@@ -7,7 +7,7 @@ import RuntimeViewerCore
 
 typealias OptionKeyPath = WritableKeyPath<RuntimeObjectInterface.GenerationOptions, Bool>
 
-class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
+final class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
     struct Input {
         let updateOption: Signal<(OptionKeyPath, Bool)>
     }

@@ -3,7 +3,7 @@ import RuntimeViewerApplication
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
-class CommonLoadingView: XiblessView {
+final class CommonLoadingView: XiblessView {
     public var isRunning: Bool = false {
         didSet {
             if isRunning {

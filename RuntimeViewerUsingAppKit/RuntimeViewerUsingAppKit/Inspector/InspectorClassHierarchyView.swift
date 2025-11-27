@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class InspectorClassHierarchyView: InspectorDisclosureView<Label> {
+final class InspectorClassHierarchyView: InspectorDisclosureView<Label> {
     var hierarchyString: String = "" {
         didSet {
             contentView.stringValue = hierarchyString

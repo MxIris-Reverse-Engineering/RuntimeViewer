@@ -1,7 +1,7 @@
 import AppKit
 import RuntimeViewerUI
 
-class ContentNavigationController: UXNavigationController {
+final class ContentNavigationController: UXNavigationController {
     override func viewDidLoad() {
         super.viewDidLoad()
 

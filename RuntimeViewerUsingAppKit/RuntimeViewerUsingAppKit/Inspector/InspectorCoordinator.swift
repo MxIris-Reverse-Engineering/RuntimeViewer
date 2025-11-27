@@ -6,7 +6,7 @@ import RuntimeViewerApplication
 
 typealias InspectorTransition = Transition<Void, InspectorNavigationController>
 
-class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition> {
+final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition> {
     let appServices: AppServices
 
     init(appServices: AppServices) {

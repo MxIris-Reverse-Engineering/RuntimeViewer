@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> {
+final class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> {
     private let tabView = NSTabView()
 
     private let imageNotLoadedView = ImageLoadableView()
@@ -91,7 +91,7 @@ class SidebarImageViewController: UXEffectViewController<SidebarImageViewModel> 
         let output = viewModel.transform(input)
 
         output.runtimeObjects.drive(imageLoadedView.outlineView.rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarImageCellViewModel) -> NSView? in
-            let cellView = outlineView.box.makeView(ofClass: SidebarImageCellView.self, owner: nil)
+            let cellView = outlineView.box.makeView(ofClass: SidebarImageCellView.self)
             cellView.bind(to: viewModel)
             return cellView
         }
@@ -158,9 +158,9 @@ extension RuntimeImageLoadState {
 }
 
 extension SidebarImageViewController {
-    private class ImageUnknownView: XiblessView {}
+    private final class ImageUnknownView: XiblessView {}
 
-    private class ImageLoadedView: XiblessView {
+    private final class ImageLoadedView: XiblessView {
         let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
         let emptyLabel = Label()
@@ -198,7 +198,7 @@ extension SidebarImageViewController {
         }
     }
 
-    private class ImageLoadingView: XiblessView {
+    private final class ImageLoadingView: XiblessView {
         let loadingIndicator: MaterialLoadingIndicator = .init(radius: 25, color: .controlAccentColor)
 
         override init(frame frameRect: CGRect) {
@@ -218,7 +218,7 @@ extension SidebarImageViewController {
         }
     }
 
-    private class ImageLoadableView: XiblessView {
+    private final class ImageLoadableView: XiblessView {
         let titleLabel = Label()
 
         let loadImageButton = PushButton()

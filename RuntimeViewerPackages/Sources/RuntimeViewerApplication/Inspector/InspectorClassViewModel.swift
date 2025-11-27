@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
-public class InspectorClassViewModel: ViewModel<InspectorRoute> {
+public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
     @Observed
     private var runtimeObjectName: RuntimeObjectName
 

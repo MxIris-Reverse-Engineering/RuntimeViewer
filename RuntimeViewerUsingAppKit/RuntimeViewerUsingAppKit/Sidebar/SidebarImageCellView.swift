@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SidebarImageCellView: ImageTextTableCellView {
+final class SidebarImageCellView: ImageTextTableCellView {
     
     override func setup() {
         super.setup()

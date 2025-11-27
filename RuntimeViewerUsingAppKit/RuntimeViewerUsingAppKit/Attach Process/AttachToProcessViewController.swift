@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class AttachToProcessViewController: AppKitViewController<AttachToProcessViewModel> {
+final class AttachToProcessViewController: AppKitViewController<AttachToProcessViewModel> {
     let pickerViewController: RunningApplicationPickerViewController
 
     let attachRelay = PublishRelay<NSRunningApplication>()

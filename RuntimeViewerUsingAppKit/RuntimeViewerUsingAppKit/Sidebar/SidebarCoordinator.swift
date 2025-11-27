@@ -6,7 +6,7 @@ import RuntimeViewerApplication
 
 typealias SidebarTransition = Transition<Void, SidebarNavigationController>
 
-class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
+final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
     protocol Delegate: AnyObject {
         func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition: SidebarRoute)
     }

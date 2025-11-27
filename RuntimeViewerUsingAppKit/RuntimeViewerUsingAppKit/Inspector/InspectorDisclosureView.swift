@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class InspectorDisclosureView<ContentView: NSView>: XiblessView {
+final class InspectorDisclosureView<ContentView: NSView>: XiblessView {
     class HeaderView: XiblessView {
         let titleLabel = Label()
 

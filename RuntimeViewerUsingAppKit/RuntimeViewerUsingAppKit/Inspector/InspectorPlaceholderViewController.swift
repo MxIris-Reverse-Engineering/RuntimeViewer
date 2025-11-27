@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class InspectorPlaceholderViewController: UXEffectViewController<InspectorPlaceholderViewModel> {
+final class InspectorPlaceholderViewController: UXEffectViewController<InspectorPlaceholderViewModel> {
     let placeholderLabel = Label("No Selection")
 
     override func viewDidLoad() {

@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class GenerationOptionsViewController: AppKitViewController<GenerationOptionsViewModel<MainRoute>> {
+final class GenerationOptionsViewController: AppKitViewController<GenerationOptionsViewModel<MainRoute>> {
     private struct OptionItem {
         let title: String
         let keyPath: OptionKeyPath

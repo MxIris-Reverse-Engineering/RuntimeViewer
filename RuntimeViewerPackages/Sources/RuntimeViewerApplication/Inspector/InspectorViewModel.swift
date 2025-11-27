@@ -9,7 +9,7 @@ import UIKit
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-public class InspectorPlaceholderViewModel: ViewModel<InspectorRoute> {}
+public final class InspectorPlaceholderViewModel: ViewModel<InspectorRoute> {}
 //public class InspectorRuntimeObjectViewModel: ViewModel<InspectorRoute> {
 //    @Observed
 //    var runtimeObject: RuntimeObjCRuntimeObject
@@ -32,7 +32,7 @@ public class InspectorPlaceholderViewModel: ViewModel<InspectorRoute> {}
 //    }
 //}
 
-public class InspectorRuntimeNodeViewModel: ViewModel<InspectorRoute> {
+public final class InspectorRuntimeNodeViewModel: ViewModel<InspectorRoute> {
     @Observed
     var runtimeNode: RuntimeImageNode
 

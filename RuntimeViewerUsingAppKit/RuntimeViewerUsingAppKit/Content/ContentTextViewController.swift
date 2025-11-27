@@ -4,7 +4,7 @@ import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTextViewDelegate {
+final class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTextViewDelegate {
     override var acceptsFirstResponder: Bool { true }
 
     let scrollView = ContentTextView.scrollableTextView()

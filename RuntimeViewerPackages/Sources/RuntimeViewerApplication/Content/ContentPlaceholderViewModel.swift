@@ -1,3 +1,3 @@
 import Foundation
 
-public class ContentPlaceholderViewModel: ViewModel<ContentRoute> {}
+public final class ContentPlaceholderViewModel: ViewModel<ContentRoute> {}
