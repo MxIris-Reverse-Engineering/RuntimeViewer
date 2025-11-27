@@ -126,19 +126,21 @@ let package = Package(
             url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
             from: "0.5.3-fork"
         ),
-        
         .package(
             url: "https://github.com/pointfreeco/swift-dependencies",
             from: "1.9.4"
         ),
-//        .package(
-//            url: "https://github.com/dagronf/DSFInspectorPanes",
-//            from: "3.0.0"
-//        ),
-        
+        .package(
+            url: "https://github.com/dagronf/DSFInspectorPanes",
+            from: "3.0.0"
+        ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/LateResponders",
             branch: "develop"
+        ),
+        .package(
+            url: "https://github.com/ukushu/Ifrit",
+            from: "3.0.0"
         ),
     ],
     targets: [
@@ -159,7 +161,7 @@ let package = Package(
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "Dependencies", package: "swift-dependencies")
+                .product(name: "Dependencies", package: "swift-dependencies"),
             ],
             swiftSettings: sharedSwiftSettings,
         ),
@@ -178,6 +180,7 @@ let package = Package(
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
                 "LateResponders",
+                "DSFInspectorPanes",
             ],
             swiftSettings: sharedSwiftSettings,
         ),
@@ -188,6 +191,7 @@ let package = Package(
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
+                .product(name: "Ifrit", package: "Ifrit"),
             ]
         ),
 
