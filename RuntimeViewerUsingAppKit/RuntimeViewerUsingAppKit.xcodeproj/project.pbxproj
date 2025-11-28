@@ -36,6 +36,10 @@
 		E985A9D22D9AF512005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D12D9AF512005A573C /* RuntimeViewerCore */; };
 		E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D92D9AF7E5005A573C /* RuntimeViewerService */; };
 		E985F5A42D8FF14800C3E5EE /* HelperInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */; };
+		E995B8942ED97D140083D9D7 /* RuntimeEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */; };
+		E995B8952ED97D140083D9D7 /* RuntimeInjectClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */; };
+		E995B8972ED97D840083D9D7 /* RuntimeEngineManager+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */; };
+		E995B89B2ED9834B0083D9D7 /* LaunchServicesPrivate in Frameworks */ = {isa = PBXBuildFile; productRef = E995B89A2ED9834B0083D9D7 /* LaunchServicesPrivate */; };
 		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */; };
@@ -187,6 +191,9 @@
 		E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UIDebugger.h; sourceTree = "<group>"; };
 		E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UIDebugger.m; sourceTree = "<group>"; };
 		E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperInstaller.swift; sourceTree = "<group>"; };
+		E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeInjectClient.swift; sourceTree = "<group>"; };
+		E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
+		E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RuntimeEngineManager+.swift"; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
@@ -276,6 +283,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E985A9D22D9AF512005A573C /* RuntimeViewerCore in Frameworks */,
+				E995B89B2ED9834B0083D9D7 /* LaunchServicesPrivate in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -316,6 +324,9 @@
 			isa = PBXGroup;
 			children = (
 				E9C9E9CE2C2D10C600C4AA34 /* Info.plist */,
+				E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */,
+				E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */,
+				E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */,
 				E9CE07C02C1498280070A6E8 /* App */,
 				E9CE07BA2C1497EA0070A6E8 /* Base */,
 				E9CE07BB2C1497F10070A6E8 /* Main */,
@@ -630,6 +641,7 @@
 			name = RuntimeViewerServer;
 			packageProductDependencies = (
 				E985A9D12D9AF512005A573C /* RuntimeViewerCore */,
+				E995B89A2ED9834B0083D9D7 /* LaunchServicesPrivate */,
 			);
 			productName = RuntimeViewerServer;
 			productReference = E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */;
@@ -674,6 +686,7 @@
 			);
 			mainGroup = E9432FD92C0D614900362862;
 			packageReferences = (
+				E995B8992ED9834B0083D9D7 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */,
 			);
 			productRefGroup = E9432FE32C0D614900362862 /* Products */;
 			projectDirPath = "";
@@ -741,6 +754,8 @@
 				E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */,
 				E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
+				E995B8942ED97D140083D9D7 /* RuntimeEngineManager.swift in Sources */,
+				E995B8952ED97D140083D9D7 /* RuntimeInjectClient.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
 				E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */,
 				E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */,
@@ -768,6 +783,7 @@
 				E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */,
 				E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,
+				E995B8972ED97D840083D9D7 /* RuntimeEngineManager+.swift in Sources */,
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
 				E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */,
@@ -1376,6 +1392,17 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		E995B8992ED9834B0083D9D7 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1396,6 +1423,11 @@
 		E985A9D92D9AF7E5005A573C /* RuntimeViewerService */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerService;
+		};
+		E995B89A2ED9834B0083D9D7 /* LaunchServicesPrivate */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E995B8992ED9834B0083D9D7 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */;
+			productName = LaunchServicesPrivate;
 		};
 		E9CBCC152C13685400169ABF /* RuntimeViewerArchitectures */ = {
 			isa = XCSwiftPackageProductDependency;

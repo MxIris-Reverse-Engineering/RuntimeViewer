@@ -1,5 +1,5 @@
 {
-  "originHash" : "fec83d04c610734ad1e033e3ad37ee1fb4ad731d7b409ad988c42eb945a4aca9",
+  "originHash" : "ccfa4fd1491b8a530418360650ec98f7b3c5617b2fca1696fcc803e0d839fa63",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "53f057050f3c78a1997ed0218337fd92d2eba2b5",
         "version" : "3.1.1"
+      }
+    },
+    {
+      "identity" : "classdumpruntime",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
+      "state" : {
+        "branch" : "master",
+        "revision" : "78fab059242919dafa1815ecba956c00c90203a0"
       }
     },
     {
@@ -142,15 +151,6 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate",
       "state" : {
         "revision" : "ee6dbcf2f13176c005337b37ba88431d40458a2b",
-        "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "machinjector",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
-      "state" : {
-        "revision" : "5dd44d029e7f3cfed444d14069f4801095a4567f",
         "version" : "0.1.0"
       }
     },
@@ -475,7 +475,7 @@
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
         "branch" : "main",
-        "revision" : "53e69d878150c635f5eda971275dd4848bd036af"
+        "revision" : "9edccb17fe0764e591bfe965df8e19aa0d040d4a"
       }
     },
     {
