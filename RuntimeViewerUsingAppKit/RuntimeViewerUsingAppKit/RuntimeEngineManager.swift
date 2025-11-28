@@ -1,4 +1,5 @@
 import Foundation
+import RuntimeViewerCore
 import RuntimeViewerCommunication
 
 public final class RuntimeEngineManager {
@@ -46,8 +47,12 @@ public final class RuntimeEngineManager {
         #endif
     }
 
-    public func launchAttachedRuntimeEngine(name: String, identifier: String) async throws {
-        try attachedRuntimeEngines.append(await RuntimeEngine(source: .remote(name: name, identifier: .init(rawValue: identifier), role: .client)))
+    public func launchAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) async throws {
+        if isSandbox {
+//            try attachedRuntimeEngines.append(await RuntimeEngine(source: .bonjourClient(endpoint: <#T##RuntimeNetworkEndpoint#>)))
+        } else {
+            try attachedRuntimeEngines.append(await RuntimeEngine(source: .remote(name: name, identifier: .init(rawValue: identifier), role: .client)))
+        }
     }
 }
 

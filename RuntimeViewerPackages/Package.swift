@@ -2,6 +2,7 @@
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
+import Foundation
 
 let appkitPlatforms: [Platform] = [.macOS]
 
@@ -13,6 +14,31 @@ var sharedSwiftSettings: [SwiftSetting] = []
 
 if usingSystemUXKit {
     sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
+}
+
+extension Package.Dependency {
+    enum LocalSearchPath {
+        case package(path: String, isRelative: Bool, isEnabled: Bool)
+    }
+
+    static func package(local localSearchPaths: LocalSearchPath..., remote: Package.Dependency) -> Package.Dependency {
+        for local in localSearchPaths {
+            switch local {
+            case .package(let path, let isRelative, let isEnabled):
+                guard isEnabled else { continue }
+                let url = if isRelative, let resolvedURL = URL(string: path, relativeTo: URL(fileURLWithPath: #filePath)) {
+                    resolvedURL
+                } else {
+                    URL(fileURLWithPath: path)
+                }
+
+                if FileManager.default.fileExists(atPath: url.path) {
+                    return .package(path: url.path)
+                }
+            }
+        }
+        return remote
+    }
 }
 
 let package = Package(
@@ -111,8 +137,11 @@ let package = Package(
             from: "0.1.1"
         ),
         .package(
-            url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
-            from: "0.1.0"
+            local: .package(path: "../../MachInjector", isRelative: true, isEnabled: true),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
+                from: "0.1.0"
+            )
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",

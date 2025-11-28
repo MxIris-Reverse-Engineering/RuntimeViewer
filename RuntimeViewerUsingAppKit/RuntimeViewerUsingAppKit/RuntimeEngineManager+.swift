@@ -1,7 +1,7 @@
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-extension RuntimeEngineManager: @retroactive ReactiveCompatible {}
+extension RuntimeEngineManager: ReactiveCompatible {}
 
 extension Reactive where Base == RuntimeEngineManager {
     public var runtimeEngines: Driver<[RuntimeEngine]> {
