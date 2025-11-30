@@ -139,3 +139,48 @@ extension NSUIColor {
         #endif
     }
 }
+
+extension String {
+    // MARK: - Index to Int Conversion
+
+    /// Converts String.Index to Int (Integer offset).
+    /// - Parameter index: The String.Index to convert.
+    /// - Returns: The integer offset corresponding to the index.
+    func integerIndex(of index: String.Index) -> Int {
+        return distance(from: startIndex, to: index)
+    }
+
+    // MARK: - Int to Index Conversion
+
+    /// Converts Int (Integer offset) to String.Index.
+    /// - Parameter offset: The integer offset.
+    /// - Returns: The corresponding String.Index, or nil if out of bounds.
+    func index(at offset: Int) -> String.Index? {
+        guard offset >= 0, offset <= count else { return nil }
+        return index(startIndex, offsetBy: offset)
+    }
+
+    // MARK: - Range<String.Index> to Range<Int>
+
+    /// Converts Range<String.Index> to Range<Int> (NSRange style).
+    /// - Parameter range: The range of String.Index.
+    /// - Returns: The corresponding Range<Int>.
+    func integerRange(from range: Range<String.Index>) -> Range<Int> {
+        let start = integerIndex(of: range.lowerBound)
+        let end = integerIndex(of: range.upperBound)
+        return start ..< end
+    }
+
+    // MARK: - Range<Int> to Range<String.Index>
+
+    /// Converts Range<Int> to Range<String.Index>.
+    /// - Parameter range: The range of integers.
+    /// - Returns: The corresponding Range<String.Index>, or nil if indices are invalid.
+    func indexRange(from range: Range<Int>) -> Range<String.Index>? {
+        guard let start = index(at: range.lowerBound),
+              let end = index(at: range.upperBound) else {
+            return nil
+        }
+        return start ..< end
+    }
+}

@@ -46,14 +46,7 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
         }
     }
 
-    override func completeTransition(for route: MainRoute) {
-//        switch route {
-//        case .initial:
-//            windowController.splitViewController.setupSplitViewItems()
-//        default:
-//            break
-//        }
-    }
+    override func completeTransition(for route: MainRoute) {}
 }
 
 extension MainCoordinator: UISplitViewControllerDelegate {

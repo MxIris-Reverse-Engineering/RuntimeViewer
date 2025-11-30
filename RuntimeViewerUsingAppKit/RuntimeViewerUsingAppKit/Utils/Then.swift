@@ -79,4 +79,28 @@ extension JSONEncoder: Then {}
 #if os(macOS)
 extension NSEdgeInsets: Then {}
 extension NSRectEdge: Then {}
+extension NSDirectionalRectEdge: Then {}
+extension NSDirectionalEdgeInsets: Then {}
+@available(macOS 15.0, *)
+extension NSHorizontalDirection: Then {}
+@available(macOS 15.0, *)
+extension NSHorizontalDirection.Set: Then {}
+@available(macOS 15.0, *)
+extension NSVerticalDirection: Then {}
+@available(macOS 15.0, *)
+extension NSVerticalDirection.Set: Then {}
+@available(macOS 15.0, *)
+extension NSSuggestionItem: Then {}
+@available(macOS 15.0, *)
+extension NSSuggestionItemResponse: Then {}
+@available(macOS 15.0, *)
+extension NSSuggestionItemResponse.Highlight: Then {}
+@available(macOS 15.0, *)
+extension NSSuggestionItemResponse.Phase: Then {}
+@available(macOS 15.0, *)
+extension NSSuggestionItemSection: Then {}
+@available(macOS 26.0, *)
+extension NSItemBadge: Then {}
+@available(macOS 26.0, *)
+extension NSView.LayoutRegion: Then {}
 #endif

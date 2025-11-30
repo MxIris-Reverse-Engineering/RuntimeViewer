@@ -45,7 +45,7 @@ extension AttachToProcessViewController: RunningApplicationPickerViewController.
         attachRelay.accept(application)
     }
 
-    func runningApplicationPickerViewControllerWasCancel(_ viewController: RunningApplicationPickerViewController) {
+    func runningApplicationPickerViewControllerWasCancelled(_ viewController: RunningApplicationPickerViewController) {
         cancelRelay.accept(())
     }
 }

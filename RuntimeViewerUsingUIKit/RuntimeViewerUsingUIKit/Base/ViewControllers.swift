@@ -1,10 +1,11 @@
 import UIKit
 import RuntimeViewerUI
+import RuntimeViewerApplication
 
-class UIKitViewController<ViewModelType>: UIViewController {
-    var viewModel: ViewModelType?
+class UIKitViewController<ViewModel: ViewModelProtocol>: UIViewController {
+    var viewModel: ViewModel?
 
-    func setupBindings(for viewModel: ViewModelType) {
+    func setupBindings(for viewModel: ViewModel) {
         self.viewModel = viewModel
     }
 }

@@ -4,8 +4,6 @@ import UIKit
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class MainViewModel: ViewModel<MainRoute> {
-    
-}
+class MainViewModel: ViewModel<MainRoute> {}
 
 #endif
