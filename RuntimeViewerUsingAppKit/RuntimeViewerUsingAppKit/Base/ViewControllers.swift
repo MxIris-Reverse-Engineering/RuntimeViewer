@@ -50,7 +50,7 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
         self.viewModel = viewModel
         
         if shouldDisplayCommonLoading {
-            viewModel.commonLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
+            viewModel.delayedLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
         }
         
         viewModel.errorRelay

@@ -14,8 +14,6 @@ class MainSplitViewController: UISplitViewController {
 
         view.backgroundColor = .systemBackground
     }
-    
-    
 }
 
 #endif
