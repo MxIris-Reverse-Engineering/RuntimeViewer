@@ -122,20 +122,6 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
                     }
                     filteredNodes = nodes
                 } else {
-//                    var maxDistance: Int = 0
-//                    
-//                    for node in nodes {
-//                        maxDistance = max(maxDistance, node.currentAndChildrenNames.count)
-//                    }
-//                    
-//                    let fuse = Fuse(distance: maxDistance)
-//                    let results = fuse.searchSync(filter, in: nodes, by: \.searchableProperties).sorted { $0.diffScore < $1.diffScore }
-//                    var filteredNodes: [SidebarRootCellViewModel] = []
-//                    for result in results {
-//                        let cellViewModel = nodes[result.index]
-//                        cellViewModel.filterResult = result
-//                        filteredNodes.append(cellViewModel)
-//                    }
                     if !isFiltering {
                         isFiltering = true
                     }

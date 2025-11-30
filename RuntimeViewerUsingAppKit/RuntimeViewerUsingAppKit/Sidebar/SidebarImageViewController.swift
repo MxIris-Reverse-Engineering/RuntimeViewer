@@ -17,6 +17,8 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
 
     private let imageUnknownView = ImageUnknownView()
 
+    private let filterModeButton = ItemPopUpButton<FilterMode>()
+
     private let filterSearchField = FilterSearchField()
 
     private let bottomSeparatorView = NSBox()
@@ -25,12 +27,18 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
 
     private var previousWindowTitle: String = ""
 
+    private let filterModeDidChange = PublishRelay<Void>()
+    
+    @Dependency(\.appDefaults)
+    private var appDefaults
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         contentView.hierarchy {
             tabView
             bottomSeparatorView
+            filterModeButton
             filterSearchField
         }
 
@@ -45,13 +53,30 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
             make.height.equalTo(1)
         }
 
+        filterModeButton.snp.makeConstraints { make in
+            make.left.equalToSuperview().inset(12)
+            make.centerY.equalTo(filterSearchField)
+        }
+
         filterSearchField.snp.makeConstraints { make in
-            make.left.right.equalToSuperview().inset(10)
+            make.left.equalTo(filterModeButton.snp.right).offset(8)
+            make.right.equalToSuperview().inset(10)
             make.bottom.equalToSuperview().inset(8)
         }
 
         bottomSeparatorView.do {
             $0.boxType = .separator
+        }
+
+        filterModeButton.do {
+            $0.icon = .symbol(systemName: .line3HorizontalDecrease)
+            $0.setup()
+            $0.onItem = appDefaults.filterMode
+            $0.stateChanged = { [weak self] filterMode in
+                guard let self else { return }
+                appDefaults.filterMode = filterMode
+                filterModeDidChange.accept()
+            }
         }
 
         filterSearchField.do {
@@ -72,8 +97,6 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
             $0.tabPosition = .none
             $0.tabViewBorderType = .none
         }
-        
-        
     }
 
     override func setupBindings(for viewModel: SidebarImageViewModel) {
@@ -85,7 +108,7 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal()
             ).merge(),
-            searchString: filterSearchField.rx.stringValue.asSignal()
+            searchString: .combineLatest(filterSearchField.rx.stringValue.asSignal(), filterModeDidChange.asSignal().startWith(()), resultSelector: { a, b in a })
         )
 
         let output = viewModel.transform(input)
@@ -105,13 +128,25 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
 
         output.isEmpty.not().drive(imageLoadedView.emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
 
-//        rx.viewWillDisappear.asDriver().driveOnNext { [weak self] in
-//            guard let self else { return }
-//            view.window?.title = previousWindowTitle
-//            view.window?.subtitle = previousWindowSubtitle
-//        }
-//        .disposed(by: rx.disposeBag)
-//
+        output.didBeginFiltering.emitOnNext { [weak self] in
+            guard let self else { return }
+            imageLoadedView.outlineView.beginFiltering()
+            imageLoadedView.outlineView.expandItem(nil, expandChildren: true)
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.didChangeFiltering.emitOnNext { [weak self] in
+            guard let self else { return }
+            imageLoadedView.outlineView.expandItem(nil, expandChildren: true)
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.didEndFiltering.emitOnNext { [weak self] in
+            guard let self else { return }
+            imageLoadedView.outlineView.endFiltering()
+        }
+        .disposed(by: rx.disposeBag)
+        
         output.windowInitialTitles.driveOnNext { [weak self] in
             guard let self, let window = view.window else { return }
             previousWindowTitle = window.title
@@ -120,19 +155,13 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
             window.subtitle = $0.subtitle
         }
         .disposed(by: rx.disposeBag)
-//
-//        rx.viewWillAppear.asSignal().flatMapLatest { output.windowSubtitle }.emitOnNext { [weak self] in
-//            guard let self, let window = view.window else { return }
-//            window.subtitle = $0
-//        }.disposed(by:rx.disposeBag)
 
         output.loadState.driveOnNextMainActor { [weak self] loadState in
             guard let self else { return }
             tabView.selectTabViewItem(withIdentifier: loadState.tabViewItemIdentifier)
         }
         .disposed(by: rx.disposeBag)
-        
-        
+
         imageLoadedView.outlineView.identifier = "com.JH.RuntimeViewer.\(ImageLoadedView.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
         imageLoadedView.outlineView.autosaveName = "com.JH.RuntimeViewer.\(ImageLoadedView.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
     }
@@ -189,7 +218,7 @@ extension SidebarImageViewController {
             scrollView.do {
                 $0.isHiddenVisualEffectView = true
             }
-            
+
             outlineView.do {
                 $0.headerView = nil
                 $0.style = .inset
@@ -260,5 +289,11 @@ extension NSTabViewItem {
         let vc = NSViewController()
         vc.view = view
         self.viewController = vc
+    }
+}
+
+extension NSPopUpButton {
+    var popUpButtonCell: NSPopUpButtonCell? {
+        cell as? NSPopUpButtonCell
     }
 }
