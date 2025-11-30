@@ -240,7 +240,7 @@ let package = Package(
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
-                .product(name: "Ifrit", package: "Ifrit"),
+                .product(name: "IfritStatic", package: "Ifrit"),
                 .product(name: "FuzzySearch", package: "fuzzy-search"),
             ]
         ),
