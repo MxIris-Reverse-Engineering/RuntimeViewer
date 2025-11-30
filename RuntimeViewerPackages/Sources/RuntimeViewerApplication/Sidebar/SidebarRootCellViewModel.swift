@@ -13,7 +13,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerUI
 import Ifrit
 
-public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, Searchable, @unchecked Sendable {
+public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @unchecked Sendable {
     public let node: RuntimeImageNode
 
     public weak var parent: SidebarRootCellViewModel?
@@ -38,42 +38,6 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, Searchab
         }
     }()
 
-    var filterResult: FuzzySrchResult? {
-        didSet {
-            if let filterResult {
-                let name = NSMutableAttributedString {
-                    AText(node.name)
-                        .font(.systemFont(ofSize: 13))
-                        .foregroundColor(.tertiaryLabelColor)
-                }
-                guard let range = currentAndChildrenNames.ranges(of: node.name).first else {
-                    self.name = name
-                    return
-                }
-                let currentNSRange = NSRange(currentAndChildrenNames.integerRange(from: range))
-                filterResult.results.flatMap { $0.ranges }.forEach { (range: CountableClosedRange<Int>) in
-                    let resultNSRange = NSRange(range)
-                    guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { return }
-                    name.addAttributes([
-                        .foregroundColor: NSUIColor.labelColor,
-                        .font: NSUIFont.systemFont(ofSize: 13, weight: .semibold),
-                    ], range: resultNSRange)
-                }
-                self.name = name
-            } else {
-                name = NSAttributedString {
-                    AText(node.name)
-                        .foregroundColor(.labelColor)
-                        .font(.systemFont(ofSize: 13))
-                }
-            }
-        }
-    }
-    var searchableProperties: [FuseProp] {
-        [
-            FuseProp(currentAndChildrenNames)
-        ]
-    }
     var filter: String = "" {
         didSet {
             if filter.isEmpty {
@@ -82,19 +46,10 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, Searchab
             } else {
                 _children.forEach { $0.filter = filter }
                 _filteredChildren = _children.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
-//                let fuse = Fuse(distance: currentAndChildrenNames.count, tokenize: true)
-//                let results = fuse.searchSync(filter, in: _children, by: \.searchableProperties).sorted { $0.diffScore < $1.diffScore }
-//                var filteredChildren: [SidebarRootCellViewModel] = []
-//                for result in results {
-//                    let cellViewModel = _children[result.index]
-//                    cellViewModel.filterResult = result
-//                    filteredChildren.append(cellViewModel)
-//                }
-//                _filteredChildren = filteredChildren
             }
         }
     }
-
+    
     @Observed
     public private(set) var icon: NSUIImage?
 

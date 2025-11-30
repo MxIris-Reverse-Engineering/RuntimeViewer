@@ -15,6 +15,9 @@ public final class AppDefaults {
 
     @UserDefault(key: "themeProfile", defaultValue: XcodePresentationTheme())
     public var themeProfile: XcodePresentationTheme
+    
+    @UserDefault(key: "filterMode", defaultValue: nil)
+    public var filterMode: FilterMode?
 }
 
 private enum AppDefaultsKey: DependencyKey {

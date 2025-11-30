@@ -1,7 +1,7 @@
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import Ifrit
+import MemberwiseInit
 
 public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     private let imageNode: RuntimeImageNode
@@ -13,7 +13,11 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @Observed private var nodes: [SidebarImageCellViewModel] = []
     @Observed private var filteredNodes: [SidebarImageCellViewModel] = []
     @Observed private var loadState: RuntimeImageLoadState = .unknown
-
+    @Observed public private(set) var isFiltering: Bool = false
+    
+    @Dependency(\.appDefaults)
+    private var appDefaults
+    
     public init(node imageNode: RuntimeImageNode, appServices: AppServices, router: any Router<SidebarRoute>) {
         self.runtimeEngine = appServices.runtimeEngine
         self.imageNode = imageNode
@@ -24,22 +28,6 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
         Task {
             do {
-//                let debouncedSearch = $searchString
-//                    .debounce(.milliseconds(80), scheduler: MainScheduler.instance)
-//                    .asObservable()
-
-//                debouncedSearch
-//                    .withLatestFrom($runtimeObjects.asObservable()) { (searchString: String, runtimeObjects: [RuntimeObjectName]) -> [RuntimeObjectName] in
-//                        if searchString.isEmpty {
-//                            return runtimeObjects.sorted()
-//                        } else {
-//                            return runtimeObjects.filter { $0.name.localizedCaseInsensitiveContains(searchString) }.sorted()
-//                        }
-//
-//                    }
-//                    .bind(to: $filteredRuntimeObjects)
-//                    .disposed(by: rx.disposeBag)
-
                 await runtimeEngine.reloadDataPublisher
                     .asObservable()
                     .subscribeOnNext { [weak self] in
@@ -49,19 +37,6 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
                         }
                     }
                     .disposed(by: rx.disposeBag)
-
-//                await runtimeEngine.$imageList
-//                    .asObservable()
-//                    .flatMap { [unowned self] imageList in
-//                        try imageList.contains(await runtimeEngine.patchImagePathForDyld(imagePath))
-//                    }
-//                    .catchAndReturn(false)
-//                    .filter { $0 } // only allow isLoaded to pass through; we don't want to erase an existing state
-//                    .map { _ in RuntimeImageLoadState.loaded }
-//                    .observeOnMainScheduler()
-//                    .bind(to: $loadState)
-//                    .disposed(by: rx.disposeBag)
-
                 try await reloadData()
             } catch {
                 self.loadState = .loadError(error)
@@ -70,15 +45,11 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
         }
     }
 
+    @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<SidebarImageCellViewModel>
         public let loadImageClicked: Signal<Void>
         public let searchString: Signal<String>
-        public init(runtimeObjectClicked: Signal<SidebarImageCellViewModel>, loadImageClicked: Signal<Void>, searchString: Signal<String>) {
-            self.runtimeObjectClicked = runtimeObjectClicked
-            self.loadImageClicked = loadImageClicked
-            self.searchString = searchString
-        }
     }
 
     public struct Output {
@@ -90,6 +61,9 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
         public let isEmpty: Driver<Bool>
         public let windowInitialTitles: Driver<(title: String, subtitle: String)>
         public let windowSubtitle: Signal<String>
+        public let didBeginFiltering: Signal<Void>
+        public let didChangeFiltering: Signal<Void>
+        public let didEndFiltering: Signal<Void>
     }
 
     private func reloadData() async throws {
@@ -118,26 +92,16 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             .debounce(.milliseconds(80))
             .emitOnNextMainActor { [weak self] filter in
                 guard let self else { return }
-                for node in nodes {
-                    node.filter = filter
-                }
                 if filter.isEmpty {
-                    filteredNodes = nodes.map {
-                        $0.filterResult = nil
-                        return $0
+                    if isFiltering {
+                        isFiltering = false
                     }
                 } else {
-//                    target.filteredNodes = target.nodes.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }.sorted(by: { $0.runtimeObject < $1.runtimeObject })
-                    let fuse = Fuse()
-                    let results = fuse.searchSync(filter, in: nodes, by: \.searchableProperties).sorted { $0.diffScore < $1.diffScore }
-                    var filteredNodes: [SidebarImageCellViewModel] = []
-                    for result in results {
-                        let cellViewModel = nodes[result.index]
-                        cellViewModel.filterResult = result
-                        filteredNodes.append(cellViewModel)
+                    if !isFiltering {
+                        isFiltering = true
                     }
-                    self.filteredNodes = filteredNodes
                 }
+                filteredNodes = FilterEngine.filter(filter, items: nodes, mode: appDefaults.filterMode)
             }
             .disposed(by: rx.disposeBag)
 
@@ -172,7 +136,10 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
             isEmpty: $nodes.asDriver().map { $0.isEmpty },
             windowInitialTitles: .just((runtimeImageName, "")),
-            windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" }
+            windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" },
+            didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
+            didChangeFiltering: input.searchString.withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)) { !$0.isEmpty && $1 }.filter { $0 }.mapToVoid(),
+            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid()
         )
     }
 
