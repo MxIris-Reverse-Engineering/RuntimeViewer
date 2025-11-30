@@ -137,7 +137,16 @@ let package = Package(
             from: "0.1.1"
         ),
         .package(
-            local: .package(path: "../../MachInjector", isRelative: true, isEnabled: true),
+            local: .package(
+                path: "../../MachInjector",
+                isRelative: true,
+                isEnabled: true
+            ),
+            .package(
+                path: "../../../../Personal/Library/macOS/MachInjector",
+                isRelative: true,
+                isEnabled: true
+            ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
                 from: "0.1.0"
@@ -148,8 +157,15 @@ let package = Package(
             branch: "main"
         ),
         .package(
-            url: "https://github.com/Mx-Iris/RunningApplicationKit",
-            from: "0.1.0"
+            local: .package(
+                path: "../../../../Personal/Library/macOS/RunningApplicationKit",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/RunningApplicationKit",
+                from: "0.1.0"
+            )
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
@@ -170,6 +186,10 @@ let package = Package(
         .package(
             url: "https://github.com/ukushu/Ifrit",
             from: "3.0.0"
+        ),
+        .package(
+            url: "https://github.com/database-utility/fuzzy-search.git",
+            branch: "main"
         ),
     ],
     targets: [
@@ -192,7 +212,7 @@ let package = Package(
                 .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ],
-            swiftSettings: sharedSwiftSettings,
+            swiftSettings: sharedSwiftSettings
         ),
         .target(
             name: "RuntimeViewerUI",
@@ -211,7 +231,7 @@ let package = Package(
                 "LateResponders",
 //                .product(name: "DSFInspectorPanes", package: "DSFInspectorPanes", condition: .when(platforms: appkitPlatforms)),
             ],
-            swiftSettings: sharedSwiftSettings,
+            swiftSettings: sharedSwiftSettings
         ),
         .target(
             name: "RuntimeViewerApplication",
@@ -221,6 +241,7 @@ let package = Package(
                 "RuntimeViewerArchitectures",
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "Ifrit", package: "Ifrit"),
+                .product(name: "FuzzySearch", package: "fuzzy-search"),
             ]
         ),
 
