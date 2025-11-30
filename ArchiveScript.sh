@@ -16,6 +16,7 @@ exportAppPath=${project_path}/Archives
 echo '///-----------'
 echo '/// Building RuntimeViewerCatalystHelper: '${development_mode}
 echo '///-----------'
+
 xcodebuild \
 build \
 -scheme 'RuntimeViewerCatalystHelper' \
@@ -23,8 +24,9 @@ build \
 -destination 'generic/platform=macOS,variant=Mac Catalyst' || exit
 
 echo '///-----------'
-echo '/// Building '${scheme_name}': '${development_mode}
+echo '/// Archiving '${scheme_name}': '${development_mode}
 echo '///-----------'
+
 xcodebuild \
 archive \
 -scheme ${scheme_name} \
@@ -32,37 +34,10 @@ archive \
 -destination 'generic/platform=macOS' \
 -archivePath ${build_path}/${project_name}.xcarchive || exit
 
-echo '///--------'
-echo '/// Build finished'
-echo '///--------'
-echo ''
+open ${build_path}/${project_name}.xcarchive
 
-echo '///----------'
-echo '/// Starting App Export'
-echo '///----------'
-
-exportFolderName="${project_name}_$(date +"%Y-%m-%d_%H-%M-%S")"
-exportFullPath="${exportAppPath}/${exportFolderName}"
-mkdir -p "$exportFullPath"
-
-xcodebuild -exportArchive -archivePath ${build_path}/${project_name}.xcarchive \
--configuration ${development_mode} \
--exportPath ${exportFullPath} \
--exportOptionsPlist ${exportOptionsPlistPath} \
--quiet || exit
-
-if [ -e $exportFullPath/$project_name.app ]; then
-echo '///----------'
-echo '/// App Exported'
-echo '///----------'
-open $exportFullPath
-else
-echo '///-------------'
-echo '/// App Export Failed '
-echo '///-------------'
-fi
 echo '///------------'
-echo '/// App Export Complete  '
+echo '/// App Archive Complete  '
 echo '///-----------='
 echo ''
 
