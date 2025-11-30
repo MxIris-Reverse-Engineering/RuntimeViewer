@@ -25,11 +25,11 @@
 		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
 		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
+		E953C3B82EDB406000C5BA4A /* ItemPopUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E953C3B72EDB406000C5BA4A /* ItemPopUpButton.swift */; };
 		E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */; };
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
 		E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */; };
 		E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */; };
-		E97B1AC72EC9AC0700FF5375 /* NSResponder+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97B1AC62EC9AC0700FF5375 /* NSResponder+.swift */; };
 		E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */ = {isa = PBXBuildFile; fileRef = E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */; };
 		E985A9CC2D9AF4FC005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CB2D9AF4FC005A573C /* RuntimeViewerCore */; };
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
@@ -177,6 +177,7 @@
 		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
 		E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIPChecker.swift; sourceTree = "<group>"; };
+		E953C3B72EDB406000C5BA4A /* ItemPopUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemPopUpButton.swift; sourceTree = "<group>"; };
 		E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		E95CDA662DAA6FA900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		E95CDA672DAA970300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
@@ -187,7 +188,6 @@
 		E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadFrameworksViewController.swift; sourceTree = "<group>"; };
 		E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = LoadFrameworksViewController.xib; sourceTree = "<group>"; };
 		E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewModel.swift; sourceTree = "<group>"; };
-		E97B1AC62EC9AC0700FF5375 /* NSResponder+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSResponder+.swift"; sourceTree = "<group>"; };
 		E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UIDebugger.h; sourceTree = "<group>"; };
 		E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UIDebugger.m; sourceTree = "<group>"; };
 		E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperInstaller.swift; sourceTree = "<group>"; };
@@ -324,9 +324,6 @@
 			isa = PBXGroup;
 			children = (
 				E9C9E9CE2C2D10C600C4AA34 /* Info.plist */,
-				E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */,
-				E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */,
-				E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */,
 				E9CE07C02C1498280070A6E8 /* App */,
 				E9CE07BA2C1497EA0070A6E8 /* Base */,
 				E9CE07BB2C1497F10070A6E8 /* Main */,
@@ -408,6 +405,7 @@
 			children = (
 				E9A825452C0E0B4900D9A85D /* ViewControllers.swift */,
 				E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */,
+				E953C3B72EDB406000C5BA4A /* ItemPopUpButton.swift */,
 			);
 			path = Base;
 			sourceTree = "<group>";
@@ -418,8 +416,8 @@
 				E942ACBE2C28865100A2F3D3 /* MainRoute.swift */,
 				E9A825372C0E085200D9A85D /* MainCoordinator.swift */,
 				E9A825412C0E0B2300D9A85D /* MainWindowController.swift */,
-				E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */,
 				E9A825432C0E0B2800D9A85D /* MainSplitViewController.swift */,
+				E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */,
 				E9A825572C0E202600D9A85D /* MainViewModel.swift */,
 			);
 			path = Main;
@@ -473,13 +471,15 @@
 			children = (
 				E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */,
 				E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */,
-				E97B1AC62EC9AC0700FF5375 /* NSResponder+.swift */,
 				E94BA6932E7EE09A006B553D /* UXKitFixups.swift */,
 				E91CD9962C2127AD00C989CC /* EventMonitor.swift */,
 				E943301B2C0DB75B00362862 /* Then.swift */,
 				E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */,
 				E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */,
 				E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */,
+				E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */,
+				E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */,
+				E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -751,6 +751,7 @@
 				E943301C2C0DB75B00362862 /* Then.swift in Sources */,
 				E985F5A42D8FF14800C3E5EE /* HelperInstaller.swift in Sources */,
 				E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */,
+				E953C3B82EDB406000C5BA4A /* ItemPopUpButton.swift in Sources */,
 				E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */,
 				E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
@@ -770,7 +771,6 @@
 				E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */,
 				E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorNavigationController.swift in Sources */,
-				E97B1AC72EC9AC0700FF5375 /* NSResponder+.swift in Sources */,
 				E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */,
 				E9EEE8DD2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
@@ -999,7 +999,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
@@ -1041,7 +1041,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
