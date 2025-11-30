@@ -14,23 +14,31 @@ exportAppPath=${project_path}/Archives
 
 
 echo '///-----------'
-echo '/// 正在编译工程:'${development_mode}
+echo '/// Building RuntimeViewerCatalystHelper: '${development_mode}
+echo '///-----------'
+xcodebuild \
+build \
+-scheme 'RuntimeViewerCatalystHelper' \
+-configuration ${development_mode} \
+-destination 'generic/platform=macOS,variant=Mac Catalyst' || exit
+
+echo '///-----------'
+echo '/// Building '${scheme_name}': '${development_mode}
 echo '///-----------'
 xcodebuild \
 archive \
 -scheme ${scheme_name} \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS' \
--archivePath ${build_path}/${project_name}.xcarchive \
-ARCHS="x86_64 arm64e" || exit
+-archivePath ${build_path}/${project_name}.xcarchive || exit
 
 echo '///--------'
-echo '/// 编译完成'
+echo '/// Build finished'
 echo '///--------'
 echo ''
 
 echo '///----------'
-echo '/// 开始打包App'
+echo '/// Starting App Export'
 echo '///----------'
 
 exportFolderName="${project_name}_$(date +"%Y-%m-%d_%H-%M-%S")"
@@ -45,16 +53,16 @@ xcodebuild -exportArchive -archivePath ${build_path}/${project_name}.xcarchive \
 
 if [ -e $exportFullPath/$project_name.app ]; then
 echo '///----------'
-echo '/// App已导出'
+echo '/// App Exported'
 echo '///----------'
 open $exportFullPath
 else
 echo '///-------------'
-echo '/// App导出失败 '
+echo '/// App Export Failed '
 echo '///-------------'
 fi
 echo '///------------'
-echo '/// App打包完成  '
+echo '/// App Export Complete  '
 echo '///-----------='
 echo ''
 

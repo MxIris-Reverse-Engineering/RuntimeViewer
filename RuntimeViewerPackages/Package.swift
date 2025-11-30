@@ -164,7 +164,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
-                from: "0.1.0"
+                from: "0.1.1"
             )
         ),
         .package(

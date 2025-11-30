@@ -4,14 +4,19 @@
 
 Alternative to RuntimeBrowser with a more modern UI and more functionality
 
-Powered by [ClassDumpRuntime](https://github.com/leptos-null/ClassDumpRuntime)
+Powered by 
+ObjC:
+[ClassDumpRuntime](https://github.com/leptos-null/ClassDumpRuntime)
+Swift:
+[MachOSwiftSection](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection)
 
 ## Highlights
+- Swift Interface support
 - Full in AppKit/UIKit, the text view supports type-defined jumps and the exact same highlighting style as Xcode.
 - Support `macOS` frameworks and `iOSSupport` frameworks.
-- Easy export of header files
+- Easy export of header or interface files
 - Loading custom macOS frameworks.
-- Code Injection, view other app objc class headers (Needs disable SIP)
+- Code Injection (WIP support arm64e) (Needs disable SIP)
 - (WIP) Support more iDevice using Bonjour (iOS, watchOS, tvOS, visionOS needs install RuntimeViewerMobileServer framework)
 
 ## Usage
@@ -22,3 +27,4 @@ If the Catalyst side and code injection applications do not appear in any direct
 ## Screenshots
 ![](./Resources/Screenshot-001.png)
 ![](./Resources/Screenshot-002.png)
+![](./Resources/Screenshot-003.png)
