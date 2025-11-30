@@ -1,5 +1,5 @@
 {
-  "originHash" : "ccfa4fd1491b8a530418360650ec98f7b3c5617b2fca1696fcc803e0d839fa63",
+  "originHash" : "cc7c79d1190dedfe27f66654218acc6f537ca34048c45497928f4cb8f5d61757",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -26,15 +26,6 @@
       "state" : {
         "revision" : "53f057050f3c78a1997ed0218337fd92d2eba2b5",
         "version" : "3.1.1"
-      }
-    },
-    {
-      "identity" : "classdumpruntime",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
-      "state" : {
-        "branch" : "master",
-        "revision" : "78fab059242919dafa1815ecba956c00c90203a0"
       }
     },
     {
@@ -97,7 +88,7 @@
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
         "branch" : "main",
-        "revision" : "d6cb4d1605aed68f6baafc14afc19950746dc543"
+        "revision" : "f91301157349eb586cf3ee1fa5877334f40bf2c4"
       }
     },
     {
@@ -215,15 +206,6 @@
       "state" : {
         "revision" : "f1d74e1642956f0300756ad8d1d64e9034857bc3",
         "version" : "2.0.0"
-      }
-    },
-    {
-      "identity" : "runningapplicationkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
-      "state" : {
-        "revision" : "9b517525c79ea951dbbf0c3590bccb3a5242d0b4",
-        "version" : "0.1.0"
       }
     },
     {
@@ -413,15 +395,6 @@
       "state" : {
         "revision" : "ce592ae52f982c847a4efc0dd881cc9eb32d29f2",
         "version" : "1.6.4"
-      }
-    },
-    {
-      "identity" : "swift-macro-toolkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/stackotter/swift-macro-toolkit",
-      "state" : {
-        "revision" : "d319bcc2586f7dbc6a09c05792105078263f1ed3",
-        "version" : "0.7.2"
       }
     },
     {
