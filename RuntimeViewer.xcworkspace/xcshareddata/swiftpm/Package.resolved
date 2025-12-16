@@ -1,5 +1,5 @@
 {
-  "originHash" : "cc7c79d1190dedfe27f66654218acc6f537ca34048c45497928f4cb8f5d61757",
+  "originHash" : "7703b3e943908f7d081cbd1e2eb83538e4185ebf6632360b97d8de0073cc6c36",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -88,7 +88,7 @@
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
         "branch" : "main",
-        "revision" : "f91301157349eb586cf3ee1fa5877334f40bf2c4"
+        "revision" : "e387b1cad42b9990378dfd7b8ee3279ded2aada9"
       }
     },
     {
@@ -161,6 +161,15 @@
       "state" : {
         "revision" : "c29eaabba18d8880851cd92339f433aa19204d91",
         "version" : "0.5.0"
+      }
+    },
+    {
+      "identity" : "machoswiftsection",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
+      "state" : {
+        "branch" : "feature/swift-interface",
+        "revision" : "44fdf071af3e5c8ada27b67716734313d2dcc90c"
       }
     },
     {
@@ -330,8 +339,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-async-algorithms",
       "state" : {
-        "revision" : "2773d4125311133a2f705ec374c363a935069d45",
-        "version" : "1.1.0"
+        "revision" : "6c050d5ef8e1aa6342528460db614e9770d7f804",
+        "version" : "1.1.1"
       }
     },
     {
@@ -393,8 +402,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log",
       "state" : {
-        "revision" : "ce592ae52f982c847a4efc0dd881cc9eb32d29f2",
-        "version" : "1.6.4"
+        "revision" : "bc386b95f2a16ccd0150a8235e7c69eab2b866ca",
+        "version" : "1.8.0"
       }
     },
     {
@@ -465,8 +474,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "4c27acf5394b645b70d8ba19dc249c0472d5f618",
-        "version" : "1.7.0"
+        "revision" : "31073495cae9caf243c440eac94b3ab067e3d7bc",
+        "version" : "1.8.0"
       }
     },
     {

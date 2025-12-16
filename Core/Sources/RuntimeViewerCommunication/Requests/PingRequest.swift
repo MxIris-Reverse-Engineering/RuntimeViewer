@@ -1,10 +1,3 @@
-//
-//  PingRequest.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 11/30/24.
-//
-
 import Foundation
 
 public struct PingRequest: Codable, RuntimeRequest {

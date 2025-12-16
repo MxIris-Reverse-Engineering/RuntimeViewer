@@ -1,10 +1,3 @@
-//
-//  RuntimeConnection.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 2025/3/22.
-//
-
 import Foundation
 
 public protocol RuntimeConnection {

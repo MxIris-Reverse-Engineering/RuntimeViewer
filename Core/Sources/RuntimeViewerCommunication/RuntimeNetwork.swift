@@ -1,10 +1,3 @@
-//
-//  RuntimeNetworkError.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 2025/3/22.
-//
-
 import Foundation
 import Network
 
@@ -27,8 +20,7 @@ struct RuntimeRequestData: Codable {
         self.identifier = identifier
         self.data = data
     }
-    
-    
+
     init<Value: Codable>(identifier: String, value: Value) throws {
         self.identifier = identifier
         self.data = try JSONEncoder().encode(value)
@@ -66,7 +58,7 @@ public class RuntimeNetworkBrowser {
         browser.browseResultsChangedHandler = { results, changes in
             for result in results {
                 switch result.endpoint {
-                case let .service(name, _, _, _):
+                case .service(let name, _, _, _):
                     handler(.init(name: name, endpoint: result.endpoint))
                 default:
                     break

@@ -1,10 +1,3 @@
-//
-//  RuntimeCommunicator.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 2025/3/22.
-//
-
 import Foundation
 import OSLog
 
@@ -15,7 +8,7 @@ public final class RuntimeCommunicator {
         switch source {
         case .local:
             throw NSError(domain: "com.JH.RuntimeViewerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Local connection is not supported"])
-        case let .remote(_, identifier, role):
+        case .remote(_, let identifier, let role):
             #if os(macOS)
             if role.isServer {
                 return try await RuntimeXPCServerConnection(identifier: identifier, modify: modify)
@@ -25,11 +18,11 @@ public final class RuntimeCommunicator {
             #else
             throw NSError(domain: "com.JH.RuntimeViewerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Remote connection is not supported on this platform"])
             #endif
-        case let .bonjourClient(endpoint):
+        case .bonjourClient(let endpoint):
             let runtimeConnection = try RuntimeNetworkClientConnection(endpoint: endpoint)
             try await modify?(runtimeConnection)
             return runtimeConnection
-        case let .bonjourServer(name, _):
+        case .bonjourServer(let name, _):
             let runtimeConnection = try await RuntimeNetworkServerConnection(name: name)
             try await modify?(runtimeConnection)
             return runtimeConnection
