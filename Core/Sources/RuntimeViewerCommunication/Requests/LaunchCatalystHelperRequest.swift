@@ -1,10 +1,3 @@
-//
-//  LaunchCatalystHelperRequest.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 11/30/24.
-//
-
 import Foundation
 
 public struct LaunchCatalystHelperRequest: Codable, RuntimeRequest {

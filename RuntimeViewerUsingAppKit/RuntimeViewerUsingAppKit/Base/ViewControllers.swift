@@ -1,8 +1,8 @@
 import AppKit
-import RuntimeViewerApplication
-import RuntimeViewerUI
-import RuntimeViewerArchitectures
 import LateResponders
+import RuntimeViewerUI
+import RuntimeViewerApplication
+import RuntimeViewerArchitectures
 
 class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
     var viewModel: ViewModel?

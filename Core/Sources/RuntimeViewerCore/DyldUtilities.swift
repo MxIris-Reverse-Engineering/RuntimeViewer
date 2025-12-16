@@ -7,9 +7,9 @@ public struct DyldOpenError: Error {
 
 package enum DyldUtilities {
     package static let addImageNotification = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.addImageNotification")
-    
+
     package static let removeImageNotification = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
-    
+
     package static func patchImagePathForDyld(_ imagePath: String) -> String {
         guard imagePath.starts(with: "/") else { return imagePath }
         let rootPath = ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]
@@ -26,7 +26,7 @@ package enum DyldUtilities {
             NotificationCenter.default.post(name: Self.removeImageNotification, object: nil)
         }
     }
-    
+
     package static func imageNames() -> [String] {
         (0...)
             .lazy

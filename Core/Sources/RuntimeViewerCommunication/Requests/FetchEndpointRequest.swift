@@ -1,10 +1,3 @@
-//
-//  FetchEndpointRequest.swift
-//  RuntimeViewerPackages
-//
-//  Created by JH on 11/30/24.
-//
-
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import Foundation
 import SwiftyXPC

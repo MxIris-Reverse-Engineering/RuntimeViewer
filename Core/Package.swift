@@ -70,12 +70,12 @@ let package = Package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/MachOSwiftSection",
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: false,
             ),
             .package(
                 path: "../../TestingLibraries/MachOSwiftSection",
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: false,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
