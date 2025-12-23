@@ -1,5 +1,5 @@
 {
-  "originHash" : "7703b3e943908f7d081cbd1e2eb83538e4185ebf6632360b97d8de0073cc6c36",
+  "originHash" : "5ed2d273d1f59809e5a28d739ca8e9e067a478de35f206b3f46886da68f813fb",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -164,15 +164,6 @@
       }
     },
     {
-      "identity" : "machoswiftsection",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-      "state" : {
-        "branch" : "feature/swift-interface",
-        "revision" : "44fdf071af3e5c8ada27b67716734313d2dcc90c"
-      }
-    },
-    {
       "identity" : "metacodable",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SwiftyLab/MetaCodable",
@@ -204,8 +195,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Rainbow",
       "state" : {
-        "revision" : "16da5c62dd737258c6df2e8c430f8a3202f655a7",
-        "version" : "4.2.0"
+        "revision" : "cdf146ae671b2624917648b61c908d1244b98ca1",
+        "version" : "4.2.1"
       }
     },
     {
@@ -330,8 +321,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-argument-parser",
       "state" : {
-        "revision" : "cdd0ef3755280949551dc26dee5de9ddeda89f54",
-        "version" : "1.6.2"
+        "revision" : "c5d11a805e765f52ba34ec7284bd4fcd6ba68615",
+        "version" : "1.7.0"
       }
     },
     {

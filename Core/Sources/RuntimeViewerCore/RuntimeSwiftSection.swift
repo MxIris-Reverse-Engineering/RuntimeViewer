@@ -8,13 +8,14 @@ import MachOKit
 import MachOSwiftSection
 import SwiftDump
 @_spi(Support) import SwiftInterface
-
+import SwiftInspection
 
 public struct SwiftGenerationOptions: Sendable, Codable {
     public var printStrippedSymbolicItem: Bool = true
     public var emitOffsetComments: Bool = false
+    public var printTypeLayout: Bool = false
+    public var printEnumLayout: Bool = false
 }
-
 
 actor RuntimeSwiftSection {
     enum Error: Swift.Error {
@@ -65,11 +66,13 @@ actor RuntimeSwiftSection {
         self.builder = try .init(configuration: .init(indexConfiguration: .init(showCImportedTypes: false), printConfiguration: .init()), in: machO)
         try await builder.prepare()
     }
-    
+
     func updateConfiguration(using options: SwiftGenerationOptions) async throws {
         var configuration = builder.configuration
         configuration.printConfiguration.printStrippedSymbolicItem = options.printStrippedSymbolicItem
         configuration.printConfiguration.emitOffsetComments = options.emitOffsetComments
+        configuration.printConfiguration.printTypeLayout = options.printTypeLayout
+        configuration.printConfiguration.printEnumLayout = options.printEnumLayout
         try await updateConfiguration(configuration)
     }
 
@@ -82,7 +85,7 @@ actor RuntimeSwiftSection {
             nameToInterfaceDefinitionName.removeAll()
         }
 
-        if newConfiguration.printConfiguration.emitOffsetComments != oldConfiguration.printConfiguration.emitOffsetComments || newConfiguration.printConfiguration.printStrippedSymbolicItem != oldConfiguration.printConfiguration.printStrippedSymbolicItem {
+        if newConfiguration.printConfiguration != oldConfiguration.printConfiguration {
             interfaceByName.removeAll()
         }
     }
