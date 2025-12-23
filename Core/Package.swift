@@ -18,8 +18,8 @@ extension Package.Dependency {
             switch local {
             case .package(let path, let isRelative, let isEnabled):
                 guard isEnabled else { continue }
-                let url = if isRelative, let resolvedURL = URL(string: path, relativeTo: URL(fileURLWithPath: #filePath)) {
-                    resolvedURL
+                let url = if isRelative {
+                    URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: #filePath))
                 } else {
                     URL(fileURLWithPath: path)
                 }
@@ -32,6 +32,8 @@ extension Package.Dependency {
         return remote
     }
 }
+
+
 
 let package = Package(
     name: "Core",
@@ -70,7 +72,7 @@ let package = Package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/MachOSwiftSection",
                 isRelative: true,
-                isEnabled: false,
+                isEnabled: true,
             ),
             .package(
                 path: "../../TestingLibraries/MachOSwiftSection",

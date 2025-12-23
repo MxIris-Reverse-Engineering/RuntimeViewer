@@ -29,6 +29,8 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
         Section(title: "Swift", items: [
             OptionItem(title: "Print Stripped Symbol Description", keyPath: \.swiftInterfaceOptions.printStrippedSymbolicItem),
             OptionItem(title: "Print Offset Comments", keyPath: \.swiftInterfaceOptions.emitOffsetComments),
+            OptionItem(title: "Print Type Layout", keyPath: \.swiftInterfaceOptions.printTypeLayout),
+            OptionItem(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
         ]),
     ]
 
