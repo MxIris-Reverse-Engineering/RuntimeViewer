@@ -54,8 +54,6 @@ open class StatefulOutlineView: OutlineView {
                 savedExpandedItems.insert(hashableItem)
             }
         }
-
-        print("State saved. \(savedExpandedItems) items are expanded.")
     }
 
     private func restoreExpansionState() {
@@ -70,14 +68,11 @@ open class StatefulOutlineView: OutlineView {
             guard let item = item(atRow: i) else { continue }
 
             // If the item's hashable representation is in our saved set, expand it.
-            print("Checking item at row \(i) for restoration.")
             if let hashableItem = item as? AnyHashable, savedExpandedItems.contains(hashableItem) {
-                print("Restoring expansion for item at row \(i).")
                 expandItem(item)
             }
         }
 
-        print("State restored.")
         // Clear the saved state after a successful restoration.
         savedExpandedItems.removeAll()
     }
