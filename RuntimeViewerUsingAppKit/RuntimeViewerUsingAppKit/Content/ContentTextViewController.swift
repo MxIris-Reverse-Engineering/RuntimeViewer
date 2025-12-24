@@ -11,8 +11,6 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
 
     var textView: ContentTextView { scrollView.documentView as! ContentTextView }
 
-    override var shouldDisplayCommonLoading: Bool { true }
-
     let eventMonitor = EventMonitor()
 
     let jumpToDefinitionRelay = PublishRelay<RuntimeObjectName>()
@@ -53,6 +51,17 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         )
         let output = viewModel.transform(input)
 
+        viewModel.delayedLoading.driveOnNextMainActor { [weak self] isLoading in
+            guard let self else { return }
+            
+            if isLoading {
+                textView.showSkeleton(using: .default)
+            } else {
+                textView.hideSkeleton()
+            }
+        }
+        .disposed(by: rx.disposeBag)
+        
         output.attributedString.drive(with: self, onNext: { target, attributedString in
             target.textView.textStorage?.setAttributedString(attributedString)
         })
