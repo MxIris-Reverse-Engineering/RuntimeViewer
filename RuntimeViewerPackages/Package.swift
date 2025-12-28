@@ -81,8 +81,15 @@ let package = Package(
             branch: "master"
         ),
         .package(
-            url: "https://github.com/Mx-Iris/CocoaCoordinator",
-            branch: "main"
+            local: .package(
+                path: "../../../Library/macOS/CocoaCoordinator",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote:.package(
+                url: "https://github.com/Mx-Iris/CocoaCoordinator",
+                branch: "main"
+            ),
         ),
         .package(
             url: "https://github.com/SnapKit/SnapKit",

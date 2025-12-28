@@ -31,6 +31,7 @@
 		E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */; };
 		E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */; };
 		E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */ = {isa = PBXBuildFile; fileRef = E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */; };
+		E982B53A2EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E982B5392EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift */; };
 		E985A9CC2D9AF4FC005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CB2D9AF4FC005A573C /* RuntimeViewerCore */; };
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
 		E985A9D22D9AF512005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D12D9AF512005A573C /* RuntimeViewerCore */; };
@@ -190,6 +191,7 @@
 		E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewModel.swift; sourceTree = "<group>"; };
 		E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UIDebugger.h; sourceTree = "<group>"; };
 		E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UIDebugger.m; sourceTree = "<group>"; };
+		E982B5392EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarBookmarkViewController.swift; sourceTree = "<group>"; };
 		E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperInstaller.swift; sourceTree = "<group>"; };
 		E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeInjectClient.swift; sourceTree = "<group>"; };
 		E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
@@ -436,6 +438,7 @@
 				E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */,
 				E9EEF7602E084D7D008D85D1 /* SidebarImageCoordinator.swift */,
 				E9EEF7622E084D87008D85D1 /* SidebarImageRoute.swift */,
+				E982B5392EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift */,
 				E9EEE8DC2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift */,
 			);
 			path = Sidebar;
@@ -786,6 +789,7 @@
 				E995B8972ED97D840083D9D7 /* RuntimeEngineManager+.swift in Sources */,
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
+				E982B53A2EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift in Sources */,
 				E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */,
 				E94BA6942E7EE09A006B553D /* UXKitFixups.swift in Sources */,
 				E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */,

@@ -39,7 +39,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         rx.disposeBag = DisposeBag()
 
         self.viewModel = viewModel
-
+        
+        splitViewController.viewModel = viewModel
+        
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),

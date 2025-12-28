@@ -1,6 +1,6 @@
 import AppKit
 
-extension NSTextView {
+extension NSView {
     public struct SkeletonConfiguration {
         public enum Direction {
             case leftToRight
@@ -18,10 +18,10 @@ extension NSTextView {
         public var lineHeight: CGFloat
         public var lineSpacing: CGFloat
         public var cornerRadius: CGFloat
-
         public var direction: Direction
         public var animationDuration: TimeInterval
         public var angle: CGFloat
+        public var contentInsets: NSSize
 
         public static let `default` = SkeletonConfiguration(
             style: .full,
@@ -56,7 +56,8 @@ extension NSTextView {
             cornerRadius: CGFloat = 4.0,
             direction: Direction = .leftToRight,
             animationDuration: TimeInterval = 1.5,
-            angle: CGFloat = 20.0
+            angle: CGFloat = 20.0,
+            contentInsets: NSSize = .init(width: 5, height: 5)
         ) {
             self.style = style
             self.baseColor = baseColor ?? NSColor.textColor.withAlphaComponent(0.08)
@@ -67,6 +68,7 @@ extension NSTextView {
             self.direction = direction
             self.animationDuration = animationDuration
             self.angle = angle
+            self.contentInsets = contentInsets
         }
     }
 
@@ -78,9 +80,6 @@ extension NSTextView {
         private final class GradientLayer: CAGradientLayer {}
 
         var configuration: SkeletonConfiguration
-
-        @Invalidating(.layout)
-        var contentInsets: NSSize = .zero
 
         // 1. 容器层：用来承载所有内容，并被 mask 裁剪出文字形状
         private let containerLayer = Layer()
@@ -213,9 +212,9 @@ extension NSTextView {
 
             if bounds.width <= 0 || bounds.height <= 0 { return }
 
-            var currentY: CGFloat = contentInsets.height
-            let startX: CGFloat = contentInsets.width
-            let maxAvailableWidth = bounds.width - (contentInsets.width * 2)
+            var currentY: CGFloat = configuration.contentInsets.height
+            let startX: CGFloat = configuration.contentInsets.width
+            let maxAvailableWidth = bounds.width - (configuration.contentInsets.width * 2)
 
             if maxAvailableWidth <= 0 { return }
 
@@ -309,17 +308,18 @@ extension NSTextView {
     public func showSkeleton(using config: SkeletonConfiguration = .default) {
         if skeletonState.overlayView != nil { return }
 
-        skeletonState.originalEditable = isEditable
-        skeletonState.originalSelectable = isSelectable
-        skeletonState.originalTextColor = textColor
+        if let textView = self as? NSTextView {
+            skeletonState.originalEditable = textView.isEditable
+            skeletonState.originalSelectable = textView.isSelectable
+            skeletonState.originalTextColor = textView.textColor
 
-        isSelectable = false
-        isEditable = false
-        textColor = .clear
+            textView.isSelectable = false
+            textView.isEditable = false
+            textView.textColor = .clear
+        }
 
         let overlay = SkeletonOverlayView(frame: bounds, configuration: config)
         overlay.translatesAutoresizingMaskIntoConstraints = false
-        overlay.contentInsets = textContainerInset
         overlay.alphaValue = 0
         addSubview(overlay)
 
@@ -352,9 +352,12 @@ extension NSTextView {
             overlay.stopAnimating()
             overlay.removeFromSuperview()
             skeletonState.overlayView = nil
-            isEditable = skeletonState.originalEditable
-            isSelectable = skeletonState.originalSelectable
-            textColor = skeletonState.originalTextColor ?? .labelColor
+
+            if let textView = self as? NSTextView {
+                textView.isEditable = skeletonState.originalEditable
+                textView.isSelectable = skeletonState.originalSelectable
+                textView.textColor = skeletonState.originalTextColor ?? .labelColor
+            }
         }
     }
 }
