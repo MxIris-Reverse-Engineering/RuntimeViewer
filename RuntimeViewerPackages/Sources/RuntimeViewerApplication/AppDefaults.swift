@@ -7,9 +7,6 @@ import Dependencies
 public final class AppDefaults {
     fileprivate static let shared = AppDefaults()
 
-    @UserDefault(key: "isInitialSetupSplitView", defaultValue: true)
-    public var isInitialSetupSplitView: Bool
-
     @UserDefault(key: "generationOptions", defaultValue: .init())
     public var options: RuntimeObjectInterface.GenerationOptions
 
