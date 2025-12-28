@@ -104,9 +104,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             }
             .disposed(by: rx.disposeBag)
 
-        contentWindow.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
+        contentWindow.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier"
 
-        contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)")
+        contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
     }
 
     private func presentOpenPanel() {

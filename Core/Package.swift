@@ -82,7 +82,7 @@ let package = Package(
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
 //                from: "0.6.0"
-                branch: "feature/swift-interface",
+                branch: "feature/in-process",
             )
         ),
         .package(
