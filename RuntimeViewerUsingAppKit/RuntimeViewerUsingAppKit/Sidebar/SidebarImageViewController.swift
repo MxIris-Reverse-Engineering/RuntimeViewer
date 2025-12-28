@@ -208,11 +208,14 @@ extension SidebarImageViewController {
 
             emptyLabel.snp.makeConstraints { make in
                 make.center.equalToSuperview()
-                make.left.right.equalToSuperview().inset(15)
+                make.top.left.greaterThanOrEqualTo(16)
+                make.bottom.right.lessThanOrEqualTo(16)
             }
 
             emptyLabel.do {
                 $0.alignment = .center
+                $0.maximumNumberOfLines = 0
+                $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             }
 
             scrollView.do {

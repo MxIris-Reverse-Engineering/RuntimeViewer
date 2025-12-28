@@ -1,5 +1,5 @@
 {
-  "originHash" : "5ed2d273d1f59809e5a28d739ca8e9e067a478de35f206b3f46886da68f813fb",
+  "originHash" : "b10bdec91d4f61edf47a72cdf8ea09a00c338616dcd0b97b583171f3fefadd40",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -26,15 +26,6 @@
       "state" : {
         "revision" : "53f057050f3c78a1997ed0218337fd92d2eba2b5",
         "version" : "3.1.1"
-      }
-    },
-    {
-      "identity" : "cocoacoordinator",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/CocoaCoordinator",
-      "state" : {
-        "branch" : "main",
-        "revision" : "ff333dd0a9fbcd834f40e9c74a7dfbf7cc07cf29"
       }
     },
     {

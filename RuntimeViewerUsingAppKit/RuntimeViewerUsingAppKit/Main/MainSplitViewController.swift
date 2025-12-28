@@ -19,27 +19,29 @@ final class MainSplitViewController: NSSplitViewController {
 
     func setupSplitViewItems() {
         splitViewItems[0].do {
-            $0.minimumThickness = 250
-            $0.maximumThickness = 400
+            $0.minimumThickness = 300
+            $0.maximumThickness = NSSplitViewItem.unspecifiedDimension
+            $0.holdingPriority = .init(261)
         }
 
         splitViewItems[1].do {
-            $0.minimumThickness = 600
-            if #available(macOS 26.0, *) {
-                $0.automaticallyAdjustsSafeAreaInsets = true
-            }
+            $0.minimumThickness = 300
+            $0.maximumThickness = NSSplitViewItem.unspecifiedDimension
+            $0.holdingPriority = .init(250)
         }
 
         splitViewItems[2].do {
-            $0.minimumThickness = 200
+            $0.minimumThickness = 260
+            $0.maximumThickness = NSSplitViewItem.unspecifiedDimension
+            $0.holdingPriority = .init(261)
         }
 
         if appDefaults.isInitialSetupSplitView {
-            splitView.setPosition(250, ofDividerAt: 0)
+            splitView.setPosition(300, ofDividerAt: 0)
             appDefaults.isInitialSetupSplitView = false
         }
 
-        splitView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier\(".\(viewModel?.appServices.runtimeEngine.source.description ?? "")")"
-        splitView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName\(".\(viewModel?.appServices.runtimeEngine.source.description ?? "")")"
+        splitView.identifier = .init("MainSplitViewController-Identifier")
+        splitView.autosaveName = .init("MainSplitViewController-AutosaveName")
     }
 }

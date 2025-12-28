@@ -9,10 +9,18 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 
     private let commonLoadingView = CommonLoadingView()
 
-    var shouldDisplayCommonLoading: Bool { false }
-
     private(set) var contentView: NSView = UXView()
 
+    var shouldDisplayCommonLoading: Bool { false }
+
+    var contentViewUsingSafeArea: Bool { false }
+
+    private var usesSkeletonReplaceCommonLoading: Bool { false }
+    
+    private var _shouldSetupCommonLoading: Bool {
+        shouldDisplayCommonLoading && !usesSkeletonReplaceCommonLoading
+    }
+    
     init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
@@ -23,20 +31,27 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 
         hierarchy {
             contentView
-            if shouldDisplayCommonLoading {
+            if _shouldSetupCommonLoading {
                 commonLoadingView
             }
         }
 
         contentView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            if contentViewUsingSafeArea {
+                make.edges.equalTo(view.safeAreaLayoutGuide)
+            } else {
+                make.edges.equalToSuperview()
+            }
         }
 
-        if shouldDisplayCommonLoading {
+        if _shouldSetupCommonLoading {
             commonLoadingView.snp.makeConstraints { make in
                 make.edges.equalTo(view.safeAreaLayoutGuide)
             }
         }
+        
+        
+//        identifier = "com.JH.RuntimeViewer.\(Self.self).identifier\(".\(viewModel?.appServices.runtimeEngine.source.description ?? "")")"
     }
 
     @available(*, unavailable)
@@ -46,13 +61,25 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 
     func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
-        
+
         self.viewModel = viewModel
-        
+
         if shouldDisplayCommonLoading {
-            viewModel.delayedLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
+            if usesSkeletonReplaceCommonLoading {
+                viewModel.delayedLoading.driveOnNextMainActor { [weak self] isLoading in
+                    guard let self else { return }
+                    if isLoading {
+                        contentView.showSkeleton()
+                    } else {
+                        contentView.hideSkeleton()
+                    }
+                }
+                .disposed(by: rx.disposeBag)
+            } else {
+                viewModel.delayedLoading.drive(commonLoadingView.rx.isRunning).disposed(by: rx.disposeBag)
+            }
         }
-        
+
         viewModel.errorRelay
             .asSignal()
             .emitOnNextMainActor { [weak self] error in
@@ -65,7 +92,7 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
             }
             .disposed(by: rx.disposeBag)
     }
-    
+
     open override func viewDidAppear() {
         super.viewDidAppear()
 
@@ -134,8 +161,7 @@ class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController {
     func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
         self.viewModel = viewModel
-        
-        
+
         viewModel.errorRelay
             .asSignal()
             .emitOnNextMainActor { [weak self] error in
