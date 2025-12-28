@@ -46,8 +46,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             )
         case .select(let runtimeObject):
             return .route(on: contentCoordinator, to: .root(runtimeObject))
-//        case let .inspect(inspectableType):
-//            return .route(on: inspectorCoordinator, to: .select(inspectableType))
         case .sidebarBack:
             return .route(on: sidebarCoordinator, to: .back)
         case .contentBack:

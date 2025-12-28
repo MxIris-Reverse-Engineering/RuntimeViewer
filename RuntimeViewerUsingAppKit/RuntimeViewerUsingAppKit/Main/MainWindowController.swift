@@ -33,15 +33,17 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.toolbar = toolbarController.toolbar
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
         contentWindow.box.positionCenter()
+        contentWindow.identifier = .makeIdentifier(of: Self.self)
+        contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
     }
 
     func setupBindings(for viewModel: MainViewModel) {
         rx.disposeBag = DisposeBag()
 
         self.viewModel = viewModel
-        
-        splitViewController.viewModel = viewModel
-        
+
+        splitViewController.setupBindings(for: viewModel)
+
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
@@ -57,7 +59,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             saveLocationSelected: saveLocationSelectedRelay.asSignal()
         )
         let output = viewModel.transform(input)
-//        output.sharingServiceItems.bind(to: toolbarController.sharingServicePickerItem.rx.items).disposed(by: rx.disposeBag)
+
         output.sharingServiceData
             .map { items -> [Any] in
                 items.map { data in
@@ -103,10 +105,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 NSAlert(error: error).beginSheetModal(for: contentWindow)
             }
             .disposed(by: rx.disposeBag)
-
-        contentWindow.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier"
-
-        contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
     }
 
     private func presentOpenPanel() {
@@ -132,3 +130,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 }
 
 extension MainWindowController: MainToolbarController.Delegate {}
+
+extension NSUserInterfaceItemIdentifier {
+    static func makeIdentifier<T>(of type: T.Type) -> Self {
+        "com.JH.RuntimeViewer.\(T.self).identifier"
+    }
+}
