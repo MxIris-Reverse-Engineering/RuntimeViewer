@@ -18,15 +18,11 @@ extension SidebarNavigationController: UXNavigationControllerDelegate {
                 return
             }
 
-            // The original background color
             let topViewController = navigationController.topViewController
             let originalBackgroundColor = topViewController?.uxView.backgroundColor
-            // Run our code alongside the transition animation
             coordinator.animate(alongsideTransition: { context in
-                // During the animation, set a solid background color
                 topViewController?.uxView.backgroundColor = .windowBackgroundColor
             }, completion: { context in
-                // After the animation completes...
                 topViewController?.uxView.backgroundColor = originalBackgroundColor
             })
         }

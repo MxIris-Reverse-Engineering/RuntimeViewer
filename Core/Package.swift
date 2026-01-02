@@ -85,10 +85,10 @@ let package = Package(
                 branch: "feature/in-process",
             )
         ),
-        .package(
-            url: "https://github.com/p-x9/MachOObjCSection",
-            from: "0.4.0"
-        ),
+//        .package(
+//            url: "https://github.com/p-x9/MachOObjCSection",
+//            from: "0.4.0"
+//        ),
         .package(
             url: "https://github.com/apple/swift-collections",
             from: "1.2.0"
@@ -131,11 +131,14 @@ let package = Package(
                 .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
-                .product(name: "MachOObjCSection", package: "MachOObjCSection"),
+//                .product(name: "MachOObjCSection", package: "MachOObjCSection"),
                 .product(name: "OrderedCollections", package: "swift-collections"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
-            ]
+            ],
+            swiftSettings: [
+                .internalImportsByDefault
+            ],
         ),
         .target(
             name: "RuntimeViewerCommunication",
@@ -145,8 +148,20 @@ let package = Package(
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
-            ]
+            ],
+            swiftSettings: [
+                .internalImportsByDefault
+            ],
         ),
     ],
     swiftLanguageModes: [.v5]
 )
+
+extension SwiftSetting {
+    static let existentialAny: Self = .enableUpcomingFeature("ExistentialAny")                                    // SE-0335, Swift 5.6,  SwiftPM 5.8+
+    static let internalImportsByDefault: Self = .enableUpcomingFeature("InternalImportsByDefault")                // SE-0409, Swift 6.0,  SwiftPM 6.0+
+    static let memberImportVisibility: Self = .enableUpcomingFeature("MemberImportVisibility")                    // SE-0444, Swift 6.1,  SwiftPM 6.1+
+    static let inferIsolatedConformances: Self = .enableUpcomingFeature("InferIsolatedConformances")              // SE-0470, Swift 6.2,  SwiftPM 6.2+
+    static let nonisolatedNonsendingByDefault: Self = .enableUpcomingFeature("NonisolatedNonsendingByDefault")    // SE-0461, Swift 6.2,  SwiftPM 6.2+
+    static let immutableWeakCaptures: Self = .enableUpcomingFeature("ImmutableWeakCaptures")                      // SE-0481, Swift 6.2,  SwiftPM 6.2+
+}

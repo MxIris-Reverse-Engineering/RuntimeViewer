@@ -1,5 +1,5 @@
 import Foundation
-import Semantic
+public import Semantic
 
 public struct RuntimeObjectInterface: Codable, Sendable {
     public let name: RuntimeObjectName

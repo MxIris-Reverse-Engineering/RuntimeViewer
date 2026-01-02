@@ -1,5 +1,5 @@
 {
-  "originHash" : "b10bdec91d4f61edf47a72cdf8ea09a00c338616dcd0b97b583171f3fefadd40",
+  "originHash" : "e58fdf4362d1839aec635808f0174a566f97573904407c557614a6194f18b069",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -79,7 +79,7 @@
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
         "branch" : "main",
-        "revision" : "e387b1cad42b9990378dfd7b8ee3279ded2aada9"
+        "revision" : "674e9c8e3df1f0aa8208331d1d58b467f9582a26"
       }
     },
     {
@@ -134,24 +134,6 @@
       "state" : {
         "revision" : "ee6dbcf2f13176c005337b37ba88431d40458a2b",
         "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "machokit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/p-x9/MachOKit.git",
-      "state" : {
-        "revision" : "315b6e255f2bd832b1b703d0792cace746ec4b29",
-        "version" : "0.42.0"
-      }
-    },
-    {
-      "identity" : "machoobjcsection",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/p-x9/MachOObjCSection",
-      "state" : {
-        "revision" : "c29eaabba18d8880851cd92339f433aa19204d91",
-        "version" : "0.5.0"
       }
     },
     {
@@ -326,6 +308,15 @@
       }
     },
     {
+      "identity" : "swift-clang",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-DeveloperTool-Forks/swift-clang",
+      "state" : {
+        "revision" : "3944b95e4458e1a1e52efcdd5ea1518fcb90a9a6",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "swift-clocks",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-clocks",
@@ -395,15 +386,6 @@
       "state" : {
         "revision" : "6121b169fb5a83d7262a69b640468606f98c6c6e",
         "version" : "0.5.3-fork.1"
-      }
-    },
-    {
-      "identity" : "swift-objc-dump",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/p-x9/swift-objc-dump.git",
-      "state" : {
-        "revision" : "1e91dfd4c332f7015f4c46f99df8a53fbb495e20",
-        "version" : "0.7.0"
       }
     },
     {

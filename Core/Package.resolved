@@ -1,5 +1,5 @@
 {
-  "originHash" : "c7f227b1730eb18bfe41a1a3800293793439fae46d4fc4800463fe51d8838aeb",
+  "originHash" : "6c2d7ca7f013d2df8d83b58e59e461d36c496722c49c4c526456b8c5b58e7705",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -38,39 +38,21 @@
       }
     },
     {
+      "identity" : "dyldprivate",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/DyldPrivate",
+      "state" : {
+        "branch" : "main",
+        "revision" : "3b4d596b702d7c8f589d0babe42c7387e5d24dbc"
+      }
+    },
+    {
       "identity" : "frameworktoolbox",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
         "branch" : "main",
         "revision" : "6bb9c64b552c0830761c76df77c729ed852697bb"
-      }
-    },
-    {
-      "identity" : "machokit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/p-x9/MachOKit.git",
-      "state" : {
-        "revision" : "fc1f2646220b3ce9db2e415b6b8848f5a89ed865",
-        "version" : "0.39.0"
-      }
-    },
-    {
-      "identity" : "machoobjcsection",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/p-x9/MachOObjCSection",
-      "state" : {
-        "revision" : "3f1bb0d9dac4fb4bd3f3ccb2eb293eac20aa8543",
-        "version" : "0.4.0"
-      }
-    },
-    {
-      "identity" : "machoswiftsection",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-      "state" : {
-        "branch" : "feature/swift-interface",
-        "revision" : "8d5061c393ae9e660cfd5d859d09c58b2a7a5ece"
       }
     },
     {
@@ -125,6 +107,24 @@
       "state" : {
         "revision" : "cdd0ef3755280949551dc26dee5de9ddeda89f54",
         "version" : "1.6.2"
+      }
+    },
+    {
+      "identity" : "swift-async-algorithms",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-async-algorithms",
+      "state" : {
+        "revision" : "6c050d5ef8e1aa6342528460db614e9770d7f804",
+        "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-clang",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-DeveloperTool-Forks/swift-clang",
+      "state" : {
+        "revision" : "3944b95e4458e1a1e52efcdd5ea1518fcb90a9a6",
+        "version" : "0.1.0"
       }
     },
     {
@@ -197,15 +197,6 @@
       "state" : {
         "revision" : "6121b169fb5a83d7262a69b640468606f98c6c6e",
         "version" : "0.5.3-fork.1"
-      }
-    },
-    {
-      "identity" : "swift-objc-dump",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/p-x9/swift-objc-dump.git",
-      "state" : {
-        "revision" : "1e91dfd4c332f7015f4c46f99df8a53fbb495e20",
-        "version" : "0.7.0"
       }
     },
     {

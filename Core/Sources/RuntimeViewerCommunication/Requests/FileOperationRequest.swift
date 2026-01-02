@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public enum FileOperation: Codable {
     case createDirectory(url: URL, isIntermediateDirectories: Bool)

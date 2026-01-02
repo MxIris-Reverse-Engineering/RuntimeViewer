@@ -1,6 +1,5 @@
 import Foundation
-import ClassDumpRuntimeSwift
-import SwiftDump
+public import ClassDumpRuntimeSwift
 
 extension RuntimeObjectInterface {
     public struct GenerationOptions: Codable {

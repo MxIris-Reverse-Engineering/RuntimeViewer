@@ -1,6 +1,6 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import Foundation
-import SwiftyXPC
+public import SwiftyXPC
 
 public struct RegisterEndpointRequest: Codable, RuntimeRequest {
     public static let identifier: String = "com.JH.RuntimeViewerService.RegisterEndpoint"

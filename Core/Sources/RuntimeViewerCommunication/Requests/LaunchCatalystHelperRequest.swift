@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public struct LaunchCatalystHelperRequest: Codable, RuntimeRequest {
     public static let identifier: String = "com.JH.RuntimeViewerService.LaunchCatalystHelper"

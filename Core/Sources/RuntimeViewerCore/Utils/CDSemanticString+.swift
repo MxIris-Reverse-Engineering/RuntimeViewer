@@ -1,6 +1,6 @@
 import Foundation
-import Semantic
-import ClassDumpRuntime
+public import Semantic
+public import ClassDumpRuntime
 
 extension CDSemanticString {
     public var semanticString: SemanticString {

@@ -2,6 +2,8 @@ import Foundation
 import Combine
 import Observation
 import SwiftStdlibToolbox
+import ClassDumpRuntime
+import ClassDumpRuntimeSwift
 
 actor RuntimeObjCRuntime {
     private var protocolList: [String] = []
