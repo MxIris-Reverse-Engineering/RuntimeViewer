@@ -6,7 +6,6 @@ import AppKit
 import UIKit
 #endif
 
-import Demangling
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
@@ -28,7 +27,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
     @Dependency(\.appDefaults)
     private var appDefaults
-    
+
     public init(runtimeObject: RuntimeObjectName, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
@@ -61,29 +60,6 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         public let theme: Driver<ThemeProfile>
         public let imageNameOfRuntimeObject: Driver<String?>
     }
-
-//    private func setAttributedString(for options: CDGenerationOptions) {
-//        switch runtimeObject {
-//        case let .class(named):
-//            if let cls = NSClassFromString(named) {
-//                let classModel = CDClassModel(with: cls)
-//                attributedString = classModel.semanticLines(with: options).attributedString(for: theme)
-//            } else {
-//                attributedString = NSAttributedString {
-//                    AText("\(named) class not found.")
-//                }
-//            }
-//        case let .protocol(named):
-//            if let proto = NSProtocolFromString(named) {
-//                let protocolModel = CDProtocolModel(with: proto)
-//                attributedString = protocolModel.semanticLines(with: options).attributedString(for: theme)
-//            } else {
-//                attributedString = NSAttributedString {
-//                    AText("\(named) protocol not found.")
-//                }
-//            }
-//        }
-//    }
 
     public func transform(_ input: Input) -> Output {
         input.runtimeObjectClicked

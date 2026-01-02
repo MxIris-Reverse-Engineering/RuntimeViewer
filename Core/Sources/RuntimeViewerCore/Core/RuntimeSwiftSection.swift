@@ -7,8 +7,8 @@ import Demangling
 import MachOKit
 import MachOSwiftSection
 import SwiftDump
-@_spi(Support) import SwiftInterface
 import SwiftInspection
+@_spi(Support) import SwiftInterface
 
 public struct SwiftGenerationOptions: Sendable, Codable {
     public var printStrippedSymbolicItem: Bool = true
@@ -57,9 +57,6 @@ actor RuntimeSwiftSection {
 
     init(imagePath: String) async throws {
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
-//        guard !imageName.starts(with: "libswift") else {
-//            throw Error.invalidMachOImage
-//        }
         guard let machO = MachOImage(name: imageName) else { throw Error.invalidMachOImage }
         self.imagePath = imagePath
         self.machO = machO
@@ -321,5 +318,5 @@ extension SemanticString {
     }
 }
 
-@FrameworkToolboxExtension
+@FrameworkToolboxExtension(.internal)
 extension SwiftInterface.Definition {}

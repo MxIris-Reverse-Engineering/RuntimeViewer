@@ -1,6 +1,6 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import Foundation
-import SwiftyXPC
+public import SwiftyXPC
 
 extension SwiftyXPC.XPCConnection {
     @discardableResult

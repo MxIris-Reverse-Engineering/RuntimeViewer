@@ -1,5 +1,6 @@
-import Foundation
+package import Foundation
 import MachO.dyld
+import ClassDumpRuntime
 
 public struct DyldOpenError: Error {
     public let message: String?

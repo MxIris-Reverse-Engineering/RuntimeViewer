@@ -1,5 +1,5 @@
 import MemberwiseInit
-import SwiftStdlibToolbox
+public import SwiftStdlibToolbox
 
 @Equatable
 @MemberwiseInit(.public)

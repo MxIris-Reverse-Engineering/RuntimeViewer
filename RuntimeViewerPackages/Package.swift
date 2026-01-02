@@ -235,7 +235,7 @@ let package = Package(
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
-                "LateResponders",
+                .product(name: "LateResponders", package: "LateResponders"),
 //                .product(name: "DSFInspectorPanes", package: "DSFInspectorPanes", condition: .when(platforms: appkitPlatforms)),
             ],
             swiftSettings: sharedSwiftSettings
