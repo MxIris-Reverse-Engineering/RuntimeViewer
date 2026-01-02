@@ -1,10 +1,9 @@
 import Logging
+import FoundationToolbox
+import RuntimeViewerObjC
 public import Combine
 import Foundation
-import ClassDumpRuntime
-import FoundationToolbox
 public import RuntimeViewerCommunication
-import RuntimeViewerObjC
 
 public actor RuntimeEngine {
     fileprivate enum CommandNames: String, CaseIterable {
@@ -41,8 +40,6 @@ public actor RuntimeEngine {
     @Published public private(set) var imageNodes: [RuntimeImageNode] = []
 
     public var reloadDataPublisher: some Publisher<Void, Never> { reloadDataSubject.eraseToAnyPublisher() }
-    
-//    private let objcRuntime: RuntimeObjCRuntime = .init()
 
     private var imageToObjCSection: [String: RuntimeObjCSection] = [:]
 
@@ -265,8 +262,6 @@ public actor RuntimeEngine {
 
     private func _names(in image: String) async throws -> [RuntimeObjectName] {
         let image = DyldUtilities.patchImagePathForDyld(image)
-//        let objcClasses = try await _objcNames(of: .type(.class), in: image)
-//        let objcProtocols = try await _objcNames(of: .type(.protocol), in: image)
         let objcNames = try await _objcSection(for: image).allNames()
         let swiftNames = try await _swiftSection(for: image).allNames()
         return objcNames + swiftNames
@@ -278,28 +273,12 @@ public actor RuntimeEngine {
             let swiftSection = imageToSwiftSection[name.imagePath]
             try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions)
             return try await swiftSection?.interface(for: name)
-        case .objc:
+        case .c, .objc:
 //            return await objcRuntime.interface(for: name, options: options.objcHeaderOptions)
             let objcSection = imageToObjCSection[name.imagePath]
             return try await objcSection?.interface(for: name, using: options.objcHeaderOptions)
-        default:
-            fatalError()
         }
     }
-
-//    private func _objcNames(of kind: RuntimeObjectKind.ObjectiveC, in image: String) async throws -> [RuntimeObjectName] {
-//        switch kind {
-//        case .type(let kind):
-//            switch kind {
-//            case .class:
-//                return await objcRuntime.classNames(in: image)
-//            case .protocol:
-//                return await objcRuntime.protocolNames(in: image)
-//            }
-//        case .category:
-//            return []
-//        }
-//    }
 
     private func _objcSection(for imagePath: String) async throws -> RuntimeObjCSection {
         if let objcSection = imageToObjCSection[imagePath] {
@@ -359,7 +338,6 @@ extension RuntimeEngine {
 
     public func imageName(ofObjectName name: RuntimeObjectName) async throws -> String? {
         try await request {
-//            RuntimeObjCRuntime.imageName(ofClass: className)
             nil
         } remote: {
             return try await $0.sendMessage(name: .imageNameOfClassName, request: name)
@@ -397,7 +375,6 @@ extension RuntimeEngine {
             case .c:
                 return []
             case .objc:
-//                return await objcRuntime.hierarchy(for: name)
                 return try await imageToObjCSection[name.imagePath]?.classHierarchy(for: name) ?? []
             case .swift:
                 return try await imageToSwiftSection[name.imagePath]?.classHierarchy(for: name) ?? []

@@ -1,6 +1,7 @@
-package import Foundation
 import MachO.dyld
-import ClassDumpRuntime
+import MachOKit
+import DyldPrivate
+package import Foundation
 
 public struct DyldOpenError: Error {
     public let message: String?
@@ -49,12 +50,17 @@ package enum DyldUtilities {
         }
     }
 
+    private static func dyldSharedCacheImagePaths() -> [String] {
+        guard let dyldCache = DyldCacheLoaded.current, let imageInfos = dyldCache.imageInfos else { return [] }
+        return imageInfos.compactMap { $0.path(in: dyldCache) }
+    }
+    
     package static var dyldSharedCacheImageRootNode: RuntimeImageNode {
-        return .rootNode(for: CDUtilities.dyldSharedCacheImagePaths(), name: "Dyld Shared Cache")
+        return .rootNode(for: dyldSharedCacheImagePaths(), name: "Dyld Shared Cache")
     }
 
     package static var otherImageRootNode: RuntimeImageNode {
-        let dyldSharedCacheImagePaths = CDUtilities.dyldSharedCacheImagePaths()
+        let dyldSharedCacheImagePaths = dyldSharedCacheImagePaths()
         let allImagePaths = imageNames()
         let otherImagePaths = allImagePaths.filter { !dyldSharedCacheImagePaths.contains($0) }
         return .rootNode(for: otherImagePaths, name: "Others")

@@ -52,22 +52,22 @@ let package = Package(
 
     ],
     dependencies: [
-        .package(
-            local: .package(
-                path: "../../../../Fork/Library/ClassDumpRuntime",
-                isRelative: true,
-                isEnabled: true,
-            ),
-            .package(
-                path: "../../ClassDumpRuntime",
-                isRelative: true,
-                isEnabled: true,
-            ),
-            remote: .package(
-                url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
-                branch: "master"
-            )
-        ),
+//        .package(
+//            local: .package(
+//                path: "../../../../Fork/Library/ClassDumpRuntime",
+//                isRelative: true,
+//                isEnabled: true,
+//            ),
+//            .package(
+//                path: "../../ClassDumpRuntime",
+//                isRelative: true,
+//                isEnabled: true,
+//            ),
+//            remote: .package(
+//                url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
+//                branch: "master"
+//            )
+//        ),
         .package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/MachOSwiftSection",
@@ -127,8 +127,8 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerObjC",
                 "RuntimeViewerCommunication",
-                .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
-                .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
+//                .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
+//                .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
 //                .product(name: "MachOObjCSection", package: "MachOObjCSection"),

@@ -1,8 +1,6 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+#if os(macOS)
 import AppKit
-#endif
-
-#if canImport(UIKit)
+#else
 import UIKit
 #endif
 
@@ -11,18 +9,20 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
 extension RuntimeObjectKind {
-    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+    #if os(macOS)
     private static let iconSize: CGFloat = 18
-    #endif
-
-    #if canImport(UIKit)
+    #else
     private static let iconSize: CGFloat = 24
     #endif
 
     private static let iconStyle: IDEIconStyle = .simple
 
+    public static let cStructIcon = IDEIcon("S", color: .green, style: iconStyle, size: iconSize).image
+    public static let cUnionIcon = IDEIcon("U", color: .green, style: iconStyle, size: iconSize).image
+    
     public static let objcClassIcon = IDEIcon("C", color: .yellow, style: iconStyle, size: iconSize).image
     public static let objcProtocolIcon = IDEIcon("Pr", color: .purple, style: iconStyle, size: iconSize).image
+    public static let objcCategoryIcon = IDEIcon("Ex", color: .yellow, style: iconStyle, size: iconSize).image
 
     public static let swiftEnumIcon = IDEIcon("E", color: .blue, style: iconStyle, size: iconSize).image
     public static let swiftStructIcon = IDEIcon("S", color: .blue, style: iconStyle, size: iconSize).image
@@ -33,14 +33,20 @@ extension RuntimeObjectKind {
 
     public var icon: NSUIImage {
         switch self {
-        case .objc(.type(let kindOfObjC)),
-             .objc(.category(let kindOfObjC)):
-            switch kindOfObjC {
+        case .c(let kind):
+            switch kind {
+            case .struct: return Self.cStructIcon
+            case .union: return Self.cUnionIcon
+            }
+        case .objc(.type(let kind)):
+            switch kind {
             case .class: return Self.objcClassIcon
             case .protocol: return Self.objcProtocolIcon
             }
-        case .swift(.type(let kindOfSwift)):
-            switch kindOfSwift {
+        case .objc(.category(.class)):
+            return Self.objcCategoryIcon
+        case .swift(.type(let kind)):
+            switch kind {
             case .enum: return Self.swiftEnumIcon
             case .struct: return Self.swiftStructIcon
             case .class: return Self.swiftClassIcon
@@ -92,26 +98,15 @@ extension RuntimeImageNode: @retroactive Sequence {
 }
 
 extension RuntimeImageNode {
-    public static let frameworkIcon = SFSymbols(systemName: .latch2Case)
+    public static let frameworkIcon: NSUIImage = icon(for: SFSymbols(systemName: .latch2Case))
 
-    public static let bundleIcon = SFSymbols(systemName: .shippingbox)
+    public static let bundleIcon: NSUIImage = icon(for: SFSymbols(systemName: .shippingbox))
 
-    public static let imageIcon = SFSymbols(systemName: .doc)
+    public static let imageIcon: NSUIImage = icon(for: SFSymbols(systemName: .doc))
 
-    public static let folderIcon = SFSymbols(systemName: .folder)
+    public static let folderIcon: NSUIImage = icon(for: SFSymbols(systemName: .folder))
 
     public var icon: NSUIImage {
-        #if os(macOS)
-        symbol
-            .hierarchicalColor(.controlAccentColor)
-            .nsuiImgae
-        #else
-        symbol
-            .nsuiImgae
-        #endif
-    }
-
-    private var symbol: SFSymbols {
         if name.hasSuffix("framework") {
             Self.frameworkIcon
         } else if name.hasSuffix("bundle") {
@@ -122,17 +117,26 @@ extension RuntimeImageNode {
             Self.folderIcon
         }
     }
+
+    private static func icon(for symbol: SFSymbols) -> NSUIImage {
+        #if os(macOS)
+        symbol
+            .hierarchicalColor(.controlAccentColor)
+            .nsuiImgae
+        #else
+        symbol
+            .nsuiImgae
+        #endif
+    }
 }
 
 extension NSUIColor {
     convenience init(light: NSUIColor, dark: NSUIColor) {
-        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        #if os(macOS)
         self.init(name: nil) { appearance in
             appearance.isLight ? light : dark
         }
-        #endif
-
-        #if canImport(UIKit)
+        #else
         self.init { traitCollection in
             traitCollection.userInterfaceStyle == .light ? light : dark
         }

@@ -1,16 +1,16 @@
 import Foundation
-public import ClassDumpRuntimeSwift
 
 extension RuntimeObjectInterface {
     public struct GenerationOptions: Codable {
-        public var objcHeaderOptions: CDGenerationOptions
+        public var objcHeaderOptions: ObjCGenerationOptions
         public var swiftInterfaceOptions: SwiftGenerationOptions
-        
+
         public init() {
-            objcHeaderOptions = .init()
-            swiftInterfaceOptions = .init()
+            self.objcHeaderOptions = .init()
+            self.swiftInterfaceOptions = .init()
         }
-        public init(objcHeaderOptions: CDGenerationOptions, swiftInterfaceOptions: SwiftGenerationOptions) {
+
+        public init(objcHeaderOptions: ObjCGenerationOptions, swiftInterfaceOptions: SwiftGenerationOptions) {
             self.objcHeaderOptions = objcHeaderOptions
             self.swiftInterfaceOptions = swiftInterfaceOptions
         }

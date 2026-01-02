@@ -6,7 +6,7 @@ Alternative to RuntimeBrowser with a more modern UI and more functionality
 
 Powered by 
 ObjC:
-[ClassDumpRuntime](https://github.com/leptos-null/ClassDumpRuntime)
+[MachOObjCSection](https://github.com/p-x9/MachOObjCSection)
 Swift:
 [MachOSwiftSection](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection)
 
