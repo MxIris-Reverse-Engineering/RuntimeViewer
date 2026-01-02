@@ -53,6 +53,7 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
                     AText(runtimeObject.displayName)
                         .font(.systemFont(ofSize: 13))
                         .foregroundColor(.tertiaryLabelColor)
+                        .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
                 }
                 guard let range = currentAndChildrenNames.ranges(of: runtimeObject.displayName).first else {
                     self.name = name
@@ -90,6 +91,7 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
         AText(runtimeObject.displayName)
             .font(.systemFont(ofSize: 13))
             .foregroundColor(.labelColor)
+            .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
     }
 
     public init(runtimeObject: RuntimeObjectName, parent: SidebarImageCellViewModel?) {

@@ -10,7 +10,7 @@ import SwiftDump
 import SwiftInspection
 @_spi(Support) import SwiftInterface
 
-public struct SwiftGenerationOptions: Sendable, Codable {
+public struct SwiftGenerationOptions: Sendable, Codable, Equatable {
     public var printStrippedSymbolicItem: Bool = true
     public var emitOffsetComments: Bool = false
     public var printTypeLayout: Bool = false
