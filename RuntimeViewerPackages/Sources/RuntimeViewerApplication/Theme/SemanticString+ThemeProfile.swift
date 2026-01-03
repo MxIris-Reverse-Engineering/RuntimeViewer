@@ -26,12 +26,16 @@ extension SemanticString {
             switch type {
             case .type(let kind, _):
                 switch runtimeObjectName.kind {
-                case .objc:
+                case .c, .objc:
                     switch kind {
                     case .class:
                         targetKind = .objc(.type(.class))
                     case .protocol:
                         targetKind = .objc(.type(.protocol))
+                    case .struct:
+                        targetKind = .c(.struct)
+                    case .other:
+                        targetKind = .c(.union)
                     default:
                         break
                     }
@@ -48,13 +52,11 @@ extension SemanticString {
                     default:
                         break
                     }
-                default:
-                    break
                 }
             default:
                 break
             }
-            
+
             #if canImport(AppKit) && !targetEnvironment(macCatalyst)
             if let targetKind {
                 attributes.updateValue(RuntimeObjectName(name: string, displayName: string, kind: targetKind, imagePath: runtimeObjectName.imagePath, children: runtimeObjectName.children), forKey: .link)

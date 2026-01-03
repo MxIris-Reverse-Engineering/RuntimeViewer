@@ -6,13 +6,17 @@ import ObjCTypeDecodeKit
 import MachOObjCSection
 import FoundationToolbox
 import OrderedCollections
+import RuntimeViewerObjC
 
 public struct ObjCGenerationOptions: Sendable, Codable, Equatable {
     public var stripProtocolConformance: Bool = false
     public var stripOverrides: Bool = false
     public var stripSynthesizedIvars: Bool = false
     public var stripSynthesizedMethods: Bool = false
+    public var stripCtorMethod: Bool = false
+    public var stripDtorMethod: Bool = false
     public var addIvarOffsetComments: Bool = false
+    public var addPropertyAttributesComments: Bool = false
 }
 
 actor RuntimeObjCSection {
@@ -63,14 +67,14 @@ actor RuntimeObjCSection {
         }
 
         @SemanticStringBuilder
-        func semanticString(isStruct: Bool, isExpandHandler: (String?, Bool) -> Bool = { _, _ in true }) -> SemanticString {
+        func semanticString(isStruct: Bool, context: ObjCDumpContext) -> SemanticString {
             Keyword(isStruct ? "struct" : "union")
             Space()
             TypeName(kind: .other, name)
             Joined {
                 MemberList(level: 1) {
                     for (index, field) in fields.enumerated() {
-                        field.semanticString(fallbackName: "x\(index)", level: 1, isExpandHandler: isExpandHandler)
+                        field.semanticString(fallbackName: "x\(index)", level: 1, context: context)
                     }
                 }
             } prefix: {
@@ -82,11 +86,20 @@ actor RuntimeObjCSection {
         }
     }
 
+    init(ptr: UnsafeRawPointer) async throws {
+        guard let machO = MachOImage.image(for: ptr) else { throw Error.invalidMachOImage }
+        try await self.init(machO: machO)
+    }
+
     init(imagePath: String) async throws {
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
         guard let machO = MachOImage(name: imageName) else { throw Error.invalidMachOImage }
-        self.imagePath = imagePath
+        try await self.init(machO: machO)
+    }
+
+    init(machO: MachOImage) async throws {
         self.machO = machO
+        self.imagePath = machO.imagePath
         try await prepare()
     }
 
@@ -223,15 +236,15 @@ actor RuntimeObjCSection {
         var resultInfos: [ObjCClassInfo] = [currentInfo]
 
         var machOAndSuperclass = cls.superClass(in: machO) // else { return resultInfos }
-        
+
         while let currentMachOAndSuperclass = machOAndSuperclass {
             let currentMachO = currentMachOAndSuperclass.0
             let currentSuperclass = currentMachOAndSuperclass.1
-            
+
             machOAndSuperclass = currentSuperclass.superClass(in: currentMachO)
-            
+
             guard let superClassName = currentSuperclass.name(in: currentMachO) else { continue }
-            
+
             var superclassInfo: ObjCClassInfo?
             if let cacheInfo = classInfoCache[superClassName] {
                 superclassInfo = cacheInfo
@@ -275,7 +288,8 @@ actor RuntimeObjCSection {
     }
 
     func interface(for name: RuntimeObjectName, using options: ObjCGenerationOptions) async throws -> RuntimeObjectInterface {
-        let isExpandHandler: (String?, Bool) -> Bool = { name, isStruct in
+        let name = name.withImagePath(imagePath)
+        let objcDumpContext = ObjCDumpContext(options: options) { name, isStruct in
             guard let name else { return true }
             if isStruct {
                 return self.structs[name] == nil
@@ -294,6 +308,14 @@ actor RuntimeObjCSection {
                 var needsStripClassMethods: Set<String> = []
                 var needsStripMethods: Set<String> = []
                 var needsStripIvars: Set<String> = []
+
+                if options.stripCtorMethod {
+                    needsStripMethods.insert(".cxx_construct")
+                }
+
+                if options.stripDtorMethod {
+                    needsStripMethods.insert(".cxx_destruct")
+                }
 
                 if options.stripOverrides {
                     for superclassInfo in superclassInfos {
@@ -314,23 +336,40 @@ actor RuntimeObjCSection {
                 if options.stripSynthesizedIvars || options.stripSynthesizedMethods {
                     var needsStripIvarNames: Set<String> = []
 
-                    for property in currentClassInfo.properties {
+                    for property in currentClassInfo.properties + currentClassInfo.classProperties {
                         if options.stripSynthesizedMethods {
                             let propertyName = property.name
                             if let customGetter = property.customGetter {
-                                needsStripMethods.insert(customGetter)
+                                if property.isClassProperty {
+                                    needsStripClassMethods.insert(customGetter)
+                                } else {
+                                    needsStripMethods.insert(customGetter)
+                                }
                             } else {
-                                needsStripMethods.insert(propertyName)
+                                if property.isClassProperty {
+                                    needsStripClassMethods.insert(propertyName)
+                                } else {
+                                    needsStripMethods.insert(propertyName)
+                                }
                             }
 
                             if let customSetter = property.customSetter {
-                                needsStripMethods.insert(customSetter)
+                                if property.isClassProperty {
+                                    needsStripClassMethods.insert(customSetter)
+                                } else {
+                                    needsStripMethods.insert(customSetter)
+                                }
                             } else {
-                                needsStripMethods.insert("set" + propertyName.uppercasedFirst)
+                                let setterMethodName = "set" + propertyName.uppercasedFirst
+                                if property.isClassProperty {
+                                    needsStripClassMethods.insert(setterMethodName)
+                                } else {
+                                    needsStripMethods.insert(setterMethodName)
+                                }
                             }
                         }
 
-                        if options.stripSynthesizedIvars {
+                        if options.stripSynthesizedIvars, !property.isClassProperty {
                             if let ivar = property.ivar {
                                 needsStripIvarNames.insert(ivar)
                             }
@@ -361,23 +400,101 @@ actor RuntimeObjCSection {
                 )
 
                 if let finalClassInfo {
-                    return .init(name: name, interfaceString: finalClassInfo.semanticString(using: options, isExpandHandler: isExpandHandler))
+                    return .init(name: name, interfaceString: finalClassInfo.semanticString(using: objcDumpContext))
                 }
             }
         case .objc(.type(.protocol)):
-            if let interfaceString = protocols[name.name]?.info.semanticString(using: options, isExpandHandler: isExpandHandler) {
-                return .init(name: name, interfaceString: interfaceString)
+            if let currentProtocolInfo = protocols[name.name]?.info {
+                var finalProtocolInfo = currentProtocolInfo
+
+                var needsStripClassProperties: Set<String> = []
+                var needsStripClassMethods: Set<String> = []
+                var needsStripProperties: Set<String> = []
+                var needsStripMethods: Set<String> = []
+
+                if options.stripCtorMethod {
+                    needsStripMethods.insert(".cxx_construct")
+                }
+
+                if options.stripDtorMethod {
+                    needsStripMethods.insert(".cxx_destruct")
+                }
+
+                if options.stripProtocolConformance {
+                    for protocolInfo in currentProtocolInfo.protocols {
+                        needsStripClassProperties.insert(contentsOf: protocolInfo.classProperties.map(\.name))
+                        needsStripProperties.insert(contentsOf: protocolInfo.properties.map(\.name))
+                        needsStripClassMethods.insert(contentsOf: protocolInfo.classMethods.map(\.name))
+                        needsStripMethods.insert(contentsOf: protocolInfo.methods.map(\.name))
+
+                        needsStripClassProperties.insert(contentsOf: protocolInfo.optionalClassProperties.map(\.name))
+                        needsStripProperties.insert(contentsOf: protocolInfo.optionalProperties.map(\.name))
+                        needsStripClassMethods.insert(contentsOf: protocolInfo.optionalClassMethods.map(\.name))
+                        needsStripMethods.insert(contentsOf: protocolInfo.optionalMethods.map(\.name))
+                    }
+                }
+
+                if options.stripSynthesizedMethods {
+                    for property in currentProtocolInfo.properties + currentProtocolInfo.classProperties + currentProtocolInfo.optionalProperties + currentProtocolInfo.optionalClassProperties {
+                        if options.stripSynthesizedMethods {
+                            let propertyName = property.name
+                            if let customGetter = property.customGetter {
+                                if property.isClassProperty {
+                                    needsStripClassMethods.insert(customGetter)
+                                } else {
+                                    needsStripMethods.insert(customGetter)
+                                }
+                            } else {
+                                if property.isClassProperty {
+                                    needsStripClassMethods.insert(propertyName)
+                                } else {
+                                    needsStripMethods.insert(propertyName)
+                                }
+                            }
+
+                            if let customSetter = property.customSetter {
+                                if property.isClassProperty {
+                                    needsStripClassMethods.insert(customSetter)
+                                } else {
+                                    needsStripMethods.insert(customSetter)
+                                }
+                            } else {
+                                let setterMethodName = "set" + propertyName.uppercasedFirst
+                                if property.isClassProperty {
+                                    needsStripClassMethods.insert(setterMethodName)
+                                } else {
+                                    needsStripMethods.insert(setterMethodName)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                finalProtocolInfo = ObjCProtocolInfo(
+                    name: currentProtocolInfo.name,
+                    protocols: currentProtocolInfo.protocols,
+                    classProperties: currentProtocolInfo.classProperties.removingAll { needsStripClassProperties.contains($0.name) },
+                    properties: currentProtocolInfo.properties.removingAll { needsStripProperties.contains($0.name) },
+                    classMethods: currentProtocolInfo.classMethods.removingAll { needsStripClassMethods.contains($0.name) },
+                    methods: currentProtocolInfo.methods.removingAll { needsStripMethods.contains($0.name) },
+                    optionalClassProperties: currentProtocolInfo.optionalClassProperties.removingAll { needsStripClassProperties.contains($0.name) },
+                    optionalProperties: currentProtocolInfo.optionalProperties.removingAll { needsStripProperties.contains($0.name) },
+                    optionalClassMethods: currentProtocolInfo.optionalClassMethods.removingAll { needsStripClassMethods.contains($0.name) },
+                    optionalMethods: currentProtocolInfo.optionalMethods.removingAll { needsStripMethods.contains($0.name) }
+                )
+
+                return .init(name: name, interfaceString: finalProtocolInfo.semanticString(using: objcDumpContext))
             }
         case .objc(.category(.class)):
-            if let interfaceString = categories[name.name]?.info.semanticString(using: options, isExpandHandler: isExpandHandler) {
+            if let interfaceString = categories[name.name]?.info.semanticString(using: objcDumpContext) {
                 return .init(name: name, interfaceString: interfaceString)
             }
         case .c(.struct):
-            if let interfaceString = structs[name.name]?.semanticString(isStruct: true, isExpandHandler: isExpandHandler) {
+            if let interfaceString = structs[name.name]?.semanticString(isStruct: true, context: objcDumpContext) {
                 return .init(name: name, interfaceString: interfaceString)
             }
         case .c(.union):
-            if let interfaceString = unions[name.name]?.semanticString(isStruct: false, isExpandHandler: isExpandHandler) {
+            if let interfaceString = unions[name.name]?.semanticString(isStruct: false, context: objcDumpContext) {
                 return .init(name: name, interfaceString: interfaceString)
             }
         default:
@@ -393,11 +510,26 @@ actor RuntimeObjCSection {
         return classGroups.info.map(\.name)
     }
 }
+extension MachOImage {
+    enum ObjCName {
+        case `class`(String)
+        case `protocol`(String)
+    }
 
-extension Set {
-    @inlinable mutating func insert<S>(contentsOf newElements: S) where S : Sequence, Element == S.Element {
-        for newElement in newElements {
-            insert(newElement)
+    static func image(forName name: ObjCName) -> Self? {
+        switch name {
+        case .class(let string):
+            return .image(forClassName: string)
+        case .protocol(let string):
+            return .image(forProtocolName: string)
         }
+    }
+
+    static func image(forClassName className: String) -> Self? {
+        RVClassFromString(className).flatMap { MachOImage.image(for: autoBitCast($0)) }
+    }
+
+    static func image(forProtocolName protocolName: String) -> Self? {
+        RVProtocolFromString(protocolName).flatMap { MachOImage.image(for: autoBitCast($0)) }
     }
 }

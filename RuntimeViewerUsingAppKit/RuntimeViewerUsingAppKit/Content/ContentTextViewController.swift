@@ -73,6 +73,15 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
             $0.scrollView.backgroundColor = $1.backgroundColor
         })
         .disposed(by: rx.disposeBag)
+        
+        output.runtimeObjectNotFound.emitOnNextMainActor { [weak self] in
+            guard let self else { return }
+            var configuration = HUDView.Configuration.standard()
+            configuration.image = SFSymbols(systemName: .xmark, pointSize: 80, weight: .light).nsuiImgae
+            view.window?.showHUD(with: configuration)
+        }
+        .disposed(by: rx.disposeBag)
+        
         rx.viewDidAppear.asDriver()
             .flatMapLatest { output.imageNameOfRuntimeObject }
             .compactMap { $0 }
