@@ -3,7 +3,7 @@ public import SwiftStdlibToolbox
 
 @Equatable
 @MemberwiseInit(.public)
-public final class RuntimeObjectName: Codable, Hashable, Identifiable, Sendable {
+public struct RuntimeObjectName: Codable, Hashable, Identifiable, Sendable {
     public let name: String
 
     public let displayName: String
@@ -17,6 +17,10 @@ public final class RuntimeObjectName: Codable, Hashable, Identifiable, Sendable 
     public var id: RuntimeObjectName { self }
 
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
+    
+    public func withImagePath(_ imagePath: String) -> RuntimeObjectName {
+        .init(name: name, displayName: displayName, kind: kind, imagePath: imagePath, children: children)
+    }
 }
 
 extension RuntimeObjectName: ComparableBuildable {

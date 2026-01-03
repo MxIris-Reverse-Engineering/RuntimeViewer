@@ -38,6 +38,13 @@ package enum DyldUtilities {
             .map { String(cString: $0) }
     }
 
+    package func imagePath(for ptr: UnsafeRawPointer) -> String? {
+        var info: Dl_info = .init()
+        dladdr(ptr, &info)
+        guard let imagePath = info.dli_fname.map({ String(cString: $0) }) else { return nil }
+        return imagePath
+    }
+    
     package static func loadImage(at path: String) throws {
         try path.withCString { cString in
             let handle = dlopen(cString, RTLD_LAZY)
@@ -50,9 +57,18 @@ package enum DyldUtilities {
         }
     }
 
+    private static var dyldSharedCacheImagePathsCache: [String]?
+    
     private static func dyldSharedCacheImagePaths() -> [String] {
+        if let dyldSharedCacheImagePathsCache { return dyldSharedCacheImagePathsCache }
         guard let dyldCache = DyldCacheLoaded.current, let imageInfos = dyldCache.imageInfos else { return [] }
-        return imageInfos.compactMap { $0.path(in: dyldCache) }
+        let results = imageInfos.compactMap { $0.path(in: dyldCache) }
+        dyldSharedCacheImagePathsCache = results
+        return results
+    }
+    
+    package static func invalidDyldSharedCacheImagePathsCache() {
+        dyldSharedCacheImagePathsCache = nil
     }
     
     package static var dyldSharedCacheImageRootNode: RuntimeImageNode {

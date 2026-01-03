@@ -1,6 +1,6 @@
 import AppKit
 
-class EventMonitor {
+final class EventMonitor {
     private var monitors: [Any?] = []
 
     func addGlobalMonitorForEvents(matching mask: NSEvent.EventTypeMask, handler block: @escaping (NSEvent) -> Void) {

@@ -2,16 +2,18 @@ import Foundation
 import Semantic
 import ObjCDump
 import ObjCTypeDecodeKit
+import MemberwiseInit
 
-extension ObjCCategoryInfo {
-    var uniqueName: String {
-        "\(className)(\(name))"
-    }
+@MemberwiseInit()
+final class ObjCDumpContext {
+    var options: ObjCGenerationOptions
+    var currentArray: SemanticString?
+    var isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }
 }
 
 extension ObjCClassInfo {
     @SemanticStringBuilder
-    func semanticString(using options: ObjCGenerationOptions, isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
+    func semanticString(using context: ObjCDumpContext) -> SemanticString {
         Keyword("@interface")
         Space()
         TypeDeclaration(kind: .class, name)
@@ -30,7 +32,7 @@ extension ObjCClassInfo {
         Joined {
             MemberList(level: 1) {
                 for ivar in ivars {
-                    ivar.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    ivar.semanticString(using: context)
                 }
             }
         } prefix: {
@@ -45,22 +47,22 @@ extension ObjCClassInfo {
         Joined(suffix: BreakLine()) {
             BlockList {
                 for property in classProperties {
-                    property.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    property.semanticString(using: context)
                 }
             }
             BlockList {
                 for property in properties {
-                    property.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    property.semanticString(using: context)
                 }
             }
             BlockList {
                 for method in classMethods {
-                    method.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    method.semanticString(using: context)
                 }
             }
             BlockList {
                 for method in methods {
-                    method.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    method.semanticString(using: context)
                 }
             }
         }
@@ -71,7 +73,7 @@ extension ObjCClassInfo {
 
 extension ObjCProtocolInfo {
     @SemanticStringBuilder
-    func semanticString(using options: ObjCGenerationOptions, isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
+    func semanticString(using context: ObjCDumpContext) -> SemanticString {
         Keyword("@protocol")
         Space()
         TypeDeclaration(kind: .protocol, name)
@@ -88,22 +90,22 @@ extension ObjCProtocolInfo {
             Joined {
                 BlockList {
                     for property in classProperties {
-                        property.semanticString(using: options, isExpandHandler: isExpandHandler)
+                        property.semanticString(using: context)
                     }
                 }
                 BlockList {
                     for property in properties {
-                        property.semanticString(using: options, isExpandHandler: isExpandHandler)
+                        property.semanticString(using: context)
                     }
                 }
                 BlockList {
                     for method in classMethods {
-                        method.semanticString(using: options, isExpandHandler: isExpandHandler)
+                        method.semanticString(using: context)
                     }
                 }
                 BlockList {
                     for method in methods {
-                        method.semanticString(using: options, isExpandHandler: isExpandHandler)
+                        method.semanticString(using: context)
                     }
                 }
             } prefix: {
@@ -114,22 +116,22 @@ extension ObjCProtocolInfo {
             Joined {
                 BlockList {
                     for property in optionalClassProperties {
-                        property.semanticString(using: options, isExpandHandler: isExpandHandler)
+                        property.semanticString(using: context)
                     }
                 }
                 BlockList {
                     for property in optionalProperties {
-                        property.semanticString(using: options, isExpandHandler: isExpandHandler)
+                        property.semanticString(using: context)
                     }
                 }
                 BlockList {
                     for method in optionalClassMethods {
-                        method.semanticString(using: options, isExpandHandler: isExpandHandler)
+                        method.semanticString(using: context)
                     }
                 }
                 BlockList {
                     for method in optionalMethods {
-                        method.semanticString(using: options, isExpandHandler: isExpandHandler)
+                        method.semanticString(using: context)
                     }
                 }
             } prefix: {
@@ -144,7 +146,7 @@ extension ObjCProtocolInfo {
 
 extension ObjCCategoryInfo {
     @SemanticStringBuilder
-    func semanticString(using options: ObjCGenerationOptions, isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
+    func semanticString(using context: ObjCDumpContext) -> SemanticString {
         Keyword("@interface")
         Space()
         TypeName(kind: .class, className)
@@ -162,25 +164,25 @@ extension ObjCCategoryInfo {
         Joined(suffix: BreakLine()) {
             BlockList {
                 for property in classProperties {
-                    property.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    property.semanticString(using: context)
                 }
             }
 
             BlockList {
                 for property in properties {
-                    property.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    property.semanticString(using: context)
                 }
             }
 
             BlockList {
                 for method in classMethods {
-                    method.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    method.semanticString(using: context)
                 }
             }
 
             BlockList {
                 for method in methods {
-                    method.semanticString(using: options, isExpandHandler: isExpandHandler)
+                    method.semanticString(using: context)
                 }
             }
         }
@@ -191,10 +193,10 @@ extension ObjCCategoryInfo {
 
 extension ObjCIvarInfo {
     @SemanticStringBuilder
-    func semanticString(using options: ObjCGenerationOptions, isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
+    func semanticString(using context: ObjCDumpContext) -> SemanticString {
         if let type, case .bitField(let width) = type {
             ObjCField(type: .int, name: name, bitWidth: width)
-                .semanticString(fallbackName: name)
+                .semanticString(fallbackName: name, context: context)
         } else {
             if [.char, .uchar].contains(type) {
                 Keyword("BOOL")
@@ -202,12 +204,16 @@ extension ObjCIvarInfo {
                 Variable(name)
                 ";"
             } else {
-                if let type = type?.semanticDecoded(isExpandHandler: isExpandHandler) {
+                if let type = type?.semanticDecoded(context: context) {
                     type
                     if type.string.last != "*" {
                         Space()
                     }
                     Variable(name)
+                    if let currentArray = context.currentArray {
+                        currentArray
+                        context.currentArray = nil
+                    }
                     ";"
                 } else {
                     UnknownError()
@@ -218,16 +224,16 @@ extension ObjCIvarInfo {
             }
         }
 
-        if options.addIvarOffsetComments {
+        if context.options.addIvarOffsetComments {
             Space()
-            Comment("offset: \(String(offset, radix: 16, uppercase: true))")
+            Comment("offset: \(offset)")
         }
     }
 }
 
 extension ObjCPropertyInfo {
     @SemanticStringBuilder
-    func semanticString(using options: ObjCGenerationOptions, isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
+    func semanticString(using context: ObjCDumpContext) -> SemanticString {
         Keyword("@property")
 
         Joined(separator: ", ", prefix: " (", suffix: ")") {
@@ -274,7 +280,7 @@ extension ObjCPropertyInfo {
 
         Space()
 
-        let typeString = attributes.compactMap(\.type).first?.semanticDecodedForArgument(isExpandHandler: isExpandHandler)
+        let typeString = attributes.compactMap(\.type).first?.semanticDecodedForArgument(context: context)
 
         if let typeString {
             typeString
@@ -287,14 +293,29 @@ extension ObjCPropertyInfo {
         }
 
         MemberDeclaration(name)
-
         ";"
+
+        if context.options.addPropertyAttributesComments {
+            Joined(separator: " ", prefix: " ") {
+                if attributes.contains(.dynamic) {
+                    Comment("@dynamic \(name)")
+                }
+
+                if let ivar {
+                    if ivar == name {
+                        Comment("@synthesize \(ivar)")
+                    } else {
+                        Comment("@synthesize \(name) = \(ivar)")
+                    }
+                }
+            }
+        }
     }
 }
 
 extension ObjCMethodInfo {
     @SemanticStringBuilder
-    func semanticString(using options: ObjCGenerationOptions, isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
+    func semanticString(using context: ObjCDumpContext) -> SemanticString {
         if isClassMethod {
             "+"
         } else {
@@ -305,7 +326,7 @@ extension ObjCMethodInfo {
 
         "("
         if let returnType = type?.returnType {
-            returnType.semanticDecodedForArgument(isExpandHandler: isExpandHandler)
+            returnType.semanticDecodedForArgument(context: context)
         } else {
             UnknownError()
         }
@@ -328,7 +349,7 @@ extension ObjCMethodInfo {
                 ":"
                 "("
                 if index < argumentInfos.count {
-                    argumentInfos[index].type.semanticDecodedForArgument(isExpandHandler: isExpandHandler)
+                    argumentInfos[index].type.semanticDecodedForArgument(context: context)
                 } else {
                     Error("unknown")
                 }
@@ -343,8 +364,8 @@ extension ObjCMethodInfo {
 
 extension ObjCField {
     @SemanticStringBuilder
-    func semanticString(fallbackName: String, level: Int = 1, isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
-        type.semanticDecoded(level: level, isExpandHandler: isExpandHandler)
+    func semanticString(fallbackName: String, level: Int = 1, context: ObjCDumpContext) -> SemanticString {
+        type.semanticDecoded(level: level, context: context)
         Space()
         Variable(name ?? fallbackName)
         if let bitWidth {
@@ -385,27 +406,32 @@ extension ObjCModifier {
 
 extension ObjCType {
     @SemanticStringBuilder
-    func semanticDecodedForArgument(isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
+    func semanticDecodedForArgument(context: ObjCDumpContext) -> SemanticString {
         switch self {
-        case .struct(let name, let fields), .union(let name, let fields):
+        case .struct(let name, let fields),
+             .union(let name, let fields):
             Keyword(isStruct ? "struct" : "union")
             if let name {
                 Space()
-                TypeName(kind: .struct, name)
+                TypeName(kind: isStruct ? .struct : .other, name)
             }
 
-            if isExpandHandler(name, isStruct) {
+            if context.isExpandHandler(name, isStruct) {
                 Joined {
                     if let fields {
-                        for (index, field) in fields.enumerated() {
-                            field.type.semanticDecodedForArgument()
-                            Space()
-                            Variable(field.name ?? "x\(index)")
-                            if let bitWidth = field.bitWidth {
-                                " : "
-                                Numeric(bitWidth)
+                        Joined(separator: " ") {
+                            for (index, field) in fields.enumerated() {
+                                Group {
+                                    field.type.semanticDecodedForArgument(context: context)
+                                    Space()
+                                    Variable(field.name ?? "x\(index)")
+                                    if let bitWidth = field.bitWidth {
+                                        " : "
+                                        Numeric(bitWidth)
+                                    }
+                                    ";"
+                                }
                             }
-                            ";"
                         }
                     }
                 } prefix: {
@@ -417,20 +443,20 @@ extension ObjCType {
         case .char:
             Keyword("BOOL")
         case .pointer(let type):
-            type.semanticDecodedForArgument()
+            type.semanticDecodedForArgument(context: context)
             Space()
             "*"
         case .modified(let modifier, let type):
             modifier.semanticDecoded(level: 0)
             Space()
-            type.semanticDecodedForArgument()
+            type.semanticDecodedForArgument(context: context)
         default:
-            semanticDecoded(level: 0)
+            semanticDecoded(level: 0, context: context)
         }
     }
 
     @SemanticStringBuilder
-    func semanticDecoded(level: Int = 1, isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }) -> SemanticString {
+    func semanticDecoded(level: Int = 1, context: ObjCDumpContext) -> SemanticString {
         switch self {
         case .class:
             TypeName(kind: .class, "Class")
@@ -493,7 +519,7 @@ extension ObjCType {
         case .void:
             Keyword("void")
         case .unknown:
-            Error("unknown")
+            UnknownError()
         case .charPtr:
             Keyword("char")
             Space()
@@ -503,48 +529,90 @@ extension ObjCType {
         case .object(let name):
             if let name {
                 if name.first == "<" && name.last == ">" {
+                    let components = name.components(separatedBy: "><")
                     Keyword("id")
-                    Space()
-                    "<"
-                    TypeName(kind: .protocol, String(name.dropFirst(1).dropLast(1)))
-                    ">"
+                    if components.count > 1 {
+                        Joined(separator: ", ", prefix: "<", suffix: ">") {
+                            for (offset, component) in components.offsetEnumerated() {
+                                if offset.isStart {
+                                    TypeName(kind: .protocol, String(component.dropFirst(1)))
+                                } else if offset.isEnd {
+                                    TypeName(kind: .protocol, String(component.dropLast(1)))
+                                } else {
+                                    TypeName(kind: .protocol, String(component))
+                                }
+                            }
+                        }
+                    } else {
+                        "<"
+                        TypeName(kind: .protocol, String(name.dropFirst(1).dropLast(1)))
+                        ">"
+                    }
                 } else {
-                    TypeName(kind: .class, name)
-                    Space()
-                    "*"
+                    if let protocolPrefixIndex = name.firstIndex(where: { $0 == "<" }) {
+                        let protocols = name[protocolPrefixIndex..<name.endIndex]
+                        let components = protocols.components(separatedBy: "><")
+                        TypeName(kind: .class, String(name[name.startIndex..<protocolPrefixIndex]))
+                        if components.count > 1 {
+                            Joined(separator: ", ", prefix: "<", suffix: ">") {
+                                for (offset, component) in components.offsetEnumerated() {
+                                    if offset.isStart {
+                                        TypeName(kind: .protocol, String(component.dropFirst(1)))
+                                    } else if offset.isEnd {
+                                        TypeName(kind: .protocol, String(component.dropLast(1)))
+                                    } else {
+                                        TypeName(kind: .protocol, String(component))
+                                    }
+                                }
+                            }
+                        } else {
+                            "<"
+                            TypeName(kind: .protocol, String(name.dropFirst(1).dropLast(1)))
+                            ">"
+                        }
+                        Space()
+                        "*"
+                    } else {
+                        TypeName(kind: .class, name)
+                        Space()
+                        "*"
+                    }
                 }
             } else {
                 Keyword("id")
             }
         case .block(let ret, let args):
             if let ret, let args {
-                ret.semanticDecoded(level: level)
+                ret.semanticDecoded(level: level, context: context)
                 " (^)("
                 Joined(separator: ", ") {
                     for arg in args {
-                        arg.semanticDecoded(level: level)
+                        arg.semanticDecoded(level: level, context: context)
                     }
                 }
                 ")"
             } else {
                 Keyword("id")
                 Space()
-                InlineComment(" block ")
+                InlineComment("block")
             }
         case .functionPointer:
             Keyword("void")
             Space()
             "*"
-            InlineComment(" function pointer ")
+            Space()
+            InlineComment("function pointer")
         case .array(let type, let size):
-            type.semanticDecoded(level: level)
-            "["
-            if let size {
-                Numeric(size)
+            type.semanticDecoded(level: level, context: context)
+            context.currentArray = SemanticString {
+                "["
+                if let size {
+                    Numeric(size)
+                }
+                "]"
             }
-            "]"
         case .pointer(let type):
-            type.semanticDecoded(level: level)
+            type.semanticDecoded(level: level, context: context)
             Space()
             "*"
         case .bitField(let width):
@@ -553,41 +621,19 @@ extension ObjCType {
             Variable("x")
             " : "
             Numeric(width)
-        case .union(let name, let fields):
-            Keyword("union")
+        case .struct(let name, let fields),
+             .union(let name, let fields):
+            Keyword(isStruct ? "struct" : "union")
             if let name {
                 Space()
-                TypeName(kind: .other, name)
+                TypeName(kind: isStruct ? .struct : .other, name)
             }
-            if isExpandHandler(name, false) {
+            if context.isExpandHandler(name, false) {
                 Joined {
                     if let fields {
                         MemberList(level: level + 1) {
                             for (index, field) in fields.enumerated() {
-                                field.semanticString(fallbackName: "x\(index)", level: level + 1)
-                            }
-                        }
-                    }
-                } prefix: {
-                    " {"
-                } suffix: {
-                    Indent(level: level)
-                    "}"
-                }.if(fields != nil || name == nil)
-            }
-        case .struct(let name, let fields):
-            Keyword("struct")
-            if let name {
-                Space()
-                TypeName(kind: .struct, name)
-            }
-            
-            if isExpandHandler(name, true) {
-                Joined {
-                    if let fields {
-                        MemberList(level: level + 1) {
-                            for (index, field) in fields.enumerated() {
-                                field.semanticString(fallbackName: "x\(index)", level: level + 1)
+                                field.semanticString(fallbackName: "x\(index)", level: level + 1, context: context)
                             }
                         }
                     }
@@ -601,10 +647,16 @@ extension ObjCType {
         case .modified(let modifier, let type):
             modifier.semanticDecoded(level: level)
             Space()
-            type.semanticDecoded(level: level)
+            type.semanticDecoded(level: level, context: context)
         case .other(let string):
             string
         }
+    }
+}
+
+extension ObjCCategoryInfo {
+    var uniqueName: String {
+        "\(className)(\(name))"
     }
 }
 
@@ -612,11 +664,11 @@ extension ObjCPropertyInfo {
     var ivar: String? {
         attributes.compactMap(\.ivar).first
     }
-    
+
     var customGetter: String? {
         attributes.compactMap(\.getter).first
     }
-    
+
     var customSetter: String? {
         attributes.compactMap(\.setter).first
     }
@@ -633,7 +685,7 @@ extension ObjCPropertyInfo {
 /// - `setFrame` -> `frame`
 /// - `setMaximumNumberOfLines` -> `lines`
 /// - `name` -> `name`
-enum NamingIntelligent {
+private enum NamingIntelligent {
     /// Common prepositions used in Objective-C method names (lowercase).
     /// Ordered by length (longest first) to match longer prepositions before shorter ones.
     private static let prepositions: [String] = [

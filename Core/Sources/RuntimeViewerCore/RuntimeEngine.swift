@@ -4,6 +4,7 @@ import RuntimeViewerObjC
 public import Combine
 import Foundation
 public import RuntimeViewerCommunication
+import MachOKit
 
 public actor RuntimeEngine {
     fileprivate enum CommandNames: String, CaseIterable {
@@ -272,11 +273,25 @@ public actor RuntimeEngine {
         case .swift:
             let swiftSection = imageToSwiftSection[name.imagePath]
             try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions)
-            return try await swiftSection?.interface(for: name)
+            return try? await swiftSection?.interface(for: name)
         case .c, .objc:
-//            return await objcRuntime.interface(for: name, options: options.objcHeaderOptions)
             let objcSection = imageToObjCSection[name.imagePath]
-            return try await objcSection?.interface(for: name, using: options.objcHeaderOptions)
+            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions) {
+                return interface
+            } else {
+                switch name.kind {
+                case .objc(.type(let kind)):
+                    switch kind {
+                    case .class:
+                        return try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions)
+                    case .protocol:
+                        return try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions)
+                    }
+                default:
+                    break
+                }
+            }
+            return nil
         }
     }
 
@@ -288,6 +303,24 @@ public actor RuntimeEngine {
             imageToObjCSection[imagePath] = objcSection
             return objcSection
         }
+    }
+    
+    private func _objcSection(forName name: MachOImage.ObjCName) async -> RuntimeObjCSection? {
+        do {
+            guard let machO = MachOImage.image(forName: name) else { return nil }
+            
+            if let existObjCSection = imageToObjCSection[machO.imagePath] {
+                return existObjCSection
+            }
+            
+            let objcSection = try await RuntimeObjCSection(machO: machO)
+            imageToObjCSection[machO.imagePath] = objcSection
+            return objcSection
+        } catch {
+            logger.error("\(error)")
+            return nil
+        }
+        
     }
     
     private func _swiftSection(for imagePath: String) async throws -> RuntimeSwiftSection {

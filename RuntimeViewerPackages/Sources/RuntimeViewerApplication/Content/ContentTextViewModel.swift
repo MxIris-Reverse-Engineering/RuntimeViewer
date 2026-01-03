@@ -59,25 +59,30 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         public let runtimeObjectName: Driver<String>
         public let theme: Driver<ThemeProfile>
         public let imageNameOfRuntimeObject: Driver<String?>
+        public let runtimeObjectNotFound: Signal<Void>
     }
 
     public func transform(_ input: Input) -> Output {
+        let runtimeObjectNotFoundRelay = PublishRelay<Void>()
+        
         input.runtimeObjectClicked
             .emit(with: self) { target, runtimeObjectName in
-                Task {
-                    if try await target.appServices.runtimeEngine.interface(for: runtimeObjectName, options: .init()) != nil {
-                        await MainActor.run {
-                            target.router.trigger(.next(runtimeObjectName))
-                        }
+                Task { @MainActor in
+                    if let interface = try await target.appServices.runtimeEngine.interface(for: runtimeObjectName, options: .init()) {
+                        target.router.trigger(.next(interface.name))
+                    } else {
+                        runtimeObjectNotFoundRelay.accept()
                     }
                 }
             }
             .disposed(by: rx.disposeBag)
+        
         return Output(
             attributedString: $attributedString.asDriver().compactMap { $0 },
             runtimeObjectName: $runtimeObject.asDriver().map { $0.displayName },
             theme: $theme.asDriver(),
-            imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver()
+            imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver(),
+            runtimeObjectNotFound: runtimeObjectNotFoundRelay.asSignal()
         )
     }
 }
