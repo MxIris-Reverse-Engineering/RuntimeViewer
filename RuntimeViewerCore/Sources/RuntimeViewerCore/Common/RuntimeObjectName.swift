@@ -10,6 +10,8 @@ public struct RuntimeObjectName: Codable, Hashable, Identifiable, Sendable {
     
     public let kind: RuntimeObjectKind
 
+    public let secondaryKind: RuntimeObjectKind?
+    
     public let imagePath: String
 
     public let children: [RuntimeObjectName]
@@ -19,7 +21,7 @@ public struct RuntimeObjectName: Codable, Hashable, Identifiable, Sendable {
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
     
     public func withImagePath(_ imagePath: String) -> RuntimeObjectName {
-        .init(name: name, displayName: displayName, kind: kind, imagePath: imagePath, children: children)
+        .init(name: name, displayName: displayName, kind: kind, secondaryKind: secondaryKind, imagePath: imagePath, children: children)
     }
 }
 

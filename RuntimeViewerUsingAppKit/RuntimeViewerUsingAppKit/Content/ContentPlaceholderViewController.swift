@@ -5,8 +5,10 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 final class ContentPlaceholderViewController: UXKitViewController<ContentPlaceholderViewModel> {
-    let placeholderLabel = Label("Select a runtime object")
+    private let placeholderLabel = Label("Select a runtime object")
 
+    override var contentViewUsingSafeArea: Bool { true }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -15,7 +17,7 @@ final class ContentPlaceholderViewController: UXKitViewController<ContentPlaceho
         }
 
         placeholderLabel.snp.makeConstraints { make in
-            make.center.equalTo(view.safeAreaLayoutGuide)
+            make.center.equalTo(contentView)
         }
 
         placeholderLabel.do {

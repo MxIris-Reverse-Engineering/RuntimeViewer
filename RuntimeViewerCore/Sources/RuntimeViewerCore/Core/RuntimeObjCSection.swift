@@ -265,23 +265,23 @@ actor RuntimeObjCSection {
         var results: [RuntimeObjectName] = []
 
         for structName in structs.keys {
-            results.append(.init(name: structName, displayName: structName, kind: .c(.struct), imagePath: imagePath, children: []))
+            results.append(.init(name: structName, displayName: structName, kind: .c(.struct), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
         for unionName in unions.keys {
-            results.append(.init(name: unionName, displayName: unionName, kind: .c(.union), imagePath: imagePath, children: []))
+            results.append(.init(name: unionName, displayName: unionName, kind: .c(.union), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
-        for cls in classes.keys {
-            results.append(.init(name: cls, displayName: cls, kind: .objc(.type(.class)), imagePath: imagePath, children: []))
+        for (className, objcClassGroup) in classes {
+            results.append(.init(name: className, displayName: className, kind: .objc(.type(.class)), secondaryKind: objcClassGroup.objcClass.isSwiftStable ? .swift(.type(.class)) : nil, imagePath: imagePath, children: []))
         }
 
         for proto in protocols.keys {
-            results.append(.init(name: proto, displayName: proto, kind: .objc(.type(.protocol)), imagePath: imagePath, children: []))
+            results.append(.init(name: proto, displayName: proto, kind: .objc(.type(.protocol)), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
         for category in categories.keys {
-            results.append(.init(name: category, displayName: category, kind: .objc(.category(.class)), imagePath: imagePath, children: []))
+            results.append(.init(name: category, displayName: category, kind: .objc(.category(.class)), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
         return results

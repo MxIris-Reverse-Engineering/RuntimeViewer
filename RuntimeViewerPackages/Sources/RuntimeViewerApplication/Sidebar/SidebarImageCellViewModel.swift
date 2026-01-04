@@ -81,7 +81,10 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
     }
 
     @Observed
-    public private(set) var icon: NSUIImage?
+    public private(set) var primaryIcon: NSUIImage?
+    
+    @Observed
+    public private(set) var secondaryIcon: NSUIImage?
 
     @Observed
     public private(set) var name: NSAttributedString = .init()
@@ -98,7 +101,8 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
         self.runtimeObject = runtimeObject
         super.init()
         self.parent = parent
-        self.icon = runtimeObject.kind.icon
+        self.primaryIcon = runtimeObject.kind.icon
+        self.secondaryIcon = runtimeObject.secondaryKind?.icon
         self.name = defaultAttributedName
     }
 

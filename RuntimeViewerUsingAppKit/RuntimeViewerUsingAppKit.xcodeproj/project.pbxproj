@@ -27,6 +27,7 @@
 		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
 		E953C3B82EDB406000C5BA4A /* ItemPopUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E953C3B72EDB406000C5BA4A /* ItemPopUpButton.swift */; };
 		E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */; };
+		E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */; };
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
 		E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */; };
 		E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */; };
@@ -186,6 +187,7 @@
 		E9668FFB2CEF7140007B344A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9668FFC2CEF7140007B344A /* launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = launchd.plist; sourceTree = "<group>"; };
 		E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RuntimeSource+.swift"; sourceTree = "<group>"; };
+		E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CheckboxButton+.swift"; sourceTree = "<group>"; };
 		E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadFrameworksViewController.swift; sourceTree = "<group>"; };
 		E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = LoadFrameworksViewController.xib; sourceTree = "<group>"; };
 		E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewModel.swift; sourceTree = "<group>"; };
@@ -460,8 +462,8 @@
 			isa = PBXGroup;
 			children = (
 				E9A8254B2C0E0EA600D9A85D /* InspectorCoordinator.swift */,
-				E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */,
 				E9A8254F2C0E0EB400D9A85D /* InspectorNavigationController.swift */,
+				E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */,
 				E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */,
 				E9EEF7682E085426008D85D1 /* InspectorClassHierarchyView.swift */,
 				E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */,
@@ -483,6 +485,7 @@
 				E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */,
 				E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */,
 				E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */,
+				E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -774,6 +777,7 @@
 				E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */,
 				E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorNavigationController.swift in Sources */,
+				E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */,
 				E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */,
 				E9EEE8DD2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,

@@ -59,7 +59,7 @@ extension SemanticString {
 
             #if canImport(AppKit) && !targetEnvironment(macCatalyst)
             if let targetKind {
-                attributes.updateValue(RuntimeObjectName(name: string, displayName: string, kind: targetKind, imagePath: runtimeObjectName.imagePath, children: runtimeObjectName.children), forKey: .link)
+                attributes.updateValue(RuntimeObjectName(name: string, displayName: string, kind: targetKind, secondaryKind: runtimeObjectName.secondaryKind, imagePath: runtimeObjectName.imagePath, children: runtimeObjectName.children), forKey: .link)
             }
             #endif
 

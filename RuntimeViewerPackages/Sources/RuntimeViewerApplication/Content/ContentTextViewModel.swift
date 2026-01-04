@@ -25,9 +25,6 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
     public private(set) var attributedString: NSAttributedString?
 
-    @Dependency(\.appDefaults)
-    private var appDefaults
-
     public init(runtimeObject: RuntimeObjectName, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
@@ -66,9 +63,16 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let runtimeObjectNotFoundRelay = PublishRelay<Void>()
         
         input.runtimeObjectClicked
-            .emit(with: self) { target, runtimeObjectName in
+            .flatMapLatest { [unowned self] runtimeObjectName in
+                Observable.async {
+                    try await self.appServices.runtimeEngine.interface(for: runtimeObjectName, options: .init())
+                }
+                .trackActivity(_commonLoading)
+                .asSignal(onErrorJustReturn: nil)
+            }
+            .emit(with: self) { target, interface in
                 Task { @MainActor in
-                    if let interface = try await target.appServices.runtimeEngine.interface(for: runtimeObjectName, options: .init()) {
+                    if let interface {
                         target.router.trigger(.next(interface.name))
                     } else {
                         runtimeObjectNotFoundRelay.accept()

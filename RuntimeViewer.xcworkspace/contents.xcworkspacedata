@@ -2,7 +2,16 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "group:Core">
+      location = "absolute:/Volumes/Repositories/Private/Fork/Library/MachOKit">
+   </FileRef>
+   <FileRef
+      location = "absolute:/Volumes/Repositories/Private/Fork/Library/MachOObjCSection">
+   </FileRef>
+   <FileRef
+      location = "absolute:/Volumes/Repositories/Private/Personal/Library/macOS/MachOSwiftSection">
+   </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerCore">
    </FileRef>
    <FileRef
       location = "group:RuntimeViewerPackages">

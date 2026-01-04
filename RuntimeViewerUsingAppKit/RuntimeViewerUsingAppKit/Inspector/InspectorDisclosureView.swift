@@ -4,17 +4,19 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
 class InspectorDisclosureView<ContentView: NSView>: XiblessView {
-    class HeaderView: XiblessView {
+    private final class HeaderView: XiblessView {
         let titleLabel = Label()
 
         let disclosureButton = Button()
 
         override init(frame frameRect: CGRect) {
             super.init(frame: frameRect)
+
             hierarchy {
                 titleLabel
                 disclosureButton
             }
+
             titleLabel.snp.makeConstraints { make in
                 make.top.left.equalToSuperview().inset(15)
                 make.bottom.equalToSuperview()
@@ -27,13 +29,13 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
 
             titleLabel.textColor = .secondaryLabelColor
             titleLabel.font = .systemFont(ofSize: 12, weight: .bold)
+
             disclosureButton.title = "Hide"
             disclosureButton.alternateTitle = "Show"
             disclosureButton.setButtonType(.toggle)
             disclosureButton.contentTintColor = .secondaryLabelColor
             disclosureButton.font = .systemFont(ofSize: 12, weight: .bold)
             disclosureButton.isBordered = false
-
             disclosureButton.alphaValue = 0.0
         }
 
@@ -55,7 +57,7 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
         }
     }
 
-    let headerView: HeaderView
+    private let headerView: HeaderView
 
     let contentView: ContentView
 
@@ -68,7 +70,9 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
     init(contentView: ContentView) {
         self.headerView = HeaderView()
         self.contentView = contentView
+
         super.init(frame: .zero)
+
         hierarchy {
             headerView
             contentView
@@ -86,7 +90,7 @@ class InspectorDisclosureView<ContentView: NSView>: XiblessView {
         }
     }
 
-    func setupContentViewConstraints(for disclosureState: NSControl.StateValue) {
+    private func setupContentViewConstraints(for disclosureState: NSControl.StateValue) {
         contentView.snp.remakeConstraints { make in
             make.top.equalTo(headerView.snp.bottom).offset(15)
             make.left.bottom.equalToSuperview().inset(15)

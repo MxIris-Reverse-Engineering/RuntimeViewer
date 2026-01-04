@@ -4,10 +4,13 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
 final class InspectorPlaceholderViewController: UXEffectViewController<InspectorPlaceholderViewModel> {
-    let placeholderLabel = Label("No Selection")
+    private let placeholderLabel = Label("No Selection")
 
+    override var contentViewUsingSafeArea: Bool { true }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
+        
         contentView.hierarchy {
             placeholderLabel
         }

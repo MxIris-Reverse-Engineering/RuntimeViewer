@@ -284,11 +284,11 @@ extension ObjCPropertyInfo {
 
         if let typeString {
             typeString
+            if typeString.string.last != "*" {
+                Space()
+            }
         } else {
             UnknownError()
-        }
-
-        if !(typeString?.string.last == "*" || typeString == nil) {
             Space()
         }
 
@@ -351,7 +351,7 @@ extension ObjCMethodInfo {
                 if index < argumentInfos.count {
                     argumentInfos[index].type.semanticDecodedForArgument(context: context)
                 } else {
-                    Error("unknown")
+                    UnknownError()
                 }
                 ")"
                 Argument(NamingIntelligent.parameterName(from: labelString))
@@ -528,6 +528,7 @@ extension ObjCType {
             Keyword("atom")
         case .object(let name):
             if let name {
+                // eg. id<NSObject>
                 if name.first == "<" && name.last == ">" {
                     let components = name.components(separatedBy: "><")
                     Keyword("id")
@@ -549,8 +550,10 @@ extension ObjCType {
                         ">"
                     }
                 } else {
-                    if let protocolPrefixIndex = name.firstIndex(where: { $0 == "<" }) {
-                        let protocols = name[protocolPrefixIndex..<name.endIndex]
+                    // eg. NSObject<NSCopying, NSCoding, ...>
+                    if let protocolPrefixIndex = name.firstIndex(of: "<"), let protocolSuffixIndex = name.lastIndex(of: ">") {
+                        let protocolStartIndex = name.index(after: protocolPrefixIndex)
+                        let protocols = name[protocolStartIndex..<protocolSuffixIndex]
                         let components = protocols.components(separatedBy: "><")
                         TypeName(kind: .class, String(name[name.startIndex..<protocolPrefixIndex]))
                         if components.count > 1 {
@@ -566,8 +569,9 @@ extension ObjCType {
                                 }
                             }
                         } else {
+                            // eg. NSObject<NSCopying>
                             "<"
-                            TypeName(kind: .protocol, String(name.dropFirst(1).dropLast(1)))
+                            TypeName(kind: .protocol, String(protocols))
                             ">"
                         }
                         Space()
@@ -628,7 +632,7 @@ extension ObjCType {
                 Space()
                 TypeName(kind: isStruct ? .struct : .other, name)
             }
-            if context.isExpandHandler(name, false) {
+            if context.isExpandHandler(name, isStruct) {
                 Joined {
                     if let fields {
                         MemberList(level: level + 1) {

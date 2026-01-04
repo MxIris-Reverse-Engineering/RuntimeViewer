@@ -4,9 +4,9 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
 final class InspectorClassViewController: UXEffectViewController<InspectorClassViewModel> {
-    let classHierarchyView = InspectorClassHierarchyView()
+    private let classHierarchyView = InspectorClassHierarchyView()
 
-    lazy var contentStackView = VStackView {
+    private lazy var contentStackView = VStackView {
         classHierarchyView
     }
 
@@ -18,7 +18,7 @@ final class InspectorClassViewController: UXEffectViewController<InspectorClassV
         }
 
         contentStackView.snp.makeConstraints { make in
-            make.edges.equalTo(view.safeAreaLayoutGuide)
+            make.edges.equalTo(contentView.safeAreaLayoutGuide)
         }
     }
 

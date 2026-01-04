@@ -7,14 +7,38 @@ import RuntimeViewerArchitectures
 final class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTextViewDelegate {
     override var acceptsFirstResponder: Bool { true }
 
-    let scrollView = ContentTextView.scrollableTextView()
+    override var shouldDisplayCommonLoading: Bool { true }
 
-    var textView: ContentTextView { scrollView.documentView as! ContentTextView }
+    private let (scrollView, textView): (NSScrollView, ContentTextView) = {
+        let scrollView = NSScrollView()
+        let textView = ContentTextView(usingTextLayoutManager: false)
 
-    let eventMonitor = EventMonitor()
+        textView.textContainer?.widthTracksTextView = true
+        textView.textContainer?.heightTracksTextView = false
 
-    let jumpToDefinitionRelay = PublishRelay<RuntimeObjectName>()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.drawsBackground = true
+        scrollView.contentView.drawsBackground = true
+        scrollView.documentView = textView
 
+        textView.isRichText = false
+        textView.usesRuler = false
+        textView.usesInspectorBar = false
+        textView.allowsDocumentBackgroundColorChange = false
+        textView.importsGraphics = false
+        textView.usesFontPanel = false
+        textView.isVerticallyResizable = true
+
+        return (scrollView, textView)
+    }()
+
+    private let eventMonitor = EventMonitor()
+
+    private let jumpToDefinitionRelay = PublishRelay<RuntimeObjectName>()
+
+    private var isPressedCommand: Bool = false
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -41,7 +65,6 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         }
     }
 
-    var isPressedCommand: Bool = false
 
     override func setupBindings(for viewModel: ContentTextViewModel) {
         super.setupBindings(for: viewModel)
@@ -51,29 +74,29 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         )
         let output = viewModel.transform(input)
 
-        viewModel.delayedLoading.driveOnNextMainActor { [weak self] isLoading in
-            guard let self else { return }
-            
-            if isLoading {
-                textView.showSkeleton(using: .default)
-            } else {
-                textView.hideSkeleton()
-            }
+//        viewModel.delayedLoading.driveOnNextMainActor { [weak self] isLoading in
+//            guard let self else { return }
+//
+//            if isLoading {
+//                textView.showSkeleton(using: .default)
+//            } else {
+//                textView.hideSkeleton()
+//            }
+//        }
+//        .disposed(by: rx.disposeBag)
+
+        output.attributedString.drive(with: self) { target, attributedString in
+            target.textView.textStorage?.setAttributedString(attributedString)
         }
         .disposed(by: rx.disposeBag)
-        
-        output.attributedString.drive(with: self, onNext: { target, attributedString in
-            target.textView.textStorage?.setAttributedString(attributedString)
-        })
-        .disposed(by: rx.disposeBag)
 
-        output.theme.drive(with: self, onNext: {
+        output.theme.drive(with: self) {
             ($0.contentView as? UXView)?.backgroundColor = $1.backgroundColor
             $0.textView.backgroundColor = $1.backgroundColor
             $0.scrollView.backgroundColor = $1.backgroundColor
-        })
+        }
         .disposed(by: rx.disposeBag)
-        
+
         output.runtimeObjectNotFound.emitOnNextMainActor { [weak self] in
             guard let self else { return }
             var configuration = HUDView.Configuration.standard()
@@ -81,12 +104,13 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
             view.window?.showHUD(with: configuration)
         }
         .disposed(by: rx.disposeBag)
-        
+
         rx.viewDidAppear.asDriver()
             .flatMapLatest { output.imageNameOfRuntimeObject }
             .compactMap { $0 }
             .drive(with: self) { $0.view.window?.title = $1 }
             .disposed(by: rx.disposeBag)
+
         rx.viewDidAppear.asDriver()
             .flatMapLatest { output.runtimeObjectName }
             .drive(with: self) { $0.view.window?.subtitle = $1 }
@@ -119,7 +143,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         return menu
     }
 
-    @objc func jumpToDefinitionAction(_ sender: JumpToDefinitionMenuItem) {
+    @objc private func jumpToDefinitionAction(_ sender: JumpToDefinitionMenuItem) {
         jumpToDefinitionRelay.accept(sender.runtimeObject)
     }
 
@@ -128,7 +152,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
             #selector(performTextFinderAction(_:)),
         ]
     }
-    
+
     override func performTextFinderAction(_ sender: Any?) {
         textView.performTextFinderAction(sender)
     }
@@ -145,7 +169,7 @@ extension ContentTextViewController: NSMenuItemValidation {
     }
 }
 
-class JumpToDefinitionMenuItem: NSMenuItem {
+private final class JumpToDefinitionMenuItem: NSMenuItem {
     let runtimeObject: RuntimeObjectName
 
     init(runtimeObject: RuntimeObjectName) {
@@ -163,7 +187,7 @@ class JumpToDefinitionMenuItem: NSMenuItem {
 }
 
 extension Selector {
-    var isStandardAction: Bool {
+    fileprivate var isStandardAction: Bool {
         self == #selector(NSText.cut(_:)) || self == #selector(NSText.copy(_:)) || self == #selector(NSText.paste(_:))
     }
 }
