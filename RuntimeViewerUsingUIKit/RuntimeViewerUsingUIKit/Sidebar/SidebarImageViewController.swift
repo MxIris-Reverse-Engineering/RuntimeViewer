@@ -69,7 +69,7 @@ class SidebarImageViewController: UIKitViewController<SidebarImageViewModel> {
             var content = cell.defaultContentConfiguration()
             content.textProperties.allowsDefaultTighteningForTruncation = false
             content.attributedText = viewModel.name
-            content.image = viewModel.icon
+            content.image = viewModel.primaryIcon
 
             cell.contentConfiguration = content
         }
