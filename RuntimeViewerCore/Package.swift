@@ -98,8 +98,8 @@ let package = Package(
             from: "0.23.0-fork"
         ),
         .package(
-            url: "https://github.com/groue/Semaphore",
-            from: "0.1.0"
+            url: "https://github.com/MxIris-Library-Forks/Semaphore",
+            branch: "main"
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",

@@ -27,16 +27,19 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
             let contentPlaceholderViewController = ContentPlaceholderViewController()
             let contentPlaceholderViewModel = ContentPlaceholderViewModel(appServices: appServices, router: self)
             contentPlaceholderViewController.setupBindings(for: contentPlaceholderViewModel)
+            contentPlaceholderViewController.loadViewIfNeeded()
             return .set([contentPlaceholderViewController], animated: false)
         case .root(let runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
+            contentTextViewController.loadViewIfNeeded()
             return .set([contentTextViewController], animated: false)
         case .next(let runtimeObjectType):
             let contentTextViewController = ContentTextViewController()
             let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
+            contentTextViewController.loadViewIfNeeded()
             return .push(contentTextViewController, animated: true)
         case .back:
             return .pop(animated: true)

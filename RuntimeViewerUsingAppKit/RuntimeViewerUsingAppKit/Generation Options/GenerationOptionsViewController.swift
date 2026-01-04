@@ -107,7 +107,7 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
 }
 
 extension CGSize {
-    func inset(_ value: CGFloat) -> CGSize {
+    fileprivate func inset(_ value: CGFloat) -> CGSize {
         return .init(width: width + value * 2, height: height + value * 2)
     }
 }

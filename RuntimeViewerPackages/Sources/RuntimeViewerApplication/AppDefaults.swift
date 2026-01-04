@@ -7,6 +7,8 @@ import Dependencies
 public final class AppDefaults {
     fileprivate static let shared = AppDefaults()
 
+    private init() {}
+    
     @UserDefault(key: "generationOptions", defaultValue: .init())
     public var options: RuntimeObjectInterface.GenerationOptions
 

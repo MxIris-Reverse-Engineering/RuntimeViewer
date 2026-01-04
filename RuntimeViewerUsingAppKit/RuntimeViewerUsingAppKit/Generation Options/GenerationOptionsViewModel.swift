@@ -16,8 +16,6 @@ final class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
         let options: Driver<RuntimeObjectInterface.GenerationOptions>
     }
 
-    @Dependency(\.appDefaults)
-    var appDefaults
 
     func transform(_ input: Input) -> Output {
         input.updateOption

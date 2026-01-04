@@ -101,19 +101,19 @@ actor RuntimeSwiftSection {
         let typeChildren = try extensionDefintions.flatMap { $0.types }.map { try makeRuntimeObjectName(for: $0, isChild: true) }
         let protocolChildren = try extensionDefintions.flatMap { $0.protocols }.map { try makeRuntimeObjectName(for: $0, isChild: true) }
         let mangledName = try mangleAsString(extensionName.node)
-        let runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: extensionName.name, kind: kind, imagePath: imagePath, children: typeChildren + protocolChildren)
+        let runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: extensionName.name, kind: kind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren)
         nameToInterfaceDefinitionName[runtimeObjectName] = definitionName
         return runtimeObjectName
     }
-
+    
     private func makeRuntimeObjectName(for protocolDefintion: ProtocolDefinition, isChild: Bool) throws -> RuntimeObjectName {
         let mangledName = try mangleAsString(protocolDefintion.protocolName.node)
         let runtimeObjectName: RuntimeObjectName
         if isChild {
-            runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: protocolDefintion.protocolName.currentName, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [])
+            runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: protocolDefintion.protocolName.currentName, kind: protocolDefintion.protocolName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: [])
             nameToInterfaceDefinitionName[runtimeObjectName] = .childProtocol(protocolDefintion.protocolName)
         } else {
-            runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, imagePath: imagePath, children: [])
+            runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: [])
             nameToInterfaceDefinitionName[runtimeObjectName] = .rootProtocol(protocolDefintion.protocolName)
         }
         return runtimeObjectName
@@ -125,10 +125,10 @@ actor RuntimeSwiftSection {
         let mangledName = try mangleAsString(typeDefinition.typeName.node)
         let runtimeObjectName: RuntimeObjectName
         if isChild {
-            runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: typeDefinition.typeName.currentName, kind: typeDefinition.typeName.runtimeObjectKind, imagePath: imagePath, children: typeChildren + protocolChildren)
+            runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: typeDefinition.typeName.currentName, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren)
             nameToInterfaceDefinitionName[runtimeObjectName] = .childType(typeDefinition.typeName)
         } else {
-            runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: typeDefinition.typeName.name, kind: typeDefinition.typeName.runtimeObjectKind, imagePath: imagePath, children: typeChildren + protocolChildren)
+            runtimeObjectName = RuntimeObjectName(name: mangledName, displayName: typeDefinition.typeName.name, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren)
             nameToInterfaceDefinitionName[runtimeObjectName] = .rootType(typeDefinition.typeName)
         }
         return runtimeObjectName

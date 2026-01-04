@@ -26,7 +26,7 @@ final class CommonLoadingView: XiblessView {
 
     private let loadingIndicator: MaterialLoadingIndicator = .init(radius: 25, color: .controlAccentColor)
 
-    override init(frame frameRect: CGRect) {
+    public override init(frame frameRect: CGRect) {
         super.init(frame: frameRect)
 
         hierarchy {

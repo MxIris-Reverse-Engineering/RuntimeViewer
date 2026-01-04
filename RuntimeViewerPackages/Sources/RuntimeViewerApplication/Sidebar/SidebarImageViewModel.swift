@@ -14,10 +14,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @Observed private var filteredNodes: [SidebarImageCellViewModel] = []
     @Observed private var loadState: RuntimeImageLoadState = .unknown
     @Observed public private(set) var isFiltering: Bool = false
-    
-    @Dependency(\.appDefaults)
-    private var appDefaults
-    
+
     public init(node imageNode: RuntimeImageNode, appServices: AppServices, router: any Router<SidebarRoute>) {
         self.runtimeEngine = appServices.runtimeEngine
         self.imageNode = imageNode
@@ -144,19 +141,14 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     }
 
     private func tryLoadImage() {
-        Task {
+        Task { @MainActor in
             do {
-                await MainActor.run {
-                    loadState = .loading
-                }
+                loadState = .loading
                 try await runtimeEngine.loadImage(at: imagePath)
-                await MainActor.run {
-                    loadState = .loaded
-                }
+                loadState = .loaded
+
             } catch {
-                await MainActor.run {
-                    loadState = .loadError(error)
-                }
+                loadState = .loadError(error)
             }
         }
     }

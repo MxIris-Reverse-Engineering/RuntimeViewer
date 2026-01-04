@@ -2,6 +2,7 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
     public enum C: Codable, Hashable, Identifiable, CaseIterable, Sendable {
         case `struct`
         case `union`
+        
         public var id: Self { self }
     }
 
@@ -14,7 +15,9 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
 
         case type(Kind)
         case category(Kind)
+        
         public var id: Self { self }
+        
         public static let allCases: [RuntimeObjectKind.ObjectiveC] = Kind.allCases.map { .type($0) } + Kind.allCases.map { .category($0) }
     }
 
@@ -31,7 +34,9 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         case type(Kind)
         case `extension`(Kind)
         case conformance(Kind)
+        
         public var id: Self { self }
+        
         public static let allCases: [RuntimeObjectKind.Swift] = Kind.allCases.map { .type($0) } + Kind.allCases.map { .extension($0) } + Kind.allCases.map { .conformance($0) }
     }
 

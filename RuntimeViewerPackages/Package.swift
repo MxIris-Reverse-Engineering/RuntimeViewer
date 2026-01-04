@@ -16,6 +16,12 @@ if usingSystemUXKit {
     sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
 }
 
+enum MxIrisStudioWorkspace {
+    static let relativeForkDirectory = "../../../../Fork"
+
+    static let relativePersonalDirectory = "../../../../Personal"
+}
+
 extension Package.Dependency {
     enum LocalSearchPath {
         case package(path: String, isRelative: Bool, isEnabled: Bool)
@@ -44,7 +50,7 @@ extension Package.Dependency {
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
-        .iOS(.v17), .macOS(.v14), .macCatalyst(.v17), .tvOS(.v17), .visionOS(.v1),
+        .iOS(.v18), .macOS(.v15), .macCatalyst(.v18), .tvOS(.v18), .visionOS(.v2),
     ],
     products: [
         .library(
@@ -66,7 +72,7 @@ let package = Package(
     ],
     dependencies: [
         .package(
-            path: "../Core"
+            path: "../RuntimeViewerCore"
         ),
         .package(
             url: "https://github.com/ChimeHQ/Rearrange.git",
@@ -82,14 +88,14 @@ let package = Package(
         ),
         .package(
             local: .package(
-                path: "../../../Library/macOS/CocoaCoordinator",
+                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/CocoaCoordinator",
                 isRelative: true,
                 isEnabled: true
             ),
-            remote:.package(
+            remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
                 branch: "main"
-            ),
+            )
         ),
         .package(
             url: "https://github.com/SnapKit/SnapKit",
@@ -104,8 +110,15 @@ let package = Package(
             from: "0.2.0"
         ),
         .package(
-            url: "https://github.com/Mx-Iris/RxAppKit",
-            branch: "main"
+            local: .package(
+                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/RxAppKit",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/RxAppKit",
+                branch: "main"
+            ),
         ),
         .package(
             url: "https://github.com/OpenUXKit/OpenUXKit",
@@ -136,8 +149,15 @@ let package = Package(
             from: "0.1.0"
         ),
         .package(
-            url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
-            branch: "main"
+            local: .package(
+                path: "\(MxIrisStudioWorkspace.relativeForkDirectory)/Library/filter-ui",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
+                branch: "main"
+            ),
         ),
         .package(
             url: "https://github.com/TrGiLong/RxConcurrency",
@@ -150,7 +170,7 @@ let package = Package(
                 isEnabled: true
             ),
             .package(
-                path: "../../../../Personal/Library/macOS/MachInjector",
+                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/MachInjector",
                 isRelative: true,
                 isEnabled: true
             ),
@@ -165,7 +185,7 @@ let package = Package(
         ),
         .package(
             local: .package(
-                path: "../../../../Personal/Library/macOS/RunningApplicationKit",
+                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/RunningApplicationKit",
                 isRelative: true,
                 isEnabled: true
             ),
@@ -196,6 +216,10 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/database-utility/fuzzy-search.git",
+            branch: "main"
+        ),
+        .package(
+            url: "https://github.com/MxIris-macOS-Library-Forks/AppKitUI",
             branch: "main"
         ),
     ],
@@ -236,6 +260,7 @@ let package = Package(
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
                 .product(name: "LateResponders", package: "LateResponders"),
+                .product(name: "AppKitUI", package: "AppKitUI", condition: .when(platforms: appkitPlatforms))
 //                .product(name: "DSFInspectorPanes", package: "DSFInspectorPanes", condition: .when(platforms: appkitPlatforms)),
             ],
             swiftSettings: sharedSwiftSettings
@@ -243,7 +268,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerApplication",
             dependencies: [
-                .product(name: "RuntimeViewerCore", package: "Core"),
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
@@ -255,7 +280,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerService",
             dependencies: [
-                .product(name: "RuntimeViewerCommunication", package: "Core"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
             ]

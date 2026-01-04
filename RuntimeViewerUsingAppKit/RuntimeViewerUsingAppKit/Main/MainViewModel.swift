@@ -49,9 +49,6 @@ final class MainViewModel: ViewModel<MainRoute> {
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
     }
-
-    @Dependency(\.appDefaults)
-    var appDefaults
     
     var completeTransition: Observable<SidebarRoute>? {
         didSet {

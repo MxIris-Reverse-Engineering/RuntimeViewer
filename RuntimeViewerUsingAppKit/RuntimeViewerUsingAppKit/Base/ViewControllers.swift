@@ -4,29 +4,29 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
-    var viewModel: ViewModel?
+open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
+    public private(set) var viewModel: ViewModel?
 
     private let commonLoadingView = CommonLoadingView()
 
-    private(set) var contentView: NSView = UXView()
+    public private(set) var contentView: NSView = UXView()
 
-    var shouldDisplayCommonLoading: Bool { false }
+    open var shouldDisplayCommonLoading: Bool { false }
 
-    var contentViewUsingSafeArea: Bool { false }
+    open var contentViewUsingSafeArea: Bool { false }
 
     private var usesSkeletonReplaceCommonLoading: Bool { false }
-    
+
     private var _shouldSetupCommonLoading: Bool {
         shouldDisplayCommonLoading && !usesSkeletonReplaceCommonLoading
     }
-    
-    init(viewModel: ViewModel? = nil) {
+
+    public init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
     }
 
-    override func viewDidLoad() {
+    public override func viewDidLoad() {
         super.viewDidLoad()
 
         hierarchy {
@@ -49,17 +49,14 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
                 make.edges.equalTo(view.safeAreaLayoutGuide)
             }
         }
-        
-        
-//        identifier = "com.JH.RuntimeViewer.\(Self.self).identifier\(".\(viewModel?.appServices.runtimeEngine.source.description ?? "")")"
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
+    public required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func setupBindings(for viewModel: ViewModel) {
+    public func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
 
         self.viewModel = viewModel
@@ -127,7 +124,7 @@ class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
     }
 }
 
-class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<ViewModel> {
+open class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<ViewModel> {
     private lazy var effectView: NSView = {
         if #available(macOS 26.0, *) {
             let view = UXView()
@@ -138,27 +135,27 @@ class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<
         }
     }()
 
-    override var contentView: NSView { effectView }
+    open override var contentView: NSView { effectView }
 
-    override func viewDidLoad() {
+    public override func viewDidLoad() {
         super.viewDidLoad()
     }
 }
 
-class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController {
-    var viewModel: ViewModel?
+open class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController {
+    public private(set) var viewModel: ViewModel?
 
-    init(viewModel: ViewModel? = nil) {
+    public init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
     }
 
     @available(*, unavailable)
-    required init?(coder: NSCoder) {
+    public required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func setupBindings(for viewModel: ViewModel) {
+    public func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
         self.viewModel = viewModel
 

@@ -1,6 +1,14 @@
 {
-  "originHash" : "7d379a5080f10b45a1ce2b5811c6d3251ac5634121fd96b987372ca4ae3d8ae6",
   "pins" : [
+    {
+      "identity" : "appkitui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-macOS-Library-Forks/AppKitUI",
+      "state" : {
+        "branch" : "main",
+        "revision" : "02f2b38a8ba79558b4fc46c5f5a927dabab50c87"
+      }
+    },
     {
       "identity" : "associatedobject",
       "kind" : "remoteSourceControl",
@@ -65,18 +73,9 @@
       }
     },
     {
-      "identity" : "filter-ui",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
-      "state" : {
-        "branch" : "main",
-        "revision" : "e272e38192f06aedbd57c4274bb71100ce983fd8"
-      }
-    },
-    {
       "identity" : "frameworktoolbox",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
+      "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
         "branch" : "main",
         "revision" : "7bdb133931d36461e8f8cc3f6987107260726140"
@@ -151,7 +150,7 @@
       "location" : "https://github.com/MxIris-Library-Forks/NSAttributedStringBuilder",
       "state" : {
         "branch" : "master",
-        "revision" : "fe2d2c1ec2f3c09e61df8ee81846398b4ada4589"
+        "revision" : "d0d35f858a556b7f7f6ad2da7d7a8b469a72fb5c"
       }
     },
     {
@@ -179,15 +178,6 @@
       "state" : {
         "revision" : "f1d74e1642956f0300756ad8d1d64e9034857bc3",
         "version" : "2.0.0"
-      }
-    },
-    {
-      "identity" : "rxappkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RxAppKit",
-      "state" : {
-        "branch" : "main",
-        "revision" : "3a82b38b385bf7de70a2fe6b50aabe72b0c68c31"
       }
     },
     {
@@ -247,10 +237,10 @@
     {
       "identity" : "semaphore",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/groue/Semaphore",
+      "location" : "https://github.com/MxIris-Library-Forks/Semaphore",
       "state" : {
-        "revision" : "2543679282aa6f6c8ecf2138acd613ed20790bc2",
-        "version" : "0.1.0"
+        "branch" : "main",
+        "revision" : "e6a244dec033ed1033878d5da5911a3ba2489701"
       }
     },
     {
@@ -326,6 +316,15 @@
       }
     },
     {
+      "identity" : "swift-cmark",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-cmark.git",
+      "state" : {
+        "revision" : "5d9bdaa4228b381639fff09403e39a04926e2dbe",
+        "version" : "0.7.1"
+      }
+    },
+    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",
@@ -380,6 +379,15 @@
       }
     },
     {
+      "identity" : "swift-markdown",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-markdown",
+      "state" : {
+        "revision" : "7d9a5ce307528578dfa777d505496bd5f544ad94",
+        "version" : "0.7.3"
+      }
+    },
+    {
       "identity" : "swift-memberwise-init-macro",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
@@ -407,12 +415,39 @@
       }
     },
     {
+      "identity" : "swiftterm",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
+      "state" : {
+        "revision" : "0b8d99bd19b694df44e1ccaa3891309719d34330",
+        "version" : "1.5.1"
+      }
+    },
+    {
       "identity" : "swiftyxpc",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
         "branch" : "main",
-        "revision" : "6735c52ce0c5715991ee7d00ba642c52566b415a"
+        "revision" : "d56672e7939ae929e94d4ea66da3fc527a69724e"
+      }
+    },
+    {
+      "identity" : "termkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/migueldeicaza/TermKit",
+      "state" : {
+        "branch" : "main",
+        "revision" : "6ba5a059527cc3c623caa32e13943abea0cf4054"
+      }
+    },
+    {
+      "identity" : "textbufferkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/migueldeicaza/TextBufferKit.git",
+      "state" : {
+        "revision" : "7f3ed5b1d7288de34ad853544d802647be11cfcf",
+        "version" : "0.3.0"
       }
     },
     {
@@ -421,7 +456,7 @@
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
         "branch" : "main",
-        "revision" : "9edccb17fe0764e591bfe965df8e19aa0d040d4a"
+        "revision" : "d8d71736d94fb5837ea7231cccca936aa59514ec"
       }
     },
     {
@@ -452,5 +487,5 @@
       }
     }
   ],
-  "version" : 3
+  "version" : 2
 }

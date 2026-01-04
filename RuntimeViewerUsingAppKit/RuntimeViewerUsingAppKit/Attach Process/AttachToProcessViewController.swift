@@ -5,11 +5,11 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
 final class AttachToProcessViewController: AppKitViewController<AttachToProcessViewModel> {
-    let pickerViewController: RunningApplicationPickerViewController
+    private let pickerViewController: RunningApplicationPickerViewController
 
-    let attachRelay = PublishRelay<NSRunningApplication>()
+    private let attachRelay = PublishRelay<NSRunningApplication>()
 
-    let cancelRelay = PublishRelay<Void>()
+    private let cancelRelay = PublishRelay<Void>()
 
     override init(viewModel: AttachToProcessViewModel? = nil) {
         let configuration = RunningApplicationPickerViewController.Configuration(title: "Attach To Process", description: "Select a running application to attach to", cancelButtonTitle: "Cancel", confirmButtonTitle: "Attach")
