@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import AppKit
 
 open class HUDView: NSView {
@@ -65,7 +67,7 @@ open class HUDView: NSView {
 
             public init(
                 tintColor: NSColor? = nil,
-                preferredSymbolConfiguration: NSImage.SymbolConfiguration? = nil,
+                preferredSymbolConfiguration: NSImage.SymbolConfiguration? = nil
             ) {
                 self.preferredSymbolConfiguration = preferredSymbolConfiguration
                 self.tintColor = tintColor
@@ -231,7 +233,7 @@ open class HUDView: NSView {
 
         contentStackView.spacing = configuration.spacing
         contentStackView.edgeInsets = configuration.contentInsets
-        
+
         needsDisplay = true
     }
 
@@ -342,7 +344,7 @@ extension NSWindow {
     }
 }
 
-//extension NSEdgeInsets: @retroactive Hashable {
+// extension NSEdgeInsets: @retroactive Hashable {
 //    public func hash(into hasher: inout Hasher) {
 //        hasher.combine(top)
 //        hasher.combine(left)
@@ -353,4 +355,6 @@ extension NSWindow {
 //    public static func == (lhs: Self, rhs: Self) -> Bool {
 //        return lhs.top == rhs.top && lhs.left == rhs.left && lhs.right == rhs.right && lhs.bottom == rhs.bottom
 //    }
-//}
+// }
+
+#endif
