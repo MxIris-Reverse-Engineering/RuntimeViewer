@@ -20,13 +20,13 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
             let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
-            return .set([viewController], animated: false)
+            return .set([viewController], animated: true)
         case .root(let inspectableObject):
-            return .set([makeTransition(for: inspectableObject)], animated: false)
+            return .set([makeTransition(for: inspectableObject)], animated: true)
         case .next(let inspectableObject):
-            return .push(makeTransition(for: inspectableObject), animated: false)
+            return .push(makeTransition(for: inspectableObject), animated: true)
         case .back:
-            return .pop(animated: false)
+            return .pop(animated: true)
         }
     }
 

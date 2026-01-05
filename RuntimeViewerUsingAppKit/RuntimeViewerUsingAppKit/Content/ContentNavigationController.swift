@@ -1,11 +1,6 @@
 import AppKit
 import RuntimeViewerUI
 
-final class ContentNavigationController: UXNavigationController {
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        isToolbarHidden = true
-        isNavigationBarHidden = true
-    }
+final class ContentNavigationController: UXKitNavigationController {
+    override var shouldUseNoAnimationTransition: Bool { true }
 }

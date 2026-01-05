@@ -2,7 +2,7 @@ project_path=$(cd `dirname $0`; pwd)
 
 project_name="RuntimeViewer"
 
-scheme_name="RuntimeViewerUsingAppKit"
+scheme_name="RuntimeViewer macOS"
 
 development_mode="Release"
 
@@ -14,12 +14,13 @@ exportAppPath=${project_path}/Archives
 
 
 echo '///-----------'
-echo '/// Building RuntimeViewerCatalystHelper: '${development_mode}
+echo '/// Building RuntimeViewer CatalystHelper: '${development_mode}
 echo '///-----------'
 
 xcodebuild \
 build \
--scheme 'RuntimeViewerCatalystHelper' \
+-workspace ${project_path}/${project_name}.xcworkspace \
+-scheme 'RuntimeViewer CatalystHelper' \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS,variant=Mac Catalyst' || exit
 
@@ -29,6 +30,7 @@ echo '///-----------'
 
 xcodebuild \
 archive \
+-workspace ${project_path}/${project_name}.xcworkspace \
 -scheme ${scheme_name} \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS' \

@@ -3,13 +3,6 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class InspectorNavigationController: UXNavigationController {
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
-        isToolbarHidden = true
-        isNavigationBarHidden = true
-    }
+final class InspectorNavigationController: UXKitNavigationController {
+    override var shouldUseNoAnimationTransition: Bool { true }
 }
-
-

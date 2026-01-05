@@ -26,7 +26,7 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
         super.init(nibName: nil, bundle: nil)
     }
 
-    public override func viewDidLoad() {
+    open override func viewDidLoad() {
         super.viewDidLoad()
 
         hierarchy {
@@ -56,7 +56,7 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    public func setupBindings(for viewModel: ViewModel) {
+    open func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
 
         self.viewModel = viewModel
@@ -137,7 +137,7 @@ open class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewContro
 
     open override var contentView: NSView { effectView }
 
-    public override func viewDidLoad() {
+    open override func viewDidLoad() {
         super.viewDidLoad()
     }
 }
@@ -155,7 +155,7 @@ open class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController 
         fatalError("init(coder:) has not been implemented")
     }
 
-    public func setupBindings(for viewModel: ViewModel) {
+    open func setupBindings(for viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
         self.viewModel = viewModel
 
@@ -170,5 +170,63 @@ open class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController 
                 }
             }
             .disposed(by: rx.disposeBag)
+    }
+}
+
+
+open class UXKitNavigationController: UXNavigationController {
+    
+    open var shouldUseNoAnimationTransition: Bool { false }
+    
+    open override func viewDidLoad() {
+        super.viewDidLoad()
+
+        isToolbarHidden = true
+        isNavigationBarHidden = true
+        delegate = self
+    }
+}
+
+extension UXKitNavigationController: UXNavigationControllerDelegate {
+    public func navigationController(_ navigationController: UXNavigationController, animationControllerFor operation: UXNavigationController.Operation, from fromViewController: UXViewController, to toViewController: UXViewController) -> (any UXViewControllerAnimatedTransitioning)? {
+        guard shouldUseNoAnimationTransition else { return nil }
+        return UXKitNoAnimationTransition.shared
+    }
+}
+
+private final class UXKitNoAnimationTransition: NSObject, UXViewControllerAnimatedTransitioning {
+
+    private override init() {}
+    
+    static let shared = UXKitNoAnimationTransition()
+    
+    func transitionDuration(using transitionContext: UXViewControllerContextTransitioning?) -> TimeInterval {
+        return 0
+    }
+
+    func animateTransition(using transitionContext: UXViewControllerContextTransitioning) {
+        let containerView = transitionContext.containerView
+        
+        guard let toVC = transitionContext.viewController(forKey: .to) else {
+            transitionContext.completeTransition(false)
+            return
+        }
+        
+        let toView = toVC.view
+        
+        let finalFrame = transitionContext.finalFrame(for: toVC)
+        if finalFrame != .zero {
+            toView.frame = finalFrame
+        }
+        
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        
+        containerView.addSubview(toView)
+        toView.layoutSubtreeIfNeeded()
+        
+        CATransaction.commit()
+        
+        transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
     }
 }
