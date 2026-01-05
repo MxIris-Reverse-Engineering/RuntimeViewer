@@ -75,7 +75,7 @@
     {
       "identity" : "frameworktoolbox",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
+      "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
         "branch" : "main",
         "revision" : "7bdb133931d36461e8f8cc3f6987107260726140"
@@ -151,15 +151,6 @@
       "state" : {
         "branch" : "master",
         "revision" : "d0d35f858a556b7f7f6ad2da7d7a8b469a72fb5c"
-      }
-    },
-    {
-      "identity" : "openuxkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/OpenUXKit/OpenUXKit",
-      "state" : {
-        "branch" : "main",
-        "revision" : "78a653d61b8e4175c367b1a11120088135085bca"
       }
     },
     {

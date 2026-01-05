@@ -121,8 +121,15 @@ let package = Package(
             ),
         ),
         .package(
-            url: "https://github.com/OpenUXKit/OpenUXKit",
-            branch: "main"
+            local: .package(
+                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/OpenUXKit",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/OpenUXKit/OpenUXKit",
+                branch: "main"
+            ),
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/NSAttributedStringBuilder",
