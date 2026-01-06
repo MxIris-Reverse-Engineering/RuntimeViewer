@@ -52,32 +52,44 @@ let package = Package(
 
     ],
     dependencies: [
+        .package(
+            local: .package(
+                path: "../../MachOKit",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
+                branch: "main"
+            ),
+        ),
+        .package(
+            local: .package(
+                path: "../../MachOObjCSection",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
+                branch: "main"
+            ),
+        ),
 //        .package(
 //            local: .package(
-//                path: "../../../../Fork/Library/ClassDumpRuntime",
-//                isRelative: true,
-//                isEnabled: true,
-//            ),
-//            .package(
-//                path: "../../ClassDumpRuntime",
+//                path: "../../swift-objc-dump",
 //                isRelative: true,
 //                isEnabled: true,
 //            ),
 //            remote: .package(
-//                url: "https://github.com/MxIris-Reverse-Engineering/ClassDumpRuntime",
-//                branch: "master"
+//                url: "https://github.com/MxIris-Reverse-Engineering/swift-objc-dump.git",
+//                branch: "main"
 //            )
 //        ),
         .package(
             local: .package(
-                path: "../../../../Personal/Library/macOS/MachOSwiftSection",
+                path: "../../MachOSwiftSection",
                 isRelative: true,
                 isEnabled: true,
-            ),
-            .package(
-                path: "../../TestingLibraries/MachOSwiftSection",
-                isRelative: true,
-                isEnabled: false,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
@@ -85,10 +97,6 @@ let package = Package(
                 branch: "feature/in-process",
             )
         ),
-//        .package(
-//            url: "https://github.com/p-x9/MachOObjCSection",
-//            from: "0.4.0"
-//        ),
         .package(
             url: "https://github.com/apple/swift-collections",
             from: "1.2.0"
@@ -127,11 +135,10 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerObjC",
                 "RuntimeViewerCommunication",
-//                .product(name: "ClassDumpRuntime", package: "ClassDumpRuntime"),
-//                .product(name: "ClassDumpRuntimeSwift", package: "ClassDumpRuntime"),
-                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
+                .product(name: "MachOKit", package: "MachOKit"),
+                .product(name: "MachOObjCSection", package: "MachOObjCSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
-//                .product(name: "MachOObjCSection", package: "MachOObjCSection"),
+                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
                 .product(name: "OrderedCollections", package: "swift-collections"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
