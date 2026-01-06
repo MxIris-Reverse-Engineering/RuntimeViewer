@@ -29,7 +29,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         textView.importsGraphics = false
         textView.usesFontPanel = false
         textView.isVerticallyResizable = true
-
+        textView.autoresizingMask = [.width, .height]
         return (scrollView, textView)
     }()
 
