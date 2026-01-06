@@ -6,3 +6,6 @@ build
 Archives
 xcuserdata
 .claude/settings.local.json
+RuntimeViewerUsingAppKit/Packaging.log
+RuntimeViewerUsingAppKit/ExportOptions.plist
+RuntimeViewerUsingAppKit/DistributionSummary.plist
