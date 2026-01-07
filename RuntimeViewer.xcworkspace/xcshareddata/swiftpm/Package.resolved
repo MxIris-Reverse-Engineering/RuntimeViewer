@@ -55,6 +55,15 @@
       }
     },
     {
+      "identity" : "dsfappearancemanager",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/dagronf/DSFAppearanceManager",
+      "state" : {
+        "revision" : "e9add5fdf05fe50950d105c77963b7373ddb5ad4",
+        "version" : "3.5.1"
+      }
+    },
+    {
       "identity" : "dyldprivate",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/DyldPrivate",
@@ -106,6 +115,15 @@
       "state" : {
         "revision" : "9b9556e14cee24ad16b19d0eb099283cf79a7d94",
         "version" : "3.0.0"
+      }
+    },
+    {
+      "identity" : "keyboardshortcuts",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sindresorhus/KeyboardShortcuts",
+      "state" : {
+        "revision" : "1aef85578fdd4f9eaeeb8d53b7b4fc31bf08fe27",
+        "version" : "2.4.0"
       }
     },
     {
@@ -212,8 +230,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
       "state" : {
-        "revision" : "1dac7a7c9e4fa6b215d90bf2f0452ff30dac00c5",
-        "version" : "0.2.1"
+        "branch" : "main",
+        "revision" : "ac669d83b295274bfe1a58d2c718038066576130"
       }
     },
     {
@@ -347,8 +365,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-fileio.git",
       "state" : {
-        "revision" : "76a4c719e796a1e5052e283788d8cd92408758fe",
-        "version" : "0.12.0"
+        "revision" : "d589ff3966f9f064574780f527449a946736b989",
+        "version" : "0.13.0"
       }
     },
     {
@@ -447,7 +465,7 @@
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
         "branch" : "main",
-        "revision" : "d70cdabb496f95424e804401b94fe7bc8857025b"
+        "revision" : "92973e3cd3398d318b318908013095e05490eefb"
       }
     },
     {
@@ -464,8 +482,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "31073495cae9caf243c440eac94b3ab067e3d7bc",
-        "version" : "1.8.0"
+        "revision" : "34e463e98ab8541c604af706c99bed7160f5ec70",
+        "version" : "1.8.1"
       }
     },
     {

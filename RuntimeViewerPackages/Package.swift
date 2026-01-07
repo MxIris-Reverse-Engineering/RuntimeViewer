@@ -107,7 +107,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/RxSwiftPlus",
-            from: "0.2.0"
+            branch: "main"
         ),
         .package(
             local: .package(
@@ -229,6 +229,21 @@ let package = Package(
             url: "https://github.com/MxIris-macOS-Library-Forks/AppKitUI",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/sindresorhus/KeyboardShortcuts",
+            from: "2.4.0"
+        ),
+        .package(
+            local: .package(
+                path: "\(MxIrisStudioWorkspace.relativeForkDirectory)/Library/DSFQuickActionBar",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-macOS-Library-Forks/DSFQuickActionBar",
+                branch: "main"
+            )
+        ),
     ],
     targets: [
         .target(
@@ -267,7 +282,9 @@ let package = Package(
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
                 .product(name: "LateResponders", package: "LateResponders"),
-                .product(name: "AppKitUI", package: "AppKitUI", condition: .when(platforms: appkitPlatforms))
+                .product(name: "AppKitUI", package: "AppKitUI", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "DSFQuickActionBar", package: "DSFQuickActionBar", condition: .when(platforms: appkitPlatforms)),
 //                .product(name: "DSFInspectorPanes", package: "DSFInspectorPanes", condition: .when(platforms: appkitPlatforms)),
             ],
             swiftSettings: sharedSwiftSettings
@@ -275,9 +292,9 @@ let package = Package(
         .target(
             name: "RuntimeViewerApplication",
             dependencies: [
-                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),
                 .product(name: "FuzzySearch", package: "fuzzy-search"),

@@ -82,7 +82,7 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         let output = viewModel.transform(input)
 
         output.nodes.drive(outlineView.rx.nodes)({ (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: SidebarRootCellViewModel) -> NSView? in
-            let cellView = outlineView.box.makeView(ofClass: SidebarRootTableCellView.self, owner: nil)
+            let cellView = outlineView.box.makeView(ofClass: SidebarRootTableCellView.self)
             cellView.bind(to: node)
             return cellView
         }, { outlineView, _ -> NSTableRowView? in
@@ -97,7 +97,6 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         output.didBeginFiltering.emitOnNext { [weak self] in
             guard let self else { return }
             outlineView.beginFiltering()
-            outlineView.expandItem(nil, expandChildren: true)
         }
         .disposed(by: rx.disposeBag)
 

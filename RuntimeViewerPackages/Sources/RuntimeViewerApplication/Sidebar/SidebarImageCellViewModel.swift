@@ -14,6 +14,8 @@ import RuntimeViewerArchitectures
 public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, FilterableItem, @unchecked Sendable {
     public let runtimeObject: RuntimeObjectName
 
+    public let forOpenQuickly: Bool
+    
     public weak var parent: SidebarImageCellViewModel?
 
     public var children: [SidebarImageCellViewModel] { _filteredChildren }
@@ -23,7 +25,7 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
     private lazy var _filteredChildren: [SidebarImageCellViewModel] = _children
 
     private lazy var _children: [SidebarImageCellViewModel] = {
-        let children = runtimeObject.children.map { SidebarImageCellViewModel(runtimeObject: $0, parent: self) }
+        let children = runtimeObject.children.map { SidebarImageCellViewModel(runtimeObject: $0, parent: self, forOpenQuickly: forOpenQuickly) }
         return children.sorted { $0.runtimeObject.displayName < $1.runtimeObject.displayName }
     }()
 
@@ -35,11 +37,10 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
             return "\(runtimeObject.displayName) \(childrenNames)"
         }
     }()
-    
+
     @Dependency(\.appDefaults)
     private var appDefaults
-    // MARK: - Filter
-    
+
     var filter: String = "" {
         didSet {
             _filteredChildren = FilterEngine.filter(filter, items: _children, mode: appDefaults.filterMode)
@@ -51,10 +52,11 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
             if let filterResult {
                 let name = NSMutableAttributedString {
                     AText(runtimeObject.displayName)
-                        .font(.systemFont(ofSize: 13))
+                        .font(.systemFont(ofSize: forOpenQuickly ? 18 : 13))
                         .foregroundColor(.tertiaryLabelColor)
                         .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
                 }
+
                 guard let range = currentAndChildrenNames.ranges(of: runtimeObject.displayName).first else {
                     self.name = name
                     return
@@ -66,12 +68,12 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
                     guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { return }
                     name.addAttributes([
                         .foregroundColor: NSUIColor.labelColor,
-                        .font: NSUIFont.systemFont(ofSize: 13, weight: .semibold),
+                        .font: NSUIFont.systemFont(ofSize: forOpenQuickly ? 18 : 13, weight: .semibold),
                     ], range: resultNSRange)
                 }
                 self.name = name
             } else {
-                name = defaultAttributedName
+                name = defaultAttributedName(forOpenQuickly: forOpenQuickly)
             }
         }
     }
@@ -82,7 +84,7 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
 
     @Observed
     public private(set) var primaryIcon: NSUIImage?
-    
+
     @Observed
     public private(set) var secondaryIcon: NSUIImage?
 
@@ -90,20 +92,26 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
     public private(set) var name: NSAttributedString = .init()
 
     @NSAttributedStringBuilder
-    var defaultAttributedName: NSAttributedString {
+    private func defaultAttributedName(forOpenQuickly: Bool) -> NSAttributedString {
         AText(runtimeObject.displayName)
-            .font(.systemFont(ofSize: 13))
+            .font(.systemFont(ofSize: forOpenQuickly ? 18 : 13))
             .foregroundColor(.labelColor)
             .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
     }
 
-    public init(runtimeObject: RuntimeObjectName, parent: SidebarImageCellViewModel?) {
+    public init(runtimeObject: RuntimeObjectName, parent: SidebarImageCellViewModel?, forOpenQuickly: Bool) {
         self.runtimeObject = runtimeObject
+        self.forOpenQuickly = forOpenQuickly
         super.init()
         self.parent = parent
-        self.primaryIcon = runtimeObject.kind.icon
-        self.secondaryIcon = runtimeObject.secondaryKind?.icon
-        self.name = defaultAttributedName
+        if forOpenQuickly {
+            self.primaryIcon = runtimeObject.kind.icon(size: 28)
+            self.secondaryIcon = runtimeObject.secondaryKind?.icon(size: 28)
+        } else {
+            self.primaryIcon = runtimeObject.kind.icon
+            self.secondaryIcon = runtimeObject.secondaryKind?.icon
+        }
+        self.name = defaultAttributedName(forOpenQuickly: forOpenQuickly)
     }
 
     public override var hash: Int {

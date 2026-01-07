@@ -10,6 +10,10 @@ final class MainWindow: NSWindow {
     init() {
         super.init(contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
     }
+    
+    override var canBecomeKey: Bool { true }
+    
+    override var canBecomeMain: Bool { true }
 }
 
 final class MainWindowController: XiblessWindowController<MainWindow> {

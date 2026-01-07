@@ -62,18 +62,6 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
                 .bind(to: $filteredNodes)
                 .disposed(by: rx.disposeBag)
         }
-
-//        $nodes.asObservable()
-//            .subscribeOnNext { _ in
-//                print("nodes reload")
-//            }
-//            .disposed(by: rx.disposeBag)
-//
-//        nodesIndexed.asObservable()
-//            .subscribeOnNext { _ in
-//                print("nodes indexed")
-//            }
-//            .disposed(by: rx.disposeBag)
     }
 
     public struct Input {
@@ -132,7 +120,7 @@ public final class SidebarRootViewModel: ViewModel<SidebarRoute> {
             nodes: $filteredNodes.asDriver(),
             nodesIndexed: nodesIndexed,
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
-            didChangeFiltering: input.searchString.withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)) { !$0.isEmpty && $1 }.filter { $0 }.mapToVoid(),
+            didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
             didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid()
         )
         #endif
