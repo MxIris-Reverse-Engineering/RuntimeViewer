@@ -5,7 +5,14 @@ import RuntimeViewerArchitectures
 open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
     public let appServices: AppServices
 
+    public unowned let router: any Router<Route>
+
+    @Dependency(\.appDefaults)
+    public var appDefaults
+
     public let errorRelay = PublishRelay<Error>()
+
+    package let _commonLoading = ActivityIndicator()
 
     public var commonLoading: Driver<Bool> { _commonLoading.asDriver() }
 
@@ -25,14 +32,6 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
                 }
             }
     }
-
-    
-    package let _commonLoading = ActivityIndicator()
-
-    public unowned let router: any Router<Route>
-
-    @Dependency(\.appDefaults)
-    public var appDefaults
 
     public init(appServices: AppServices, router: any Router<Route>) {
         self.appServices = appServices

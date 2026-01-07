@@ -8,57 +8,145 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
+//extension RuntimeObjectKind {
+//    #if os(macOS)
+//    private static let iconSize: CGFloat = 18
+//    #else
+//    private static let iconSize: CGFloat = 24
+//    #endif
+//
+//    private static let iconStyle: IDEIconStyle = .simple
+//
+//    public static let cStructIcon = IDEIcon("S", color: .green, style: iconStyle, size: iconSize).image
+//    public static let cUnionIcon = IDEIcon("U", color: .green, style: iconStyle, size: iconSize).image
+//    
+//    public static let objcClassIcon = IDEIcon("C", color: .yellow, style: iconStyle, size: iconSize).image
+//    public static let objcProtocolIcon = IDEIcon("Pr", color: .purple, style: iconStyle, size: iconSize).image
+//    public static let objcCategoryIcon = IDEIcon("Ex", color: .yellow, style: iconStyle, size: iconSize).image
+//
+//    public static let swiftEnumIcon = IDEIcon("E", color: .blue, style: iconStyle, size: iconSize).image
+//    public static let swiftStructIcon = IDEIcon("S", color: .blue, style: iconStyle, size: iconSize).image
+//    public static let swiftClassIcon = IDEIcon("C", color: .blue, style: iconStyle, size: iconSize).image
+//    public static let swiftProtocolIcon = IDEIcon("Pr", color: .blue, style: iconStyle, size: iconSize).image
+//    public static let swiftExtensionIcon = IDEIcon("Ex", color: .blue, style: iconStyle, size: iconSize).image
+//    public static let swiftTypeAliasIcon = IDEIcon("T", color: .blue, style: iconStyle, size: iconSize).image
+//
+//    public var icon: NSUIImage {
+//        switch self {
+//        case .c(let kind):
+//            switch kind {
+//            case .struct: return Self.cStructIcon
+//            case .union: return Self.cUnionIcon
+//            }
+//        case .objc(.type(let kind)):
+//            switch kind {
+//            case .class: return Self.objcClassIcon
+//            case .protocol: return Self.objcProtocolIcon
+//            }
+//        case .objc(.category(.class)):
+//            return Self.objcCategoryIcon
+//        case .swift(.type(let kind)):
+//            switch kind {
+//            case .enum: return Self.swiftEnumIcon
+//            case .struct: return Self.swiftStructIcon
+//            case .class: return Self.swiftClassIcon
+//            case .protocol: return Self.swiftProtocolIcon
+//            case .typeAlias: return Self.swiftTypeAliasIcon
+//            }
+//        case .swift(.extension(_)),
+//             .swift(.conformance(_)):
+//            return Self.swiftExtensionIcon
+//        default:
+//            fatalError()
+//        }
+//    }
+//}
+
 extension RuntimeObjectKind {
+
     #if os(macOS)
-    private static let iconSize: CGFloat = 18
+    public static let defaultIconSize: CGFloat = 18
     #else
-    private static let iconSize: CGFloat = 24
+    public static let defaultIconSize: CGFloat = 24
     #endif
 
-    private static let iconStyle: IDEIconStyle = .simple
+    public static let defaultIconStyle: IDEIconStyle = .simple
 
-    public static let cStructIcon = IDEIcon("S", color: .green, style: iconStyle, size: iconSize).image
-    public static let cUnionIcon = IDEIcon("U", color: .green, style: iconStyle, size: iconSize).image
-    
-    public static let objcClassIcon = IDEIcon("C", color: .yellow, style: iconStyle, size: iconSize).image
-    public static let objcProtocolIcon = IDEIcon("Pr", color: .purple, style: iconStyle, size: iconSize).image
-    public static let objcCategoryIcon = IDEIcon("Ex", color: .yellow, style: iconStyle, size: iconSize).image
+    private struct IconCacheKey: Hashable {
+        let text: String
+        let color: IDEIconColor
+        let style: IDEIconStyle
+        let size: CGFloat
+    }
 
-    public static let swiftEnumIcon = IDEIcon("E", color: .blue, style: iconStyle, size: iconSize).image
-    public static let swiftStructIcon = IDEIcon("S", color: .blue, style: iconStyle, size: iconSize).image
-    public static let swiftClassIcon = IDEIcon("C", color: .blue, style: iconStyle, size: iconSize).image
-    public static let swiftProtocolIcon = IDEIcon("Pr", color: .blue, style: iconStyle, size: iconSize).image
-    public static let swiftExtensionIcon = IDEIcon("Ex", color: .blue, style: iconStyle, size: iconSize).image
-    public static let swiftTypeAliasIcon = IDEIcon("T", color: .blue, style: iconStyle, size: iconSize).image
+//    @MainActor
+    private static var iconCache: [IconCacheKey: NSUIImage] = [:]
 
-    public var icon: NSUIImage {
+    private var iconSpec: (text: String, color: IDEIconColor) {
         switch self {
         case .c(let kind):
             switch kind {
-            case .struct: return Self.cStructIcon
-            case .union: return Self.cUnionIcon
+            case .struct: return ("S", .green)
+            case .union:  return ("U", .green)
             }
+        
         case .objc(.type(let kind)):
             switch kind {
-            case .class: return Self.objcClassIcon
-            case .protocol: return Self.objcProtocolIcon
+            case .class:    return ("C", .yellow)
+            case .protocol: return ("Pr", .purple)
             }
+            
         case .objc(.category(.class)):
-            return Self.objcCategoryIcon
+            return ("Ex", .yellow)
+            
         case .swift(.type(let kind)):
             switch kind {
-            case .enum: return Self.swiftEnumIcon
-            case .struct: return Self.swiftStructIcon
-            case .class: return Self.swiftClassIcon
-            case .protocol: return Self.swiftProtocolIcon
-            case .typeAlias: return Self.swiftTypeAliasIcon
+            case .enum:      return ("E", .blue)
+            case .struct:    return ("S", .blue)
+            case .class:     return ("C", .blue)
+            case .protocol:  return ("Pr", .blue)
+            case .typeAlias: return ("T", .blue)
             }
+            
         case .swift(.extension(_)),
              .swift(.conformance(_)):
-            return Self.swiftExtensionIcon
+            return ("Ex", .blue)
+            
         default:
-            fatalError()
+            return ("?", .gray)
         }
+    }
+
+//    @MainActor
+    public func icon(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+        let spec = self.iconSpec
+        
+        let key = IconCacheKey(
+            text: spec.text,
+            color: spec.color,
+            style: style,
+            size: size
+        )
+        
+        if let cachedImage = Self.iconCache[key] {
+            return cachedImage
+        }
+        
+        let image = IDEIcon(
+            spec.text,
+            color: spec.color,
+            style: style,
+            size: size
+        ).image
+        
+        Self.iconCache[key] = image
+        
+        return image
+    }
+
+//    @MainActor
+    public var icon: NSUIImage {
+        return icon()
     }
 }
 

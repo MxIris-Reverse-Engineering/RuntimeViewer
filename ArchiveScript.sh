@@ -22,13 +22,13 @@ catalyst_helper_app_path=${catalyst_helper_export_path}/RuntimeViewerCatalystHel
 catalyst_helper_archive_path=${build_path}/RuntimeViewerCatalystHelper.xcarchive
 
 echo '///-----------'
-echo '/// Archiving RuntimeViewer CatalystHelper: '${development_mode}
+echo '/// Archiving RuntimeViewerCatalystHelper: '${development_mode}
 echo '///-----------'
 
 xcodebuild \
 archive \
 -workspace ${project_path}/${project_name}.xcworkspace \
--scheme 'RuntimeViewer CatalystHelper' \
+-scheme 'RuntimeViewerCatalystHelper' \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS,variant=Mac Catalyst' \
 -archivePath ${catalyst_helper_archive_path} | xcbeautify || exit

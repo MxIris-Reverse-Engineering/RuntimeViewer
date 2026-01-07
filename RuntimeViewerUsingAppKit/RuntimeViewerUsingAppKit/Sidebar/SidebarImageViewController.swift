@@ -28,6 +28,14 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
     private var previousWindowTitle: String = ""
 
     private let filterModeDidChange = PublishRelay<Void>()
+
+    private let openQuicklyActionBar = DSFQuickActionBar()
+
+    private let openQuicklyActivateRelay = PublishRelay<SidebarImageCellViewModel>()
+    
+    private let searchStringDidChangeForOpenQuickly = PublishRelay<String>()
+    
+    private var currentSearchTask: DSFQuickActionBar.SearchTask?
     
     @Dependency(\.appDefaults)
     private var appDefaults
@@ -97,26 +105,39 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
             $0.tabPosition = .none
             $0.tabViewBorderType = .none
         }
+        
+        openQuicklyActionBar.do {
+            $0.rowHeight = 60
+            $0.contentSource = self
+        }
     }
 
     override func setupBindings(for viewModel: SidebarImageViewModel) {
         super.setupBindings(for: viewModel)
-
+        
         let input = SidebarImageViewModel.Input(
-            runtimeObjectClicked: imageLoadedView.outlineView.rx.modelSelected().asSignal(),
+            runtimeObjectClicked: Signal.of(imageLoadedView.outlineView.rx.modelSelected().asSignal(), openQuicklyActivateRelay.asSignal()).merge(),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal()
             ).merge(),
-            searchString: .combineLatest(filterSearchField.rx.stringValue.asSignal(), filterModeDidChange.asSignal().startWith(()), resultSelector: { a, b in a })
+            searchString: .combineLatest(filterSearchField.rx.stringValue.asSignal(), filterModeDidChange.asSignal().startWith(()), resultSelector: { a, b in a }),
+            searchStringForOpenQuickly: searchStringDidChangeForOpenQuickly.asSignal(),
         )
 
         let output = viewModel.transform(input)
 
         output.runtimeObjects.drive(imageLoadedView.outlineView.rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarImageCellViewModel) -> NSView? in
-            let cellView = outlineView.box.makeView(ofClass: SidebarImageCellView.self)
+            let cellView = outlineView.box.makeView(ofClass: SidebarImageCellView.self) { .init(forOpenQuickly: false) }
             cellView.bind(to: viewModel)
             return cellView
+        }
+        .disposed(by: rx.disposeBag)
+        
+        output.runtimeObjectsForOpenQuickly.driveOnNextMainActor { [weak self] viewModels in
+            guard let self else { return }
+            currentSearchTask?.complete(with: viewModels)
+            currentSearchTask = nil
         }
         .disposed(by: rx.disposeBag)
 
@@ -146,7 +167,7 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
             imageLoadedView.outlineView.endFiltering()
         }
         .disposed(by: rx.disposeBag)
-        
+
         output.windowInitialTitles.driveOnNext { [weak self] in
             guard let self, let window = view.window else { return }
             previousWindowTitle = window.title
@@ -164,6 +185,36 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
 
         imageLoadedView.outlineView.identifier = "com.JH.RuntimeViewer.\(ImageLoadedView.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
         imageLoadedView.outlineView.autosaveName = "com.JH.RuntimeViewer.\(ImageLoadedView.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
+    }
+
+    @IBAction func openQuickly(_ sender: Any?) {
+        openQuicklyActionBar.present(
+            parentWindow: view.window,
+            placeholderText: "Open Quickly",
+            searchImage: nil,
+            initialSearchText: nil,
+            showKeyboardShortcuts: false,
+            canBecomeMainWindow: false,
+        ) {}
+    }
+}
+
+extension SidebarImageViewController: DSFQuickActionBarContentSource {
+    func quickActionBar(_ quickActionBar: DSFQuickActionBar, viewForItem item: AnyHashable, searchTerm: String) -> NSView? {
+        guard let viewModel = item as? SidebarImageCellViewModel else { return nil }
+        let cellView = SidebarImageCellView(forOpenQuickly: true)
+        cellView.bind(to: viewModel)
+        return cellView
+    }
+    
+    func quickActionBar(_ quickActionBar: DSFQuickActionBar, itemsForSearchTermTask task: DSFQuickActionBar.SearchTask) {
+        currentSearchTask = task
+        searchStringDidChangeForOpenQuickly.accept(task.searchTerm)
+    }
+    
+    func quickActionBar(_ quickActionBar: DSFQuickActionBar, didActivateItem item: AnyHashable) {
+        guard let viewModel = item as? SidebarImageCellViewModel else { return }
+        openQuicklyActivateRelay.accept(viewModel)
     }
 }
 
@@ -300,3 +351,5 @@ extension NSPopUpButton {
         cell as? NSPopUpButtonCell
     }
 }
+
+extension DSFQuickActionBar: Then {}
