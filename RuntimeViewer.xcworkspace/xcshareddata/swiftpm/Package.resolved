@@ -37,6 +37,15 @@
       }
     },
     {
+      "identity" : "cocoacoordinator",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/CocoaCoordinator",
+      "state" : {
+        "branch" : "main",
+        "revision" : "ff333dd0a9fbcd834f40e9c74a7dfbf7cc07cf29"
+      }
+    },
+    {
       "identity" : "combine-schedulers",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/combine-schedulers",
@@ -79,6 +88,15 @@
       "state" : {
         "revision" : "ae639dfac5c7116abb64c5f62124915f627140e4",
         "version" : "1.1.3"
+      }
+    },
+    {
+      "identity" : "filter-ui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
+      "state" : {
+        "branch" : "main",
+        "revision" : "259a5c2eb2bc32beae3368f75f327de6b213190d"
       }
     },
     {
@@ -169,6 +187,15 @@
       "state" : {
         "branch" : "master",
         "revision" : "d0d35f858a556b7f7f6ad2da7d7a8b469a72fb5c"
+      }
+    },
+    {
+      "identity" : "openuxkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/OpenUXKit/OpenUXKit",
+      "state" : {
+        "branch" : "main",
+        "revision" : "420838a1257d0ddd21f6bf3295799ee895ff36dd"
       }
     },
     {

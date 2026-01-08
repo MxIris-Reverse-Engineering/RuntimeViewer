@@ -109,17 +109,7 @@ let package = Package(
             url: "https://github.com/Mx-Iris/RxSwiftPlus",
             branch: "main"
         ),
-        .package(
-            local: .package(
-                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/RxAppKit",
-                isRelative: true,
-                isEnabled: true
-            ),
-            remote: .package(
-                url: "https://github.com/Mx-Iris/RxAppKit",
-                branch: "main"
-            ),
-        ),
+        
         .package(
             local: .package(
                 path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/OpenUXKit",
@@ -129,7 +119,7 @@ let package = Package(
             remote: .package(
                 url: "https://github.com/OpenUXKit/OpenUXKit",
                 branch: "main"
-            ),
+            )
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/NSAttributedStringBuilder",
@@ -152,6 +142,22 @@ let package = Package(
             from: "2.0.0"
         ),
         .package(
+            local: .package(
+                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/RxAppKit",
+                isRelative: true,
+                isEnabled: true
+            ),
+            .package(
+                path: "../../RxAppKit",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/RxAppKit",
+                branch: "main"
+            )
+        ),
+        .package(
             url: "https://github.com/Mx-Iris/RxUIKit",
             from: "0.1.0"
         ),
@@ -164,7 +170,7 @@ let package = Package(
             remote: .package(
                 url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
                 branch: "main"
-            ),
+            )
         ),
         .package(
             url: "https://github.com/TrGiLong/RxConcurrency",
@@ -193,6 +199,11 @@ let package = Package(
         .package(
             local: .package(
                 path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/RunningApplicationKit",
+                isRelative: true,
+                isEnabled: true
+            ),
+            .package(
+                path: "../../RunningApplicationKit",
                 isRelative: true,
                 isEnabled: true
             ),
@@ -235,6 +246,11 @@ let package = Package(
         ),
         .package(
             local: .package(
+                path: "../../DSFQuickActionBar",
+                isRelative: true,
+                isEnabled: true
+            ),
+            .package(
                 path: "\(MxIrisStudioWorkspace.relativeForkDirectory)/Library/DSFQuickActionBar",
                 isRelative: true,
                 isEnabled: true

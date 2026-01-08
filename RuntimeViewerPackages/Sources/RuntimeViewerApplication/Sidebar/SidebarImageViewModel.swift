@@ -49,7 +49,6 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<SidebarImageCellViewModel>
-//        public let runtimeObjectClickedForOpenQuickly: Signal<SidebarImageCellViewModel>
         public let loadImageClicked: Signal<Void>
         public let searchString: Signal<String>
         public let searchStringForOpenQuickly: Signal<String>
@@ -163,7 +162,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             windowInitialTitles: .just((runtimeImageName, "")),
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" },
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
-            didChangeFiltering: input.searchString.withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)) { !$0.isEmpty && $1 }.filter { $0 }.mapToVoid(),
+            didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
             didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid()
         )
     }
