@@ -74,17 +74,6 @@ let package = Package(
                 branch: "main"
             ),
         ),
-//        .package(
-//            local: .package(
-//                path: "../../swift-objc-dump",
-//                isRelative: true,
-//                isEnabled: true,
-//            ),
-//            remote: .package(
-//                url: "https://github.com/MxIris-Reverse-Engineering/swift-objc-dump.git",
-//                branch: "main"
-//            )
-//        ),
         .package(
             local: .package(
                 path: "../../MachOSwiftSection",

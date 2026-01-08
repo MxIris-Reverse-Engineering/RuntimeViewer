@@ -152,7 +152,6 @@ final class SidebarImageViewController: UXEffectViewController<SidebarImageViewM
         output.didBeginFiltering.emitOnNext { [weak self] in
             guard let self else { return }
             imageLoadedView.outlineView.beginFiltering()
-            imageLoadedView.outlineView.expandItem(nil, expandChildren: true)
         }
         .disposed(by: rx.disposeBag)
 
