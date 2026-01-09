@@ -52,8 +52,8 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
             if let filterResult {
                 let name = NSMutableAttributedString {
                     AText(runtimeObject.displayName)
-                        .font(.systemFont(ofSize: forOpenQuickly ? 18 : 13))
-                        .foregroundColor(.tertiaryLabelColor)
+                        .font(.systemFont(ofSize: fontSize))
+                        .foregroundColor(forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor)
                         .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
                 }
 
@@ -68,12 +68,12 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
                     guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { return }
                     name.addAttributes([
                         .foregroundColor: NSUIColor.labelColor,
-                        .font: NSUIFont.systemFont(ofSize: forOpenQuickly ? 18 : 13, weight: .semibold),
+                        .font: NSUIFont.systemFont(ofSize: fontSize, weight: .semibold),
                     ], range: resultNSRange)
                 }
                 self.name = name
             } else {
-                name = defaultAttributedName(forOpenQuickly: forOpenQuickly)
+                name = defaultAttributedName()
             }
         }
     }
@@ -82,6 +82,14 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
         currentAndChildrenNames
     }
 
+    private static let normalFontSize: CGFloat = 13
+    
+    private static let openQuicklyFontSize: CGFloat = 16
+    
+    private var fontSize: CGFloat {
+        forOpenQuickly ? Self.openQuicklyFontSize : Self.normalFontSize
+    }
+    
     @Observed
     public private(set) var primaryIcon: NSUIImage?
 
@@ -92,9 +100,9 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
     public private(set) var name: NSAttributedString = .init()
 
     @NSAttributedStringBuilder
-    private func defaultAttributedName(forOpenQuickly: Bool) -> NSAttributedString {
+    private func defaultAttributedName() -> NSAttributedString {
         AText(runtimeObject.displayName)
-            .font(.systemFont(ofSize: forOpenQuickly ? 18 : 13))
+            .font(.systemFont(ofSize: fontSize))
             .foregroundColor(.labelColor)
             .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
     }
@@ -105,13 +113,13 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
         super.init()
         self.parent = parent
         if forOpenQuickly {
-            self.primaryIcon = runtimeObject.kind.icon(size: 28)
-            self.secondaryIcon = runtimeObject.secondaryKind?.icon(size: 28)
+            self.primaryIcon = runtimeObject.kind.icon(size: 24)
+            self.secondaryIcon = runtimeObject.secondaryKind?.icon(size: 24)
         } else {
             self.primaryIcon = runtimeObject.kind.icon
             self.secondaryIcon = runtimeObject.secondaryKind?.icon
         }
-        self.name = defaultAttributedName(forOpenQuickly: forOpenQuickly)
+        self.name = defaultAttributedName()
     }
 
     public override var hash: Int {

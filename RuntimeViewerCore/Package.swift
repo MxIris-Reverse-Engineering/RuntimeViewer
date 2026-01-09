@@ -38,7 +38,7 @@ extension Package.Dependency {
 let package = Package(
     name: "Core",
     platforms: [
-        .iOS(.v13), .macOS(.v10_15), .macCatalyst(.v13), .watchOS(.v6), .tvOS(.v13), .visionOS(.v1),
+        .macOS(.v10_15), .iOS(.v13), .macCatalyst(.v13), .watchOS(.v6), .tvOS(.v13), .visionOS(.v1),
     ],
     products: [
         .library(

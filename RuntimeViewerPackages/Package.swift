@@ -50,7 +50,7 @@ extension Package.Dependency {
 let package = Package(
     name: "RuntimeViewerPackages",
     platforms: [
-        .iOS(.v18), .macOS(.v15), .macCatalyst(.v18), .tvOS(.v18), .visionOS(.v2),
+        .macOS(.v15), .iOS(.v18), .macCatalyst(.v18), .tvOS(.v18), .visionOS(.v2),
     ],
     products: [
         .library(
