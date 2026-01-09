@@ -49,6 +49,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
     @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<SidebarImageCellViewModel>
+        public let runtimeObjectClickedForOpenQuickly: Signal<SidebarImageCellViewModel>
         public let loadImageClicked: Signal<Void>
         public let searchString: Signal<String>
         public let searchStringForOpenQuickly: Signal<String>
@@ -67,6 +68,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
         public let didBeginFiltering: Signal<Void>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
+        public let selectRuntimeObject: Signal<SidebarImageCellViewModel>
     }
 
     private func reloadData() async throws {
@@ -88,7 +90,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             self.nodes = names.sorted().map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil, forOpenQuickly: false) }
             self.nodesForOpenQuickly = names.sorted().map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil, forOpenQuickly: true) }
             self.filteredNodes = self.nodes
-            self.filteredNodesForOpenQuickly = self.nodesForOpenQuickly
+            self.filteredNodesForOpenQuickly = []
         }
     }
 
@@ -110,8 +112,9 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 filteredNodes = FilterEngine.filter(filter, items: nodes, mode: appDefaults.filterMode)
             }
             .disposed(by: rx.disposeBag)
-        
+
         input.searchStringForOpenQuickly
+            .skip(1)
             .debounce(.milliseconds(80))
             .emitOnNextMainActor { [weak self] filter in
                 guard let self else { return }
@@ -119,20 +122,23 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
                     if isFilteringForOpenQuickly {
                         isFilteringForOpenQuickly = false
                     }
+                    filteredNodesForOpenQuickly = []
                 } else {
                     if !isFilteringForOpenQuickly {
                         isFilteringForOpenQuickly = true
                     }
+                    filteredNodesForOpenQuickly = FilterEngine.filter(filter, items: nodesForOpenQuickly, mode: .fuzzySearch)
                 }
-                filteredNodesForOpenQuickly = FilterEngine.filter(filter, items: nodesForOpenQuickly, mode: appDefaults.filterMode)
             }
             .disposed(by: rx.disposeBag)
 
-        input.runtimeObjectClicked.emitOnNextMainActor { [weak self] viewModel in
-            guard let self else { return }
-            self.router.trigger(.selectedObject(viewModel.runtimeObject))
-        }
-        .disposed(by: rx.disposeBag)
+        Signal.of(input.runtimeObjectClicked, input.runtimeObjectClickedForOpenQuickly)
+            .merge()
+            .emitOnNextMainActor { [weak self] viewModel in
+                guard let self else { return }
+                self.router.trigger(.selectedObject(viewModel.runtimeObject))
+            }
+            .disposed(by: rx.disposeBag)
 
         input.loadImageClicked.emitOnNextMainActor { [weak self] in
             guard let self else { return }
@@ -153,7 +159,7 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
         let runtimeImageName = imageNode.name
         return Output(
             runtimeObjects: $filteredNodes.asDriver(),
-            runtimeObjectsForOpenQuickly: $filteredNodesForOpenQuickly.asDriver(),
+            runtimeObjectsForOpenQuickly: $filteredNodesForOpenQuickly.asDriver().skip(1),
             loadState: $loadState.asDriver(),
             notLoadedText: .just("\(imageName) is not yet loaded"),
             errorText: errorText,
@@ -163,7 +169,8 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" },
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
             didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
-            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid()
+            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
+            selectRuntimeObject: input.runtimeObjectClickedForOpenQuickly,
         )
     }
 

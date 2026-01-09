@@ -14,14 +14,14 @@ final class SidebarImageCellView: TableCellView {
     private let forOpenQuickly: Bool
 
     private lazy var contentStackView = HStackView(distribution: .fill, spacing: 6) {
-        HStackView(distribution: .fill, spacing: 6) {
+//        HStackView(distribution: .fill, spacing: 6) {
             primaryIconImageView
                 .contentHugging(h: .required)
                 .contentCompressionResistance(h: .required)
             secondaryIconImageView
                 .contentHugging(h: .required)
                 .contentCompressionResistance(h: .required)
-        }
+//        }
         nameLabel
             .contentHugging(h: .defaultLow)
             .contentCompressionResistance(h: .defaultLow)
@@ -44,8 +44,9 @@ final class SidebarImageCellView: TableCellView {
 
         contentStackView.snp.makeConstraints { make in
             if forOpenQuickly {
-                make.edges.equalToSuperview()
-                make.height.greaterThanOrEqualTo(50)
+                make.top.bottom.equalToSuperview()
+                make.leading.trailing.equalToSuperview().inset(8)
+                make.height.greaterThanOrEqualTo(40)
             } else {
                 make.edges.equalToSuperview()
             }
