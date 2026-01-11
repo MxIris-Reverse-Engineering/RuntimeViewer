@@ -84,7 +84,7 @@
     {
       "identity" : "frameworktoolbox",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
+      "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
         "branch" : "main",
         "revision" : "f2638e3d32693704c1f46465f924c8393f48cca3"
@@ -223,15 +223,6 @@
       "state" : {
         "revision" : "5004a18539bd68905c5939aa893075f578f4f03d",
         "version" : "6.9.1"
-      }
-    },
-    {
-      "identity" : "rxswiftplus",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
-      "state" : {
-        "branch" : "main",
-        "revision" : "ac669d83b295274bfe1a58d2c718038066576130"
       }
     },
     {
@@ -457,15 +448,6 @@
       "state" : {
         "revision" : "7f3ed5b1d7288de34ad853544d802647be11cfcf",
         "version" : "0.3.0"
-      }
-    },
-    {
-      "identity" : "uifoundation",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/UIFoundation",
-      "state" : {
-        "branch" : "main",
-        "revision" : "ddc9b695a8a99ae0187fcd78b461ba0e4ee959d9"
       }
     },
     {

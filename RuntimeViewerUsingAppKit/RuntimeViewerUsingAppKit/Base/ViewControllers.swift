@@ -136,10 +136,6 @@ open class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewContro
     }()
 
     open override var contentView: NSView { effectView }
-
-    open override func viewDidLoad() {
-        super.viewDidLoad()
-    }
 }
 
 open class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController {

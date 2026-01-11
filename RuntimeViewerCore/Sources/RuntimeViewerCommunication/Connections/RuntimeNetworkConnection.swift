@@ -33,13 +33,13 @@ class RuntimeNetworkConnection {
 
     private let connection: NWConnection
 
-    private static let logger = Logger(label: "RuntimeNetworkConnection")
+    private static let logger = Logger(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeNetworkConnection")
 
     private static let endMarkerData = "\nOK".data(using: .utf8)!
 
     private var logger: Logger { Self.logger }
 
-    private let queue = DispatchQueue(label: "com.JH.LocalizationStudioCommunication.Connection.queue")
+    private let queue = DispatchQueue(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeNetworkConnection.queue")
 
     private var connectionStateStream: AsyncStream<NWConnection.State>?
 
@@ -387,20 +387,23 @@ final class RuntimeNetworkServerConnection: RuntimeNetworkBaseConnection {
                 do {
                     let connection = try RuntimeNetworkConnection(connection: newConnection)
                     self.connection = connection
-                    connection.didReady = { _ in
+                    connection.didReady = { [weak connection] _ in
                         continuation.resume()
-                    }
-                    connection.didStop = { [weak self] _ in
-                        guard let self else { return }
-                        Task {
-                            try await self.start()
+                        if let connection {
+                            connection.didReady = nil
                         }
                     }
-                    listener.newConnectionHandler = nil
-                    listener.cancel()
+                    connection.didStop = { _ in
+                        Task { [weak self] in
+                            guard let self else { return }
+                            try await start()
+                        }
+                    }
                 } catch {
                     continuation.resume(throwing: error)
                 }
+                listener.newConnectionHandler = nil
+                listener.cancel()
             }
             listener.start(queue: .main)
         }

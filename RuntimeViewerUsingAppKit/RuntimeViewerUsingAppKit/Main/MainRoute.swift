@@ -9,7 +9,7 @@ import RuntimeViewerApplication
 @CaseCheckable(.public)
 public enum MainRoute: Routable {
     case main(RuntimeEngine)
-    case select(RuntimeObjectName)
+    case select(RuntimeObject)
     case sidebarBack
     case contentBack
     case generationOptions(sender: NSView)

@@ -9,7 +9,7 @@ import RuntimeViewerArchitectures
 class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
     let textView = UITextView()
 
-    let runtimeObjectClicked = PublishRelay<RuntimeObjectName>()
+    let runtimeObjectClicked = PublishRelay<RuntimeObject>()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -58,7 +58,7 @@ extension ContentTextViewController: UITextViewDelegate {
         case .link(let url):
             let jumpToDefinitionAction = UIAction(title: "Jump to Definition") { [weak self] _ in
                 guard let self = self else { return }
-//                #warning("RuntimeObjectType is not used in this context, consider using RuntimeObjectName")
+//                #warning("RuntimeObjectType is not used in this context, consider using RuntimeObject")
                 if let scheme = url.scheme, let host = url.host {
 //                    var runtimeObject: RuntimeObjCRuntimeObject?
 //                    switch scheme {

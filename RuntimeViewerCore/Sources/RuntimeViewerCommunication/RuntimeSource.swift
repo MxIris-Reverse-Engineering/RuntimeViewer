@@ -1,14 +1,14 @@
 import Foundation
 
 extension RuntimeSource {
-    public enum Role {
+    public enum Role: Sendable, Codable, Equatable {
         case client
         case server
         public var isClient: Bool { self == .client }
         public var isServer: Bool { self == .server }
     }
 
-    public struct Identifier: RawRepresentable, ExpressibleByStringLiteral {
+    public struct Identifier: Sendable, Codable, RawRepresentable, ExpressibleByStringLiteral, Equatable {
         public let rawValue: String
 
         public init(rawValue: String) {
@@ -21,7 +21,7 @@ extension RuntimeSource {
     }
 }
 
-public enum RuntimeSource: CustomStringConvertible {
+public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Equatable {
     case local
     case remote(name: String, identifier: Identifier, role: Role)
     case bonjourClient(endpoint: RuntimeNetworkEndpoint)
@@ -62,6 +62,6 @@ extension RuntimeSource {
 }
 
 extension RuntimeSource.Identifier {
-    public static let macCatalyst: Self = "com.JH.RuntimeViewer.MacCatalyst"
+    public static let macCatalyst: Self = "com.RuntimeViewer.RuntimeSource.MacCatalyst"
 }
 #endif

@@ -15,24 +15,21 @@
 		E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FE52C0D614900362862 /* AppDelegate.swift */; };
 		E9432FE82C0D614A00362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FE72C0D614A00362862 /* Assets.xcassets */; };
 		E9432FEB2C0D614A00362862 /* Base in Resources */ = {isa = PBXBuildFile; fileRef = E9432FEA2C0D614A00362862 /* Base */; };
-		E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94330172C0DA62500362862 /* SidebarRootViewController.swift */; };
+		E94330182C0DA62500362862 /* SidebarRootDirectoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94330172C0DA62500362862 /* SidebarRootDirectoryViewController.swift */; };
 		E943301C2C0DB75B00362862 /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E943301B2C0DB75B00362862 /* Then.swift */; };
 		E947C36A2C2A4D0400296B2E /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C3692C2A4D0400296B2E /* AppDelegate.swift */; };
 		E947C36C2C2A4D0400296B2E /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */; };
 		E947C3732C2A4D0500296B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E947C3722C2A4D0500296B2E /* Assets.xcassets */; };
-		E94BA6942E7EE09A006B553D /* UXKitFixups.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94BA6932E7EE09A006B553D /* UXKitFixups.swift */; };
 		E94BA6962E7EEB64006B553D /* SidebarRootTableRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */; };
 		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
 		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
-		E953C3B82EDB406000C5BA4A /* ItemPopUpButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E953C3B72EDB406000C5BA4A /* ItemPopUpButton.swift */; };
 		E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */; };
 		E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */; };
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
 		E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */; };
 		E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */; };
 		E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */ = {isa = PBXBuildFile; fileRef = E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */; };
-		E982B53A2EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E982B5392EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift */; };
 		E985A9CC2D9AF4FC005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CB2D9AF4FC005A573C /* RuntimeViewerCore */; };
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
 		E985A9D22D9AF512005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D12D9AF512005A573C /* RuntimeViewerCore */; };
@@ -46,7 +43,7 @@
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */; };
 		E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825372C0E085200D9A85D /* MainCoordinator.swift */; };
-		E9A8253A2C0E095500D9A85D /* SidebarImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */; };
+		E9A8253A2C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825392C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift */; };
 		E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825412C0E0B2300D9A85D /* MainWindowController.swift */; };
 		E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825432C0E0B2800D9A85D /* MainSplitViewController.swift */; };
 		E9A825462C0E0B4900D9A85D /* ViewControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825452C0E0B4900D9A85D /* ViewControllers.swift */; };
@@ -68,19 +65,24 @@
 		E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9CBCC192C13685400169ABF /* RuntimeViewerUI */; };
 		E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */; };
 		E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */; };
-		E9D5359B2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D5359A2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift */; };
+		E9D470632F12A52A008BF7A9 /* SidebarRootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D470622F12A52A008BF7A9 /* SidebarRootViewController.swift */; };
+		E9D470652F134210008BF7A9 /* SidebarRootTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D470642F134210008BF7A9 /* SidebarRootTabViewController.swift */; };
+		E9D470672F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */; };
+		E9D470692F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */; };
+		E9D4706B2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */; };
 		E9E900EB2C2D0D5B00FADDCC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E900EA2C2D0D5B00FADDCC /* main.swift */; };
 		E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */; };
 		E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */; };
-		E9EEE8DD2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEE8DC2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift */; };
-		E9EEF7612E084D7D008D85D1 /* SidebarImageCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7602E084D7D008D85D1 /* SidebarImageCoordinator.swift */; };
-		E9EEF7632E084D87008D85D1 /* SidebarImageRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7622E084D87008D85D1 /* SidebarImageRoute.swift */; };
+		E9EEF7612E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */; };
 		E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7642E08540B008D85D1 /* ContentTextView.swift */; };
 		E9EEF7672E085420008D85D1 /* InspectorDisclosureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */; };
 		E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7682E085426008D85D1 /* InspectorClassHierarchyView.swift */; };
 		E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7702E086841008D85D1 /* AttachToProcessViewModel.swift */; };
 		E9F0A57E2C305C01001C36FB /* GenerationOptionsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */; };
-		E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */; };
+		E9F11E0B2F123EEC0052B0A3 /* SidebarRootCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E0A2F123EEC0052B0A3 /* SidebarRootCoordinator.swift */; };
+		E9F11E162F12671D0052B0A3 /* TabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E152F12671D0052B0A3 /* TabViewController.swift */; };
+		E9F11E182F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */; };
+		E9F759422CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */; };
 		E9F759622CF76B2200BE7A5F /* RuntimeViewerServer.h in Headers */ = {isa = PBXBuildFile; fileRef = E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		E9F759642CF76B3300BE7A5F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E9F759632CF76B3300BE7A5F /* main.m */; };
 		E9F759682CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759672CF76F4E00BE7A5F /* RuntimeViewerServerLoader.swift */; };
@@ -166,7 +168,7 @@
 		E9432FE72C0D614A00362862 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E9432FEA2C0D614A00362862 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
 		E9432FEC2C0D614A00362862 /* RuntimeViewerUsingAppKit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerUsingAppKit.entitlements; sourceTree = "<group>"; };
-		E94330172C0DA62500362862 /* SidebarRootViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootViewController.swift; sourceTree = "<group>"; };
+		E94330172C0DA62500362862 /* SidebarRootDirectoryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootDirectoryViewController.swift; sourceTree = "<group>"; };
 		E943301B2C0DB75B00362862 /* Then.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Then.swift; sourceTree = "<group>"; };
 		E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerCatalystHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E947C3692C2A4D0400296B2E /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -174,12 +176,10 @@
 		E947C3722C2A4D0500296B2E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E947C3772C2A4D0500296B2E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E94BA68D2E7EA992006B553D /* UXKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = UXKit.xcframework; path = RuntimeViewerUsingAppKit/UXKit.xcframework; sourceTree = "<group>"; };
-		E94BA6932E7EE09A006B553D /* UXKitFixups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UXKitFixups.swift; sourceTree = "<group>"; };
 		E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTableRowView.swift; sourceTree = "<group>"; };
 		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
 		E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIPChecker.swift; sourceTree = "<group>"; };
-		E953C3B72EDB406000C5BA4A /* ItemPopUpButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemPopUpButton.swift; sourceTree = "<group>"; };
 		E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		E95CDA662DAA6FA900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		E95CDA672DAA970300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
@@ -193,7 +193,6 @@
 		E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewModel.swift; sourceTree = "<group>"; };
 		E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UIDebugger.h; sourceTree = "<group>"; };
 		E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UIDebugger.m; sourceTree = "<group>"; };
-		E982B5392EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarBookmarkViewController.swift; sourceTree = "<group>"; };
 		E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperInstaller.swift; sourceTree = "<group>"; };
 		E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeInjectClient.swift; sourceTree = "<group>"; };
 		E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
@@ -203,7 +202,7 @@
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
 		E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCoordinator.swift; sourceTree = "<group>"; };
 		E9A825372C0E085200D9A85D /* MainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainCoordinator.swift; sourceTree = "<group>"; };
-		E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageViewController.swift; sourceTree = "<group>"; };
+		E9A825392C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectViewController.swift; sourceTree = "<group>"; };
 		E9A825412C0E0B2300D9A85D /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
 		E9A825432C0E0B2800D9A85D /* MainSplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitViewController.swift; sourceTree = "<group>"; };
 		E9A825452C0E0B4900D9A85D /* ViewControllers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewControllers.swift; sourceTree = "<group>"; };
@@ -222,25 +221,30 @@
 		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
 		E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainToolbarController.swift; sourceTree = "<group>"; };
 		E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTableCellView.swift; sourceTree = "<group>"; };
-		E9D5359A2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootOutlineViewDataSource.swift; sourceTree = "<group>"; };
+		E9D470622F12A52A008BF7A9 /* SidebarRootViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootViewController.swift; sourceTree = "<group>"; };
+		E9D470642F134210008BF7A9 /* SidebarRootTabViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTabViewController.swift; sourceTree = "<group>"; };
+		E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectListViewController.swift; sourceTree = "<group>"; };
+		E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectBookmarkViewController.swift; sourceTree = "<group>"; };
+		E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectTabViewController.swift; sourceTree = "<group>"; };
 		E9E900D72C2CF96500FADDCC /* RuntimeViewerCatalystHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerCatalystHelper.entitlements; sourceTree = "<group>"; };
 		E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerCatalystHelperPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900EA2C2D0D5B00FADDCC /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassViewController.swift; sourceTree = "<group>"; };
 		E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonLoadingView.swift; sourceTree = "<group>"; };
-		E9EEE8DC2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeObjectKindFilterViewController.swift; sourceTree = "<group>"; };
-		E9EEF7602E084D7D008D85D1 /* SidebarImageCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageCoordinator.swift; sourceTree = "<group>"; };
-		E9EEF7622E084D87008D85D1 /* SidebarImageRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageRoute.swift; sourceTree = "<group>"; };
+		E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCoordinator.swift; sourceTree = "<group>"; };
 		E9EEF7642E08540B008D85D1 /* ContentTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextView.swift; sourceTree = "<group>"; };
 		E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorDisclosureView.swift; sourceTree = "<group>"; };
 		E9EEF7682E085426008D85D1 /* InspectorClassHierarchyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassHierarchyView.swift; sourceTree = "<group>"; };
 		E9EEF7702E086841008D85D1 /* AttachToProcessViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewModel.swift; sourceTree = "<group>"; };
 		E9F0A57D2C305C01001C36FB /* GenerationOptionsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewController.swift; sourceTree = "<group>"; };
+		E9F11E0A2F123EEC0052B0A3 /* SidebarRootCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootCoordinator.swift; sourceTree = "<group>"; };
+		E9F11E152F12671D0052B0A3 /* TabViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabViewController.swift; sourceTree = "<group>"; };
+		E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootBookmarkViewController.swift; sourceTree = "<group>"; };
 		E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
 		E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Shared-Release.xcconfig"; sourceTree = "<group>"; };
 		E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Shared-Debug.xcconfig"; sourceTree = "<group>"; };
-		E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageCellView.swift; sourceTree = "<group>"; };
+		E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCellView.swift; sourceTree = "<group>"; };
 		E9F759512CF76B0F00BE7A5F /* RuntimeViewerServer.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = RuntimeViewerServer.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9F759602CF76B2200BE7A5F /* RuntimeViewerServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerServer.h; sourceTree = "<group>"; };
 		E9F759632CF76B3300BE7A5F /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
@@ -409,7 +413,7 @@
 			children = (
 				E9A825452C0E0B4900D9A85D /* ViewControllers.swift */,
 				E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */,
-				E953C3B72EDB406000C5BA4A /* ItemPopUpButton.swift */,
+				E9F11E152F12671D0052B0A3 /* TabViewController.swift */,
 			);
 			path = Base;
 			sourceTree = "<group>";
@@ -432,16 +436,19 @@
 			children = (
 				E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */,
 				E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */,
-				E9D5359A2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift */,
-				E94330172C0DA62500362862 /* SidebarRootViewController.swift */,
+				E9F11E0A2F123EEC0052B0A3 /* SidebarRootCoordinator.swift */,
+				E9D470642F134210008BF7A9 /* SidebarRootTabViewController.swift */,
+				E9D470622F12A52A008BF7A9 /* SidebarRootViewController.swift */,
 				E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */,
 				E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */,
-				E9A825392C0E095500D9A85D /* SidebarImageViewController.swift */,
-				E9F759412CF603DD00BE7A5F /* SidebarImageCellView.swift */,
-				E9EEF7602E084D7D008D85D1 /* SidebarImageCoordinator.swift */,
-				E9EEF7622E084D87008D85D1 /* SidebarImageRoute.swift */,
-				E982B5392EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift */,
-				E9EEE8DC2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift */,
+				E94330172C0DA62500362862 /* SidebarRootDirectoryViewController.swift */,
+				E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */,
+				E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */,
+				E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */,
+				E9A825392C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift */,
+				E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */,
+				E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */,
+				E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */,
 			);
 			path = Sidebar;
 			sourceTree = "<group>";
@@ -476,7 +483,6 @@
 			children = (
 				E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */,
 				E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */,
-				E94BA6932E7EE09A006B553D /* UXKitFixups.swift */,
 				E91CD9962C2127AD00C989CC /* EventMonitor.swift */,
 				E943301B2C0DB75B00362862 /* Then.swift */,
 				E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */,
@@ -663,7 +669,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1540;
-				LastUpgradeCheck = 1640;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					E9432FE12C0D614900362862 = {
 						CreatedOnToolsVersion = 15.4;
@@ -792,22 +798,25 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E9D470672F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift in Sources */,
 				E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */,
 				E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */,
-				E9A8253A2C0E095500D9A85D /* SidebarImageViewController.swift in Sources */,
+				E9A8253A2C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift in Sources */,
 				E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */,
 				E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */,
 				E943301C2C0DB75B00362862 /* Then.swift in Sources */,
 				E985F5A42D8FF14800C3E5EE /* HelperInstaller.swift in Sources */,
 				E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */,
-				E953C3B82EDB406000C5BA4A /* ItemPopUpButton.swift in Sources */,
-				E9F759422CF603DD00BE7A5F /* SidebarImageCellView.swift in Sources */,
+				E9D470632F12A52A008BF7A9 /* SidebarRootViewController.swift in Sources */,
+				E9F11E162F12671D0052B0A3 /* TabViewController.swift in Sources */,
+				E9F759422CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift in Sources */,
 				E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
 				E995B8942ED97D140083D9D7 /* RuntimeEngineManager.swift in Sources */,
 				E995B8952ED97D140083D9D7 /* RuntimeInjectClient.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
 				E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */,
+				E9D470652F134210008BF7A9 /* SidebarRootTabViewController.swift in Sources */,
 				E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */,
 				E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */,
 				E94BA6962E7EEB64006B553D /* SidebarRootTableRowView.swift in Sources */,
@@ -816,33 +825,32 @@
 				E9A825462C0E0B4900D9A85D /* ViewControllers.swift in Sources */,
 				E9A825522C0E0F9F00D9A85D /* ContentNavigationController.swift in Sources */,
 				E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */,
-				E9D5359B2E81AF38006518A1 /* SidebarRootOutlineViewDataSource.swift in Sources */,
 				E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */,
 				E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorNavigationController.swift in Sources */,
 				E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */,
-				E94330182C0DA62500362862 /* SidebarRootViewController.swift in Sources */,
-				E9EEE8DD2E071A8F008D85D1 /* RuntimeObjectKindFilterViewController.swift in Sources */,
+				E94330182C0DA62500362862 /* SidebarRootDirectoryViewController.swift in Sources */,
+				E9F11E0B2F123EEC0052B0A3 /* SidebarRootCoordinator.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
-				E9EEF7612E084D7D008D85D1 /* SidebarImageCoordinator.swift in Sources */,
+				E9D4706B2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift in Sources */,
+				E9EEF7612E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift in Sources */,
 				E9F0A57E2C305C01001C36FB /* GenerationOptionsViewController.swift in Sources */,
 				E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */,
-				E9EEF7632E084D87008D85D1 /* SidebarImageRoute.swift in Sources */,
 				E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */,
 				E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */,
 				E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */,
 				E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */,
+				E9D470692F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,
 				E995B8972ED97D840083D9D7 /* RuntimeEngineManager+.swift in Sources */,
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
-				E982B53A2EFD8B5D0075B9CD /* SidebarBookmarkViewController.swift in Sources */,
 				E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */,
-				E94BA6942E7EE09A006B553D /* UXKitFixups.swift in Sources */,
 				E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */,
 				E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */,
 				E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */,
 				E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */,
+				E9F11E182F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

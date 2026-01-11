@@ -1,4 +1,5 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+#if os(macOS)
+
 import Foundation
 public import SwiftyXPC
 

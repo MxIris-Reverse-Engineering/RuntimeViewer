@@ -5,7 +5,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootViewController: UIKitViewController<SidebarRootViewModel> {
+class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UIKitViewController<ViewModel> {
     let collectionView: UICollectionView = {
         #if os(tvOS)
         var configuration = UICollectionLayoutListConfiguration(appearance: .grouped)
@@ -62,10 +62,10 @@ class SidebarRootViewController: UIKitViewController<SidebarRootViewModel> {
         }
     }
 
-    override func setupBindings(for viewModel: SidebarRootViewModel) {
+    override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
 
-        let input = SidebarRootViewModel.Input(clickedNode: collectionView.rx.modelSelected(SidebarRootCellViewModel.self).asSignal(), selectedNode: .never(), searchString: searchBar.rx.text.asSignalOnErrorJustComplete().filterNil())
+        let input = ViewModel.Input(clickedNode: collectionView.rx.modelSelected(SidebarRootCellViewModel.self).asSignal(), selectedNode: .never(), searchString: searchBar.rx.text.asSignalOnErrorJustComplete().filterNil())
 
         let output = viewModel.transform(input)
 
@@ -79,7 +79,7 @@ class SidebarRootViewController: UIKitViewController<SidebarRootViewModel> {
         }
         .disposed(by: rx.disposeBag)
 
-        output.filteredNodes.drive(collectionView.rx.filteredNodes).disposed(by: rx.disposeBag)
+        output.nodes.map { Optional.some($0) }.drive(collectionView.rx.filteredNodes).disposed(by: rx.disposeBag)
     }
 }
 

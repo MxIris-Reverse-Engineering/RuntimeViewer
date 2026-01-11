@@ -16,23 +16,3 @@ public struct VoidResponse: RuntimeResponse, Codable {
 
     public static let empty: VoidResponse = .init()
 }
-
-
-//public struct AnyRuntimeRequest<Value: Codable>: RuntimeRequest {
-//
-//    public typealias Response = AnyRuntimeResponse<Value>
-//
-//    public static let identifier: String
-//    
-//    public var wrappedValue: Value
-//
-//    public init(identifier: String, wrappedValue: Value) {
-//        self.identifier = identifier
-//        self.wrappedValue = wrappedValue
-//    }
-//}
-//
-//
-//public struct AnyRuntimeResponse<Value: Codable>: RuntimeResponse {
-//    public var wrappedValue: Value
-//}

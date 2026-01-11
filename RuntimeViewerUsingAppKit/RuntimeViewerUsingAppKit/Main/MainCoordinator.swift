@@ -29,9 +29,9 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         switch route {
         case .main(let runtimeEngine):
             appServices.runtimeEngine = runtimeEngine
-            removeChild(sidebarCoordinator)
-            removeChild(contentCoordinator)
-            removeChild(inspectorCoordinator)
+            sidebarCoordinator.removeFromParent()
+            contentCoordinator.removeFromParent()
+            inspectorCoordinator.removeFromParent()
             sidebarCoordinator = SidebarCoordinator(appServices: appServices, delegate: self)
             contentCoordinator = ContentCoordinator(appServices: appServices, delegate: self)
             inspectorCoordinator = InspectorCoordinator(appServices: appServices)
@@ -91,12 +91,10 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 extension MainCoordinator: SidebarCoordinator.Delegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
         switch route {
-        case .selectedNode:
-            break
-        case .clickedNode(let runtimeNamedNode):
-            windowController.window?.title = runtimeNamedNode.name
-        case .selectedObject(let runtimeObjectType):
-            contentCoordinator.trigger(.root(runtimeObjectType))
+        case .clickedNode(let imageNode):
+            windowController.window?.title = imageNode.name
+        case .selectedObject(let runtimeObject):
+            contentCoordinator.trigger(.root(runtimeObject))
         case .back:
             contentCoordinator.trigger(.placeholder)
         default:
@@ -113,10 +111,10 @@ extension MainCoordinator: ContentCoordinator.Delegate {
         switch route {
         case .placeholder:
             inspectorCoordinator.trigger(.placeholder)
-        case .root(let runtimeObjectType):
-            inspectorCoordinator.trigger(.root(.object(runtimeObjectType)))
-        case .next(let runtimeObjectType):
-            inspectorCoordinator.trigger(.next(.object(runtimeObjectType)))
+        case .root(let runtimeObject):
+            inspectorCoordinator.trigger(.root(.object(runtimeObject)))
+        case .next(let runtimeObject):
+            inspectorCoordinator.trigger(.next(.object(runtimeObject)))
         case .back:
             inspectorCoordinator.trigger(.back)
         }

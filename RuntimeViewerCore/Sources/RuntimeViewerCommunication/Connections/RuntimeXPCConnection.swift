@@ -1,4 +1,4 @@
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+#if os(macOS)
 
 import Foundation
 import SwiftyXPC
@@ -13,7 +13,7 @@ class RuntimeXPCConnection: RuntimeConnection {
 
     fileprivate var connection: SwiftyXPC.XPCConnection?
 
-    fileprivate static let logger = Logger(label: "RuntimeXPCConnection")
+    fileprivate static let logger = Logger(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeXPCConnection")
 
     fileprivate var logger: Logger { Self.logger }
     
@@ -129,9 +129,9 @@ class RuntimeXPCConnection: RuntimeConnection {
 }
 
 private enum CommandIdentifiers {
-    static let serverLaunched = command("serverLaunched")
-    static let clientConnected = command("clientConnected")
-    static func command(_ command: String) -> String { "com.JH.RuntimeViewer.RuntimeListings.\(command)" }
+    static let serverLaunched = command("ServerLaunched")
+    static let clientConnected = command("ClientConnected")
+    static func command(_ command: String) -> String { "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeXPCConnection.\(command)" }
 }
 
 final class RuntimeXPCClientConnection: RuntimeXPCConnection {

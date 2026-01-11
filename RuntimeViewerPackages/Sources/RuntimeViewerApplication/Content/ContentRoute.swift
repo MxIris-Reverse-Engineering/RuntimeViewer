@@ -8,7 +8,7 @@ import RuntimeViewerArchitectures
 @CaseCheckable(.public)
 public enum ContentRoute: Routable {
     case placeholder
-    case root(RuntimeObjectName)
-    case next(RuntimeObjectName)
+    case root(RuntimeObject)
+    case next(RuntimeObject)
     case back
 }

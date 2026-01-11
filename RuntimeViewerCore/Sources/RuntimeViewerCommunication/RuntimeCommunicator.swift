@@ -7,7 +7,7 @@ public final class RuntimeCommunicator {
     public func connect(to source: RuntimeSource, modify: ((RuntimeConnection) async throws -> Void)? = nil) async throws -> RuntimeConnection {
         switch source {
         case .local:
-            throw NSError(domain: "com.JH.RuntimeViewerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Local connection is not supported"])
+            throw NSError(domain: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeCommunicator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Local connection is not supported"])
         case .remote(_, let identifier, let role):
             #if os(macOS)
             if role.isServer {
@@ -16,7 +16,7 @@ public final class RuntimeCommunicator {
                 return try await RuntimeXPCClientConnection(identifier: identifier, modify: modify)
             }
             #else
-            throw NSError(domain: "com.JH.RuntimeViewerService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Remote connection is not supported on this platform"])
+            throw NSError(domain: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeCommunicator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Remote connection is not supported on this platform"])
             #endif
         case .bonjourClient(let endpoint):
             let runtimeConnection = try RuntimeNetworkClientConnection(endpoint: endpoint)

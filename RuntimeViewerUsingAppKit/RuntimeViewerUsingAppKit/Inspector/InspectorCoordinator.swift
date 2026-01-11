@@ -37,10 +37,10 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
             return viewController
-        case .object(let runtimeObjectName):
-            switch runtimeObjectName.kind {
+        case .object(let runtimeObject):
+            switch runtimeObject.kind {
             case .objc(.type(.class)), .swift(.type(.class)):
-                let viewModel = InspectorClassViewModel(runtimeObjectName: runtimeObjectName, appServices: appServices, router: self)
+                let viewModel = InspectorClassViewModel(runtimeObject: runtimeObject, appServices: appServices, router: self)
                 let viewController = InspectorClassViewController()
                 viewController.setupBindings(for: viewModel)
                 return viewController

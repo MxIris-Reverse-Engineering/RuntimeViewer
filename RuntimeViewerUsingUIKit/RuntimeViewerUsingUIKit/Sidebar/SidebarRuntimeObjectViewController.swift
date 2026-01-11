@@ -6,7 +6,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-class SidebarImageViewController: UIKitViewController<SidebarImageViewModel> {
+class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewModel>: UIKitViewController<ViewModel> {
     @MagicViewLoading
     var imageTabBarController = UITabBarController()
 
@@ -53,19 +53,20 @@ class SidebarImageViewController: UIKitViewController<SidebarImageViewModel> {
         }
     }
 
-    override func setupBindings(for viewModel: SidebarImageViewModel) {
+    override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
-        let input = SidebarImageViewModel.Input(
-            runtimeObjectClicked: imageLoadedView.listView.rx.modelSelected(SidebarImageCellViewModel.self).asSignal(),
+        let input = ViewModel.Input(
+            runtimeObjectClicked: imageLoadedView.listView.rx.modelSelected(SidebarRuntimeObjectCellViewModel.self).asSignal(),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.tap.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.tap.asSignal()
             ).merge(),
-            searchString: imageLoadedView.searchBar.rx.text.asSignalOnErrorJustComplete().filterNil()
+            searchString: imageLoadedView.searchBar.rx.text.asSignalOnErrorJustComplete().filterNil(),
+            isSearchCaseInsensitive: nil
         )
 
         let output = viewModel.transform(input)
-        let listCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarImageCellViewModel> { cell, indexPath, viewModel in
+        let listCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarRuntimeObjectCellViewModel> { cell, indexPath, viewModel in
             var content = cell.defaultContentConfiguration()
             content.textProperties.allowsDefaultTighteningForTruncation = false
             content.attributedText = viewModel.name
@@ -110,7 +111,7 @@ extension RuntimeImageLoadState {
     }
 }
 
-extension SidebarImageViewController {
+extension SidebarRuntimeObjectViewController {
     class ImageLoadingView: XiblessView {
         let loadingIndicator: MaterialLoadingIndicator = .init(radius: 25, color: .tintColor)
 

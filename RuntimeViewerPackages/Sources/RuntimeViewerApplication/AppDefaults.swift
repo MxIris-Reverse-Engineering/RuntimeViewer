@@ -17,6 +17,12 @@ public final class AppDefaults {
     
     @UserDefault(key: "filterMode", defaultValue: nil)
     public var filterMode: FilterMode?
+    
+    @FileStorage("imageBookmarks", directory: .applicationSupportDirectory)
+    public var imageBookmarks: [RuntimeImageBookmark] = []
+    
+    @FileStorage("objectBookmarks", directory: .applicationSupportDirectory)
+    public var objectBookmarks: [RuntimeObjectBookmark] = []
 }
 
 private enum AppDefaultsKey: DependencyKey {

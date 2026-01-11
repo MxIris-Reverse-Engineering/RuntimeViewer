@@ -3,7 +3,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
-public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
+public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>, @unchecked Sendable {
     public let imageNode: RuntimeImageNode
     public let imagePath: String
     public let imageName: String
@@ -11,53 +11,49 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
 
     @Observed public private(set) var loadState: RuntimeImageLoadState = .unknown
     @Observed public private(set) var searchString: String = ""
-    @Observed public private(set) var searchStringForOpenQuickly: String = ""
-    @Observed public private(set) var nodes: [SidebarImageCellViewModel] = []
-    @Observed public private(set) var nodesForOpenQuickly: [SidebarImageCellViewModel] = []
-    @Observed public private(set) var filteredNodes: [SidebarImageCellViewModel] = []
-    @Observed public private(set) var filteredNodesForOpenQuickly: [SidebarImageCellViewModel] = []
+    @Observed public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
+    @Observed public private(set) var filteredNodes: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var isFiltering: Bool = false
-    @Observed public private(set) var isFilteringForOpenQuickly: Bool = false
+    @Observed public private(set) var isSearchCaseInsensitive: Bool = false
 
-    public init(node imageNode: RuntimeImageNode, appServices: AppServices, router: any Router<SidebarRoute>) {
+    public init(imageNode: RuntimeImageNode, appServices: AppServices, router: any Router<SidebarRuntimeObjectRoute>) {
+        let imagePath = imageNode.path
         self.runtimeEngine = appServices.runtimeEngine
         self.imageNode = imageNode
-        let imagePath = imageNode.path
         self.imagePath = imagePath
         self.imageName = imageNode.name
         super.init(appServices: appServices, router: router)
 
+        runtimeEngine.reloadDataStream
+            .asObservable()
+            .subscribeOnNext { [weak self] in
+                guard let self else { return }
+                Task {
+                    try await self.reloadData()
+                }
+            }
+            .disposed(by: rx.disposeBag)
+
         Task {
             do {
-                await runtimeEngine.reloadDataPublisher
-                    .asObservable()
-                    .subscribeOnNext { [weak self] in
-                        guard let self else { return }
-                        Task {
-                            try await self.reloadData()
-                        }
-                    }
-                    .disposed(by: rx.disposeBag)
                 try await reloadData()
             } catch {
                 self.loadState = .loadError(error)
-                print(error)
+                logger.error("\(error)")
             }
         }
     }
 
     @MemberwiseInit(.public)
     public struct Input {
-        public let runtimeObjectClicked: Signal<SidebarImageCellViewModel>
-        public let runtimeObjectClickedForOpenQuickly: Signal<SidebarImageCellViewModel>
+        public let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel>
         public let loadImageClicked: Signal<Void>
         public let searchString: Signal<String>
-        public let searchStringForOpenQuickly: Signal<String>
+        public let isSearchCaseInsensitive: Driver<Bool>?
     }
 
     public struct Output {
-        public let runtimeObjects: Driver<[SidebarImageCellViewModel]>
-        public let runtimeObjectsForOpenQuickly: Driver<[SidebarImageCellViewModel]>
+        public let runtimeObjects: Driver<[SidebarRuntimeObjectCellViewModel]>
         public let loadState: Driver<RuntimeImageLoadState>
         public let notLoadedText: Driver<String>
         public let errorText: Driver<String>
@@ -68,36 +64,14 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
         public let didBeginFiltering: Signal<Void>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
-        public let selectRuntimeObject: Signal<SidebarImageCellViewModel>
-    }
-
-    private func reloadData() async throws {
-        let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
-        if case .notLoaded = loadState {
-            await MainActor.run {
-                self.loadState = .notLoaded
-            }
-            return
-        }
-        await MainActor.run {
-            self.loadState = .loading
-        }
-        let names = try await runtimeEngine.names(in: imagePath)
-        await MainActor.run {
-            self.loadState = .loaded
-            self.searchString = ""
-            self.searchStringForOpenQuickly = ""
-            self.nodes = names.sorted().map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil, forOpenQuickly: false) }
-            self.nodesForOpenQuickly = names.sorted().map { SidebarImageCellViewModel(runtimeObject: $0, parent: nil, forOpenQuickly: true) }
-            self.filteredNodes = self.nodes
-            self.filteredNodesForOpenQuickly = []
-        }
     }
 
     @MainActor
     public func transform(_ input: Input) -> Output {
+        input.isSearchCaseInsensitive?.drive($isSearchCaseInsensitive).disposed(by: rx.disposeBag)
+
         input.searchString
-            .debounce(.milliseconds(80))
+            .debounce(.milliseconds(500))
             .emitOnNextMainActor { [weak self] filter in
                 guard let self else { return }
                 if filter.isEmpty {
@@ -109,31 +83,11 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
                         isFiltering = true
                     }
                 }
-                filteredNodes = FilterEngine.filter(filter, items: nodes, mode: appDefaults.filterMode)
+                filteredNodes = FilterEngine.filter(filter, items: nodes, mode: appDefaults.filterMode, isCaseInsensitive: isSearchCaseInsensitive)
             }
             .disposed(by: rx.disposeBag)
 
-        input.searchStringForOpenQuickly
-            .skip(1)
-            .debounce(.milliseconds(80))
-            .emitOnNextMainActor { [weak self] filter in
-                guard let self else { return }
-                if filter.isEmpty {
-                    if isFilteringForOpenQuickly {
-                        isFilteringForOpenQuickly = false
-                    }
-                    filteredNodesForOpenQuickly = []
-                } else {
-                    if !isFilteringForOpenQuickly {
-                        isFilteringForOpenQuickly = true
-                    }
-                    filteredNodesForOpenQuickly = FilterEngine.filter(filter, items: nodesForOpenQuickly, mode: .fuzzySearch)
-                }
-            }
-            .disposed(by: rx.disposeBag)
-
-        Signal.of(input.runtimeObjectClicked, input.runtimeObjectClickedForOpenQuickly)
-            .merge()
+        input.runtimeObjectClicked
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
@@ -156,11 +110,25 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
                 }
             }
             .asDriver(onErrorJustReturn: "")
+
         let runtimeImageName = imageNode.name
+
+        let distinctLoadState = $loadState.asObservable()
+            .distinctUntilChanged()
+            .flatMapLatest { state -> Observable<RuntimeImageLoadState> in
+                switch state {
+                case .loading:
+                    return Observable.just(state)
+                        .delay(.milliseconds(500), scheduler: MainScheduler.instance)
+                default:
+                    return Observable.just(state)
+                }
+            }
+            .asDriver(onErrorDriveWith: .empty())
+
         return Output(
             runtimeObjects: $filteredNodes.asDriver(),
-            runtimeObjectsForOpenQuickly: $filteredNodesForOpenQuickly.asDriver().skip(1),
-            loadState: $loadState.asDriver(),
+            loadState: distinctLoadState,
             notLoadedText: .just("\(imageName) is not yet loaded"),
             errorText: errorText,
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
@@ -169,9 +137,36 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" },
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
             didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
-            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
-            selectRuntimeObject: input.runtimeObjectClickedForOpenQuickly,
+            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid()
         )
+    }
+
+    func reloadData() async throws {
+        let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
+
+        if case .notLoaded = loadState {
+            await MainActor.run {
+                self.loadState = .notLoaded
+            }
+            return
+        }
+
+        await MainActor.run {
+            self.loadState = .loading
+        }
+
+        let runtimeObjects = try await buildRuntimeObjects()
+
+        await MainActor.run {
+            self.loadState = .loaded
+            self.searchString = ""
+            self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, parent: nil, forOpenQuickly: false) }
+            self.filteredNodes = self.nodes
+        }
+    }
+
+    func buildRuntimeObjects() async throws -> [RuntimeObject] {
+        try await runtimeEngine.objects(in: imagePath)
     }
 
     private func tryLoadImage() {
@@ -184,6 +179,19 @@ public final class SidebarImageViewModel: ViewModel<SidebarRoute> {
             } catch {
                 loadState = .loadError(error)
             }
+        }
+    }
+}
+
+extension RuntimeImageLoadState: @retroactive Equatable {
+    public static func == (lhs: RuntimeViewerCore.RuntimeImageLoadState, rhs: RuntimeViewerCore.RuntimeImageLoadState) -> Bool {
+        switch (lhs, rhs) {
+        case (.unknown, .unknown): return true
+        case (.loaded, .loaded): return true
+        case (.loading, .loading): return true
+        case (.notLoaded, .notLoaded): return true
+        case (.loadError, .loadError): return true
+        default: return false
         }
     }
 }

@@ -1,10 +1,9 @@
 import Logging
 import FoundationToolbox
 import RuntimeViewerObjC
-public import Combine
 import Foundation
-public import RuntimeViewerCommunication
 import MachOKit
+public import RuntimeViewerCommunication
 
 public actor RuntimeEngine {
     fileprivate enum CommandNames: String, CaseIterable {
@@ -29,40 +28,52 @@ public actor RuntimeEngine {
         case namesInImage
         case reloadData
 
-        var commandName: String { "com.JH.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
+        var commandName: String { "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
     }
     
     public static let shared = RuntimeEngine()
 
     public nonisolated let source: RuntimeSource
+    
+    public nonisolated let imageNodesStream: AsyncStream<[RuntimeImageNode]>
+    
+    private let imageNodesContinuation: AsyncStream<[RuntimeImageNode]>.Continuation
+    
+    public private(set) var imageList: [String] = []
 
-    @Published public private(set) var imageList: [String] = []
+    public private(set) var imageNodes: [RuntimeImageNode] = [] {
+        didSet {
+            imageNodesContinuation.yield(imageNodes)
+        }
+    }
 
-    @Published public private(set) var imageNodes: [RuntimeImageNode] = []
-
-    public var reloadDataPublisher: some Publisher<Void, Never> { reloadDataSubject.eraseToAnyPublisher() }
-
+    public nonisolated let reloadDataStream: AsyncStream<Void>
+    
+    private let reloadDataContinuation: AsyncStream<Void>.Continuation
+    
     private var imageToObjCSection: [String: RuntimeObjCSection] = [:]
 
     private var imageToSwiftSection: [String: RuntimeSwiftSection] = [:]
 
-    private let reloadDataSubject = PassthroughSubject<Void, Never>()
-
-    private static let logger = Logger(label: "RuntimeEngine")
+    private static let logger = Logger(label: "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine")
 
     private var logger: Logger { Self.logger }
 
-    private let shouldReload = PassthroughSubject<Void, Never>()
-
     private let communicator = RuntimeCommunicator()
-
-    private var subscriptions: Set<AnyCancellable> = []
 
     /// The connection to the sender or receiver
     private var connection: RuntimeConnection?
 
     public init() {
         self.source = .local
+        let (imageNodesStream, imageNodesContinuation) = AsyncStream<[RuntimeImageNode]>.makeStream()
+        self.imageNodesStream = imageNodesStream
+        self.imageNodesContinuation = imageNodesContinuation
+
+        let (reloadDataStream, reloadDataContinuation) = AsyncStream<Void>.makeStream()
+        self.reloadDataStream = reloadDataStream
+        self.reloadDataContinuation = reloadDataContinuation
+        
         Task {
             try await observeRuntime()
         }
@@ -80,6 +91,15 @@ public actor RuntimeEngine {
 
     public init(source: RuntimeSource) async throws {
         self.source = source
+        
+        let (imageNodesStream, imageNodesContinuation) = AsyncStream<[RuntimeImageNode]>.makeStream()
+        self.imageNodesStream = imageNodesStream
+        self.imageNodesContinuation = imageNodesContinuation
+
+        let (reloadDataStream, reloadDataContinuation) = AsyncStream<Void>.makeStream()
+        self.reloadDataStream = reloadDataStream
+        self.reloadDataContinuation = reloadDataContinuation
+        
         if let role = source.remoteRole {
             switch role {
             case .server:
@@ -104,16 +124,17 @@ public actor RuntimeEngine {
     private func setupMessageHandlerForServer() {
         setMessageHandlerBinding(forName: .isImageLoaded, of: self) { $0.isImageLoaded(path:) }
         setMessageHandlerBinding(forName: .loadImage, of: self) { $0.loadImage(at:) }
-        setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.runtimeObjectHierarchy(for:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofObjectName:) }
-        setMessageHandlerBinding(forName: .namesInImage, of: self) { $0.names(in:) }
+
+        setMessageHandlerBinding(forName: .namesInImage, of: self) { $0.objects(in:) }
         setMessageHandlerBinding(forName: .interfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
+        setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
     }
 
     private func setupMessageHandlerForClient() {
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
-        setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
+        setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataContinuation.yield() }
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
@@ -161,7 +182,6 @@ public actor RuntimeEngine {
 
     public func reloadData(isReloadImageNodes: Bool) async {
         logger.debug("Start reload")
-//        await objcRuntime.reloadData()
         imageList = DyldUtilities.imageNames()
         if isReloadImageNodes {
             imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
@@ -172,25 +192,14 @@ public actor RuntimeEngine {
 
     private func observeRuntime() async throws {
         imageList = DyldUtilities.imageNames()
-//        await objcRuntime.reloadData()
+        
         await Task.detached {
             await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
         }.value
 
-        shouldReload
-            .debounce(for: .milliseconds(15), scheduler: DispatchQueue.main)
-            .sink { [weak self] in
-                guard let self else { return }
-                Task {
-                    await self.reloadData(isReloadImageNodes: false)
-                }
-            }
-            .store(in: &subscriptions)
-
-//        observeDyldRegister()
         sendRemoteDataIfNeeded(isReloadImageNodes: true)
     }
-
+    
     private func setImageNodes(_ imageNodes: [RuntimeImageNode]) async {
         self.imageNodes = imageNodes
     }
@@ -202,7 +211,7 @@ public actor RuntimeEngine {
     private func sendRemoteDataIfNeeded(isReloadImageNodes: Bool) {
         Task {
             guard let role = source.remoteRole, role.isServer, let connection else {
-                reloadDataSubject.send()
+                reloadDataContinuation.yield()
                 return
             }
             try await connection.sendMessage(name: .imageList, request: imageList)
@@ -212,63 +221,15 @@ public actor RuntimeEngine {
             try await connection.sendMessage(name: .reloadData)
         }
     }
-
-    private func observeDyldRegister() {
-        DyldUtilities.observeDyldRegisterEvents()
-
-        NotificationCenter.default.publisher(for: DyldUtilities.addImageNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                Task {
-                    await self.shouldReload.send()
-                }
-            }
-            .store(in: &subscriptions)
-
-        NotificationCenter.default.publisher(for: DyldUtilities.removeImageNotification)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                Task {
-                    await self.shouldReload.send()
-                }
-            }
-            .store(in: &subscriptions)
-    }
-
-//    private func startTimingReload() {
-//        Timer.publish(every: 15, on: .main, in: .default)
-//            .autoconnect()
-//            .sink { [weak self] _ in
-//                guard let self else { return }
-//
-//                let classList = ObjCRuntime.classNames()
-//                let protocolList = ObjCRuntime.protocolNames()
-//
-//                let refClassList = self.classList
-//                let refProtocolList = self.protocolList
-//
-//                if classList != refClassList {
-//                    Self.logger.error("Watchdog: classList is out-of-date")
-//                    self.classList = classList
-//                }
-//                if protocolList != refProtocolList {
-//                    Self.logger.error("Watchdog: protocolList is out-of-date")
-//                    self.protocolList = protocolList
-//                }
-//            }
-//            .store(in: &subscriptions)
-//    }
-
-    private func _names(in image: String) async throws -> [RuntimeObjectName] {
+    
+    private func _objects(in image: String) async throws -> [RuntimeObject] {
         let image = DyldUtilities.patchImagePathForDyld(image)
-        let objcNames = try await _objcSection(for: image).allNames()
-        let swiftNames = try await _swiftSection(for: image).allNames()
-        return objcNames + swiftNames
+        let objcObjects = try await _objcSection(for: image).allObjects()
+        let swiftObjects = try await _swiftSection(for: image).allObjects()
+        return objcObjects + swiftObjects
     }
 
-    private func _interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+    private func _interface(for name: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
         switch name.kind {
         case .swift:
             let swiftSection = imageToSwiftSection[name.imagePath]
@@ -369,7 +330,7 @@ extension RuntimeEngine {
         }
     }
 
-    public func imageName(ofObjectName name: RuntimeObjectName) async throws -> String? {
+    public func imageName(ofObjectName name: RuntimeObject) async throws -> String? {
         try await request {
             nil
         } remote: {
@@ -378,12 +339,12 @@ extension RuntimeEngine {
     }
 
     private struct InterfaceRequest: Codable {
-        let name: RuntimeObjectName
+        let name: RuntimeObject
         let options: RuntimeObjectInterface.GenerationOptions
     }
 
-    public func interface(for name: RuntimeObjectName, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        return try await interface(for: .init(name: name, options: options))
+    public func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+        return try await interface(for: .init(name: object, options: options))
     }
 
     private func interface(for request: InterfaceRequest) async throws -> RuntimeObjectInterface? {
@@ -394,26 +355,26 @@ extension RuntimeEngine {
         }
     }
 
-    public func names(in image: String) async throws -> [RuntimeObjectName] {
+    public func objects(in image: String) async throws -> [RuntimeObject] {
         try await request {
-            try await _names(in: image)
+            try await _objects(in: image)
         } remote: {
             return try await $0.sendMessage(name: .namesInImage, request: image)
         }
     }
 
-    public func runtimeObjectHierarchy(for name: RuntimeObjectName) async throws -> [String] {
+    public func hierarchy(for object: RuntimeObject) async throws -> [String] {
         try await request { () -> [String] in
-            switch name.kind {
+            switch object.kind {
             case .c:
                 return []
             case .objc:
-                return try await imageToObjCSection[name.imagePath]?.classHierarchy(for: name) ?? []
+                return try await imageToObjCSection[object.imagePath]?.classHierarchy(for: object) ?? []
             case .swift:
-                return try await imageToSwiftSection[name.imagePath]?.classHierarchy(for: name) ?? []
+                return try await imageToSwiftSection[object.imagePath]?.classHierarchy(for: object) ?? []
             }
         } remote: {
-            return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: name)
+            return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: object)
         }
     }
 }

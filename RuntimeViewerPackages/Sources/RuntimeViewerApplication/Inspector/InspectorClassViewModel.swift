@@ -6,7 +6,7 @@ import MemberwiseInit
 
 public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
     @Observed
-    private var runtimeObjectName: RuntimeObjectName
+    private var runtimeObject: RuntimeObject
 
     @MemberwiseInit(.public)
     public struct Input {}
@@ -17,19 +17,19 @@ public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
 
     public func transform(_ input: Input) -> Output {
         return Output(
-            classHierarchy: $runtimeObjectName.flatMapLatest { [unowned self] runtimeObjectName in
+            classHierarchy: $runtimeObject.flatMapLatest { [unowned self] runtimeObject in
                 do {
-                    return try await appServices.runtimeEngine.runtimeObjectHierarchy(for: runtimeObjectName).joined(separator: "\n")
+                    return try await appServices.runtimeEngine.hierarchy(for: runtimeObject).joined(separator: "\n")
                 } catch {
                     print(error.localizedDescription)
-                    return runtimeObjectName.displayName
+                    return runtimeObject.displayName
                 }
-            }.catchAndReturn(runtimeObjectName.displayName).observeOnMainScheduler().asDriverOnErrorJustComplete()
+            }.catchAndReturn(runtimeObject.displayName).observeOnMainScheduler().asDriverOnErrorJustComplete()
         )
     }
 
-    public init(runtimeObjectName: RuntimeObjectName, appServices: AppServices, router: any Router<InspectorRoute>) {
-        self.runtimeObjectName = runtimeObjectName
+    public init(runtimeObject: RuntimeObject, appServices: AppServices, router: any Router<InspectorRoute>) {
+        self.runtimeObject = runtimeObject
         super.init(appServices: appServices, router: router)
     }
 }

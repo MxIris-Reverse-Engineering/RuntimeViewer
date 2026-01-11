@@ -36,7 +36,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
 
     private let eventMonitor = EventMonitor()
 
-    private let jumpToDefinitionRelay = PublishRelay<RuntimeObjectName>()
+    private let jumpToDefinitionRelay = PublishRelay<RuntimeObject>()
 
     private var isPressedCommand: Bool = false
     
@@ -71,7 +71,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         super.setupBindings(for: viewModel)
 
         let input = ContentTextViewModel.Input(
-            runtimeObjectClicked: Signal.of(textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObjectName }.asSignalOnErrorJustComplete().filter { [unowned self] _ in isPressedCommand }, jumpToDefinitionRelay.asSignal()).merge()
+            runtimeObjectClicked: Signal.of(textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObject }.asSignalOnErrorJustComplete().filter { [unowned self] _ in isPressedCommand }, jumpToDefinitionRelay.asSignal()).merge()
         )
         let output = viewModel.transform(input)
 
@@ -133,7 +133,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
 
     func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
         var newMenuItems: [NSMenuItem] = []
-        if let runtimeObject = view.attributedString().attributes(at: charIndex, effectiveRange: nil)[.link] as? RuntimeObjectName {
+        if let runtimeObject = view.attributedString().attributes(at: charIndex, effectiveRange: nil)[.link] as? RuntimeObject {
             let menuItem = JumpToDefinitionMenuItem(runtimeObject: runtimeObject)
             menuItem.target = self
             menuItem.action = #selector(jumpToDefinitionAction(_:))
@@ -171,9 +171,9 @@ extension ContentTextViewController: NSMenuItemValidation {
 }
 
 private final class JumpToDefinitionMenuItem: NSMenuItem {
-    let runtimeObject: RuntimeObjectName
+    let runtimeObject: RuntimeObject
 
-    init(runtimeObject: RuntimeObjectName) {
+    init(runtimeObject: RuntimeObject) {
         self.runtimeObject = runtimeObject
         super.init(title: "Jump to Definition", action: nil, keyEquivalent: "")
         if #available(macOS 26.0, *) {
