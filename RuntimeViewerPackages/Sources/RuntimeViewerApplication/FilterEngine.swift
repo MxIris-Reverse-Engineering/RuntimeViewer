@@ -33,9 +33,10 @@ enum FilterEngine {
         }
     }
 
-    static func filter<Item: FilterableItem>(_ filter: String, items: [Item], mode: FilterMode?) -> [Item] {
+    static func filter<Item: FilterableItem>(_ filter: String, items: [Item], mode: FilterMode?, isCaseInsensitive: Bool) -> [Item] {
         for item in items {
             item.filter = filter
+            item.isCaseInsensitive = isCaseInsensitive
             item.filterResult = nil
         }
         guard !filter.isEmpty else {
@@ -66,7 +67,13 @@ enum FilterEngine {
             }
             return filteredItems
         case .none:
-            return items.filter { $0.filterableString.localizedCaseInsensitiveContains(filter) }
+            return items.filter {
+                if isCaseInsensitive {
+                    $0.filterableString.contains(filter)
+                } else {
+                    $0.filterableString.localizedCaseInsensitiveContains(filter)
+                }
+            }
         }
     }
 }
@@ -75,6 +82,7 @@ protocol FilterableItem: AnyObject {
     var filter: String { set get }
     var filterResult: FuzzyFilterResult? { set get }
     var filterableString: String { get }
+    var isCaseInsensitive: Bool { set get }
 }
 
 protocol FuzzyFilterResult {

@@ -133,7 +133,9 @@ let package = Package(
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
             ],
             swiftSettings: [
-                .internalImportsByDefault
+                .internalImportsByDefault,
+                .immutableWeakCaptures,
+                
             ],
         ),
         .target(
@@ -146,7 +148,8 @@ let package = Package(
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
             ],
             swiftSettings: [
-                .internalImportsByDefault
+                .internalImportsByDefault,
+                .immutableWeakCaptures,
             ],
         ),
     ],

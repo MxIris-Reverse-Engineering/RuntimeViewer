@@ -27,14 +27,14 @@ class SidebarCoordinator: NavigationCoordinator<SidebarRoute> {
         switch route {
         case .root:
             let viewController = SidebarRootViewController()
-            let viewModel = SidebarRootViewModel(appServices: appServices, router: self)
+            let viewModel = SidebarRootDirectoryViewModel(appServices: appServices, router: self)
             viewController.setupBindings(for: viewModel)
             return .set([viewController], animation: nil)
         case let .clickedNode(clickedNode):
-            let imageViewController = SidebarImageViewController()
-            let imageViewModel = SidebarImageViewModel(node: clickedNode, appServices: appServices, router: self)
-            imageViewController.setupBindings(for: imageViewModel)
-            return .push(imageViewController, animation: .default)
+            let viewController = SidebarRuntimeObjectViewController()
+            let viewModel = SidebarRuntimeObjectListViewModel(imageNode: clickedNode, appServices: appServices, router: self)
+            viewController.setupBindings(for: viewModel)
+            return .push(viewController, animation: .default)
         case .back:
             return .pop(animation: .default)
         default:

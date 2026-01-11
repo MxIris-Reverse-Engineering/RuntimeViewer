@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-final class SidebarImageCellView: TableCellView {
+final class SidebarRuntimeObjectCellView: TableCellView {
     private let primaryIconImageView = ImageView()
 
     private let secondaryIconImageView = ImageView()
@@ -14,14 +14,12 @@ final class SidebarImageCellView: TableCellView {
     private let forOpenQuickly: Bool
 
     private lazy var contentStackView = HStackView(distribution: .fill, spacing: 6) {
-//        HStackView(distribution: .fill, spacing: 6) {
-            primaryIconImageView
-                .contentHugging(h: .required)
-                .contentCompressionResistance(h: .required)
-            secondaryIconImageView
-                .contentHugging(h: .required)
-                .contentCompressionResistance(h: .required)
-//        }
+        primaryIconImageView
+            .contentHugging(h: .required)
+            .contentCompressionResistance(h: .required)
+        secondaryIconImageView
+            .contentHugging(h: .required)
+            .contentCompressionResistance(h: .required)
         nameLabel
             .contentHugging(h: .defaultLow)
             .contentCompressionResistance(h: .defaultLow)
@@ -67,7 +65,7 @@ final class SidebarImageCellView: TableCellView {
         }
     }
 
-    func bind(to viewModel: SidebarImageCellViewModel) {
+    func bind(to viewModel: SidebarRuntimeObjectCellViewModel) {
         rx.disposeBag = DisposeBag()
 
         viewModel.$primaryIcon.asDriver().drive(primaryIconImageView.rx.image).disposed(by: rx.disposeBag)

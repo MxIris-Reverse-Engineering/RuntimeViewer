@@ -17,7 +17,7 @@
 		E9038FB12C31A8500051B6AC /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C39D2C2AB7E400296B2E /* Then.swift */; };
 		E9038FB22C31A8500051B6AC /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACA32C28682C00A2F3D3 /* MainViewModel.swift */; };
 		E9038FB32C31A8500051B6AC /* InspectorNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC9F2C2866E600A2F3D3 /* InspectorNavigationController.swift */; };
-		E9038FB42C31A8500051B6AC /* SidebarImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC922C28210100A2F3D3 /* SidebarImageViewController.swift */; };
+		E9038FB42C31A8500051B6AC /* SidebarRuntimeObjectViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC922C28210100A2F3D3 /* SidebarRuntimeObjectViewController.swift */; };
 		E9038FB52C31A8500051B6AC /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC52C0D612000362862 /* AppDelegate.swift */; };
 		E9038FB62C31A8500051B6AC /* SidebarNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */; };
 		E9038FB72C31A8500051B6AC /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC992C28659C00A2F3D3 /* ContentPlaceholderViewController.swift */; };
@@ -38,7 +38,7 @@
 		E942AC8C2C27CF0A00A2F3D3 /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */; };
 		E942AC8E2C27CF3400A2F3D3 /* SidebarNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */; };
 		E942AC902C27CF4F00A2F3D3 /* SidebarRootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC8F2C27CF4F00A2F3D3 /* SidebarRootViewController.swift */; };
-		E942AC932C28210100A2F3D3 /* SidebarImageViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC922C28210100A2F3D3 /* SidebarImageViewController.swift */; };
+		E942AC932C28210100A2F3D3 /* SidebarRuntimeObjectViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC922C28210100A2F3D3 /* SidebarRuntimeObjectViewController.swift */; };
 		E942AC962C28654F00A2F3D3 /* ContentCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC952C28654F00A2F3D3 /* ContentCoordinator.swift */; };
 		E942AC982C28658A00A2F3D3 /* ContentNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC972C28658A00A2F3D3 /* ContentNavigationController.swift */; };
 		E942AC9A2C28659C00A2F3D3 /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942AC992C28659C00A2F3D3 /* ContentPlaceholderViewController.swift */; };
@@ -77,7 +77,7 @@
 		E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarCoordinator.swift; sourceTree = "<group>"; };
 		E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarNavigationController.swift; sourceTree = "<group>"; };
 		E942AC8F2C27CF4F00A2F3D3 /* SidebarRootViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootViewController.swift; sourceTree = "<group>"; };
-		E942AC922C28210100A2F3D3 /* SidebarImageViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarImageViewController.swift; sourceTree = "<group>"; };
+		E942AC922C28210100A2F3D3 /* SidebarRuntimeObjectViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectViewController.swift; sourceTree = "<group>"; };
 		E942AC952C28654F00A2F3D3 /* ContentCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentCoordinator.swift; sourceTree = "<group>"; };
 		E942AC972C28658A00A2F3D3 /* ContentNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentNavigationController.swift; sourceTree = "<group>"; };
 		E942AC992C28659C00A2F3D3 /* ContentPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPlaceholderViewController.swift; sourceTree = "<group>"; };
@@ -205,7 +205,7 @@
 				E942AC8B2C27CF0A00A2F3D3 /* SidebarCoordinator.swift */,
 				E942AC8D2C27CF3400A2F3D3 /* SidebarNavigationController.swift */,
 				E942AC8F2C27CF4F00A2F3D3 /* SidebarRootViewController.swift */,
-				E942AC922C28210100A2F3D3 /* SidebarImageViewController.swift */,
+				E942AC922C28210100A2F3D3 /* SidebarRuntimeObjectViewController.swift */,
 			);
 			path = Sidebar;
 			sourceTree = "<group>";
@@ -435,7 +435,7 @@
 				E9038FB22C31A8500051B6AC /* MainViewModel.swift in Sources */,
 				E9038FB32C31A8500051B6AC /* InspectorNavigationController.swift in Sources */,
 				E96CF52E2EC7848700CBC159 /* XiblessView.swift in Sources */,
-				E9038FB42C31A8500051B6AC /* SidebarImageViewController.swift in Sources */,
+				E9038FB42C31A8500051B6AC /* SidebarRuntimeObjectViewController.swift in Sources */,
 				E9038FB52C31A8500051B6AC /* AppDelegate.swift in Sources */,
 				E9038FB62C31A8500051B6AC /* SidebarNavigationController.swift in Sources */,
 				E9038FB72C31A8500051B6AC /* ContentPlaceholderViewController.swift in Sources */,
@@ -471,7 +471,7 @@
 				E9432FCA2C0D612000362862 /* ViewControllers.swift in Sources */,
 				E96CF52D2EC7848700CBC159 /* XiblessView.swift in Sources */,
 				E9432FC62C0D612000362862 /* AppDelegate.swift in Sources */,
-				E942AC932C28210100A2F3D3 /* SidebarImageViewController.swift in Sources */,
+				E942AC932C28210100A2F3D3 /* SidebarRuntimeObjectViewController.swift in Sources */,
 				E942AC772C270C0000A2F3D3 /* MainCoordinator.swift in Sources */,
 				E9432FC82C0D612000362862 /* SceneDelegate.swift in Sources */,
 				E942AC9A2C28659C00A2F3D3 /* ContentPlaceholderViewController.swift in Sources */,

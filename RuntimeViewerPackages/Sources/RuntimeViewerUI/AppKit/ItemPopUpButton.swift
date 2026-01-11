@@ -1,9 +1,11 @@
+#if os(macOS)
+
 import AppKit
 import SFSymbols
 import UIFoundationToolbox
 
-final class ItemPopUpButton<Item: CaseIterable & CustomStringConvertible & RawRepresentable>: NSPopUpButton where Item.RawValue == Int {
-    var onItem: Item? {
+public final class ItemPopUpButton<Item: CaseIterable & CustomStringConvertible & RawRepresentable>: NSPopUpButton where Item.RawValue == Int {
+    public var onItem: Item? {
         didSet {
             guard let onItem else { return }
             item(withTitle: onItem.description)?.do {
@@ -12,11 +14,11 @@ final class ItemPopUpButton<Item: CaseIterable & CustomStringConvertible & RawRe
         }
     }
     
-    var icon: NSImage?
+    public var icon: NSImage?
     
-    var stateChanged: ((Item?) -> Void)?
+    public var stateChanged: ((Item?) -> Void)?
 
-    func setup() {
+    public func setup() {
         pullsDown = true
         preferredEdge = .minY
         isBordered = false
@@ -42,3 +44,6 @@ final class ItemPopUpButton<Item: CaseIterable & CustomStringConvertible & RawRe
         }
     }
 }
+
+
+#endif

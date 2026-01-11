@@ -64,7 +64,7 @@ final class MainViewModel: ViewModel<MainRoute> {
     let selectedRuntimeSourceIndex = BehaviorRelay(value: 0)
 
     @Observed
-    var selectedRuntimeObject: RuntimeObjectName?
+    var selectedRuntimeObject: RuntimeObject?
 
     func transform(_ input: Input) -> Output {
         rx.disposeBag = DisposeBag()
@@ -276,7 +276,7 @@ extension UTType {
     fileprivate static let swiftInterface: Self = .init(filenameExtension: "swiftinterface") ?? .swiftSource
 }
 
-extension RuntimeObjectName {
+extension RuntimeObject {
     fileprivate var contentType: UTType {
         switch kind {
         case .c,

@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Logging
 
 public enum RuntimeNetworkError: Error {
     case notConnected
@@ -36,14 +37,36 @@ public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
 }
 
-public struct RuntimeNetworkEndpoint {
+public struct RuntimeNetworkEndpoint: Sendable, Codable, Equatable {
     public let name: String
+    
     let endpoint: NWEndpoint
+    
+    init(name: String, endpoint: NWEndpoint) {
+        self.name = name
+        self.endpoint = endpoint
+    }
+    
+    private enum CodableError: Error {
+        case unsupported
+    }
+    
+    public init(from decoder: any Decoder) throws {
+        throw CodableError.unsupported
+    }
+    
+    public func encode(to encoder: any Encoder) throws {
+        throw CodableError.unsupported
+    }
 }
 
 public class RuntimeNetworkBrowser {
     private let browser: NWBrowser
 
+    private var logger: Logger { Self.logger }
+    
+    private static var logger = Logger(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeNetworkBrowser")
+    
     public init() {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
@@ -53,7 +76,7 @@ public class RuntimeNetworkBrowser {
 
     public func start(handler: @escaping (RuntimeNetworkEndpoint) -> Void) {
         browser.stateUpdateHandler = { newState in
-            print("browser.stateUpdateHandler \(newState)")
+            Self.logger.info("browser.stateUpdateHandler \(newState)")
         }
         browser.browseResultsChangedHandler = { results, changes in
             for result in results {

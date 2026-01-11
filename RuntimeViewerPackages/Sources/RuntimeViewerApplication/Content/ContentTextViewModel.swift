@@ -17,7 +17,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     public private(set) var theme: ThemeProfile
 
     @Observed
-    public private(set) var runtimeObject: RuntimeObjectName
+    public private(set) var runtimeObject: RuntimeObject
 
     @Observed
     public private(set) var imageNameOfRuntimeObject: String?
@@ -25,7 +25,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
     public private(set) var attributedString: NSAttributedString?
 
-    public init(runtimeObject: RuntimeObjectName, appServices: AppServices, router: any Router<ContentRoute>) {
+    public init(runtimeObject: RuntimeObject, appServices: AppServices, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
         super.init(appServices: appServices, router: router)
@@ -48,7 +48,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
     @MemberwiseInit(.public)
     public struct Input {
-        public let runtimeObjectClicked: Signal<RuntimeObjectName>
+        public let runtimeObjectClicked: Signal<RuntimeObject>
     }
 
     public struct Output {
@@ -63,9 +63,9 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let runtimeObjectNotFoundRelay = PublishRelay<Void>()
         
         input.runtimeObjectClicked
-            .flatMapLatest { [unowned self] runtimeObjectName in
+            .flatMapLatest { [unowned self] runtimeObject in
                 Observable.async {
-                    try await self.appServices.runtimeEngine.interface(for: runtimeObjectName, options: .init())
+                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init())
                 }
                 .trackActivity(_commonLoading)
                 .asSignal(onErrorJustReturn: nil)
@@ -73,7 +73,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .emit(with: self) { target, interface in
                 Task { @MainActor in
                     if let interface {
-                        target.router.trigger(.next(interface.name))
+                        target.router.trigger(.next(interface.object))
                     } else {
                         runtimeObjectNotFoundRelay.accept()
                     }

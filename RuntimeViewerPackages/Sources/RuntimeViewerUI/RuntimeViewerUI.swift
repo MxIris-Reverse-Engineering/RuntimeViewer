@@ -15,6 +15,8 @@
 @_exported import RunningApplicationKit
 @_exported import Rearrange
 @_exported import DSFQuickActionBar
+@_exported import SystemHUD
+
 #endif
 
 #if canImport(UIKit)

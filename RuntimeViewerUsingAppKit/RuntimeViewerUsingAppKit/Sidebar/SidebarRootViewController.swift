@@ -1,16 +1,17 @@
 import AppKit
+import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class SidebarRootViewController: UXEffectViewController<SidebarRootViewModel> {
-    private let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
+class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXEffectViewController<ViewModel> {
+    let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
     private let filterSearchField = FilterSearchField()
 
     private let bottomSeparatorView = NSBox()
 
-    private var dataSource: SidebarRootOutlineViewDataSource?
+    private var dataSource: OutlineViewDataSource?
 
     override var shouldDisplayCommonLoading: Bool { true }
 
@@ -68,12 +69,12 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         }
     }
 
-    override func setupBindings(for viewModel: SidebarRootViewModel) {
+    override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
 
         dataSource = .init(viewModel: viewModel)
 
-        let input = SidebarRootViewModel.Input(
+        let input = ViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
             searchString: filterSearchField.rx.stringValue.asSignal()
@@ -112,13 +113,46 @@ final class SidebarRootViewController: UXEffectViewController<SidebarRootViewMod
         }
         .disposed(by: rx.disposeBag)
 
-        output.nodesIndexed.asObservable().first().asObservable().subscribeOnNext { [weak self] _ in
-            guard let self, let dataSource else { return }
-            outlineView.rx.setDataSource(dataSource).disposed(by: rx.disposeBag)
-            outlineView.autosaveExpandedItems = true
-            outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
-            outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
+        output.nodesIndexed
+            .delay(.milliseconds(100))
+            .asObservable()
+            .first()
+            .asObservable()
+            .subscribeOnNext { [weak self] _ in
+                guard let self, let dataSource else { return }
+                outlineView.rx.setDataSource(dataSource).disposed(by: rx.disposeBag)
+                outlineView.autosaveExpandedItems = true
+                outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
+                outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
+            }
+            .disposed(by: rx.disposeBag)
+    }
+}
+
+extension SidebarRootViewController {
+    private final class OutlineViewDataSource: NSObject, NSOutlineViewDataSource {
+        private unowned let viewModel: ViewModel
+
+        init(viewModel: ViewModel) {
+            self.viewModel = viewModel
+            super.init()
         }
-        .disposed(by: rx.disposeBag)
+
+        func outlineView(_ outlineView: NSOutlineView, itemForPersistentObject object: Any) -> Any? {
+            guard !viewModel.isFiltering else { return nil }
+            guard let path = object as? String else {
+                print("Invalid persistent object:", object)
+                return nil
+            }
+            let item = viewModel.allNodes[path]
+            return item
+        }
+
+        func outlineView(_ outlineView: NSOutlineView, persistentObjectForItem item: Any?) -> Any? {
+            guard !viewModel.isFiltering else { return nil }
+            guard let item = item as? SidebarRootCellViewModel else { return nil }
+            let returnObject = item.node.parent != nil ? item.node.absolutePath : item.node.name
+            return returnObject
+        }
     }
 }

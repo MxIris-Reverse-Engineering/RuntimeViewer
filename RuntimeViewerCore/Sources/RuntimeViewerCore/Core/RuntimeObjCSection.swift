@@ -22,7 +22,7 @@ public struct ObjCGenerationOptions: Sendable, Codable, Equatable {
 actor RuntimeObjCSection {
     enum Error: Swift.Error {
         case invalidMachOImage
-        case invalidRuntimeObjectName
+        case invalidRuntimeObject
     }
 
     let imagePath: String
@@ -261,8 +261,8 @@ actor RuntimeObjCSection {
         return resultInfos
     }
 
-    func allNames() async throws -> [RuntimeObjectName] {
-        var results: [RuntimeObjectName] = []
+    func allObjects() async throws -> [RuntimeObject] {
+        var results: [RuntimeObject] = []
 
         for structName in structs.keys {
             results.append(.init(name: structName, displayName: structName, kind: .c(.struct), secondaryKind: nil, imagePath: imagePath, children: []))
@@ -287,8 +287,8 @@ actor RuntimeObjCSection {
         return results
     }
 
-    func interface(for name: RuntimeObjectName, using options: ObjCGenerationOptions) async throws -> RuntimeObjectInterface {
-        let name = name.withImagePath(imagePath)
+    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions) async throws -> RuntimeObjectInterface {
+        let name = object.withImagePath(imagePath)
         let objcDumpContext = ObjCDumpContext(options: options) { name, isStruct in
             guard let name else { return true }
             if isStruct {
@@ -400,7 +400,7 @@ actor RuntimeObjCSection {
                 )
 
                 if let finalClassInfo {
-                    return .init(name: name, interfaceString: finalClassInfo.semanticString(using: objcDumpContext))
+                    return .init(object: name, interfaceString: finalClassInfo.semanticString(using: objcDumpContext))
                 }
             }
         case .objc(.type(.protocol)):
@@ -483,29 +483,29 @@ actor RuntimeObjCSection {
                     optionalMethods: currentProtocolInfo.optionalMethods.removingAll { needsStripMethods.contains($0.name) }
                 )
 
-                return .init(name: name, interfaceString: finalProtocolInfo.semanticString(using: objcDumpContext))
+                return .init(object: name, interfaceString: finalProtocolInfo.semanticString(using: objcDumpContext))
             }
         case .objc(.category(.class)):
             if let interfaceString = categories[name.name]?.info.semanticString(using: objcDumpContext) {
-                return .init(name: name, interfaceString: interfaceString)
+                return .init(object: name, interfaceString: interfaceString)
             }
         case .c(.struct):
             if let interfaceString = structs[name.name]?.semanticString(isStruct: true, context: objcDumpContext) {
-                return .init(name: name, interfaceString: interfaceString)
+                return .init(object: name, interfaceString: interfaceString)
             }
         case .c(.union):
             if let interfaceString = unions[name.name]?.semanticString(isStruct: false, context: objcDumpContext) {
-                return .init(name: name, interfaceString: interfaceString)
+                return .init(object: name, interfaceString: interfaceString)
             }
         default:
             break
         }
-        throw Error.invalidRuntimeObjectName
+        throw Error.invalidRuntimeObject
     }
 
-    func classHierarchy(for name: RuntimeObjectName) async throws -> [String] {
-        guard case .objc(.type(.class)) = name.kind,
-              let classGroups = classes[name.name]
+    func classHierarchy(for object: RuntimeObject) async throws -> [String] {
+        guard case .objc(.type(.class)) = object.kind,
+              let classGroups = classes[object.name]
         else { return [] }
         return classGroups.info.map(\.name)
     }

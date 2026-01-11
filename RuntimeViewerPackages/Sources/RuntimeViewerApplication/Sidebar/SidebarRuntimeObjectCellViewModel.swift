@@ -11,21 +11,21 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, FilterableItem, @unchecked Sendable {
-    public let runtimeObject: RuntimeObjectName
+public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType, FilterableItem, @unchecked Sendable {
+    public let runtimeObject: RuntimeObject
 
     public let forOpenQuickly: Bool
     
-    public weak var parent: SidebarImageCellViewModel?
+    public weak var parent: SidebarRuntimeObjectCellViewModel?
 
-    public var children: [SidebarImageCellViewModel] { _filteredChildren }
+    public var children: [SidebarRuntimeObjectCellViewModel] { _filteredChildren }
 
     public var isLeaf: Bool { children.isEmpty }
 
-    private lazy var _filteredChildren: [SidebarImageCellViewModel] = _children
+    private lazy var _filteredChildren: [SidebarRuntimeObjectCellViewModel] = _children
 
-    private lazy var _children: [SidebarImageCellViewModel] = {
-        let children = runtimeObject.children.map { SidebarImageCellViewModel(runtimeObject: $0, parent: self, forOpenQuickly: forOpenQuickly) }
+    private lazy var _children: [SidebarRuntimeObjectCellViewModel] = {
+        let children = runtimeObject.children.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, parent: self, forOpenQuickly: forOpenQuickly) }
         return children.sorted { $0.runtimeObject.displayName < $1.runtimeObject.displayName }
     }()
 
@@ -41,9 +41,11 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
     @Dependency(\.appDefaults)
     private var appDefaults
 
+    var isCaseInsensitive: Bool = false
+    
     var filter: String = "" {
         didSet {
-            _filteredChildren = FilterEngine.filter(filter, items: _children, mode: appDefaults.filterMode)
+            _filteredChildren = FilterEngine.filter(filter, items: _children, mode: appDefaults.filterMode, isCaseInsensitive: isCaseInsensitive)
         }
     }
 
@@ -87,7 +89,7 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
     private static let openQuicklyFontSize: CGFloat = 16
     
     private var fontSize: CGFloat {
-        forOpenQuickly ? Self.openQuicklyFontSize : Self.normalFontSize
+        forOpenQuickly ? SidebarRuntimeObjectCellViewModel.openQuicklyFontSize : SidebarRuntimeObjectCellViewModel.normalFontSize
     }
     
     @Observed
@@ -107,7 +109,7 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
             .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
     }
 
-    public init(runtimeObject: RuntimeObjectName, parent: SidebarImageCellViewModel?, forOpenQuickly: Bool) {
+    public init(runtimeObject: RuntimeObject, parent: SidebarRuntimeObjectCellViewModel?, forOpenQuickly: Bool) {
         self.runtimeObject = runtimeObject
         self.forOpenQuickly = forOpenQuickly
         super.init()
@@ -136,6 +138,6 @@ public final class SidebarImageCellViewModel: NSObject, OutlineNodeType, Filtera
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
-extension SidebarImageCellViewModel: Differentiable {}
+extension SidebarRuntimeObjectCellViewModel: Differentiable {}
 
 #endif

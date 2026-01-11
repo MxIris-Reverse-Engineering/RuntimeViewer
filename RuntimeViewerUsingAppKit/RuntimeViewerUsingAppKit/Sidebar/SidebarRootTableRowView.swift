@@ -3,7 +3,7 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerUI
 
-final class SidebarRootTableRowView: NSTableRowView {
+final class SidebarRootTableRowView: TableRowView {
     override var backgroundColor: NSColor {
         set {}
         get { Self.backgroundColor }

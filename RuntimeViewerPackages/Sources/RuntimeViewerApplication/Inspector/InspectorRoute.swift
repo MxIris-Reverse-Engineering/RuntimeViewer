@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 
 public enum InspectableObject {
     case node(RuntimeImageNode)
-    case object(RuntimeObjectName)
+    case object(RuntimeObject)
 }
 
 @AssociatedValue(.public)

@@ -16,10 +16,34 @@ if usingSystemUXKit {
     sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
 }
 
-enum MxIrisStudioWorkspace {
-    static let relativeForkDirectory = "../../../../Fork"
+struct MxIrisStudioWorkspace: RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    let rawValue: String
 
-    static let relativePersonalDirectory = "../../../../Personal"
+    init(rawValue value: String) {
+        self.rawValue = value
+    }
+
+    init(stringLiteral value: StringLiteralType) {
+        self.rawValue = value
+    }
+
+    static let forkDirectory: MxIrisStudioWorkspace = "../../../../Fork"
+    
+    static let forkLibraryDirectory: MxIrisStudioWorkspace = "../../../../Fork/Library"
+
+    static let personalDirectory: MxIrisStudioWorkspace = "../../../../Personal"
+
+    static let personalLibraryDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library"
+    
+    static let personalLibraryMacOSDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library/macOS"
+
+    static let personalLibraryMuiltplePlatfromDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library/Multi"
+    
+    var description: String { rawValue }
+    
+    func libraryPath(_ libraryName: String) -> String {
+        "\(rawValue)/\(libraryName)"
+    }
 }
 
 extension Package.Dependency {
@@ -78,17 +102,26 @@ let package = Package(
             url: "https://github.com/ChimeHQ/Rearrange.git",
             from: "2.0.0"
         ),
+
         .package(
-            url: "https://github.com/Mx-Iris/UIFoundation",
-            branch: "main"
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/UIFoundation",
+                branch: "main"
+            )
         ),
+
         .package(
             url: "https://github.com/MxIris-Library-Forks/XCoordinator",
             branch: "master"
         ),
         .package(
             local: .package(
-                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/CocoaCoordinator",
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
                 isRelative: true,
                 isEnabled: true
             ),
@@ -105,14 +138,21 @@ let package = Package(
             url: "https://github.com/ReactiveX/RxSwift",
             from: "6.0.0"
         ),
-        .package(
-            url: "https://github.com/Mx-Iris/RxSwiftPlus",
-            branch: "main"
-        ),
         
         .package(
             local: .package(
-                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/OpenUXKit",
+                path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("RxSwiftPlus"),
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/RxSwiftPlus",
+                branch: "main"
+            ),
+        ),
+        .package(
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("OpenUXKit"),
                 isRelative: true,
                 isEnabled: true
             ),
@@ -143,7 +183,7 @@ let package = Package(
         ),
         .package(
             local: .package(
-                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/RxAppKit",
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RxAppKit"),
                 isRelative: true,
                 isEnabled: true
             ),
@@ -163,7 +203,7 @@ let package = Package(
         ),
         .package(
             local: .package(
-                path: "\(MxIrisStudioWorkspace.relativeForkDirectory)/Library/filter-ui",
+                path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("filter-ui"),
                 isRelative: true,
                 isEnabled: true
             ),
@@ -183,7 +223,7 @@ let package = Package(
                 isEnabled: true
             ),
             .package(
-                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/MachInjector",
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("MachInjector"),
                 isRelative: true,
                 isEnabled: true
             ),
@@ -198,7 +238,7 @@ let package = Package(
         ),
         .package(
             local: .package(
-                path: "\(MxIrisStudioWorkspace.relativePersonalDirectory)/Library/macOS/RunningApplicationKit",
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
                 isRelative: true,
                 isEnabled: true
             ),
@@ -251,7 +291,7 @@ let package = Package(
                 isEnabled: true
             ),
             .package(
-                path: "\(MxIrisStudioWorkspace.relativeForkDirectory)/Library/DSFQuickActionBar",
+                path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("DSFQuickActionBar"),
                 isRelative: true,
                 isEnabled: true
             ),
@@ -260,6 +300,17 @@ let package = Package(
                 branch: "main"
             )
         ),
+        .package(
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("SystemHUD"),
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/SystemHUD",
+                branch: "main"
+            ),
+        )
     ],
     targets: [
         .target(
@@ -302,6 +353,7 @@ let package = Package(
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DSFQuickActionBar", package: "DSFQuickActionBar", condition: .when(platforms: appkitPlatforms)),
 //                .product(name: "DSFInspectorPanes", package: "DSFInspectorPanes", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "SystemHUD", package: "SystemHUD", condition: .when(platforms: appkitPlatforms)),
             ],
             swiftSettings: sharedSwiftSettings
         ),
