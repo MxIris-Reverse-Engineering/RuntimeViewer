@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXEffectViewController<ViewModel> {
+class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewController<ViewModel> {
     let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
     private let filterSearchField = FilterSearchField()

@@ -21,7 +21,7 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
         self.appServices = appServices
         self.delegate = delegate
         self.imageNode = imageNode
-        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .initial)
+        super.init(rootViewController: .init(), initialRoute: .initial)
     }
 
     override func prepareTransition(for route: SidebarRuntimeObjectRoute) -> SidebarRuntimeObjectTransition {
@@ -34,7 +34,11 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
             let bookmarkViewController = SidebarRuntimeObjectBookmarkViewController()
             let bookmarkViewModel = SidebarRuntimeObjectBookmarkViewModel(imageNode: imageNode, appServices: appServices, router: self)
             bookmarkViewController.setupBindings(for: bookmarkViewModel)
-            return .set([(SFSymbols(systemName: .folder), listViewController), (SFSymbols(systemName: .bookmark), bookmarkViewController)])
+            
+            return .set([
+                TabViewItem(normalSymbol: .init(systemName: .folder), selectedSymbol: .init(systemName: .folderFill), viewController: listViewController),
+                TabViewItem(normalSymbol: .init(systemName: .bookmark), selectedSymbol: .init(systemName: .bookmarkFill), viewController: bookmarkViewController),
+            ])
         case .objects:
             return .select(index: 0)
         case .bookmarks:

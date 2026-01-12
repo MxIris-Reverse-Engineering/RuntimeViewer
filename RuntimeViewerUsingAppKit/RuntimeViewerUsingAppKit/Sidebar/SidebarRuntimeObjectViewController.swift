@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewModel>: UXEffectViewController<ViewModel> {
+class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewModel>: UXKitViewController<ViewModel> {
     private let tabView = NSTabView()
 
     let imageNotLoadedView = ImageLoadableView()

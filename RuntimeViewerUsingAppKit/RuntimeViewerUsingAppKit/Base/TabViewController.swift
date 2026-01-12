@@ -1,13 +1,29 @@
 import AppKit
 import RuntimeViewerUI
+import RuntimeViewerApplication
 
 struct TabViewItem {
-    let symbol: SFSymbols
+    let normalSymbol: SFSymbols
+    let selectedSymbol: SFSymbols
     let viewController: NSViewController
 }
 
 class TabViewController: UXViewController {
-    private let segmentedControl = NSSegmentedControl()
+    private let contentView: NSView = {
+        if #available(macOS 26.0, *) {
+            UXView()
+        } else {
+            NSVisualEffectView()
+        }
+    }()
+
+    private let segmentedControl: any SegmentedControl = {
+        if #available(macOS 26.0, *) {
+            NSSegmentedControl()
+        } else {
+            AreaSegmentedControl()
+        }
+    }()
 
     private let tabView = NSTabView()
 
@@ -15,28 +31,35 @@ class TabViewController: UXViewController {
         super.viewDidLoad()
 
         hierarchy {
-            segmentedControl
-            tabView
+            contentView.hierarchy {
+                segmentedControl
+                tabView
+            }
+        }
+
+        contentView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
         }
 
         segmentedControl.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide)
-            make.left.right.equalTo(view.safeAreaLayoutGuide).inset(8)
+            make.top.equalTo(contentView.safeAreaLayoutGuide)
+            if #available(macOS 26.0, *) {
+                make.leading.trailing.equalTo(contentView.safeAreaLayoutGuide).inset(8)
+            } else {
+                make.leading.trailing.equalTo(contentView.safeAreaLayoutGuide)
+            }
         }
 
         tabView.view.snp.makeConstraints { make in
-            make.top.equalTo(segmentedControl.snp.bottom).offset(12)
-            make.left.right.bottom.equalTo(view.safeAreaLayoutGuide)
+            make.top.equalTo(segmentedControl.snp.bottom).offset(10)
+            make.left.right.bottom.equalTo(contentView.safeAreaLayoutGuide)
         }
 
+//        segmentedControl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         segmentedControl.controlSize = .large
         segmentedControl.selectedSegment = 0
-        segmentedControl.box.action { [weak self] segmentedControl in
-            guard let self else { return }
-            let indexOfSelectedItem = segmentedControl.indexOfSelectedItem
-            guard indexOfSelectedItem >= 0, indexOfSelectedItem < tabView.tabViewItems.count else { return }
-            selectedTabViewItemIndex = segmentedControl.indexOfSelectedItem
-        }
+        segmentedControl.target = tabView
+        segmentedControl.action = #selector(tabView.takeSelectedTabViewItemFromSender(_:))
 
         tabView.tabViewType = .noTabsNoBorder
         tabView.tabPosition = .none
@@ -51,7 +74,11 @@ class TabViewController: UXViewController {
     func setTabViewItems(_ tabViewItems: [TabViewItem]) {
         segmentedControl.segmentCount = tabViewItems.count
         for (index, tabViewItem) in tabViewItems.enumerated() {
-            segmentedControl.setImage(tabViewItem.symbol.nsuiImgae, forSegment: index)
+            segmentedControl.setImage(tabViewItem.normalSymbol.nsuiImgae, forSegment: index)
+            segmentedControl.setAlternateImage(tabViewItem.selectedSymbol.nsuiImgae, forSegment: index)
+            if #unavailable(macOS 26.0) {
+//                segmentedControl.setWidth(30, forSegment: index)
+            }
             tabView.addTabViewItem(.init(viewController: tabViewItem.viewController))
         }
     }
@@ -71,14 +98,13 @@ extension Transition where ViewController: TabViewController {
         }
     }
 
-    static func set(_ presentables: [(symbol: SFSymbols, presentable: Presentable)]) -> Self {
-        Self(presentables: presentables.map(\.presentable)) { windowController, viewController, options, completion in
+    static func set(_ tabViewItems: [TabViewItem]) -> Self {
+        Self(presentables: tabViewItems.map(\.viewController)) { windowController, viewController, options, completion in
             guard let viewController = viewController ?? ((windowController as? NSWindowController)?.contentViewController as? ViewController) else {
                 completion?()
                 return
             }
             viewController.removeAllTabViewItems()
-            let tabViewItems: [TabViewItem] = presentables.filter { $0.presentable.viewController != nil }.map { .init(symbol: $0.symbol, viewController: $0.presentable.viewController!) }
             viewController.setTabViewItems(tabViewItems)
             completion?()
         }

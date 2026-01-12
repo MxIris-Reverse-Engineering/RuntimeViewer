@@ -18,7 +18,7 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
     init(appServices: AppServices, delegate: Delegate? = nil) {
         self.appServices = appServices
         self.delegate = delegate
-        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .initial)
+        super.init(rootViewController: .init(), initialRoute: .initial)
     }
 
     override func prepareTransition(for route: SidebarRootRoute) -> SidebarRootTransition {
@@ -31,8 +31,10 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
             let bookmarkViewController = SidebarRootBookmarkViewController()
             let bookmarkViewModel = SidebarRootBookmarkViewModel(appServices: appServices, router: self)
             bookmarkViewController.setupBindings(for: bookmarkViewModel)
-
-            return .set([(SFSymbols(systemName: .folder), directoryViewController), (SFSymbols(systemName: .bookmark), bookmarkViewController)])
+            return .set([
+                TabViewItem(normalSymbol: .init(systemName: .folder), selectedSymbol: .init(systemName: .folderFill), viewController: directoryViewController),
+                TabViewItem(normalSymbol: .init(systemName: .bookmark), selectedSymbol: .init(systemName: .bookmarkFill), viewController: bookmarkViewController),
+            ])
         case .directory:
             return .select(index: 0)
         case .bookmarks:

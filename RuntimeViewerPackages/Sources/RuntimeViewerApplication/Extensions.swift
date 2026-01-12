@@ -209,7 +209,6 @@ extension RuntimeImageNode {
     private static func icon(for symbol: SFSymbols) -> NSUIImage {
         #if os(macOS)
         symbol
-            .hierarchicalColor(.controlAccentColor)
             .nsuiImgae
         #else
         symbol
