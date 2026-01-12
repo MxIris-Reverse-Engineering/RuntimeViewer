@@ -8,11 +8,6 @@ final class SidebarRootTableRowView: TableRowView {
         set {}
         get { Self.backgroundColor }
     }
-
-    override var interiorBackgroundStyle: NSView.BackgroundStyle {
-        set {}
-        get { .emphasized }
-    }
     
     private static let backgroundColor = NSColor.controlAccentColor.withSystemEffect(.deepPressed)
 }

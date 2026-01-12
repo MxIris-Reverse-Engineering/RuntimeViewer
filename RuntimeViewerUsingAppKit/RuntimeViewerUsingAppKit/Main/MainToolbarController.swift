@@ -8,6 +8,12 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     class IconButtonToolbarItem: NSToolbarItem {
         let button = ToolbarButton()
 
+        override var isHidden: Bool {
+            didSet {
+                print(isHidden)
+            }
+        }
+        
         convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbols.SystemSymbolName) {
             self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbols.SymbolName)
         }

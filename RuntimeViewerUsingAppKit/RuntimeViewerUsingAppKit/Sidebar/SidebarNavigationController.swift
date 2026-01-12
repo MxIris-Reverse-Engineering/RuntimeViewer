@@ -6,16 +6,19 @@ final class SidebarNavigationController: UXKitNavigationController {}
 extension SidebarNavigationController {
     func navigationController(_ navigationController: UXNavigationController, willShow viewController: UXViewController) {
         if #available(macOS 26.0, *) {
-            guard let coordinator = navigationController.transitionCoordinator, let fromViewController = coordinator.viewController(forKey: .from), navigationController.viewControllers.contains(fromViewController) else {
-                return
-            }
+            guard let coordinator = navigationController.transitionCoordinator,
+                  let fromViewController = coordinator.viewController(forKey: .from),
+                  let toViewController = coordinator.viewController(forKey: .to)
+            else { return }
 
-            let topViewController = navigationController.topViewController
-            let originalBackgroundColor = topViewController?.uxView.backgroundColor
+            let fromOriginalBackgroundColor = fromViewController.uxView.backgroundColor
+            let toOriginalBackgroundColor = toViewController.uxView.backgroundColor
             coordinator.animate(alongsideTransition: { context in
-                topViewController?.uxView.backgroundColor = .windowBackgroundColor
+                fromViewController.uxView.backgroundColor = .windowBackgroundColor
+                toViewController.uxView.backgroundColor = .windowBackgroundColor
             }, completion: { context in
-                topViewController?.uxView.backgroundColor = originalBackgroundColor
+                fromViewController.uxView.backgroundColor = fromOriginalBackgroundColor
+                toViewController.uxView.backgroundColor = toOriginalBackgroundColor
             })
         }
     }
@@ -25,10 +28,4 @@ extension SidebarNavigationController {
             navigationController.view.needsDisplay = true
         }
     }
-    
-//    func navigationController(_ navigationController: UXNavigationController, animationControllerFor operation: UXNavigationController.Operation, from fromViewController: UXViewController, to toViewController: UXViewController) -> (any UXViewControllerAnimatedTransitioning)? {
-//        return NoAnimationTransition.shared
-//    }
 }
-
-
