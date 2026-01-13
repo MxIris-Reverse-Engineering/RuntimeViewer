@@ -34,14 +34,11 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
             .bind(to: $nodes)
             .disposed(by: rx.disposeBag)
 
-        $nodes
-            .bind(to: $filteredNodes)
-            .disposed(by: rx.disposeBag)
-
-        let isFilterEmptyNodes = isFilterEmptyNodes
-
         let indexedNodes = $nodes
-            .filter { isFilterEmptyNodes ? $0.isNotEmpty : true }
+            .filter { [weak self] in
+                guard let self else { return false }
+                return isFilterEmptyNodes ? !$0.isEmpty : true
+            }
             .observe(on: ConcurrentDispatchQueueScheduler(qos: .userInteractive))
             .flatMapLatest { nodes -> [String: SidebarRootCellViewModel] in
                 var allNodes: [String: SidebarRootCellViewModel] = [:]
@@ -62,6 +59,11 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         indexedNodes.emit(to: $allNodes).disposed(by: rx.disposeBag)
 
         self.nodesIndexed = indexedNodes.trackActivity(_commonLoading).asSignal().mapToVoid()
+        
+        
+        $nodes
+            .bind(to: $filteredNodes)
+            .disposed(by: rx.disposeBag)
     }
 
     @MemberwiseInit(.public)

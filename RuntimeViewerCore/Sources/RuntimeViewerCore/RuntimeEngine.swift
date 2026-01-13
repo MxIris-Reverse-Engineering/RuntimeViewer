@@ -1,8 +1,9 @@
 import Logging
+import MachOKit
 import FoundationToolbox
 import RuntimeViewerObjC
-import Foundation
-import MachOKit
+public import Foundation
+public import Combine
 public import RuntimeViewerCommunication
 
 public actor RuntimeEngine {
@@ -35,21 +36,16 @@ public actor RuntimeEngine {
 
     public nonisolated let source: RuntimeSource
     
-    public nonisolated let imageNodesStream: AsyncStream<[RuntimeImageNode]>
-    
-    private let imageNodesContinuation: AsyncStream<[RuntimeImageNode]>.Continuation
-    
     public private(set) var imageList: [String] = []
 
-    public private(set) var imageNodes: [RuntimeImageNode] = [] {
-        didSet {
-            imageNodesContinuation.yield(imageNodes)
-        }
-    }
-
-    public nonisolated let reloadDataStream: AsyncStream<Void>
+    @Published
+    public private(set) var imageNodes: [RuntimeImageNode] = []
     
-    private let reloadDataContinuation: AsyncStream<Void>.Continuation
+    public var reloadDataPublisher: some Publisher<Void, Never> {
+        reloadDataSubject.eraseToAnyPublisher()
+    }
+    
+    private let reloadDataSubject = PassthroughSubject<Void, Never>()
     
     private var imageToObjCSection: [String: RuntimeObjCSection] = [:]
 
@@ -66,13 +62,6 @@ public actor RuntimeEngine {
 
     public init() {
         self.source = .local
-        let (imageNodesStream, imageNodesContinuation) = AsyncStream<[RuntimeImageNode]>.makeStream()
-        self.imageNodesStream = imageNodesStream
-        self.imageNodesContinuation = imageNodesContinuation
-
-        let (reloadDataStream, reloadDataContinuation) = AsyncStream<Void>.makeStream()
-        self.reloadDataStream = reloadDataStream
-        self.reloadDataContinuation = reloadDataContinuation
         
         Task {
             try await observeRuntime()
@@ -91,14 +80,6 @@ public actor RuntimeEngine {
 
     public init(source: RuntimeSource) async throws {
         self.source = source
-        
-        let (imageNodesStream, imageNodesContinuation) = AsyncStream<[RuntimeImageNode]>.makeStream()
-        self.imageNodesStream = imageNodesStream
-        self.imageNodesContinuation = imageNodesContinuation
-
-        let (reloadDataStream, reloadDataContinuation) = AsyncStream<Void>.makeStream()
-        self.reloadDataStream = reloadDataStream
-        self.reloadDataContinuation = reloadDataContinuation
         
         if let role = source.remoteRole {
             switch role {
@@ -134,7 +115,7 @@ public actor RuntimeEngine {
     private func setupMessageHandlerForClient() {
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
-        setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataContinuation.yield() }
+        setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
@@ -211,7 +192,7 @@ public actor RuntimeEngine {
     private func sendRemoteDataIfNeeded(isReloadImageNodes: Bool) {
         Task {
             guard let role = source.remoteRole, role.isServer, let connection else {
-                reloadDataContinuation.yield()
+                reloadDataSubject.send()
                 return
             }
             try await connection.sendMessage(name: .imageList, request: imageList)

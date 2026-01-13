@@ -9,3 +9,4 @@ xcuserdata
 RuntimeViewerUsingAppKit/Packaging.log
 RuntimeViewerUsingAppKit/ExportOptions.plist
 RuntimeViewerUsingAppKit/DistributionSummary.plist
+*.resolved
