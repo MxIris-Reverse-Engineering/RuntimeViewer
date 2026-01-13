@@ -110,7 +110,6 @@ let package = Package(
             url: "https://github.com/ChimeHQ/Rearrange.git",
             from: "2.0.0"
         ),
-
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),

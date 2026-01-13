@@ -1,10 +1,3 @@
-//
-//  AppKitPluginImpl.swift
-//  AppKitPlugin
-//
-//  Created by JH on 2024/6/24.
-//
-
 import AppKit
 import RuntimeViewerCore
 
@@ -13,7 +6,7 @@ extension NSObject {
 }
 
 @objc(AppKitPluginImpl)
-class AppKitPluginImpl: NSObject, AppKitPlugin {
+final class AppKitPluginImpl: NSObject, AppKitPlugin {
     var observation: NSKeyValueObservation?
 
     var runtimeEngine: RuntimeEngine?
@@ -40,37 +33,6 @@ class AppKitPluginImpl: NSObject, AppKitPlugin {
     func launch() {
         Task {
             runtimeEngine = try await .macCatalystServer()
-            // The host application quits, check if any of the two is running.
-            // If none, quit the XPC service.
-
-            let sequence = NSWorkspace.shared.notificationCenter
-                .notifications(named: NSWorkspace.didTerminateApplicationNotification)
-            for await notification in sequence {
-                try Task.checkCancellation()
-                guard let app = notification
-                    .userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                    app.isUserOfService
-                else { continue }
-                if NSWorkspace.shared.runningApplications.contains(where: \.isUserOfService) {
-                    continue
-                }
-                await NSApplication.shared.terminate(nil)
-            }
         }
-    }
-}
-
-extension AppKitPluginImpl: NSWindowDelegate {
-//    func windowDidBecomeKey(_ notification: Notification) {
-//        NSApplication.shared.hide(nil)
-//    }
-}
-
-extension NSRunningApplication {
-    var isUserOfService: Bool {
-        [
-            "com.JH.RuntimeViewer",
-            "dev.JH.RuntimeViewer",
-        ].contains(bundleIdentifier)
     }
 }

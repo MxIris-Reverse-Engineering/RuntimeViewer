@@ -130,7 +130,9 @@ class RuntimeXPCConnection: RuntimeConnection {
 
 private enum CommandIdentifiers {
     static let serverLaunched = command("ServerLaunched")
+    
     static let clientConnected = command("ClientConnected")
+    
     static func command(_ command: String) -> String { "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeXPCConnection.\(command)" }
 }
 

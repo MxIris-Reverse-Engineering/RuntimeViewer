@@ -4,7 +4,7 @@ import Asynchrone
 import Semaphore
 import Logging
 
-class RuntimeNetworkConnection {
+final class RuntimeNetworkConnection {
     private class MessageHandler {
         typealias RawHandler = (Data) async throws -> Data
         let closure: RawHandler
@@ -25,11 +25,11 @@ class RuntimeNetworkConnection {
 
     private typealias ReceiveType = (Data?, NWConnection.ContentContext?, Bool, NWError?) -> Void
 
-    public let id = UUID()
+    let id = UUID()
 
-    public var didStop: ((RuntimeNetworkConnection) -> Void)?
+    var didStop: ((RuntimeNetworkConnection) -> Void)?
 
-    public var didReady: ((RuntimeNetworkConnection) -> Void)?
+    var didReady: ((RuntimeNetworkConnection) -> Void)?
 
     private let connection: NWConnection
 
@@ -58,7 +58,7 @@ class RuntimeNetworkConnection {
     private var messageHandlers: [String: MessageHandler] = [:]
 
     /// outgoing connection
-    public init(endpoint: NWEndpoint) throws {
+    init(endpoint: NWEndpoint) throws {
         Self.logger.info("RuntimeNetworkConnection outgoing endpoint: \(endpoint.debugDescription)")
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
@@ -71,13 +71,13 @@ class RuntimeNetworkConnection {
     }
 
     /// incoming connection
-    public init(connection: NWConnection) throws {
+    init(connection: NWConnection) throws {
         Self.logger.info("RuntimeNetworkConnection incoming connection: \(connection.debugDescription)")
         self.connection = connection
         try start()
     }
 
-    public func start() throws {
+    func start() throws {
         guard !isStarted else { return }
         isStarted = true
         Self.logger.info("Connection will start")
@@ -89,7 +89,7 @@ class RuntimeNetworkConnection {
         Self.logger.info("Connection did start")
     }
 
-    public func stop() {
+    func stop() {
         guard isStarted else { return }
         isStarted = false
         Self.logger.info("Connection will stop")
@@ -102,22 +102,22 @@ class RuntimeNetworkConnection {
         Self.logger.info("Connection did stop")
     }
 
-    public func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping ((Request) async throws -> Response)) {
+    func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping ((Request) async throws -> Response)) {
         messageHandlers[name] = .init(closure: handler)
     }
 
-    public func setMessageHandler<Request: RuntimeRequest>(_ handler: @escaping ((Request) async throws -> Request.Response)) {
+    func setMessageHandler<Request: RuntimeRequest>(_ handler: @escaping ((Request) async throws -> Request.Response)) {
         messageHandlers[Request.identifier] = .init(closure: handler)
     }
 
-    public func send(requestData: RuntimeRequestData) async throws {
+    func send(requestData: RuntimeRequestData) async throws {
         await semaphore.wait()
         defer { semaphore.signal() }
         logger.info("RuntimeNetworkConnection send identifier: \(requestData.identifier)")
         try await send(content: requestData)
     }
 
-    public func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {
+    func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {
         await semaphore.wait()
         defer { semaphore.signal() }
         logger.info("RuntimeNetworkConnection send identifier: \(requestData.identifier)")
@@ -129,12 +129,12 @@ class RuntimeNetworkConnection {
         return try JSONDecoder().decode(Response.self, from: responseData.data)
     }
 
-    public func send<Request: RuntimeRequest>(request: Request) async throws {
+    func send<Request: RuntimeRequest>(request: Request) async throws {
         let requestData = try RuntimeRequestData(request: request)
         try await send(requestData: requestData)
     }
 
-    public func send<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
+    func send<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
         let requestData = try RuntimeRequestData(request: request)
         return try await send(requestData: requestData)
     }
