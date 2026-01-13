@@ -1,13 +1,10 @@
 import Foundation
 
-//#if targetEnvironment(macCatalyst)
-
 @objcMembers
-@dynamicMemberLookup
-class AppKitBridge: NSObject {
+final class AppKitBridge: NSObject {
     static let shared = AppKitBridge()
     
-    var plugin: AppKitPlugin?
+    private(set) var plugin: AppKitPlugin?
 
     enum Error: Swift.Error {
         case failedCreateBundlePath
@@ -15,7 +12,8 @@ class AppKitBridge: NSObject {
         case failedLoadPrincipalClass
     }
 
-    func loadPlugins() throws {
+    @discardableResult
+    func loadPlugins() throws -> AppKitPlugin {
         guard let bundlePath = Bundle.main.builtInPlugInsURL?.appendingPathComponent("RuntimeViewerCatalystHelperPlugin.bundle").path else {
             throw Error.failedCreateBundlePath
         }
@@ -28,35 +26,8 @@ class AppKitBridge: NSObject {
             throw Error.failedLoadPrincipalClass
         }
 
-        AppKitBridge.shared.plugin = principalClass.init()
-    }
-    
-    subscript<Property>(dynamicMember keyPath: KeyPath<AppKitPlugin, Property>) -> Property {
-        get {
-            if let plugins = plugin {
-               return plugins[keyPath: keyPath]
-            } else {
-                fatalError("请在成功加载插件后再访问成员")
-            }
-        }
-    }
-    
-    subscript<Property>(dynamicMember keyPath: WritableKeyPath<AppKitPlugin, Property>) -> Property {
-        set {
-            if var plugins = plugin {
-                plugins[keyPath: keyPath] = newValue
-            } else {
-                fatalError("请在成功加载插件后再访问成员")
-            }
-            
-        }
-        get {
-            if let plugins = plugin {
-               return plugins[keyPath: keyPath]
-            } else {
-                fatalError("请在成功加载插件后再访问成员")
-            }
-        }
+        let plugin = principalClass.init()
+        self.plugin = plugin
+        return plugin
     }
 }
-//#endif

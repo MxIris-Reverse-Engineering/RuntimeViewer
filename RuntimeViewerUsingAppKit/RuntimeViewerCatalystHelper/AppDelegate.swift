@@ -8,15 +8,18 @@
 //
 
 import UIKit
+import os.log
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+    private let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerCatalystHelper", category: "AppDelegate")
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         do {
-            try AppKitBridge.shared.loadPlugins()
-            AppKitBridge.shared.plugin?.launch()
+            let plugin = try AppKitBridge.shared.loadPlugins()
+            plugin.launch()
         } catch {
-            print(error)
+            logger.error("\(error, privacy: .public)")
         }
         return true
     }
@@ -29,6 +32,5 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {}
 }
-
 
 #endif

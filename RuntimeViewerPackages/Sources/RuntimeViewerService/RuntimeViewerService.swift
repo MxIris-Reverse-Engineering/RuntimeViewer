@@ -1,8 +1,10 @@
 #if os(macOS)
+
 import AppKit
 import SwiftyXPC
-import RuntimeViewerCommunication
 import MachInjector
+import RuntimeViewerCommunication
+import os.log
 
 public final class RuntimeViewerService {
     private let listener: SwiftyXPC.XPCListener
@@ -74,11 +76,43 @@ public final class RuntimeViewerService {
         return .empty
     }
 
+    private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerService", category: "RuntimeViewerService")
+    
     public static func main() throws {
         try autoreleasepool {
-            _ = try RuntimeViewerService()
+            let service = try RuntimeViewerService()
+            Task {
+                let notifications = NSWorkspace.shared.notificationCenter.notifications(named: NSWorkspace.didTerminateApplicationNotification)
+                
+                for await notification in notifications {
+                    do {
+                        try Task.checkCancellation()
+                        
+                        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication, app.isMainApp else { continue }
+                        
+                        if NSWorkspace.shared.runningApplications.contains(where: \.isMainApp) { continue }
+                        
+                        if let catalystHelperApplication = service.catalystHelperApplication, catalystHelperApplication.terminate() { continue }
+                        
+                        if let macCatalystHelper = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "" }), macCatalystHelper.terminate() { continue }
+                        
+                    } catch {
+                        logger.error("\(error, privacy: .public)")
+                    }
+                }
+            }
             RunLoop.current.run()
         }
     }
 }
+
+extension NSRunningApplication {
+    var isMainApp: Bool {
+        [
+            "com.JH.RuntimeViewer",
+            "dev.JH.RuntimeViewer",
+        ].contains(bundleIdentifier)
+    }
+}
+
 #endif

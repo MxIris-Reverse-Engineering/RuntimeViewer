@@ -2,6 +2,7 @@ import Foundation
 import Semantic
 import Utilities
 import ObjCDump
+import Logging
 import ObjCTypeDecodeKit
 import MachOObjCSection
 import FoundationToolbox
@@ -20,6 +21,9 @@ public struct ObjCGenerationOptions: Sendable, Codable, Equatable {
 }
 
 actor RuntimeObjCSection {
+    
+    private static let logger: Logger = .init(label: "RuntimeObjCSection")
+    
     enum Error: Swift.Error {
         case invalidMachOImage
         case invalidRuntimeObject
@@ -86,6 +90,23 @@ actor RuntimeObjCSection {
         }
     }
 
+//    static func makeRuntimeObjCSection(for name: RuntimeObjCName, in imageToObjCSection: inout [String: RuntimeObjCSection]) async -> RuntimeObjCSection? {
+//        do {
+//            guard let machO = MachOImage.image(forName: name) else { return nil }
+//            
+//            if let existObjCSection = imageToObjCSection[machO.imagePath] {
+//                return existObjCSection
+//            }
+//            
+//            let objcSection = try await RuntimeObjCSection(machO: machO)
+//            imageToObjCSection[machO.imagePath] = objcSection
+//            return objcSection
+//        } catch {
+//            logger.error("\(error)")
+//            return nil
+//        }
+//    }
+    
     init(ptr: UnsafeRawPointer) async throws {
         guard let machO = MachOImage.image(for: ptr) else { throw Error.invalidMachOImage }
         try await self.init(machO: machO)
@@ -510,13 +531,15 @@ actor RuntimeObjCSection {
         return classGroups.info.map(\.name)
     }
 }
-extension MachOImage {
-    enum ObjCName {
-        case `class`(String)
-        case `protocol`(String)
-    }
 
-    static func image(forName name: ObjCName) -> Self? {
+enum RuntimeObjCName {
+    case `class`(String)
+    case `protocol`(String)
+}
+
+extension MachOImage {
+
+    static func image(forName name: RuntimeObjCName) -> Self? {
         switch name {
         case .class(let string):
             return .image(forClassName: string)

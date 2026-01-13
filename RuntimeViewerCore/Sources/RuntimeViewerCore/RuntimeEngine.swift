@@ -5,6 +5,7 @@ import RuntimeViewerObjC
 public import Foundation
 public import Combine
 public import RuntimeViewerCommunication
+//public import Version
 
 public actor RuntimeEngine {
     fileprivate enum CommandNames: String, CaseIterable {
@@ -60,6 +61,8 @@ public actor RuntimeEngine {
     /// The connection to the sender or receiver
     private var connection: RuntimeConnection?
 
+//    public private(set) var helperVersion: VersionModule.Version?
+    
     public init() {
         self.source = .local
         
@@ -247,7 +250,7 @@ public actor RuntimeEngine {
         }
     }
     
-    private func _objcSection(forName name: MachOImage.ObjCName) async -> RuntimeObjCSection? {
+    private func _objcSection(forName name: RuntimeObjCName) async -> RuntimeObjCSection? {
         do {
             guard let machO = MachOImage.image(forName: name) else { return nil }
             
@@ -262,7 +265,6 @@ public actor RuntimeEngine {
             logger.error("\(error)")
             return nil
         }
-        
     }
     
     private func _swiftSection(for imagePath: String) async throws -> RuntimeSwiftSection {
@@ -320,19 +322,19 @@ extension RuntimeEngine {
     }
 
     private struct InterfaceRequest: Codable {
-        let name: RuntimeObject
+        let object: RuntimeObject
         let options: RuntimeObjectInterface.GenerationOptions
     }
 
     public func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        return try await interface(for: .init(name: object, options: options))
+        return try await interface(for: .init(object: object, options: options))
     }
 
     private func interface(for request: InterfaceRequest) async throws -> RuntimeObjectInterface? {
         try await self.request {
-            try await _interface(for: request.name, options: request.options)
+            try await _interface(for: request.object, options: request.options)
         } remote: { senderConnection in
-            return try await senderConnection.sendMessage(name: .interfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(name: request.name, options: request.options))
+            return try await senderConnection.sendMessage(name: .interfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(object: request.object, options: request.options))
         }
     }
 
