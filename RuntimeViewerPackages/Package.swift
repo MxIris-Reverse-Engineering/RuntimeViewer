@@ -117,6 +117,11 @@ let package = Package(
                 isRelative: true,
                 isEnabled: true
             ),
+            .package(
+                path: "../../UIFoundation",
+                isRelative: true,
+                isEnabled: true,
+            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
                 branch: "main"

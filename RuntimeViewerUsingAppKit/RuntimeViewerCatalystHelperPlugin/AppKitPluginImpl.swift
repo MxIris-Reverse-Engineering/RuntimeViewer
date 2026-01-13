@@ -70,6 +70,7 @@ extension NSRunningApplication {
     var isUserOfService: Bool {
         [
             "com.JH.RuntimeViewer",
+            "dev.JH.RuntimeViewer",
         ].contains(bundleIdentifier)
     }
 }

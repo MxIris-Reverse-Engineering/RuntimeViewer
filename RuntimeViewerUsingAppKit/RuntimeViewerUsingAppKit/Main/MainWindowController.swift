@@ -39,6 +39,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.box.positionCenter()
         contentWindow.identifier = .makeIdentifier(of: Self.self)
         contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
+        contentWindow.animationBehavior = .documentWindow
     }
 
     func setupBindings(for viewModel: MainViewModel) {

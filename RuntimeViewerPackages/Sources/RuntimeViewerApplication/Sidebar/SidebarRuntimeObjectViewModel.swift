@@ -24,17 +24,17 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         self.imageName = imageNode.name
         super.init(appServices: appServices, router: router)
 
-        runtimeEngine.reloadDataStream
-            .asObservable()
-            .subscribeOnNext { [weak self] in
-                guard let self else { return }
-                Task {
-                    try await self.reloadData()
-                }
-            }
-            .disposed(by: rx.disposeBag)
-
         Task {
+            await runtimeEngine.reloadDataPublisher
+                .asObservable()
+                .subscribeOnNext { [weak self] in
+                    guard let self else { return }
+                    Task {
+                        try await self.reloadData()
+                    }
+                }
+                .disposed(by: rx.disposeBag)
+            
             do {
                 try await reloadData()
             } catch {
