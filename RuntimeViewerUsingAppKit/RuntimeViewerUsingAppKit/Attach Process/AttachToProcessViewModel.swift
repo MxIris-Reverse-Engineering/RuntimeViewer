@@ -33,11 +33,16 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                 guard let self else { return }
 
                 do {
-                    if app.isSandbox { throw Error.sandboxAppNoSupported }
+//                    if app.isSandbox { throw Error.sandboxAppNoSupported }
                     try await RuntimeInjectClient.shared.installServerFrameworkIfNeeded()
                     guard let dylibURL = Bundle(url: RuntimeInjectClient.shared.serverFrameworkDestinationURL)?.executableURL else { return }
-                    try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: app.isSandbox)
-                    try await RuntimeInjectClient.shared.injectApplication(pid: app.processIdentifier, dylibURL: dylibURL)
+                    if app.isSandbox {
+                        try await RuntimeInjectClient.shared.injectApplication(pid: app.processIdentifier, dylibURL: dylibURL)
+                        try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: app.isSandbox)
+                    } else {
+                        try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: app.isSandbox)
+                        try await RuntimeInjectClient.shared.injectApplication(pid: app.processIdentifier, dylibURL: dylibURL)
+                    }
                     router.trigger(.dismiss)
                 } catch {
                     logger.error("\(error)")
