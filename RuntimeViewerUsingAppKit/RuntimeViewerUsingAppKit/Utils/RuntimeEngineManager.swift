@@ -49,7 +49,7 @@ public final class RuntimeEngineManager {
 
     public func launchAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) async throws {
         if isSandbox {
-//            try attachedRuntimeEngines.append(await RuntimeEngine(source: .bonjourClient(endpoint: <#T##RuntimeNetworkEndpoint#>)))
+            try attachedRuntimeEngines.append(await RuntimeEngine(source: .localSocketClient(name: name, identifier: .init(rawValue: identifier))))
         } else {
             try attachedRuntimeEngines.append(await RuntimeEngine(source: .remote(name: name, identifier: .init(rawValue: identifier), role: .client)))
         }

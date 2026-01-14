@@ -19,10 +19,10 @@ extension RuntimeSource: MainMenuItemRepresentable {
             } else {
                 return .symbol(name: RuntimeViewerSymbols.appFill)
             }
-        case .bonjourClient:
+        case .bonjourClient, .bonjourServer:
             return .symbol(systemName: .bonjour)
-        case .bonjourServer:
-            return .symbol(systemName: .bonjour)
+        case .localSocketClient, .localSocketServer:
+            return .symbol(systemName: .network)
         }
     }
 }

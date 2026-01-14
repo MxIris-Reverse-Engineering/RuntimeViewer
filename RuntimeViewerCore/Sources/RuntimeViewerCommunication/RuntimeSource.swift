@@ -26,6 +26,8 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Equatable
     case remote(name: String, identifier: Identifier, role: Role)
     case bonjourClient(endpoint: RuntimeNetworkEndpoint)
     case bonjourServer(name: String, identifier: Identifier)
+    case localSocketClient(name: String, identifier: Identifier)
+    case localSocketServer(name: String, identifier: Identifier)
 
     public var description: String {
         switch self {
@@ -33,23 +35,23 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Equatable
         case let .remote(name, _, _): return name
         case let .bonjourClient(endpoint): return endpoint.name
         case let .bonjourServer(name, _): return name
+        case let .localSocketClient(name, _): return name
+        case let .localSocketServer(name, _): return name
         }
     }
 
     public var isRemote: Bool {
         switch self {
-        case .remote: return true
-        case .bonjourClient,
-             .bonjourServer: return true
-        default: return false
+        case .local: return false
+        default: return true
         }
     }
 
     public var remoteRole: Role? {
         switch self {
         case let .remote(_, _, role): return role
-        case .bonjourClient: return .client
-        case .bonjourServer: return .server
+        case .bonjourClient, .localSocketClient: return .client
+        case .bonjourServer, .localSocketServer: return .server
         default: return nil
         }
     }

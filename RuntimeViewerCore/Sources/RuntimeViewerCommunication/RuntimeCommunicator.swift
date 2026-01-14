@@ -26,6 +26,17 @@ public final class RuntimeCommunicator {
             let runtimeConnection = try await RuntimeNetworkServerConnection(name: name)
             try await modify?(runtimeConnection)
             return runtimeConnection
+        case .localSocketClient(_, identifier: let identifier):
+            let runtimeConnection = try await RuntimeLocalSocketClientConnection(identifier: identifier.rawValue)
+            try await modify?(runtimeConnection)
+            return runtimeConnection
+        case .localSocketServer(_, identifier: let identifier):
+            let runtimeConnection = RuntimeLocalSocketServerConnection(identifier: identifier.rawValue)
+            Task {
+                try await runtimeConnection.start()
+            }
+            try await modify?(runtimeConnection)
+            return runtimeConnection
         }
     }
 }
