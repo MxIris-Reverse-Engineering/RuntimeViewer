@@ -29,25 +29,20 @@ struct RuntimeLocalSocketConnectionTests {
         server.stop()
     }
 
-    @Test("Port discovery writes and reads port file")
+    @Test("Port discovery uses deterministic hash")
     func testPortDiscovery() async throws {
         let identifier = "test-discovery-\(UUID().uuidString)"
-        let testPort: UInt16 = 12345
 
-        // Write port
-        try RuntimeLocalSocketPortDiscovery.writePort(testPort, identifier: identifier)
+        // Compute port using deterministic hash
+        let port1 = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
+        let port2 = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
 
-        // Read port
-        let readPort = try await RuntimeLocalSocketPortDiscovery.readPort(identifier: identifier, timeout: 1)
+        // Port should be the same for the same identifier
+        #expect(port1 == port2)
 
-        #expect(readPort == testPort)
-
-        // Clean up
-        RuntimeLocalSocketPortDiscovery.removePortFile(identifier: identifier)
-
-        // Verify file is removed
-        let portFilePath = RuntimeLocalSocketPortDiscovery.portFilePath(for: identifier)
-        #expect(!FileManager.default.fileExists(atPath: portFilePath.path))
+        // Port should be in the valid dynamic port range (49152-65535)
+        #expect(port1 >= 49152)
+        #expect(port1 <= 65535)
     }
 
     @Test("Client connects to server via port discovery")
@@ -206,36 +201,51 @@ struct RuntimeLocalSocketConnectionTests {
 @Suite("RuntimeLocalSocketPortDiscovery Tests", .serialized)
 struct RuntimeLocalSocketPortDiscoveryTests {
 
-    @Test("Port file path is sanitized")
-    func testPortFilePathSanitization() {
-        let identifier = "com.example/test/identifier"
-        let path = RuntimeLocalSocketPortDiscovery.portFilePath(for: identifier)
+    @Test("Deterministic port computation")
+    func testDeterministicPortComputation() {
+        // Same identifier should always produce the same port
+        let identifier = "com.example.test.identifier"
+        let port1 = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
+        let port2 = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
 
-        // Should not contain slashes in filename
-        #expect(!path.lastPathComponent.contains("/"))
-        #expect(path.lastPathComponent.contains("com.example_test_identifier"))
+        #expect(port1 == port2)
     }
 
-    @Test("Port file timeout when file doesn't exist")
-    func testPortFileTimeout() async throws {
-        let identifier = "nonexistent-\(UUID().uuidString)"
+    @Test("Different identifiers produce different ports")
+    func testDifferentIdentifiersDifferentPorts() {
+        let identifiers = [
+            "com.example.app1",
+            "com.example.app2",
+            "com.example.app3",
+            "test-server-123",
+            "test-server-456"
+        ]
 
-        await #expect(throws: RuntimeLocalSocketError.self) {
-            _ = try await RuntimeLocalSocketPortDiscovery.readPort(identifier: identifier, timeout: 0.5)
+        var ports = Set<UInt16>()
+        for identifier in identifiers {
+            let port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
+            ports.insert(port)
         }
+
+        // All ports should be different (with high probability for different identifiers)
+        #expect(ports.count == identifiers.count)
     }
 
-    @Test("Multiple write/read cycles")
-    func testMultipleWriteReadCycles() async throws {
-        let identifier = "test-cycles-\(UUID().uuidString)"
+    @Test("Port is in valid dynamic range")
+    func testPortInValidRange() {
+        let testIdentifiers = [
+            "short",
+            "a-very-long-identifier-that-might-overflow",
+            "com.example.app.with.many.components",
+            "special!@#$%^&*()characters",
+            ""
+        ]
 
-        for port: UInt16 in [1000, 2000, 3000, 4000, 5000] {
-            try RuntimeLocalSocketPortDiscovery.writePort(port, identifier: identifier)
-            let readPort = try await RuntimeLocalSocketPortDiscovery.readPort(identifier: identifier, timeout: 1)
-            #expect(readPort == port)
+        for identifier in testIdentifiers {
+            let port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
+            #expect(port >= 49152, "Port \(port) for '\(identifier)' is below minimum 49152")
+            #expect(port <= 65535, "Port \(port) for '\(identifier)' is above maximum 65535")
         }
-
-        RuntimeLocalSocketPortDiscovery.removePortFile(identifier: identifier)
     }
 }
 
@@ -244,20 +254,31 @@ struct RuntimeLocalSocketPortDiscoveryTests {
 @Suite("RuntimeLocalSocketError Tests", .serialized)
 struct RuntimeLocalSocketErrorTests {
 
-    @Test("Error when base connection not established")
-    func testNotConnectedError() async throws {
-        let baseConnection = RuntimeLocalSocketBaseConnection()
-
-        await #expect(throws: RuntimeLocalSocketError.self) {
-            try await baseConnection.sendMessage(name: "test")
-        }
-    }
-
     @Test("Error when connecting to non-existent server")
     func testConnectionRefused() throws {
         // Try to connect to a port that's not listening
         #expect(throws: RuntimeLocalSocketError.self) {
             _ = try RuntimeLocalSocketClientConnection(port: 59999)
+        }
+    }
+
+    @Test("Error description is informative")
+    func testErrorDescriptions() {
+        let errors: [RuntimeLocalSocketError] = [
+            .notConnected,
+            .receiveFailed,
+            .socketCreationFailed(errno: EMFILE),
+            .bindFailed(errno: EADDRINUSE, port: 8080),
+            .listenFailed(errno: EACCES),
+            .acceptFailed(errno: EINTR),
+            .connectFailed(errno: ECONNREFUSED, port: 9999),
+            .sendFailed(errno: EPIPE),
+        ]
+
+        for error in errors {
+            let description = error.description
+            #expect(!description.isEmpty)
+            #expect(description.contains("RuntimeLocalSocketError"))
         }
     }
 }

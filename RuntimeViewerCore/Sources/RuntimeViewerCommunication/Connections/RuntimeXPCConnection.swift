@@ -1,8 +1,9 @@
 #if os(macOS)
 
 import Foundation
+import FoundationToolbox
+import os.log
 @preconcurrency import SwiftyXPC
-import Logging
 
 // MARK: - RuntimeXPCConnection
 
@@ -51,7 +52,7 @@ import Logging
 ///
 /// - Note: For code injection into sandboxed apps, use `RuntimeLocalSocketConnection`
 ///   instead, as XPC requires the target process to explicitly participate.
-class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
+class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable, Loggable {
     fileprivate let identifier: RuntimeSource.Identifier
 
     fileprivate let listener: SwiftyXPC.XPCListener
@@ -60,10 +61,6 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
 
     fileprivate var connection: SwiftyXPC.XPCConnection?
 
-    fileprivate static let logger = Logger(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeXPCConnection")
-
-    fileprivate var logger: Logger { Self.logger }
-    
     init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         self.identifier = identifier
         let listener = try SwiftyXPC.XPCListener(type: .anonymous, codeSigningRequirement: nil)
@@ -94,15 +91,15 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
     }
 
     func handleServiceConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
-        logger.error("\(connection) \(error)")
+        logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
     }
 
     func handleListenerError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
-        logger.error("\(connection) \(error)")
+        logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
     }
 
     func handleClientOrServerConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
-        logger.error("\(connection) \(error)")
+        logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
     }
 
     enum Error: Swift.Error {

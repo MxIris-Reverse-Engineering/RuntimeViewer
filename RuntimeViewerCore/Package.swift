@@ -127,12 +127,12 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "RuntimeViewerObjC"
+            name: "RuntimeViewerCoreObjC"
         ),
         .target(
             name: "RuntimeViewerCore",
             dependencies: [
-                "RuntimeViewerObjC",
+                "RuntimeViewerCoreObjC",
                 "RuntimeViewerCommunication",
                 .product(name: "MachOKit", package: "MachOKit"),
                 .product(name: "MachOObjCSection", package: "MachOObjCSection"),
@@ -156,6 +156,9 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "Version", package: "Version"),
+                .product(name: "FrameworkToolbox", package: "FrameworkToolbox"),
+                .product(name: "SwiftStdlibToolbox", package: "FrameworkToolbox"),
+                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
             ],
             swiftSettings: [
                 .internalImportsByDefault,

@@ -1,4 +1,5 @@
 import Foundation
+import FoundationToolbox
 import Semaphore
 import Asynchrone
 
@@ -93,7 +94,7 @@ extension RuntimeMessageProtocol {
 ///     // Write data to underlying transport
 /// })
 /// ```
-final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
+final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, Loggable {
     /// Unique identifier for this channel.
     let id = UUID()
 
@@ -102,16 +103,13 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     var onMessageReceived: (@Sendable (Data) -> Void)?
 
     /// Message handlers keyed by message identifier.
-    private var messageHandlers: [String: RuntimeMessageHandler] = [:]
+    private let messageHandlers = Mutex<[String: RuntimeMessageHandler]>([:])
 
-    /// Lock for thread-safe access to handlers.
-    private let handlersLock = NSLock()
+    /// Pending request continuations keyed by request identifier.
+    private let pendingRequests = Mutex<[String: CheckedContinuation<Data, Error>]>([:])
 
     /// Buffer for incoming data.
-    private var receivingData = Data()
-
-    /// Lock for thread-safe access to receiving buffer.
-    private let receivingLock = NSLock()
+    private let receivingData = Mutex<Data>(Data())
 
     /// Stream for received messages.
     private var receivedDataStream: SharedAsyncSequence<AsyncThrowingStream<Data, Error>>?
@@ -124,6 +122,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     init() {
         setupStreams()
+        logger.debug("RuntimeMessageChannel initialized with id: \(self.id, privacy: .public)")
     }
 
     // MARK: - Stream Setup
@@ -161,9 +160,8 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     /// Registers a handler for messages with both request payload and response.
     func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) {
-        handlersLock.lock()
-        defer { handlersLock.unlock() }
-        messageHandlers[name] = RuntimeMessageHandler(closure: handler)
+        messageHandlers.withLock { $0[name] = RuntimeMessageHandler(closure: handler) }
+        logger.debug("Registered message handler for: \(name, privacy: .public)")
     }
 
     /// Registers a handler for typed requests with associated responses.
@@ -173,41 +171,50 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     /// Returns the handler for the given message identifier.
     func handler(for identifier: String) -> RuntimeMessageHandler? {
-        handlersLock.lock()
-        defer { handlersLock.unlock() }
-        return messageHandlers[identifier]
+        messageHandlers.withLock { $0[identifier] }
+    }
+
+    /// Checks if there's a pending request waiting for a response with the given identifier.
+    /// If found, delivers the data to the pending request and returns true.
+    /// - Parameters:
+    ///   - identifier: The request identifier to check.
+    ///   - data: The response data to deliver.
+    /// - Returns: `true` if the data was delivered to a pending request, `false` otherwise.
+    func deliverToPendingRequest(identifier: String, data: Data) -> Bool {
+        guard let continuation = pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) else {
+            return false
+        }
+        logger.debug("Delivered response to pending request: \(identifier, privacy: .public)")
+        continuation.resume(returning: data)
+        return true
     }
 
     // MARK: - Receiving Data
 
     /// Appends data to the receiving buffer and processes complete messages.
     func appendReceivedData(_ data: Data) {
-        receivingLock.lock()
-        receivingData.append(data)
-        receivingLock.unlock()
-
+        receivingData.withLock { $0.append(data) }
         processReceivedData()
     }
 
     /// Processes the receiving buffer and extracts complete messages.
     private func processReceivedData() {
-        receivingLock.lock()
-        defer { receivingLock.unlock() }
+        receivingData.withLock { buffer in
+            while true {
+                guard let endRange = buffer.range(of: Self.endMarkerData) else {
+                    break
+                }
 
-        while true {
-            guard let endRange = receivingData.range(of: Self.endMarkerData) else {
-                break
-            }
+                let messageData = buffer.subdata(in: 0 ..< endRange.lowerBound)
+                receivedDataContinuation?.yield(messageData)
+                onMessageReceived?(messageData)
 
-            let messageData = receivingData.subdata(in: 0 ..< endRange.lowerBound)
-            receivedDataContinuation?.yield(messageData)
-            onMessageReceived?(messageData)
-
-            if endRange.upperBound < receivingData.count {
-                receivingData = receivingData.subdata(in: endRange.upperBound ..< receivingData.count)
-            } else {
-                receivingData = Data()
-                break
+                if endRange.upperBound < buffer.count {
+                    buffer = buffer.subdata(in: endRange.upperBound ..< buffer.count)
+                } else {
+                    buffer = Data()
+                    break
+                }
             }
         }
     }
@@ -215,17 +222,17 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Finishes the received data stream.
     func finishReceiving(throwing error: (any Error)? = nil) {
         if let error {
+            logger.warning("Finishing receiving with error: \(String(describing: error), privacy: .public)")
             receivedDataContinuation?.finish(throwing: error)
         } else {
+            logger.debug("Finishing receiving stream normally")
             receivedDataContinuation?.finish()
         }
     }
 
     /// Returns the current size of the receiving buffer.
     var receivingBufferSize: Int {
-        receivingLock.lock()
-        defer { receivingLock.unlock() }
-        return receivingData.count
+        receivingData.withLock { $0.count }
     }
 
     // MARK: - Sending Data
@@ -239,23 +246,40 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         defer { sendSemaphore.signal() }
 
         let dataToSend = data + Self.endMarkerData
+        logger.debug("Sending \(dataToSend.count, privacy: .public) bytes")
         try await writer(dataToSend)
     }
 
     /// Sends a request and waits for a response.
     func sendRequest<Response: Codable>(
         requestData: RuntimeRequestData,
-        writer: @Sendable (Data) async throws -> Void
+        writer: @escaping @Sendable (Data) async throws -> Void
     ) async throws -> Response {
         await sendSemaphore.wait()
-        defer { sendSemaphore.signal() }
 
+        logger.debug("Sending request: \(requestData.identifier, privacy: .public)")
         let data = try JSONEncoder().encode(requestData)
         let dataToSend = data + Self.endMarkerData
-        try await writer(dataToSend)
 
-        // Wait for response
-        let responseData = try await receiveData()
+        // Register pending request before sending
+        let responseData: Data = try await withCheckedThrowingContinuation { continuation in
+            pendingRequests.withLock { $0[requestData.identifier] = continuation }
+
+            Task {
+                do {
+                    try await writer(dataToSend)
+                } catch {
+                    // Remove pending request and resume with error
+                    _ = self.pendingRequests.withLock { $0.removeValue(forKey: requestData.identifier) }
+                    Self.logger.error("Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        sendSemaphore.signal()
+
+        logger.debug("Received response for: \(requestData.identifier, privacy: .public)")
         let response = try JSONDecoder().decode(RuntimeRequestData.self, from: responseData)
         return try JSONDecoder().decode(Response.self, from: response.data)
     }
@@ -268,6 +292,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         await sendSemaphore.wait()
         defer { sendSemaphore.signal() }
 
+        logger.debug("Sending fire-and-forget request: \(requestData.identifier, privacy: .public)")
         let data = try JSONEncoder().encode(requestData)
         let dataToSend = data + Self.endMarkerData
         try await writer(dataToSend)
@@ -276,17 +301,21 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Waits for and returns the next received message.
     func receiveData() async throws -> Data {
         guard let receivedDataStream else {
+            logger.error("Attempted to receive data but channel is not connected")
             throw RuntimeMessageChannelError.notConnected
         }
 
         for try await data in receivedDataStream {
             if let error = try? JSONDecoder().decode(RuntimeNetworkRequestError.self, from: data) {
+                logger.warning("Received error response: \(String(describing: error), privacy: .public)")
                 throw error
             } else {
+                logger.debug("Received \(data.count, privacy: .public) bytes")
                 return data
             }
         }
 
+        logger.error("Receive failed - stream ended unexpectedly")
         throw RuntimeMessageChannelError.receiveFailed
     }
 

@@ -1,6 +1,7 @@
 import Foundation
+public import FoundationToolbox
 import Network
-import Logging
+import os.log
 
 public enum RuntimeNetworkError: Error {
     case notConnected
@@ -60,13 +61,9 @@ public struct RuntimeNetworkEndpoint: Sendable, Codable, Equatable {
     }
 }
 
-public class RuntimeNetworkBrowser {
+public class RuntimeNetworkBrowser: Loggable {
     private let browser: NWBrowser
 
-    private var logger: Logger { Self.logger }
-    
-    private static var logger = Logger(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeNetworkBrowser")
-    
     public init() {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
@@ -76,7 +73,7 @@ public class RuntimeNetworkBrowser {
 
     public func start(handler: @escaping (RuntimeNetworkEndpoint) -> Void) {
         browser.stateUpdateHandler = { newState in
-            Self.logger.info("browser.stateUpdateHandler \(newState)")
+            Self.logger.info("browser.stateUpdateHandler \(String(describing: newState), privacy: .public)")
         }
         browser.browseResultsChangedHandler = { results, changes in
             for result in results {
