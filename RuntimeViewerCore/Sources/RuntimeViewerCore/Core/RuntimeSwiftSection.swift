@@ -1,11 +1,12 @@
+import Demangling
 import Foundation
 import FoundationToolbox
 import FrameworkToolbox
-import Semantic
-import OrderedCollections
-import Demangling
 import MachOKit
 import MachOSwiftSection
+import OrderedCollections
+import os.log
+import Semantic
 import SwiftDump
 import SwiftInspection
 @_spi(Support) import SwiftInterface
@@ -17,7 +18,7 @@ public struct SwiftGenerationOptions: Sendable, Codable, Equatable {
     public var printEnumLayout: Bool = false
 }
 
-actor RuntimeSwiftSection {
+actor RuntimeSwiftSection: Loggable {
     enum Error: Swift.Error {
         case invalidMachOImage
         case invalidRuntimeObject
@@ -56,15 +57,22 @@ actor RuntimeSwiftSection {
     }
 
     init(imagePath: String) async throws {
+        Self.logger.info("Initializing Swift section for image: \(imagePath, privacy: .public)")
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
-        guard let machO = MachOImage(name: imageName) else { throw Error.invalidMachOImage }
+        guard let machO = MachOImage(name: imageName) else {
+            Self.logger.error("Failed to create MachOImage for: \(imageName, privacy: .public)")
+            throw Error.invalidMachOImage
+        }
         self.imagePath = imagePath
         self.machO = machO
+        Self.logger.debug("Creating SwiftInterfaceBuilder")
         self.builder = try .init(configuration: .init(indexConfiguration: .init(showCImportedTypes: false), printConfiguration: .init()), in: machO)
         try await builder.prepare()
+        Self.logger.info("Swift section initialized successfully")
     }
 
     func updateConfiguration(using options: SwiftGenerationOptions) async throws {
+        logger.debug("Updating Swift section configuration")
         var configuration = builder.configuration
         configuration.printConfiguration.printStrippedSymbolicItem = options.printStrippedSymbolicItem
         configuration.printConfiguration.emitOffsetComments = options.emitOffsetComments
@@ -78,23 +86,28 @@ actor RuntimeSwiftSection {
         builder.configuration = newConfiguration
 
         if newConfiguration.indexConfiguration.showCImportedTypes != oldConfiguration.indexConfiguration.showCImportedTypes {
+            logger.debug("Index configuration changed, re-preparing builder")
             try await builder.prepare()
             nameToInterfaceDefinitionName.removeAll()
         }
 
         if newConfiguration.printConfiguration != oldConfiguration.printConfiguration {
+            logger.debug("Print configuration changed, clearing interface cache")
             interfaceByName.removeAll()
         }
     }
 
     func allObjects() async throws -> [RuntimeObject] {
+        logger.debug("Getting all Swift objects")
         let rootTypeName = try builder.indexer.rootTypeDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
         let rootProtocolName = try builder.indexer.rootProtocolDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
         let typeExtensionName = try builder.indexer.typeExtensionDefinitions.filter { $0.key.typeName.map { builder.indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
         let protocolExtensionName = try builder.indexer.protocolExtensionDefinitions.filter { $0.key.protocolName.map { builder.indexer.allProtocolDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .protocolExtension($0.key)) }
         let typeAliasExtensionName = try builder.indexer.typeAliasExtensionDefinitions.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeAliasExtension($0.key)) }
         let conformanceExtensionName = try builder.indexer.conformanceExtensionDefinitions.filter { $0.key.typeName.map { builder.indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
-        return rootTypeName + rootProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName
+        let allObjects = rootTypeName + rootProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName
+        logger.debug("Found \(allObjects.count, privacy: .public) Swift objects: \(rootTypeName.count, privacy: .public) types, \(rootProtocolName.count, privacy: .public) protocols, \(typeExtensionName.count, privacy: .public) type extensions")
+        return allObjects
     }
 
     private func makeRuntimeObject(for extensionDefintions: [ExtensionDefinition], extensionName: ExtensionName, kind: RuntimeObjectKind, definitionName: InterfaceDefinitionName) throws -> RuntimeObject {
@@ -135,11 +148,16 @@ actor RuntimeSwiftSection {
     }
 
     func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface {
+        logger.debug("Generating Swift interface for: \(object.name, privacy: .public)")
         if let interface = interfaceByName[object] {
+            logger.debug("Using cached interface")
             return interface
         }
 
-        guard let interfaceDefinitionName = nameToInterfaceDefinitionName[object] else { throw Error.invalidRuntimeObject }
+        guard let interfaceDefinitionName = nameToInterfaceDefinitionName[object] else {
+            logger.warning("Invalid runtime object: \(object.name, privacy: .public)")
+            throw Error.invalidRuntimeObject
+        }
         var newInterfaceString: SemanticString = ""
         switch interfaceDefinitionName {
         case .rootType(let rootTypeName):
@@ -202,16 +220,23 @@ actor RuntimeSwiftSection {
 
         let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
         interfaceByName[object] = newInterface
+        logger.debug("Interface generated and cached")
         return newInterface
     }
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
+        logger.debug("Getting Swift class hierarchy for: \(object.name, privacy: .public)")
         guard case .swift(.type(.class)) = object.kind,
               let classDefinitionName = nameToInterfaceDefinitionName[object]?.typeName,
               let classDefinition = builder.indexer.allTypeDefinitions[classDefinitionName],
               case .class(let `class`) = classDefinition.type
-        else { return [] }
-        return try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
+        else {
+            logger.debug("No class hierarchy found")
+            return []
+        }
+        let hierarchy = try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
+        logger.debug("Class hierarchy: \(hierarchy.count, privacy: .public) levels")
+        return hierarchy
     }
 }
 

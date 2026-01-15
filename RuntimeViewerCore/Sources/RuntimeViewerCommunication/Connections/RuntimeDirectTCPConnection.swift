@@ -1,6 +1,7 @@
 #if canImport(Network)
 
 import Foundation
+import FoundationToolbox
 import Network
 import os.log
 
@@ -62,7 +63,7 @@ import os.log
 ///
 /// let response = try await client.sendMessage(request: GetClassListRequest())
 /// ```
-final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
+final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked Sendable {
     let id = UUID()
 
     var didStop: ((RuntimeDirectTCPConnection) -> Void)?
@@ -195,6 +196,12 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
                 for try await data in stream {
                     do {
                         let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+
+                        // Check if this is a response to a pending request
+                        if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
+                            continue
+                        }
+
                         guard let handler = messageChannel.handler(for: requestData.identifier) else {
                             logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
                             continue
@@ -284,7 +291,7 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
 ///
 /// let classes = try await client.sendMessage(request: GetClassListRequest())
 /// ```
-final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirectTCPConnection>, @unchecked Sendable, Loggable {
+final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirectTCPConnection>, @unchecked Sendable {
     /// Creates a client connection to the specified host and port.
     ///
     /// - Parameters:
@@ -298,35 +305,18 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
         self.underlyingConnection = connection
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            // Use a class to safely track resume state across concurrent callbacks
-            final class ResumeState: @unchecked Sendable {
-                private var _didResume = false
-                private let lock = NSLock()
-
-                var didResume: Bool {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    return _didResume
-                }
-
-                func tryResume() -> Bool {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    if _didResume { return false }
-                    _didResume = true
-                    return true
-                }
-            }
-            let state = ResumeState()
+            let didResume = Mutex<Bool>(false)
 
             connection.didReady = { _ in
-                if state.tryResume() {
+                if didResume.withLock({ !$0 }) {
+                    didResume.withLock { $0 = true }
                     continuation.resume()
                 }
             }
 
             connection.didStop = { _ in
-                if state.tryResume() {
+                if didResume.withLock({ !$0 }) {
+                    didResume.withLock { $0 = true }
                     continuation.resume(throwing: RuntimeDirectTCPError.connectionFailed)
                 }
             }
@@ -334,13 +324,15 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
             do {
                 try connection.start()
             } catch {
-                if state.tryResume() {
+                if didResume.withLock({ !$0 }) {
+                    didResume.withLock { $0 = true }
                     continuation.resume(throwing: error)
                 }
             }
 
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                if state.tryResume() {
+                if didResume.withLock({ !$0 }) {
+                    didResume.withLock { $0 = true }
                     connection.stop()
                     continuation.resume(throwing: RuntimeDirectTCPError.timeout)
                 }
@@ -368,7 +360,7 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
 ///     return GetClassListResponse(classes: [...])
 /// }
 /// ```
-final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirectTCPConnection>, @unchecked Sendable, Loggable {
+final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirectTCPConnection>, @unchecked Sendable {
     private var listener: NWListener?
 
     /// The host address the server is listening on.
@@ -401,26 +393,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
         self.listener = listener
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            // Use a class to safely track resume state across concurrent callbacks
-            final class ResumeState: @unchecked Sendable {
-                private var _didResume = false
-                private let lock = NSLock()
-
-                var didResume: Bool {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    return _didResume
-                }
-
-                func tryResume() -> Bool {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    if _didResume { return false }
-                    _didResume = true
-                    return true
-                }
-            }
-            let state = ResumeState()
+            let didResume = Mutex<Bool>(false)
 
             listener.stateUpdateHandler = { [weak self] listenerState in
                 guard let self else { return }
@@ -433,7 +406,8 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                         Self.logger.info("Server listening on \(self.host, privacy: .public):\(self.port, privacy: .public)")
                     }
                 case .failed(let error):
-                    if state.tryResume() {
+                    if didResume.withLock({ !$0 }) {
+                        didResume.withLock { $0 = true }
                         continuation.resume(throwing: error)
                     }
                 default:
@@ -450,7 +424,8 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                 self.underlyingConnection = tcpConnection
 
                 tcpConnection.didReady = { _ in
-                    if state.tryResume() {
+                    if didResume.withLock({ !$0 }) {
+                        didResume.withLock { $0 = true }
                         continuation.resume()
                     }
                 }

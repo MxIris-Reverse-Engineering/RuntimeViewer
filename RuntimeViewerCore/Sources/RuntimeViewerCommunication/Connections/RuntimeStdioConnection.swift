@@ -1,4 +1,5 @@
 import Foundation
+import FoundationToolbox
 import os.log
 
 // MARK: - RuntimeStdioConnection
@@ -159,6 +160,12 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
                 for try await data in stream {
                     do {
                         let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+
+                        // Check if this is a response to a pending request
+                        if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
+                            continue
+                        }
+
                         guard let handler = messageChannel.handler(for: requestData.identifier) else {
                             logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
                             continue
@@ -274,7 +281,7 @@ enum RuntimeStdioError: Error, LocalizedError, Sendable {
 /// // Or send by name
 /// let result: String = try await client.sendMessage(name: "echo", request: "hello")
 /// ```
-final class RuntimeStdioClientConnection: RuntimeConnectionBase<RuntimeStdioConnection>, @unchecked Sendable, Loggable {
+final class RuntimeStdioClientConnection: RuntimeConnectionBase<RuntimeStdioConnection>, @unchecked Sendable {
     /// Creates a client connection with the specified file handles.
     ///
     /// - Parameters:
@@ -316,7 +323,7 @@ final class RuntimeStdioClientConnection: RuntimeConnectionBase<RuntimeStdioConn
 /// // Keep process alive
 /// RunLoop.main.run()
 /// ```
-final class RuntimeStdioServerConnection: RuntimeConnectionBase<RuntimeStdioConnection>, @unchecked Sendable, Loggable {
+final class RuntimeStdioServerConnection: RuntimeConnectionBase<RuntimeStdioConnection>, @unchecked Sendable {
     /// Creates a server connection with the specified file handles.
     ///
     /// - Parameters:

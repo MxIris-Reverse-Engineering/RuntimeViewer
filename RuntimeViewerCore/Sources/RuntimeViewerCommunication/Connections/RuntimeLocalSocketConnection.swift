@@ -1,9 +1,6 @@
 import Foundation
+import FoundationToolbox
 import os.log
-
-#if canImport(Darwin)
-import Darwin
-#endif
 
 // MARK: - RuntimeLocalSocketConnection
 
@@ -99,7 +96,7 @@ import Darwin
 /// }
 /// ```
 ///
-final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
+final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecked Sendable {
     let id = UUID()
 
     var didStop: ((RuntimeLocalSocketConnection) -> Void)?
@@ -120,7 +117,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     }
 
     init(port: UInt16) throws {
-        Self.logger.info("Creating connection to localhost:\(port)")
+        Self.logger.info("Creating connection to localhost:\(port, privacy: .public)")
         try connectToLocalhost(port: port)
     }
 
@@ -154,7 +151,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         var noDelay: Int32 = 1
         setsockopt(socketFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
 
-        Self.logger.info("Connected to localhost:\(port)")
+        Self.logger.info("Connected to localhost:\(port, privacy: .public)")
     }
 
     // MARK: - Lifecycle
@@ -230,6 +227,12 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
                 for try await data in stream {
                     do {
                         let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+
+                        // Check if this is a response to a pending request
+                        if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
+                            continue
+                        }
+
                         guard let handler = messageChannel.handler(for: requestData.identifier) else {
                             logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
                             continue
@@ -524,7 +527,7 @@ enum RuntimeLocalSocketPortDiscovery: Loggable {
 /// - Note: The identifier must match what the main app used when creating
 ///   `RuntimeLocalSocketServerConnection`. Both sides use the same identifier
 ///   to compute the deterministic port number.
-final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable, Loggable {
+final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable {
     private let identifier: String
 
     /// Creates a client connection using deterministic port calculation.
@@ -623,7 +626,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 /// - Note: The identifier must match what the injected code uses when creating
 ///   `RuntimeLocalSocketClientConnection`. Both sides use the same identifier
 ///   to compute the deterministic port number.
-final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable, Loggable {
+final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable {
     private var serverSocketFD: Int32 = -1
     private let identifier: String
 

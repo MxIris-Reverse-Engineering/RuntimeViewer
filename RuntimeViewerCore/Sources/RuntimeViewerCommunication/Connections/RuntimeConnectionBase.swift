@@ -1,4 +1,6 @@
 import Foundation
+import FoundationToolbox
+import os.log
 
 // MARK: - RuntimeConnectionBase
 
@@ -17,7 +19,7 @@ import Foundation
 ///
 /// - `Connection`: The underlying connection type that provides `send` and
 ///   `setMessageHandler` methods.
-class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeConnection, @unchecked Sendable {
+class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeConnection, @unchecked Sendable, Loggable {
     /// The underlying connection that handles actual communication.
     /// - Note: Thread-safety is managed by the underlying connection itself.
     var underlyingConnection: Connection?
@@ -94,7 +96,7 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
 ///
 /// This protocol abstracts the common interface needed by `RuntimeConnectionBase`
 /// to delegate message handling to different connection implementations.
-protocol RuntimeUnderlyingConnection: Sendable {
+protocol RuntimeUnderlyingConnection: Sendable, Loggable {
     /// Sends a request without expecting a response.
     func send(requestData: RuntimeRequestData) async throws
 

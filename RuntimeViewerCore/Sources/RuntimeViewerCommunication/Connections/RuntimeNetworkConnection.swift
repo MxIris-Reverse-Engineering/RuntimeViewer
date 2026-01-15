@@ -1,6 +1,7 @@
 #if canImport(Network)
 
 import Foundation
+import FoundationToolbox
 import Network
 import os.log
 
@@ -177,6 +178,12 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
                 for try await data in stream {
                     do {
                         let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+
+                        // Check if this is a response to a pending request
+                        if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
+                            continue
+                        }
+
                         guard let handler = messageChannel.handler(for: requestData.identifier) else {
                             logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
                             continue
@@ -295,7 +302,7 @@ final class RuntimeNetworkClientConnection: RuntimeConnectionBase<RuntimeNetwork
 /// ```
 ///
 /// - Note: The server automatically restarts listening after a client disconnects.
-final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetworkConnection>, @unchecked Sendable, Loggable {
+final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetworkConnection>, @unchecked Sendable {
     private var listener: NWListener?
 
     init(name: String) async throws {
@@ -318,29 +325,11 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
 
     private func waitForConnection(listener: NWListener) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            // Use a class to safely track resume state across concurrent callbacks
-            final class ResumeState: @unchecked Sendable {
-                private var _didResume = false
-                private let lock = NSLock()
-
-                var didResume: Bool {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    return _didResume
-                }
-
-                func tryResume() -> Bool {
-                    lock.lock()
-                    defer { lock.unlock() }
-                    if _didResume { return false }
-                    _didResume = true
-                    return true
-                }
-            }
-            let state = ResumeState()
-
+            
+            let didResume = Mutex<Bool>(false)
+            
             listener.newConnectionHandler = { [weak self] newConnection in
-                guard let self, !state.didResume else { return }
+                guard let self, didResume.withLock({ !$0 }) else { return }
 
                 Self.logger.info("Accepted new connection")
 
@@ -349,7 +338,8 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                     self.underlyingConnection = connection
 
                     connection.didReady = { _ in
-                        if state.tryResume() {
+                        if didResume.withLock({ !$0 }) {
+                            didResume.withLock { $0 = true }
                             continuation.resume()
                         }
                     }
@@ -360,7 +350,8 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                         }
                     }
                 } catch {
-                    if state.tryResume() {
+                    if didResume.withLock({ !$0 }) {
+                        didResume.withLock { $0 = true }
                         continuation.resume(throwing: error)
                     }
                 }
