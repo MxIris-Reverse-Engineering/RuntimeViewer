@@ -1,7 +1,5 @@
 import Foundation
-import Logging
-import Semaphore
-import Asynchrone
+import os.log
 
 #if canImport(Darwin)
 import Darwin
@@ -24,129 +22,113 @@ import Darwin
 /// | Unix Domain Socket | ❌ (path restrictions) | ✅ |
 /// | **TCP Localhost** | **✅** | **✅** |
 ///
-/// ## Architecture for Code Injection
+/// ## Role Inversion: Why Socket Roles Are Swapped
+///
+/// In a typical design, the "server" (data provider) would create a socket server,
+/// and the "client" (data consumer) would connect to it. However, sandboxed apps
+/// have restrictions on `bind()` system calls, while `connect()` is generally allowed.
+///
+/// Since the **injected code runs inside sandboxed target apps** (e.g., Numbers, Pages),
+/// it cannot create a socket server. Therefore, we **invert the socket roles**:
+///
+/// | Component | Business Role | Socket Role | Reason |
+/// |-----------|---------------|-------------|--------|
+/// | Main App (RuntimeViewer) | Client (sends queries) | **Server** (bind/listen) | Has network permissions |
+/// | Injected Code | Server (handles queries) | **Client** (connect) | Runs in sandbox, connect() OK |
 ///
 /// ```
-/// ┌─────────────────────┐                    ┌─────────────────────┐
-/// │  RuntimeViewer      │                    │  Target Process     │
-/// │  (Main App)         │                    │                     │
-/// │                     │   1. inject dylib  │                     │
-/// │                     │ ──────────────────>│  [Injected Code]    │
-/// │                     │                    │                     │
-/// │                     │   2. write port    │                     │
-/// │                     │      to file       │                     │
-/// │  LocalSocketServer ◄┼─── 127.0.0.1:port ─┼──► LocalSocketClient│
-/// │  (port discovery)   │                    │  (reads port file)  │
-/// └─────────────────────┘                    └─────────────────────┘
+/// ┌─────────────────────────┐                    ┌─────────────────────────┐
+/// │  RuntimeViewer          │                    │  Target Process         │
+/// │  (Main App)             │                    │  (Sandboxed)            │
+/// │                         │                    │                         │
+/// │  Business: Client       │   1. start server  │                         │
+/// │  Socket: SERVER         │   2. inject dylib  │                         │
+/// │  (bind/listen OK)       │ ──────────────────>│  Business: Server       │
+/// │                         │                    │  Socket: CLIENT         │
+/// │                         │ <──── connect ─────│  (connect OK in sandbox)│
+/// │                         │                    │                         │
+/// │  sendMessage(request)   │ ──── request ─────>│  handleMessage(request) │
+/// │  receive(response)      │ <─── response ─────│  return response        │
+/// └─────────────────────────┘                    └─────────────────────────┘
 /// ```
 ///
-/// ## Port Discovery Mechanism
+/// ## Port Discovery: Deterministic Hash-Based Calculation
 ///
-/// Since we can't hardcode ports, we use a file-based discovery:
-/// 1. Server binds to port 0 (system assigns available port)
-/// 2. Server writes port number to a known file path
-/// 3. Client reads the port file and connects
-///
-/// ## Example: Main App (Server)
+/// Since sandboxed apps cannot share files via `/tmp` or other directories,
+/// we use a deterministic hash algorithm to compute the port number from the
+/// identifier. Both sides independently calculate the same port:
 ///
 /// ```swift
-/// // Start server with auto port discovery
-/// let server = try RuntimeLocalSocketServerConnection(
-///     identifier: "com.myapp.runtime-\(targetPID)"
-/// )
-/// try await server.start()
-///
-/// // Server is now listening, port file is written
-/// // Inject dylib into target process...
-///
-/// // Handle requests from injected code
-/// server.setMessageHandler(requestType: RuntimeInfoRequest.self) { request in
-///     return RuntimeInfoResponse(...)
-/// }
+/// port = djb2_hash(identifier) % 16383 + 49152  // Range: 49152-65535
 /// ```
 ///
-/// ## Example: Injected Code (Client)
+/// This eliminates the need for file-based port discovery entirely.
+///
+/// ## Example: Main App (Socket Server, Business Client)
+///
+/// ```swift
+/// // Main app creates socket server before injecting code
+/// let connection = RuntimeLocalSocketServerConnection(
+///     identifier: "com.myapp.runtime-\(targetPID)"
+/// )
+/// try await connection.start()
+///
+/// // Inject dylib into target process...
+/// // Injected code will connect as socket client
+///
+/// // Send queries to injected code (business client role)
+/// let classes = try await connection.sendMessage(request: GetClassListRequest())
+/// ```
+///
+/// ## Example: Injected Code (Socket Client, Business Server)
 ///
 /// ```swift
 /// @_cdecl("injected_entry")
 /// func injectedEntry() {
 ///     Task {
-///         // Connect using the same identifier
-///         let client = try RuntimeLocalSocketClientConnection(
+///         // Connect to main app's socket server
+///         let connection = try await RuntimeLocalSocketClientConnection(
 ///             identifier: "com.myapp.runtime-\(getpid())"
 ///         )
 ///
-///         // Now can communicate with main app
-///         client.setMessageHandler(requestType: QueryRequest.self) { request in
-///             // Return runtime information
-///             return QueryResponse(classes: objc_copyClassList()...)
+///         // Handle queries from main app (business server role)
+///         connection.setMessageHandler(requestType: GetClassListRequest.self) { request in
+///             return GetClassListResponse(classes: objc_copyClassList()...)
 ///         }
 ///     }
 /// }
 /// ```
 ///
-final class RuntimeLocalSocketConnection: @unchecked Sendable {
-    private class MessageHandler {
-        typealias RawHandler = (Data) async throws -> Data
-        let closure: RawHandler
-        let requestType: Codable.Type
-        let responseType: Codable.Type
-
-        init<Request: Codable, Response: Codable>(closure: @escaping (Request) async throws -> Response) {
-            self.requestType = Request.self
-            self.responseType = Response.self
-
-            self.closure = { request in
-                let request = try JSONDecoder().decode(Request.self, from: request)
-                let response = try await closure(request)
-                return try JSONEncoder().encode(response)
-            }
-        }
-    }
-
+final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
     let id = UUID()
 
     var didStop: ((RuntimeLocalSocketConnection) -> Void)?
-
     var didReady: ((RuntimeLocalSocketConnection) -> Void)?
 
-    private static let logger = Logger(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeLocalSocketConnection")
-
-    private static let endMarkerData = "\nOK".data(using: .utf8)!
-
-    private var logger: Logger { Self.logger }
-
     private var socketFD: Int32 = -1
-
-    private var receivedDataStream: SharedAsyncSequence<AsyncThrowingStream<Data, Error>>?
-
-    private var receivedDataContinuation: AsyncThrowingStream<Data, Error>.Continuation?
+    private let messageChannel = RuntimeMessageChannel()
 
     private var isStarted = false
 
-    private var receivingData = Data()
-
-    private let semaphore = AsyncSemaphore(value: 1)
-
-    private var messageHandlers: [String: MessageHandler] = [:]
-
     private let readQueue = DispatchQueue(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeLocalSocketConnection.readQueue")
-
     private let writeQueue = DispatchQueue(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeLocalSocketConnection.writeQueue")
+
+    // MARK: - Initialization
 
     init(socketFD: Int32) {
         self.socketFD = socketFD
     }
 
     init(port: UInt16) throws {
-        Self.logger.info("RuntimeLocalSocketConnection connecting to localhost:\(port)")
+        Self.logger.info("Creating connection to localhost:\(port)")
         try connectToLocalhost(port: port)
     }
 
     private func connectToLocalhost(port: UInt16) throws {
+        errno = 0
         socketFD = socket(AF_INET, SOCK_STREAM, 0)
         guard socketFD >= 0 else {
-            throw RuntimeLocalSocketError.socketCreationFailed
+            throw RuntimeLocalSocketError.socketCreationFailed(errno: errno)
         }
 
         var addr = sockaddr_in()
@@ -154,121 +136,58 @@ final class RuntimeLocalSocketConnection: @unchecked Sendable {
         addr.sin_port = port.bigEndian
         addr.sin_addr.s_addr = inet_addr("127.0.0.1")
 
+        errno = 0
         let result = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
                 Darwin.connect(socketFD, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
+        let connectErrno = errno
 
         guard result == 0 else {
-            let error = errno
             close(socketFD)
             socketFD = -1
-            throw RuntimeLocalSocketError.connectFailed(error)
+            throw RuntimeLocalSocketError.connectFailed(errno: connectErrno, port: port)
         }
+
+        // Disable Nagle algorithm for lower latency
+        var noDelay: Int32 = 1
+        setsockopt(socketFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
 
         Self.logger.info("Connected to localhost:\(port)")
     }
+
+    // MARK: - Lifecycle
 
     func start() throws {
         guard !isStarted else { return }
         guard socketFD >= 0 else { throw RuntimeLocalSocketError.notConnected }
         isStarted = true
-        Self.logger.info("Local socket connection will start")
-        setupStreams()
+
         setupReceiver()
         observeIncomingMessages()
+
         didReady?(self)
         didReady = nil
-        Self.logger.info("Local socket connection did start")
+        Self.logger.info("Connection started")
     }
 
     func stop() {
         guard isStarted else { return }
         isStarted = false
-        Self.logger.info("Local socket connection will stop")
+
         if socketFD >= 0 {
             close(socketFD)
             socketFD = -1
         }
-        receivedDataContinuation?.finish()
+        messageChannel.finishReceiving()
         didStop?(self)
         didStop = nil
-        Self.logger.info("Local socket connection did stop")
+
+        Self.logger.info("Connection stopped")
     }
 
-    func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping ((Request) async throws -> Response)) {
-        messageHandlers[name] = .init(closure: handler)
-    }
-
-    func setMessageHandler<Request: RuntimeRequest>(_ handler: @escaping ((Request) async throws -> Request.Response)) {
-        messageHandlers[Request.identifier] = .init(closure: handler)
-    }
-
-    func send(requestData: RuntimeRequestData) async throws {
-        await semaphore.wait()
-        defer { semaphore.signal() }
-        logger.info("RuntimeLocalSocketConnection send identifier: \(requestData.identifier)")
-        try await send(content: requestData)
-    }
-
-    func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {
-        await semaphore.wait()
-        defer { semaphore.signal() }
-        logger.info("RuntimeLocalSocketConnection send identifier: \(requestData.identifier)")
-        try await send(content: requestData)
-        let receiveData = try await receiveData()
-        let responseData = try JSONDecoder().decode(RuntimeRequestData.self, from: receiveData)
-        logger.info("RuntimeLocalSocketConnection received identifier: \(responseData.identifier)")
-        return try JSONDecoder().decode(Response.self, from: responseData.data)
-    }
-
-    func send<Request: RuntimeRequest>(request: Request) async throws {
-        let requestData = try RuntimeRequestData(request: request)
-        try await send(requestData: requestData)
-    }
-
-    func send<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
-        let requestData = try RuntimeRequestData(request: request)
-        return try await send(requestData: requestData)
-    }
-
-    private func observeIncomingMessages() {
-        Task {
-            do {
-                guard let receivedDataStream else { return }
-                for try await data in receivedDataStream {
-                    do {
-                        let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
-                        guard let messageHandler = messageHandlers[requestData.identifier] else { continue }
-                        logger.info("RuntimeLocalSocketConnection received identifier: \(requestData.identifier)")
-                        let responseData = try await messageHandler.closure(requestData.data)
-                        if messageHandler.responseType != MessageNull.self {
-                            try await send(requestData: RuntimeRequestData(identifier: requestData.identifier, data: responseData))
-                        }
-                    } catch {
-                        logger.error("\(error)")
-                        let requestError = RuntimeNetworkRequestError(message: "\(error)")
-                        do {
-                            let commandErrorData = try JSONEncoder().encode(requestError)
-                            try await send(data: commandErrorData)
-                        } catch {
-                            logger.error("\(error)")
-                        }
-                    }
-                }
-
-            } catch {
-                logger.error("\(error)")
-            }
-        }
-    }
-
-    private func setupStreams() {
-        let (receivedDataStream, receivedDataContinuation) = AsyncThrowingStream<Data, Error>.makeStream()
-        self.receivedDataStream = receivedDataStream.shared()
-        self.receivedDataContinuation = receivedDataContinuation
-    }
+    // MARK: - Receiving
 
     private func setupReceiver() {
         readQueue.async { [weak self] in
@@ -277,12 +196,14 @@ final class RuntimeLocalSocketConnection: @unchecked Sendable {
 
             while self.isStarted && self.socketFD >= 0 {
                 let bytesRead = recv(self.socketFD, &buffer, buffer.count, 0)
+
                 if bytesRead > 0 {
                     let data = Data(buffer[0..<bytesRead])
-                    self.receivingData.append(data)
-                    self.processReceivedData()
+                    self.logger.debug("Received \(bytesRead, privacy: .public) bytes")
+                    self.messageChannel.appendReceivedData(data)
                 } else if bytesRead == 0 {
-                    self.receivedDataContinuation?.finish()
+                    self.logger.info("Connection closed by peer")
+                    self.messageChannel.finishReceiving()
                     DispatchQueue.main.async {
                         self.stop()
                     }
@@ -290,7 +211,8 @@ final class RuntimeLocalSocketConnection: @unchecked Sendable {
                 } else {
                     let error = errno
                     if error != EAGAIN && error != EWOULDBLOCK {
-                        self.receivedDataContinuation?.finish()
+                        self.logger.error("Receive error, errno=\(error, privacy: .public)")
+                        self.messageChannel.finishReceiving()
                         DispatchQueue.main.async {
                             self.stop()
                         }
@@ -301,38 +223,75 @@ final class RuntimeLocalSocketConnection: @unchecked Sendable {
         }
     }
 
-    private func processReceivedData() {
-        guard let endMarker = "\nOK".data(using: .utf8) else { return }
+    private func observeIncomingMessages() {
+        Task {
+            do {
+                guard let stream = messageChannel.receivedMessages() else { return }
+                for try await data in stream {
+                    do {
+                        let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+                        guard let handler = messageChannel.handler(for: requestData.identifier) else {
+                            logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
+                            continue
+                        }
 
-        while true {
-            guard let endRange = receivingData.range(of: endMarker) else {
-                break
-            }
+                        logger.debug("Handling request: \(requestData.identifier, privacy: .public)")
+                        let responseData = try await handler.closure(requestData.data)
 
-            let messageData = receivingData.subdata(in: 0 ..< endRange.lowerBound)
-            receivedDataContinuation?.yield(messageData)
-
-            if endRange.upperBound < receivingData.count {
-                receivingData = receivingData.subdata(in: endRange.upperBound ..< receivingData.count)
-            } else {
-                receivingData = Data()
-                break
+                        if handler.responseType != RuntimeMessageNull.self {
+                            let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData)
+                            try await send(requestData: response)
+                        }
+                    } catch {
+                        logger.error("Handler error: \(error, privacy: .public)")
+                        let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
+                        if let errorData = try? JSONEncoder().encode(errorResponse) {
+                            try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
+                        }
+                    }
+                }
+            } catch {
+                logger.error("Message observation error: \(error, privacy: .public)")
             }
         }
     }
 
-    private func send<Content: Codable>(content: Content) async throws {
-        let data = try JSONEncoder().encode(content)
-        try await send(data: data)
+    // MARK: - RuntimeUnderlyingConnection
+
+    func send(requestData: RuntimeRequestData) async throws {
+        let data = try JSONEncoder().encode(requestData)
+        try await messageChannel.send(data: data) { [weak self] dataToSend in
+            try await self?.sendRaw(data: dataToSend)
+        }
+        logger.debug("Sent request: \(requestData.identifier, privacy: .public)")
     }
 
-    private func send(data: Data) async throws {
+    func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {
+        try await messageChannel.sendRequest(requestData: requestData) { [weak self] data in
+            try await self?.sendRaw(data: data)
+        }
+    }
+
+    func send<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
+        let requestData = try RuntimeRequestData(request: request)
+        return try await send(requestData: requestData)
+    }
+
+    func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) {
+        messageChannel.setMessageHandler(name: name, handler: handler)
+    }
+
+    func setMessageHandler<Request: RuntimeRequest>(_ handler: @escaping @Sendable (Request) async throws -> Request.Response) {
+        messageChannel.setMessageHandler(handler)
+    }
+
+    // MARK: - Private
+
+    private func sendRaw(data: Data) async throws {
         guard socketFD >= 0 else { throw RuntimeLocalSocketError.notConnected }
 
-        let dataToSend = data + Self.endMarkerData
-
         try await withCheckedThrowingContinuation { [weak self] (continuation: CheckedContinuation<Void, Error>) in
-            guard let self else {
+            guard let self, self.socketFD >= 0 else {
                 continuation.resume(throwing: RuntimeLocalSocketError.notConnected)
                 return
             }
@@ -343,199 +302,205 @@ final class RuntimeLocalSocketConnection: @unchecked Sendable {
                     return
                 }
 
-                dataToSend.withUnsafeBytes { buffer in
+                data.withUnsafeBytes { buffer in
                     guard let baseAddress = buffer.baseAddress else {
                         continuation.resume(throwing: RuntimeLocalSocketError.notConnected)
                         return
                     }
 
                     var totalSent = 0
-                    while totalSent < dataToSend.count {
-                        let sent = Darwin.send(self.socketFD, baseAddress.advanced(by: totalSent), dataToSend.count - totalSent, 0)
+                    while totalSent < data.count {
+                        let sent = Darwin.send(self.socketFD, baseAddress.advanced(by: totalSent), data.count - totalSent, 0)
                         if sent < 0 {
-                            continuation.resume(throwing: RuntimeLocalSocketError.sendFailed(errno))
+                            let sendErrno = errno
+                            continuation.resume(throwing: RuntimeLocalSocketError.sendFailed(errno: sendErrno))
                             return
                         }
                         totalSent += sent
                     }
-                    Self.logger.info("RuntimeLocalSocketConnection send data: \(data)")
                     continuation.resume()
                 }
             }
         }
-    }
-
-    private func receiveData() async throws -> Data {
-        guard let receivedDataStream else {
-            throw RuntimeLocalSocketError.notConnected
-        }
-
-        for try await data in receivedDataStream {
-            if let error = try? JSONDecoder().decode(RuntimeNetworkRequestError.self, from: data) {
-                throw error
-            } else {
-                return data
-            }
-        }
-
-        throw RuntimeLocalSocketError.receiveFailed
     }
 }
 
 // MARK: - RuntimeLocalSocketError
 
 /// Errors that can occur during local socket communication.
-enum RuntimeLocalSocketError: Error {
+enum RuntimeLocalSocketError: Error, LocalizedError, CustomStringConvertible, Sendable {
     case notConnected
     case receiveFailed
-    case socketCreationFailed
-    case bindFailed(Int32)
-    case listenFailed(Int32)
-    case acceptFailed(Int32)
-    case connectFailed(Int32)
-    case sendFailed(Int32)
-    case portFileNotFound
-    case invalidPortFile
+    case socketCreationFailed(errno: Int32)
+    case bindFailed(errno: Int32, port: UInt16)
+    case listenFailed(errno: Int32)
+    case acceptFailed(errno: Int32)
+    case connectFailed(errno: Int32, port: UInt16)
+    case sendFailed(errno: Int32)
+    case portFileNotFound(path: String, timeout: TimeInterval)
+    case invalidPortFile(path: String, content: String?)
+
+    var description: String {
+        switch self {
+        case .notConnected:
+            return "RuntimeLocalSocketError.notConnected: Socket is not connected"
+        case .receiveFailed:
+            return "RuntimeLocalSocketError.receiveFailed: Failed to receive data from socket"
+        case .socketCreationFailed(let errno):
+            return "RuntimeLocalSocketError.socketCreationFailed: Failed to create socket - \(Self.errnoDescription(errno))"
+        case .bindFailed(let errno, let port):
+            return "RuntimeLocalSocketError.bindFailed: Failed to bind to 127.0.0.1:\(port) - \(Self.errnoDescription(errno))"
+        case .listenFailed(let errno):
+            return "RuntimeLocalSocketError.listenFailed: Failed to listen on socket - \(Self.errnoDescription(errno))"
+        case .acceptFailed(let errno):
+            return "RuntimeLocalSocketError.acceptFailed: Failed to accept connection - \(Self.errnoDescription(errno))"
+        case .connectFailed(let errno, let port):
+            return "RuntimeLocalSocketError.connectFailed: Failed to connect to 127.0.0.1:\(port) - \(Self.errnoDescription(errno))"
+        case .sendFailed(let errno):
+            return "RuntimeLocalSocketError.sendFailed: Failed to send data - \(Self.errnoDescription(errno))"
+        case .portFileNotFound(let path, let timeout):
+            return "RuntimeLocalSocketError.portFileNotFound: Port file not found at '\(path)' after \(timeout)s timeout"
+        case .invalidPortFile(let path, let content):
+            return "RuntimeLocalSocketError.invalidPortFile: Invalid port file at '\(path)', content: '\(content ?? "nil")'"
+        }
+    }
+
+    var errorDescription: String? { description }
+
+    private static func errnoDescription(_ errno: Int32) -> String {
+        let name = errnoName(errno)
+        let message = String(cString: strerror(errno))
+        return "errno=\(errno) (\(name)): \(message)"
+    }
+
+    private static func errnoName(_ errno: Int32) -> String {
+        switch errno {
+        case EPERM: return "EPERM"
+        case ENOENT: return "ENOENT"
+        case ESRCH: return "ESRCH"
+        case EINTR: return "EINTR"
+        case EIO: return "EIO"
+        case ENXIO: return "ENXIO"
+        case E2BIG: return "E2BIG"
+        case ENOEXEC: return "ENOEXEC"
+        case EBADF: return "EBADF"
+        case ECHILD: return "ECHILD"
+        case EDEADLK: return "EDEADLK"
+        case ENOMEM: return "ENOMEM"
+        case EACCES: return "EACCES"
+        case EFAULT: return "EFAULT"
+        case EBUSY: return "EBUSY"
+        case EEXIST: return "EEXIST"
+        case EXDEV: return "EXDEV"
+        case ENODEV: return "ENODEV"
+        case ENOTDIR: return "ENOTDIR"
+        case EISDIR: return "EISDIR"
+        case EINVAL: return "EINVAL"
+        case ENFILE: return "ENFILE"
+        case EMFILE: return "EMFILE"
+        case ENOTTY: return "ENOTTY"
+        case ETXTBSY: return "ETXTBSY"
+        case EFBIG: return "EFBIG"
+        case ENOSPC: return "ENOSPC"
+        case ESPIPE: return "ESPIPE"
+        case EROFS: return "EROFS"
+        case EMLINK: return "EMLINK"
+        case EPIPE: return "EPIPE"
+        case EDOM: return "EDOM"
+        case ERANGE: return "ERANGE"
+        case EAGAIN: return "EAGAIN"
+        case EINPROGRESS: return "EINPROGRESS"
+        case EALREADY: return "EALREADY"
+        case ENOTSOCK: return "ENOTSOCK"
+        case EDESTADDRREQ: return "EDESTADDRREQ"
+        case EMSGSIZE: return "EMSGSIZE"
+        case EPROTOTYPE: return "EPROTOTYPE"
+        case ENOPROTOOPT: return "ENOPROTOOPT"
+        case EPROTONOSUPPORT: return "EPROTONOSUPPORT"
+        case ENOTSUP: return "ENOTSUP"
+        case EAFNOSUPPORT: return "EAFNOSUPPORT"
+        case EADDRINUSE: return "EADDRINUSE"
+        case EADDRNOTAVAIL: return "EADDRNOTAVAIL"
+        case ENETDOWN: return "ENETDOWN"
+        case ENETUNREACH: return "ENETUNREACH"
+        case ENETRESET: return "ENETRESET"
+        case ECONNABORTED: return "ECONNABORTED"
+        case ECONNRESET: return "ECONNRESET"
+        case ENOBUFS: return "ENOBUFS"
+        case EISCONN: return "EISCONN"
+        case ENOTCONN: return "ENOTCONN"
+        case ETIMEDOUT: return "ETIMEDOUT"
+        case ECONNREFUSED: return "ECONNREFUSED"
+        case ELOOP: return "ELOOP"
+        case ENAMETOOLONG: return "ENAMETOOLONG"
+        case EHOSTDOWN: return "EHOSTDOWN"
+        case EHOSTUNREACH: return "EHOSTUNREACH"
+        case ENOTEMPTY: return "ENOTEMPTY"
+        case ENOLCK: return "ENOLCK"
+        case ENOSYS: return "ENOSYS"
+        default: return "UNKNOWN"
+        }
+    }
 }
 
 // MARK: - RuntimeLocalSocketPortDiscovery
 
-/// Handles port discovery via file system for sandboxed environments.
+/// Handles port discovery using deterministic port calculation.
 ///
-/// The port file is stored in a location accessible to both processes:
-/// - `/tmp/RuntimeViewer/{identifier}.port` for non-sandboxed apps
-/// - User's temp directory for sandboxed apps
-enum RuntimeLocalSocketPortDiscovery {
+/// Since sandboxed apps cannot share files via `/tmp` or other directories,
+/// we use a hash-based algorithm to compute a deterministic port number
+/// from the identifier. Both server and client can independently calculate
+/// the same port without any file I/O.
+enum RuntimeLocalSocketPortDiscovery: Loggable {
 
-    /// Returns the port file path for the given identifier.
-    static func portFilePath(for identifier: String) -> URL {
-        let sanitizedIdentifier = identifier.replacingOccurrences(of: "/", with: "_")
+    /// Dynamic/private port range (IANA recommendation)
+    private static let portRangeStart: UInt16 = 49152
+    private static let portRangeEnd: UInt16 = 65535
+    private static let portRangeSize: UInt16 = portRangeEnd - portRangeStart
 
-        // Use /tmp for maximum compatibility
-        // Both sandboxed and non-sandboxed apps can typically access /tmp
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("RuntimeViewer", isDirectory: true)
-
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        return directory.appendingPathComponent("\(sanitizedIdentifier).port")
-    }
-
-    /// Writes the port number to the discovery file.
-    static func writePort(_ port: UInt16, identifier: String) throws {
-        let path = portFilePath(for: identifier)
-        let data = "\(port)".data(using: .utf8)!
-        try data.write(to: path, options: .atomic)
-        Logger(label: "RuntimeLocalSocketPortDiscovery").info("Port \(port) written to \(path.path)")
-    }
-
-    /// Reads the port number from the discovery file.
-    static func readPort(identifier: String, timeout: TimeInterval = 10) async throws -> UInt16 {
-        let path = portFilePath(for: identifier)
-        let logger = Logger(label: "RuntimeLocalSocketPortDiscovery")
-        let startTime = Date()
-
-        // Poll for port file with timeout
-        while Date().timeIntervalSince(startTime) < timeout {
-            if FileManager.default.fileExists(atPath: path.path) {
-                let data = try Data(contentsOf: path)
-                guard let portString = String(data: data, encoding: .utf8),
-                      let port = UInt16(portString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-                    throw RuntimeLocalSocketError.invalidPortFile
-                }
-                logger.info("Port \(port) read from \(path.path)")
-                return port
-            }
-
-            // Wait before retry
-            try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+    /// Computes a deterministic port number from the identifier.
+    ///
+    /// Uses a simple hash function to map the identifier to a port
+    /// in the dynamic/private range (49152-65535).
+    ///
+    /// - Parameter identifier: Unique identifier for the connection.
+    /// - Returns: A port number in the range 49152-65535.
+    static func computePort(for identifier: String) -> UInt16 {
+        // Use a simple hash: sum of character values with mixing
+        var hash: UInt64 = 5381
+        for char in identifier.utf8 {
+            hash = ((hash << 5) &+ hash) &+ UInt64(char) // hash * 33 + char
         }
 
-        throw RuntimeLocalSocketError.portFileNotFound
-    }
-
-    /// Removes the port file.
-    static func removePortFile(identifier: String) {
-        let path = portFilePath(for: identifier)
-        try? FileManager.default.removeItem(at: path)
-    }
-}
-
-// MARK: - MessageNull
-
-private struct MessageNull: Codable {
-    static let null = MessageNull()
-}
-
-// MARK: - RuntimeLocalSocketBaseConnection
-
-/// Base class implementing `RuntimeConnection` protocol for local socket communication.
-class RuntimeLocalSocketBaseConnection: RuntimeConnection {
-    var connection: RuntimeLocalSocketConnection?
-
-    init() {}
-
-    func sendMessage(name: String) async throws {
-        guard let connection = connection else { throw RuntimeLocalSocketError.notConnected }
-        try await connection.send(requestData: RuntimeRequestData(identifier: name, value: MessageNull.null))
-    }
-
-    func sendMessage(name: String, request: some Codable) async throws {
-        guard let connection = connection else { throw RuntimeLocalSocketError.notConnected }
-        try await connection.send(requestData: RuntimeRequestData(identifier: name, value: request))
-    }
-
-    func sendMessage<Response>(name: String) async throws -> Response where Response: Decodable, Response: Encodable {
-        guard let connection = connection else { throw RuntimeLocalSocketError.notConnected }
-        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: MessageNull.null))
-    }
-
-    func sendMessage<Request>(request: Request) async throws -> Request.Response where Request: RuntimeRequest {
-        guard let connection = connection else { throw RuntimeLocalSocketError.notConnected }
-        return try await connection.send(request: request)
-    }
-
-    func sendMessage<Response>(name: String, request: some Codable) async throws -> Response where Response: Decodable, Response: Encodable {
-        guard let connection = connection else { throw RuntimeLocalSocketError.notConnected }
-        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: request))
-    }
-
-    func setMessageHandler(name: String, handler: @escaping () async throws -> Void) {
-        connection?.setMessageHandler(name: name, handler: { (_: MessageNull) in
-            try await handler()
-            return MessageNull.null
-        })
-    }
-
-    func setMessageHandler<Request>(name: String, handler: @escaping (Request) async throws -> Void) where Request: Decodable, Request: Encodable {
-        connection?.setMessageHandler(name: name, handler: { (request: Request) in
-            try await handler(request)
-            return MessageNull.null
-        })
-    }
-
-    func setMessageHandler<Response>(name: String, handler: @escaping () async throws -> Response) where Response: Decodable, Response: Encodable {
-        connection?.setMessageHandler(name: name, handler: { (_: MessageNull) in
-            return try await handler()
-        })
-    }
-
-    func setMessageHandler<Request>(requestType: Request.Type, handler: @escaping (Request) async throws -> Request.Response) where Request: RuntimeRequest {
-        connection?.setMessageHandler { (request: Request) in
-            return try await handler(request)
-        }
-    }
-
-    func setMessageHandler<Request, Response>(name: String, handler: @escaping (Request) async throws -> Response) where Request: Decodable, Request: Encodable, Response: Decodable, Response: Encodable {
-        connection?.setMessageHandler(name: name, handler: { (request: Request) in
-            return try await handler(request)
-        })
+        let port = UInt16(hash % UInt64(portRangeSize)) + portRangeStart
+        logger.info("Computed port \(port, privacy: .public) for identifier '\(identifier, privacy: .public)'")
+        return port
     }
 }
 
 // MARK: - RuntimeLocalSocketClientConnection
 
-/// Client-side local socket connection that discovers server port automatically.
+/// Socket client connection for use in **injected code** running inside sandboxed apps.
+///
+/// ## Role Clarification
+///
+/// | Aspect | This Class |
+/// |--------|------------|
+/// | Socket Role | **Client** (connect to server) |
+/// | Business Role | **Server** (handles queries, returns data) |
+/// | Runs In | Injected dylib inside target (sandboxed) app |
+/// | Counterpart | `RuntimeLocalSocketServerConnection` in main app |
+///
+/// ## Why Socket Client for Business Server?
+///
+/// This class uses socket client (`connect()`) because:
+/// 1. Injected code runs inside sandboxed apps (e.g., Numbers, Pages)
+/// 2. Sandboxed apps cannot call `bind()` - returns EPERM
+/// 3. `connect()` is allowed even in sandboxed environments
+///
+/// The main app (RuntimeViewer) creates the socket server, and this class
+/// connects to it. Despite being the socket client, this side handles
+/// runtime queries and returns data (business server role).
 ///
 /// ## Usage in Injected Code
 ///
@@ -543,41 +508,56 @@ class RuntimeLocalSocketBaseConnection: RuntimeConnection {
 /// @_cdecl("injected_entry")
 /// func injectedEntry() {
 ///     Task {
-///         // The identifier must match what the server used
-///         let client = try await RuntimeLocalSocketClientConnection(
+///         // Connect to the socket server created by main app
+///         let connection = try await RuntimeLocalSocketClientConnection(
 ///             identifier: "com.myapp.runtime-\(getpid())"
 ///         )
 ///
-///         // Register handlers for requests from main app
-///         client.setMessageHandler(requestType: GetClassesRequest.self) { request in
-///             return GetClassesResponse(classes: ...)
+///         // Handle queries from main app (business server role)
+///         connection.setMessageHandler(requestType: GetClassesRequest.self) { request in
+///             return GetClassesResponse(classes: objc_copyClassList()...)
 ///         }
-///
-///         // Or send requests to main app
-///         let config = try await client.sendMessage(request: GetConfigRequest())
 ///     }
 /// }
 /// ```
-final class RuntimeLocalSocketClientConnection: RuntimeLocalSocketBaseConnection {
+///
+/// - Note: The identifier must match what the main app used when creating
+///   `RuntimeLocalSocketServerConnection`. Both sides use the same identifier
+///   to compute the deterministic port number.
+final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable, Loggable {
     private let identifier: String
 
-    /// Creates a client connection that auto-discovers the server port.
+    /// Creates a client connection using deterministic port calculation.
     ///
     /// - Parameters:
     ///   - identifier: Unique identifier matching the server's identifier.
-    ///   - timeout: Maximum time to wait for port discovery (default: 10 seconds).
+    ///   - timeout: Maximum time to wait for server to be ready (default: 10 seconds).
     /// - Throws: `RuntimeLocalSocketError` if connection cannot be established.
     init(identifier: String, timeout: TimeInterval = 10) async throws {
         self.identifier = identifier
         super.init()
 
-        // Discover port from file
-        let port = try await RuntimeLocalSocketPortDiscovery.readPort(identifier: identifier, timeout: timeout)
+        // Compute port deterministically (same algorithm as server)
+        let port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
 
-        // Connect to server
-        let connection = try RuntimeLocalSocketConnection(port: port)
-        self.connection = connection
-        try connection.start()
+        // Retry connection until server is ready or timeout
+        let startTime = Date()
+        var lastError: Error?
+
+        while Date().timeIntervalSince(startTime) < timeout {
+            do {
+                let connection = try RuntimeLocalSocketConnection(port: port)
+                self.underlyingConnection = connection
+                try connection.start()
+                return
+            } catch {
+                lastError = error
+                // Wait before retry
+                try await Task.sleep(nanoseconds: 100_000_000) // 100ms
+            }
+        }
+
+        throw lastError ?? RuntimeLocalSocketError.connectFailed(errno: ETIMEDOUT, port: port)
     }
 
     /// Creates a client connection to a known port.
@@ -590,50 +570,75 @@ final class RuntimeLocalSocketClientConnection: RuntimeLocalSocketBaseConnection
         super.init()
 
         let connection = try RuntimeLocalSocketConnection(port: port)
-        self.connection = connection
+        self.underlyingConnection = connection
         try connection.start()
     }
 }
 
 // MARK: - RuntimeLocalSocketServerConnection
 
-/// Server-side local socket connection that listens on localhost.
+/// Socket server connection for use in the **main app** (RuntimeViewer).
+///
+/// ## Role Clarification
+///
+/// | Aspect | This Class |
+/// |--------|------------|
+/// | Socket Role | **Server** (bind/listen/accept) |
+/// | Business Role | **Client** (sends queries, receives data) |
+/// | Runs In | Main RuntimeViewer app (non-sandboxed) |
+/// | Counterpart | `RuntimeLocalSocketClientConnection` in injected code |
+///
+/// ## Why Socket Server for Business Client?
+///
+/// This class uses socket server (`bind()`/`listen()`) because:
+/// 1. The main app (RuntimeViewer) has full network permissions
+/// 2. The counterpart (injected code) runs in sandboxed apps that cannot `bind()`
+/// 3. By hosting the socket server here, the injected code only needs `connect()`
+///
+/// Despite being the socket server, this side sends runtime queries and
+/// receives data (business client role).
+///
+/// ## Port Discovery
+///
+/// The port is computed deterministically from the identifier using a hash
+/// algorithm. Both this class and `RuntimeLocalSocketClientConnection` use
+/// the same algorithm, so no file-based port discovery is needed.
 ///
 /// ## Usage in Main App
 ///
 /// ```swift
-/// // Before injecting code, start the server
-/// let server = try RuntimeLocalSocketServerConnection(
+/// // 1. Create and start socket server before injecting code
+/// let connection = RuntimeLocalSocketServerConnection(
 ///     identifier: "com.myapp.runtime-\(targetPID)"
 /// )
-/// try await server.start()
+/// try await connection.start()
 ///
-/// print("Server listening on port: \(server.port)")
+/// // 2. Inject dylib into target process
+/// // The injected code will connect using RuntimeLocalSocketClientConnection
 ///
-/// // Now inject the dylib into target process...
-/// // The injected code will discover the port automatically
-///
-/// // Handle requests from injected code
-/// server.setMessageHandler(requestType: LogRequest.self) { request in
-///     print("Log from injected: \(request.message)")
-///     return VoidResponse()
-/// }
+/// // 3. Send queries to injected code (business client role)
+/// let classes = try await connection.sendMessage(request: GetClassesRequest())
 /// ```
-final class RuntimeLocalSocketServerConnection: RuntimeLocalSocketBaseConnection, @unchecked Sendable {
+///
+/// - Note: The identifier must match what the injected code uses when creating
+///   `RuntimeLocalSocketClientConnection`. Both sides use the same identifier
+///   to compute the deterministic port number.
+final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable, Loggable {
     private var serverSocketFD: Int32 = -1
     private let identifier: String
 
     /// Pending message handlers to apply to new connections.
-    private var pendingHandlers: [(RuntimeLocalSocketConnection) -> Void] = []
+    private var pendingHandlers: [@Sendable (RuntimeLocalSocketConnection) -> Void] = []
 
     /// The port the server is listening on (available after `start()` is called).
     private(set) var port: UInt16 = 0
 
-    /// Creates a server connection with automatic port assignment.
+    /// Creates a server connection with deterministic port calculation.
     ///
-    /// - Parameter identifier: Unique identifier for port discovery.
+    /// - Parameter identifier: Unique identifier used to compute the port.
     init(identifier: String) {
         self.identifier = identifier
+        self.port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
         super.init()
     }
 
@@ -648,64 +653,64 @@ final class RuntimeLocalSocketServerConnection: RuntimeLocalSocketBaseConnection
 
     // MARK: - Message Handler Overrides
 
-    override func setMessageHandler(name: String, handler: @escaping () async throws -> Void) {
-        let setupHandler: (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { (_: MessageNull) in
+    override func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
                 try await handler()
-                return MessageNull.null
+                return NullPayload.null
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = connection {
+        if let connection = underlyingConnection {
             setupHandler(connection)
         }
     }
 
-    override func setMessageHandler<Request>(name: String, handler: @escaping (Request) async throws -> Void) where Request: Codable {
-        let setupHandler: (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { (request: Request) in
+    override func setMessageHandler<Request>(name: String, handler: @escaping @Sendable (Request) async throws -> Void) where Request: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (request: Request) in
                 try await handler(request)
-                return MessageNull.null
+                return NullPayload.null
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = connection {
+        if let connection = underlyingConnection {
             setupHandler(connection)
         }
     }
 
-    override func setMessageHandler<Response>(name: String, handler: @escaping () async throws -> Response) where Response: Codable {
-        let setupHandler: (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { (_: MessageNull) in
+    override func setMessageHandler<Response>(name: String, handler: @escaping @Sendable () async throws -> Response) where Response: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
                 return try await handler()
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = connection {
+        if let connection = underlyingConnection {
             setupHandler(connection)
         }
     }
 
-    override func setMessageHandler<Request>(requestType: Request.Type, handler: @escaping (Request) async throws -> Request.Response) where Request: RuntimeRequest {
-        let setupHandler: (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler { (request: Request) in
+    override func setMessageHandler<Request>(requestType: Request.Type, handler: @escaping @Sendable (Request) async throws -> Request.Response) where Request: RuntimeRequest {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler { @Sendable (request: Request) in
                 return try await handler(request)
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = connection {
+        if let connection = underlyingConnection {
             setupHandler(connection)
         }
     }
 
-    override func setMessageHandler<Request, Response>(name: String, handler: @escaping (Request) async throws -> Response) where Request: Codable, Response: Codable {
-        let setupHandler: (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { (request: Request) in
+    override func setMessageHandler<Request, Response>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) where Request: Codable, Response: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (request: Request) in
                 return try await handler(request)
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = connection {
+        if let connection = underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -723,9 +728,10 @@ final class RuntimeLocalSocketServerConnection: RuntimeLocalSocketBaseConnection
     /// and the port file has been written for client discovery.
     /// Connections are accepted asynchronously in the background.
     func start() async throws {
+        errno = 0
         serverSocketFD = socket(AF_INET, SOCK_STREAM, 0)
         guard serverSocketFD >= 0 else {
-            throw RuntimeLocalSocketError.socketCreationFailed
+            throw RuntimeLocalSocketError.socketCreationFailed(errno: errno)
         }
 
         var reuseAddr: Int32 = 1
@@ -736,44 +742,29 @@ final class RuntimeLocalSocketServerConnection: RuntimeLocalSocketBaseConnection
         addr.sin_port = port.bigEndian
         addr.sin_addr.s_addr = inet_addr("127.0.0.1")
 
+        errno = 0
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
                 bind(serverSocketFD, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
+        let bindErrno = errno
 
         guard bindResult == 0 else {
-            let error = errno
             close(serverSocketFD)
             serverSocketFD = -1
-            throw RuntimeLocalSocketError.bindFailed(error)
+            throw RuntimeLocalSocketError.bindFailed(errno: bindErrno, port: port)
         }
 
-        // Get the actual port if we bound to port 0
-        if port == 0 {
-            var boundAddr = sockaddr_in()
-            var boundAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-            _ = withUnsafeMutablePointer(to: &boundAddr) { ptr in
-                ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
-                    getsockname(serverSocketFD, sockaddrPtr, &boundAddrLen)
-                }
-            }
-            port = UInt16(bigEndian: boundAddr.sin_port)
-        }
-
+        errno = 0
         guard listen(serverSocketFD, 5) == 0 else {
-            let error = errno
+            let listenErrno = errno
             close(serverSocketFD)
             serverSocketFD = -1
-            throw RuntimeLocalSocketError.listenFailed(error)
+            throw RuntimeLocalSocketError.listenFailed(errno: listenErrno)
         }
 
-        // Write port file for discovery
-        if !identifier.isEmpty {
-            try RuntimeLocalSocketPortDiscovery.writePort(port, identifier: identifier)
-        }
-
-        Logger(label: "RuntimeLocalSocketServerConnection").info("Server listening on 127.0.0.1:\(port)")
+        logger.info("Server listening on 127.0.0.1:\(self.port, privacy: .public)")
 
         // Start accepting connections in background (non-blocking)
         startAcceptingConnections()
@@ -804,8 +795,12 @@ final class RuntimeLocalSocketServerConnection: RuntimeLocalSocketBaseConnection
             return
         }
 
+        // Disable Nagle algorithm for lower latency
+        var noDelay: Int32 = 1
+        setsockopt(clientFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
+
         let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD)
-        self.connection = socketConnection
+        self.underlyingConnection = socketConnection
 
         // Apply all pending message handlers to the new connection
         applyPendingHandlers(to: socketConnection)
@@ -818,7 +813,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeLocalSocketBaseConnection
         do {
             try socketConnection.start()
         } catch {
-            Logger(label: "RuntimeLocalSocketServerConnection").error("Failed to start connection: \(error)")
+            logger.error("Failed to start connection: \(error, privacy: .public)")
             // Try accepting again
             startAcceptingConnections()
         }
@@ -826,15 +821,10 @@ final class RuntimeLocalSocketServerConnection: RuntimeLocalSocketBaseConnection
 
     /// Stops the server and cleans up resources.
     func stop() {
-        connection?.stop()
+        underlyingConnection?.stop()
         if serverSocketFD >= 0 {
             close(serverSocketFD)
             serverSocketFD = -1
-        }
-
-        // Clean up port file
-        if !identifier.isEmpty {
-            RuntimeLocalSocketPortDiscovery.removePortFile(identifier: identifier)
         }
     }
 

@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import AppKit
 import SnapKit
 
@@ -325,3 +327,6 @@ extension NSSegmentedControl: SegmentedControl {
 }
 
 extension AreaSegmentedControl: SegmentedControl {}
+
+
+#endif

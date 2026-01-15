@@ -89,23 +89,6 @@ actor RuntimeObjCSection {
             }
         }
     }
-
-//    static func makeRuntimeObjCSection(for name: RuntimeObjCName, in imageToObjCSection: inout [String: RuntimeObjCSection]) async -> RuntimeObjCSection? {
-//        do {
-//            guard let machO = MachOImage.image(forName: name) else { return nil }
-//            
-//            if let existObjCSection = imageToObjCSection[machO.imagePath] {
-//                return existObjCSection
-//            }
-//            
-//            let objcSection = try await RuntimeObjCSection(machO: machO)
-//            imageToObjCSection[machO.imagePath] = objcSection
-//            return objcSection
-//        } catch {
-//            logger.error("\(error)")
-//            return nil
-//        }
-//    }
     
     init(ptr: UnsafeRawPointer) async throws {
         guard let machO = MachOImage.image(for: ptr) else { throw Error.invalidMachOImage }
@@ -115,7 +98,9 @@ actor RuntimeObjCSection {
     init(imagePath: String) async throws {
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
         guard let machO = MachOImage(name: imageName) else { throw Error.invalidMachOImage }
-        try await self.init(machO: machO)
+        self.machO = machO
+        self.imagePath = imagePath
+        try await prepare()
     }
 
     init(machO: MachOImage) async throws {

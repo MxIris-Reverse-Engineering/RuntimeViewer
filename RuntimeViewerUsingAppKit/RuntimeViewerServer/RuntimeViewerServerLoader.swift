@@ -10,21 +10,21 @@ public final class RuntimeViewerServerLoader: NSObject {
     private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerServer", category: "RuntimeViewerServerLoader")
     
     @objc public static func main() {
-        logger.info("\("Attach successfully", privacy: .public)")
+        logger.info("Attach successfully")
         
         let name = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String ?? Bundle.main.name
         
         Task {
             do {
-                logger.info("\("Will Launch", privacy: .public)")
+                logger.info("Will Launch")
                 if LSBundleProxy.forCurrentProcess().isSandboxed {
                     runtimeEngine = try await RuntimeEngine(source: .localSocketServer(name: name, identifier: .init(rawValue: Bundle.main.bundleIdentifier!)))
                 } else {
                     runtimeEngine = try await RuntimeEngine(source: .remote(name: name, identifier: .init(rawValue: Bundle.main.bundleIdentifier!), role: .server))
                 }
-                logger.info("\("Did Launch", privacy: .public)")
+                logger.info("Did Launch")
             } catch {
-                logger.error("\("Failed to create runtime engine: \(error)", privacy: .public)")
+                logger.error("Failed to create runtime engine: \(error, privacy: .public)")
             }
         }
     }

@@ -1,7 +1,5 @@
 import Foundation
-import Logging
-import Semaphore
-import Asynchrone
+import os.log
 
 // MARK: - RuntimeStdioConnection
 
@@ -88,107 +86,119 @@ import Asynchrone
 /// }
 /// ```
 ///
-final class RuntimeStdioConnection {
-    private class MessageHandler {
-        typealias RawHandler = (Data) async throws -> Data
-        let closure: RawHandler
-        let requestType: Codable.Type
-        let responseType: Codable.Type
-
-        init<Request: Codable, Response: Codable>(closure: @escaping (Request) async throws -> Response) {
-            self.requestType = Request.self
-            self.responseType = Response.self
-
-            self.closure = { request in
-                let request = try JSONDecoder().decode(Request.self, from: request)
-                let response = try await closure(request)
-                return try JSONEncoder().encode(response)
-            }
-        }
-    }
-
+final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
     let id = UUID()
 
     var didStop: ((RuntimeStdioConnection) -> Void)?
 
-    private static let logger = Logger(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeStdioConnection")
-
-    private static let endMarkerData = "\nOK".data(using: .utf8)!
-
-    private var logger: Logger { Self.logger }
-
     private let inputHandle: FileHandle
-
     private let outputHandle: FileHandle
-
-    private var receivedDataStream: SharedAsyncSequence<AsyncThrowingStream<Data, Error>>?
-
-    private var receivedDataContinuation: AsyncThrowingStream<Data, Error>.Continuation?
+    private let messageChannel = RuntimeMessageChannel()
 
     private var isStarted = false
 
-    private var receivingData = Data()
-
-    private let semaphore = AsyncSemaphore(value: 1)
-
-    private var messageHandlers: [String: MessageHandler] = [:]
-
     private let readQueue = DispatchQueue(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeStdioConnection.readQueue")
+
+    // MARK: - Initialization
 
     init(inputHandle: FileHandle, outputHandle: FileHandle) {
         self.inputHandle = inputHandle
         self.outputHandle = outputHandle
     }
 
+    // MARK: - Lifecycle
+
     func start() throws {
         guard !isStarted else { return }
         isStarted = true
-        Self.logger.info("Stdio connection will start")
-        setupStreams()
+
         setupReceiver()
         observeIncomingMessages()
-        Self.logger.info("Stdio connection did start")
+
+        Self.logger.info("Connection started")
     }
 
     func stop() {
         guard isStarted else { return }
         isStarted = false
-        Self.logger.info("Stdio connection will stop")
-        receivedDataContinuation?.finish()
+
+        messageChannel.finishReceiving()
         didStop?(self)
         didStop = nil
-        Self.logger.info("Stdio connection did stop")
+
+        Self.logger.info("Connection stopped")
     }
 
-    func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping ((Request) async throws -> Response)) {
-        messageHandlers[name] = .init(closure: handler)
+    // MARK: - Receiving
+
+    private func setupReceiver() {
+        readQueue.async { [weak self] in
+            guard let self else { return }
+
+            while self.isStarted {
+                let data = self.inputHandle.availableData
+                if data.isEmpty {
+                    self.logger.info("Input stream closed")
+                    self.messageChannel.finishReceiving()
+                    DispatchQueue.main.async {
+                        self.stop()
+                    }
+                    break
+                } else {
+                    self.logger.debug("Received \(data.count, privacy: .public) bytes")
+                    self.messageChannel.appendReceivedData(data)
+                }
+            }
+        }
     }
 
-    func setMessageHandler<Request: RuntimeRequest>(_ handler: @escaping ((Request) async throws -> Request.Response)) {
-        messageHandlers[Request.identifier] = .init(closure: handler)
+    private func observeIncomingMessages() {
+        Task {
+            do {
+                guard let stream = messageChannel.receivedMessages() else { return }
+                for try await data in stream {
+                    do {
+                        let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+                        guard let handler = messageChannel.handler(for: requestData.identifier) else {
+                            logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
+                            continue
+                        }
+
+                        logger.debug("Handling request: \(requestData.identifier, privacy: .public)")
+                        let responseData = try await handler.closure(requestData.data)
+
+                        if handler.responseType != RuntimeMessageNull.self {
+                            let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData)
+                            try await send(requestData: response)
+                        }
+                    } catch {
+                        logger.error("Handler error: \(error, privacy: .public)")
+                        let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
+                        if let errorData = try? JSONEncoder().encode(errorResponse) {
+                            try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
+                        }
+                    }
+                }
+            } catch {
+                logger.error("Message observation error: \(error, privacy: .public)")
+            }
+        }
     }
+
+    // MARK: - RuntimeUnderlyingConnection
 
     func send(requestData: RuntimeRequestData) async throws {
-        await semaphore.wait()
-        defer { semaphore.signal() }
-        logger.info("RuntimeStdioConnection send identifier: \(requestData.identifier)")
-        try await send(content: requestData)
+        let data = try JSONEncoder().encode(requestData)
+        try await messageChannel.send(data: data) { [weak self] dataToSend in
+            try await self?.sendRaw(data: dataToSend)
+        }
+        logger.debug("Sent request: \(requestData.identifier, privacy: .public)")
     }
 
     func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {
-        await semaphore.wait()
-        defer { semaphore.signal() }
-        logger.info("RuntimeStdioConnection send identifier: \(requestData.identifier)")
-        try await send(content: requestData)
-        let receiveData = try await receiveData()
-        let responseData = try JSONDecoder().decode(RuntimeRequestData.self, from: receiveData)
-        logger.info("RuntimeStdioConnection received identifier: \(responseData.identifier)")
-        return try JSONDecoder().decode(Response.self, from: responseData.data)
-    }
-
-    func send<Request: RuntimeRequest>(request: Request) async throws {
-        let requestData = try RuntimeRequestData(request: request)
-        try await send(requestData: requestData)
+        try await messageChannel.sendRequest(requestData: requestData) { [weak self] data in
+            try await self?.sendRaw(data: data)
+        }
     }
 
     func send<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
@@ -196,196 +206,41 @@ final class RuntimeStdioConnection {
         return try await send(requestData: requestData)
     }
 
-    private func observeIncomingMessages() {
-        Task {
-            do {
-                guard let receivedDataStream else { return }
-                for try await data in receivedDataStream {
-                    do {
-                        let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
-                        guard let messageHandler = messageHandlers[requestData.identifier] else { continue }
-                        logger.info("RuntimeStdioConnection received identifier: \(requestData.identifier)")
-                        let responseData = try await messageHandler.closure(requestData.data)
-                        if messageHandler.responseType != MessageNull.self {
-                            try await send(requestData: RuntimeRequestData(identifier: requestData.identifier, data: responseData))
-                        }
-                    } catch {
-                        logger.error("\(error)")
-                        let requestError = RuntimeNetworkRequestError(message: "\(error)")
-                        do {
-                            let commandErrorData = try JSONEncoder().encode(requestError)
-                            try await send(data: commandErrorData)
-                        } catch {
-                            logger.error("\(error)")
-                        }
-                    }
-                }
-
-            } catch {
-                logger.error("\(error)")
-            }
-        }
+    func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) {
+        messageChannel.setMessageHandler(name: name, handler: handler)
     }
 
-    private func setupStreams() {
-        let (receivedDataStream, receivedDataContinuation) = AsyncThrowingStream<Data, Error>.makeStream()
-        self.receivedDataStream = receivedDataStream.shared()
-        self.receivedDataContinuation = receivedDataContinuation
+    func setMessageHandler<Request: RuntimeRequest>(_ handler: @escaping @Sendable (Request) async throws -> Request.Response) {
+        messageChannel.setMessageHandler(handler)
     }
 
-    private func setupReceiver() {
-        readQueue.async { [weak self] in
-            guard let self else { return }
-            while self.isStarted {
-                let data = self.inputHandle.availableData
-                if data.isEmpty {
-                    self.receivedDataContinuation?.finish()
-                    DispatchQueue.main.async {
-                        self.stop()
-                    }
-                    break
-                } else {
-                    self.receivingData.append(data)
-                    self.processReceivedData()
-                }
-            }
-        }
-    }
+    // MARK: - Private
 
-    private func processReceivedData() {
-        guard let endMarker = "\nOK".data(using: .utf8) else { return }
-
-        while true {
-            guard let endRange = receivingData.range(of: endMarker) else {
-                break
-            }
-
-            let messageData = receivingData.subdata(in: 0 ..< endRange.lowerBound)
-            receivedDataContinuation?.yield(messageData)
-
-            if endRange.upperBound < receivingData.count {
-                receivingData = receivingData.subdata(in: endRange.upperBound ..< receivingData.count)
-            } else {
-                receivingData = Data()
-                break
-            }
-        }
-    }
-
-    private func send<Content: Codable>(content: Content) async throws {
-        let data = try JSONEncoder().encode(content)
-        try await send(data: data)
-    }
-
-    private func send(data: Data) async throws {
-        let dataToSend = data + Self.endMarkerData
+    private func sendRaw(data: Data) async throws {
         if #available(macOS 10.15.4, iOS 13.4, *) {
-            try outputHandle.write(contentsOf: dataToSend)
+            try outputHandle.write(contentsOf: data)
         } else {
-            outputHandle.write(dataToSend)
+            outputHandle.write(data)
         }
-        Self.logger.info("RuntimeStdioConnection send data: \(data)")
-    }
-
-    private func receiveData() async throws -> Data {
-        guard let receivedDataStream else {
-            throw RuntimeStdioError.notConnected
-        }
-
-        for try await data in receivedDataStream {
-            if let error = try? JSONDecoder().decode(RuntimeNetworkRequestError.self, from: data) {
-                throw error
-            } else {
-                return data
-            }
-        }
-
-        throw RuntimeStdioError.receiveFailed
     }
 }
 
 // MARK: - RuntimeStdioError
 
 /// Errors that can occur during stdio communication.
-enum RuntimeStdioError: Error {
+enum RuntimeStdioError: Error, LocalizedError, Sendable {
     /// The connection is not established or has been closed.
     case notConnected
     /// Failed to receive data from the input stream.
     case receiveFailed
-}
 
-// MARK: - MessageNull
-
-private struct MessageNull: Codable {
-    static let null = MessageNull()
-}
-
-// MARK: - RuntimeStdioBaseConnection
-
-/// Base class implementing `RuntimeConnection` protocol for stdio communication.
-///
-/// This class provides the foundation for both client and server connections,
-/// implementing all required protocol methods.
-class RuntimeStdioBaseConnection: RuntimeConnection {
-    var connection: RuntimeStdioConnection?
-
-    init() {}
-
-    func sendMessage(name: String) async throws {
-        guard let connection = connection else { throw RuntimeStdioError.notConnected }
-        try await connection.send(requestData: RuntimeRequestData(identifier: name, value: MessageNull.null))
-    }
-
-    func sendMessage(name: String, request: some Codable) async throws {
-        guard let connection = connection else { throw RuntimeStdioError.notConnected }
-        try await connection.send(requestData: RuntimeRequestData(identifier: name, value: request))
-    }
-
-    func sendMessage<Response>(name: String) async throws -> Response where Response: Decodable, Response: Encodable {
-        guard let connection = connection else { throw RuntimeStdioError.notConnected }
-        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: MessageNull.null))
-    }
-
-    func sendMessage<Request>(request: Request) async throws -> Request.Response where Request: RuntimeRequest {
-        guard let connection = connection else { throw RuntimeStdioError.notConnected }
-        return try await connection.send(request: request)
-    }
-
-    func sendMessage<Response>(name: String, request: some Codable) async throws -> Response where Response: Decodable, Response: Encodable {
-        guard let connection = connection else { throw RuntimeStdioError.notConnected }
-        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: request))
-    }
-
-    func setMessageHandler(name: String, handler: @escaping () async throws -> Void) {
-        connection?.setMessageHandler(name: name, handler: { (_: MessageNull) in
-            try await handler()
-            return MessageNull.null
-        })
-    }
-
-    func setMessageHandler<Request>(name: String, handler: @escaping (Request) async throws -> Void) where Request: Decodable, Request: Encodable {
-        connection?.setMessageHandler(name: name, handler: { (request: Request) in
-            try await handler(request)
-            return MessageNull.null
-        })
-    }
-
-    func setMessageHandler<Response>(name: String, handler: @escaping () async throws -> Response) where Response: Decodable, Response: Encodable {
-        connection?.setMessageHandler(name: name, handler: { (_: MessageNull) in
-            return try await handler()
-        })
-    }
-
-    func setMessageHandler<Request>(requestType: Request.Type, handler: @escaping (Request) async throws -> Request.Response) where Request: RuntimeRequest {
-        connection?.setMessageHandler { (request: Request) in
-            return try await handler(request)
+    var errorDescription: String? {
+        switch self {
+        case .notConnected:
+            return "Stdio connection is not established"
+        case .receiveFailed:
+            return "Failed to receive data from stdio"
         }
-    }
-
-    func setMessageHandler<Request, Response>(name: String, handler: @escaping (Request) async throws -> Response) where Request: Decodable, Request: Encodable, Response: Decodable, Response: Encodable {
-        connection?.setMessageHandler(name: name, handler: { (request: Request) in
-            return try await handler(request)
-        })
     }
 }
 
@@ -419,7 +274,7 @@ class RuntimeStdioBaseConnection: RuntimeConnection {
 /// // Or send by name
 /// let result: String = try await client.sendMessage(name: "echo", request: "hello")
 /// ```
-final class RuntimeStdioClientConnection: RuntimeStdioBaseConnection {
+final class RuntimeStdioClientConnection: RuntimeConnectionBase<RuntimeStdioConnection>, @unchecked Sendable, Loggable {
     /// Creates a client connection with the specified file handles.
     ///
     /// - Parameters:
@@ -429,7 +284,7 @@ final class RuntimeStdioClientConnection: RuntimeStdioBaseConnection {
     init(inputHandle: FileHandle, outputHandle: FileHandle) throws {
         super.init()
         let connection = RuntimeStdioConnection(inputHandle: inputHandle, outputHandle: outputHandle)
-        self.connection = connection
+        self.underlyingConnection = connection
         try connection.start()
     }
 }
@@ -461,7 +316,7 @@ final class RuntimeStdioClientConnection: RuntimeStdioBaseConnection {
 /// // Keep process alive
 /// RunLoop.main.run()
 /// ```
-final class RuntimeStdioServerConnection: RuntimeStdioBaseConnection {
+final class RuntimeStdioServerConnection: RuntimeConnectionBase<RuntimeStdioConnection>, @unchecked Sendable, Loggable {
     /// Creates a server connection with the specified file handles.
     ///
     /// - Parameters:
@@ -471,7 +326,7 @@ final class RuntimeStdioServerConnection: RuntimeStdioBaseConnection {
     init(inputHandle: FileHandle, outputHandle: FileHandle) throws {
         super.init()
         let connection = RuntimeStdioConnection(inputHandle: inputHandle, outputHandle: outputHandle)
-        self.connection = connection
+        self.underlyingConnection = connection
         try connection.start()
     }
 }
