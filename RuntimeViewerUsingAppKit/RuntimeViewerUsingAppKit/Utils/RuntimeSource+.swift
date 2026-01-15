@@ -23,6 +23,8 @@ extension RuntimeSource: MainMenuItemRepresentable {
             return .symbol(systemName: .bonjour)
         case .localSocketClient, .localSocketServer:
             return .symbol(systemName: .network)
+        case .directTCPClient, .directTCPServer:
+            return .symbol(systemName: .network)
         }
     }
 }

@@ -1,33 +1,26 @@
 import Logging
 import MachOKit
-import FoundationToolbox
+public import FoundationToolbox
 import RuntimeViewerObjC
 public import Foundation
 public import Combine
 public import RuntimeViewerCommunication
 //public import Version
 
-public actor RuntimeEngine {
+public actor RuntimeEngine: Loggable {
     fileprivate enum CommandNames: String, CaseIterable {
-        case classList
-        case protocolList
         case imageList
-        case protocolToImage
-        case imageToProtocols
-        case loadImage
-        case serverLaunched
-        case isImageLoaded
-        case classNamesInImage
-        case patchImagePathForDyld
-        case semanticStringForRuntimeObjectWithOptions
         case imageNodes
+        case loadImage
+        case isImageLoaded
+        case patchImagePathForDyld
         case runtimeObjectHierarchy
         case runtimeObjectInfo
         case imageNameOfClassName
         case observeRuntime
-        case interfaceForRuntimeObjectInImageWithOptions
-        case namesOfKindInImage
-        case namesInImage
+        case runtimeInterfaceForRuntimeObjectInImageWithOptions
+        case runtimeObjectsOfKindInImage
+        case runtimeObjectsInImage
         case reloadData
 
         var commandName: String { "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
@@ -110,8 +103,8 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .loadImage, of: self) { $0.loadImage(at:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofObjectName:) }
 
-        setMessageHandlerBinding(forName: .namesInImage, of: self) { $0.objects(in:) }
-        setMessageHandlerBinding(forName: .interfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
+        setMessageHandlerBinding(forName: .runtimeObjectsInImage, of: self) { $0.objects(in:) }
+        setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
     }
 
@@ -334,7 +327,7 @@ extension RuntimeEngine {
         try await self.request {
             try await _interface(for: request.object, options: request.options)
         } remote: { senderConnection in
-            return try await senderConnection.sendMessage(name: .interfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(object: request.object, options: request.options))
+            return try await senderConnection.sendMessage(name: .runtimeInterfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(object: request.object, options: request.options))
         }
     }
 
@@ -342,7 +335,7 @@ extension RuntimeEngine {
         try await request {
             try await _objects(in: image)
         } remote: {
-            return try await $0.sendMessage(name: .namesInImage, request: image)
+            return try await $0.sendMessage(name: .runtimeObjectsInImage, request: image)
         }
     }
 
