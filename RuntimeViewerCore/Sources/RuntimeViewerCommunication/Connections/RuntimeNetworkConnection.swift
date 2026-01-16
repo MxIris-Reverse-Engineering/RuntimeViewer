@@ -4,6 +4,7 @@ import Foundation
 import FoundationToolbox
 import Network
 import os.log
+import Combine
 
 // MARK: - RuntimeNetworkConnection
 
@@ -52,8 +53,15 @@ import os.log
 final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
     let id = UUID()
 
-    var didStop: ((RuntimeNetworkConnection) -> Void)?
-    var didReady: ((RuntimeNetworkConnection) -> Void)?
+    private let stateSubject = CurrentValueSubject<ConnectionState, Never>(.connecting)
+
+    var statePublisher: AnyPublisher<ConnectionState, Never> {
+        stateSubject.eraseToAnyPublisher()
+    }
+
+    var state: ConnectionState {
+        stateSubject.value
+    }
 
     private let connection: NWConnection
     private let messageChannel = RuntimeMessageChannel()
@@ -111,10 +119,21 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         connection.stateUpdateHandler = nil
         connection.cancel()
         messageChannel.finishReceiving()
-        didStop?(self)
-        didStop = nil
+        stateSubject.send(.disconnected(error: nil))
 
         Self.logger.info("Connection stopped")
+    }
+
+    func stop(with error: ConnectionError) {
+        guard isStarted else { return }
+        isStarted = false
+
+        connection.stateUpdateHandler = nil
+        connection.cancel()
+        messageChannel.finishReceiving()
+        stateSubject.send(.disconnected(error: error))
+
+        Self.logger.info("Connection stopped with error: \(error.localizedDescription, privacy: .public)")
     }
 
     // MARK: - State Handling
@@ -126,22 +145,21 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         }
     }
 
-    private func handleStateChange(_ state: NWConnection.State) {
-        switch state {
+    private func handleStateChange(_ nwState: NWConnection.State) {
+        switch nwState {
         case .setup:
             logger.debug("Connection is setup")
         case .waiting(let error):
             logger.warning("Connection is waiting: \(error, privacy: .public)")
-            stop()
+            stop(with: .networkError("Connection waiting: \(error.localizedDescription)"))
         case .preparing:
             logger.debug("Connection is preparing")
         case .ready:
             logger.info("Connection is ready")
-            didReady?(self)
-            didReady = nil
+            stateSubject.send(.connected)
         case .failed(let error):
             logger.error("Connection failed: \(error, privacy: .public)")
-            stop()
+            stop(with: .networkError("Connection failed: \(error.localizedDescription)"))
         case .cancelled:
             logger.info("Connection cancelled")
         @unknown default:
@@ -304,6 +322,7 @@ final class RuntimeNetworkClientConnection: RuntimeConnectionBase<RuntimeNetwork
 /// - Note: The server automatically restarts listening after a client disconnects.
 final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetworkConnection>, @unchecked Sendable {
     private var listener: NWListener?
+    private var connectionStateCancellable: AnyCancellable?
 
     init(name: String) async throws {
         super.init()
@@ -325,9 +344,9 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
 
     private func waitForConnection(listener: NWListener) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            
+
             let didResume = Mutex<Bool>(false)
-            
+
             listener.newConnectionHandler = { [weak self] newConnection in
                 guard let self, didResume.withLock({ !$0 }) else { return }
 
@@ -337,18 +356,29 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                     let connection = try RuntimeNetworkConnection(connection: newConnection)
                     self.underlyingConnection = connection
 
-                    connection.didReady = { _ in
-                        if didResume.withLock({ !$0 }) {
-                            didResume.withLock { $0 = true }
-                            continuation.resume()
+                    // Observe connection state
+                    self.connectionStateCancellable = connection.statePublisher
+                        .sink { [weak self] state in
+                            if state.isConnected {
+                                if didResume.withLock({ !$0 }) {
+                                    didResume.withLock { $0 = true }
+                                    continuation.resume()
+                                }
+                            } else if state.isDisconnected {
+                                if didResume.withLock({ !$0 }) {
+                                    // Connection failed before becoming ready
+                                    if case .disconnected(let error) = state, let error {
+                                        didResume.withLock { $0 = true }
+                                        continuation.resume(throwing: error)
+                                    }
+                                } else {
+                                    // Connection was ready and then disconnected, restart listening
+                                    Task { [weak self] in
+                                        try await self?.restartListening()
+                                    }
+                                }
+                            }
                         }
-                    }
-
-                    connection.didStop = { [weak self] _ in
-                        Task { [weak self] in
-                            try await self?.restartListening()
-                        }
-                    }
                 } catch {
                     if didResume.withLock({ !$0 }) {
                         didResume.withLock { $0 = true }
@@ -376,15 +406,26 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                 let connection = try RuntimeNetworkConnection(connection: newConnection)
                 self.underlyingConnection = connection
 
-                connection.didStop = { [weak self] _ in
-                    Task { [weak self] in
-                        try await self?.restartListening()
+                // Observe connection state to restart listening when disconnected
+                self.connectionStateCancellable = connection.statePublisher
+                    .filter { $0.isDisconnected }
+                    .sink { [weak self] _ in
+                        Task { [weak self] in
+                            try await self?.restartListening()
+                        }
                     }
-                }
             } catch {
                 Self.logger.error("Failed to create connection: \(error, privacy: .public)")
             }
         }
+    }
+
+    override func stop() {
+        connectionStateCancellable?.cancel()
+        connectionStateCancellable = nil
+        underlyingConnection?.stop()
+        listener?.cancel()
+        listener = nil
     }
 }
 

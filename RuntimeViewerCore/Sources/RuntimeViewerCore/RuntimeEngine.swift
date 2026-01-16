@@ -7,6 +7,40 @@ public import Combine
 public import RuntimeViewerCommunication
 //public import Version
 
+// MARK: - RuntimeEngine.State
+
+extension RuntimeEngine {
+    /// Represents the current state of the RuntimeEngine.
+    public enum State: Sendable, Equatable {
+        /// The engine is being initialized.
+        case initializing
+
+        /// The engine is running locally without a remote connection.
+        case localOnly
+
+        /// The engine is attempting to connect to a remote source.
+        case connecting
+
+        /// The engine is connected to a remote source.
+        case connected
+
+        /// The engine has been disconnected from the remote source.
+        case disconnected(error: ConnectionError?)
+
+        /// Returns `true` if the engine is ready to process requests.
+        public var isReady: Bool {
+            switch self {
+            case .localOnly, .connected:
+                return true
+            case .initializing, .connecting, .disconnected:
+                return false
+            }
+        }
+    }
+}
+
+// MARK: - RuntimeEngine
+
 public actor RuntimeEngine: Loggable {
     fileprivate enum CommandNames: String, CaseIterable {
         case imageList
@@ -29,7 +63,25 @@ public actor RuntimeEngine: Loggable {
     public static let shared = RuntimeEngine()
 
     public nonisolated let source: RuntimeSource
+
+    // MARK: - State Management
+
+    private nonisolated let stateSubject = CurrentValueSubject<State, Never>(.initializing)
     
+    private var connectionStateCancellable: AnyCancellable?
+
+    /// Publisher that emits engine state changes.
+    public nonisolated var statePublisher: some Publisher<State, Never> {
+        stateSubject.eraseToAnyPublisher()
+    }
+
+    /// The current engine state.
+    public nonisolated var state: State {
+        stateSubject.value
+    }
+
+    // MARK: - Data Properties
+
     public private(set) var imageList: [String] = []
 
     @Published
@@ -58,6 +110,7 @@ public actor RuntimeEngine: Loggable {
 
         Task {
             try await observeRuntime()
+            stateSubject.send(.localOnly)
         }
     }
 
@@ -76,27 +129,64 @@ public actor RuntimeEngine: Loggable {
         logger.info("Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
 
         if let role = source.remoteRole {
+            stateSubject.send(.connecting)
+
             switch role {
             case .server:
                 logger.info("Starting as server")
                 self.connection = try await communicator.connect(to: source) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForServer()
+                    self.observeConnectionState(connection)
                 }
                 logger.info("Server connection established")
                 try await observeRuntime()
+                stateSubject.send(.connected)
             case .client:
                 logger.info("Starting as client")
                 self.connection = try await communicator.connect(to: source) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForClient()
+                    self.observeConnectionState(connection)
                 }
                 logger.info("Client connected successfully")
+                stateSubject.send(.connected)
             }
         } else {
             logger.debug("No remote role, observing local runtime")
             try await observeRuntime()
+            stateSubject.send(.localOnly)
         }
+    }
+
+    /// Observes the connection state and updates the engine state accordingly.
+    private func observeConnectionState(_ connection: RuntimeConnection) {
+        connectionStateCancellable = connection.statePublisher
+            .sink { [weak self] state in
+                guard let self else { return }
+                Task { await self.handleConnectionStateChange(state) }
+            }
+    }
+
+    /// Handles connection state changes and updates the engine state.
+    private func handleConnectionStateChange(_ connectionState: ConnectionState) {
+        switch connectionState {
+        case .connecting:
+            stateSubject.send(.connecting)
+        case .connected:
+            stateSubject.send(.connected)
+        case .disconnected(let error):
+            stateSubject.send(.disconnected(error: error))
+        }
+    }
+
+    /// Stops the engine and its connection.
+    public func stop() {
+        connectionStateCancellable?.cancel()
+        connectionStateCancellable = nil
+        connection?.stop()
+        stateSubject.send(.disconnected(error: nil))
+        logger.info("RuntimeEngine stopped")
     }
 
     private func setupMessageHandlerForServer() {

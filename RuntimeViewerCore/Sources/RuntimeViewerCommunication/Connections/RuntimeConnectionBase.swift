@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import os.log
+import Combine
 
 // MARK: - RuntimeConnectionBase
 
@@ -25,6 +26,20 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
     var underlyingConnection: Connection?
 
     init() {}
+
+    // MARK: - RuntimeConnection State Properties
+
+    var statePublisher: AnyPublisher<ConnectionState, Never> {
+        underlyingConnection?.statePublisher ?? Just(.disconnected(error: nil)).eraseToAnyPublisher()
+    }
+
+    var state: ConnectionState {
+        underlyingConnection?.state ?? .disconnected(error: nil)
+    }
+
+    func stop() {
+        underlyingConnection?.stop()
+    }
 
     func sendMessage(name: String) async throws {
         guard let connection = underlyingConnection else {
@@ -97,6 +112,15 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
 /// This protocol abstracts the common interface needed by `RuntimeConnectionBase`
 /// to delegate message handling to different connection implementations.
 protocol RuntimeUnderlyingConnection: Sendable, Loggable {
+    /// Publisher that emits connection state changes.
+    var statePublisher: AnyPublisher<ConnectionState, Never> { get }
+
+    /// The current connection state.
+    var state: ConnectionState { get }
+
+    /// Stops the connection and releases resources.
+    func stop()
+
     /// Sends a request without expecting a response.
     func send(requestData: RuntimeRequestData) async throws
 

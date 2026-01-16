@@ -37,7 +37,6 @@
 		E985F5A42D8FF14800C3E5EE /* HelperInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */; };
 		E995B8942ED97D140083D9D7 /* RuntimeEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */; };
 		E995B8952ED97D140083D9D7 /* RuntimeInjectClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */; };
-		E995B8972ED97D840083D9D7 /* RuntimeEngineManager+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */; };
 		E995B89B2ED9834B0083D9D7 /* LaunchServicesPrivate in Frameworks */ = {isa = PBXBuildFile; productRef = E995B89A2ED9834B0083D9D7 /* LaunchServicesPrivate */; };
 		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
@@ -196,7 +195,6 @@
 		E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperInstaller.swift; sourceTree = "<group>"; };
 		E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeInjectClient.swift; sourceTree = "<group>"; };
 		E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
-		E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RuntimeEngineManager+.swift"; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
@@ -488,7 +486,6 @@
 				E985F5A32D8FF14800C3E5EE /* HelperInstaller.swift */,
 				E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */,
 				E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */,
-				E995B8962ED97D800083D9D7 /* RuntimeEngineManager+.swift */,
 				E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */,
 				E995B8922ED97C020083D9D7 /* RuntimeInjectClient.swift */,
 				E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */,
@@ -842,7 +839,6 @@
 				E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */,
 				E9D470692F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,
-				E995B8972ED97D840083D9D7 /* RuntimeEngineManager+.swift in Sources */,
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
 				E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */,

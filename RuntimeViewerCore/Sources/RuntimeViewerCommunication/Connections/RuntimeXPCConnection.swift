@@ -3,6 +3,7 @@
 import Foundation
 import FoundationToolbox
 import os.log
+import Combine
 @preconcurrency import SwiftyXPC
 
 // MARK: - RuntimeXPCConnection
@@ -61,6 +62,16 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable, Loggable {
 
     fileprivate var connection: SwiftyXPC.XPCConnection?
 
+    fileprivate let stateSubject = CurrentValueSubject<ConnectionState, Never>(.connecting)
+
+    var statePublisher: AnyPublisher<ConnectionState, Never> {
+        stateSubject.eraseToAnyPublisher()
+    }
+
+    var state: ConnectionState {
+        stateSubject.value
+    }
+
     init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         self.identifier = identifier
         let listener = try SwiftyXPC.XPCListener(type: .anonymous, codeSigningRequirement: nil)
@@ -92,14 +103,26 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable, Loggable {
 
     func handleServiceConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
         logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
+        stateSubject.send(.disconnected(error: .xpcError("Service connection error: \(error.localizedDescription)")))
     }
 
     func handleListenerError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
         logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
+        stateSubject.send(.disconnected(error: .xpcError("Listener error: \(error.localizedDescription)")))
     }
 
     func handleClientOrServerConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
         logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
+        stateSubject.send(.disconnected(error: .xpcError("Connection error: \(error.localizedDescription)")))
+    }
+
+    func stop() {
+        connection?.cancel()
+        connection = nil
+        serviceConnection.cancel()
+        listener.cancel()
+        stateSubject.send(.disconnected(error: nil))
+        logger.info("XPC connection stopped")
     }
 
     enum Error: Swift.Error {
@@ -226,6 +249,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
             }
             _ = try await connection.sendMessage(request: PingRequest())
             self.connection = connection
+            self.stateSubject.send(.connected)
             Self.logger.info("Ping server successfully")
         }
     }
@@ -272,6 +296,7 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
         try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
         try await connection.sendMessage(name: CommandIdentifiers.serverLaunched, request: listener.endpoint)
         self.connection = connection
+        stateSubject.send(.connected)
         Self.logger.info("Ping client successfully")
     }
 }

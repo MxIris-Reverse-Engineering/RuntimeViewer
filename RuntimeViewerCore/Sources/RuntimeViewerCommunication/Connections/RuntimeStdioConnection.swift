@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import os.log
+import Combine
 
 // MARK: - RuntimeStdioConnection
 
@@ -90,7 +91,15 @@ import os.log
 final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
     let id = UUID()
 
-    var didStop: ((RuntimeStdioConnection) -> Void)?
+    private let stateSubject = CurrentValueSubject<ConnectionState, Never>(.connecting)
+
+    var statePublisher: AnyPublisher<ConnectionState, Never> {
+        stateSubject.eraseToAnyPublisher()
+    }
+
+    var state: ConnectionState {
+        stateSubject.value
+    }
 
     private let inputHandle: FileHandle
     private let outputHandle: FileHandle
@@ -116,6 +125,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
         setupReceiver()
         observeIncomingMessages()
 
+        stateSubject.send(.connected)
         Self.logger.info("Connection started")
     }
 
@@ -124,10 +134,19 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
         isStarted = false
 
         messageChannel.finishReceiving()
-        didStop?(self)
-        didStop = nil
+        stateSubject.send(.disconnected(error: nil))
 
         Self.logger.info("Connection stopped")
+    }
+
+    func stop(with error: ConnectionError) {
+        guard isStarted else { return }
+        isStarted = false
+
+        messageChannel.finishReceiving()
+        stateSubject.send(.disconnected(error: error))
+
+        Self.logger.info("Connection stopped with error: \(error.localizedDescription, privacy: .public)")
     }
 
     // MARK: - Receiving
@@ -142,7 +161,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
                     self.logger.info("Input stream closed")
                     self.messageChannel.finishReceiving()
                     DispatchQueue.main.async {
-                        self.stop()
+                        self.stop(with: .peerClosed)
                     }
                     break
                 } else {

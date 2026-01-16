@@ -1,4 +1,5 @@
-import Foundation
+public import Foundation
+public import Combine
 
 /// Protocol defining the unified interface for all runtime communication channels.
 ///
@@ -45,6 +46,20 @@ import Foundation
 /// }
 /// ```
 public protocol RuntimeConnection: Sendable {
+    /// Publisher that emits connection state changes.
+    ///
+    /// Subscribe to this publisher to observe connection lifecycle events.
+    var statePublisher: AnyPublisher<ConnectionState, Never> { get }
+
+    /// The current connection state.
+    var state: ConnectionState { get }
+
+    /// Stops the connection and releases resources.
+    ///
+    /// After calling this method, the connection will emit `.disconnected` state
+    /// and should not be used for sending or receiving messages.
+    func stop()
+
     /// Sends a message with no payload and no expected response.
     /// - Parameter name: The message identifier.
     func sendMessage(name: String) async throws

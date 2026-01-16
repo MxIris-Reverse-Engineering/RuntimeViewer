@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import os.log
+import Combine
 
 // MARK: - RuntimeLocalSocketConnection
 
@@ -99,8 +100,15 @@ import os.log
 final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecked Sendable {
     let id = UUID()
 
-    var didStop: ((RuntimeLocalSocketConnection) -> Void)?
-    var didReady: ((RuntimeLocalSocketConnection) -> Void)?
+    private let stateSubject = CurrentValueSubject<ConnectionState, Never>(.connecting)
+
+    var statePublisher: AnyPublisher<ConnectionState, Never> {
+        stateSubject.eraseToAnyPublisher()
+    }
+
+    var state: ConnectionState {
+        stateSubject.value
+    }
 
     private var socketFD: Int32 = -1
     private let messageChannel = RuntimeMessageChannel()
@@ -164,8 +172,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         setupReceiver()
         observeIncomingMessages()
 
-        didReady?(self)
-        didReady = nil
+        stateSubject.send(.connected)
         Self.logger.info("Connection started")
     }
 
@@ -178,10 +185,23 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
             socketFD = -1
         }
         messageChannel.finishReceiving()
-        didStop?(self)
-        didStop = nil
+        stateSubject.send(.disconnected(error: nil))
 
         Self.logger.info("Connection stopped")
+    }
+
+    func stop(with error: ConnectionError) {
+        guard isStarted else { return }
+        isStarted = false
+
+        if socketFD >= 0 {
+            close(socketFD)
+            socketFD = -1
+        }
+        messageChannel.finishReceiving()
+        stateSubject.send(.disconnected(error: error))
+
+        Self.logger.info("Connection stopped with error: \(error.localizedDescription, privacy: .public)")
     }
 
     // MARK: - Receiving
@@ -202,16 +222,16 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
                     self.logger.info("Connection closed by peer")
                     self.messageChannel.finishReceiving()
                     DispatchQueue.main.async {
-                        self.stop()
+                        self.stop(with: .peerClosed)
                     }
                     break
                 } else {
-                    let error = errno
-                    if error != EAGAIN && error != EWOULDBLOCK {
-                        self.logger.error("Receive error, errno=\(error, privacy: .public)")
+                    let recvErrno = errno
+                    if recvErrno != EAGAIN && recvErrno != EWOULDBLOCK {
+                        self.logger.error("Receive error, errno=\(recvErrno, privacy: .public)")
                         self.messageChannel.finishReceiving()
                         DispatchQueue.main.async {
-                            self.stop()
+                            self.stop(with: .socketError("Receive error: errno=\(recvErrno)"))
                         }
                         break
                     }
@@ -633,6 +653,9 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
     /// Pending message handlers to apply to new connections.
     private var pendingHandlers: [@Sendable (RuntimeLocalSocketConnection) -> Void] = []
 
+    /// Subscription for observing connection state changes.
+    private var connectionStateCancellable: AnyCancellable?
+
     /// The port the server is listening on (available after `start()` is called).
     private(set) var port: UInt16 = 0
 
@@ -808,10 +831,12 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         // Apply all pending message handlers to the new connection
         applyPendingHandlers(to: socketConnection)
 
-        socketConnection.didStop = { [weak self] _ in
-            // When connection stops, start accepting new connections
-            self?.startAcceptingConnections()
-        }
+        // Observe connection state to restart accepting when disconnected
+        connectionStateCancellable = socketConnection.statePublisher
+            .filter { $0.isDisconnected }
+            .sink { [weak self] _ in
+                self?.startAcceptingConnections()
+            }
 
         do {
             try socketConnection.start()
@@ -823,7 +848,9 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
     }
 
     /// Stops the server and cleans up resources.
-    func stop() {
+    override func stop() {
+        connectionStateCancellable?.cancel()
+        connectionStateCancellable = nil
         underlyingConnection?.stop()
         if serverSocketFD >= 0 {
             close(serverSocketFD)
