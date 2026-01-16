@@ -1,8 +1,10 @@
 import Foundation
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerArchitectures
 
-public final class RuntimeEngineManager {
+public final class RuntimeEngineManager: Loggable {
     public static let shared = RuntimeEngineManager()
 
     @Published
@@ -20,18 +22,22 @@ public final class RuntimeEngineManager {
         browser.start { [weak self] endpoint in
             guard let self else { return }
             Task { @MainActor in
-                try await self.appendBonjourRuntimeEngine(.init(source: .bonjourClient(endpoint: endpoint)))
+                do {
+                    try await self.appendBonjourRuntimeEngine(.init(source: .bonjourClient(endpoint: endpoint)))
+                } catch {
+                    Self.logger.error("\(error, privacy: .public)")
+                }
             }
         }
         Task.detached {
             do {
                 try await self.launchSystemRuntimeEngines()
             } catch {
-                NSLog("%@", error as NSError)
+                Self.logger.error("\(error, privacy: .public)")
             }
         }
     }
-    
+
     private func appendBonjourRuntimeEngine(_ bonjourRuntimeEngine: RuntimeEngine) {
         bonjourRuntimeEngines.append(bonjourRuntimeEngine)
     }
@@ -57,3 +63,10 @@ public final class RuntimeEngineManager {
 }
 
 
+extension RuntimeEngineManager: ReactiveCompatible {}
+
+extension Reactive where Base == RuntimeEngineManager {
+    public var runtimeEngines: Driver<[RuntimeEngine]> {
+        Driver.combineLatest(base.$systemRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []), base.$attachedRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []), base.$bonjourRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []), resultSelector: { $0 + $1 + $2 })
+    }
+}

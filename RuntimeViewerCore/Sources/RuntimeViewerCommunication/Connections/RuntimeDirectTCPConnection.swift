@@ -4,6 +4,7 @@ import Foundation
 import FoundationToolbox
 import Network
 import os.log
+import Combine
 
 // MARK: - RuntimeDirectTCPConnection
 
@@ -66,8 +67,15 @@ import os.log
 final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked Sendable {
     let id = UUID()
 
-    var didStop: ((RuntimeDirectTCPConnection) -> Void)?
-    var didReady: ((RuntimeDirectTCPConnection) -> Void)?
+    private let stateSubject = CurrentValueSubject<ConnectionState, Never>(.connecting)
+
+    var statePublisher: AnyPublisher<ConnectionState, Never> {
+        stateSubject.eraseToAnyPublisher()
+    }
+
+    var state: ConnectionState {
+        stateSubject.value
+    }
 
     private let connection: NWConnection
     private let messageChannel = RuntimeMessageChannel()
@@ -129,10 +137,21 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
         connection.stateUpdateHandler = nil
         connection.cancel()
         messageChannel.finishReceiving()
-        didStop?(self)
-        didStop = nil
+        stateSubject.send(.disconnected(error: nil))
 
         Self.logger.info("Connection stopped")
+    }
+
+    func stop(with error: ConnectionError) {
+        guard isStarted else { return }
+        isStarted = false
+
+        connection.stateUpdateHandler = nil
+        connection.cancel()
+        messageChannel.finishReceiving()
+        stateSubject.send(.disconnected(error: error))
+
+        Self.logger.info("Connection stopped with error: \(error.localizedDescription, privacy: .public)")
     }
 
     // MARK: - State Handling
@@ -144,22 +163,21 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
         }
     }
 
-    private func handleStateChange(_ state: NWConnection.State) {
-        switch state {
+    private func handleStateChange(_ nwState: NWConnection.State) {
+        switch nwState {
         case .setup:
             logger.debug("Connection is setup")
         case .waiting(let error):
             logger.warning("Connection is waiting: \(error, privacy: .public)")
-            stop()
+            stop(with: .networkError("Connection waiting: \(error.localizedDescription)"))
         case .preparing:
             logger.debug("Connection is preparing")
         case .ready:
             logger.info("Connection is ready")
-            didReady?(self)
-            didReady = nil
+            stateSubject.send(.connected)
         case .failed(let error):
             logger.error("Connection failed: \(error, privacy: .public)")
-            stop()
+            stop(with: .networkError("Connection failed: \(error.localizedDescription)"))
         case .cancelled:
             logger.info("Connection cancelled")
         @unknown default:
@@ -292,6 +310,8 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
 /// let classes = try await client.sendMessage(request: GetClassListRequest())
 /// ```
 final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirectTCPConnection>, @unchecked Sendable {
+    private var connectionStateCancellable: AnyCancellable?
+
     /// Creates a client connection to the specified host and port.
     ///
     /// - Parameters:
@@ -307,19 +327,25 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let didResume = Mutex<Bool>(false)
 
-            connection.didReady = { _ in
-                if didResume.withLock({ !$0 }) {
-                    didResume.withLock { $0 = true }
-                    continuation.resume()
+            // Observe connection state
+            self.connectionStateCancellable = connection.statePublisher
+                .sink { state in
+                    if state.isConnected {
+                        if didResume.withLock({ !$0 }) {
+                            didResume.withLock { $0 = true }
+                            continuation.resume()
+                        }
+                    } else if state.isDisconnected {
+                        if didResume.withLock({ !$0 }) {
+                            didResume.withLock { $0 = true }
+                            if case .disconnected(let error) = state, let error {
+                                continuation.resume(throwing: error)
+                            } else {
+                                continuation.resume(throwing: RuntimeDirectTCPError.connectionFailed)
+                            }
+                        }
+                    }
                 }
-            }
-
-            connection.didStop = { _ in
-                if didResume.withLock({ !$0 }) {
-                    didResume.withLock { $0 = true }
-                    continuation.resume(throwing: RuntimeDirectTCPError.connectionFailed)
-                }
-            }
 
             do {
                 try connection.start()
@@ -333,11 +359,17 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
                 if didResume.withLock({ !$0 }) {
                     didResume.withLock { $0 = true }
-                    connection.stop()
+                    connection.stop(with: .timeout)
                     continuation.resume(throwing: RuntimeDirectTCPError.timeout)
                 }
             }
         }
+    }
+
+    override func stop() {
+        connectionStateCancellable?.cancel()
+        connectionStateCancellable = nil
+        underlyingConnection?.stop()
     }
 }
 
@@ -362,6 +394,7 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
 /// ```
 final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirectTCPConnection>, @unchecked Sendable {
     private var listener: NWListener?
+    private var connectionStateCancellable: AnyCancellable?
 
     /// The host address the server is listening on.
     private(set) var host: String = ""
@@ -423,18 +456,29 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                 let tcpConnection = RuntimeDirectTCPConnection(connection: newConnection)
                 self.underlyingConnection = tcpConnection
 
-                tcpConnection.didReady = { _ in
-                    if didResume.withLock({ !$0 }) {
-                        didResume.withLock { $0 = true }
-                        continuation.resume()
+                // Observe connection state
+                self.connectionStateCancellable = tcpConnection.statePublisher
+                    .sink { [weak self] state in
+                        if state.isConnected {
+                            if didResume.withLock({ !$0 }) {
+                                didResume.withLock { $0 = true }
+                                continuation.resume()
+                            }
+                        } else if state.isDisconnected {
+                            if didResume.withLock({ !$0 }) {
+                                // Connection failed before becoming ready
+                                if case .disconnected(let error) = state, let error {
+                                    didResume.withLock { $0 = true }
+                                    continuation.resume(throwing: error)
+                                }
+                            } else {
+                                // Connection was ready and then disconnected, restart listening
+                                Task { [weak self] in
+                                    try await self?.restartListening()
+                                }
+                            }
+                        }
                     }
-                }
-
-                tcpConnection.didStop = { [weak self] _ in
-                    Task { [weak self] in
-                        try await self?.restartListening()
-                    }
-                }
 
                 do {
                     try tcpConnection.start()
@@ -459,11 +503,14 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
             let tcpConnection = RuntimeDirectTCPConnection(connection: newConnection)
             self.underlyingConnection = tcpConnection
 
-            tcpConnection.didStop = { [weak self] _ in
-                Task { [weak self] in
-                    try await self?.restartListening()
+            // Observe connection state to restart listening when disconnected
+            self.connectionStateCancellable = tcpConnection.statePublisher
+                .filter { $0.isDisconnected }
+                .sink { [weak self] _ in
+                    Task { [weak self] in
+                        try await self?.restartListening()
+                    }
                 }
-            }
 
             do {
                 try tcpConnection.start()
@@ -474,7 +521,9 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
     }
 
     /// Stops the server and closes all connections.
-    func stop() {
+    override func stop() {
+        connectionStateCancellable?.cancel()
+        connectionStateCancellable = nil
         underlyingConnection?.stop()
         listener?.cancel()
         listener = nil
