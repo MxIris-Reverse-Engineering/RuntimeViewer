@@ -66,7 +66,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
             guard row >= 0, row < outlineView.numberOfRows else { return }
             outlineView.selectRowIndexes(.init(integer: row), byExtendingSelection: false)
             guard !outlineView.visibleRowIndexes.contains(row) else { return }
-            outlineView.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
+            outlineView.box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
         }
         .disposed(by: rx.disposeBag)
     }

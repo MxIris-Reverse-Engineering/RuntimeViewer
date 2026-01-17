@@ -21,7 +21,7 @@ public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
                 do {
                     return try await appServices.runtimeEngine.hierarchy(for: runtimeObject).joined(separator: "\n")
                 } catch {
-                    print(error.localizedDescription)
+                    logger.error("Failed to fetch class hierarchy for runtime object: \("\(runtimeObject)", privacy: .public) with error: \(error, privacy: .public)")
                     return runtimeObject.displayName
                 }
             }.catchAndReturn(runtimeObject.displayName).observeOnMainScheduler().asDriverOnErrorJustComplete()

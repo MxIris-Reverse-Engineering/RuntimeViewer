@@ -6,10 +6,10 @@ import MemberwiseInit
 
 public final class SidebarRootDirectoryViewModel: SidebarRootViewModel {
     
-    public let nodesSubject = PublishRelay<[RuntimeImageNode]>()
+    public let nodesSubject = BehaviorSubject<[RuntimeImageNode]>(value: [])
     
     public init(appServices: AppServices, router: any Router<SidebarRootRoute>) {
-        super.init(appServices: appServices, router: router, nodesSource: nodesSubject.share().asObservable())
+        super.init(appServices: appServices, router: router, nodesSource: nodesSubject.asObservable())
         
         Task {
             await appServices.runtimeEngine

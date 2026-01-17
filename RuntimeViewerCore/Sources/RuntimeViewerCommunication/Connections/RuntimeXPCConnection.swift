@@ -103,7 +103,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable, Loggable {
 
     func handleServiceConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
         logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
-        stateSubject.send(.disconnected(error: .xpcError("Service connection error: \(error.localizedDescription)")))
+//        stateSubject.send(.disconnected(error: .xpcError("Service connection error: \(error.localizedDescription)")))
     }
 
     func handleListenerError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {

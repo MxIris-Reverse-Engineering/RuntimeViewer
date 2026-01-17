@@ -41,6 +41,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
             }
             .observe(on: ConcurrentDispatchQueueScheduler(qos: .userInteractive))
             .flatMapLatest { nodes -> [String: SidebarRootCellViewModel] in
+                Self.logger.info("\(Self.self, privacy: .public) Indexing sidebar nodes...")
                 var allNodes: [String: SidebarRootCellViewModel] = [:]
                 for rootNode in nodes {
                     allNodes[rootNode.node.name] = rootNode
