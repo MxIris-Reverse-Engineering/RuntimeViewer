@@ -1,26 +1,51 @@
-import AppKit
-internal import os.log
-internal import RuntimeViewerCore
-import LaunchServicesPrivate
+private import Foundation
+private import os.log
+private import RuntimeViewerCore
+private import LaunchServicesPrivate
 
-@objc
-public final class RuntimeViewerServerLoader: NSObject {
+@_cdecl("swift_initializeRuntimeViewerServer")
+func initializeRuntimeViewerServer() {
+    RuntimeViewerServerLoader.main()
+}
+
+enum RuntimeViewerServerLoader {
+    private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerServer", category: "RuntimeViewerServerLoader")
+
     private static var runtimeEngine: RuntimeEngine?
 
-    private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerServer", category: "RuntimeViewerServerLoader")
-    
-    @objc public static func main() {
+    private static var processName: String {
+        if let displayName = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String {
+            return displayName
+        }
+        
+        if let bundleName = Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String {
+            return bundleName
+        }
+
+        return ProcessInfo.processInfo.processName
+    }
+
+    private static var identifier: String {
+        if let bundleID = Bundle.main.bundleIdentifier, !bundleID.isEmpty {
+            return bundleID
+        }
+
+        let processName = ProcessInfo.processInfo.processName
+        let sanitizedName = processName.components(separatedBy: .whitespacesAndNewlines).joined()
+        
+        return "com.RuntimeViewer.UnknownBinary.\(sanitizedName)"
+    }
+
+    static func main() {
         logger.info("Attach successfully")
-        
-        let name = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String ?? Bundle.main.name
-        
+
         Task {
             do {
                 logger.info("Will Launch")
                 if LSBundleProxy.forCurrentProcess().isSandboxed {
-                    runtimeEngine = try await RuntimeEngine(source: .localSocketServer(name: name, identifier: .init(rawValue: Bundle.main.bundleIdentifier!)))
+                    runtimeEngine = try await RuntimeEngine(source: .localSocketServer(name: processName, identifier: .init(rawValue: identifier)))
                 } else {
-                    runtimeEngine = try await RuntimeEngine(source: .remote(name: name, identifier: .init(rawValue: Bundle.main.bundleIdentifier!), role: .server))
+                    runtimeEngine = try await RuntimeEngine(source: .remote(name: processName, identifier: .init(rawValue: identifier), role: .server))
                 }
                 logger.info("Did Launch")
             } catch {
@@ -31,7 +56,7 @@ public final class RuntimeViewerServerLoader: NSObject {
 }
 
 extension LSBundleProxy {
-    var isSandboxed: Bool {
+    fileprivate var isSandboxed: Bool {
         guard let entitlements = entitlements else { return false }
         guard let isSandboxed = entitlements["com.apple.security.app-sandbox"] as? Bool else { return false }
         return isSandboxed

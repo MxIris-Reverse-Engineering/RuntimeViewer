@@ -23,10 +23,10 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
 
     func transform(_ input: Input) -> Output {
         input.cancel.emit(to: router.rx.trigger(.dismiss)).disposed(by: rx.disposeBag)
-        input.attachToProcess.emit(onNext: { [weak self] app in
+        input.attachToProcess.emit(onNext: { [weak self] application in
             guard let self,
-                  let name = app.localizedName,
-                  let bundleIdentifier = app.bundleIdentifier
+                  let name = application.localizedName,
+                  let bundleIdentifier = application.bundleIdentifier
             else { return }
 
             Task { @MainActor [weak self] in
@@ -34,11 +34,11 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                 do {
                     try await RuntimeInjectClient.shared.installServerFrameworkIfNeeded()
                     guard let dylibURL = Bundle(url: RuntimeInjectClient.shared.serverFrameworkDestinationURL)?.executableURL else { return }
-                    try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: app.isSandbox)
-                    try await RuntimeInjectClient.shared.injectApplication(pid: app.processIdentifier, dylibURL: dylibURL)
-
+                    try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
+                    try await RuntimeInjectClient.shared.injectApplication(pid: application.processIdentifier, dylibURL: dylibURL)
                     router.trigger(.dismiss)
                 } catch {
+                    RuntimeEngineManager.shared.terminateAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
                     logger.error("\(error, privacy: .public)")
                     errorRelay.accept(error)
                 }

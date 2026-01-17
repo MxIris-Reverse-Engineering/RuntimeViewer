@@ -101,8 +101,6 @@ public actor RuntimeEngine: Loggable {
 
     /// The connection to the sender or receiver
     private var connection: RuntimeConnection?
-
-//    public private(set) var helperVersion: VersionModule.Version?
     
     public init() {
         self.source = .local

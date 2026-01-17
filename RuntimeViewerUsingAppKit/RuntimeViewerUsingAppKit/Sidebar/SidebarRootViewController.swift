@@ -141,7 +141,6 @@ extension SidebarRootViewController {
         func outlineView(_ outlineView: NSOutlineView, itemForPersistentObject object: Any) -> Any? {
             guard !viewModel.isFiltering else { return nil }
             guard let path = object as? String else {
-                print("Invalid persistent object:", object)
                 return nil
             }
             let item = viewModel.allNodes[path]

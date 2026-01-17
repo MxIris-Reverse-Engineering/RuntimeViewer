@@ -1,13 +1,6 @@
-//
-//  main.m
-//  RuntimeViewerServer
-//
-//  Created by JH on 11/27/24.
-//
+extern void swift_initializeRuntimeViewerServer(void);
 
-#import <Foundation/Foundation.h>
-#import <RuntimeViewerServer-Swift.h>
-
-static void __attribute__((constructor)) runtime_viewer_server_main(void) {
-    [RuntimeViewerServerLoader main];
+__attribute__((constructor, used))
+static void initializeRuntimeViewerServer(void) {
+    swift_initializeRuntimeViewerServer();
 }
