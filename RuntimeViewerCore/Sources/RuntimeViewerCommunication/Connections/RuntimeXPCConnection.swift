@@ -235,9 +235,9 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
         try await super.init(identifier: identifier, modifier: modifier)
         try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
 
-        if identifier == .macCatalyst {
-            try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
-        }
+//        if identifier == .macCatalyst {
+//            try await serviceConnection.sendMessage(request: LaunchCatalystHelperRequest(helperURL: RuntimeViewerCatalystHelperLauncher.helperURL))
+//        }
 
         listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { [weak self] (_: XPCConnection, endpoint: SwiftyXPC.XPCEndpoint) in
             guard let self else { return }

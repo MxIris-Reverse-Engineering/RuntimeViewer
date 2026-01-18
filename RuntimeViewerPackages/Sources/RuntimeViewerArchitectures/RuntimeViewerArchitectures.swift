@@ -9,6 +9,8 @@
 @_exported import EnumKit
 @_exported import RxConcurrency
 
+@_exported import SwiftNavigation
+
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 @_exported import RxAppKit
 @_exported import CocoaCoordinator

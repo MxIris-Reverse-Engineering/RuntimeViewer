@@ -117,6 +117,10 @@ let package = Package(
             name: "RuntimeViewerSettingsUI",
             targets: ["RuntimeViewerSettingsUI"]
         ),
+        .library(
+            name: "RuntimeViewerCatalystExtensions",
+            targets: ["RuntimeViewerCatalystExtensions"]
+        ),
     ],
     dependencies: [
         .package(
@@ -460,6 +464,12 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
+            ]
+        ),
+        .target(
+            name: "RuntimeViewerCatalystExtensions",
+            dependencies: [
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
             ]
         ),
     ],

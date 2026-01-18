@@ -4,7 +4,7 @@ import AppKit
 import SwiftyXPC
 import MachInjector
 import RuntimeViewerCommunication
-import os.log
+import OSLog
 
 public final class RuntimeViewerService {
     private let listener: SwiftyXPC.XPCListener
@@ -17,7 +17,7 @@ public final class RuntimeViewerService {
         self.listener = try .init(type: .machService(name: RuntimeViewerMachServiceName), codeSigningRequirement: nil)
         listener.setMessageHandler(handler: registerEndpoint)
         listener.setMessageHandler(handler: fetchEndpoint)
-        listener.setMessageHandler(handler: launchCatalystHelper)
+        listener.setMessageHandler(handler: openApplication)
         listener.setMessageHandler(handler: ping)
         listener.setMessageHandler(handler: injectApplication)
         listener.setMessageHandler(handler: fileOperation)
@@ -40,12 +40,12 @@ public final class RuntimeViewerService {
         return .empty
     }
 
-    private func launchCatalystHelper(_ connection: XPCConnection, request: LaunchCatalystHelperRequest) async throws -> LaunchCatalystHelperRequest.Response {
+    private func openApplication(_ connection: XPCConnection, request: OpenApplicationRequest) async throws -> OpenApplicationRequest.Response {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.createsNewApplicationInstance = false
         configuration.addsToRecentItems = false
         configuration.activates = false
-        catalystHelperApplication = try await NSWorkspace.shared.openApplication(at: request.helperURL, configuration: configuration)
+        catalystHelperApplication = try await NSWorkspace.shared.openApplication(at: request.url, configuration: configuration)
         return .empty
     }
 
@@ -107,7 +107,7 @@ public final class RuntimeViewerService {
 }
 
 extension NSRunningApplication {
-    var isMainApp: Bool {
+    fileprivate var isMainApp: Bool {
         [
             "com.JH.RuntimeViewer",
             "dev.JH.RuntimeViewer",
