@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-public let RuntimeViewerMachServiceName = "com.JH.RuntimeViewerService"
+public let RuntimeViewerMachServiceName = "com.mxiris.runtimeviewer.service"
 
 public protocol RuntimeRequest: Codable {
     associatedtype Response: RuntimeResponse

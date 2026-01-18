@@ -2,7 +2,7 @@
 
 import Foundation
 import FoundationToolbox
-import os.log
+import OSLog
 import Combine
 @preconcurrency import SwiftyXPC
 

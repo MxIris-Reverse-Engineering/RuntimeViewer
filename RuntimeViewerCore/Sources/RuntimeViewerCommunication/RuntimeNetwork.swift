@@ -1,7 +1,7 @@
 import Foundation
 public import FoundationToolbox
 import Network
-import os.log
+import OSLog
 
 public enum RuntimeNetworkError: Error {
     case notConnected

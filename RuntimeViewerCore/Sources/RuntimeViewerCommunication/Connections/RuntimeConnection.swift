@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 public import Combine
 
 /// Protocol defining the unified interface for all runtime communication channels.

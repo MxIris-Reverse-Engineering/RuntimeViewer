@@ -4,7 +4,7 @@ import MachOObjCSection
 import ObjCDump
 import ObjCTypeDecodeKit
 import OrderedCollections
-import os.log
+import OSLog
 import RuntimeViewerCoreObjC
 import Semantic
 import Utilities

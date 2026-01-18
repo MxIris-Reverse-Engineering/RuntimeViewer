@@ -3,7 +3,9 @@ import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
+import RuntimeViewerHelperClient
 import FoundationToolbox
+import Dependencies
 
 final class AttachToProcessViewModel: ViewModel<MainRoute> {
     struct Input {
@@ -21,6 +23,9 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         }
     }
 
+    @Dependency(\.runtimeInjectClient) private var runtimeInjectClient
+    @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
+
     func transform(_ input: Input) -> Output {
         input.cancel.emit(to: router.rx.trigger(.dismiss)).disposed(by: rx.disposeBag)
         input.attachToProcess.emit(onNext: { [weak self] application in
@@ -32,13 +37,13 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 do {
-                    try await RuntimeInjectClient.shared.installServerFrameworkIfNeeded()
-                    guard let dylibURL = Bundle(url: RuntimeInjectClient.shared.serverFrameworkDestinationURL)?.executableURL else { return }
-                    try await RuntimeEngineManager.shared.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
-                    try await RuntimeInjectClient.shared.injectApplication(pid: application.processIdentifier, dylibURL: dylibURL)
+                    try await runtimeInjectClient.installServerFrameworkIfNeeded()
+                    guard let dylibURL = Bundle(url: runtimeInjectClient.serverFrameworkDestinationURL)?.executableURL else { return }
+                    try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
+                    try await runtimeInjectClient.injectApplication(pid: application.processIdentifier, dylibURL: dylibURL)
                     router.trigger(.dismiss)
                 } catch {
-                    RuntimeEngineManager.shared.terminateAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
+                    runtimeEngineManager.terminateAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
                     logger.error("\(error, privacy: .public)")
                     errorRelay.accept(error)
                 }

@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
+import Dependencies
 
 enum MessageError: LocalizedError {
     case message(String)
@@ -33,7 +34,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         let fontSizeSmallerClick: Signal<Void>
         let fontSizeLargerClick: Signal<Void>
         let loadFrameworksClick: Signal<Void>
-        let installHelperClick: Signal<Void>
+//        let installHelperClick: Signal<Void>
         let attachToProcessClick: Signal<Void>
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
@@ -48,8 +49,11 @@ final class MainViewModel: ViewModel<MainRoute> {
         let selectedRuntimeSourceIndex: Driver<Int>
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
+        let requestRestartConfirmation: Signal<Void>
     }
-    
+
+    @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
+
     var completeTransition: Observable<SidebarRoute>? {
         didSet {
             completeTransitionDisposable?.dispose()
@@ -65,6 +69,8 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     @Observed
     var selectedRuntimeObject: RuntimeObject?
+
+    private let requestRestartConfirmationRelay = PublishRelay<Void>()
 
     func transform(_ input: Input) -> Output {
         rx.disposeBag = DisposeBag()
@@ -87,17 +93,18 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         
 
-        input.installHelperClick.emitOnNext { [weak self] in
-            guard let self else { return }
-            Task {
-                do {
-                    try await RuntimeHelperClient.shared.install()
-                } catch {
-                    self.errorRelay.accept(error)
-                }
-            }
-        }
-        .disposed(by: rx.disposeBag)
+//        input.installHelperClick.emitOnNext { [weak self] in
+//            guard let self else { return }
+//            Task { @MainActor in
+//                do {
+//                    try RuntimeHelperClient.installLegacyHelper()
+//                    self.requestRestartConfirmationRelay.accept(())
+//                } catch {
+//                    self.errorRelay.accept(error)
+//                }
+//            }
+//        }
+//        .disposed(by: rx.disposeBag)
 
         input.fontSizeSmallerClick.emitOnNext { [weak self] in
             guard let self else { return }
@@ -150,7 +157,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             }).disposed(by: rx.disposeBag)
 
         input.switchSource.emit(with: self) {
-            $0.router.trigger(.main(RuntimeEngineManager.shared.runtimeEngines[$1]))
+            $0.router.trigger(.main($0.runtimeEngineManager.runtimeEngines[$1]))
             $0.selectedRuntimeSourceIndex.accept($1)
         }.disposed(by: rx.disposeBag)
 
@@ -186,10 +193,11 @@ final class MainViewModel: ViewModel<MainRoute> {
             isContentBackHidden: isContentStackDepthGreaterThanOne.map {
                 !$0
             }.asDriver(onErrorJustReturn: true),
-            runtimeSources: RuntimeEngineManager.shared.rx.runtimeEngines.map { $0.map { $0.source } },
+            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map { $0.source } },
             selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver(),
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
+            requestRestartConfirmation: requestRestartConfirmationRelay.asSignal()
         )
     }
 }
