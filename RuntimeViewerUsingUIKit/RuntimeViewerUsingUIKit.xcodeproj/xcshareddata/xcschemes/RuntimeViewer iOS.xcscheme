@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "E9432FC12C0D612000362862"
-               BuildableName = "RuntimeViewerUsingUIKit.app"
+               BuildableName = "RuntimeViewer.app"
                BlueprintName = "RuntimeViewerUsingUIKit"
                ReferencedContainer = "container:RuntimeViewerUsingUIKit.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E9432FC12C0D612000362862"
-            BuildableName = "RuntimeViewerUsingUIKit.app"
+            BuildableName = "RuntimeViewer.app"
             BlueprintName = "RuntimeViewerUsingUIKit"
             ReferencedContainer = "container:RuntimeViewerUsingUIKit.xcodeproj">
          </BuildableReference>
@@ -62,7 +62,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E9432FC12C0D612000362862"
-            BuildableName = "RuntimeViewerUsingUIKit.app"
+            BuildableName = "RuntimeViewer.app"
             BlueprintName = "RuntimeViewerUsingUIKit"
             ReferencedContainer = "container:RuntimeViewerUsingUIKit.xcodeproj">
          </BuildableReference>

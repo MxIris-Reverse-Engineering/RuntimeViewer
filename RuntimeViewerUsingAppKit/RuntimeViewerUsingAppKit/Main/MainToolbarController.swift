@@ -101,7 +101,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.contentBack,
             .Main.switchSource,
             .Main.attach,
-            .Main.installHelper,
             .Main.loadFrameworks,
             .Main.fontSizeSmaller,
             .Main.fontSizeLarger,
@@ -130,7 +129,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.fontSizeSmaller,
             .Main.fontSizeLarger,
             .Main.loadFrameworks,
-            .Main.installHelper,
             .Main.attach,
         ]
     }

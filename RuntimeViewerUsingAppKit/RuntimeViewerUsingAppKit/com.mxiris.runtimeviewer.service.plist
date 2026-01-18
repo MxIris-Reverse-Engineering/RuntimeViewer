@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.JH.RuntimeViewerService</string>
+	<string>com.mxiris.runtimeviewer.service</string>
 	<key>BundleProgram</key>
-	<string>Contents/Library/LaunchServices/com.JH.RuntimeViewerService</string>
+	<string>Contents/Library/LaunchServices/com.mxiris.runtimeviewer.service</string>
 	<key>MachServices</key>
 	<dict>
-		<key>com.JH.RuntimeViewerService</key>
+		<key>com.mxiris.runtimeviewer.service</key>
 		<true/>
 	</dict>
 </dict>
