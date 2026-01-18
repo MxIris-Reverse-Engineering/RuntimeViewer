@@ -132,13 +132,13 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Equatable
     public var description: String {
         switch self {
         case .local: return "My Mac"
-        case let .remote(name, _, _): return name
-        case let .bonjourClient(endpoint): return endpoint.name
-        case let .bonjourServer(name, _): return name
-        case let .localSocketClient(name, _): return name
-        case let .localSocketServer(name, _): return name
-        case let .directTCPClient(name, _, _): return name
-        case let .directTCPServer(name, _): return name
+        case .remote(let name, _, _): return name
+        case .bonjourClient(let endpoint): return endpoint.name
+        case .bonjourServer(let name, _): return name
+        case .localSocketClient(let name, _): return name
+        case .localSocketServer(let name, _): return name
+        case .directTCPClient(let name, _, _): return name
+        case .directTCPServer(let name, _): return name
         }
     }
 
@@ -151,21 +151,24 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Equatable
 
     public var remoteRole: Role? {
         switch self {
-        case let .remote(_, _, role): return role
-        case .bonjourClient, .localSocketClient, .directTCPClient: return .client
-        case .bonjourServer, .localSocketServer, .directTCPServer: return .server
+        case .remote(_, _, let role): return role
+        case .bonjourClient,
+             .localSocketClient,
+             .directTCPClient: return .client
+        case .bonjourServer,
+             .localSocketServer,
+             .directTCPServer: return .server
         default: return nil
         }
     }
-}
 
-#if os(macOS)
-extension RuntimeSource {
-    public static let macCatalystClient: Self = .remote(name: "My Mac (Mac Catalyst)", identifier: .macCatalyst, role: .client)
-    public static let macCatalystServer: Self = .remote(name: "My Mac (Mac Catalyst)", identifier: .macCatalyst, role: .server)
+    /// Returns `true` if this source uses XPC for communication.
+    /// XPC connections cannot be reconnected due to SwiftyXPC limitations,
+    /// they must be destroyed and recreated instead.
+    public var isXPC: Bool {
+        switch self {
+        case .remote: return true
+        default: return false
+        }
+    }
 }
-
-extension RuntimeSource.Identifier {
-    public static let macCatalyst: Self = "com.RuntimeViewer.RuntimeSource.MacCatalyst"
-}
-#endif

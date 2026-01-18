@@ -3,7 +3,7 @@ import Foundation
 import CoreGraphics
 #endif
 
-#if os(macOS) && !targetEnvironment(macCatalyst)
+#if os(macOS)
 import AppKit
 #endif
 

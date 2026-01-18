@@ -5,7 +5,8 @@ import RuntimeViewerCoreObjC
 public import Foundation
 public import Combine
 public import RuntimeViewerCommunication
-//public import Version
+
+// public import Version
 
 // MARK: - RuntimeEngine.State
 
@@ -30,9 +31,12 @@ extension RuntimeEngine {
         /// Returns `true` if the engine is ready to process requests.
         public var isReady: Bool {
             switch self {
-            case .localOnly, .connected:
+            case .localOnly,
+                 .connected:
                 return true
-            case .initializing, .connecting, .disconnected:
+            case .initializing,
+                 .connecting,
+                 .disconnected:
                 return false
             }
         }
@@ -59,7 +63,7 @@ public actor RuntimeEngine: Loggable {
 
         var commandName: String { "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
     }
-    
+
     public static let shared = RuntimeEngine()
 
     public nonisolated let source: RuntimeSource
@@ -67,7 +71,7 @@ public actor RuntimeEngine: Loggable {
     // MARK: - State Management
 
     private nonisolated let stateSubject = CurrentValueSubject<State, Never>(.initializing)
-    
+
     private var connectionStateCancellable: AnyCancellable?
 
     /// Publisher that emits engine state changes.
@@ -86,13 +90,13 @@ public actor RuntimeEngine: Loggable {
 
     @Published
     public private(set) var imageNodes: [RuntimeImageNode] = []
-    
+
     public var reloadDataPublisher: some Publisher<Void, Never> {
         reloadDataSubject.eraseToAnyPublisher()
     }
-    
+
     private let reloadDataSubject = PassthroughSubject<Void, Never>()
-    
+
     private var imageToObjCSection: [String: RuntimeObjCSection] = [:]
 
     private var imageToSwiftSection: [String: RuntimeSwiftSection] = [:]
@@ -101,26 +105,16 @@ public actor RuntimeEngine: Loggable {
 
     /// The connection to the sender or receiver
     private var connection: RuntimeConnection?
-    
+
     public init() {
         self.source = .local
         logger.info("Initializing RuntimeEngine with local source")
 
         Task {
-            try await observeRuntime()
+            await observeRuntime()
             stateSubject.send(.localOnly)
         }
     }
-
-    #if os(macOS)
-    public static func macCatalystClient() async throws -> Self {
-        try await Self(source: .macCatalystClient)
-    }
-
-    public static func macCatalystServer() async throws -> Self {
-        try await Self(source: .macCatalystServer)
-    }
-    #endif
 
     public init(source: RuntimeSource) async throws {
         self.source = source
@@ -138,7 +132,7 @@ public actor RuntimeEngine: Loggable {
                     self.observeConnectionState(connection)
                 }
                 logger.info("Server connection established")
-                try await observeRuntime()
+                await observeRuntime()
                 stateSubject.send(.connected)
             case .client:
                 logger.info("Starting as client")
@@ -152,7 +146,7 @@ public actor RuntimeEngine: Loggable {
             }
         } else {
             logger.debug("No remote role, observing local runtime")
-            try await observeRuntime()
+            await observeRuntime()
             stateSubject.send(.localOnly)
         }
     }
@@ -162,7 +156,9 @@ public actor RuntimeEngine: Loggable {
         connectionStateCancellable = connection.statePublisher
             .sink { [weak self] state in
                 guard let self else { return }
-                Task { await self.handleConnectionStateChange(state) }
+                Task {
+                    await self.handleConnectionStateChange(state)
+                }
             }
     }
 
@@ -250,7 +246,7 @@ public actor RuntimeEngine: Loggable {
         }
     }
 
-    public func reloadData(isReloadImageNodes: Bool) async {
+    public func reloadData(isReloadImageNodes: Bool) {
         logger.info("Reloading data, isReloadImageNodes=\(isReloadImageNodes, privacy: .public)")
         imageList = DyldUtilities.imageNames()
         logger.debug("Loaded \(self.imageList.count, privacy: .public) images")
@@ -262,7 +258,7 @@ public actor RuntimeEngine: Loggable {
         logger.info("Data reload complete")
     }
 
-    private func observeRuntime() async throws {
+    private func observeRuntime() async {
         logger.info("Starting runtime observation")
         imageList = DyldUtilities.imageNames()
         logger.debug("Initial image list contains \(self.imageList.count, privacy: .public) images")
@@ -275,7 +271,7 @@ public actor RuntimeEngine: Loggable {
         sendRemoteDataIfNeeded(isReloadImageNodes: true)
         logger.info("Runtime observation started")
     }
-    
+
     private func setImageNodes(_ imageNodes: [RuntimeImageNode]) async {
         self.imageNodes = imageNodes
     }
@@ -300,7 +296,7 @@ public actor RuntimeEngine: Loggable {
             logger.debug("Remote data sent successfully")
         }
     }
-    
+
     private func _objects(in image: String) async throws -> [RuntimeObject] {
         logger.debug("Getting objects in image: \(image, privacy: .public)")
         let image = DyldUtilities.patchImagePathForDyld(image)
@@ -316,7 +312,8 @@ public actor RuntimeEngine: Loggable {
             let swiftSection = imageToSwiftSection[name.imagePath]
             try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions)
             return try? await swiftSection?.interface(for: name)
-        case .c, .objc:
+        case .c,
+             .objc:
             let objcSection = imageToObjCSection[name.imagePath]
             if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions) {
                 return interface
@@ -349,7 +346,7 @@ public actor RuntimeEngine: Loggable {
             return objcSection
         }
     }
-    
+
     private func _objcSection(forName name: RuntimeObjCName) async -> RuntimeObjCSection? {
         logger.debug("Looking up ObjC section for name: \(String(describing: name), privacy: .public)")
         do {
@@ -416,7 +413,7 @@ extension RuntimeEngine {
             try DyldUtilities.loadImage(at: path)
             _ = try await _objcSection(for: path)
             _ = try await _swiftSection(for: path)
-            await reloadData(isReloadImageNodes: false)
+            reloadData(isReloadImageNodes: false)
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
         }

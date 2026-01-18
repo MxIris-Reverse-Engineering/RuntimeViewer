@@ -1,9 +1,11 @@
 import Foundation
 import FoundationToolbox
+import ServiceManagement
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
-import Dependencies
+import RuntimeViewerHelperClient
+import RuntimeViewerCatalystExtensions
 
 public final class RuntimeEngineManager: Loggable {
     public static let shared = RuntimeEngineManager()
@@ -19,6 +21,15 @@ public final class RuntimeEngineManager: Loggable {
 
     private let browser = RuntimeNetworkBrowser()
 
+    @Dependency(\.helperServiceManager)
+    private var helperServiceManager
+
+    @Dependency(\.runtimeConnectionNotificationService)
+    private var runtimeConnectionNotificationService
+
+    @Dependency(\.runtimeHelperClient)
+    private var runtimeHelperClient
+    
     private init() {
         browser.start { [weak self] endpoint in
             guard let self else { return }
@@ -52,7 +63,10 @@ public final class RuntimeEngineManager: Loggable {
     public func launchSystemRuntimeEngines() async throws {
         systemRuntimeEngines.append(.shared)
         #if os(macOS)
-        try await systemRuntimeEngines.append(.macCatalystClient())
+        let macCatalystClientEngine = try await RuntimeEngine(source: .macCatalystClient)
+        try await runtimeHelperClient.launchMacCatalystHelper()
+        systemRuntimeEngines.append(macCatalystClientEngine)
+        observeRuntimeEngineState(macCatalystClientEngine)
         #endif
     }
 
@@ -80,14 +94,14 @@ public final class RuntimeEngineManager: Loggable {
                     logger.info("Connecting to runtime engine: \(runtimeEngine.source.description, privacy: .public)")
                 case .connected:
                     logger.info("Connected to runtime engine: \(runtimeEngine.source.description, privacy: .public)")
-                    ConnectionNotificationService.shared.notifyConnected(source: runtimeEngine.source)
+                    runtimeConnectionNotificationService.notifyConnected(source: runtimeEngine.source)
                 case .disconnected(error: let error):
                     if let error {
                         logger.error("Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public) with error: \(error, privacy: .public)")
                     } else {
                         logger.info("Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public)")
                     }
-                    ConnectionNotificationService.shared.notifyDisconnected(source: runtimeEngine.source, error: error)
+                    runtimeConnectionNotificationService.notifyDisconnected(source: runtimeEngine.source, error: error)
                     terminateRuntimeEngine(for: runtimeEngine.source)
                 default:
                     break

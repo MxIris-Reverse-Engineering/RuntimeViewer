@@ -87,7 +87,17 @@ public final class RuntimeHelperClient: @unchecked Sendable {
             return newConnection
         }
     }
+
+    public func launchMacCatalystHelper() async throws {
+        try await connectionIfNeeded().sendMessage(request: OpenApplicationRequest(url: RuntimeViewerCatalystHelperLauncher.helperURL))
+    }
 }
+
+enum RuntimeViewerCatalystHelperLauncher {
+    static let appName = "RuntimeViewerCatalystHelper"
+    static let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents").appendingPathComponent("Applications").appendingPathComponent("\(appName).app")
+}
+
 
 // MARK: - Dependencies
 
