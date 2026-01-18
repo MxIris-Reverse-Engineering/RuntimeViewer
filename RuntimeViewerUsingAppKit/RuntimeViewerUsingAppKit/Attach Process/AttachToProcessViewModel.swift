@@ -1,11 +1,10 @@
 import AppKit
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerHelperClient
-import FoundationToolbox
-import Dependencies
 
 final class AttachToProcessViewModel: ViewModel<MainRoute> {
     struct Input {
@@ -23,8 +22,11 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         }
     }
 
-    @Dependency(\.runtimeInjectClient) private var runtimeInjectClient
-    @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
+    @Dependency(\.runtimeInjectClient)
+    private var runtimeInjectClient
+    
+    @Dependency(\.runtimeEngineManager)
+    private var runtimeEngineManager
 
     func transform(_ input: Input) -> Output {
         input.cancel.emit(to: router.rx.trigger(.dismiss)).disposed(by: rx.disposeBag)

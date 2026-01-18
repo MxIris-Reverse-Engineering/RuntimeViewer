@@ -10,4 +10,9 @@ final class SidebarRootTableRowView: TableRowView {
     }
     
     private static let backgroundColor = NSColor.controlAccentColor.withSystemEffect(.deepPressed)
+    
+//    override var isEmphasized: Bool {
+//        set {}
+//        get { true }
+//    }
 }

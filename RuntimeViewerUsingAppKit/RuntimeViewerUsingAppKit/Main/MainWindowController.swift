@@ -10,9 +10,9 @@ final class MainWindow: NSWindow {
     init() {
         super.init(contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
     }
-    
+
     override var canBecomeKey: Bool { true }
-    
+
     override var canBecomeMain: Bool { true }
 }
 
@@ -58,7 +58,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
             fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
             loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
-            installHelperClick: toolbarController.installHelperItem.button.rx.click.asSignal(),
             attachToProcessClick: toolbarController.attachItem.button.rx.click.asSignal(),
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal()

@@ -1,5 +1,7 @@
 import AppKit
 import RuntimeViewerCore
+import RuntimeViewerCommunication
+import RuntimeViewerCatalystExtensions
 
 extension NSObject {
     @objc func rvch_makeKeyAndOrderFront(_ sender: Any?) {}
@@ -32,7 +34,7 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
 
     func launch() {
         Task {
-            runtimeEngine = try await .macCatalystServer()
+            runtimeEngine = try await RuntimeEngine(source: .macCatalystServer)
         }
     }
 }
