@@ -28,19 +28,19 @@ struct MxIrisStudioWorkspace: RawRepresentable, ExpressibleByStringLiteral, Cust
     }
 
     static let forkDirectory: MxIrisStudioWorkspace = "../../../../Fork"
-    
+
     static let forkLibraryDirectory: MxIrisStudioWorkspace = "../../../../Fork/Library"
 
     static let personalDirectory: MxIrisStudioWorkspace = "../../../../Personal"
 
     static let personalLibraryDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library"
-    
+
     static let personalLibraryMacOSDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library/macOS"
 
     static let personalLibraryMuiltplePlatfromDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library/Multi"
-    
+
     var description: String { rawValue }
-    
+
     func libraryPath(_ libraryName: String) -> String {
         "\(rawValue)/\(libraryName)"
     }
@@ -101,6 +101,22 @@ let package = Package(
             name: "RuntimeViewerService",
             targets: ["RuntimeViewerService"]
         ),
+        .library(
+            name: "RuntimeViewerServiceHelper",
+            targets: ["RuntimeViewerServiceHelper"]
+        ),
+        .library(
+            name: "RuntimeViewerHelperClient",
+            targets: ["RuntimeViewerHelperClient"]
+        ),
+        .library(
+            name: "RuntimeViewerSettings",
+            targets: ["RuntimeViewerSettings"]
+        ),
+        .library(
+            name: "RuntimeViewerSettingsUI",
+            targets: ["RuntimeViewerSettingsUI"]
+        ),
     ],
     dependencies: [
         .package(
@@ -119,7 +135,7 @@ let package = Package(
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: true
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
@@ -150,7 +166,7 @@ let package = Package(
             url: "https://github.com/ReactiveX/RxSwift",
             from: "6.0.0"
         ),
-        
+
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("RxSwiftPlus"),
@@ -160,7 +176,7 @@ let package = Package(
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
                 branch: "main"
-            ),
+            )
         ),
         .package(
             local: .package(
@@ -321,8 +337,20 @@ let package = Package(
             remote: .package(
                 url: "https://github.com/Mx-Iris/SystemHUD",
                 branch: "main"
-            ),
-        )
+            )
+        ),
+        .package(
+            url: "https://github.com/Aeastr/SettingsKit",
+            from: "2.0.1"
+        ),
+        .package(
+            url: "https://github.com/MxIris-Library-Forks/swift-navigation",
+            branch: "main"
+        ),
+        .package(
+            url: "https://github.com/siteline/swiftui-introspect",
+            from: "26.0.0"
+        ),
     ],
     targets: [
         .target(
@@ -343,9 +371,14 @@ let package = Package(
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "SwiftNavigation", package: "swift-navigation"),
+//                .product(name: "SwiftUINavigation", package: "swift-navigation"),
+                .product(name: "AppKitNavigation", package: "swift-navigation", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "UIKitNavigation", package: "swift-navigation", condition: .when(platforms: uikitPlatforms)),
             ],
             swiftSettings: sharedSwiftSettings
         ),
+        
         .target(
             name: "RuntimeViewerUI",
             dependencies: [
@@ -366,14 +399,40 @@ let package = Package(
                 .product(name: "DSFQuickActionBar", package: "DSFQuickActionBar", condition: .when(platforms: appkitPlatforms)),
 //                .product(name: "DSFInspectorPanes", package: "DSFInspectorPanes", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "SystemHUD", package: "SystemHUD", condition: .when(platforms: appkitPlatforms)),
+
             ],
             swiftSettings: sharedSwiftSettings
         ),
+        
+        .target(
+            name: "RuntimeViewerSettings",
+            dependencies: [
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "Dependencies", package: "swift-dependencies"),
+            ]
+        ),
+        
+        .target(
+            name: "RuntimeViewerSettingsUI",
+            dependencies: [
+                "RuntimeViewerUI",
+                "RuntimeViewerSettings",
+                .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "SettingsKit", package: "SettingsKit"),
+                .product(name: "SwiftUIIntrospect", package: "swiftui-introspect"),
+            ],
+            resources: [
+                .process("Resources"),
+            ]
+        ),
+        
         .target(
             name: "RuntimeViewerApplication",
             dependencies: [
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
+                .target(name: "RuntimeViewerSettings", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerSettingsUI", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),
@@ -387,6 +446,20 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
+            ]
+        ),
+        
+        .target(
+            name: "RuntimeViewerServiceHelper"
+        ),
+
+        .target(
+            name: "RuntimeViewerHelperClient",
+            dependencies: [
+                "RuntimeViewerServiceHelper",
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "SwiftyXPC", package: "SwiftyXPC"),
+                .product(name: "Dependencies", package: "swift-dependencies"),
             ]
         ),
     ],

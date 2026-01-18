@@ -1,6 +1,6 @@
 import Foundation
 import FoundationToolbox
-import os.log
+import OSLog
 import Combine
 
 // MARK: - RuntimeStdioConnection

@@ -3,7 +3,7 @@
 import Foundation
 import FoundationToolbox
 import Network
-import os.log
+import OSLog
 import Combine
 
 // MARK: - RuntimeDirectTCPConnection

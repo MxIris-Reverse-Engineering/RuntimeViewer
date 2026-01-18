@@ -3,6 +3,7 @@ import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
+import Dependencies
 
 public final class RuntimeEngineManager: Loggable {
     public static let shared = RuntimeEngineManager()
@@ -79,12 +80,14 @@ public final class RuntimeEngineManager: Loggable {
                     logger.info("Connecting to runtime engine: \(runtimeEngine.source.description, privacy: .public)")
                 case .connected:
                     logger.info("Connected to runtime engine: \(runtimeEngine.source.description, privacy: .public)")
+                    ConnectionNotificationService.shared.notifyConnected(source: runtimeEngine.source)
                 case .disconnected(error: let error):
                     if let error {
                         logger.error("Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public) with error: \(error, privacy: .public)")
                     } else {
                         logger.info("Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public)")
                     }
+                    ConnectionNotificationService.shared.notifyDisconnected(source: runtimeEngine.source, error: error)
                     terminateRuntimeEngine(for: runtimeEngine.source)
                 default:
                     break
@@ -113,5 +116,18 @@ extension RuntimeEngineManager: ReactiveCompatible {}
 extension Reactive where Base == RuntimeEngineManager {
     public var runtimeEngines: Driver<[RuntimeEngine]> {
         Driver.combineLatest(base.$systemRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []), base.$attachedRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []), base.$bonjourRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []), resultSelector: { $0 + $1 + $2 })
+    }
+}
+
+// MARK: - Dependencies
+
+private enum RuntimeEngineManagerKey: DependencyKey {
+    static let liveValue = RuntimeEngineManager.shared
+}
+
+extension DependencyValues {
+    public var runtimeEngineManager: RuntimeEngineManager {
+        get { self[RuntimeEngineManagerKey.self] }
+        set { self[RuntimeEngineManagerKey.self] = newValue }
     }
 }

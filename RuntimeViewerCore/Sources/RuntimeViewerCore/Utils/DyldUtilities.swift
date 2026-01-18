@@ -3,7 +3,7 @@ package import Foundation
 import FoundationToolbox
 import MachO.dyld
 import MachOKit
-import os.log
+import OSLog
 
 public struct DyldOpenError: Error {
     public let message: String?

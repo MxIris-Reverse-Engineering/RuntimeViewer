@@ -5,7 +5,7 @@ import FrameworkToolbox
 import MachOKit
 import MachOSwiftSection
 import OrderedCollections
-import os.log
+import OSLog
 import Semantic
 import SwiftDump
 import SwiftInspection

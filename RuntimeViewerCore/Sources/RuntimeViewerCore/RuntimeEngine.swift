@@ -1,6 +1,6 @@
 import MachOKit
 public import FoundationToolbox
-import os.log
+import OSLog
 import RuntimeViewerCoreObjC
 public import Foundation
 public import Combine

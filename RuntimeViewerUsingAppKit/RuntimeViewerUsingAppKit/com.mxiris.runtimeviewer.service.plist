@@ -5,7 +5,7 @@
 	<key>Label</key>
 	<string>com.JH.RuntimeViewerService</string>
 	<key>BundleProgram</key>
-	<string>Contents/Library/LaunchServices</string>
+	<string>Contents/Library/LaunchServices/com.JH.RuntimeViewerService</string>
 	<key>MachServices</key>
 	<dict>
 		<key>com.JH.RuntimeViewerService</key>
