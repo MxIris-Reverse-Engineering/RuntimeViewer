@@ -124,16 +124,16 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         self.name = defaultAttributedName()
     }
 
-    public override var hash: Int {
-        var hasher = Hasher()
-        hasher.combine(runtimeObject)
-        return hasher.finalize()
-    }
-
-    public override func isEqual(_ object: Any?) -> Bool {
-        guard let object = object as? Self else { return false }
-        return runtimeObject == object.runtimeObject
-    }
+//    public override var hash: Int {
+//        var hasher = Hasher()
+//        hasher.combine(runtimeObject)
+//        return hasher.finalize()
+//    }
+//
+//    public override func isEqual(_ object: Any?) -> Bool {
+//        guard let object = object as? Self else { return false }
+//        return runtimeObject == object.runtimeObject
+//    }
 }
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)

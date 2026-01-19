@@ -10,10 +10,8 @@ scheme_name="RuntimeViewer macOS"
 development_mode="Release"
 
 
-build_path=${project_path}/archive
-
-final_export_path=${build_path}/Export
-
+build_path=${project_path}/Products/Archives
+final_export_path=${build_path}/Products/Export
 export_options_plist_path=${project_path}/ArchiveExportConfig.plist
 
 catalyst_export_options_plist_path=${project_path}/ArchiveExportConfig-Catalyst.plist
@@ -46,11 +44,14 @@ xcodebuild \
 -exportOptionsPlist ${catalyst_export_options_plist_path} \
 -quiet || exit
 
+rm -f "${catalyst_helper_export_path}/Packaging.log"
+rm -f "${catalyst_helper_export_path}/DistributionSummary.plist"
+rm -f "${catalyst_helper_export_path}/ExportOptions.plist"
+
 echo '///------------'
 echo '/// RuntimeViewerCatalystHelper Archive Complete  '
 echo '///-----------='
 echo ''
-
 
 echo '///-----------'
 echo '/// Archiving '${scheme_name}': '${development_mode}

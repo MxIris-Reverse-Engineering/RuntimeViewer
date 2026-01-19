@@ -27,6 +27,17 @@ class TabViewController: UXViewController {
 
     private let tabView = NSTabView()
 
+    
+    var autosaveName: String? {
+        didSet {
+            guard let autosaveName else { return }
+            let index = UserDefaults.standard.integer(forKey: autosaveName)
+            guard index >= 0, index < tabView.numberOfTabViewItems, index < segmentedControl.segmentCount else { return }
+            tabView.selectTabViewItem(at: index)
+            segmentedControl.selectedSegment = index
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -76,15 +87,22 @@ class TabViewController: UXViewController {
         for (index, tabViewItem) in tabViewItems.enumerated() {
             segmentedControl.setImage(tabViewItem.normalSymbol.nsuiImgae, forSegment: index)
             segmentedControl.setAlternateImage(tabViewItem.selectedSymbol.nsuiImgae, forSegment: index)
-            if #unavailable(macOS 26.0) {
-//                segmentedControl.setWidth(30, forSegment: index)
-            }
             tabView.addTabViewItem(.init(viewController: tabViewItem.viewController))
         }
     }
 
     func removeAllTabViewItems() {
         tabView.tabViewItems.forEach { tabView.removeTabViewItem($0) }
+    }
+}
+
+extension TabViewController: NSTabViewDelegate {
+    func tabView(_ tabView: NSTabView, didSelect tabViewItem: NSTabViewItem?) {
+        guard let tabViewItem else { return }
+        let index = tabView.indexOfTabViewItem(tabViewItem)
+        guard index >= 0, index < tabView.numberOfTabViewItems else { return }
+        guard let autosaveName else { return }
+        UserDefaults.standard.set(index, forKey: autosaveName)
     }
 }
 

@@ -6,7 +6,7 @@ import Foundation
 
 let appkitPlatforms: [Platform] = [.macOS]
 
-let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
+let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS, .macCatalyst, .watchOS]
 
 extension Package.Dependency {
     enum LocalSearchPath {
