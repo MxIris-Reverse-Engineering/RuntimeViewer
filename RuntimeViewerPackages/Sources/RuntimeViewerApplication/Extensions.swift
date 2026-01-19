@@ -8,60 +8,6 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-//extension RuntimeObjectKind {
-//    #if os(macOS)
-//    private static let iconSize: CGFloat = 18
-//    #else
-//    private static let iconSize: CGFloat = 24
-//    #endif
-//
-//    private static let iconStyle: IDEIconStyle = .simple
-//
-//    public static let cStructIcon = IDEIcon("S", color: .green, style: iconStyle, size: iconSize).image
-//    public static let cUnionIcon = IDEIcon("U", color: .green, style: iconStyle, size: iconSize).image
-//    
-//    public static let objcClassIcon = IDEIcon("C", color: .yellow, style: iconStyle, size: iconSize).image
-//    public static let objcProtocolIcon = IDEIcon("Pr", color: .purple, style: iconStyle, size: iconSize).image
-//    public static let objcCategoryIcon = IDEIcon("Ex", color: .yellow, style: iconStyle, size: iconSize).image
-//
-//    public static let swiftEnumIcon = IDEIcon("E", color: .blue, style: iconStyle, size: iconSize).image
-//    public static let swiftStructIcon = IDEIcon("S", color: .blue, style: iconStyle, size: iconSize).image
-//    public static let swiftClassIcon = IDEIcon("C", color: .blue, style: iconStyle, size: iconSize).image
-//    public static let swiftProtocolIcon = IDEIcon("Pr", color: .blue, style: iconStyle, size: iconSize).image
-//    public static let swiftExtensionIcon = IDEIcon("Ex", color: .blue, style: iconStyle, size: iconSize).image
-//    public static let swiftTypeAliasIcon = IDEIcon("T", color: .blue, style: iconStyle, size: iconSize).image
-//
-//    public var icon: NSUIImage {
-//        switch self {
-//        case .c(let kind):
-//            switch kind {
-//            case .struct: return Self.cStructIcon
-//            case .union: return Self.cUnionIcon
-//            }
-//        case .objc(.type(let kind)):
-//            switch kind {
-//            case .class: return Self.objcClassIcon
-//            case .protocol: return Self.objcProtocolIcon
-//            }
-//        case .objc(.category(.class)):
-//            return Self.objcCategoryIcon
-//        case .swift(.type(let kind)):
-//            switch kind {
-//            case .enum: return Self.swiftEnumIcon
-//            case .struct: return Self.swiftStructIcon
-//            case .class: return Self.swiftClassIcon
-//            case .protocol: return Self.swiftProtocolIcon
-//            case .typeAlias: return Self.swiftTypeAliasIcon
-//            }
-//        case .swift(.extension(_)),
-//             .swift(.conformance(_)):
-//            return Self.swiftExtensionIcon
-//        default:
-//            fatalError()
-//        }
-//    }
-//}
-
 extension RuntimeObjectKind {
 
     #if os(macOS)
@@ -79,7 +25,6 @@ extension RuntimeObjectKind {
         let size: CGFloat
     }
 
-//    @MainActor
     private static var iconCache: [IconCacheKey: NSUIImage] = [:]
 
     private var iconSpec: (text: String, color: IDEIconColor) {
@@ -117,7 +62,6 @@ extension RuntimeObjectKind {
         }
     }
 
-//    @MainActor
     public func icon(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         let spec = self.iconSpec
         
@@ -144,7 +88,6 @@ extension RuntimeObjectKind {
         return image
     }
 
-//    @MainActor
     public var icon: NSUIImage {
         return icon()
     }

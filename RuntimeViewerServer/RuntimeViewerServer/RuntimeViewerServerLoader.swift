@@ -3,9 +3,11 @@ private import OSLog
 private import RuntimeViewerCore
 private import RuntimeViewerCommunication
 
-#if os(macOS)
+#if os(macOS) || targetEnvironment(macCatalyst)
 private import LaunchServicesPrivate
-#else
+#endif
+
+#if canImport(UIKit)
 private import UIKit.UIDevice
 #endif
 
@@ -49,7 +51,7 @@ enum RuntimeViewerServerLoader {
         Task {
             do {
                 logger.info("Will Launch")
-                #if os(macOS)
+                #if os(macOS) || targetEnvironment(macCatalyst)
                 if LSBundleProxy.forCurrentProcess().isSandboxed {
                     runtimeEngine = try await RuntimeEngine(source: .localSocketServer(name: processName, identifier: .init(rawValue: identifier)))
                 } else {
@@ -67,7 +69,7 @@ enum RuntimeViewerServerLoader {
     }
 }
 
-#if os(macOS)
+#if os(macOS) || targetEnvironment(macCatalyst)
 extension LSBundleProxy {
     fileprivate var isSandboxed: Bool {
         guard let entitlements = entitlements else { return false }
