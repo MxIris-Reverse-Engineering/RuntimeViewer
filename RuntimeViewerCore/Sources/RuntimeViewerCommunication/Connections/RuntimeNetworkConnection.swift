@@ -53,13 +53,13 @@ import Combine
 final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
     let id = UUID()
 
-    private let stateSubject = CurrentValueSubject<ConnectionState, Never>(.connecting)
+    private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
-    var statePublisher: AnyPublisher<ConnectionState, Never> {
+    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
         stateSubject.eraseToAnyPublisher()
     }
 
-    var state: ConnectionState {
+    var state: RuntimeConnectionState {
         stateSubject.value
     }
 
@@ -124,7 +124,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         Self.logger.info("Connection stopped")
     }
 
-    func stop(with error: ConnectionError) {
+    func stop(with error: RuntimeConnectionError) {
         guard isStarted else { return }
         isStarted = false
 

@@ -1,3 +1,5 @@
+#if os(macOS)
+
 public import Foundation
 
 public struct OpenApplicationRequest: Codable, RuntimeRequest {
@@ -11,3 +13,5 @@ public struct OpenApplicationRequest: Codable, RuntimeRequest {
         self.url = url
     }
 }
+
+#endif

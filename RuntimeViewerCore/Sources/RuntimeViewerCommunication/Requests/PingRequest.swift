@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 import Version
 
@@ -8,3 +10,5 @@ public struct PingRequest: Codable, RuntimeRequest {
 
     public init() {}
 }
+
+#endif

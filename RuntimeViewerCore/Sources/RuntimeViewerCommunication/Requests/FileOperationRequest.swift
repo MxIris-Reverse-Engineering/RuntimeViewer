@@ -1,3 +1,5 @@
+#if os(macOS)
+
 public import Foundation
 
 public enum FileOperation: Codable {
@@ -19,3 +21,5 @@ public struct FileOperationRequest: Codable, RuntimeRequest {
         self.operation = operation
     }
 }
+
+#endif

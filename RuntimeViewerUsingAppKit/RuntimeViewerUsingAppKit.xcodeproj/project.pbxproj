@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E901138F2F1E04440059745A /* RuntimeViewerServer.framework in Embed Server Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -89,6 +90,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		E901138B2F1E042E0059745A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = E978F9182F1BBB38004C09B4;
+			remoteInfo = RuntimeViewerServer;
+		};
 		E98BEF562F1CBEAF0041DB20 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
@@ -120,6 +128,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		E901138E2F1E043E0059745A /* Embed Server Framework */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				E901138F2F1E04440059745A /* RuntimeViewerServer.framework in Embed Server Framework */,
+			);
+			name = "Embed Server Framework";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -580,10 +599,12 @@
 				E9F6CD052D9A7B1700DBFB50 /* Embed LaunchDaemon */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */,
+				E901138E2F1E043E0059745A /* Embed Server Framework */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E901138C2F1E042E0059745A /* PBXTargetDependency */,
 				E98BEF572F1CBEAF0041DB20 /* PBXTargetDependency */,
 			);
 			name = RuntimeViewerUsingAppKit;
@@ -931,6 +952,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		E901138C2F1E042E0059745A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = RuntimeViewerServer;
+			targetProxy = E901138B2F1E042E0059745A /* PBXContainerItemProxy */;
+		};
 		E98BEF572F1CBEAF0041DB20 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = E9EC5BC42F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */;

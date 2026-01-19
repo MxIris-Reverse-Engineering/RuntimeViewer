@@ -26,7 +26,7 @@ extension RuntimeEngine {
         case connected
 
         /// The engine has been disconnected from the remote source.
-        case disconnected(error: ConnectionError?)
+        case disconnected(error: RuntimeConnectionError?)
 
         /// Returns `true` if the engine is ready to process requests.
         public var isReady: Bool {
@@ -163,7 +163,7 @@ public actor RuntimeEngine: Loggable {
     }
 
     /// Handles connection state changes and updates the engine state.
-    private func handleConnectionStateChange(_ connectionState: ConnectionState) {
+    private func handleConnectionStateChange(_ connectionState: RuntimeConnectionState) {
         switch connectionState {
         case .connecting:
             stateSubject.send(.connecting)

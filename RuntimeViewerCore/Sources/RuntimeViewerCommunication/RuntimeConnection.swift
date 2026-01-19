@@ -49,10 +49,10 @@ public protocol RuntimeConnection: Sendable {
     /// Publisher that emits connection state changes.
     ///
     /// Subscribe to this publisher to observe connection lifecycle events.
-    var statePublisher: AnyPublisher<ConnectionState, Never> { get }
+    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> { get }
 
     /// The current connection state.
-    var state: ConnectionState { get }
+    var state: RuntimeConnectionState { get }
 
     /// Stops the connection and releases resources.
     ///
