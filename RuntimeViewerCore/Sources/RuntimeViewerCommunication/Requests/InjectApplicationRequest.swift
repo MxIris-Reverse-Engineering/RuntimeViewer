@@ -1,3 +1,5 @@
+#if os(macOS)
+
 public import Foundation
 
 public struct InjectApplicationRequest: Codable, RuntimeRequest {
@@ -14,3 +16,5 @@ public struct InjectApplicationRequest: Codable, RuntimeRequest {
         self.dylibURL = dylibURL
     }
 }
+
+#endif

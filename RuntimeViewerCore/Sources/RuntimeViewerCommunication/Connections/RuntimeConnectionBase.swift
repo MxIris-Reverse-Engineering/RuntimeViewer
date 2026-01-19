@@ -29,11 +29,11 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
 
     // MARK: - RuntimeConnection State Properties
 
-    var statePublisher: AnyPublisher<ConnectionState, Never> {
+    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
         underlyingConnection?.statePublisher ?? Just(.disconnected(error: nil)).eraseToAnyPublisher()
     }
 
-    var state: ConnectionState {
+    var state: RuntimeConnectionState {
         underlyingConnection?.state ?? .disconnected(error: nil)
     }
 
@@ -113,10 +113,10 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
 /// to delegate message handling to different connection implementations.
 protocol RuntimeUnderlyingConnection: Sendable, Loggable {
     /// Publisher that emits connection state changes.
-    var statePublisher: AnyPublisher<ConnectionState, Never> { get }
+    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> { get }
 
     /// The current connection state.
-    var state: ConnectionState { get }
+    var state: RuntimeConnectionState { get }
 
     /// Stops the connection and releases resources.
     func stop()
@@ -147,16 +147,3 @@ struct NullPayload: Codable, Sendable {
     static let null = NullPayload()
 }
 
-// MARK: - RuntimeConnectionError
-
-/// Common errors for RuntimeConnection implementations.
-enum RuntimeConnectionError: Error, LocalizedError, Sendable {
-    case notConnected
-
-    var errorDescription: String? {
-        switch self {
-        case .notConnected:
-            return "Not connected"
-        }
-    }
-}

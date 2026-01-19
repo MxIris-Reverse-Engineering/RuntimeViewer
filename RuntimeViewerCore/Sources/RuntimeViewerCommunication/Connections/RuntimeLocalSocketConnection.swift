@@ -100,13 +100,13 @@ import Combine
 final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecked Sendable {
     let id = UUID()
 
-    private let stateSubject = CurrentValueSubject<ConnectionState, Never>(.connecting)
+    private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
-    var statePublisher: AnyPublisher<ConnectionState, Never> {
+    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
         stateSubject.eraseToAnyPublisher()
     }
 
-    var state: ConnectionState {
+    var state: RuntimeConnectionState {
         stateSubject.value
     }
 
@@ -190,7 +190,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         Self.logger.info("Connection stopped")
     }
 
-    func stop(with error: ConnectionError) {
+    func stop(with error: RuntimeConnectionError) {
         guard isStarted else { return }
         isStarted = false
 

@@ -4,7 +4,7 @@ import Foundation
 import FoundationToolbox
 import OSLog
 import Combine
-@preconcurrency import SwiftyXPC
+@preconcurrency public import SwiftyXPC
 
 // MARK: - RuntimeXPCConnection
 
@@ -62,13 +62,13 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable, Loggable {
 
     fileprivate var connection: SwiftyXPC.XPCConnection?
 
-    fileprivate let stateSubject = CurrentValueSubject<ConnectionState, Never>(.connecting)
+    fileprivate let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
-    var statePublisher: AnyPublisher<ConnectionState, Never> {
+    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
         stateSubject.eraseToAnyPublisher()
     }
 
-    var state: ConnectionState {
+    var state: RuntimeConnectionState {
         stateSubject.value
     }
 
@@ -298,6 +298,21 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
         self.connection = connection
         stateSubject.send(.connected)
         Self.logger.info("Ping client successfully")
+    }
+}
+
+extension SwiftyXPC.XPCConnection {
+    @discardableResult
+    public func sendMessage<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
+        try await sendMessage(name: type(of: request).identifier, request: request)
+    }
+}
+
+extension SwiftyXPC.XPCListener {
+    public func setMessageHandler<Request: RuntimeRequest>(requestType: Request.Type = Request.self, handler: @escaping (XPCConnection, Request) async throws -> Request.Response) {
+        setMessageHandler(name: requestType.identifier) { (connection: XPCConnection, request: Request) -> Request.Response in
+            try await handler(connection, request)
+        }
     }
 }
 

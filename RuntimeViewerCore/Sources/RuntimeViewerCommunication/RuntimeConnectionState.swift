@@ -1,12 +1,12 @@
 public import Foundation
 
-// MARK: - ConnectionState
+// MARK: - RuntimeConnectionState
 
 /// Represents the current state of a connection.
 ///
 /// This enum provides a unified way to track connection lifecycle across
 /// all connection types (XPC, Network, LocalSocket, Stdio, DirectTCP).
-public enum ConnectionState: Sendable, Equatable {
+public enum RuntimeConnectionState: Sendable, Equatable {
     /// The connection is being established.
     case connecting
 
@@ -14,7 +14,7 @@ public enum ConnectionState: Sendable, Equatable {
     case connected
 
     /// The connection has been terminated, either normally or due to an error.
-    case disconnected(error: ConnectionError?)
+    case disconnected(error: RuntimeConnectionError?)
 
     /// Returns `true` if the connection is currently connected and ready.
     public var isConnected: Bool {
@@ -35,13 +35,13 @@ public enum ConnectionState: Sendable, Equatable {
     }
 }
 
-// MARK: - ConnectionError
+// MARK: - RuntimeConnectionError
 
 /// Errors that can occur during connection operations.
 ///
 /// This provides a unified error type that can represent errors from
 /// any underlying transport (socket, network, XPC, etc.).
-public enum ConnectionError: Error, Sendable, Equatable, LocalizedError {
+public enum RuntimeConnectionError: Error, Sendable, Equatable, LocalizedError {
     /// An error occurred in the local socket connection.
     case socketError(String)
 
@@ -60,6 +60,8 @@ public enum ConnectionError: Error, Sendable, Equatable, LocalizedError {
     /// An unknown or unexpected error occurred.
     case unknown(String)
 
+    case notConnected
+    
     public var errorDescription: String? {
         switch self {
         case .socketError(let message):
@@ -74,6 +76,8 @@ public enum ConnectionError: Error, Sendable, Equatable, LocalizedError {
             return "Connection closed by peer"
         case .unknown(let message):
             return "Unknown error: \(message)"
+        case .notConnected:
+            return "Not connected"
         }
     }
 }
