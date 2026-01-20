@@ -1,10 +1,9 @@
 import AppKit
-import RuntimeViewerCore
 import UniformTypeIdentifiers
+import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
-import Dependencies
 
 enum MessageError: LocalizedError {
     case message(String)
