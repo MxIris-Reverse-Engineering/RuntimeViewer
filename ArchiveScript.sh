@@ -19,7 +19,15 @@ catalyst_helper_export_path=${project_path}/RuntimeViewerUsingAppKit
 catalyst_helper_app_path=${catalyst_helper_export_path}/RuntimeViewerCatalystHelper.app
 catalyst_helper_archive_path=${build_path}/RuntimeViewerCatalystHelper.xcarchive
 
-notary_profile_name="notarytool-password" 
+notary_profile_name="notarytool-password"
+
+# Set build number to current date and time (format: YYYYMMDD.HH.MM)
+build_number=$(date +"%Y%m%d.%H.%M")
+
+echo '///-----------'
+echo '/// Build Number: '${build_number}
+echo '///-----------'
+echo ''
 
 echo '///-----------'
 echo '/// Archiving RuntimeViewerCatalystHelper: '${development_mode}
@@ -31,7 +39,8 @@ archive \
 -scheme 'RuntimeViewerCatalystHelper' \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS,variant=Mac Catalyst' \
--archivePath ${catalyst_helper_archive_path} | xcbeautify || exit
+-archivePath ${catalyst_helper_archive_path} \
+CURRENT_PROJECT_VERSION=${build_number} | xcbeautify || exit
 
 if [ -d "${catalyst_helper_app_path}" ]; then
     rm -rf "${catalyst_helper_app_path}"
@@ -64,7 +73,7 @@ archive \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS' \
 -archivePath ${build_path}/${project_name}.xcarchive \
-| xcbeautify || exit
+CURRENT_PROJECT_VERSION=${build_number} | xcbeautify || exit
 
 echo '///------------'
 echo '/// '${scheme_name}' Archive Complete'
