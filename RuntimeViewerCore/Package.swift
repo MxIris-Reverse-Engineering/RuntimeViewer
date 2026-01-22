@@ -88,8 +88,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-//                from: "0.6.0"
-                branch: "feature/in-process"
+                branch: "main"
             )
         ),
         .package(
