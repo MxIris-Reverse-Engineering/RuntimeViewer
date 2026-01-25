@@ -27,6 +27,10 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
         public let runtimeObjectsForOpenQuickly: Driver<[SidebarRuntimeObjectCellViewModel]>
         public let selectRuntimeObject: Signal<SidebarRuntimeObjectCellViewModel>
     }
+    
+    override func buildRuntimeObjects() async throws -> [RuntimeObject] {
+        try await runtimeEngine.objects(in: imagePath)
+    }
 
     override func reloadData() async throws {
         try await super.reloadData()

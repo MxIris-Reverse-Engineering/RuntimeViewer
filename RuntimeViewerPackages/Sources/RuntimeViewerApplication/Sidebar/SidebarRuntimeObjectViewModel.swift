@@ -165,9 +165,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         }
     }
 
-    func buildRuntimeObjects() async throws -> [RuntimeObject] {
-        try await runtimeEngine.objects(in: imagePath)
-    }
+    func buildRuntimeObjects() async throws -> [RuntimeObject] { [] }
 
     private func tryLoadImage() {
         Task { @MainActor in
