@@ -20,8 +20,7 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     }
 
     override func buildRuntimeObjects() async throws -> [RuntimeObject] {
-        _ = try await super.buildRuntimeObjects()
-        return appDefaults.objectBookmarks.filter { $0.source == appServices.runtimeEngine.source && $0.object.imagePath == imagePath }.map { $0.object }
+        appDefaults.objectBookmarks.filter { $0.source == appServices.runtimeEngine.source && $0.object.imagePath == imagePath }.map { $0.object }
     }
 
     @MemberwiseInit(.public)

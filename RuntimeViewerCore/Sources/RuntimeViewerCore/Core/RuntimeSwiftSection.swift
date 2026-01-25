@@ -28,7 +28,9 @@ actor RuntimeSwiftSection: Loggable {
 
     private let machO: MachOImage
 
-    private let builder: SwiftInterfaceBuilder<MachOImage>
+    private var indexer: SwiftInterfaceIndexer<MachOImage>
+
+    private var printer: SwiftInterfacePrinter<MachOImage>
 
     private var interfaceByName: OrderedDictionary<RuntimeObject, RuntimeObjectInterface> = [:]
 
@@ -65,15 +67,16 @@ actor RuntimeSwiftSection: Loggable {
         }
         self.imagePath = imagePath
         self.machO = machO
-        Self.logger.debug("Creating SwiftInterfaceBuilder")
-        self.builder = try .init(configuration: .init(indexConfiguration: .init(showCImportedTypes: false), printConfiguration: .init()), in: machO)
-        try await builder.prepare()
+        Self.logger.debug("Creating Swift Interface Components")
+        self.indexer = .init(configuration: .init(showCImportedTypes: false), eventHandlers: [], in: machO)
+        self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
+        try await indexer.prepare()
         Self.logger.info("Swift section initialized successfully")
     }
 
     func updateConfiguration(using options: SwiftGenerationOptions) async throws {
         logger.debug("Updating Swift section configuration")
-        var configuration = builder.configuration
+        var configuration = SwiftInterfaceBuilderConfiguration(indexConfiguration: indexer.configuration, printConfiguration: printer.configuration)
         configuration.printConfiguration.printStrippedSymbolicItem = options.printStrippedSymbolicItem
         configuration.printConfiguration.emitOffsetComments = options.emitOffsetComments
         configuration.printConfiguration.printTypeLayout = options.printTypeLayout
@@ -82,16 +85,18 @@ actor RuntimeSwiftSection: Loggable {
     }
 
     private func updateConfiguration(_ newConfiguration: SwiftInterfaceBuilderConfiguration) async throws {
-        let oldConfiguration = builder.configuration
-        builder.configuration = newConfiguration
+        let oldIndexConfiguration = indexer.configuration
+        try await indexer.updateConfiguration(newConfiguration.indexConfiguration)
 
-        if newConfiguration.indexConfiguration.showCImportedTypes != oldConfiguration.indexConfiguration.showCImportedTypes {
+        let oldPrintConfiguration = printer.configuration
+        printer.updateConfiguration(newConfiguration.printConfiguration)
+
+        if newConfiguration.indexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
             logger.debug("Index configuration changed, re-preparing builder")
-            try await builder.prepare()
             nameToInterfaceDefinitionName.removeAll()
         }
 
-        if newConfiguration.printConfiguration != oldConfiguration.printConfiguration {
+        if newConfiguration.printConfiguration != oldPrintConfiguration {
             logger.debug("Print configuration changed, clearing interface cache")
             interfaceByName.removeAll()
         }
@@ -99,12 +104,12 @@ actor RuntimeSwiftSection: Loggable {
 
     func allObjects() async throws -> [RuntimeObject] {
         logger.debug("Getting all Swift objects")
-        let rootTypeName = try builder.indexer.rootTypeDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
-        let rootProtocolName = try builder.indexer.rootProtocolDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
-        let typeExtensionName = try builder.indexer.typeExtensionDefinitions.filter { $0.key.typeName.map { builder.indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
-        let protocolExtensionName = try builder.indexer.protocolExtensionDefinitions.filter { $0.key.protocolName.map { builder.indexer.allProtocolDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .protocolExtension($0.key)) }
-        let typeAliasExtensionName = try builder.indexer.typeAliasExtensionDefinitions.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeAliasExtension($0.key)) }
-        let conformanceExtensionName = try builder.indexer.conformanceExtensionDefinitions.filter { $0.key.typeName.map { builder.indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
+        let rootTypeName = try indexer.rootTypeDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
+        let rootProtocolName = try indexer.rootProtocolDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
+        let typeExtensionName = try indexer.typeExtensionDefinitions.filter { $0.key.typeName.map { indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
+        let protocolExtensionName = try indexer.protocolExtensionDefinitions.filter { $0.key.protocolName.map { indexer.allProtocolDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .protocolExtension($0.key)) }
+        let typeAliasExtensionName = try indexer.typeAliasExtensionDefinitions.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeAliasExtension($0.key)) }
+        let conformanceExtensionName = try indexer.conformanceExtensionDefinitions.filter { $0.key.typeName.map { indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
         let allObjects = rootTypeName + rootProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName
         logger.debug("Found \(allObjects.count, privacy: .public) Swift objects: \(rootTypeName.count, privacy: .public) types, \(rootProtocolName.count, privacy: .public) protocols, \(typeExtensionName.count, privacy: .public) type extensions")
         return allObjects
@@ -118,7 +123,7 @@ actor RuntimeSwiftSection: Loggable {
         nameToInterfaceDefinitionName[runtimeObjectName] = definitionName
         return runtimeObjectName
     }
-    
+
     private func makeRuntimeObject(for protocolDefintion: ProtocolDefinition, isChild: Bool) throws -> RuntimeObject {
         let mangledName = try mangleAsString(protocolDefintion.protocolName.node)
         let runtimeObjectName: RuntimeObject
@@ -161,61 +166,61 @@ actor RuntimeSwiftSection: Loggable {
         var newInterfaceString: SemanticString = ""
         switch interfaceDefinitionName {
         case .rootType(let rootTypeName):
-            guard let typeDefinition = builder.indexer.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(builder.printTypeDefinition(typeDefinition))
-            if let typeExtensionDefinitions = builder.indexer.typeExtensionDefinitions[rootTypeName.extensionName] {
+            guard let typeDefinition = indexer.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(printer.printTypeDefinition(typeDefinition))
+            if let typeExtensionDefinitions = indexer.typeExtensionDefinitions[rootTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
-            if let conformanceExtensionDefinitions = builder.indexer.conformanceExtensionDefinitions[rootTypeName.extensionName] {
+            if let conformanceExtensionDefinitions = indexer.conformanceExtensionDefinitions[rootTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .childType(let childTypeName):
-            guard let typeDefinition = builder.indexer.allTypeDefinitions[childTypeName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(builder.printTypeDefinition(typeDefinition))
-            if let typeExtensionDefinitions = builder.indexer.typeExtensionDefinitions[childTypeName.extensionName] {
+            guard let typeDefinition = indexer.allTypeDefinitions[childTypeName] else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(printer.printTypeDefinition(typeDefinition))
+            if let typeExtensionDefinitions = indexer.typeExtensionDefinitions[childTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
-            if let conformanceExtensionDefinitions = builder.indexer.conformanceExtensionDefinitions[childTypeName.extensionName] {
+            if let conformanceExtensionDefinitions = indexer.conformanceExtensionDefinitions[childTypeName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .rootProtocol(let rootProtocolName):
-            guard let definition = builder.indexer.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(builder.printProtocolDefinition(definition))
+            guard let definition = indexer.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(printer.printProtocolDefinition(definition))
             if !definition.defaultImplementationExtensions.isEmpty {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
-            if let protocolExtensionDefinitions = builder.indexer.protocolExtensionDefinitions[rootProtocolName.extensionName] {
+            if let protocolExtensionDefinitions = indexer.protocolExtensionDefinitions[rootProtocolName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .childProtocol(let childProtocolName):
-            guard let definition = builder.indexer.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(builder.printProtocolDefinition(definition))
+            guard let definition = indexer.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(printer.printProtocolDefinition(definition))
             if !definition.defaultImplementationExtensions.isEmpty {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
-            if let protocolExtensionDefinitions = builder.indexer.protocolExtensionDefinitions[childProtocolName.extensionName] {
+            if let protocolExtensionDefinitions = indexer.protocolExtensionDefinitions[childProtocolName.extensionName] {
                 newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+                try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
             }
         case .typeExtension(let typeExtensionName):
-            guard let definitions = builder.indexer.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            guard let definitions = indexer.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(definitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .protocolExtension(let protocolExtensionName):
-            guard let definitions = builder.indexer.protocolExtensionDefinitions[protocolExtensionName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            guard let definitions = indexer.protocolExtensionDefinitions[protocolExtensionName] else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(definitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .typeAliasExtension(let typeAliasExtensionName):
-            guard let definitions = builder.indexer.typeAliasExtensionDefinitions[typeAliasExtensionName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            guard let definitions = indexer.typeAliasExtensionDefinitions[typeAliasExtensionName] else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(definitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         case .conformance(let conformanceExtensionName):
-            guard let definitions = builder.indexer.conformanceExtensionDefinitions[conformanceExtensionName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(definitions.box.asyncMap { try await builder.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            guard let definitions = indexer.conformanceExtensionDefinitions[conformanceExtensionName] else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(definitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
         }
 
         let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
@@ -228,7 +233,7 @@ actor RuntimeSwiftSection: Loggable {
         logger.debug("Getting Swift class hierarchy for: \(object.name, privacy: .public)")
         guard case .swift(.type(.class)) = object.kind,
               let classDefinitionName = nameToInterfaceDefinitionName[object]?.typeName,
-              let classDefinition = builder.indexer.allTypeDefinitions[classDefinitionName],
+              let classDefinition = indexer.allTypeDefinitions[classDefinitionName],
               case .class(let `class`) = classDefinition.type
         else {
             logger.debug("No class hierarchy found")
