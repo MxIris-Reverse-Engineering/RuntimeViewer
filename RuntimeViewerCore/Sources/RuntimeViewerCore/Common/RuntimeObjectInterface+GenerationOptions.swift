@@ -10,23 +10,23 @@ extension RuntimeObjectInterface {
         @Default(ifMissing: SwiftGenerationOptions())
         public var swiftInterfaceOptions: SwiftGenerationOptions
 
-        @Default(ifMissing: TransformerConfiguration())
-        public var transformerConfiguration: TransformerConfiguration
+        @Default(ifMissing: Transformer.Configuration())
+        public var transformer: Transformer.Configuration
 
         public init() {
             self.objcHeaderOptions = .init()
             self.swiftInterfaceOptions = .init()
-            self.transformerConfiguration = .init()
+            self.transformer = .init()
         }
 
         public init(
             objcHeaderOptions: ObjCGenerationOptions,
             swiftInterfaceOptions: SwiftGenerationOptions,
-            transformerConfiguration: TransformerConfiguration = .init()
+            transformer: Transformer.Configuration = .init()
         ) {
             self.objcHeaderOptions = objcHeaderOptions
             self.swiftInterfaceOptions = swiftInterfaceOptions
-            self.transformerConfiguration = transformerConfiguration
+            self.transformer = transformer
         }
     }
 }

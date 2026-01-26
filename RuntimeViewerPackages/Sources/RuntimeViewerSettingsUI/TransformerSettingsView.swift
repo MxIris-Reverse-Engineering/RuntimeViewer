@@ -6,56 +6,55 @@ import RuntimeViewerCore
 
 struct TransformerSettingsView: SettingsContent {
     @AppSettings(\.transformer)
-    var settings
+    var config
 
     var body: some SettingsContent {
         SettingsGroup("Interface Transformer", .navigation) {
             SettingsForm {
-                // MARK: - C Type Transformer Section
+                // MARK: - C Type Module
                 Section {
-                    Toggle("Enable C Type Replacement", isOn: $settings.cType.isEnabled)
+                    Toggle("Enable C Type Replacement", isOn: $config.cType.isEnabled)
                 } footer: {
                     Text("Replace C primitive types with custom types in ObjC interfaces.")
                 }
 
-                if settings.cType.isEnabled {
+                if config.cType.isEnabled {
                     Section {
-                        CTypeReplacementEditor(config: $settings.cType)
+                        CTypeEditor(module: $config.cType)
                     } header: {
                         Text("Type Replacements")
                     } footer: {
-                        Text("Configure which C types to replace. Leave empty to use original type.")
+                        Text("Configure which C types to replace. Leave empty to use original.")
                     }
 
                     Section {
-                        PresetButtons(config: $settings.cType)
+                        CTypePresets(module: $config.cType)
                     } header: {
                         Text("Presets")
                     }
                 }
 
-                Divider()
-                    .padding(.vertical, 8)
+                Divider().padding(.vertical, 8)
 
-                // MARK: - Swift Field Offset Transformer Section
+                // MARK: - Field Offset Module
                 Section {
-                    Toggle("Enable Field Offset Format", isOn: $settings.swiftFieldOffset.isEnabled)
+                    Toggle("Enable Field Offset Format", isOn: $config.fieldOffset.isEnabled)
                 } footer: {
-                    Text("Customize the format of field offset comments in Swift interfaces.")
+                    Text("Customize field offset comment format in Swift interfaces.")
                 }
 
-                if settings.swiftFieldOffset.isEnabled {
+                if config.fieldOffset.isEnabled {
                     Section {
-                        SwiftFieldOffsetEditor(config: $settings.swiftFieldOffset)
+                        FieldOffsetEditor(module: $config.fieldOffset)
                     } header: {
                         Text("Output Format")
                     } footer: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Available tokens:")
-                            Text("• ${startOffset} - Field start offset")
-                                .font(.caption)
-                            Text("• ${endOffset} - Field end offset")
-                                .font(.caption)
+                            ForEach(Transformer.FieldOffset.Token.allCases, id: \.self) { token in
+                                Text("• \(token.placeholder) - \(token.displayName)")
+                                    .font(.caption)
+                            }
                         }
                     }
                 }
@@ -66,14 +65,14 @@ struct TransformerSettingsView: SettingsContent {
     }
 }
 
-// MARK: - C Type Replacement Editor
+// MARK: - C Type Editor
 
-private struct CTypeReplacementEditor: View {
-    @Binding var config: CTypeTransformerConfig
+private struct CTypeEditor: View {
+    @Binding var module: Transformer.CType
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(CTypeTransformerConfig.Pattern.allCases, id: \.self) { pattern in
+            ForEach(Transformer.CType.Pattern.allCases, id: \.self) { pattern in
                 HStack {
                     Text(pattern.displayName)
                         .font(.system(.body, design: .monospaced))
@@ -86,12 +85,12 @@ private struct CTypeReplacementEditor: View {
                     TextField(
                         "Original",
                         text: Binding(
-                            get: { config.replacements[pattern] ?? "" },
+                            get: { module.replacements[pattern] ?? "" },
                             set: { newValue in
                                 if newValue.isEmpty {
-                                    config.replacements.removeValue(forKey: pattern)
+                                    module.replacements.removeValue(forKey: pattern)
                                 } else {
-                                    config.replacements[pattern] = newValue
+                                    module.replacements[pattern] = newValue
                                 }
                             }
                         )
@@ -105,40 +104,37 @@ private struct CTypeReplacementEditor: View {
     }
 }
 
-// MARK: - Preset Buttons
+// MARK: - C Type Presets
 
-private struct PresetButtons: View {
-    @Binding var config: CTypeTransformerConfig
+private struct CTypePresets: View {
+    @Binding var module: Transformer.CType
 
     var body: some View {
         HStack(spacing: 12) {
             Button("stdint.h") {
-                config.replacements = CTypeTransformerConfig.stdintPreset
+                module.replacements = Transformer.CType.Presets.stdint
             }
             .help("uint32_t, int64_t, etc.")
 
             Button("Foundation") {
-                config.replacements = CTypeTransformerConfig.foundationPreset
+                module.replacements = Transformer.CType.Presets.foundation
             }
             .help("CGFloat, NSInteger, etc.")
 
             Spacer()
 
             Button("Clear All") {
-                config.replacements.removeAll()
+                module.replacements.removeAll()
             }
             .foregroundStyle(.red)
         }
     }
 }
 
-// MARK: - Swift Field Offset Editor
+// MARK: - Field Offset Editor
 
-private struct SwiftFieldOffsetEditor: View {
-    @Binding var config: SwiftFieldOffsetTransformerConfig
-
-    @State private var previewStartOffset = 0
-    @State private var previewEndOffset = 8
+private struct FieldOffsetEditor: View {
+    @Binding var module: Transformer.FieldOffset
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -148,16 +144,16 @@ private struct SwiftFieldOffsetEditor: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                TextField("Template", text: $config.template)
+                TextField("Template", text: $module.template)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
             }
 
-            // Preset templates
+            // Preset buttons
             HStack(spacing: 8) {
-                ForEach(presetTemplates, id: \.0) { name, template in
-                    Button(name) {
-                        config.template = template
+                ForEach(Transformer.FieldOffset.Templates.all, id: \.name) { preset in
+                    Button(preset.name) {
+                        module.template = preset.template
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
@@ -173,7 +169,7 @@ private struct SwiftFieldOffsetEditor: View {
                 HStack {
                     Text("// ")
                         .foregroundStyle(.secondary)
-                    Text(config.render(startOffset: previewStartOffset, endOffset: previewEndOffset))
+                    Text(module.render(start: 0, end: 8))
                 }
                 .font(.system(.body, design: .monospaced))
                 .padding(8)
@@ -181,14 +177,5 @@ private struct SwiftFieldOffsetEditor: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
-    }
-
-    private var presetTemplates: [(String, String)] {
-        [
-            ("Range", SwiftFieldOffsetTransformerConfig.rangeTemplate),
-            ("Labeled", SwiftFieldOffsetTransformerConfig.labeledTemplate),
-            ("Interval", SwiftFieldOffsetTransformerConfig.intervalTemplate),
-            ("Start Only", SwiftFieldOffsetTransformerConfig.startOnlyTemplate),
-        ]
     }
 }

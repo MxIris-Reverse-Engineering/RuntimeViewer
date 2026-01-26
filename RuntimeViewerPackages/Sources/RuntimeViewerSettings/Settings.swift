@@ -18,7 +18,7 @@ public final class Settings: Codable, Loggable {
         didSet { scheduleAutoSave() }
     }
 
-    public var transformer: Transformer = .init() {
+    public var transformer: RuntimeViewerCore.Transformer.Configuration = .init() {
         didSet { scheduleAutoSave() }
     }
 
@@ -34,7 +34,7 @@ public final class Settings: Codable, Loggable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.general = try container.decodeIfPresent(General.self, forKey: .general) ?? .init()
         self.notifications = try container.decodeIfPresent(Notifications.self, forKey: .notifications) ?? .init()
-        self.transformer = try container.decodeIfPresent(Transformer.self, forKey: .transformer) ?? .init()
+        self.transformer = try container.decodeIfPresent(RuntimeViewerCore.Transformer.Configuration.self, forKey: .transformer) ?? .init()
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -108,34 +108,11 @@ extension Settings {
         public var showOnDisconnect: Bool = true
     }
 
-    /// Transformer module configurations.
-    ///
-    /// Users configure predefined transformer modules here.
-    /// The configuration is then converted to `TransformerConfiguration` for use with RuntimeEngine.
-    public struct Transformer: Codable {
-        /// C type replacement configuration.
-        public var cType: CTypeTransformerConfig = CTypeTransformerConfig()
-
-        /// Swift field offset comment format configuration.
-        public var swiftFieldOffset: SwiftFieldOffsetTransformerConfig = SwiftFieldOffsetTransformerConfig()
-
-        public init(
-            cType: CTypeTransformerConfig = CTypeTransformerConfig(),
-            swiftFieldOffset: SwiftFieldOffsetTransformerConfig = SwiftFieldOffsetTransformerConfig()
-        ) {
-            self.cType = cType
-            self.swiftFieldOffset = swiftFieldOffset
-        }
-
-        /// Converts to TransformerConfiguration for use with RuntimeEngine.
-        public func toConfiguration() -> TransformerConfiguration {
-            TransformerConfiguration(
-                cType: cType,
-                swiftFieldOffset: swiftFieldOffset
-            )
-        }
-    }
 }
+
+// Use Transformer.Configuration directly from RuntimeViewerCore
+// Type alias for convenience
+public typealias TransformerSettings = RuntimeViewerCore.Transformer.Configuration
 
 protocol SettingsStorageStrategy {
     func save(_ data: Data) async throws
