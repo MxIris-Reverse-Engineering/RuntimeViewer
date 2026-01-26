@@ -2,6 +2,7 @@ import Foundation
 import FoundationToolbox
 import Observation
 import Dependencies
+import RuntimeViewerCore
 
 @Observable
 public final class Settings: Codable, Loggable {
@@ -17,6 +18,10 @@ public final class Settings: Codable, Loggable {
         didSet { scheduleAutoSave() }
     }
 
+    public var transformer: Transformer = .init() {
+        didSet { scheduleAutoSave() }
+    }
+
     @ObservationIgnored private var saveTask: Task<Void, Error>?
 
     fileprivate init() {
@@ -29,17 +34,20 @@ public final class Settings: Codable, Loggable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.general = try container.decodeIfPresent(General.self, forKey: .general) ?? .init()
         self.notifications = try container.decodeIfPresent(Notifications.self, forKey: .notifications) ?? .init()
+        self.transformer = try container.decodeIfPresent(Transformer.self, forKey: .transformer) ?? .init()
     }
 
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(general, forKey: .general)
         try container.encode(notifications, forKey: .notifications)
+        try container.encode(transformer, forKey: .transformer)
     }
 
     private enum CodingKeys: String, CodingKey {
         case general
         case notifications
+        case transformer
     }
 
     private func scheduleAutoSave() {
@@ -98,6 +106,36 @@ extension Settings {
 
         /// Whether to show notification when disconnected from a runtime engine
         public var showOnDisconnect: Bool = true
+    }
+
+    public struct Transformer: Codable {
+        /// Whether interface transformers are enabled
+        public var isEnabled: Bool = false
+
+        /// Whether to use predefined stdint.h type replacements
+        public var useStdintReplacements: Bool = false
+
+        /// Custom type replacement rules
+        public var customReplacements: [CTypeReplacement] = []
+
+        public init(
+            isEnabled: Bool = false,
+            useStdintReplacements: Bool = false,
+            customReplacements: [CTypeReplacement] = []
+        ) {
+            self.isEnabled = isEnabled
+            self.useStdintReplacements = useStdintReplacements
+            self.customReplacements = customReplacements
+        }
+
+        /// Converts to TransformerConfiguration for use with RuntimeEngine
+        public func toConfiguration() -> TransformerConfiguration {
+            TransformerConfiguration(
+                isEnabled: isEnabled,
+                customTypeReplacements: customReplacements,
+                useStdintReplacements: useStdintReplacements
+            )
+        }
     }
 }
 

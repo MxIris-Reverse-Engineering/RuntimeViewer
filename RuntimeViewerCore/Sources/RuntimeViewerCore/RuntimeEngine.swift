@@ -307,31 +307,57 @@ public actor RuntimeEngine: Loggable {
     }
 
     private func _interface(for name: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+        let rawInterface: RuntimeObjectInterface?
+
         switch name.kind {
         case .swift:
             let swiftSection = imageToSwiftSection[name.imagePath]
             try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions)
-            return try? await swiftSection?.interface(for: name)
+            rawInterface = try? await swiftSection?.interface(for: name)
         case .c,
              .objc:
             let objcSection = imageToObjCSection[name.imagePath]
             if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions) {
-                return interface
+                rawInterface = interface
             } else {
                 switch name.kind {
                 case .objc(.type(let kind)):
                     switch kind {
                     case .class:
-                        return try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions)
+                        rawInterface = try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions)
                     case .protocol:
-                        return try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions)
+                        rawInterface = try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions)
                     }
                 default:
-                    break
+                    rawInterface = nil
                 }
             }
-            return nil
         }
+
+        // Apply transformers if configured
+        guard let rawInterface else { return nil }
+        return applyTransformers(to: rawInterface, options: options)
+    }
+
+    /// Applies configured transformers to the given interface.
+    private func applyTransformers(
+        to interface: RuntimeObjectInterface,
+        options: RuntimeObjectInterface.GenerationOptions
+    ) -> RuntimeObjectInterface {
+        let context = TransformContext(
+            imagePath: interface.object.imagePath,
+            objectName: interface.object.name
+        )
+
+        let transformedString = options.transformerConfiguration.apply(
+            to: interface.interfaceString,
+            context: context
+        )
+
+        return RuntimeObjectInterface(
+            object: interface.object,
+            interfaceString: transformedString
+        )
     }
 
     private func _objcSection(for imagePath: String) async throws -> RuntimeObjCSection {
