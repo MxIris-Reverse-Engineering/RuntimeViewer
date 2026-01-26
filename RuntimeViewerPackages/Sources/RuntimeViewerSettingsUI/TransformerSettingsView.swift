@@ -11,30 +11,53 @@ struct TransformerSettingsView: SettingsContent {
     var body: some SettingsContent {
         SettingsGroup("Interface Transformer", .navigation) {
             SettingsForm {
+                // MARK: - C Type Transformer Section
                 Section {
-                    Toggle("Enable Interface Transformers", isOn: $settings.isEnabled)
+                    Toggle("Enable C Type Replacement", isOn: $settings.cType.isEnabled)
                 } footer: {
-                    Text("When enabled, interface output will be transformed according to the rules below.")
+                    Text("Replace C primitive types with custom types in ObjC interfaces.")
                 }
 
-                Section {
-                    Toggle("Use stdint.h Types", isOn: $settings.useStdintReplacements)
-                        .disabled(!settings.isEnabled)
-                } header: {
-                    Text("Predefined Replacements")
-                } footer: {
-                    Text("Replace C integer types with their stdint.h equivalents (e.g., unsigned int → uint32_t).")
+                if settings.cType.isEnabled {
+                    Section {
+                        CTypeReplacementEditor(config: $settings.cType)
+                    } header: {
+                        Text("Type Replacements")
+                    } footer: {
+                        Text("Configure which C types to replace. Leave empty to use original type.")
+                    }
+
+                    Section {
+                        PresetButtons(config: $settings.cType)
+                    } header: {
+                        Text("Presets")
+                    }
                 }
 
+                Divider()
+                    .padding(.vertical, 8)
+
+                // MARK: - Swift Field Offset Transformer Section
                 Section {
-                    CustomReplacementsView(
-                        replacements: $settings.customReplacements,
-                        isEnabled: settings.isEnabled
-                    )
-                } header: {
-                    Text("Custom Type Replacements")
+                    Toggle("Enable Field Offset Format", isOn: $settings.swiftFieldOffset.isEnabled)
                 } footer: {
-                    Text("Add custom type replacement rules. The pattern will be matched exactly and replaced with the specified string.")
+                    Text("Customize the format of field offset comments in Swift interfaces.")
+                }
+
+                if settings.swiftFieldOffset.isEnabled {
+                    Section {
+                        SwiftFieldOffsetEditor(config: $settings.swiftFieldOffset)
+                    } header: {
+                        Text("Output Format")
+                    } footer: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Available tokens:")
+                            Text("• ${startOffset} - Field start offset")
+                                .font(.caption)
+                            Text("• ${endOffset} - Field end offset")
+                                .font(.caption)
+                        }
+                    }
                 }
             }
         } icon: {
@@ -43,171 +66,129 @@ struct TransformerSettingsView: SettingsContent {
     }
 }
 
-// MARK: - Custom Replacements View
+// MARK: - C Type Replacement Editor
 
-private struct CustomReplacementsView: View {
-    @Binding var replacements: [CTypeReplacement]
-    let isEnabled: Bool
-
-    @State private var newPattern: String = ""
-    @State private var newReplacement: String = ""
-    @State private var showingAddSheet: Bool = false
+private struct CTypeReplacementEditor: View {
+    @Binding var config: CTypeTransformerConfig
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if replacements.isEmpty {
-                Text("No custom replacements configured.")
-                    .foregroundStyle(.secondary)
-                    .font(.callout)
-            } else {
-                ForEach(replacements) { replacement in
-                    ReplacementRow(
-                        replacement: replacement,
-                        isEnabled: isEnabled,
-                        onToggle: { toggleReplacement(replacement) },
-                        onDelete: { deleteReplacement(replacement) }
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(CTypeTransformerConfig.Pattern.allCases, id: \.self) { pattern in
+                HStack {
+                    Text(pattern.displayName)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(width: 140, alignment: .leading)
+
+                    Image(systemName: "arrow.right")
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+
+                    TextField(
+                        "Original",
+                        text: Binding(
+                            get: { config.replacements[pattern] ?? "" },
+                            set: { newValue in
+                                if newValue.isEmpty {
+                                    config.replacements.removeValue(forKey: pattern)
+                                } else {
+                                    config.replacements[pattern] = newValue
+                                }
+                            }
+                        )
                     )
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(width: 120)
                 }
             }
-
-            Button {
-                showingAddSheet = true
-            } label: {
-                Label("Add Replacement", systemImage: "plus")
-            }
-            .disabled(!isEnabled)
         }
-        .sheet(isPresented: $showingAddSheet) {
-            AddReplacementSheet(
-                pattern: $newPattern,
-                replacement: $newReplacement,
-                onAdd: addReplacement,
-                onCancel: { showingAddSheet = false }
-            )
-        }
-    }
-
-    private func toggleReplacement(_ replacement: CTypeReplacement) {
-        if let index = replacements.firstIndex(where: { $0.id == replacement.id }) {
-            var updated = replacement
-            updated.isEnabled.toggle()
-            replacements[index] = updated
-        }
-    }
-
-    private func deleteReplacement(_ replacement: CTypeReplacement) {
-        replacements.removeAll { $0.id == replacement.id }
-    }
-
-    private func addReplacement() {
-        guard !newPattern.isEmpty, !newReplacement.isEmpty else { return }
-        let replacement = CTypeReplacement(
-            pattern: newPattern,
-            replacement: newReplacement
-        )
-        replacements.append(replacement)
-        newPattern = ""
-        newReplacement = ""
-        showingAddSheet = false
     }
 }
 
-// MARK: - Replacement Row
+// MARK: - Preset Buttons
 
-private struct ReplacementRow: View {
-    let replacement: CTypeReplacement
-    let isEnabled: Bool
-    let onToggle: () -> Void
-    let onDelete: () -> Void
+private struct PresetButtons: View {
+    @Binding var config: CTypeTransformerConfig
 
     var body: some View {
-        HStack {
-            Toggle("", isOn: Binding(
-                get: { replacement.isEnabled },
-                set: { _ in onToggle() }
-            ))
-            .labelsHidden()
-            .disabled(!isEnabled)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(replacement.pattern)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(replacement.isEnabled && isEnabled ? .primary : .secondary)
-
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text(replacement.replacement)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
+        HStack(spacing: 12) {
+            Button("stdint.h") {
+                config.replacements = CTypeTransformerConfig.stdintPreset
             }
+            .help("uint32_t, int64_t, etc.")
+
+            Button("Foundation") {
+                config.replacements = CTypeTransformerConfig.foundationPreset
+            }
+            .help("CGFloat, NSInteger, etc.")
 
             Spacer()
 
-            Button {
-                onDelete()
-            } label: {
-                Image(systemName: "trash")
-                    .foregroundStyle(.red)
+            Button("Clear All") {
+                config.replacements.removeAll()
             }
-            .buttonStyle(.plain)
-            .disabled(!isEnabled)
+            .foregroundStyle(.red)
         }
-        .padding(.vertical, 4)
     }
 }
 
-// MARK: - Add Replacement Sheet
+// MARK: - Swift Field Offset Editor
 
-private struct AddReplacementSheet: View {
-    @Binding var pattern: String
-    @Binding var replacement: String
-    let onAdd: () -> Void
-    let onCancel: () -> Void
+private struct SwiftFieldOffsetEditor: View {
+    @Binding var config: SwiftFieldOffsetTransformerConfig
+
+    @State private var previewStartOffset = 0
+    @State private var previewEndOffset = 8
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Add Type Replacement")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+            // Template input
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Template")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Pattern")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("e.g., unsigned int", text: $pattern)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
-                }
+                TextField("Template", text: $config.template)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+            }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Replacement")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("e.g., uint32_t", text: $replacement)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.body, design: .monospaced))
+            // Preset templates
+            HStack(spacing: 8) {
+                ForEach(presetTemplates, id: \.0) { name, template in
+                    Button(name) {
+                        config.template = template
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
             }
 
-            HStack {
-                Button("Cancel") {
-                    onCancel()
-                }
-                .keyboardShortcut(.cancelAction)
+            // Live preview
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Preview")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-                Spacer()
-
-                Button("Add") {
-                    onAdd()
+                HStack {
+                    Text("// ")
+                        .foregroundStyle(.secondary)
+                    Text(config.render(startOffset: previewStartOffset, endOffset: previewEndOffset))
                 }
-                .keyboardShortcut(.defaultAction)
-                .disabled(pattern.isEmpty || replacement.isEmpty)
+                .font(.system(.body, design: .monospaced))
+                .padding(8)
+                .background(Color.secondary.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
-        .padding()
-        .frame(width: 300)
+    }
+
+    private var presetTemplates: [(String, String)] {
+        [
+            ("Range", SwiftFieldOffsetTransformerConfig.rangeTemplate),
+            ("Labeled", SwiftFieldOffsetTransformerConfig.labeledTemplate),
+            ("Interval", SwiftFieldOffsetTransformerConfig.intervalTemplate),
+            ("Start Only", SwiftFieldOffsetTransformerConfig.startOnlyTemplate),
+        ]
     }
 }

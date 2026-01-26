@@ -108,32 +108,30 @@ extension Settings {
         public var showOnDisconnect: Bool = true
     }
 
+    /// Transformer module configurations.
+    ///
+    /// Users configure predefined transformer modules here.
+    /// The configuration is then converted to `TransformerConfiguration` for use with RuntimeEngine.
     public struct Transformer: Codable {
-        /// Whether interface transformers are enabled
-        public var isEnabled: Bool = false
+        /// C type replacement configuration.
+        public var cType: CTypeTransformerConfig = CTypeTransformerConfig()
 
-        /// Whether to use predefined stdint.h type replacements
-        public var useStdintReplacements: Bool = false
-
-        /// Custom type replacement rules
-        public var customReplacements: [CTypeReplacement] = []
+        /// Swift field offset comment format configuration.
+        public var swiftFieldOffset: SwiftFieldOffsetTransformerConfig = SwiftFieldOffsetTransformerConfig()
 
         public init(
-            isEnabled: Bool = false,
-            useStdintReplacements: Bool = false,
-            customReplacements: [CTypeReplacement] = []
+            cType: CTypeTransformerConfig = CTypeTransformerConfig(),
+            swiftFieldOffset: SwiftFieldOffsetTransformerConfig = SwiftFieldOffsetTransformerConfig()
         ) {
-            self.isEnabled = isEnabled
-            self.useStdintReplacements = useStdintReplacements
-            self.customReplacements = customReplacements
+            self.cType = cType
+            self.swiftFieldOffset = swiftFieldOffset
         }
 
-        /// Converts to TransformerConfiguration for use with RuntimeEngine
+        /// Converts to TransformerConfiguration for use with RuntimeEngine.
         public func toConfiguration() -> TransformerConfiguration {
             TransformerConfiguration(
-                isEnabled: isEnabled,
-                customTypeReplacements: customReplacements,
-                useStdintReplacements: useStdintReplacements
+                cType: cType,
+                swiftFieldOffset: swiftFieldOffset
             )
         }
     }
