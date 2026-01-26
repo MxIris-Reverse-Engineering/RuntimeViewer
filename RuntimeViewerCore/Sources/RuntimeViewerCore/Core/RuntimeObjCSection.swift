@@ -5,18 +5,28 @@ import ObjCDump
 import ObjCTypeDecodeKit
 import OrderedCollections
 import OSLog
-import RuntimeViewerCoreObjC
+private import RuntimeViewerCoreObjC
 import Semantic
 import Utilities
+import MetaCodable
 
-public struct ObjCGenerationOptions: Sendable, Codable, Equatable {
+@Codable
+public struct ObjCGenerationOptions: Sendable, Equatable {
+    @Default(ifMissing: false)
     public var stripProtocolConformance: Bool = false
+    @Default(ifMissing: false)
     public var stripOverrides: Bool = false
+    @Default(ifMissing: false)
     public var stripSynthesizedIvars: Bool = false
+    @Default(ifMissing: false)
     public var stripSynthesizedMethods: Bool = false
+    @Default(ifMissing: false)
     public var stripCtorMethod: Bool = false
+    @Default(ifMissing: false)
     public var stripDtorMethod: Bool = false
+    @Default(ifMissing: false)
     public var addIvarOffsetComments: Bool = false
+    @Default(ifMissing: false)
     public var addPropertyAttributesComments: Bool = false
 }
 

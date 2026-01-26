@@ -45,10 +45,28 @@ The project uses two Swift Package Manager packages:
 
 ### Key Architectural Patterns
 
-- **MVVM + Coordinator**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
+- **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
 - **Dependency Injection**: Uses swift-dependencies for service injection
 - **Multi-Process**: XPC services enable safe inspection of external processes
+
+### UI Technology Stack
+
+- **AppKit**: All UI components except Settings
+- **SwiftUI**: Settings module only
+
+## Development Guidelines
+
+When adding new features, you **MUST** follow these rules:
+
+1. **UI Framework**: Use AppKit for all new UI components (except Settings-related features which use SwiftUI)
+2. **Architecture**: Follow MVVM-C pattern
+   - **Model**: Data structures and business logic
+   - **View**: AppKit views (NSView, NSViewController)
+   - **ViewModel**: RxSwift-based, handles UI state and logic
+   - **Coordinator**: Manages navigation and flow
+3. **Reactive**: Use RxSwift for data binding and event handling
+4. **No SwiftUI** in non-Settings areas - keep the codebase consistent
 
 ### Platform Requirements
 

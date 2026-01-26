@@ -5,7 +5,7 @@
 //  Created by JH on 11/12/25.
 //
 
-#import "RuntimeViewerObjC.h"
+#import "RuntimeViewerCoreObjC.h"
 
 const void * _Nullable RVClassFromString(NSString *className) {
     return (__bridge void * _Nullable)(NSClassFromString(className));

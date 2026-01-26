@@ -5,13 +5,11 @@ import RxAppKit
 
 #if canImport(UIKit)
 import UIKit
-import Foundation
 #endif
 
 import RuntimeViewerCore
-import RuntimeViewerArchitectures
 import RuntimeViewerUI
-import Ifrit
+import RuntimeViewerArchitectures
 
 public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @unchecked Sendable {
     public let node: RuntimeImageNode

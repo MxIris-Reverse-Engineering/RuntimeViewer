@@ -1,8 +1,12 @@
 import Foundation
+import MetaCodable
 
 extension RuntimeObjectInterface {
-    public struct GenerationOptions: Codable {
+    @Codable
+    public struct GenerationOptions {
+        @Default(ifMissing: ObjCGenerationOptions())
         public var objcHeaderOptions: ObjCGenerationOptions
+        @Default(ifMissing: SwiftGenerationOptions())
         public var swiftInterfaceOptions: SwiftGenerationOptions
 
         public init() {
