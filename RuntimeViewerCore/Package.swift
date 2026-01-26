@@ -123,6 +123,10 @@ let package = Package(
             url: "https://github.com/mxcl/Version",
             from: "2.2.0"
         ),
+        .package(
+            url: "https://github.com/SwiftyLab/MetaCodable",
+            from: "1.6.0"
+        )
     ],
     targets: [
         .target(
@@ -140,6 +144,7 @@ let package = Package(
                 .product(name: "OrderedCollections", package: "swift-collections"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
+                .product(name: "MetaCodable", package: "MetaCodable"),
             ],
             swiftSettings: [
                 .internalImportsByDefault,

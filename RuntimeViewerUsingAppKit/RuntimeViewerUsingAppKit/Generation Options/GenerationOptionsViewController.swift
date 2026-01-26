@@ -18,14 +18,11 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
         Section(title: "ObjC", items: [
             OptionItem(title: "Strip Protocol Conformance", keyPath: \.objcHeaderOptions.stripProtocolConformance),
             OptionItem(title: "Strip Overrides", keyPath: \.objcHeaderOptions.stripOverrides),
-//            OptionItem(title: "Strip Duplicates", keyPath: \.objcHeaderOptions.stripDuplicates),
             OptionItem(title: "Strip Synthesized Ivars", keyPath: \.objcHeaderOptions.stripSynthesizedIvars),
             OptionItem(title: "Strip Synthesized Methods", keyPath: \.objcHeaderOptions.stripSynthesizedMethods),
             OptionItem(title: "Strip Ctor Method", keyPath: \.objcHeaderOptions.stripCtorMethod),
             OptionItem(title: "Strip Dtor Method", keyPath: \.objcHeaderOptions.stripDtorMethod),
-//            OptionItem(title: "Add Symbol Image Comments", keyPath: \.objcHeaderOptions.addSymbolImageComments),
             OptionItem(title: "Add Ivar Offset Comments", keyPath: \.objcHeaderOptions.addIvarOffsetComments),
-//            OptionItem(title: "Expand Ivar Record Type Members", keyPath: \.objcHeaderOptions.expandIvarRecordTypeMembers),
             OptionItem(title: "Add Property Attributes Comments", keyPath: \.objcHeaderOptions.addPropertyAttributesComments),
         ]),
         Section(title: "Swift", items: [
@@ -33,6 +30,7 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
             OptionItem(title: "Print Offset Comments", keyPath: \.swiftInterfaceOptions.emitOffsetComments),
             OptionItem(title: "Print Type Layout", keyPath: \.swiftInterfaceOptions.printTypeLayout),
             OptionItem(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
+            OptionItem(title: "Synthesize Opaque Type (WIP)", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
         ]),
     ]
 

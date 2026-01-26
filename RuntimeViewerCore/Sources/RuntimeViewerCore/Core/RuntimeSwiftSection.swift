@@ -10,12 +10,20 @@ import Semantic
 import SwiftDump
 import SwiftInspection
 @_spi(Support) import SwiftInterface
+import MetaCodable
 
-public struct SwiftGenerationOptions: Sendable, Codable, Equatable {
+@Codable
+public struct SwiftGenerationOptions: Sendable, Equatable {
+    @Default(ifMissing: true)
     public var printStrippedSymbolicItem: Bool = true
+    @Default(ifMissing: false)
     public var emitOffsetComments: Bool = false
+    @Default(ifMissing: false)
     public var printTypeLayout: Bool = false
+    @Default(ifMissing: false)
     public var printEnumLayout: Bool = false
+    @Default(ifMissing: false)
+    public var synthesizeOpaqueType: Bool = false
 }
 
 actor RuntimeSwiftSection: Loggable {
@@ -76,27 +84,27 @@ actor RuntimeSwiftSection: Loggable {
 
     func updateConfiguration(using options: SwiftGenerationOptions) async throws {
         logger.debug("Updating Swift section configuration")
-        var configuration = SwiftInterfaceBuilderConfiguration(indexConfiguration: indexer.configuration, printConfiguration: printer.configuration)
-        configuration.printConfiguration.printStrippedSymbolicItem = options.printStrippedSymbolicItem
-        configuration.printConfiguration.emitOffsetComments = options.emitOffsetComments
-        configuration.printConfiguration.printTypeLayout = options.printTypeLayout
-        configuration.printConfiguration.printEnumLayout = options.printEnumLayout
-        try await updateConfiguration(configuration)
-    }
 
-    private func updateConfiguration(_ newConfiguration: SwiftInterfaceBuilderConfiguration) async throws {
         let oldIndexConfiguration = indexer.configuration
-        try await indexer.updateConfiguration(newConfiguration.indexConfiguration)
+        let newIndexConfiguration = SwiftInterfaceIndexConfiguration(showCImportedTypes: false)
+        try await indexer.updateConfiguration(newIndexConfiguration)
 
         let oldPrintConfiguration = printer.configuration
-        printer.updateConfiguration(newConfiguration.printConfiguration)
+        let newPrintConfiguration = SwiftInterfacePrintConfiguration(printStrippedSymbolicItem: options.printStrippedSymbolicItem, emitOffsetComments: options.emitOffsetComments, printTypeLayout: options.printTypeLayout, printEnumLayout: options.printEnumLayout)
+        printer.updateConfiguration(newPrintConfiguration)
 
-        if newConfiguration.indexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
+        if options.synthesizeOpaqueType {
+            printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
+        } else {
+            printer.removeAllTypeNameResolvers()
+        }
+
+        if newIndexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
             logger.debug("Index configuration changed, re-preparing builder")
             nameToInterfaceDefinitionName.removeAll()
         }
 
-        if newConfiguration.printConfiguration != oldPrintConfiguration {
+        if newPrintConfiguration != oldPrintConfiguration {
             logger.debug("Print configuration changed, clearing interface cache")
             interfaceByName.removeAll()
         }

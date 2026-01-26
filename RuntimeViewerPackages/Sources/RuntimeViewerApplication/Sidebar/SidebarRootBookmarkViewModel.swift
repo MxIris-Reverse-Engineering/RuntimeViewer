@@ -1,7 +1,6 @@
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-import Ifrit
 import MemberwiseInit
 
 public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
