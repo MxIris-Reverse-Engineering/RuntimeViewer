@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 
 /// Context information passed to transformers during transformation.
 ///

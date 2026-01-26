@@ -2,56 +2,42 @@ public import Foundation
 import MetaCodable
 public import Semantic
 
-/// Configuration for runtime interface transformers.
+/// Configuration for all runtime interface transformer modules.
 ///
-/// This structure aggregates all transformer settings and provides
+/// This structure aggregates all transformer module configurations and provides
 /// methods to apply transformations to semantic strings.
+///
+/// Users configure individual modules through this unified configuration:
+/// - `cType`: C type replacement (double → CGFloat, etc.)
+/// - `swiftFieldOffset`: Swift field offset comment format
 @Codable
 public struct TransformerConfiguration: Sendable, Equatable, Hashable {
-    /// Whether transformers are enabled.
-    @Default(ifMissing: false)
-    public var isEnabled: Bool
+    /// C type replacement transformer configuration.
+    @Default(ifMissing: CTypeTransformerConfig())
+    public var cType: CTypeTransformerConfig
 
-    /// Custom type replacement rules.
-    @Default(ifMissing: [])
-    public var customTypeReplacements: [CTypeReplacement]
+    /// Swift field offset comment transformer configuration.
+    @Default(ifMissing: SwiftFieldOffsetTransformerConfig())
+    public var swiftFieldOffset: SwiftFieldOffsetTransformerConfig
 
-    /// Whether to use predefined stdint.h replacements.
-    @Default(ifMissing: false)
-    public var useStdintReplacements: Bool
-
-    /// Creates a new transformer configuration.
-    ///
-    /// - Parameters:
-    ///   - isEnabled: Whether transformers are enabled.
-    ///   - customTypeReplacements: Custom replacement rules.
-    ///   - useStdintReplacements: Whether to use stdint.h replacements.
-    public init(
-        isEnabled: Bool = false,
-        customTypeReplacements: [CTypeReplacement] = [],
-        useStdintReplacements: Bool = false
-    ) {
-        self.isEnabled = isEnabled
-        self.customTypeReplacements = customTypeReplacements
-        self.useStdintReplacements = useStdintReplacements
+    /// Creates a new transformer configuration with default settings.
+    public init() {
+        self.cType = CTypeTransformerConfig()
+        self.swiftFieldOffset = SwiftFieldOffsetTransformerConfig()
     }
 
-    /// Returns all active replacement rules.
-    ///
-    /// This combines custom replacements with predefined stdint.h replacements
-    /// if enabled, ensuring custom rules take precedence.
-    public var activeReplacements: [CTypeReplacement] {
-        var replacements = customTypeReplacements.filter { $0.isEnabled }
+    /// Creates a new transformer configuration with the specified module configs.
+    public init(
+        cType: CTypeTransformerConfig = CTypeTransformerConfig(),
+        swiftFieldOffset: SwiftFieldOffsetTransformerConfig = SwiftFieldOffsetTransformerConfig()
+    ) {
+        self.cType = cType
+        self.swiftFieldOffset = swiftFieldOffset
+    }
 
-        if useStdintReplacements {
-            // Get stdint replacements that don't conflict with custom ones
-            let customPatterns = Set(replacements.map(\.pattern))
-            let stdintReplacements = CTypeReplacement.stdintReplacements
-                .filter { !customPatterns.contains($0.pattern) }
-            replacements.append(contentsOf: stdintReplacements)
-        }
-
-        return replacements
+    /// Whether any transformer module is enabled.
+    public var hasEnabledModules: Bool {
+        cType.isEnabled || swiftFieldOffset.isEnabled
     }
 
     /// Applies all enabled transformations to the given semantic string.
@@ -61,70 +47,126 @@ public struct TransformerConfiguration: Sendable, Equatable, Hashable {
     ///   - context: The transformation context.
     /// - Returns: The transformed semantic string.
     public func apply(to interface: SemanticString, context: TransformContext) -> SemanticString {
-        guard isEnabled else {
-            return interface
+        var result = interface
+
+        // Apply C type transformer if enabled
+        if cType.isEnabled {
+            result = applyCTypeTransformer(to: result, context: context)
         }
 
-        let replacements = activeReplacements
-        guard !replacements.isEmpty else {
-            return interface
+        // Note: Swift field offset transformer is applied during generation,
+        // not as a post-process, since it needs access to offset values.
+
+        return result
+    }
+
+    /// Applies C type replacements to the semantic string.
+    private func applyCTypeTransformer(to interface: SemanticString, context: TransformContext) -> SemanticString {
+        let sortedPatterns = cType.sortedPatterns
+        guard !sortedPatterns.isEmpty else { return interface }
+
+        let components = interface.components
+        guard !components.isEmpty else { return interface }
+
+        var result: [AtomicComponent] = []
+        var index = 0
+
+        while index < components.count {
+            if let (replacement, consumedCount) = findCTypeMatch(
+                in: components,
+                startingAt: index,
+                patterns: sortedPatterns
+            ) {
+                result.append(AtomicComponent(string: replacement, type: .keyword))
+                index += consumedCount
+            } else {
+                result.append(components[index])
+                index += 1
+            }
         }
 
-        let transformer = CTypeReplacementTransformer(
-            replacements: replacements,
-            scope: .global,
-            isEnabled: true
-        )
+        return SemanticString(components: result)
+    }
 
-        return transformer.transform(interface, context: context)
+    /// Finds a matching C type pattern starting at the given index.
+    private func findCTypeMatch(
+        in components: [AtomicComponent],
+        startingAt startIndex: Int,
+        patterns: [(CTypeTransformerConfig.Pattern, String)]
+    ) -> (String, Int)? {
+        for (pattern, replacement) in patterns {
+            if let consumedCount = matchPattern(pattern.patternString, in: components, startingAt: startIndex) {
+                return (replacement, consumedCount)
+            }
+        }
+        return nil
+    }
+
+    /// Matches a pattern string against components using sliding window.
+    private func matchPattern(
+        _ patternString: String,
+        in components: [AtomicComponent],
+        startingAt startIndex: Int
+    ) -> Int? {
+        let keywords = patternString.split(separator: " ").map(String.init)
+        guard !keywords.isEmpty else { return nil }
+
+        var componentIndex = startIndex
+        var keywordIndex = 0
+        var consumedCount = 0
+
+        while keywordIndex < keywords.count && componentIndex < components.count {
+            let component = components[componentIndex]
+
+            // Skip whitespace
+            if component.type == .standard && component.string.allSatisfy(\.isWhitespace) {
+                componentIndex += 1
+                consumedCount += 1
+                continue
+            }
+
+            // Must be keyword type
+            guard component.type == .keyword else { return nil }
+
+            // Check match
+            if component.string == keywords[keywordIndex] {
+                keywordIndex += 1
+                componentIndex += 1
+                consumedCount += 1
+            } else {
+                return nil
+            }
+        }
+
+        return keywordIndex == keywords.count ? consumedCount : nil
     }
 }
 
-// MARK: - Convenience Methods
+// MARK: - Convenience Presets
 
 extension TransformerConfiguration {
-    /// A configuration with all transformers disabled.
+    /// A configuration with all modules disabled.
     public static var disabled: TransformerConfiguration {
         TransformerConfiguration()
     }
 
-    /// A configuration with stdint.h replacements enabled.
-    public static var stdintEnabled: TransformerConfiguration {
+    /// A configuration with stdint.h style C type replacements enabled.
+    public static var stdintPreset: TransformerConfiguration {
         TransformerConfiguration(
-            isEnabled: true,
-            useStdintReplacements: true
+            cType: CTypeTransformerConfig(
+                isEnabled: true,
+                replacements: CTypeTransformerConfig.stdintPreset
+            )
         )
     }
 
-    /// Adds a custom type replacement rule.
-    ///
-    /// - Parameter replacement: The replacement rule to add.
-    /// - Returns: A new configuration with the rule added.
-    public func adding(_ replacement: CTypeReplacement) -> TransformerConfiguration {
-        var copy = self
-        copy.customTypeReplacements.append(replacement)
-        return copy
-    }
-
-    /// Removes a custom type replacement rule by ID.
-    ///
-    /// - Parameter id: The ID of the rule to remove.
-    /// - Returns: A new configuration with the rule removed.
-    public func removing(id: UUID) -> TransformerConfiguration {
-        var copy = self
-        copy.customTypeReplacements.removeAll { $0.id == id }
-        return copy
-    }
-
-    /// Updates a custom type replacement rule.
-    ///
-    /// - Parameter replacement: The updated replacement rule.
-    /// - Returns: A new configuration with the rule updated.
-    public func updating(_ replacement: CTypeReplacement) -> TransformerConfiguration {
-        var copy = self
-        if let index = copy.customTypeReplacements.firstIndex(where: { $0.id == replacement.id }) {
-            copy.customTypeReplacements[index] = replacement
-        }
-        return copy
+    /// A configuration with Foundation style C type replacements enabled.
+    public static var foundationPreset: TransformerConfiguration {
+        TransformerConfiguration(
+            cType: CTypeTransformerConfig(
+                isEnabled: true,
+                replacements: CTypeTransformerConfig.foundationPreset
+            )
+        )
     }
 }
