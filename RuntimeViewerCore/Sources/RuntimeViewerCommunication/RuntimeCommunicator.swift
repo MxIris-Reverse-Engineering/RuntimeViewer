@@ -1,6 +1,5 @@
 import Foundation
 public import FoundationToolbox
-import OSLog
 
 /// Factory for creating runtime connections based on the specified source.
 ///
@@ -17,9 +16,10 @@ import OSLog
 ///     identifier: "com.example.target"
 /// ))
 /// ```
-public final class RuntimeCommunicator: Loggable {
+@Loggable
+public final class RuntimeCommunicator {
     public init() {
-        logger.debug("RuntimeCommunicator initialized")
+        #log(.debug, "RuntimeCommunicator initialized")
     }
 
     /// Establishes a connection to the specified runtime source.
@@ -30,42 +30,42 @@ public final class RuntimeCommunicator: Loggable {
     /// - Returns: A configured `RuntimeConnection` ready for communication.
     /// - Throws: An error if the connection cannot be established.
     public func connect(to source: RuntimeSource, modifier: ((RuntimeConnection) async throws -> Void)? = nil) async throws -> RuntimeConnection {
-        logger.info("Connecting to source: \(String(describing: source), privacy: .public)")
+        #log(.info, "Connecting to source: \(String(describing: source), privacy: .public)")
         switch source {
         case .local:
-            logger.error("Local connection is not supported")
+            #log(.error, "Local connection is not supported")
             throw NSError(domain: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeCommunicator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Local connection is not supported"])
 
         case .remote(_, let identifier, let role):
             #if os(macOS)
             if role.isServer {
-                logger.debug("Creating XPC server connection with identifier: \(String(describing: identifier), privacy: .public)")
+                #log(.debug, "Creating XPC server connection with identifier: \(String(describing: identifier), privacy: .public)")
                 let connection = try await RuntimeXPCServerConnection(identifier: identifier, modifier: modifier)
-                logger.info("XPC server connection established")
+                #log(.info, "XPC server connection established")
                 return connection
             } else {
-                logger.debug("Creating XPC client connection with identifier: \(String(describing: identifier), privacy: .public)")
+                #log(.debug, "Creating XPC client connection with identifier: \(String(describing: identifier), privacy: .public)")
                 let connection = try await RuntimeXPCClientConnection(identifier: identifier, modifier: modifier)
-                logger.info("XPC client connection established")
+                #log(.info, "XPC client connection established")
                 return connection
             }
             #else
-            logger.error("Remote connection is not supported on this platform")
+            #log(.error, "Remote connection is not supported on this platform")
             throw NSError(domain: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeCommunicator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Remote connection is not supported on this platform"])
             #endif
 
         case .bonjourClient(let endpoint):
-            logger.debug("Creating Bonjour client connection to endpoint: \(String(describing: endpoint), privacy: .public)")
+            #log(.debug, "Creating Bonjour client connection to endpoint: \(String(describing: endpoint), privacy: .public)")
             let runtimeConnection = try RuntimeNetworkClientConnection(endpoint: endpoint)
             try await modifier?(runtimeConnection)
-            logger.info("Bonjour client connection established")
+            #log(.info, "Bonjour client connection established")
             return runtimeConnection
 
         case .bonjourServer(let name, _):
-            logger.debug("Creating Bonjour server connection with name: \(name, privacy: .public)")
+            #log(.debug, "Creating Bonjour server connection with name: \(name, privacy: .public)")
             let runtimeConnection = try await RuntimeNetworkServerConnection(name: name)
             try await modifier?(runtimeConnection)
-            logger.info("Bonjour server connection established")
+            #log(.info, "Bonjour server connection established")
             return runtimeConnection
 
         case .localSocketClient(_, let identifier):
@@ -80,11 +80,11 @@ public final class RuntimeCommunicator: Loggable {
             // 4. Socket client only needs connect() - allowed even in sandboxed apps
             //
             // See RuntimeLocalSocketConnection documentation for detailed explanation.
-            logger.debug("Creating local socket server connection (business client) with identifier: \(identifier.rawValue, privacy: .public)")
+            #log(.debug, "Creating local socket server connection (business client) with identifier: \(identifier.rawValue, privacy: .public)")
             let runtimeConnection = RuntimeLocalSocketServerConnection(identifier: identifier.rawValue)
             try await runtimeConnection.start()
             try await modifier?(runtimeConnection)
-            logger.info("Local socket server connection established")
+            #log(.info, "Local socket server connection established")
             return runtimeConnection
 
         case .localSocketServer(_, let identifier):
@@ -98,23 +98,23 @@ public final class RuntimeCommunicator: Loggable {
             // 3. Socket client only needs connect() - allowed in sandboxed apps
             //
             // See RuntimeLocalSocketConnection documentation for detailed explanation.
-            logger.debug("Creating local socket client connection (business server) with identifier: \(identifier.rawValue, privacy: .public)")
+            #log(.debug, "Creating local socket client connection (business server) with identifier: \(identifier.rawValue, privacy: .public)")
             let runtimeConnection = try await RuntimeLocalSocketClientConnection(identifier: identifier.rawValue)
             try await modifier?(runtimeConnection)
-            logger.info("Local socket client connection established")
+            #log(.info, "Local socket client connection established")
             return runtimeConnection
 
         case .directTCPClient(_, let host, let port):
             #if canImport(Network)
             // Direct TCP connection to a known host:port.
             // Doesn't require NSBonjourServices or NSLocalNetworkUsageDescription.
-            logger.debug("Creating direct TCP client connection to \(host, privacy: .public):\(port, privacy: .public)")
+            #log(.debug, "Creating direct TCP client connection to \(host, privacy: .public):\(port, privacy: .public)")
             let runtimeConnection = try await RuntimeDirectTCPClientConnection(host: host, port: port)
             try await modifier?(runtimeConnection)
-            logger.info("Direct TCP client connection established")
+            #log(.info, "Direct TCP client connection established")
             return runtimeConnection
             #else
-            logger.error("Direct TCP connection is not supported on this platform")
+            #log(.error, "Direct TCP connection is not supported on this platform")
             throw NSError(domain: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeCommunicator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Direct TCP connection is not supported on this platform"])
             #endif
 
@@ -122,13 +122,13 @@ public final class RuntimeCommunicator: Loggable {
             #if canImport(Network)
             // Direct TCP server listening on a port.
             // After initialization, server.host and server.port contain the actual address.
-            logger.debug("Creating direct TCP server connection on port: \(port, privacy: .public)")
+            #log(.debug, "Creating direct TCP server connection on port: \(port, privacy: .public)")
             let runtimeConnection = try await RuntimeDirectTCPServerConnection(port: port)
             try await modifier?(runtimeConnection)
-            logger.info("Direct TCP server connection established")
+            #log(.info, "Direct TCP server connection established")
             return runtimeConnection
             #else
-            logger.error("Direct TCP connection is not supported on this platform")
+            #log(.error, "Direct TCP connection is not supported on this platform")
             throw NSError(domain: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeCommunicator", code: 1, userInfo: [NSLocalizedDescriptionKey: "Direct TCP connection is not supported on this platform"])
             #endif
         }
