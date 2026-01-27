@@ -3,7 +3,6 @@
 import Foundation
 import FoundationToolbox
 import Network
-import OSLog
 import Combine
 
 // MARK: - RuntimeNetworkConnection
@@ -50,7 +49,8 @@ import Combine
 ///
 /// - Note: Requires both devices to be on the same local network.
 ///   For sandboxed app injection, use `RuntimeLocalSocketConnection` instead.
-final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
+@Loggable
+final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Sendable {
     let id = UUID()
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
@@ -75,7 +75,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     ///
     /// - Parameter endpoint: The Bonjour-discovered endpoint to connect to.
     init(endpoint: NWEndpoint) throws {
-        Self.logger.info("Creating outgoing connection to: \(endpoint.debugDescription, privacy: .public)")
+        #log(.info, "Creating outgoing connection to: \(endpoint.debugDescription, privacy: .public)")
 
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
@@ -93,7 +93,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     ///
     /// - Parameter connection: The accepted connection from NWListener.
     init(connection: NWConnection) throws {
-        Self.logger.info("Creating incoming connection: \(connection.debugDescription, privacy: .public)")
+        #log(.info, "Creating incoming connection: \(connection.debugDescription, privacy: .public)")
         self.connection = connection
         try start()
     }
@@ -109,7 +109,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         observeIncomingMessages()
 
         connection.start(queue: queue)
-        Self.logger.info("Connection started")
+        #log(.info, "Connection started")
     }
 
     func stop() {
@@ -121,7 +121,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: nil))
 
-        Self.logger.info("Connection stopped")
+        #log(.info, "Connection stopped")
     }
 
     func stop(with error: RuntimeConnectionError) {
@@ -133,7 +133,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: error))
 
-        Self.logger.info("Connection stopped with error: \(error.localizedDescription, privacy: .public)")
+        #log(.info, "Connection stopped with error: \(error.localizedDescription, privacy: .public)")
     }
 
     // MARK: - State Handling
@@ -148,20 +148,20 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     private func handleStateChange(_ nwState: NWConnection.State) {
         switch nwState {
         case .setup:
-            logger.debug("Connection is setup")
+            #log(.debug, "Connection is setup")
         case .waiting(let error):
-            logger.warning("Connection is waiting: \(error, privacy: .public)")
+            #log(.default, "Connection is waiting: \(error, privacy: .public)")
             stop(with: .networkError("Connection waiting: \(error.localizedDescription)"))
         case .preparing:
-            logger.debug("Connection is preparing")
+            #log(.debug, "Connection is preparing")
         case .ready:
-            logger.info("Connection is ready")
+            #log(.info, "Connection is ready")
             stateSubject.send(.connected)
         case .failed(let error):
-            logger.error("Connection failed: \(error, privacy: .public)")
+            #log(.error, "Connection failed: \(error, privacy: .public)")
             stop(with: .networkError("Connection failed: \(error.localizedDescription)"))
         case .cancelled:
-            logger.info("Connection cancelled")
+            #log(.info, "Connection cancelled")
         @unknown default:
             break
         }
@@ -174,15 +174,15 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
             guard let self else { return }
 
             if let error {
-                self.logger.error("Receive error: \(error, privacy: .public)")
+                #log(.error, "Receive error: \(error, privacy: .public)")
                 self.messageChannel.finishReceiving(throwing: error)
                 self.stop()
             } else if isComplete {
-                self.logger.debug("Receive complete")
+                #log(.debug, "Receive complete")
                 self.messageChannel.finishReceiving()
                 self.stop()
             } else if let data {
-                self.logger.debug("Received \(data.count, privacy: .public) bytes")
+                #log(.debug, "Received \(data.count, privacy: .public) bytes")
                 self.messageChannel.appendReceivedData(data)
                 self.setupReceiver()
             }
@@ -203,11 +203,11 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
                         }
 
                         guard let handler = messageChannel.handler(for: requestData.identifier) else {
-                            logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
+                            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
                             continue
                         }
 
-                        logger.debug("Handling request: \(requestData.identifier, privacy: .public)")
+                        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
                         let responseData = try await handler.closure(requestData.data)
 
                         if handler.responseType != RuntimeMessageNull.self {
@@ -215,7 +215,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
                             try await send(requestData: response)
                         }
                     } catch {
-                        logger.error("Handler error: \(error, privacy: .public)")
+                        #log(.error, "Handler error: \(error, privacy: .public)")
                         let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
                         if let errorData = try? JSONEncoder().encode(errorResponse) {
                             try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
@@ -223,7 +223,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
                     }
                 }
             } catch {
-                logger.error("Message observation error: \(error, privacy: .public)")
+                #log(.error, "Message observation error: \(error, privacy: .public)")
             }
         }
     }
@@ -235,7 +235,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         try await messageChannel.send(data: data) { [weak self] dataToSend in
             try await self?.sendRaw(data: dataToSend)
         }
-        logger.debug("Sent request: \(requestData.identifier, privacy: .public)")
+        #log(.debug, "Sent request: \(requestData.identifier, privacy: .public)")
     }
 
     func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {
@@ -320,6 +320,7 @@ final class RuntimeNetworkClientConnection: RuntimeConnectionBase<RuntimeNetwork
 /// ```
 ///
 /// - Note: The server automatically restarts listening after a client disconnects.
+@Loggable
 final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetworkConnection>, @unchecked Sendable {
     private var listener: NWListener?
     private var connectionStateCancellable: AnyCancellable?
@@ -350,7 +351,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
             listener.newConnectionHandler = { [weak self] newConnection in
                 guard let self, didResume.withLock({ !$0 }) else { return }
 
-                Self.logger.info("Accepted new connection")
+                #log(.info, "Accepted new connection")
 
                 do {
                     let connection = try RuntimeNetworkConnection(connection: newConnection)
@@ -400,7 +401,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         listener.newConnectionHandler = { [weak self] newConnection in
             guard let self else { return }
 
-            Self.logger.info("Accepted new connection")
+            #log(.info, "Accepted new connection")
 
             do {
                 let connection = try RuntimeNetworkConnection(connection: newConnection)
@@ -415,7 +416,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                         }
                     }
             } catch {
-                Self.logger.error("Failed to create connection: \(error, privacy: .public)")
+                #log(.error, "Failed to create connection: \(error, privacy: .public)")
             }
         }
     }

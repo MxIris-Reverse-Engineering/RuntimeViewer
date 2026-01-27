@@ -44,7 +44,7 @@ extension Package.Dependency {
 let package = Package(
     name: "RuntimeViewerCore",
     platforms: [
-        .macOS(.v11), .iOS(.v14), .macCatalyst(.v14), .watchOS(.v7), .tvOS(.v14), .visionOS(.v1),
+        .macOS(.v10_15), .iOS(.v13), .macCatalyst(.v13), .watchOS(.v6), .tvOS(.v13), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -143,6 +143,7 @@ let package = Package(
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
                 .product(name: "OrderedCollections", package: "swift-collections"),
                 .product(name: "Logging", package: "swift-log"),
+                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "MetaCodable", package: "MetaCodable"),
             ],
