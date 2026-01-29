@@ -36,6 +36,8 @@ actor RuntimeSwiftSection {
 
     private let machO: MachOImage
 
+    private let factory: RuntimeSwiftSectionFactory
+    
     private var indexer: SwiftInterfaceIndexer<MachOImage>
 
     private var printer: SwiftInterfacePrinter<MachOImage>
@@ -68,13 +70,14 @@ actor RuntimeSwiftSection {
         }
     }
 
-    init(imagePath: String) async throws {
+    init(imagePath: String, factory: RuntimeSwiftSectionFactory) async throws {
         #log(.info, "Initializing Swift section for image: \(imagePath, privacy: .public)")
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
         guard let machO = MachOImage(name: imageName) else {
             #log(.error, "Failed to create MachOImage for: \(imageName, privacy: .public)")
             throw Error.invalidMachOImage
         }
+        self.factory = factory
         self.imagePath = imagePath
         self.machO = machO
         #log(.debug, "Creating Swift Interface Components")
@@ -480,6 +483,35 @@ extension ExtensionName {
 extension SemanticString {
     fileprivate static var doubleBreakLine: SemanticString {
         "\n\n"
+    }
+}
+
+@Loggable
+actor RuntimeSwiftSectionFactory {
+    private var sections: [String: RuntimeSwiftSection] = [:]
+
+    func existingSection(for imagePath: String) -> RuntimeSwiftSection? {
+        sections[imagePath]
+    }
+
+    func section(for imagePath: String) async throws -> RuntimeSwiftSection {
+        if let section = sections[imagePath] {
+            #log(.debug, "Using cached Swift section for: \(imagePath, privacy: .public)")
+            return section
+        }
+        #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
+        let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self)
+        sections[imagePath] = section
+        #log(.debug, "Swift section created and cached")
+        return section
+    }
+
+    func removeSection(for imagePath: String) {
+        sections.removeValue(forKey: imagePath)
+    }
+
+    func removeAllSections() {
+        sections.removeAll()
     }
 }
 
