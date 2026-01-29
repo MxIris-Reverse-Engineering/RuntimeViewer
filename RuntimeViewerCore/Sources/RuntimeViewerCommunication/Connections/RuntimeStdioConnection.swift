@@ -1,6 +1,5 @@
 import Foundation
 import FoundationToolbox
-import OSLog
 import Combine
 
 // MARK: - RuntimeStdioConnection
@@ -88,7 +87,8 @@ import Combine
 /// }
 /// ```
 ///
-final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Sendable, Loggable {
+@Loggable
+final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Sendable {
     let id = UUID()
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
@@ -126,7 +126,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
         observeIncomingMessages()
 
         stateSubject.send(.connected)
-        Self.logger.info("Connection started")
+        #log(.info, "Connection started")
     }
 
     func stop() {
@@ -136,7 +136,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: nil))
 
-        Self.logger.info("Connection stopped")
+        #log(.info, "Connection stopped")
     }
 
     func stop(with error: RuntimeConnectionError) {
@@ -146,7 +146,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: error))
 
-        Self.logger.info("Connection stopped with error: \(error.localizedDescription, privacy: .public)")
+        #log(.info, "Connection stopped with error: \(error.localizedDescription, privacy: .public)")
     }
 
     // MARK: - Receiving
@@ -158,14 +158,14 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
             while self.isStarted {
                 let data = self.inputHandle.availableData
                 if data.isEmpty {
-                    self.logger.info("Input stream closed")
+                    #log(.info, "Input stream closed")
                     self.messageChannel.finishReceiving()
                     DispatchQueue.main.async {
                         self.stop(with: .peerClosed)
                     }
                     break
                 } else {
-                    self.logger.debug("Received \(data.count, privacy: .public) bytes")
+                    #log(.debug, "Received \(data.count, privacy: .public) bytes")
                     self.messageChannel.appendReceivedData(data)
                 }
             }
@@ -186,11 +186,11 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
                         }
 
                         guard let handler = messageChannel.handler(for: requestData.identifier) else {
-                            logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
+                            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
                             continue
                         }
 
-                        logger.debug("Handling request: \(requestData.identifier, privacy: .public)")
+                        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
                         let responseData = try await handler.closure(requestData.data)
 
                         if handler.responseType != RuntimeMessageNull.self {
@@ -198,7 +198,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
                             try await send(requestData: response)
                         }
                     } catch {
-                        logger.error("Handler error: \(error, privacy: .public)")
+                        #log(.error, "Handler error: \(error, privacy: .public)")
                         let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
                         if let errorData = try? JSONEncoder().encode(errorResponse) {
                             try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
@@ -206,7 +206,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
                     }
                 }
             } catch {
-                logger.error("Message observation error: \(error, privacy: .public)")
+                #log(.error, "Message observation error: \(error, privacy: .public)")
             }
         }
     }
@@ -218,7 +218,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
         try await messageChannel.send(data: data) { [weak self] dataToSend in
             try await self?.sendRaw(data: dataToSend)
         }
-        logger.debug("Sent request: \(requestData.identifier, privacy: .public)")
+        #log(.debug, "Sent request: \(requestData.identifier, privacy: .public)")
     }
 
     func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {

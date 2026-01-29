@@ -5,7 +5,6 @@ import FrameworkToolbox
 import MachOKit
 import MachOSwiftSection
 import OrderedCollections
-import OSLog
 import Semantic
 import SwiftDump
 import SwiftInspection
@@ -26,7 +25,8 @@ public struct SwiftGenerationOptions: Sendable, Equatable {
     public var synthesizeOpaqueType: Bool = false
 }
 
-actor RuntimeSwiftSection: Loggable {
+@Loggable
+actor RuntimeSwiftSection {
     enum Error: Swift.Error {
         case invalidMachOImage
         case invalidRuntimeObject
@@ -67,23 +67,23 @@ actor RuntimeSwiftSection: Loggable {
     }
 
     init(imagePath: String) async throws {
-        Self.logger.info("Initializing Swift section for image: \(imagePath, privacy: .public)")
+        #log(.info, "Initializing Swift section for image: \(imagePath, privacy: .public)")
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
         guard let machO = MachOImage(name: imageName) else {
-            Self.logger.error("Failed to create MachOImage for: \(imageName, privacy: .public)")
+            #log(.error, "Failed to create MachOImage for: \(imageName, privacy: .public)")
             throw Error.invalidMachOImage
         }
         self.imagePath = imagePath
         self.machO = machO
-        Self.logger.debug("Creating Swift Interface Components")
+        #log(.debug, "Creating Swift Interface Components")
         self.indexer = .init(configuration: .init(showCImportedTypes: false), eventHandlers: [], in: machO)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
         try await indexer.prepare()
-        Self.logger.info("Swift section initialized successfully")
+        #log(.info, "Swift section initialized successfully")
     }
 
     func updateConfiguration(using options: SwiftGenerationOptions) async throws {
-        logger.debug("Updating Swift section configuration")
+        #log(.debug, "Updating Swift section configuration")
 
         let oldIndexConfiguration = indexer.configuration
         let newIndexConfiguration = SwiftInterfaceIndexConfiguration(showCImportedTypes: false)
@@ -100,18 +100,18 @@ actor RuntimeSwiftSection: Loggable {
         }
 
         if newIndexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
-            logger.debug("Index configuration changed, re-preparing builder")
+            #log(.debug, "Index configuration changed, re-preparing builder")
             nameToInterfaceDefinitionName.removeAll()
         }
 
         if newPrintConfiguration != oldPrintConfiguration {
-            logger.debug("Print configuration changed, clearing interface cache")
+            #log(.debug, "Print configuration changed, clearing interface cache")
             interfaceByName.removeAll()
         }
     }
 
     func allObjects() async throws -> [RuntimeObject] {
-        logger.debug("Getting all Swift objects")
+        #log(.debug, "Getting all Swift objects")
         let rootTypeName = try indexer.rootTypeDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
         let rootProtocolName = try indexer.rootProtocolDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
         let typeExtensionName = try indexer.typeExtensionDefinitions.filter { $0.key.typeName.map { indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeExtension($0.key)) }
@@ -119,7 +119,7 @@ actor RuntimeSwiftSection: Loggable {
         let typeAliasExtensionName = try indexer.typeAliasExtensionDefinitions.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftExtension, definitionName: .typeAliasExtension($0.key)) }
         let conformanceExtensionName = try indexer.conformanceExtensionDefinitions.filter { $0.key.typeName.map { indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
         let allObjects = rootTypeName + rootProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName
-        logger.debug("Found \(allObjects.count, privacy: .public) Swift objects: \(rootTypeName.count, privacy: .public) types, \(rootProtocolName.count, privacy: .public) protocols, \(typeExtensionName.count, privacy: .public) type extensions")
+        #log(.debug, "Found \(allObjects.count, privacy: .public) Swift objects: \(rootTypeName.count, privacy: .public) types, \(rootProtocolName.count, privacy: .public) protocols, \(typeExtensionName.count, privacy: .public) type extensions")
         return allObjects
     }
 
@@ -161,14 +161,14 @@ actor RuntimeSwiftSection: Loggable {
     }
 
     func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface {
-        logger.debug("Generating Swift interface for: \(object.name, privacy: .public)")
+        #log(.debug, "Generating Swift interface for: \(object.name, privacy: .public)")
         if let interface = interfaceByName[object] {
-            logger.debug("Using cached interface")
+            #log(.debug, "Using cached interface")
             return interface
         }
 
         guard let interfaceDefinitionName = nameToInterfaceDefinitionName[object] else {
-            logger.warning("Invalid runtime object: \(object.name, privacy: .public)")
+            #log(.default, "Invalid runtime object: \(object.name, privacy: .public)")
             throw Error.invalidRuntimeObject
         }
         var newInterfaceString: SemanticString = ""
@@ -233,22 +233,22 @@ actor RuntimeSwiftSection: Loggable {
 
         let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
         interfaceByName[object] = newInterface
-        logger.debug("Interface generated and cached")
+        #log(.debug, "Interface generated and cached")
         return newInterface
     }
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
-        logger.debug("Getting Swift class hierarchy for: \(object.name, privacy: .public)")
+        #log(.debug, "Getting Swift class hierarchy for: \(object.name, privacy: .public)")
         guard case .swift(.type(.class)) = object.kind,
               let classDefinitionName = nameToInterfaceDefinitionName[object]?.typeName,
               let classDefinition = indexer.allTypeDefinitions[classDefinitionName],
               case .class(let `class`) = classDefinition.type
         else {
-            logger.debug("No class hierarchy found")
+            #log(.debug, "No class hierarchy found")
             return []
         }
         let hierarchy = try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
-        logger.debug("Class hierarchy: \(hierarchy.count, privacy: .public) levels")
+        #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
         return hierarchy
     }
 }
