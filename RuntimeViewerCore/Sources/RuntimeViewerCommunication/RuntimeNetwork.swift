@@ -1,7 +1,6 @@
 import Foundation
 public import FoundationToolbox
 import Network
-import OSLog
 
 public enum RuntimeNetworkError: Error {
     case notConnected
@@ -61,7 +60,8 @@ public struct RuntimeNetworkEndpoint: Sendable, Codable, Equatable {
     }
 }
 
-public class RuntimeNetworkBrowser: Loggable {
+@Loggable
+public class RuntimeNetworkBrowser {
     private let browser: NWBrowser
 
     public init() {
@@ -73,7 +73,7 @@ public class RuntimeNetworkBrowser: Loggable {
 
     public func start(handler: @escaping (RuntimeNetworkEndpoint) -> Void) {
         browser.stateUpdateHandler = { newState in
-            Self.logger.info("browser.stateUpdateHandler \(String(describing: newState), privacy: .public)")
+            #log(.info, "browser.stateUpdateHandler \(String(describing: newState), privacy: .public)")
         }
         browser.browseResultsChangedHandler = { results, changes in
             for result in results {

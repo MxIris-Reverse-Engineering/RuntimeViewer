@@ -1,6 +1,5 @@
 import Foundation
 import FoundationToolbox
-import OSLog
 import Combine
 
 // MARK: - RuntimeLocalSocketConnection
@@ -97,6 +96,7 @@ import Combine
 /// }
 /// ```
 ///
+@Loggable
 final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecked Sendable {
     let id = UUID()
 
@@ -125,7 +125,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     }
 
     init(port: UInt16) throws {
-        Self.logger.info("Creating connection to localhost:\(port, privacy: .public)")
+        #log(.info, "Creating connection to localhost:\(port, privacy: .public)")
         try connectToLocalhost(port: port)
     }
 
@@ -159,7 +159,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         var noDelay: Int32 = 1
         setsockopt(socketFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
 
-        Self.logger.info("Connected to localhost:\(port, privacy: .public)")
+        #log(.info, "Connected to localhost:\(port, privacy: .public)")
     }
 
     // MARK: - Lifecycle
@@ -173,7 +173,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         observeIncomingMessages()
 
         stateSubject.send(.connected)
-        Self.logger.info("Connection started")
+        #log(.info, "Connection started")
     }
 
     func stop() {
@@ -187,7 +187,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: nil))
 
-        Self.logger.info("Connection stopped")
+        #log(.info, "Connection stopped")
     }
 
     func stop(with error: RuntimeConnectionError) {
@@ -201,7 +201,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: error))
 
-        Self.logger.info("Connection stopped with error: \(error.localizedDescription, privacy: .public)")
+        #log(.info, "Connection stopped with error: \(error.localizedDescription, privacy: .public)")
     }
 
     // MARK: - Receiving
@@ -216,10 +216,10 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
 
                 if bytesRead > 0 {
                     let data = Data(buffer[0..<bytesRead])
-                    self.logger.debug("Received \(bytesRead, privacy: .public) bytes")
+                    #log(.debug, "Received \(bytesRead, privacy: .public) bytes")
                     self.messageChannel.appendReceivedData(data)
                 } else if bytesRead == 0 {
-                    self.logger.info("Connection closed by peer")
+                    #log(.info, "Connection closed by peer")
                     self.messageChannel.finishReceiving()
                     DispatchQueue.main.async {
                         self.stop(with: .peerClosed)
@@ -228,7 +228,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
                 } else {
                     let recvErrno = errno
                     if recvErrno != EAGAIN && recvErrno != EWOULDBLOCK {
-                        self.logger.error("Receive error, errno=\(recvErrno, privacy: .public)")
+                        #log(.error, "Receive error, errno=\(recvErrno, privacy: .public)")
                         self.messageChannel.finishReceiving()
                         DispatchQueue.main.async {
                             self.stop(with: .socketError("Receive error: errno=\(recvErrno)"))
@@ -254,11 +254,11 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
                         }
 
                         guard let handler = messageChannel.handler(for: requestData.identifier) else {
-                            logger.warning("No handler for: \(requestData.identifier, privacy: .public)")
+                            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
                             continue
                         }
 
-                        logger.debug("Handling request: \(requestData.identifier, privacy: .public)")
+                        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
                         let responseData = try await handler.closure(requestData.data)
 
                         if handler.responseType != RuntimeMessageNull.self {
@@ -266,7 +266,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
                             try await send(requestData: response)
                         }
                     } catch {
-                        logger.error("Handler error: \(error, privacy: .public)")
+                        #log(.error, "Handler error: \(error, privacy: .public)")
                         let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
                         if let errorData = try? JSONEncoder().encode(errorResponse) {
                             try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
@@ -274,7 +274,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
                     }
                 }
             } catch {
-                logger.error("Message observation error: \(error, privacy: .public)")
+                #log(.error, "Message observation error: \(error, privacy: .public)")
             }
         }
     }
@@ -286,7 +286,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         try await messageChannel.send(data: data) { [weak self] dataToSend in
             try await self?.sendRaw(data: dataToSend)
         }
-        logger.debug("Sent request: \(requestData.identifier, privacy: .public)")
+        #log(.debug, "Sent request: \(requestData.identifier, privacy: .public)")
     }
 
     func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {
@@ -474,7 +474,8 @@ enum RuntimeLocalSocketError: Error, LocalizedError, CustomStringConvertible, Se
 /// we use a hash-based algorithm to compute a deterministic port number
 /// from the identifier. Both server and client can independently calculate
 /// the same port without any file I/O.
-enum RuntimeLocalSocketPortDiscovery: Loggable {
+@Loggable
+enum RuntimeLocalSocketPortDiscovery {
 
     /// Dynamic/private port range (IANA recommendation)
     private static let portRangeStart: UInt16 = 49152
@@ -496,7 +497,7 @@ enum RuntimeLocalSocketPortDiscovery: Loggable {
         }
 
         let port = UInt16(hash % UInt64(portRangeSize)) + portRangeStart
-        logger.info("Computed port \(port, privacy: .public) for identifier '\(identifier, privacy: .public)'")
+        #log(.info, "Computed port \(port, privacy: .public) for identifier '\(identifier, privacy: .public)'")
         return port
     }
 }
@@ -646,6 +647,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 /// - Note: The identifier must match what the injected code uses when creating
 ///   `RuntimeLocalSocketClientConnection`. Both sides use the same identifier
 ///   to compute the deterministic port number.
+@Loggable
 final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable {
     private var serverSocketFD: Int32 = -1
     private let identifier: String
@@ -790,7 +792,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
             throw RuntimeLocalSocketError.listenFailed(errno: listenErrno)
         }
 
-        logger.info("Server listening on 127.0.0.1:\(self.port, privacy: .public)")
+        #log(.info, "Server listening on 127.0.0.1:\(self.port, privacy: .public)")
 
         // Start accepting connections in background (non-blocking)
         startAcceptingConnections()
@@ -841,7 +843,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         do {
             try socketConnection.start()
         } catch {
-            logger.error("Failed to start connection: \(error, privacy: .public)")
+            #log(.error, "Failed to start connection: \(error, privacy: .public)")
             // Try accepting again
             startAcceptingConnections()
         }
