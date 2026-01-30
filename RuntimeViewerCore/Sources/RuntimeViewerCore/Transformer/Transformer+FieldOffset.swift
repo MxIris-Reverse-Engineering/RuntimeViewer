@@ -20,7 +20,9 @@ extension Transformer {
     /// ```
     @Codable
     public struct FieldOffset: Module {
-        public static let moduleID = "fieldOffset"
+        public typealias Parameter = Token
+        public typealias Output = String
+
         public static let displayName = "Field Offset Format"
 
         @Default(ifMissing: false)
@@ -34,23 +36,31 @@ extension Transformer {
             self.template = template
         }
 
-        /// Note: Field offset transformation is applied during generation,
-        /// not as post-processing, because it needs access to offset values.
-        /// This method is a no-op; use `render()` instead.
-        public func apply(to interface: SemanticString, context: Context) -> SemanticString {
-            interface
-        }
-
         /// Renders the template with actual offset values.
-        public func render(start: Int, end: Int) -> String {
+        public func transform(_ input: Input) -> String {
             template
-                .replacingOccurrences(of: Token.startOffset.placeholder, with: String(start))
-                .replacingOccurrences(of: Token.endOffset.placeholder, with: String(end))
+                .replacingOccurrences(of: Token.startOffset.placeholder, with: String(input.startOffset))
+                .replacingOccurrences(of: Token.endOffset.placeholder, with: String(input.endOffset))
         }
 
         /// Checks if the template contains a specific token.
         public func contains(_ token: Token) -> Bool {
             template.contains(token.placeholder)
+        }
+    }
+}
+
+// MARK: - Input
+
+extension Transformer.FieldOffset {
+    /// Input for field offset transformation.
+    public struct Input: Sendable {
+        public let startOffset: Int
+        public let endOffset: Int
+
+        public init(startOffset: Int, endOffset: Int) {
+            self.startOffset = startOffset
+            self.endOffset = endOffset
         }
     }
 }
