@@ -344,14 +344,8 @@ public actor RuntimeEngine: Loggable {
         to interface: RuntimeObjectInterface,
         options: RuntimeObjectInterface.GenerationOptions
     ) -> RuntimeObjectInterface {
-        let context = Transformer.Context(
-            imagePath: interface.object.imagePath,
-            objectName: interface.object.name
-        )
-
         let transformedString = options.transformer.apply(
-            to: interface.interfaceString,
-            context: context
+            to: interface.interfaceString
         )
 
         return RuntimeObjectInterface(

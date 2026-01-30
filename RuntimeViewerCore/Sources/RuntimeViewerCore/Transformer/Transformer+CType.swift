@@ -16,7 +16,10 @@ extension Transformer {
     /// ```
     @Codable
     public struct CType: Module {
-        public static let moduleID = "cType"
+        public typealias Parameter = Pattern
+        public typealias Input = SemanticString
+        public typealias Output = SemanticString
+
         public static let displayName = "C Type Replacement"
 
         @Default(ifMissing: false)
@@ -30,12 +33,12 @@ extension Transformer {
             self.replacements = replacements
         }
 
-        public func apply(to interface: SemanticString, context: Context) -> SemanticString {
+        public func transform(_ input: SemanticString) -> SemanticString {
             let sorted = sortedReplacements
-            guard !sorted.isEmpty else { return interface }
+            guard !sorted.isEmpty else { return input }
 
-            let components = interface.components
-            guard !components.isEmpty else { return interface }
+            let components = input.components
+            guard !components.isEmpty else { return input }
 
             var result: [AtomicComponent] = []
             var index = 0

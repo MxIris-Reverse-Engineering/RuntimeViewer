@@ -22,19 +22,13 @@ struct TransformerSettingsView: SettingsContent {
                     Section {
                         CTypeEditor(module: $config.cType)
                     } header: {
-                        Text("Type Replacements")
-                    } footer: {
-                        Text("Configure which C types to replace. Leave empty to use original.")
-                    }
-
-                    Section {
-                        CTypePresets(module: $config.cType)
-                    } header: {
-                        Text("Presets")
+                        HStack {
+                            Text("Type Replacements")
+                            Spacer()
+                            CTypePresets(module: $config.cType)
+                        }
                     }
                 }
-
-                Divider().padding(.vertical, 8)
 
                 // MARK: - Field Offset Module
                 Section {
@@ -48,14 +42,6 @@ struct TransformerSettingsView: SettingsContent {
                         FieldOffsetEditor(module: $config.fieldOffset)
                     } header: {
                         Text("Output Format")
-                    } footer: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Available tokens:")
-                            ForEach(Transformer.FieldOffset.Token.allCases, id: \.self) { token in
-                                Text("• \(token.placeholder) - \(token.displayName)")
-                                    .font(.caption)
-                            }
-                        }
                     }
                 }
             }
@@ -71,33 +57,32 @@ private struct CTypeEditor: View {
     @Binding var module: Transformer.CType
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
             ForEach(Transformer.CType.Pattern.allCases, id: \.self) { pattern in
-                HStack {
+                GridRow {
                     Text(pattern.displayName)
                         .font(.system(.body, design: .monospaced))
-                        .frame(width: 140, alignment: .leading)
+                        .foregroundStyle(.secondary)
+                        .gridColumnAlignment(.trailing)
+                        .lineLimit(1)
+                        .fixedSize()
 
                     Image(systemName: "arrow.right")
-                        .foregroundStyle(.secondary)
-                        .font(.caption)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
 
-                    TextField(
-                        "Original",
-                        text: Binding(
-                            get: { module.replacements[pattern] ?? "" },
-                            set: { newValue in
-                                if newValue.isEmpty {
-                                    module.replacements.removeValue(forKey: pattern)
-                                } else {
-                                    module.replacements[pattern] = newValue
-                                }
+                    TextField("Replacement", text: Binding(
+                        get: { module.replacements[pattern] ?? "" },
+                        set: { newValue in
+                            if newValue.isEmpty {
+                                module.replacements.removeValue(forKey: pattern)
+                            } else {
+                                module.replacements[pattern] = newValue
                             }
-                        )
-                    )
+                        }
+                    ))
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
-                    .frame(width: 120)
                 }
             }
         }
@@ -110,23 +95,26 @@ private struct CTypePresets: View {
     @Binding var module: Transformer.CType
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 6) {
             Button("stdint.h") {
                 module.replacements = Transformer.CType.Presets.stdint
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
             .help("uint32_t, int64_t, etc.")
 
             Button("Foundation") {
                 module.replacements = Transformer.CType.Presets.foundation
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
             .help("CGFloat, NSInteger, etc.")
 
-            Spacer()
-
-            Button("Clear All") {
+            Button("Clear") {
                 module.replacements.removeAll()
             }
-            .foregroundStyle(.red)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
     }
 }
@@ -139,18 +127,18 @@ private struct FieldOffsetEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Template input
-            VStack(alignment: .leading, spacing: 4) {
+            HStack {
                 Text("Template")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
-
-                TextField("Template", text: $module.template)
+                TextField("e.g. ${startOffset} ..< ${endOffset}", text: $module.template)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
             }
 
             // Preset buttons
             HStack(spacing: 8) {
+                Text("Presets")
+                    .foregroundStyle(.secondary)
                 ForEach(Transformer.FieldOffset.Templates.all, id: \.name) { preset in
                     Button(preset.name) {
                         module.template = preset.template
@@ -160,21 +148,46 @@ private struct FieldOffsetEditor: View {
                 }
             }
 
-            // Live preview
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Preview")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Text("// ")
+            // Tokens + Preview
+            HStack(alignment: .top, spacing: 16) {
+                // Available tokens
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Available Tokens")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text(module.render(start: 0, end: 8))
+                    ForEach(Transformer.FieldOffset.Token.allCases, id: \.self) { token in
+                        HStack(spacing: 4) {
+                            Text(token.displayName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .fixedSize()
+                            Text(token.placeholder)
+                                .font(.system(.caption, design: .monospaced))
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                    }
                 }
-                .font(.system(.body, design: .monospaced))
-                .padding(8)
-                .background(Color.secondary.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                Spacer()
+
+                // Live preview
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("Preview")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 0) {
+                        Text("// ")
+                            .foregroundStyle(.secondary)
+                        Text(module.transform(.init(startOffset: 0, endOffset: 8)))
+                    }
+                    .font(.system(.body, design: .monospaced))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.quaternary)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
             }
         }
     }
