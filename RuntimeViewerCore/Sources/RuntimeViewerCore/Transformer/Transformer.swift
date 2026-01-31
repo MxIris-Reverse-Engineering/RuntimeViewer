@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 import MetaCodable
 public import Semantic
 
@@ -45,30 +45,34 @@ extension Transformer {
 
 extension Transformer {
     /// Aggregated configuration for all transformer modules.
-    public struct Configuration: Sendable, Equatable, Hashable, Codable {
+    @Codable
+    public struct Configuration: Sendable, Equatable, Hashable {
+        @Default(ifMissing: Transformer.CType())
         public var cType: Transformer.CType
-        public var fieldOffset: Transformer.FieldOffset
+        @Default(ifMissing: Transformer.SwiftFieldOffset())
+        public var swiftFieldOffset: Transformer.SwiftFieldOffset
+        @Default(ifMissing: Transformer.SwiftTypeLayout())
+        public var swiftTypeLayout: Transformer.SwiftTypeLayout
 
         public init(
-            cType: Transformer.CType = .init(),
-            fieldOffset: Transformer.FieldOffset = .init()
+            cType: CType = .init(),
+            swiftFieldOffset: SwiftFieldOffset = .init(),
+            swiftTypeLayout: SwiftTypeLayout = .init()
         ) {
             self.cType = cType
-            self.fieldOffset = fieldOffset
+            self.swiftFieldOffset = swiftFieldOffset
+            self.swiftTypeLayout = swiftTypeLayout
         }
 
         /// Whether any module is enabled.
         public var hasEnabledModules: Bool {
-            cType.isEnabled || fieldOffset.isEnabled
+            cType.isEnabled || swiftFieldOffset.isEnabled || swiftTypeLayout.isEnabled
         }
 
-        /// Applies all enabled modules to the interface string.
+        /// Applies post-processing transformer modules to the interface string.
+        /// Note: CType replacement is applied at generation time via ObjCDumpContext.
         public func apply(to interface: SemanticString) -> SemanticString {
-            var result = interface
-            if cType.isEnabled {
-                result = cType.transform(result)
-            }
-            return result
+            interface
         }
     }
 }

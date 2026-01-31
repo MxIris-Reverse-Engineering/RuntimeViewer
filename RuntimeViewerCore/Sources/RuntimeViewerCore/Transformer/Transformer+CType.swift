@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 import MetaCodable
 public import Semantic
 
@@ -45,7 +45,7 @@ extension Transformer {
 
             while index < components.count {
                 if let (replacement, consumed) = match(in: components, at: index, patterns: sorted) {
-                    result.append(AtomicComponent(string: replacement, type: .keyword))
+                    result.append(AtomicComponent(string: replacement, type: .type(.other, .name)))
                     index += consumed
                 } else {
                     result.append(components[index])

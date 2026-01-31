@@ -312,21 +312,22 @@ public actor RuntimeEngine: Loggable {
         switch name.kind {
         case .swift:
             let swiftSection = imageToSwiftSection[name.imagePath]
-            try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions)
+            try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer)
             rawInterface = try? await swiftSection?.interface(for: name)
         case .c,
              .objc:
             let objcSection = imageToObjCSection[name.imagePath]
-            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions) {
+            let cTypeReplacements = options.transformer.cType.isEnabled ? options.transformer.cType.replacements : [:]
+            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, cTypeReplacements: cTypeReplacements) {
                 rawInterface = interface
             } else {
                 switch name.kind {
                 case .objc(.type(let kind)):
                     switch kind {
                     case .class:
-                        rawInterface = try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions)
+                        rawInterface = try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, cTypeReplacements: cTypeReplacements)
                     case .protocol:
-                        rawInterface = try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions)
+                        rawInterface = try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, cTypeReplacements: cTypeReplacements)
                     }
                 default:
                     rawInterface = nil

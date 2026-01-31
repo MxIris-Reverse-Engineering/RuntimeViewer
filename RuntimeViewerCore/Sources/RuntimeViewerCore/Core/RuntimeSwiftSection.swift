@@ -82,7 +82,7 @@ actor RuntimeSwiftSection: Loggable {
         Self.logger.info("Swift section initialized successfully")
     }
 
-    func updateConfiguration(using options: SwiftGenerationOptions) async throws {
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.Configuration = .init()) async throws {
         logger.debug("Updating Swift section configuration")
 
         let oldIndexConfiguration = indexer.configuration
@@ -92,6 +92,39 @@ actor RuntimeSwiftSection: Loggable {
         let oldPrintConfiguration = printer.configuration
         let newPrintConfiguration = SwiftInterfacePrintConfiguration(printStrippedSymbolicItem: options.printStrippedSymbolicItem, emitOffsetComments: options.emitOffsetComments, printTypeLayout: options.printTypeLayout, printEnumLayout: options.printEnumLayout)
         printer.updateConfiguration(newPrintConfiguration)
+
+        if transformer.swiftFieldOffset.isEnabled {
+            let fieldOffsetModule = transformer.swiftFieldOffset
+            printer.fieldOffsetTransformer = { startOffset, endOffset in
+                let result = fieldOffsetModule.transform(.init(startOffset: startOffset, endOffset: endOffset))
+                return Comment(result).asSemanticString()
+            }
+        } else {
+            printer.fieldOffsetTransformer = nil
+        }
+
+        if transformer.swiftTypeLayout.isEnabled {
+            let typeLayoutModule = transformer.swiftTypeLayout
+            printer.typeLayoutTransformer = { typeLayout in
+                let input = Transformer.SwiftTypeLayout.Input(
+                    size: Int(typeLayout.size),
+                    stride: Int(typeLayout.stride),
+                    alignment: Int(typeLayout.flags.alignment),
+                    extraInhabitantCount: Int(typeLayout.extraInhabitantCount),
+                    isPOD: typeLayout.flags.isPOD,
+                    isInlineStorage: typeLayout.flags.isInlineStorage,
+                    isBitwiseTakable: typeLayout.flags.isBitwiseTakable,
+                    isBitwiseBorrowable: typeLayout.flags.isBitwiseBorrowable,
+                    isCopyable: typeLayout.flags.isCopyable,
+                    hasEnumWitnesses: typeLayout.flags.hasEnumWitnesses,
+                    isIncomplete: typeLayout.flags.isIncomplete
+                )
+                let result = typeLayoutModule.transform(input)
+                return Comment(result).asSemanticString()
+            }
+        } else {
+            printer.typeLayoutTransformer = nil
+        }
 
         if options.synthesizeOpaqueType {
             printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))

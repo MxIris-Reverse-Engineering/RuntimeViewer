@@ -75,6 +75,8 @@ public final class Settings: Codable, Loggable {
             let data = try await Self.storage.load()
             let decoded = try JSONDecoder().decode(Settings.self, from: data)
             general = decoded.general
+            notifications = decoded.notifications
+            transformer = decoded.transformer
             logger.debug("Settings loaded successfully.")
         } catch {
             logger.debug("No saved settings found or load failed, using defaults. (\(error, privacy: .public))")

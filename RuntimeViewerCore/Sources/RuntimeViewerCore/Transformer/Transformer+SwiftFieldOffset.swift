@@ -1,6 +1,6 @@
-public import Foundation
+import Foundation
 import MetaCodable
-public import Semantic
+import Semantic
 
 // MARK: - Swift Field Offset Transformer Module
 
@@ -19,11 +19,11 @@ extension Transformer {
     /// module.template = "offset: ${startOffset}"           // "offset: 0"
     /// ```
     @Codable
-    public struct FieldOffset: Module {
+    public struct SwiftFieldOffset: Module {
         public typealias Parameter = Token
         public typealias Output = String
 
-        public static let displayName = "Field Offset Format"
+        public static let displayName = "Swift Field Offset Comment"
 
         @Default(ifMissing: false)
         public var isEnabled: Bool
@@ -31,16 +31,24 @@ extension Transformer {
         @Default(ifMissing: Templates.range)
         public var template: String
 
-        public init(isEnabled: Bool = false, template: String = Templates.range) {
+        @Default(ifMissing: false)
+        public var useHexadecimal: Bool
+
+        public init(isEnabled: Bool = false, template: String = Templates.range, useHexadecimal: Bool = false) {
             self.isEnabled = isEnabled
             self.template = template
+            self.useHexadecimal = useHexadecimal
         }
 
         /// Renders the template with actual offset values.
         public func transform(_ input: Input) -> String {
             template
-                .replacingOccurrences(of: Token.startOffset.placeholder, with: String(input.startOffset))
-                .replacingOccurrences(of: Token.endOffset.placeholder, with: String(input.endOffset))
+                .replacingOccurrences(of: Token.startOffset.placeholder, with: formatValue(input.startOffset))
+                .replacingOccurrences(of: Token.endOffset.placeholder, with: formatValue(input.endOffset))
+        }
+
+        private func formatValue(_ value: Int) -> String {
+            useHexadecimal ? "0x\(String(value, radix: 16))" : String(value)
         }
 
         /// Checks if the template contains a specific token.
@@ -52,7 +60,7 @@ extension Transformer {
 
 // MARK: - Input
 
-extension Transformer.FieldOffset {
+extension Transformer.SwiftFieldOffset {
     /// Input for field offset transformation.
     public struct Input: Sendable {
         public let startOffset: Int
@@ -67,7 +75,7 @@ extension Transformer.FieldOffset {
 
 // MARK: - Token
 
-extension Transformer.FieldOffset {
+extension Transformer.SwiftFieldOffset {
     /// Available tokens for field offset templates.
     public enum Token: String, CaseIterable, Sendable {
         case startOffset
@@ -85,7 +93,7 @@ extension Transformer.FieldOffset {
 
 // MARK: - Templates
 
-extension Transformer.FieldOffset {
+extension Transformer.SwiftFieldOffset {
     public enum Templates {
         /// Range style: "0 ..< 8"
         public static let range = "${startOffset} ..< ${endOffset}"
