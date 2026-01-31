@@ -7,6 +7,7 @@ import MemberwiseInit
 @MemberwiseInit()
 final class ObjCDumpContext {
     var options: ObjCGenerationOptions
+    var cTypeReplacements: [Transformer.CType.Pattern: String] = [:]
     var currentArray: SemanticString?
     var isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }
 }
@@ -463,56 +464,84 @@ extension ObjCType {
         case .selector:
             Keyword("SEL")
         case .char:
-            Keyword("char")
+            if let r = context.cTypeReplacements[.char] { TypeName(kind: .other, r) } else { Keyword("char") }
         case .uchar:
-            Joined(separator: Space()) {
-                Keyword("unsigned")
-                Keyword("char")
+            if let r = context.cTypeReplacements[.uchar] {
+                TypeName(kind: .other, r)
+            } else {
+                Joined(separator: Space()) {
+                    Keyword("unsigned")
+                    Keyword("char")
+                }
             }
         case .short:
-            Keyword("short")
+            if let r = context.cTypeReplacements[.short] { TypeName(kind: .other, r) } else { Keyword("short") }
         case .ushort:
-            Joined(separator: Space()) {
-                Keyword("unsigned")
-                Keyword("short")
+            if let r = context.cTypeReplacements[.ushort] {
+                TypeName(kind: .other, r)
+            } else {
+                Joined(separator: Space()) {
+                    Keyword("unsigned")
+                    Keyword("short")
+                }
             }
         case .int:
-            Keyword("int")
+            if let r = context.cTypeReplacements[.int] { TypeName(kind: .other, r) } else { Keyword("int") }
         case .uint:
-            Joined(separator: Space()) {
-                Keyword("unsigned")
-                Keyword("int")
+            if let r = context.cTypeReplacements[.uint] {
+                TypeName(kind: .other, r)
+            } else {
+                Joined(separator: Space()) {
+                    Keyword("unsigned")
+                    Keyword("int")
+                }
             }
         case .long:
-            Keyword("long")
+            if let r = context.cTypeReplacements[.long] { TypeName(kind: .other, r) } else { Keyword("long") }
         case .ulong:
-            Joined(separator: Space()) {
-                Keyword("unsigned")
-                Keyword("long")
+            if let r = context.cTypeReplacements[.ulong] {
+                TypeName(kind: .other, r)
+            } else {
+                Joined(separator: Space()) {
+                    Keyword("unsigned")
+                    Keyword("long")
+                }
             }
         case .longLong:
-            Joined(separator: Space()) {
-                Keyword("long")
-                Keyword("long")
+            if let r = context.cTypeReplacements[.longLong] {
+                TypeName(kind: .other, r)
+            } else {
+                Joined(separator: Space()) {
+                    Keyword("long")
+                    Keyword("long")
+                }
             }
         case .ulongLong:
-            Joined(separator: Space()) {
-                Keyword("unsigned")
-                Keyword("long")
-                Keyword("long")
+            if let r = context.cTypeReplacements[.ulongLong] {
+                TypeName(kind: .other, r)
+            } else {
+                Joined(separator: Space()) {
+                    Keyword("unsigned")
+                    Keyword("long")
+                    Keyword("long")
+                }
             }
         case .int128:
             TypeName(kind: .other, "__int128_t")
         case .uint128:
             TypeName(kind: .other, "__uint128_t")
         case .float:
-            Keyword("float")
+            if let r = context.cTypeReplacements[.float] { TypeName(kind: .other, r) } else { Keyword("float") }
         case .double:
-            Keyword("double")
+            if let r = context.cTypeReplacements[.double] { TypeName(kind: .other, r) } else { Keyword("double") }
         case .longDouble:
-            Joined(separator: Space()) {
-                Keyword("long")
-                Keyword("double")
+            if let r = context.cTypeReplacements[.longDouble] {
+                TypeName(kind: .other, r)
+            } else {
+                Joined(separator: Space()) {
+                    Keyword("long")
+                    Keyword("double")
+                }
             }
         case .bool:
             Keyword("BOOL")

@@ -1,5 +1,6 @@
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 import AppKit
+@preconcurrency import RuntimeViewerSettings
 #endif
 
 #if canImport(UIKit)
@@ -32,10 +33,35 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
         self.imageNameOfRuntimeObject = runtimeObject.imageName
 
-        Observable.combineLatest($runtimeObject, appDefaults.$options, appDefaults.$themeProfile)
-            .flatMapLatest { [unowned self] runtimeObject, options, theme in
-                Observable.async {
-                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: options).map { ($0.interfaceString, theme, runtimeObject) }
+        let transformerObservable: Observable<Transformer.Configuration>
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        transformerObservable = Observable<Transformer.Configuration>.create { observer in
+            nonisolated(unsafe) let settings = Settings.shared
+            nonisolated(unsafe) let observer = observer
+            observer.onNext(settings.transformer)
+            func observe() {
+                withObservationTracking {
+                    _ = settings.transformer
+                } onChange: {
+                    DispatchQueue.main.async {
+                        observer.onNext(settings.transformer)
+                        observe()
+                    }
+                }
+            }
+            observe()
+            return Disposables.create()
+        }
+        #else
+        transformerObservable = .just(.init())
+        #endif
+
+        Observable.combineLatest($runtimeObject, appDefaults.$options, appDefaults.$themeProfile, transformerObservable)
+            .flatMapLatest { [unowned self] runtimeObject, options, theme, transformer in
+                var mergedOptions = options
+                mergedOptions.transformer = transformer
+                return Observable.async {
+                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: mergedOptions).map { ($0.interfaceString, theme, runtimeObject) }
                 }
                 .trackActivity(_commonLoading)
             }
