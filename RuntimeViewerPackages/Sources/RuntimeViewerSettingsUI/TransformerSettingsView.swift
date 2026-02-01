@@ -14,34 +14,35 @@ struct TransformerSettingsView: SettingsContent {
         SettingsGroup("Transformer", .navigation) {
             SettingsForm {
                 // MARK: - C Type Module
+                // MARK: - C Type Module
                 Section {
-                    Toggle("Enable C Type Replacement", isOn: $config.cType.isEnabled)
+                    Toggle("Enable C Type Replacement", isOn: $config.objc.cType.isEnabled)
                 } footer: {
                     Text("Replace C primitive types with custom types in ObjC interfaces.")
                 }
 
-                if config.cType.isEnabled {
+                if config.objc.cType.isEnabled {
                     Section {
-                        CTypeEditor(module: $config.cType)
+                        CTypeEditor(module: $config.objc.cType)
                     } header: {
                         HStack {
                             Text("Type Replacements")
                             Spacer()
-                            CTypePresets(module: $config.cType)
+                            CTypePresets(module: $config.objc.cType)
                         }
                     }
                 }
 
                 // MARK: - Field Offset Module
                 Section {
-                    Toggle("Enable Swift Field Offset Format", isOn: $config.swiftFieldOffset.isEnabled)
+                    Toggle("Enable Swift Field Offset Format", isOn: $config.swift.swiftFieldOffset.isEnabled)
                 } footer: {
                     Text("Customize swift field offset comment format in Swift interfaces.")
                 }
 
-                if config.swiftFieldOffset.isEnabled {
+                if config.swift.swiftFieldOffset.isEnabled {
                     Section {
-                        SwiftFieldOffsetEditor(module: $config.swiftFieldOffset)
+                        SwiftFieldOffsetEditor(module: $config.swift.swiftFieldOffset)
                     } header: {
                         Text("Output Format")
                     }
@@ -49,14 +50,14 @@ struct TransformerSettingsView: SettingsContent {
 
                 // MARK: - Type Layout Module
                 Section {
-                    Toggle("Enable Swift Type Layout Comment", isOn: $config.swiftTypeLayout.isEnabled)
+                    Toggle("Enable Swift Type Layout Comment", isOn: $config.swift.swiftTypeLayout.isEnabled)
                 } footer: {
                     Text("Customize swift type layout comment format in Swift interfaces.")
                 }
 
-                if config.swiftTypeLayout.isEnabled {
+                if config.swift.swiftTypeLayout.isEnabled {
                     Section {
-                        SwiftTypeLayoutEditor(module: $config.swiftTypeLayout)
+                        SwiftTypeLayoutEditor(module: $config.swift.swiftTypeLayout)
                     } header: {
                         Text("Output Format")
                     }
@@ -258,7 +259,13 @@ private final class TokenTemplateTextView: NSTextView {
         let range = NSRange(string.startIndex..., in: string)
         let matches = regex.matches(in: string, range: range)
 
+        let defaultAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+            .foregroundColor: NSColor.textColor,
+        ]
+
         textStorage.beginEditing()
+        textStorage.setAttributes(defaultAttributes, range: range)
         for match in matches.reversed() {
             let nsString = string as NSString
             let fullMatch = nsString.substring(with: match.range)
@@ -316,6 +323,10 @@ private struct TokenTemplateTextField: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.drawsBackground = true
         scrollView.backgroundColor = .textBackgroundColor
+        scrollView.wantsLayer = true
+        scrollView.layer?.cornerRadius = 6
+        scrollView.layer?.masksToBounds = true
+        scrollView.borderType = .noBorder
 
         textView.string = text
 

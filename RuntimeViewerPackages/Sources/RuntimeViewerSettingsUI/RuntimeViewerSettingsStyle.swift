@@ -31,7 +31,6 @@ struct RuntimeViewerSettingsStyle: SettingsStyle {
 
     private struct SidebarNavigationLink: View {
         let configuration: SettingsGroupConfiguration
-        @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
         var body: some View {
             destinationBasedLink
@@ -40,9 +39,7 @@ struct RuntimeViewerSettingsStyle: SettingsStyle {
         private var destinationBasedLink: some View {
             NavigationLink {
                 NavigationStack {
-//                    List {
                     configuration.content
-//                    }
                         .navigationTitle(configuration.title)
                 }
             } label: {
@@ -78,7 +75,9 @@ struct RuntimeViewerSettingsStyle: SettingsStyle {
             .hideSidebarToggle()
         }
 
-        private var selectionBinding: Binding<SettingsGroupConfiguration?>? { nil }
+        private var selectionBinding: Binding<SettingsGroupConfiguration?>? {
+            nil
+        }
     }
 }
 
