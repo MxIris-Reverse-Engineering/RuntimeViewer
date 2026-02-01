@@ -1,53 +1,39 @@
 import Foundation
 import FoundationToolbox
 import Observation
-import Dependencies
-import RuntimeViewerCore
+import MetaCodable
 
 @Observable
-public final class Settings: Codable, Loggable {
+@Codable
+@Loggable
+public final class Settings {
     public static let shared = Settings()
 
     private static var storage: SettingsStorageStrategy = SettingsFileSystemStorage()
 
+    @Default(ifMissing: General())
     public var general: General = .init() {
         didSet { scheduleAutoSave() }
     }
 
+    @Default(ifMissing: Notifications())
     public var notifications: Notifications = .init() {
         didSet { scheduleAutoSave() }
     }
 
-    public var transformer: RuntimeViewerCore.Transformer.Configuration = .init() {
+    @Default(ifMissing: TransformerSettings())
+    public var transformer: TransformerSettings = .init() {
         didSet { scheduleAutoSave() }
     }
 
-    @ObservationIgnored private var saveTask: Task<Void, Error>?
+    @IgnoreCoding
+    @ObservationIgnored
+    private var saveTask: Task<Void, Error>?
 
-    fileprivate init() {
+    internal init() {
         Task {
             await load()
         }
-    }
-
-    public required init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.general = try container.decodeIfPresent(General.self, forKey: .general) ?? .init()
-        self.notifications = try container.decodeIfPresent(Notifications.self, forKey: .notifications) ?? .init()
-        self.transformer = try container.decodeIfPresent(RuntimeViewerCore.Transformer.Configuration.self, forKey: .transformer) ?? .init()
-    }
-
-    public func encode(to encoder: any Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(general, forKey: .general)
-        try container.encode(notifications, forKey: .notifications)
-        try container.encode(transformer, forKey: .transformer)
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case general
-        case notifications
-        case transformer
     }
 
     private func scheduleAutoSave() {
@@ -64,9 +50,9 @@ public final class Settings: Codable, Loggable {
         do {
             let data = try JSONEncoder().encode(self)
             try await Self.storage.save(data)
-            logger.debug("Settings auto-saved successfully.")
+            #log(.debug, "Settings auto-saved successfully.")
         } catch {
-            logger.debug("Failed to save settings: \(error, privacy: .public)")
+            #log(.debug, "Failed to save settings: \(error, privacy: .public)")
         }
     }
 
@@ -77,94 +63,9 @@ public final class Settings: Codable, Loggable {
             general = decoded.general
             notifications = decoded.notifications
             transformer = decoded.transformer
-            logger.debug("Settings loaded successfully.")
+            #log(.debug, "Settings loaded successfully.")
         } catch {
-            logger.debug("No saved settings found or load failed, using defaults. (\(error, privacy: .public))")
+            #log(.debug, "No saved settings found or load failed, using defaults. (\(error, privacy: .public))")
         }
-    }
-}
-
-extension Settings {
-    /// The appearance of the app
-    /// - **system**: uses the system appearance
-    /// - **dark**: always uses dark appearance
-    /// - **light**: always uses light appearance
-    public enum Appearances: String, Codable {
-        case system
-        case light
-        case dark
-    }
-
-    public struct General: Codable {
-        public var appearance: Appearances = .system
-    }
-
-    public struct Notifications: Codable {
-        /// Whether notifications are enabled globally
-        public var isEnabled: Bool = true
-
-        /// Whether to show notification when connected to a runtime engine
-        public var showOnConnect: Bool = true
-
-        /// Whether to show notification when disconnected from a runtime engine
-        public var showOnDisconnect: Bool = true
-    }
-
-}
-
-// Use Transformer.Configuration directly from RuntimeViewerCore
-// Type alias for convenience
-public typealias TransformerSettings = RuntimeViewerCore.Transformer.Configuration
-
-protocol SettingsStorageStrategy {
-    func save(_ data: Data) async throws
-    func load() async throws -> Data
-}
-
-struct SettingsFileSystemStorage: SettingsStorageStrategy {
-    let fileName: String
-    let directory: FileManager.SearchPathDirectory
-
-    init(fileName: String = "settings.json", directory: FileManager.SearchPathDirectory = .applicationSupportDirectory) {
-        self.fileName = fileName
-        self.directory = directory
-    }
-
-    private var fileURL: URL {
-        let paths = FileManager.default.urls(for: directory, in: .userDomainMask)
-        let dir = paths[0].appendingPathComponent("MyAppConfig")
-
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent(fileName)
-    }
-
-    func save(_ data: Data) throws {
-        try data.write(to: fileURL, options: [.atomic])
-    }
-
-    func load() throws -> Data {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            throw SettingsStorageError.noData
-        }
-        return try Data(contentsOf: fileURL)
-    }
-}
-
-enum SettingsStorageError: Error {
-    case noData
-    case encodingFailed
-    case decodingFailed
-}
-
-
-private enum SettingsKey: DependencyKey {
-    static let liveValue = Settings.shared
-    static let previewValue = Settings()
-}
-
-extension DependencyValues {
-    public var settings: Settings {
-        get { self[SettingsKey.self] }
-        set { self[SettingsKey.self] = newValue }
     }
 }

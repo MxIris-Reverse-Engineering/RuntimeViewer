@@ -1,6 +1,6 @@
 import Foundation
 import MetaCodable
-public import Semantic
+import Semantic
 
 // MARK: - Transformer Namespace
 
@@ -66,13 +66,17 @@ extension Transformer {
         public var swiftFieldOffset: Transformer.SwiftFieldOffset
         @Default(ifMissing: Transformer.SwiftTypeLayout())
         public var swiftTypeLayout: Transformer.SwiftTypeLayout
+        @Default(ifMissing: Transformer.SwiftEnumLayout())
+        public var swiftEnumLayout: Transformer.SwiftEnumLayout
 
         public init(
             swiftFieldOffset: SwiftFieldOffset = .init(),
-            swiftTypeLayout: SwiftTypeLayout = .init()
+            swiftTypeLayout: SwiftTypeLayout = .init(),
+            swiftEnumLayout: SwiftEnumLayout = .init()
         ) {
             self.swiftFieldOffset = swiftFieldOffset
             self.swiftTypeLayout = swiftTypeLayout
+            self.swiftEnumLayout = swiftEnumLayout
         }
     }
 }
@@ -98,7 +102,7 @@ extension Transformer {
 
         /// Whether any module is enabled.
         public var hasEnabledModules: Bool {
-            objc.cType.isEnabled || swift.swiftFieldOffset.isEnabled || swift.swiftTypeLayout.isEnabled
+            objc.cType.isEnabled || swift.swiftFieldOffset.isEnabled || swift.swiftTypeLayout.isEnabled || swift.swiftEnumLayout.isEnabled
         }
     }
 }

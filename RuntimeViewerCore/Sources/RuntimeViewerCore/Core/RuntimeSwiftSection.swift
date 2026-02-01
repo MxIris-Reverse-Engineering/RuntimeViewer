@@ -98,6 +98,8 @@ actor RuntimeSwiftSection {
 
         var fieldOffsetTransformer: FieldOffsetTransformer? = oldPrintConfiguration.fieldOffsetTransformer
         var typeLayoutTransformer: TypeLayoutTransformer? = oldPrintConfiguration.typeLayoutTransformer
+        var enumLayoutTransformer: EnumLayoutTransformer? = oldPrintConfiguration.enumLayoutTransformer
+        var enumLayoutCaseTransformer: EnumLayoutCaseTransformer? = oldPrintConfiguration.enumLayoutCaseTransformer
 
         if transformerChanged {
             if transformer.swiftFieldOffset.isEnabled {
@@ -132,6 +134,52 @@ actor RuntimeSwiftSection {
             } else {
                 typeLayoutTransformer = nil
             }
+
+            if transformer.swiftEnumLayout.isEnabled {
+                let module = transformer.swiftEnumLayout
+                enumLayoutTransformer = EnumLayoutTransformer { layoutResult in
+                    let input = Transformer.SwiftEnumLayout.Input(
+                        strategy: layoutResult.strategyDescription,
+                        bitsNeededForTag: layoutResult.bitsNeededForTag,
+                        bitsAvailableForPayload: layoutResult.bitsAvailableForPayload,
+                        numTags: layoutResult.numTags,
+                        totalCases: layoutResult.cases.count,
+                        tagRegionRange: layoutResult.tagRegion.map { "\($0.range)" } ?? "N/A",
+                        tagRegionBitCount: layoutResult.tagRegion?.bitCount ?? 0,
+                        payloadRegionRange: layoutResult.payloadRegion.map { "\($0.range)" } ?? "N/A",
+                        payloadRegionBitCount: layoutResult.payloadRegion?.bitCount ?? 0
+                    )
+                    let result = module.transform(input)
+                    return InlineComment(result).asSemanticString()
+                }
+
+                enumLayoutCaseTransformer = EnumLayoutCaseTransformer { input in
+                    let caseProjection = input.caseProjection
+                    let indentation = input.indentation
+                    let caseType: String = caseProjection.caseName.hasPrefix("Payload") ? "Payload" : "Empty"
+                    let caseInput = Transformer.SwiftEnumLayout.CaseInput(
+                        caseIndex: caseProjection.caseIndex,
+                        caseName: caseProjection.caseName,
+                        tagValue: caseProjection.tagValue,
+                        payloadValue: caseProjection.payloadValue,
+                        tagHex: String(format: "0x%02X", caseProjection.tagValue),
+                        payloadHex: String(format: "0x%02X", caseProjection.payloadValue),
+                        caseType: caseType,
+                        memoryChangeCount: caseProjection.memoryChanges.count
+                    )
+                    let header = module.transformCase(caseInput)
+                    let indentStr = String(repeating: "    ", count: indentation)
+                    var output = ""
+                    for line in header.split(separator: "\n", omittingEmptySubsequences: false) {
+                        output += "\(indentStr)// \(line)\n"
+                    }
+                    output += caseProjection.formattedMemoryChanges(indent: indentation, prefix: "//")
+                    return AtomicComponent(string: output, type: .comment).asSemanticString()
+                }
+            } else {
+                enumLayoutTransformer = nil
+                enumLayoutCaseTransformer = nil
+            }
         }
 
         let newPrintConfiguration = SwiftInterfacePrintConfiguration(
@@ -140,7 +188,9 @@ actor RuntimeSwiftSection {
             printTypeLayout: options.printTypeLayout,
             printEnumLayout: options.printEnumLayout,
             fieldOffsetTransformer: fieldOffsetTransformer,
-            typeLayoutTransformer: typeLayoutTransformer
+            typeLayoutTransformer: typeLayoutTransformer,
+            enumLayoutTransformer: enumLayoutTransformer,
+            enumLayoutCaseTransformer: enumLayoutCaseTransformer
         )
         printer.updateConfiguration(newPrintConfiguration)
 
