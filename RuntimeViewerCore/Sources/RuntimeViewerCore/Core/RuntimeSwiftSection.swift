@@ -138,16 +138,22 @@ actor RuntimeSwiftSection {
             if transformer.swiftEnumLayout.isEnabled {
                 let module = transformer.swiftEnumLayout
                 enumLayoutTransformer = EnumLayoutTransformer { layoutResult in
+                    let payloadCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Payload") }.count
+                    let emptyCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Empty") }.count
                     let input = Transformer.SwiftEnumLayout.Input(
                         strategy: layoutResult.strategyDescription,
                         bitsNeededForTag: layoutResult.bitsNeededForTag,
                         bitsAvailableForPayload: layoutResult.bitsAvailableForPayload,
                         numTags: layoutResult.numTags,
                         totalCases: layoutResult.cases.count,
+                        payloadCaseCount: payloadCaseCount,
+                        emptyCaseCount: emptyCaseCount,
                         tagRegionRange: layoutResult.tagRegion.map { "\($0.range)" } ?? "N/A",
                         tagRegionBitCount: layoutResult.tagRegion?.bitCount ?? 0,
+                        tagRegionBytesHex: layoutResult.tagRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A",
                         payloadRegionRange: layoutResult.payloadRegion.map { "\($0.range)" } ?? "N/A",
-                        payloadRegionBitCount: layoutResult.payloadRegion?.bitCount ?? 0
+                        payloadRegionBitCount: layoutResult.payloadRegion?.bitCount ?? 0,
+                        payloadRegionBytesHex: layoutResult.payloadRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A"
                     )
                     let result = module.transform(input)
                     return InlineComment(result).asSemanticString()
@@ -157,6 +163,10 @@ actor RuntimeSwiftSection {
                     let caseProjection = input.caseProjection
                     let indentation = input.indentation
                     let caseType: String = caseProjection.caseName.hasPrefix("Payload") ? "Payload" : "Empty"
+                    let memoryChangesDetail = caseProjection.memoryChanges
+                        .sorted(by: { $0.key < $1.key })
+                        .map { "[\($0.key)]=0x\(String(format: "%02X", $0.value))" }
+                        .joined(separator: ", ")
                     let caseInput = Transformer.SwiftEnumLayout.CaseInput(
                         caseIndex: caseProjection.caseIndex,
                         caseName: caseProjection.caseName,
@@ -164,8 +174,11 @@ actor RuntimeSwiftSection {
                         payloadValue: caseProjection.payloadValue,
                         tagHex: String(format: "0x%02X", caseProjection.tagValue),
                         payloadHex: String(format: "0x%02X", caseProjection.payloadValue),
+                        tagValueBinary: "0b\(String(caseProjection.tagValue, radix: 2))",
+                        payloadValueBinary: "0b\(String(caseProjection.payloadValue, radix: 2))",
                         caseType: caseType,
-                        memoryChangeCount: caseProjection.memoryChanges.count
+                        memoryChangeCount: caseProjection.memoryChanges.count,
+                        memoryChangesDetail: memoryChangesDetail
                     )
                     let header = module.transformCase(caseInput)
                     let indentStr = String(repeating: "    ", count: indentation)
