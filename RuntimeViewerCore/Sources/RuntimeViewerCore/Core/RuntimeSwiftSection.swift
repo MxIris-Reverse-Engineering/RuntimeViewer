@@ -42,6 +42,8 @@ actor RuntimeSwiftSection: Loggable {
 
     private var interfaceByName: OrderedDictionary<RuntimeObject, RuntimeObjectInterface> = [:]
 
+    private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
+
     private var nameToInterfaceDefinitionName: [RuntimeObject: InterfaceDefinitionName] = [:]
 
     private enum InterfaceDefinitionName {
@@ -82,7 +84,7 @@ actor RuntimeSwiftSection: Loggable {
         Self.logger.info("Swift section initialized successfully")
     }
 
-    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.Configuration = .init()) async throws {
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration) async throws {
         logger.debug("Updating Swift section configuration")
 
         let oldIndexConfiguration = indexer.configuration
@@ -90,41 +92,57 @@ actor RuntimeSwiftSection: Loggable {
         try await indexer.updateConfiguration(newIndexConfiguration)
 
         let oldPrintConfiguration = printer.configuration
-        let newPrintConfiguration = SwiftInterfacePrintConfiguration(printStrippedSymbolicItem: options.printStrippedSymbolicItem, emitOffsetComments: options.emitOffsetComments, printTypeLayout: options.printTypeLayout, printEnumLayout: options.printEnumLayout)
+
+        let transformerChanged = transformer != lastTransformerConfiguration
+        lastTransformerConfiguration = transformer
+
+        var fieldOffsetTransformer: FieldOffsetTransformer? = oldPrintConfiguration.fieldOffsetTransformer
+        var typeLayoutTransformer: TypeLayoutTransformer? = oldPrintConfiguration.typeLayoutTransformer
+
+        if transformerChanged {
+            if transformer.swiftFieldOffset.isEnabled {
+                let module = transformer.swiftFieldOffset
+                fieldOffsetTransformer = FieldOffsetTransformer { input in
+                    let result = module.transform(.init(startOffset: input.startOffset, endOffset: input.endOffset))
+                    return Comment(result).asSemanticString()
+                }
+            } else {
+                fieldOffsetTransformer = nil
+            }
+
+            if transformer.swiftTypeLayout.isEnabled {
+                let module = transformer.swiftTypeLayout
+                typeLayoutTransformer = TypeLayoutTransformer { typeLayout in
+                    let input = Transformer.SwiftTypeLayout.Input(
+                        size: Int(typeLayout.size),
+                        stride: Int(typeLayout.stride),
+                        alignment: Int(typeLayout.flags.alignment),
+                        extraInhabitantCount: Int(typeLayout.extraInhabitantCount),
+                        isPOD: typeLayout.flags.isPOD,
+                        isInlineStorage: typeLayout.flags.isInlineStorage,
+                        isBitwiseTakable: typeLayout.flags.isBitwiseTakable,
+                        isBitwiseBorrowable: typeLayout.flags.isBitwiseBorrowable,
+                        isCopyable: typeLayout.flags.isCopyable,
+                        hasEnumWitnesses: typeLayout.flags.hasEnumWitnesses,
+                        isIncomplete: typeLayout.flags.isIncomplete
+                    )
+                    let result = module.transform(input)
+                    return Comment(result).asSemanticString()
+                }
+            } else {
+                typeLayoutTransformer = nil
+            }
+        }
+
+        let newPrintConfiguration = SwiftInterfacePrintConfiguration(
+            printStrippedSymbolicItem: options.printStrippedSymbolicItem,
+            printFieldOffset: options.emitOffsetComments,
+            printTypeLayout: options.printTypeLayout,
+            printEnumLayout: options.printEnumLayout,
+            fieldOffsetTransformer: fieldOffsetTransformer,
+            typeLayoutTransformer: typeLayoutTransformer
+        )
         printer.updateConfiguration(newPrintConfiguration)
-
-        if transformer.swiftFieldOffset.isEnabled {
-            let fieldOffsetModule = transformer.swiftFieldOffset
-            printer.fieldOffsetTransformer = { startOffset, endOffset in
-                let result = fieldOffsetModule.transform(.init(startOffset: startOffset, endOffset: endOffset))
-                return Comment(result).asSemanticString()
-            }
-        } else {
-            printer.fieldOffsetTransformer = nil
-        }
-
-        if transformer.swiftTypeLayout.isEnabled {
-            let typeLayoutModule = transformer.swiftTypeLayout
-            printer.typeLayoutTransformer = { typeLayout in
-                let input = Transformer.SwiftTypeLayout.Input(
-                    size: Int(typeLayout.size),
-                    stride: Int(typeLayout.stride),
-                    alignment: Int(typeLayout.flags.alignment),
-                    extraInhabitantCount: Int(typeLayout.extraInhabitantCount),
-                    isPOD: typeLayout.flags.isPOD,
-                    isInlineStorage: typeLayout.flags.isInlineStorage,
-                    isBitwiseTakable: typeLayout.flags.isBitwiseTakable,
-                    isBitwiseBorrowable: typeLayout.flags.isBitwiseBorrowable,
-                    isCopyable: typeLayout.flags.isCopyable,
-                    hasEnumWitnesses: typeLayout.flags.hasEnumWitnesses,
-                    isIncomplete: typeLayout.flags.isIncomplete
-                )
-                let result = typeLayoutModule.transform(input)
-                return Comment(result).asSemanticString()
-            }
-        } else {
-            printer.typeLayoutTransformer = nil
-        }
 
         if options.synthesizeOpaqueType {
             printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))

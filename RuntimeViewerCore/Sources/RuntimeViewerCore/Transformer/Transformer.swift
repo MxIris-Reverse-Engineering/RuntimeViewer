@@ -19,7 +19,7 @@ extension Transformer {
     ///
     /// To add a new module:
     /// 1. Create a struct conforming to `Transformer.Module`
-    /// 2. Add it as a property in `Transformer.Configuration`
+    /// 2. Add it as a property in the appropriate configuration
     public protocol Module: Codable, Sendable, Hashable {
         /// Predefined parameters, displayed in Settings UI for user configuration.
         associatedtype Parameter: CaseIterable & Hashable & Sendable
@@ -41,58 +41,64 @@ extension Transformer {
     }
 }
 
-// MARK: - Configuration
+// MARK: - ObjC Configuration
 
 extension Transformer {
-    /// Aggregated configuration for all transformer modules.
+    /// Configuration for ObjC-specific transformer modules.
     @Codable
-    public struct Configuration: Sendable, Equatable, Hashable {
+    public struct ObjCConfiguration: Sendable, Equatable, Hashable {
         @Default(ifMissing: Transformer.CType())
         public var cType: Transformer.CType
+
+        public init(cType: CType = .init()) {
+            self.cType = cType
+        }
+    }
+}
+
+// MARK: - Swift Configuration
+
+extension Transformer {
+    /// Configuration for Swift-specific transformer modules.
+    @Codable
+    public struct SwiftConfiguration: Sendable, Equatable, Hashable {
         @Default(ifMissing: Transformer.SwiftFieldOffset())
         public var swiftFieldOffset: Transformer.SwiftFieldOffset
         @Default(ifMissing: Transformer.SwiftTypeLayout())
         public var swiftTypeLayout: Transformer.SwiftTypeLayout
 
         public init(
-            cType: CType = .init(),
             swiftFieldOffset: SwiftFieldOffset = .init(),
             swiftTypeLayout: SwiftTypeLayout = .init()
         ) {
-            self.cType = cType
             self.swiftFieldOffset = swiftFieldOffset
             self.swiftTypeLayout = swiftTypeLayout
-        }
-
-        /// Whether any module is enabled.
-        public var hasEnabledModules: Bool {
-            cType.isEnabled || swiftFieldOffset.isEnabled || swiftTypeLayout.isEnabled
-        }
-
-        /// Applies post-processing transformer modules to the interface string.
-        /// Note: CType replacement is applied at generation time via ObjCDumpContext.
-        public func apply(to interface: SemanticString) -> SemanticString {
-            interface
         }
     }
 }
 
-// MARK: - Presets
+// MARK: - Aggregated Configuration
 
-extension Transformer.Configuration {
-    public static var disabled: Self { .init() }
+extension Transformer {
+    /// Aggregated configuration for all transformer modules (used for persistence).
+    @Codable
+    public struct Configuration: Sendable, Equatable, Hashable {
+        @Default(ifMissing: Transformer.ObjCConfiguration())
+        public var objc: Transformer.ObjCConfiguration
+        @Default(ifMissing: Transformer.SwiftConfiguration())
+        public var swift: Transformer.SwiftConfiguration
 
-    public static var stdint: Self {
-        var config = Self()
-        config.cType.isEnabled = true
-        config.cType.replacements = Transformer.CType.Presets.stdint
-        return config
-    }
+        public init(
+            objc: ObjCConfiguration = .init(),
+            swift: SwiftConfiguration = .init()
+        ) {
+            self.objc = objc
+            self.swift = swift
+        }
 
-    public static var foundation: Self {
-        var config = Self()
-        config.cType.isEnabled = true
-        config.cType.replacements = Transformer.CType.Presets.foundation
-        return config
+        /// Whether any module is enabled.
+        public var hasEnabledModules: Bool {
+            objc.cType.isEnabled || swift.swiftFieldOffset.isEnabled || swift.swiftTypeLayout.isEnabled
+        }
     }
 }

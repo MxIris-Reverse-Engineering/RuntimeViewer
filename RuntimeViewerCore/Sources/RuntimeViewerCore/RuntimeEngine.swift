@@ -312,22 +312,22 @@ public actor RuntimeEngine: Loggable {
         switch name.kind {
         case .swift:
             let swiftSection = imageToSwiftSection[name.imagePath]
-            try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer)
+            try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
             rawInterface = try? await swiftSection?.interface(for: name)
         case .c,
              .objc:
             let objcSection = imageToObjCSection[name.imagePath]
-            let cTypeReplacements = options.transformer.cType.isEnabled ? options.transformer.cType.replacements : [:]
-            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, cTypeReplacements: cTypeReplacements) {
+            let objcTransformer = options.transformer.objc
+            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer) {
                 rawInterface = interface
             } else {
                 switch name.kind {
                 case .objc(.type(let kind)):
                     switch kind {
                     case .class:
-                        rawInterface = try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, cTypeReplacements: cTypeReplacements)
+                        rawInterface = try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
                     case .protocol:
-                        rawInterface = try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, cTypeReplacements: cTypeReplacements)
+                        rawInterface = try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
                     }
                 default:
                     rawInterface = nil
@@ -335,24 +335,7 @@ public actor RuntimeEngine: Loggable {
             }
         }
 
-        // Apply transformers if configured
-        guard let rawInterface else { return nil }
-        return applyTransformers(to: rawInterface, options: options)
-    }
-
-    /// Applies configured transformers to the given interface.
-    private func applyTransformers(
-        to interface: RuntimeObjectInterface,
-        options: RuntimeObjectInterface.GenerationOptions
-    ) -> RuntimeObjectInterface {
-        let transformedString = options.transformer.apply(
-            to: interface.interfaceString
-        )
-
-        return RuntimeObjectInterface(
-            object: interface.object,
-            interfaceString: transformedString
-        )
+        return rawInterface
     }
 
     private func _objcSection(for imagePath: String) async throws -> RuntimeObjCSection {

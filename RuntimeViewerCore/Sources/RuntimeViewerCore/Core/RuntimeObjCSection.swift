@@ -312,9 +312,10 @@ actor RuntimeObjCSection: Loggable {
         return results
     }
 
-    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, cTypeReplacements: [Transformer.CType.Pattern: String] = [:]) async throws -> RuntimeObjectInterface {
+    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration) async throws -> RuntimeObjectInterface {
         logger.debug("Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
+        let cTypeReplacements = transformer.cType.isEnabled ? transformer.cType.replacements : [:]
         let objcDumpContext = ObjCDumpContext(options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
             guard let name else { return true }
             if isStruct {

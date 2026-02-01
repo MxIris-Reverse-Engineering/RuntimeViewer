@@ -41,10 +41,13 @@ extension Transformer {
         }
 
         /// Renders the template with actual offset values.
+        ///
+        /// When `endOffset` is `nil` (last field in a type), the `${endOffset}` token
+        /// is replaced with `"?"`.
         public func transform(_ input: Input) -> String {
             template
                 .replacingOccurrences(of: Token.startOffset.placeholder, with: formatValue(input.startOffset))
-                .replacingOccurrences(of: Token.endOffset.placeholder, with: formatValue(input.endOffset))
+                .replacingOccurrences(of: Token.endOffset.placeholder, with: input.endOffset.map(formatValue) ?? "?")
         }
 
         private func formatValue(_ value: Int) -> String {
@@ -64,9 +67,9 @@ extension Transformer.SwiftFieldOffset {
     /// Input for field offset transformation.
     public struct Input: Sendable {
         public let startOffset: Int
-        public let endOffset: Int
+        public let endOffset: Int?
 
-        public init(startOffset: Int, endOffset: Int) {
+        public init(startOffset: Int, endOffset: Int?) {
             self.startOffset = startOffset
             self.endOffset = endOffset
         }
