@@ -2,7 +2,6 @@
 
 import Foundation
 import FoundationToolbox
-import OSLog
 import Combine
 @preconcurrency public import SwiftyXPC
 
@@ -53,7 +52,8 @@ import Combine
 ///
 /// - Note: For code injection into sandboxed apps, use `RuntimeLocalSocketConnection`
 ///   instead, as XPC requires the target process to explicitly participate.
-class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable, Loggable {
+@Loggable
+class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
     fileprivate let identifier: RuntimeSource.Identifier
 
     fileprivate let listener: SwiftyXPC.XPCListener
@@ -97,22 +97,22 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable, Loggable {
         let serviceConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
         serviceConnection.activate()
         try await serviceConnection.sendMessage(request: PingRequest())
-        Self.logger.info("Ping mach service successfully")
+        #log(.info, "Ping mach service successfully")
         return serviceConnection
     }
 
     func handleServiceConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
-        logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
+        #log(.error, "\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
 //        stateSubject.send(.disconnected(error: .xpcError("Service connection error: \(error.localizedDescription)")))
     }
 
     func handleListenerError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
-        logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
+        #log(.error, "\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
         stateSubject.send(.disconnected(error: .xpcError("Listener error: \(error.localizedDescription)")))
     }
 
     func handleClientOrServerConnectionError(connection: SwiftyXPC.XPCConnection, error: any Swift.Error) {
-        logger.error("\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
+        #log(.error, "\(String(describing: connection), privacy: .public) \(String(describing: error), privacy: .public)")
         stateSubject.send(.disconnected(error: .xpcError("Connection error: \(error.localizedDescription)")))
     }
 
@@ -122,7 +122,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable, Loggable {
         serviceConnection.cancel()
         listener.cancel()
         stateSubject.send(.disconnected(error: nil))
-        logger.info("XPC connection stopped")
+        #log(.info, "XPC connection stopped")
     }
 
     enum Error: Swift.Error {
@@ -250,7 +250,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
             _ = try await connection.sendMessage(request: PingRequest())
             self.connection = connection
             self.stateSubject.send(.connected)
-            Self.logger.info("Ping server successfully")
+            #log(.info, "Ping server successfully")
         }
     }
 }
@@ -297,7 +297,7 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
         try await connection.sendMessage(name: CommandIdentifiers.serverLaunched, request: listener.endpoint)
         self.connection = connection
         stateSubject.send(.connected)
-        Self.logger.info("Ping client successfully")
+        #log(.info, "Ping client successfully")
     }
 }
 

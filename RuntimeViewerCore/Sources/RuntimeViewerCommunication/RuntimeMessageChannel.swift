@@ -94,7 +94,8 @@ extension RuntimeMessageProtocol {
 ///     // Write data to underlying transport
 /// })
 /// ```
-final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, Loggable {
+@Loggable
+final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Unique identifier for this channel.
     let id = UUID()
 
@@ -122,7 +123,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
 
     init() {
         setupStreams()
-        logger.debug("RuntimeMessageChannel initialized with id: \(self.id, privacy: .public)")
+        #log(.debug, "RuntimeMessageChannel initialized with id: \(self.id, privacy: .public)")
     }
 
     // MARK: - Stream Setup
@@ -161,7 +162,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
     /// Registers a handler for messages with both request payload and response.
     func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) {
         messageHandlers.withLock { $0[name] = RuntimeMessageHandler(closure: handler) }
-        logger.debug("Registered message handler for: \(name, privacy: .public)")
+        #log(.debug, "Registered message handler for: \(name, privacy: .public)")
     }
 
     /// Registers a handler for typed requests with associated responses.
@@ -184,7 +185,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
         guard let continuation = pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) else {
             return false
         }
-        logger.debug("Delivered response to pending request: \(identifier, privacy: .public)")
+        #log(.debug, "Delivered response to pending request: \(identifier, privacy: .public)")
         continuation.resume(returning: data)
         return true
     }
@@ -222,10 +223,10 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
     /// Finishes the received data stream.
     func finishReceiving(throwing error: (any Error)? = nil) {
         if let error {
-            logger.warning("Finishing receiving with error: \(String(describing: error), privacy: .public)")
+            #log(.default, "Finishing receiving with error: \(String(describing: error), privacy: .public)")
             receivedDataContinuation?.finish(throwing: error)
         } else {
-            logger.debug("Finishing receiving stream normally")
+            #log(.debug, "Finishing receiving stream normally")
             receivedDataContinuation?.finish()
         }
     }
@@ -246,7 +247,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
         defer { sendSemaphore.signal() }
 
         let dataToSend = data + Self.endMarkerData
-        logger.debug("Sending \(dataToSend.count, privacy: .public) bytes")
+        #log(.debug, "Sending \(dataToSend.count, privacy: .public) bytes")
         try await writer(dataToSend)
     }
 
@@ -257,7 +258,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
     ) async throws -> Response {
         await sendSemaphore.wait()
 
-        logger.debug("Sending request: \(requestData.identifier, privacy: .public)")
+        #log(.debug, "Sending request: \(requestData.identifier, privacy: .public)")
         let data = try JSONEncoder().encode(requestData)
         let dataToSend = data + Self.endMarkerData
 
@@ -271,7 +272,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
                 } catch {
                     // Remove pending request and resume with error
                     _ = self.pendingRequests.withLock { $0.removeValue(forKey: requestData.identifier) }
-                    Self.logger.error("Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
+                    #log(.error, "Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
                     continuation.resume(throwing: error)
                 }
             }
@@ -279,7 +280,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
 
         sendSemaphore.signal()
 
-        logger.debug("Received response for: \(requestData.identifier, privacy: .public)")
+        #log(.debug, "Received response for: \(requestData.identifier, privacy: .public)")
         let response = try JSONDecoder().decode(RuntimeRequestData.self, from: responseData)
         return try JSONDecoder().decode(Response.self, from: response.data)
     }
@@ -292,7 +293,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
         await sendSemaphore.wait()
         defer { sendSemaphore.signal() }
 
-        logger.debug("Sending fire-and-forget request: \(requestData.identifier, privacy: .public)")
+        #log(.debug, "Sending fire-and-forget request: \(requestData.identifier, privacy: .public)")
         let data = try JSONEncoder().encode(requestData)
         let dataToSend = data + Self.endMarkerData
         try await writer(dataToSend)
@@ -301,21 +302,21 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol, 
     /// Waits for and returns the next received message.
     func receiveData() async throws -> Data {
         guard let receivedDataStream else {
-            logger.error("Attempted to receive data but channel is not connected")
+            #log(.error, "Attempted to receive data but channel is not connected")
             throw RuntimeMessageChannelError.notConnected
         }
 
         for try await data in receivedDataStream {
             if let error = try? JSONDecoder().decode(RuntimeNetworkRequestError.self, from: data) {
-                logger.warning("Received error response: \(String(describing: error), privacy: .public)")
+                #log(.default, "Received error response: \(String(describing: error), privacy: .public)")
                 throw error
             } else {
-                logger.debug("Received \(data.count, privacy: .public) bytes")
+                #log(.debug, "Received \(data.count, privacy: .public) bytes")
                 return data
             }
         }
 
-        logger.error("Receive failed - stream ended unexpectedly")
+        #log(.error, "Receive failed - stream ended unexpectedly")
         throw RuntimeMessageChannelError.receiveFailed
     }
 
