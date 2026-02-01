@@ -96,7 +96,7 @@ actor RuntimeObjCSection {
             }
         }
     }
-    
+
     init(ptr: UnsafeRawPointer) async throws {
         guard let machO = MachOImage.image(for: ptr) else {
             #log(.error, "Failed to create MachOImage from pointer")
@@ -551,7 +551,6 @@ enum RuntimeObjCName {
 }
 
 extension MachOImage {
-
     static func image(forName name: RuntimeObjCName) -> Self? {
         switch name {
         case .class(let string):

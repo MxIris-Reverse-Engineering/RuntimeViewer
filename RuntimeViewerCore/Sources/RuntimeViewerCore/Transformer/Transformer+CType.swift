@@ -175,18 +175,36 @@ extension Transformer.CType {
             .uchar: "uint8_t",
             .ushort: "uint16_t",
             .uint: "uint32_t",
+            .ulong: "uint64_t",
             .ulongLong: "uint64_t",
-            .longLong: "int64_t",
+            
+            .char: "int8_t",
             .short: "int16_t",
+            .int: "int32_t",
+            .long: "int64_t",
+            .longLong: "int64_t",
         ]
 
         public static let foundation: [Pattern: String] = [
             .double: "CGFloat",
-            .float: "CGFloat",
             .long: "NSInteger",
             .ulong: "NSUInteger",
             .longLong: "NSInteger",
             .ulongLong: "NSUInteger",
+        ]
+        
+        public static let mixed: [Pattern: String] = [
+            .uchar: "uint8_t",
+            .ushort: "uint16_t",
+            .uint: "uint32_t",
+            .char: "int8_t",
+            .short: "int16_t",
+            .int: "int32_t",
+            .long: "NSInteger",
+            .ulong: "NSUInteger",
+            .longLong: "NSInteger",
+            .ulongLong: "NSUInteger",
+            .double: "CGFloat",
         ]
     }
 }

@@ -5,7 +5,6 @@ import Dependencies
 import RuntimeViewerSettings
 import RuntimeViewerCore
 
-
 struct TransformerSettingsView: SettingsContent {
     @AppSettings(\.transformer)
     var config
@@ -14,11 +13,11 @@ struct TransformerSettingsView: SettingsContent {
         SettingsGroup("Transformer", .navigation) {
             SettingsForm {
                 // MARK: - C Type Module
-                // MARK: - C Type Module
+
                 Section {
-                    Toggle("Enable C Type Replacement", isOn: $config.objc.cType.isEnabled)
+                    Toggle("Transform C Types", isOn: $config.objc.cType.isEnabled)
                 } footer: {
-                    Text("Replace C primitive types with custom types in ObjC interfaces.")
+                    Text("Transform C primitive types to custom types in ObjC interfaces.")
                 }
 
                 if config.objc.cType.isEnabled {
@@ -33,11 +32,12 @@ struct TransformerSettingsView: SettingsContent {
                     }
                 }
 
-                // MARK: - Field Offset Module
+                // MARK: - Swift Field Offset Module
+
                 Section {
-                    Toggle("Enable Swift Field Offset Format", isOn: $config.swift.swiftFieldOffset.isEnabled)
+                    Toggle("Transform Swift Field Offset Comment", isOn: $config.swift.swiftFieldOffset.isEnabled)
                 } footer: {
-                    Text("Customize swift field offset comment format in Swift interfaces.")
+                    Text("Transform Swift field offset comment format in Swift interfaces.")
                 }
 
                 if config.swift.swiftFieldOffset.isEnabled {
@@ -48,16 +48,33 @@ struct TransformerSettingsView: SettingsContent {
                     }
                 }
 
-                // MARK: - Type Layout Module
+                // MARK: - Swift Type Layout Module
+
                 Section {
-                    Toggle("Enable Swift Type Layout Comment", isOn: $config.swift.swiftTypeLayout.isEnabled)
+                    Toggle("Transform Swift Type Layout Comment", isOn: $config.swift.swiftTypeLayout.isEnabled)
                 } footer: {
-                    Text("Customize swift type layout comment format in Swift interfaces.")
+                    Text("Transform Swift type layout comment format in Swift interfaces.")
                 }
 
                 if config.swift.swiftTypeLayout.isEnabled {
                     Section {
                         SwiftTypeLayoutEditor(module: $config.swift.swiftTypeLayout)
+                    } header: {
+                        Text("Output Format")
+                    }
+                }
+
+                // MARK: - Swift Enum Layout Module
+
+                Section {
+                    Toggle("Transform Swift Enum Layout Comment", isOn: $config.swift.swiftEnumLayout.isEnabled)
+                } footer: {
+                    Text("Transform Swift enum layout comment format in Swift interfaces.")
+                }
+
+                if config.swift.swiftEnumLayout.isEnabled {
+                    Section {
+                        SwiftEnumLayoutEditor(module: $config.swift.swiftEnumLayout)
                     } header: {
                         Text("Output Format")
                     }
@@ -78,27 +95,34 @@ private struct CTypeEditor: View {
         Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
             ForEach(Transformer.CType.Pattern.allCases, id: \.self) { pattern in
                 GridRow {
-                    Text(pattern.displayName)
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .gridColumnAlignment(.trailing)
-                        .lineLimit(1)
-                        .fixedSize()
+                    HStack(spacing: 6) {
+                        Text(pattern.displayName)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
 
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .fixedSize()
+                    .gridColumnAlignment(.trailing)
 
-                    TextField("Replacement", text: Binding(
-                        get: { module.replacements[pattern] ?? "" },
-                        set: { newValue in
-                            if newValue.isEmpty {
-                                module.replacements.removeValue(forKey: pattern)
-                            } else {
-                                module.replacements[pattern] = newValue
+                    TextField(
+                        "Replacement",
+                        text: Binding(
+                            get: {
+                                module.replacements[pattern] ?? ""
+                            },
+                            set: { newValue in
+                                if newValue.isEmpty {
+                                    module.replacements.removeValue(forKey: pattern)
+                                } else {
+                                    module.replacements[pattern] = newValue
+                                }
                             }
-                        }
-                    ))
+                        )
+                    )
                     .textFieldStyle(.roundedBorder)
                     .font(.system(.body, design: .monospaced))
                 }
@@ -114,7 +138,7 @@ private struct CTypePresets: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Button("stdint.h") {
+            Button("stdint") {
                 module.replacements = Transformer.CType.Presets.stdint
             }
             .buttonStyle(.bordered)
@@ -127,6 +151,12 @@ private struct CTypePresets: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .help("CGFloat, NSInteger, etc.")
+            
+            Button("Mixed") {
+                module.replacements = Transformer.CType.Presets.mixed
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
 
             Button("Clear") {
                 module.replacements.removeAll()
@@ -281,9 +311,9 @@ private final class TokenTemplateTextView: NSTextView {
     }
 }
 
-private extension NSAttributedString {
+extension NSAttributedString {
     /// Converts attachment-based tokens back to ${...} placeholder strings.
-    var untokenized: NSAttributedString {
+    fileprivate var untokenized: NSAttributedString {
         let result = mutableCopy() as! NSMutableAttributedString
         let fullRange = NSRange(string.startIndex..., in: string)
         enumerateAttribute(.attachment, in: fullRange, options: .reverse) { value, range, _ in
@@ -448,7 +478,7 @@ private struct SwiftFieldOffsetEditor: View {
                 Text("Presets")
                     .foregroundStyle(.secondary)
 
-                HStack(spacing: 6) {
+                FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftFieldOffset.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
                             module.template = preset.template
@@ -511,7 +541,7 @@ private struct SwiftTypeLayoutEditor: View {
                 Text("Presets")
                     .foregroundStyle(.secondary)
 
-                HStack(spacing: 6) {
+                FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftTypeLayout.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
                             module.template = preset.template
@@ -520,6 +550,114 @@ private struct SwiftTypeLayoutEditor: View {
                         .controlSize(.small)
                     }
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Swift Enum Layout Editor
+
+private struct SwiftEnumLayoutEditor: View {
+    @Binding var module: Transformer.SwiftEnumLayout
+    @State private var strategyFieldHeight: CGFloat = 24
+    @State private var caseFieldHeight: CGFloat = 24
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+            // Strategy header template editor
+            GridRow {
+                Text("Strategy\nTemplate")
+                    .foregroundStyle(.secondary)
+                    .gridColumnAlignment(.trailing)
+
+                TokenTemplateTextField(text: $module.template, height: $strategyFieldHeight)
+                    .frame(height: max(24, strategyFieldHeight))
+            }
+
+            // Strategy token chips
+            GridRow {
+                Text("Tokens")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftEnumLayout.Token.allCases, id: \.self) { token in
+                        CopyableTokenChip(token: token, placeholder: token.placeholder)
+                    }
+                }
+            }
+
+            // Strategy preset buttons
+            GridRow {
+                Text("Presets")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftEnumLayout.Templates.all, id: \.name) { preset in
+                        Button(preset.name) {
+                            module.template = preset.template
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+
+            Divider()
+                .gridCellColumns(2)
+
+            // Per-case template editor
+            GridRow {
+                Text("Case\nTemplate")
+                    .foregroundStyle(.secondary)
+                    .gridColumnAlignment(.trailing)
+
+                TokenTemplateTextField(text: $module.caseTemplate, height: $caseFieldHeight)
+                    .frame(height: max(24, caseFieldHeight))
+            }
+
+            // Case token chips
+            GridRow {
+                Text("Tokens")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftEnumLayout.CaseToken.allCases, id: \.self) { token in
+                        CopyableTokenChip(token: token, placeholder: token.placeholder)
+                    }
+                }
+            }
+
+            // Case preset buttons
+            GridRow {
+                Text("Presets")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftEnumLayout.CaseTemplates.all, id: \.name) { preset in
+                        Button(preset.name) {
+                            module.caseTemplate = preset.template
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+
+            Divider()
+                .gridCellColumns(2)
+
+            // Radix picker (shared)
+            GridRow {
+                Text("Radix")
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $module.useHexadecimal) {
+                    Text("Decimal").tag(false)
+                    Text("Hexadecimal").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
             }
         }
     }
