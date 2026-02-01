@@ -4,7 +4,6 @@ import MachOObjCSection
 import ObjCDump
 import ObjCTypeDecodeKit
 import OrderedCollections
-import OSLog
 private import RuntimeViewerCoreObjC
 import Semantic
 import Utilities
@@ -30,7 +29,8 @@ public struct ObjCGenerationOptions: Sendable, Equatable {
     public var addPropertyAttributesComments: Bool = false
 }
 
-actor RuntimeObjCSection: Loggable {
+@Loggable
+actor RuntimeObjCSection {
     enum Error: Swift.Error {
         case invalidMachOImage
         case invalidRuntimeObject
@@ -99,17 +99,17 @@ actor RuntimeObjCSection: Loggable {
     
     init(ptr: UnsafeRawPointer) async throws {
         guard let machO = MachOImage.image(for: ptr) else {
-            Self.logger.error("Failed to create MachOImage from pointer")
+            #log(.error, "Failed to create MachOImage from pointer")
             throw Error.invalidMachOImage
         }
         try await self.init(machO: machO)
     }
 
     init(imagePath: String) async throws {
-        Self.logger.info("Initializing ObjC section for image: \(imagePath, privacy: .public)")
+        #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
         guard let machO = MachOImage(name: imageName) else {
-            Self.logger.error("Failed to create MachOImage for: \(imageName, privacy: .public)")
+            #log(.error, "Failed to create MachOImage for: \(imageName, privacy: .public)")
             throw Error.invalidMachOImage
         }
         self.machO = machO
@@ -118,14 +118,14 @@ actor RuntimeObjCSection: Loggable {
     }
 
     init(machO: MachOImage) async throws {
-        Self.logger.info("Initializing ObjC section from MachO: \(machO.imagePath, privacy: .public)")
+        #log(.info, "Initializing ObjC section from MachO: \(machO.imagePath, privacy: .public)")
         self.machO = machO
         self.imagePath = machO.imagePath
         try await prepare()
     }
 
     private func prepare() async throws {
-        logger.debug("Preparing ObjC section data")
+        #log(.debug, "Preparing ObjC section data")
         var classByName: [String: ObjCClassGroup] = [:]
         var protocolByName: [String: ObjCProtocolGroup] = [:]
         var categoryByName: [String: ObjCCategoryGroup] = [:]
@@ -238,7 +238,7 @@ actor RuntimeObjCSection: Loggable {
         categories = categoryByName
         structs = structsByName
         unions = unionsByName
-        logger.info("ObjC section prepared: \(classByName.count, privacy: .public) classes, \(protocolByName.count, privacy: .public) protocols, \(categoryByName.count, privacy: .public) categories, \(structsByName.count, privacy: .public) structs, \(unionsByName.count, privacy: .public) unions")
+        #log(.info, "ObjC section prepared: \(classByName.count, privacy: .public) classes, \(protocolByName.count, privacy: .public) protocols, \(categoryByName.count, privacy: .public) categories, \(structsByName.count, privacy: .public) structs, \(unionsByName.count, privacy: .public) unions")
     }
 
     private func infoWithSuperclasses<Class: ObjCClassProtocol>(class cls: Class, in machO: MachOImage) -> [ObjCClassInfo] {
@@ -285,7 +285,7 @@ actor RuntimeObjCSection: Loggable {
     }
 
     func allObjects() async throws -> [RuntimeObject] {
-        logger.debug("Getting all ObjC objects")
+        #log(.debug, "Getting all ObjC objects")
         var results: [RuntimeObject] = []
 
         for structName in structs.keys {
@@ -308,12 +308,12 @@ actor RuntimeObjCSection: Loggable {
             results.append(.init(name: category, displayName: category, kind: .objc(.category(.class)), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
-        logger.debug("Found \(results.count, privacy: .public) ObjC objects")
+        #log(.debug, "Found \(results.count, privacy: .public) ObjC objects")
         return results
     }
 
     func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration) async throws -> RuntimeObjectInterface {
-        logger.debug("Generating interface for: \(object.name, privacy: .public)")
+        #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
         let cTypeReplacements = transformer.cType.isEnabled ? transformer.cType.replacements : [:]
         let objcDumpContext = ObjCDumpContext(options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
@@ -527,20 +527,20 @@ actor RuntimeObjCSection: Loggable {
         default:
             break
         }
-        logger.warning("Invalid runtime object: \(object.name, privacy: .public) kind: \(String(describing: object.kind), privacy: .public)")
+        #log(.default, "Invalid runtime object: \(object.name, privacy: .public) kind: \(String(describing: object.kind), privacy: .public)")
         throw Error.invalidRuntimeObject
     }
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
-        logger.debug("Getting class hierarchy for: \(object.name, privacy: .public)")
+        #log(.debug, "Getting class hierarchy for: \(object.name, privacy: .public)")
         guard case .objc(.type(.class)) = object.kind,
               let classGroups = classes[object.name]
         else {
-            logger.debug("No class hierarchy found")
+            #log(.debug, "No class hierarchy found")
             return []
         }
         let hierarchy = classGroups.info.map(\.name)
-        logger.debug("Class hierarchy: \(hierarchy.count, privacy: .public) levels")
+        #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
         return hierarchy
     }
 }

@@ -1,6 +1,5 @@
 import MachOKit
 public import FoundationToolbox
-import OSLog
 import RuntimeViewerCoreObjC
 public import Foundation
 public import Combine
@@ -45,7 +44,8 @@ extension RuntimeEngine {
 
 // MARK: - RuntimeEngine
 
-public actor RuntimeEngine: Loggable {
+@Loggable
+public actor RuntimeEngine {
     fileprivate enum CommandNames: String, CaseIterable {
         case imageList
         case imageNodes
@@ -108,7 +108,7 @@ public actor RuntimeEngine: Loggable {
 
     public init() {
         self.source = .local
-        logger.info("Initializing RuntimeEngine with local source")
+        #log(.info, "Initializing RuntimeEngine with local source")
 
         Task {
             await observeRuntime()
@@ -118,34 +118,34 @@ public actor RuntimeEngine: Loggable {
 
     public init(source: RuntimeSource) async throws {
         self.source = source
-        logger.info("Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
+        #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
 
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
 
             switch role {
             case .server:
-                logger.info("Starting as server")
+                #log(.info, "Starting as server")
                 self.connection = try await communicator.connect(to: source) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForServer()
                     self.observeConnectionState(connection)
                 }
-                logger.info("Server connection established")
+                #log(.info, "Server connection established")
                 await observeRuntime()
                 stateSubject.send(.connected)
             case .client:
-                logger.info("Starting as client")
+                #log(.info, "Starting as client")
                 self.connection = try await communicator.connect(to: source) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForClient()
                     self.observeConnectionState(connection)
                 }
-                logger.info("Client connected successfully")
+                #log(.info, "Client connected successfully")
                 stateSubject.send(.connected)
             }
         } else {
-            logger.debug("No remote role, observing local runtime")
+            #log(.debug, "No remote role, observing local runtime")
             await observeRuntime()
             stateSubject.send(.localOnly)
         }
@@ -180,11 +180,11 @@ public actor RuntimeEngine: Loggable {
         connectionStateCancellable = nil
         connection?.stop()
         stateSubject.send(.disconnected(error: nil))
-        logger.info("RuntimeEngine stopped")
+        #log(.info, "RuntimeEngine stopped")
     }
 
     private func setupMessageHandlerForServer() {
-        logger.debug("Setting up server message handlers")
+        #log(.debug, "Setting up server message handlers")
         setMessageHandlerBinding(forName: .isImageLoaded, of: self) { $0.isImageLoaded(path:) }
         setMessageHandlerBinding(forName: .loadImage, of: self) { $0.loadImage(at:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofObjectName:) }
@@ -192,20 +192,20 @@ public actor RuntimeEngine: Loggable {
         setMessageHandlerBinding(forName: .runtimeObjectsInImage, of: self) { $0.objects(in:) }
         setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
-        logger.debug("Server message handlers setup complete")
+        #log(.debug, "Server message handlers setup complete")
     }
 
     private func setupMessageHandlerForClient() {
-        logger.debug("Setting up client message handlers")
+        #log(.debug, "Setting up client message handlers")
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
         setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
-        logger.debug("Client message handlers setup complete")
+        #log(.debug, "Client message handlers setup complete")
     }
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Void)) {
         guard let connection else {
-            logger.warning("Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
+            #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
             return
         }
         connection.setMessageHandler(name: name.commandName) { [unowned object] (request: Request) in
@@ -215,7 +215,7 @@ public actor RuntimeEngine: Loggable {
 
     private func setMessageHandlerBinding<Object: AnyObject, Request: Codable, Response: Codable>(forName name: CommandNames, of object: Object, to function: @escaping (Object) -> ((Request) async throws -> Response)) {
         guard let connection else {
-            logger.warning("Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
+            #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
             return
         }
         connection.setMessageHandler(name: name.commandName) { [unowned object] (request: Request) -> Response in
@@ -226,7 +226,7 @@ public actor RuntimeEngine: Loggable {
 
     private func setMessageHandlerBinding<Response: Codable>(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine, Response) async throws -> Void) {
         guard let connection else {
-            logger.warning("Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
+            #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
             return
         }
         connection.setMessageHandler(name: name.commandName) { [weak self] (response: Response) in
@@ -237,7 +237,7 @@ public actor RuntimeEngine: Loggable {
 
     private func setMessageHandlerBinding(forName name: CommandNames, perform: @escaping (isolated RuntimeEngine) async throws -> Void) {
         guard let connection else {
-            logger.warning("Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
+            #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
             return
         }
         connection.setMessageHandler(name: name.commandName) { [weak self] in
@@ -247,29 +247,29 @@ public actor RuntimeEngine: Loggable {
     }
 
     public func reloadData(isReloadImageNodes: Bool) {
-        logger.info("Reloading data, isReloadImageNodes=\(isReloadImageNodes, privacy: .public)")
+        #log(.info, "Reloading data, isReloadImageNodes=\(isReloadImageNodes, privacy: .public)")
         imageList = DyldUtilities.imageNames()
-        logger.debug("Loaded \(self.imageList.count, privacy: .public) images")
+        #log(.debug, "Loaded \(self.imageList.count, privacy: .public) images")
         if isReloadImageNodes {
             imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
-            logger.debug("Reloaded image nodes")
+            #log(.debug, "Reloaded image nodes")
         }
         sendRemoteDataIfNeeded(isReloadImageNodes: isReloadImageNodes)
-        logger.info("Data reload complete")
+        #log(.info, "Data reload complete")
     }
 
     private func observeRuntime() async {
-        logger.info("Starting runtime observation")
+        #log(.info, "Starting runtime observation")
         imageList = DyldUtilities.imageNames()
-        logger.debug("Initial image list contains \(self.imageList.count, privacy: .public) images")
+        #log(.debug, "Initial image list contains \(self.imageList.count, privacy: .public) images")
 
         await Task.detached {
             await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
         }.value
-        logger.debug("Image nodes initialized")
+        #log(.debug, "Image nodes initialized")
 
         sendRemoteDataIfNeeded(isReloadImageNodes: true)
-        logger.info("Runtime observation started")
+        #log(.info, "Runtime observation started")
     }
 
     private func setImageNodes(_ imageNodes: [RuntimeImageNode]) async {
@@ -283,26 +283,26 @@ public actor RuntimeEngine: Loggable {
     private func sendRemoteDataIfNeeded(isReloadImageNodes: Bool) {
         Task {
             guard let role = source.remoteRole, role.isServer, let connection else {
-                logger.debug("No remote connection, sending local reload notification")
+                #log(.debug, "No remote connection, sending local reload notification")
                 reloadDataSubject.send()
                 return
             }
-            logger.debug("Sending remote data to client")
+            #log(.debug, "Sending remote data to client")
             try await connection.sendMessage(name: .imageList, request: imageList)
             if isReloadImageNodes {
                 try await connection.sendMessage(name: .imageNodes, request: imageNodes)
             }
             try await connection.sendMessage(name: .reloadData)
-            logger.debug("Remote data sent successfully")
+            #log(.debug, "Remote data sent successfully")
         }
     }
 
     private func _objects(in image: String) async throws -> [RuntimeObject] {
-        logger.debug("Getting objects in image: \(image, privacy: .public)")
+        #log(.debug, "Getting objects in image: \(image, privacy: .public)")
         let image = DyldUtilities.patchImagePathForDyld(image)
         let objcObjects = try await _objcSection(for: image).allObjects()
         let swiftObjects = try await _swiftSection(for: image).allObjects()
-        logger.debug("Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects")
+        #log(.debug, "Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects")
         return objcObjects + swiftObjects
     }
 
@@ -340,49 +340,49 @@ public actor RuntimeEngine: Loggable {
 
     private func _objcSection(for imagePath: String) async throws -> RuntimeObjCSection {
         if let objcSection = imageToObjCSection[imagePath] {
-            logger.debug("Using cached ObjC section for: \(imagePath, privacy: .public)")
+            #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
             return objcSection
         } else {
-            logger.debug("Creating ObjC section for: \(imagePath, privacy: .public)")
+            #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
             let objcSection = try await RuntimeObjCSection(imagePath: imagePath)
             imageToObjCSection[imagePath] = objcSection
-            logger.debug("ObjC section created and cached")
+            #log(.debug, "ObjC section created and cached")
             return objcSection
         }
     }
 
     private func _objcSection(forName name: RuntimeObjCName) async -> RuntimeObjCSection? {
-        logger.debug("Looking up ObjC section for name: \(String(describing: name), privacy: .public)")
+        #log(.debug, "Looking up ObjC section for name: \(String(describing: name), privacy: .public)")
         do {
             guard let machO = MachOImage.image(forName: name) else {
-                logger.debug("No MachO image found for name")
+                #log(.debug, "No MachO image found for name")
                 return nil
             }
 
             if let existObjCSection = imageToObjCSection[machO.imagePath] {
-                logger.debug("Using cached ObjC section")
+                #log(.debug, "Using cached ObjC section")
                 return existObjCSection
             }
 
-            logger.debug("Creating ObjC section from MachO: \(machO.imagePath, privacy: .public)")
+            #log(.debug, "Creating ObjC section from MachO: \(machO.imagePath, privacy: .public)")
             let objcSection = try await RuntimeObjCSection(machO: machO)
             imageToObjCSection[machO.imagePath] = objcSection
             return objcSection
         } catch {
-            logger.error("Failed to create ObjC section: \(error, privacy: .public)")
+            #log(.error, "Failed to create ObjC section: \(error, privacy: .public)")
             return nil
         }
     }
 
     private func _swiftSection(for imagePath: String) async throws -> RuntimeSwiftSection {
         if let swiftSection = imageToSwiftSection[imagePath] {
-            logger.debug("Using cached Swift section for: \(imagePath, privacy: .public)")
+            #log(.debug, "Using cached Swift section for: \(imagePath, privacy: .public)")
             return swiftSection
         } else {
-            logger.debug("Creating Swift section for: \(imagePath, privacy: .public)")
+            #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
             let swiftSection = try await RuntimeSwiftSection(imagePath: imagePath)
             imageToSwiftSection[imagePath] = swiftSection
-            logger.debug("Swift section created and cached")
+            #log(.debug, "Swift section created and cached")
             return swiftSection
         }
     }
