@@ -161,11 +161,13 @@ extension Transformer.SwiftTypeLayout {
 
 extension Transformer.SwiftTypeLayout {
     public enum Templates {
-        /// Standard style: "TypeLayout(size: 8, stride: 8, alignment: 8, extraInhabitantCount: 0)"
-        public static let standard = "TypeLayout(size: ${size}, stride: ${stride}, alignment: ${alignment}, extraInhabitantCount: ${extraInhabitantCount})"
+        /// Default style matching non-transformed output:
+        /// "Type Layout: (size: 8, stride: 8, alignment: 8, extraInhabitantCount: 0)"
+        public static let standard = "Type Layout: (size: ${size}, stride: ${stride}, alignment: ${alignment}, extraInhabitantCount: ${extraInhabitantCount})"
 
-        /// Verbose style includes flags: "TypeLayout(size: 8, stride: 8, alignment: 8, extraInhabitantCount: 0, isPOD: true, isInlineStorage: true, isBitwiseTakable: true, isBitwiseBorrowable: true, isCopyable: true, hasEnumWitnesses: false, isIncomplete: false)"
-        public static let verbose = "TypeLayout(size: ${size}, stride: ${stride}, alignment: ${alignment}, extraInhabitantCount: ${extraInhabitantCount}, isPOD: ${isPOD}, isInlineStorage: ${isInlineStorage}, isBitwiseTakable: ${isBitwiseTakable}, isBitwiseBorrowable: ${isBitwiseBorrowable}, isCopyable: ${isCopyable}, hasEnumWitnesses: ${hasEnumWitnesses}, isIncomplete: ${isIncomplete})"
+        /// Verbose style includes flags:
+        /// "Type Layout: (size: 8, stride: 8, alignment: 8, extraInhabitantCount: 0, isPOD: true, ...)"
+        public static let verbose = "Type Layout: (size: ${size}, stride: ${stride}, alignment: ${alignment}, extraInhabitantCount: ${extraInhabitantCount}, isPOD: ${isPOD}, isInlineStorage: ${isInlineStorage}, isBitwiseTakable: ${isBitwiseTakable}, isBitwiseBorrowable: ${isBitwiseBorrowable}, isCopyable: ${isCopyable}, hasEnumWitnesses: ${hasEnumWitnesses}, isIncomplete: ${isIncomplete})"
 
         /// Compact style: "size: 8, stride: 8, align: 8"
         public static let compact = "size: ${size}, stride: ${stride}, align: ${alignment}"
@@ -173,11 +175,16 @@ extension Transformer.SwiftTypeLayout {
         /// Size only: "8 bytes"
         public static let sizeOnly = "${size} bytes"
 
+        /// Tuple element style matching non-transformed tuple output:
+        /// "Layout: (size: 8, stride: 8, alignment: 8, extraInhabitantCount: 0)"
+        public static let tupleElement = "Layout: (size: ${size}, stride: ${stride}, alignment: ${alignment}, extraInhabitantCount: ${extraInhabitantCount})"
+
         public static let all: [(name: String, template: String)] = [
             ("Standard", standard),
             ("Verbose", verbose),
             ("Compact", compact),
             ("Size Only", sizeOnly),
+            ("Tuple Element", tupleElement),
         ]
     }
 }

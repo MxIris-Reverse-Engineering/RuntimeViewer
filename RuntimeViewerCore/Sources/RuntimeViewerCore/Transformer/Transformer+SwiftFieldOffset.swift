@@ -28,13 +28,13 @@ extension Transformer {
         @Default(ifMissing: false)
         public var isEnabled: Bool
 
-        @Default(ifMissing: Templates.range)
+        @Default(ifMissing: Templates.standard)
         public var template: String
 
-        @Default(ifMissing: false)
+        @Default(ifMissing: true)
         public var useHexadecimal: Bool
 
-        public init(isEnabled: Bool = false, template: String = Templates.range, useHexadecimal: Bool = false) {
+        public init(isEnabled: Bool = false, template: String = Templates.standard, useHexadecimal: Bool = true) {
             self.isEnabled = isEnabled
             self.template = template
             self.useHexadecimal = useHexadecimal
@@ -98,6 +98,9 @@ extension Transformer.SwiftFieldOffset {
 
 extension Transformer.SwiftFieldOffset {
     public enum Templates {
+        /// Default style matching non-transformed output: "Field Offset: 0x0"
+        public static let standard = "Field Offset: ${startOffset}"
+
         /// Range style: "0 ..< 8"
         public static let range = "${startOffset} ..< ${endOffset}"
 
@@ -111,6 +114,7 @@ extension Transformer.SwiftFieldOffset {
         public static let startOnly = "${startOffset}"
 
         public static let all: [(name: String, template: String)] = [
+            ("Standard", standard),
             ("Range", range),
             ("Labeled", labeled),
             ("Interval", interval),

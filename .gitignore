@@ -12,3 +12,4 @@ RuntimeViewerUsingAppKit/DistributionSummary.plist
 *.resolved
 .claude
 buildServer.json
+.codex
