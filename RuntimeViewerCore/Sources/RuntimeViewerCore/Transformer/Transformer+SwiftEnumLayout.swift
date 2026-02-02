@@ -81,7 +81,7 @@ extension Transformer {
         }
 
         private func formatNumeric(_ value: Int) -> String {
-            useHexadecimal ? "0x\(String(value, radix: 16))" : String(value)
+            useHexadecimal ? "0x\(String(value, radix: 16, uppercase: true))" : String(value)
         }
 
         /// Checks if the strategy template contains a specific token.

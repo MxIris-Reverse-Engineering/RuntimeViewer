@@ -5,6 +5,9 @@ import RuntimeViewerCore
 import RuntimeViewerApplication
 
 class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewModel>: UXKitViewController<ViewModel> {
+    
+    var isReorderable: Bool { false }
+    
     private let tabView = NSTabView()
 
     let imageNotLoadedView = ImageLoadableView()
@@ -120,7 +123,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         let output = viewModel.transform(input)
 
-        output.runtimeObjects.drive(imageLoadedView.outlineView.rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarRuntimeObjectCellViewModel) -> NSView? in
+        output.runtimeObjects.drive(isReorderable ? imageLoadedView.outlineView.rx.reorderableNodes : imageLoadedView.outlineView.rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarRuntimeObjectCellViewModel) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: SidebarRuntimeObjectCellView.self) { .init(forOpenQuickly: false) }
             cellView.bind(to: viewModel)
             return cellView
@@ -215,6 +218,7 @@ extension SidebarRuntimeObjectViewController {
                 $0.headerView = nil
                 $0.style = .inset
                 $0.addTableColumn(.init(identifier: "Default Column"))
+                $0.autoresizesOutlineColumn = false
             }
         }
     }
