@@ -5,6 +5,9 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewController<ViewModel> {
+    
+    var isReorderable: Bool { false }
+    
     let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
 
     private let filterSearchField = FilterSearchField()
@@ -66,6 +69,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
         outlineView.do {
             $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
             $0.headerView = nil
+            $0.autoresizesOutlineColumn = false
         }
     }
 
@@ -82,7 +86,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
 
         let output = viewModel.transform(input)
 
-        output.nodes.drive(outlineView.rx.nodes)({ (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: SidebarRootCellViewModel) -> NSView? in
+        output.nodes.drive(isReorderable ? outlineView.rx.reorderableNodes : outlineView.rx.nodes)({ (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: SidebarRootCellViewModel) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: SidebarRootTableCellView.self)
             cellView.bind(to: node)
             return cellView
