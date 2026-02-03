@@ -31,16 +31,21 @@ extension Transformer {
         @Default(ifMissing: false)
         public var useHexadecimal: Bool
 
+        @Default(ifMissing: MemoryOffsetTemplates.standard)
+        public var memoryOffsetTemplate: String
+
         public init(
             isEnabled: Bool = false,
             template: String = Templates.strategyOnly,
             caseTemplate: String = CaseTemplates.standard,
-            useHexadecimal: Bool = false
+            useHexadecimal: Bool = false,
+            memoryOffsetTemplate: String = MemoryOffsetTemplates.standard
         ) {
             self.isEnabled = isEnabled
             self.template = template
             self.caseTemplate = caseTemplate
             self.useHexadecimal = useHexadecimal
+            self.memoryOffsetTemplate = memoryOffsetTemplate
         }
 
         /// Renders the strategy header template with actual enum layout values.
@@ -80,6 +85,20 @@ extension Transformer {
             return result
         }
 
+        /// Renders the per-memory-offset template with actual offset values.
+        public func transformMemoryOffset(_ input: MemoryOffsetInput) -> String {
+            var result = memoryOffsetTemplate
+            result = result.replacingOccurrences(of: MemoryOffsetToken.offset.placeholder, with: formatNumeric(input.offset))
+            result = result.replacingOccurrences(of: MemoryOffsetToken.offsetHex.placeholder, with: String(format: "0x%02X", input.offset))
+            result = result.replacingOccurrences(of: MemoryOffsetToken.value.placeholder, with: formatNumeric(Int(input.value)))
+            result = result.replacingOccurrences(of: MemoryOffsetToken.valueHex.placeholder, with: String(format: "0x%02X", input.value))
+            result = result.replacingOccurrences(of: MemoryOffsetToken.valueBinaryRaw.placeholder, with: input.valueBinaryRaw)
+            result = result.replacingOccurrences(of: MemoryOffsetToken.valueBinary.placeholder, with: input.valueBinary)
+            result = result.replacingOccurrences(of: MemoryOffsetToken.valueBinaryPaddedRaw.placeholder, with: input.valueBinaryPaddedRaw)
+            result = result.replacingOccurrences(of: MemoryOffsetToken.valueBinaryPadded.placeholder, with: input.valueBinaryPadded)
+            return result
+        }
+
         private func formatNumeric(_ value: Int) -> String {
             useHexadecimal ? "0x\(String(value, radix: 16, uppercase: true))" : String(value)
         }
@@ -92,6 +111,11 @@ extension Transformer {
         /// Checks if the case template contains a specific case token.
         public func containsCase(_ token: CaseToken) -> Bool {
             caseTemplate.contains(token.placeholder)
+        }
+
+        /// Checks if the memory offset template contains a specific token.
+        public func containsMemoryOffset(_ token: MemoryOffsetToken) -> Bool {
+            memoryOffsetTemplate.contains(token.placeholder)
         }
     }
 }
@@ -192,6 +216,38 @@ extension Transformer.SwiftEnumLayout {
     }
 }
 
+// MARK: - Memory Offset Input
+
+extension Transformer.SwiftEnumLayout {
+    /// Input for per-memory-offset transformation.
+    public struct MemoryOffsetInput: Sendable {
+        public let offset: Int
+        public let value: UInt8
+        /// Binary string without prefix (e.g., "1")
+        public let valueBinaryRaw: String
+        /// Binary string with 0b prefix (e.g., "0b1")
+        public let valueBinary: String
+        /// Binary string padded to 8 digits without prefix (e.g., "00000001")
+        public let valueBinaryPaddedRaw: String
+        /// Binary string padded to 8 digits with 0b prefix (e.g., "0b00000001")
+        public let valueBinaryPadded: String
+
+        public init(
+            offset: Int,
+            value: UInt8
+        ) {
+            self.offset = offset
+            self.value = value
+            let binaryString = String(value, radix: 2)
+            let paddedBinaryString = String(repeating: "0", count: 8 - binaryString.count) + binaryString
+            self.valueBinaryRaw = binaryString
+            self.valueBinary = "0b\(binaryString)"
+            self.valueBinaryPaddedRaw = paddedBinaryString
+            self.valueBinaryPadded = "0b\(paddedBinaryString)"
+        }
+    }
+}
+
 // MARK: - Token (Strategy Header)
 
 extension Transformer.SwiftEnumLayout {
@@ -227,6 +283,36 @@ extension Transformer.SwiftEnumLayout {
             case .payloadRegionRange: "Payload Region Range"
             case .payloadRegionBitCount: "Payload Region Bit Count"
             case .payloadRegionBytesHex: "Payload Region Bytes (Hex)"
+            }
+        }
+    }
+}
+
+// MARK: - Memory Offset Token
+
+extension Transformer.SwiftEnumLayout {
+    /// Available tokens for per-memory-offset templates.
+    public enum MemoryOffsetToken: String, CaseIterable, Sendable {
+        case offset
+        case offsetHex
+        case value
+        case valueHex
+        case valueBinaryRaw
+        case valueBinary
+        case valueBinaryPaddedRaw
+        case valueBinaryPadded
+
+        public var placeholder: String { "${\(rawValue)}" }
+        public var displayName: String {
+            switch self {
+            case .offset: "Offset"
+            case .offsetHex: "Offset (Hex)"
+            case .value: "Value"
+            case .valueHex: "Value (Hex)"
+            case .valueBinaryRaw: "Value (Binary Raw)"
+            case .valueBinary: "Value (Binary)"
+            case .valueBinaryPaddedRaw: "Value (Binary Padded Raw)"
+            case .valueBinaryPadded: "Value (Binary Padded)"
             }
         }
     }
@@ -315,6 +401,39 @@ extension Transformer.SwiftEnumLayout {
             ("Bits", bits),
             ("Case Breakdown", caseBreakdown),
             ("Full Detail", fullDetail),
+        ]
+    }
+}
+
+// MARK: - Memory Offset Templates
+
+extension Transformer.SwiftEnumLayout {
+    public enum MemoryOffsetTemplates {
+        /// Standard style: "Memory Offset 0 (0x00) = 0x01 (Bin: 00000001)"
+        public static let standard = "Memory Offset ${offset} (${offsetHex}) = ${valueHex} (Bin: ${valueBinaryPaddedRaw})"
+
+        /// Compact style: "[0]=0x01"
+        public static let compact = "[${offset}]=${valueHex}"
+
+        /// Hex only style: "0x00: 0x01"
+        public static let hexOnly = "${offsetHex}: ${valueHex}"
+
+        /// Binary style: "Offset 0: 0b00000001"
+        public static let binary = "Offset ${offset}: ${valueBinaryPadded}"
+
+        /// Verbose style: "Offset 0 (0x00) = 1 (0x01, 0b00000001)"
+        public static let verbose = "Offset ${offset} (${offsetHex}) = ${value} (${valueHex}, ${valueBinaryPadded})"
+
+        /// Minimal style: "0: 0x01"
+        public static let minimal = "${offset}: ${valueHex}"
+
+        public static let all: [(name: String, template: String)] = [
+            ("Standard", standard),
+            ("Compact", compact),
+            ("Hex Only", hexOnly),
+            ("Binary", binary),
+            ("Verbose", verbose),
+            ("Minimal", minimal),
         ]
     }
 }

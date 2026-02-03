@@ -186,7 +186,20 @@ actor RuntimeSwiftSection {
                     for line in header.split(separator: "\n", omittingEmptySubsequences: false) {
                         output += "\(indentStr)// \(line)\n"
                     }
-                    output += caseProjection.formattedMemoryChanges(indent: indentation, prefix: "//")
+                    // Transform memory offsets using the configured template
+                    if caseProjection.memoryChanges.isEmpty {
+                        output += "\(indentStr)// (No bits set / Zero)\n"
+                    } else {
+                        for offset in caseProjection.memoryChanges.keys.sorted() {
+                            let byteValue = caseProjection.memoryChanges[offset]!
+                            let offsetInput = Transformer.SwiftEnumLayout.MemoryOffsetInput(
+                                offset: offset,
+                                value: byteValue
+                            )
+                            let formattedOffset = module.transformMemoryOffset(offsetInput)
+                            output += "\(indentStr)// \(formattedOffset)\n"
+                        }
+                    }
                     return AtomicComponent(string: output, type: .comment).asSemanticString()
                 }
             } else {
