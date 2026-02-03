@@ -92,10 +92,6 @@ let package = Package(
             )
         ),
         .package(
-            url: "https://github.com/apple/swift-collections",
-            from: "1.2.0"
-        ),
-        .package(
             url: "https://github.com/MxIris-Library-Forks/Asynchrone",
             from: "0.23.0-fork"
         ),
@@ -110,10 +106,6 @@ let package = Package(
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
             branch: "main"
-        ),
-        .package(
-            url: "https://github.com/apple/swift-log",
-            from: "1.6.3"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
@@ -141,10 +133,6 @@ let package = Package(
                 .product(name: "MachOObjCSection", package: "MachOObjCSection"),
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
-                .product(name: "OrderedCollections", package: "swift-collections"),
-                .product(name: "Logging", package: "swift-log"),
-                .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
-                .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "MetaCodable", package: "MetaCodable"),
             ],
             swiftSettings: [
@@ -158,11 +146,8 @@ let package = Package(
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Asynchrone", package: "Asynchrone"),
                 .product(name: "Semaphore", package: "Semaphore"),
-                .product(name: "Logging", package: "swift-log"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "Version", package: "Version"),
-                .product(name: "FrameworkToolbox", package: "FrameworkToolbox"),
-                .product(name: "SwiftStdlibToolbox", package: "FrameworkToolbox"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
             ],
             swiftSettings: [
