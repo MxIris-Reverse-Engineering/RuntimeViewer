@@ -4,7 +4,6 @@
 # Build RuntimeViewerServer XCFramework
 # Supports all Apple platforms:
 #   - macOS
-#   - Mac Catalyst
 #   - iOS (Device + Simulator)
 #   - tvOS (Device + Simulator)
 #   - watchOS (Device + Simulator)
@@ -31,17 +30,23 @@ BUILD_FOR_DISTRIBUTION="NO"
 VERBOSE=false
 CLEAN_BUILD=true
 USER_PLATFORMS=()
+DEFAULT_JOBS=$(sysctl -n hw.ncpu 2>/dev/null)
+if [ -z "$DEFAULT_JOBS" ]; then
+    DEFAULT_JOBS=4
+fi
+MAX_JOBS="$DEFAULT_JOBS"
 
 usage() {
     echo "Usage: $0 [options] [Platforms...]"
     echo ""
     echo "Options:"
     echo "  -v, --verbose      Show detailed build output"
+    echo "  -j, --jobs <N>     Max parallel builds (default: $DEFAULT_JOBS)"
     echo "  --no-clean         Skip cleaning before build"
     echo "  -h, --help         Show this help message"
     echo ""
     echo "Platforms (if none specified, builds all):"
-    echo "  macOS, Catalyst, iOS, tvOS, watchOS, visionOS"
+    echo "  macOS, iOS, tvOS, watchOS, visionOS"
     echo ""
     echo "Examples:"
     echo "  $0                     # Build all platforms"
@@ -55,6 +60,14 @@ while [[ $# -gt 0 ]]; do
         -v|--verbose)
             VERBOSE=true
             shift
+            ;;
+        -j|--jobs)
+            if [ -z "$2" ]; then
+                echo "❌ Error: Missing value for --jobs."
+                exit 1
+            fi
+            MAX_JOBS="$2"
+            shift 2
             ;;
         --no-clean)
             CLEAN_BUILD=false
@@ -76,7 +89,6 @@ done
 # ==========================================
 PLATFORM_CONFIGS=(
     "macOS|generic/platform=macOS|"
-    "Catalyst|generic/platform=macOS,variant=Mac Catalyst|"
     "iOS|generic/platform=iOS|generic/platform=iOS Simulator"
     "tvOS|generic/platform=tvOS|generic/platform=tvOS Simulator"
     "watchOS|generic/platform=watchOS|generic/platform=watchOS Simulator"
@@ -113,6 +125,14 @@ if [ ${#TARGET_PLATFORMS[@]} -eq 0 ]; then
     exit 1
 fi
 
+if ! [[ "$MAX_JOBS" =~ ^[0-9]+$ ]]; then
+    echo "❌ Error: --jobs must be a positive integer."
+    exit 1
+fi
+if [ "$MAX_JOBS" -lt 1 ]; then
+    MAX_JOBS=1
+fi
+
 # ==========================================
 # Print Build Configuration
 # ==========================================
@@ -135,6 +155,7 @@ if [ "$CLEAN_BUILD" = true ]; then
     rm -rf "$OUTPUT_DIR"
 fi
 mkdir -p "$ARCHIVE_PATH"
+mkdir -p "$OUTPUT_DIR/DerivedData"
 
 # ==========================================
 # Function: Build Archive
@@ -142,6 +163,9 @@ mkdir -p "$ARCHIVE_PATH"
 build_archive() {
     local destination=$1
     local archive_name=$2
+    shift 2
+    local extra_build_settings=("$@")
+    local derived_data_path="$OUTPUT_DIR/DerivedData/$archive_name"
 
     echo "🛠  [$(date +%T)] Building: $archive_name ..."
 
@@ -150,17 +174,16 @@ build_archive() {
         redirect="/dev/stdout"
     fi
 
-    xcodebuild archive \
+    if ! xcodebuild archive \
         -workspace "$WORKSPACE_PATH" \
         -scheme "$SCHEME_NAME" \
         -destination "$destination" \
         -archivePath "$ARCHIVE_PATH/$archive_name.xcarchive" \
         -configuration "$CONFIGURATION" \
+        -derivedDataPath "$derived_data_path" \
         BUILD_LIBRARY_FOR_DISTRIBUTION="$BUILD_FOR_DISTRIBUTION" \
-        SKIP_INSTALL=NO \
-        > "$redirect" 2>&1
-
-    if [ $? -ne 0 ]; then
+        "${extra_build_settings[@]}" \
+        > "$redirect" 2>&1; then
         echo "❌ Build Failed: $archive_name"
         echo "   Run with -v flag to see detailed error log"
         exit 1
@@ -177,14 +200,17 @@ build_archive() {
     echo "✅ Build Success: $archive_name"
 }
 
+
 # ==========================================
 # Main Loop: Generate Archives
 # ==========================================
 echo "📦 Starting archive builds..."
 echo ""
 
-FRAMEWORK_ARGS=()
-DEBUG_SYMBOL_ARGS=()
+BUILD_JOBS_DEST=()
+BUILD_JOBS_NAME=()
+FRAMEWORK_PATHS=()
+DSYM_PATHS=()
 
 for platform in "${TARGET_PLATFORMS[@]}"; do
     for config in "${PLATFORM_CONFIGS[@]}"; do
@@ -193,29 +219,63 @@ for platform in "${TARGET_PLATFORMS[@]}"; do
 
             # Build Device Slice
             if [ -n "$dest_device" ]; then
-                build_archive "$dest_device" "${p_name}_Device"
-                FRAMEWORK_ARGS+=("-framework" "$ARCHIVE_PATH/${p_name}_Device.xcarchive/Products/Library/Frameworks/${FRAMEWORK_NAME}.framework")
-
-                # Add debug symbols if available
-                local dsym_path="$ARCHIVE_PATH/${p_name}_Device.xcarchive/dSYMs/${FRAMEWORK_NAME}.framework.dSYM"
-                if [ -d "$dsym_path" ]; then
-                    DEBUG_SYMBOL_ARGS+=("-debug-symbols" "$dsym_path")
-                fi
+                BUILD_JOBS_DEST+=("$dest_device")
+                BUILD_JOBS_NAME+=("${p_name}_Device")
+                FRAMEWORK_PATHS+=("$ARCHIVE_PATH/${p_name}_Device.xcarchive/Products/Library/Frameworks/${FRAMEWORK_NAME}.framework")
+                DSYM_PATHS+=("$ARCHIVE_PATH/${p_name}_Device.xcarchive/dSYMs/${FRAMEWORK_NAME}.framework.dSYM")
             fi
 
             # Build Simulator Slice (if applicable)
             if [ -n "$dest_sim" ]; then
-                build_archive "$dest_sim" "${p_name}_Simulator"
-                FRAMEWORK_ARGS+=("-framework" "$ARCHIVE_PATH/${p_name}_Simulator.xcarchive/Products/Library/Frameworks/${FRAMEWORK_NAME}.framework")
-
-                # Add debug symbols if available
-                local dsym_path="$ARCHIVE_PATH/${p_name}_Simulator.xcarchive/dSYMs/${FRAMEWORK_NAME}.framework.dSYM"
-                if [ -d "$dsym_path" ]; then
-                    DEBUG_SYMBOL_ARGS+=("-debug-symbols" "$dsym_path")
-                fi
+                BUILD_JOBS_DEST+=("$dest_sim")
+                BUILD_JOBS_NAME+=("${p_name}_Simulator")
+                FRAMEWORK_PATHS+=("$ARCHIVE_PATH/${p_name}_Simulator.xcarchive/Products/Library/Frameworks/${FRAMEWORK_NAME}.framework")
+                DSYM_PATHS+=("$ARCHIVE_PATH/${p_name}_Simulator.xcarchive/dSYMs/${FRAMEWORK_NAME}.framework.dSYM")
             fi
         fi
     done
+done
+
+# ==========================================
+# Run Builds in Parallel
+# ==========================================
+echo "⚙️  Parallel jobs: $MAX_JOBS"
+echo ""
+
+pids=()
+job_names=()
+
+for i in "${!BUILD_JOBS_NAME[@]}"; do
+    dest="${BUILD_JOBS_DEST[$i]}"
+    name="${BUILD_JOBS_NAME[$i]}"
+
+    while [ "$(jobs -rp | wc -l | tr -d ' ')" -ge "$MAX_JOBS" ]; do
+        sleep 0.5
+    done
+
+    (build_archive "$dest" "$name") &
+    pids+=("$!")
+    job_names+=("$name")
+done
+
+failed=0
+for i in "${!pids[@]}"; do
+    if ! wait "${pids[$i]}"; then
+        echo "❌ Build Failed: ${job_names[$i]}"
+        failed=1
+    fi
+done
+
+if [ "$failed" -ne 0 ]; then
+    exit 1
+fi
+
+FRAMEWORK_ARGS=()
+for i in "${!FRAMEWORK_PATHS[@]}"; do
+    FRAMEWORK_ARGS+=("-framework" "${FRAMEWORK_PATHS[$i]}")
+    if [ -d "${DSYM_PATHS[$i]}" ]; then
+        FRAMEWORK_ARGS+=("-debug-symbols" "${DSYM_PATHS[$i]}")
+    fi
 done
 
 # ==========================================
@@ -227,9 +287,12 @@ echo "📦 Creating XCFramework..."
 # Remove existing xcframework if present
 rm -rf "$OUTPUT_DIR/$XCFRAMEWORK_NAME"
 
-xcodebuild -create-xcframework \
+if ! xcodebuild -create-xcframework \
     "${FRAMEWORK_ARGS[@]}" \
-    -output "$OUTPUT_DIR/$XCFRAMEWORK_NAME"
+    -output "$OUTPUT_DIR/$XCFRAMEWORK_NAME"; then
+    echo "❌ Failed to create XCFramework."
+    exit 1
+fi
 
 if [ -d "$OUTPUT_DIR/$XCFRAMEWORK_NAME" ]; then
     echo ""
