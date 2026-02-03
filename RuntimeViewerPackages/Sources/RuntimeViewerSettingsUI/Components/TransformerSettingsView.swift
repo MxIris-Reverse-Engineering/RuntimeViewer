@@ -561,6 +561,7 @@ private struct SwiftEnumLayoutEditor: View {
     @Binding var module: Transformer.SwiftEnumLayout
     @State private var strategyFieldHeight: CGFloat = 24
     @State private var caseFieldHeight: CGFloat = 24
+    @State private var memoryOffsetFieldHeight: CGFloat = 24
 
     var body: some View {
         Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
@@ -636,6 +637,47 @@ private struct SwiftEnumLayoutEditor: View {
                     ForEach(Transformer.SwiftEnumLayout.CaseTemplates.all, id: \.name) { preset in
                         Button(preset.name) {
                             module.caseTemplate = preset.template
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+
+            Divider()
+                .gridCellColumns(2)
+
+            // Memory offset template editor
+            GridRow {
+                Text("Memory\nOffset")
+                    .foregroundStyle(.secondary)
+                    .gridColumnAlignment(.trailing)
+
+                TokenTemplateTextField(text: $module.memoryOffsetTemplate, height: $memoryOffsetFieldHeight)
+                    .frame(height: max(24, memoryOffsetFieldHeight))
+            }
+
+            // Memory offset token chips
+            GridRow {
+                Text("Tokens")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftEnumLayout.MemoryOffsetToken.allCases, id: \.self) { token in
+                        CopyableTokenChip(token: token, placeholder: token.placeholder)
+                    }
+                }
+            }
+
+            // Memory offset preset buttons
+            GridRow {
+                Text("Presets")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftEnumLayout.MemoryOffsetTemplates.all, id: \.name) { preset in
+                        Button(preset.name) {
+                            module.memoryOffsetTemplate = preset.template
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
