@@ -8,6 +8,7 @@ project_path=$(cd `dirname $0`; pwd)
 project_name="RuntimeViewer"
 scheme_name="RuntimeViewer macOS"
 development_mode="Release"
+cpu_cores=$(sysctl -n hw.ncpu 2>/dev/null || echo 8)
 
 
 build_path=${project_path}/Products/Archives
@@ -26,6 +27,7 @@ build_number=$(date +"%Y%m%d.%H.%M")
 
 echo '///-----------'
 echo '/// Build Number: '${build_number}
+echo '/// Parallel compile tasks: '${cpu_cores}
 echo '///-----------'
 echo ''
 
@@ -40,6 +42,7 @@ archive \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS,variant=Mac Catalyst' \
 -archivePath ${catalyst_helper_archive_path} \
+-jobs ${cpu_cores} \
 CURRENT_PROJECT_VERSION=${build_number} | xcbeautify || exit
 
 if [ -d "${catalyst_helper_app_path}" ]; then
@@ -73,6 +76,7 @@ archive \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS' \
 -archivePath ${build_path}/${project_name}.xcarchive \
+-jobs ${cpu_cores} \
 CURRENT_PROJECT_VERSION=${build_number} | xcbeautify || exit
 
 echo '///------------'
