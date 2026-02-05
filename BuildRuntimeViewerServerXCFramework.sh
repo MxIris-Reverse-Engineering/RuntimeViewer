@@ -25,7 +25,7 @@ FRAMEWORK_NAME="RuntimeViewerServer"
 OUTPUT_DIR="${SCRIPT_DIR}/Products"
 ARCHIVE_PATH="${OUTPUT_DIR}/Archives"
 XCFRAMEWORK_NAME="${FRAMEWORK_NAME}.xcframework"
-CONFIGURATION="Release"
+CONFIGURATION="Distribution"
 
 # Parse arguments
 VERBOSE=false
