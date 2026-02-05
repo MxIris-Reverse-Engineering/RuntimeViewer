@@ -25,4 +25,7 @@
    <FileRef
       location = "group:RuntimeViewerServer/RuntimeViewerServer.xcodeproj">
    </FileRef>
+   <FileRef
+      location = "group:RuntimeViewerPrecompiledLibraries/swift-syntax">
+   </FileRef>
 </Workspace>
