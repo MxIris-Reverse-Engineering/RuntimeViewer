@@ -26,7 +26,6 @@ OUTPUT_DIR="${SCRIPT_DIR}/Products"
 ARCHIVE_PATH="${OUTPUT_DIR}/Archives"
 XCFRAMEWORK_NAME="${FRAMEWORK_NAME}.xcframework"
 CONFIGURATION="Release"
-BUILD_FOR_DISTRIBUTION="NO"
 
 # Parse arguments
 VERBOSE=false
@@ -82,7 +81,7 @@ done
 # ==========================================
 PLATFORM_CONFIGS=(
     "macOS|${SCHEME_MACOS}|generic/platform=macOS|"
-    "macCatalyst|${SCHEME_MOBILE}|generic/platform=macOS,variant=Mac Catalyst|"
+    # "macCatalyst|${SCHEME_MOBILE}|generic/platform=macOS,variant=Mac Catalyst|"
     "iOS|${SCHEME_MOBILE}|generic/platform=iOS|generic/platform=iOS Simulator"
     "tvOS|${SCHEME_MOBILE}|generic/platform=tvOS|generic/platform=tvOS Simulator"
     "watchOS|${SCHEME_MOBILE}|generic/platform=watchOS|generic/platform=watchOS Simulator"
@@ -173,10 +172,7 @@ build_archive() {
         -archivePath "$ARCHIVE_PATH/$archive_name.xcarchive" \
         -derivedDataPath "$derived_data_path" \
         -configuration "$CONFIGURATION" \
-        # -onlyUsePackageVersionsFromResolvedFile \
-        # -skipPackagePluginValidation \
-        # "${job_args[@]}" \
-        # BUILD_LIBRARY_FOR_DISTRIBUTION="$BUILD_FOR_DISTRIBUTION" \
+        "${job_args[@]}" \
         "${extra_build_settings[@]}" \
         > "$redirect" 2>&1; then
         echo "❌ Build Failed: $archive_name"
