@@ -22,11 +22,11 @@ struct SettingsFileSystemStorage: SettingsStorageStrategy {
         return dir.appendingPathComponent(fileName)
     }
 
-    func save(_ data: Data) throws {
+    func save(_ data: Data) async throws {
         try data.write(to: fileURL, options: [.atomic])
     }
 
-    func load() throws -> Data {
+    func load() async throws -> Data {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             throw SettingsStorageError.noData
         }
