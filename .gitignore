@@ -10,3 +10,7 @@ RuntimeViewerUsingAppKit/Packaging.log
 RuntimeViewerUsingAppKit/ExportOptions.plist
 RuntimeViewerUsingAppKit/DistributionSummary.plist
 *.resolved
+.claude
+buildServer.json
+.codex
+Products

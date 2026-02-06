@@ -3,12 +3,12 @@
 # ==========================================
 # Build RuntimeViewerServer XCFramework
 # Supports all Apple platforms:
-#   - macOS
-#   - Mac Catalyst
-#   - iOS (Device + Simulator)
-#   - tvOS (Device + Simulator)
-#   - watchOS (Device + Simulator)
-#   - visionOS (Device + Simulator)
+#   - macOS (using RuntimeViewerServer)
+#   - Mac Catalyst (using RuntimeViewerMobileServer)
+#   - iOS (Device + Simulator) (using RuntimeViewerMobileServer)
+#   - tvOS (Device + Simulator) (using RuntimeViewerMobileServer)
+#   - watchOS (Device + Simulator) (using RuntimeViewerMobileServer)
+#   - visionOS (Device + Simulator) (using RuntimeViewerMobileServer)
 # ==========================================
 
 set -e
@@ -19,18 +19,19 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WORKSPACE_NAME="RuntimeViewer"
 WORKSPACE_PATH="${SCRIPT_DIR}/${WORKSPACE_NAME}.xcworkspace"
-SCHEME_NAME="RuntimeViewerServer"
+SCHEME_MACOS="RuntimeViewerServer"
+SCHEME_MOBILE="RuntimeViewerMobileServer"
 FRAMEWORK_NAME="RuntimeViewerServer"
 OUTPUT_DIR="${SCRIPT_DIR}/Products"
 ARCHIVE_PATH="${OUTPUT_DIR}/Archives"
 XCFRAMEWORK_NAME="${FRAMEWORK_NAME}.xcframework"
-CONFIGURATION="Release"
-BUILD_FOR_DISTRIBUTION="NO"
+CONFIGURATION="Distribution"
 
 # Parse arguments
 VERBOSE=false
 CLEAN_BUILD=true
 USER_PLATFORMS=()
+CPU_CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 8)
 
 usage() {
     echo "Usage: $0 [options] [Platforms...]"
@@ -41,7 +42,11 @@ usage() {
     echo "  -h, --help         Show this help message"
     echo ""
     echo "Platforms (if none specified, builds all):"
-    echo "  macOS, Catalyst, iOS, tvOS, watchOS, visionOS"
+    echo "  macOS, macCatalyst, iOS, tvOS, watchOS, visionOS"
+    echo ""
+    echo "Schemes:"
+    echo "  macOS uses:  $SCHEME_MACOS"
+    echo "  Others use:  $SCHEME_MOBILE (macCatalyst, iOS, tvOS, watchOS, visionOS)"
     echo ""
     echo "Examples:"
     echo "  $0                     # Build all platforms"
@@ -72,15 +77,15 @@ done
 
 # ==========================================
 # Platform Configurations
-# Format: "PlatformName|DeviceDestination|SimulatorDestination"
+# Format: "PlatformName|Scheme|DeviceDestination|SimulatorDestination"
 # ==========================================
 PLATFORM_CONFIGS=(
-    "macOS|generic/platform=macOS|"
-    "Catalyst|generic/platform=macOS,variant=Mac Catalyst|"
-    "iOS|generic/platform=iOS|generic/platform=iOS Simulator"
-    "tvOS|generic/platform=tvOS|generic/platform=tvOS Simulator"
-    "watchOS|generic/platform=watchOS|generic/platform=watchOS Simulator"
-    "visionOS|generic/platform=visionOS|generic/platform=visionOS Simulator"
+    "macOS|${SCHEME_MACOS}|generic/platform=macOS|"
+    # "macCatalyst|${SCHEME_MOBILE}|generic/platform=macOS,variant=Mac Catalyst|"
+    "iOS|${SCHEME_MOBILE}|generic/platform=iOS|generic/platform=iOS Simulator"
+    "tvOS|${SCHEME_MOBILE}|generic/platform=tvOS|generic/platform=tvOS Simulator"
+    "watchOS|${SCHEME_MOBILE}|generic/platform=watchOS|generic/platform=watchOS Simulator"
+    "visionOS|${SCHEME_MOBILE}|generic/platform=visionOS|generic/platform=visionOS Simulator"
 )
 
 # Determine Target Platforms
@@ -120,9 +125,12 @@ echo "============================================"
 echo "🚀 Building RuntimeViewerServer XCFramework"
 echo "============================================"
 echo "📂 Project: $WORKSPACE_PATH"
-echo "📋 Scheme: $SCHEME_NAME"
+echo "📋 Schemes:"
+echo "   - macOS:  $SCHEME_MACOS"
+echo "   - Mobile: $SCHEME_MOBILE (macCatalyst, iOS, tvOS, watchOS, visionOS)"
 echo "⚙️  Configuration: $CONFIGURATION"
 echo "📦 Build for Distribution: $BUILD_FOR_DISTRIBUTION"
+echo "🔧 Parallel compile tasks: $CPU_CORES"
 echo "🎯 Target Platforms: ${TARGET_PLATFORMS[*]}"
 echo "============================================"
 echo ""
@@ -135,32 +143,38 @@ if [ "$CLEAN_BUILD" = true ]; then
     rm -rf "$OUTPUT_DIR"
 fi
 mkdir -p "$ARCHIVE_PATH"
+mkdir -p "$OUTPUT_DIR/DerivedData"
 
 # ==========================================
 # Function: Build Archive
 # ==========================================
 build_archive() {
-    local destination=$1
-    local archive_name=$2
+    local scheme=$1
+    local destination=$2
+    local archive_name=$3
+    shift 3
+    local extra_build_settings=("$@")
+    local derived_data_path="$OUTPUT_DIR/DerivedData/$archive_name"
 
-    echo "🛠  [$(date +%T)] Building: $archive_name ..."
+    echo "🛠  [$(date +%T)] Building: $archive_name (scheme: $scheme) ..."
 
     local redirect="/dev/null"
     if [ "$VERBOSE" = true ]; then
         redirect="/dev/stdout"
     fi
 
-    xcodebuild archive \
+    local job_args=("-jobs" "$CPU_CORES")
+
+    if ! xcodebuild archive \
         -workspace "$WORKSPACE_PATH" \
-        -scheme "$SCHEME_NAME" \
+        -scheme "$scheme" \
         -destination "$destination" \
         -archivePath "$ARCHIVE_PATH/$archive_name.xcarchive" \
+        -derivedDataPath "$derived_data_path" \
         -configuration "$CONFIGURATION" \
-        BUILD_LIBRARY_FOR_DISTRIBUTION="$BUILD_FOR_DISTRIBUTION" \
-        SKIP_INSTALL=NO \
-        > "$redirect" 2>&1
-
-    if [ $? -ne 0 ]; then
+        "${job_args[@]}" \
+        "${extra_build_settings[@]}" \
+        > "$redirect" 2>&1; then
         echo "❌ Build Failed: $archive_name"
         echo "   Run with -v flag to see detailed error log"
         exit 1
@@ -177,45 +191,44 @@ build_archive() {
     echo "✅ Build Success: $archive_name"
 }
 
+
 # ==========================================
-# Main Loop: Generate Archives
+# Main Loop: Generate Archives (Sequential)
 # ==========================================
 echo "📦 Starting archive builds..."
 echo ""
 
-FRAMEWORK_ARGS=()
-DEBUG_SYMBOL_ARGS=()
+FRAMEWORK_PATHS=()
+DSYM_PATHS=()
 
 for platform in "${TARGET_PLATFORMS[@]}"; do
     for config in "${PLATFORM_CONFIGS[@]}"; do
         if [[ "$config" == "$platform|"* ]]; then
-            IFS='|' read -r p_name dest_device dest_sim <<< "$config"
+            IFS='|' read -r p_name p_scheme dest_device dest_sim <<< "$config"
 
             # Build Device Slice
             if [ -n "$dest_device" ]; then
-                build_archive "$dest_device" "${p_name}_Device"
-                FRAMEWORK_ARGS+=("-framework" "$ARCHIVE_PATH/${p_name}_Device.xcarchive/Products/Library/Frameworks/${FRAMEWORK_NAME}.framework")
-
-                # Add debug symbols if available
-                local dsym_path="$ARCHIVE_PATH/${p_name}_Device.xcarchive/dSYMs/${FRAMEWORK_NAME}.framework.dSYM"
-                if [ -d "$dsym_path" ]; then
-                    DEBUG_SYMBOL_ARGS+=("-debug-symbols" "$dsym_path")
-                fi
+                build_archive "$p_scheme" "$dest_device" "${p_name}_Device"
+                FRAMEWORK_PATHS+=("$ARCHIVE_PATH/${p_name}_Device.xcarchive/Products/Library/Frameworks/${FRAMEWORK_NAME}.framework")
+                DSYM_PATHS+=("$ARCHIVE_PATH/${p_name}_Device.xcarchive/dSYMs/${FRAMEWORK_NAME}.framework.dSYM")
             fi
 
             # Build Simulator Slice (if applicable)
             if [ -n "$dest_sim" ]; then
-                build_archive "$dest_sim" "${p_name}_Simulator"
-                FRAMEWORK_ARGS+=("-framework" "$ARCHIVE_PATH/${p_name}_Simulator.xcarchive/Products/Library/Frameworks/${FRAMEWORK_NAME}.framework")
-
-                # Add debug symbols if available
-                local dsym_path="$ARCHIVE_PATH/${p_name}_Simulator.xcarchive/dSYMs/${FRAMEWORK_NAME}.framework.dSYM"
-                if [ -d "$dsym_path" ]; then
-                    DEBUG_SYMBOL_ARGS+=("-debug-symbols" "$dsym_path")
-                fi
+                build_archive "$p_scheme" "$dest_sim" "${p_name}_Simulator"
+                FRAMEWORK_PATHS+=("$ARCHIVE_PATH/${p_name}_Simulator.xcarchive/Products/Library/Frameworks/${FRAMEWORK_NAME}.framework")
+                DSYM_PATHS+=("$ARCHIVE_PATH/${p_name}_Simulator.xcarchive/dSYMs/${FRAMEWORK_NAME}.framework.dSYM")
             fi
         fi
     done
+done
+
+FRAMEWORK_ARGS=()
+for i in "${!FRAMEWORK_PATHS[@]}"; do
+    FRAMEWORK_ARGS+=("-framework" "${FRAMEWORK_PATHS[$i]}")
+    if [ -d "${DSYM_PATHS[$i]}" ]; then
+        FRAMEWORK_ARGS+=("-debug-symbols" "${DSYM_PATHS[$i]}")
+    fi
 done
 
 # ==========================================
@@ -227,9 +240,12 @@ echo "📦 Creating XCFramework..."
 # Remove existing xcframework if present
 rm -rf "$OUTPUT_DIR/$XCFRAMEWORK_NAME"
 
-xcodebuild -create-xcframework \
+if ! xcodebuild -create-xcframework \
     "${FRAMEWORK_ARGS[@]}" \
-    -output "$OUTPUT_DIR/$XCFRAMEWORK_NAME"
+    -output "$OUTPUT_DIR/$XCFRAMEWORK_NAME"; then
+    echo "❌ Failed to create XCFramework."
+    exit 1
+fi
 
 if [ -d "$OUTPUT_DIR/$XCFRAMEWORK_NAME" ]; then
     echo ""

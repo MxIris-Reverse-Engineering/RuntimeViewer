@@ -42,6 +42,8 @@ actor RuntimeSwiftSection {
 
     private var interfaceByName: OrderedDictionary<RuntimeObject, RuntimeObjectInterface> = [:]
 
+    private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
+
     private var nameToInterfaceDefinitionName: [RuntimeObject: InterfaceDefinitionName] = [:]
 
     private enum InterfaceDefinitionName {
@@ -82,7 +84,7 @@ actor RuntimeSwiftSection {
         #log(.info, "Swift section initialized successfully")
     }
 
-    func updateConfiguration(using options: SwiftGenerationOptions) async throws {
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration) async throws {
         #log(.debug, "Updating Swift section configuration")
 
         let oldIndexConfiguration = indexer.configuration
@@ -90,7 +92,132 @@ actor RuntimeSwiftSection {
         try await indexer.updateConfiguration(newIndexConfiguration)
 
         let oldPrintConfiguration = printer.configuration
-        let newPrintConfiguration = SwiftInterfacePrintConfiguration(printStrippedSymbolicItem: options.printStrippedSymbolicItem, emitOffsetComments: options.emitOffsetComments, printTypeLayout: options.printTypeLayout, printEnumLayout: options.printEnumLayout)
+
+        let transformerChanged = transformer != lastTransformerConfiguration
+        lastTransformerConfiguration = transformer
+
+        var fieldOffsetTransformer: FieldOffsetTransformer? = oldPrintConfiguration.fieldOffsetTransformer
+        var typeLayoutTransformer: TypeLayoutTransformer? = oldPrintConfiguration.typeLayoutTransformer
+        var enumLayoutTransformer: EnumLayoutTransformer? = oldPrintConfiguration.enumLayoutTransformer
+        var enumLayoutCaseTransformer: EnumLayoutCaseTransformer? = oldPrintConfiguration.enumLayoutCaseTransformer
+
+        if transformerChanged {
+            if transformer.swiftFieldOffset.isEnabled {
+                let module = transformer.swiftFieldOffset
+                fieldOffsetTransformer = FieldOffsetTransformer { input in
+                    let result = module.transform(.init(startOffset: input.startOffset, endOffset: input.endOffset))
+                    return Comment(result).asSemanticString()
+                }
+            } else {
+                fieldOffsetTransformer = nil
+            }
+
+            if transformer.swiftTypeLayout.isEnabled {
+                let module = transformer.swiftTypeLayout
+                typeLayoutTransformer = TypeLayoutTransformer { typeLayout in
+                    let input = Transformer.SwiftTypeLayout.Input(
+                        size: Int(typeLayout.size),
+                        stride: Int(typeLayout.stride),
+                        alignment: Int(typeLayout.flags.alignment),
+                        extraInhabitantCount: Int(typeLayout.extraInhabitantCount),
+                        isPOD: typeLayout.flags.isPOD,
+                        isInlineStorage: typeLayout.flags.isInlineStorage,
+                        isBitwiseTakable: typeLayout.flags.isBitwiseTakable,
+                        isBitwiseBorrowable: typeLayout.flags.isBitwiseBorrowable,
+                        isCopyable: typeLayout.flags.isCopyable,
+                        hasEnumWitnesses: typeLayout.flags.hasEnumWitnesses,
+                        isIncomplete: typeLayout.flags.isIncomplete
+                    )
+                    let result = module.transform(input)
+                    return Comment(result).asSemanticString()
+                }
+            } else {
+                typeLayoutTransformer = nil
+            }
+
+            if transformer.swiftEnumLayout.isEnabled {
+                let module = transformer.swiftEnumLayout
+                enumLayoutTransformer = EnumLayoutTransformer { layoutResult in
+                    let payloadCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Payload") }.count
+                    let emptyCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Empty") }.count
+                    let input = Transformer.SwiftEnumLayout.Input(
+                        strategy: layoutResult.strategyDescription,
+                        bitsNeededForTag: layoutResult.bitsNeededForTag,
+                        bitsAvailableForPayload: layoutResult.bitsAvailableForPayload,
+                        numTags: layoutResult.numTags,
+                        totalCases: layoutResult.cases.count,
+                        payloadCaseCount: payloadCaseCount,
+                        emptyCaseCount: emptyCaseCount,
+                        tagRegionRange: layoutResult.tagRegion.map { "\($0.range)" } ?? "N/A",
+                        tagRegionBitCount: layoutResult.tagRegion?.bitCount ?? 0,
+                        tagRegionBytesHex: layoutResult.tagRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A",
+                        payloadRegionRange: layoutResult.payloadRegion.map { "\($0.range)" } ?? "N/A",
+                        payloadRegionBitCount: layoutResult.payloadRegion?.bitCount ?? 0,
+                        payloadRegionBytesHex: layoutResult.payloadRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A"
+                    )
+                    let result = module.transform(input)
+                    return InlineComment(result).asSemanticString()
+                }
+
+                enumLayoutCaseTransformer = EnumLayoutCaseTransformer { input in
+                    let caseProjection = input.caseProjection
+                    let indentation = input.indentation
+                    let caseType: String = caseProjection.caseName.hasPrefix("Payload") ? "Payload" : "Empty"
+                    let memoryChangesDetail = caseProjection.memoryChanges
+                        .sorted(by: { $0.key < $1.key })
+                        .map { "[\($0.key)]=0x\(String(format: "%02X", $0.value))" }
+                        .joined(separator: ", ")
+                    let caseInput = Transformer.SwiftEnumLayout.CaseInput(
+                        caseIndex: caseProjection.caseIndex,
+                        caseName: caseProjection.caseName,
+                        tagValue: caseProjection.tagValue,
+                        payloadValue: caseProjection.payloadValue,
+                        tagHex: String(format: "0x%02X", caseProjection.tagValue),
+                        payloadHex: String(format: "0x%02X", caseProjection.payloadValue),
+                        tagValueBinary: "0b\(String(caseProjection.tagValue, radix: 2))",
+                        payloadValueBinary: "0b\(String(caseProjection.payloadValue, radix: 2))",
+                        caseType: caseType,
+                        memoryChangeCount: caseProjection.memoryChanges.count,
+                        memoryChangesDetail: memoryChangesDetail
+                    )
+                    let header = module.transformCase(caseInput)
+                    let indentStr = String(repeating: "    ", count: indentation)
+                    var output = ""
+                    for line in header.split(separator: "\n", omittingEmptySubsequences: false) {
+                        output += "\(indentStr)// \(line)\n"
+                    }
+                    // Transform memory offsets using the configured template
+                    if caseProjection.memoryChanges.isEmpty {
+                        output += "\(indentStr)// (No bits set / Zero)\n"
+                    } else {
+                        for offset in caseProjection.memoryChanges.keys.sorted() {
+                            let byteValue = caseProjection.memoryChanges[offset]!
+                            let offsetInput = Transformer.SwiftEnumLayout.MemoryOffsetInput(
+                                offset: offset,
+                                value: byteValue
+                            )
+                            let formattedOffset = module.transformMemoryOffset(offsetInput)
+                            output += "\(indentStr)// \(formattedOffset)\n"
+                        }
+                    }
+                    return AtomicComponent(string: output, type: .comment).asSemanticString()
+                }
+            } else {
+                enumLayoutTransformer = nil
+                enumLayoutCaseTransformer = nil
+            }
+        }
+
+        let newPrintConfiguration = SwiftInterfacePrintConfiguration(
+            printStrippedSymbolicItem: options.printStrippedSymbolicItem,
+            printFieldOffset: options.emitOffsetComments,
+            printTypeLayout: options.printTypeLayout,
+            printEnumLayout: options.printEnumLayout,
+            fieldOffsetTransformer: fieldOffsetTransformer,
+            typeLayoutTransformer: typeLayoutTransformer,
+            enumLayoutTransformer: enumLayoutTransformer,
+            enumLayoutCaseTransformer: enumLayoutCaseTransformer
+        )
         printer.updateConfiguration(newPrintConfiguration)
 
         if options.synthesizeOpaqueType {

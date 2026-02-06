@@ -96,7 +96,7 @@ actor RuntimeObjCSection {
             }
         }
     }
-    
+
     init(ptr: UnsafeRawPointer) async throws {
         guard let machO = MachOImage.image(for: ptr) else {
             #log(.error, "Failed to create MachOImage from pointer")
@@ -312,10 +312,11 @@ actor RuntimeObjCSection {
         return results
     }
 
-    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions) async throws -> RuntimeObjectInterface {
+    func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
-        let objcDumpContext = ObjCDumpContext(options: options) { name, isStruct in
+        let cTypeReplacements = transformer.cType.isEnabled ? transformer.cType.replacements : [:]
+        let objcDumpContext = ObjCDumpContext(options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
             guard let name else { return true }
             if isStruct {
                 return self.structs[name] == nil
@@ -550,7 +551,6 @@ enum RuntimeObjCName {
 }
 
 extension MachOImage {
-
     static func image(forName name: RuntimeObjCName) -> Self? {
         switch name {
         case .class(let string):

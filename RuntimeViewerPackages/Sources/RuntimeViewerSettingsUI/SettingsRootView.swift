@@ -25,6 +25,7 @@ private struct SettingsView: SettingsContainer {
     var settingsBody: some SettingsContent {
         GeneralSettingsView()
         NotificationSettingsView()
+        TransformerSettingsView()
         HelperServiceSettingsView()
     }
 }

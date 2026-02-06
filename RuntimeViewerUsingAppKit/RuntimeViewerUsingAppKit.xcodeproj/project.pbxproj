@@ -104,13 +104,6 @@
 			remoteGlobalIDString = E9EC5BC42F1CBDBA00859091;
 			remoteInfo = com.mxiris.runtimeviewer.service;
 		};
-		E98BF5F22F1CE6A60041DB20 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = E98BF5EC2F1CE6A60041DB20 /* RuntimeViewerServer.xcodeproj */;
-			proxyType = 2;
-			remoteGlobalIDString = E978F9192F1BBB38004C09B4;
-			remoteInfo = RuntimeViewerServer;
-		};
 		E98BF6362F1D4ABB0041DB20 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */;
@@ -230,7 +223,6 @@
 		E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UIDebugger.h; sourceTree = "<group>"; };
 		E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UIDebugger.m; sourceTree = "<group>"; };
 		E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = ../RuntimeViewerServer/RuntimeViewerServer.xcodeproj; sourceTree = SOURCE_ROOT; };
-		E98BF5EC2F1CE6A60041DB20 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = "/Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerServer/RuntimeViewerServer.xcodeproj"; sourceTree = "<absolute>"; };
 		E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
 		E995B8962F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeConnectionNotificationService.swift; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
@@ -355,7 +347,6 @@
 				E9EC5BC62F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */,
 				E9432FE32C0D614900362862 /* Products */,
 				E9432FF32C0D637500362862 /* Frameworks */,
-				E98BF5EC2F1CE6A60041DB20 /* RuntimeViewerServer.xcodeproj */,
 			);
 			sourceTree = "<group>";
 		};
@@ -450,14 +441,6 @@
 				E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */,
 			);
 			path = "Load Frameworks";
-			sourceTree = "<group>";
-		};
-		E98BF5ED2F1CE6A60041DB20 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				E98BF5F32F1CE6A60041DB20 /* RuntimeViewerServer.framework */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 		E98BF6322F1D4ABB0041DB20 /* Products */ = {
@@ -749,10 +732,6 @@
 			projectDirPath = "";
 			projectReferences = (
 				{
-					ProductGroup = E98BF5ED2F1CE6A60041DB20 /* Products */;
-					ProjectRef = E98BF5EC2F1CE6A60041DB20 /* RuntimeViewerServer.xcodeproj */;
-				},
-				{
 					ProductGroup = E98BF6322F1D4ABB0041DB20 /* Products */;
 					ProjectRef = E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */;
 				},
@@ -769,13 +748,6 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
-		E98BF5F32F1CE6A60041DB20 /* RuntimeViewerServer.framework */ = {
-			isa = PBXReferenceProxy;
-			fileType = wrapper.framework;
-			path = RuntimeViewerServer.framework;
-			remoteRef = E98BF5F22F1CE6A60041DB20 /* PBXContainerItemProxy */;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
 		E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;

@@ -1,32 +1,34 @@
-private import Foundation
-private import OSLog
-private import RuntimeViewerCore
-private import RuntimeViewerCommunication
+import Foundation
+import FoundationToolbox
+import RuntimeViewerCore
+import RuntimeViewerCommunication
 
 #if os(macOS) || targetEnvironment(macCatalyst)
-private import LaunchServicesPrivate
+import LaunchServicesPrivate
+#elseif canImport(UIKit)
+#if os(watchOS)
+import WatchKit.WKInterfaceDevice
+#else
+import UIKit.UIDevice
 #endif
-
-#if canImport(UIKit)
-private import UIKit.UIDevice
+#else
+#error("Unsupported Platform")
 #endif
-
 
 @_cdecl("swift_initializeRuntimeViewerServer")
 func initializeRuntimeViewerServer() {
     RuntimeViewerServerLoader.main()
 }
 
-enum RuntimeViewerServerLoader {
-    private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerServer", category: "RuntimeViewerServerLoader")
-
+@Loggable
+private enum RuntimeViewerServerLoader {
     private static var runtimeEngine: RuntimeEngine?
 
     private static var processName: String {
         if let displayName = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String {
             return displayName
         }
-        
+
         if let bundleName = Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String {
             return bundleName
         }
@@ -41,29 +43,39 @@ enum RuntimeViewerServerLoader {
 
         let processName = ProcessInfo.processInfo.processName
         let sanitizedName = processName.components(separatedBy: .whitespacesAndNewlines).joined()
-        
+
         return "com.RuntimeViewer.UnknownBinary.\(sanitizedName)"
     }
 
-    static func main() {
-        logger.info("Attach successfully")
-
+    fileprivate static func main() {
+        #log(.default, "Attach successfully")
         Task {
             do {
-                logger.info("Will Launch")
+                #log(.default, "Will Launch")
+
                 #if os(macOS) || targetEnvironment(macCatalyst)
+
                 if LSBundleProxy.forCurrentProcess().isSandboxed {
                     runtimeEngine = try await RuntimeEngine(source: .localSocketServer(name: processName, identifier: .init(rawValue: identifier)))
                 } else {
                     runtimeEngine = try await RuntimeEngine(source: .remote(name: processName, identifier: .init(rawValue: identifier), role: .server))
                 }
+
+                #else
+
+                #if os(watchOS)
+                let name = WKInterfaceDevice.current().name
                 #else
                 let name = await UIDevice.current.name
-                runtimeEngine = try await RuntimeEngine(source: .bonjourServer(name: name, identifier: .init(rawValue: name)))
                 #endif
-                logger.info("Did Launch")
+
+                runtimeEngine = try await RuntimeEngine(source: .bonjourServer(name: name, identifier: .init(rawValue: name)))
+
+                #endif
+
+                #log(.default, "Did Launch")
             } catch {
-                logger.error("Failed to create runtime engine: \(error, privacy: .public)")
+                #log(.error, "Failed to create runtime engine: \(error, privacy: .public)")
             }
         }
     }
