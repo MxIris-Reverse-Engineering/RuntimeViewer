@@ -16,7 +16,7 @@ struct SettingsFileSystemStorage: SettingsStorageStrategy {
 
     private var fileURL: URL {
         let paths = FileManager.default.urls(for: directory, in: .userDomainMask)
-        let dir = paths[0].appendingPathComponent("MyAppConfig")
+        let dir = paths[0].appendingPathComponent("RuntimeViewer")
 
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent(fileName)
