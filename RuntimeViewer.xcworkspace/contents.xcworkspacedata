@@ -17,6 +17,9 @@
       location = "group:RuntimeViewerPackages">
    </FileRef>
    <FileRef
+      location = "group:RuntimeViewerMCP">
+   </FileRef>
+   <FileRef
       location = "group:RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj">
    </FileRef>
    <FileRef

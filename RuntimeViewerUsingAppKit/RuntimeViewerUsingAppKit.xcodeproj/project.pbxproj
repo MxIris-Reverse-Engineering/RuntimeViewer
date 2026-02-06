@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 70;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -22,6 +22,8 @@
 		E947C36C2C2A4D0400296B2E /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C36B2C2A4D0400296B2E /* SceneDelegate.swift */; };
 		E947C3732C2A4D0500296B2E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E947C3722C2A4D0500296B2E /* Assets.xcassets */; };
 		E94BA6962E7EEB64006B553D /* SidebarRootTableRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */; };
+		E94C1B8C2F35E7AC005DF968 /* AppMCPBridgeDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94C1B8B2F35E7AC005DF968 /* AppMCPBridgeDelegate.swift */; };
+		E94C1B912F35E836005DF968 /* RuntimeViewerMCPService in Frameworks */ = {isa = PBXBuildFile; productRef = E94C1B902F35E836005DF968 /* RuntimeViewerMCPService */; };
 		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
 		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
@@ -60,6 +62,7 @@
 		E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */; };
 		E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825572C0E202600D9A85D /* MainViewModel.swift */; };
 		E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */; };
+		E9B4C6562F35E9C800823FE0 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B4C6542F35E9C800823FE0 /* main.swift */; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9C9E9DD2C2D169D00C4AA34 /* AppKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */; };
 		E9C9E9DE2C2D169D00C4AA34 /* AppKitPluginImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */; };
@@ -96,6 +99,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = E978F9182F1BBB38004C09B4;
 			remoteInfo = RuntimeViewerServer;
+		};
+		E94C1B8E2F35E7AC005DF968 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = E994E2962F323A51009DD28A;
+			remoteInfo = RuntimeViewerMobileServer;
 		};
 		E98BEF562F1CBEAF0041DB20 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -205,6 +215,7 @@
 		E947C3772C2A4D0500296B2E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E94BA68D2E7EA992006B553D /* UXKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = UXKit.xcframework; path = RuntimeViewerUsingAppKit/UXKit.xcframework; sourceTree = "<group>"; };
 		E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootTableRowView.swift; sourceTree = "<group>"; };
+		E94C1B8B2F35E7AC005DF968 /* AppMCPBridgeDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMCPBridgeDelegate.swift; sourceTree = "<group>"; };
 		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
 		E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIPChecker.swift; sourceTree = "<group>"; };
@@ -242,6 +253,7 @@
 		E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPlaceholderViewController.swift; sourceTree = "<group>"; };
 		E9A825572C0E202600D9A85D /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
 		E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPlaceholderViewController.swift; sourceTree = "<group>"; };
+		E9B4C6542F35E9C800823FE0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		E9C9E9CE2C2D10C600C4AA34 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitPlugin.swift; sourceTree = "<group>"; };
@@ -276,10 +288,6 @@
 		E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCellView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		E9EC5BC62F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = com.mxiris.runtimeviewer.service; sourceTree = "<group>"; };
-/* End PBXFileSystemSynchronizedRootGroup section */
-
 /* Begin PBXFrameworksBuildPhase section */
 		E9432FDF2C0D614900362862 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -288,6 +296,7 @@
 				E978F9242F1BD033004C09B4 /* RuntimeViewerSettingsUI in Frameworks */,
 				E985A9CC2D9AF4FC005A573C /* RuntimeViewerCore in Frameworks */,
 				E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */,
+				E94C1B912F35E836005DF968 /* RuntimeViewerMCPService in Frameworks */,
 				E9CBCC1A2C13685400169ABF /* RuntimeViewerUI in Frameworks */,
 				E978F2892F1BAC6E004C09B4 /* RuntimeViewerServiceHelper in Frameworks */,
 				E978F28B2F1BAC6F004C09B4 /* RuntimeViewerHelperClient in Frameworks */,
@@ -344,7 +353,7 @@
 				E947C3682C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
 				E9E900E02C2CF9B000FADDCC /* RuntimeViewerCatalystHelperPlugin */,
 				E9E900E92C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
-				E9EC5BC62F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */,
+				E9B4C6552F35E9C800823FE0 /* com.mxiris.runtimeviewer.service */,
 				E9432FE32C0D614900362862 /* Products */,
 				E9432FF32C0D637500362862 /* Frameworks */,
 			);
@@ -447,8 +456,17 @@
 			isa = PBXGroup;
 			children = (
 				E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */,
+				E94C1B8F2F35E7AC005DF968 /* RuntimeViewerServer.framework */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E9B4C6552F35E9C800823FE0 /* com.mxiris.runtimeviewer.service */ = {
+			isa = PBXGroup;
+			children = (
+				E9B4C6542F35E9C800823FE0 /* main.swift */,
+			);
+			path = com.mxiris.runtimeviewer.service;
 			sourceTree = "<group>";
 		};
 		E9CE07BA2C1497EA0070A6E8 /* Base */ = {
@@ -542,6 +560,7 @@
 			children = (
 				E9432FE52C0D614900362862 /* AppDelegate.swift */,
 				E99AE0BB2CBD4A840028B11E /* Document.swift */,
+				E94C1B8B2F35E7AC005DF968 /* AppMCPBridgeDelegate.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -600,6 +619,7 @@
 				E978F28A2F1BAC6F004C09B4 /* RuntimeViewerHelperClient */,
 				E978F9232F1BD033004C09B4 /* RuntimeViewerSettingsUI */,
 				E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */,
+				E94C1B902F35E836005DF968 /* RuntimeViewerMCPService */,
 			);
 			productName = RuntimeViewerUsingAppKit;
 			productReference = E9432FE22C0D614900362862 /* RuntimeViewer.app */;
@@ -677,9 +697,6 @@
 			);
 			dependencies = (
 			);
-			fileSystemSynchronizedGroups = (
-				E9EC5BC62F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */,
-			);
 			name = com.mxiris.runtimeviewer.service;
 			packageProductDependencies = (
 				E98BEF532F1CBE180041DB20 /* RuntimeViewerService */,
@@ -748,6 +765,13 @@
 /* End PBXProject section */
 
 /* Begin PBXReferenceProxy section */
+		E94C1B8F2F35E7AC005DF968 /* RuntimeViewerServer.framework */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.framework;
+			path = RuntimeViewerServer.framework;
+			remoteRef = E94C1B8E2F35E7AC005DF968 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 		E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */ = {
 			isa = PBXReferenceProxy;
 			fileType = wrapper.framework;
@@ -870,6 +894,7 @@
 				E9F0A57E2C305C01001C36FB /* GenerationOptionsViewController.swift in Sources */,
 				E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */,
 				E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */,
+				E94C1B8C2F35E7AC005DF968 /* AppMCPBridgeDelegate.swift in Sources */,
 				E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */,
 				E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */,
 				E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */,
@@ -918,6 +943,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E9B4C6562F35E9C800823FE0 /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1468,6 +1494,10 @@
 		E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerApplication;
+		};
+		E94C1B902F35E836005DF968 /* RuntimeViewerMCPService */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerMCPService;
 		};
 		E978F2882F1BAC6E004C09B4 /* RuntimeViewerServiceHelper */ = {
 			isa = XCSwiftPackageProductDependency;
