@@ -307,31 +307,35 @@ public actor RuntimeEngine {
     }
 
     private func _interface(for name: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+        let rawInterface: RuntimeObjectInterface?
+
         switch name.kind {
         case .swift:
             let swiftSection = imageToSwiftSection[name.imagePath]
-            try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions)
-            return try? await swiftSection?.interface(for: name)
+            try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
+            rawInterface = try? await swiftSection?.interface(for: name)
         case .c,
              .objc:
             let objcSection = imageToObjCSection[name.imagePath]
-            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions) {
-                return interface
+            let objcTransformer = options.transformer.objc
+            if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer) {
+                rawInterface = interface
             } else {
                 switch name.kind {
                 case .objc(.type(let kind)):
                     switch kind {
                     case .class:
-                        return try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions)
+                        rawInterface = try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
                     case .protocol:
-                        return try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions)
+                        rawInterface = try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
                     }
                 default:
-                    break
+                    rawInterface = nil
                 }
             }
-            return nil
         }
+
+        return rawInterface
     }
 
     private func _objcSection(for imagePath: String) async throws -> RuntimeObjCSection {

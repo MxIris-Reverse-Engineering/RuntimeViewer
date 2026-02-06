@@ -243,7 +243,7 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
     // MARK: - Private
 
     private func sendRaw(data: Data) async throws {
-        if #available(macOS 10.15.4, iOS 13.4, *) {
+        if #available(macOS 10.15.4, iOS 13.4, watchOS 6.2, tvOS 13.4, *) {
             try outputHandle.write(contentsOf: data)
         } else {
             outputHandle.write(data)
