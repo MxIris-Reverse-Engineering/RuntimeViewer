@@ -1,7 +1,10 @@
 import AppKit
+import RuntimeViewerApplication
 
 final class Document: NSDocument {
-    private lazy var mainCoordinator = MainCoordinator(appServices: .init())
+    let appServices = AppServices()
+
+    private lazy var mainCoordinator = MainCoordinator(appServices: appServices)
 
     override class var autosavesInPlace: Bool {
         return false

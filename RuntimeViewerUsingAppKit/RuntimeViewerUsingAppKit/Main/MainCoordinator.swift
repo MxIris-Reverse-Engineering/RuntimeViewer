@@ -94,8 +94,10 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
         case .clickedNode(let imageNode):
             windowController.window?.title = imageNode.name
         case .selectedObject(let runtimeObject):
+            appServices.selectedRuntimeObject = runtimeObject
             contentCoordinator.trigger(.root(runtimeObject))
         case .back:
+            appServices.selectedRuntimeObject = nil
             contentCoordinator.trigger(.placeholder)
         default:
             break
@@ -107,13 +109,16 @@ extension MainCoordinator: ContentCoordinator.Delegate {
     func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition route: ContentRoute) {
         let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
         viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
-        
+
         switch route {
         case .placeholder:
+            appServices.selectedRuntimeObject = nil
             inspectorCoordinator.trigger(.placeholder)
         case .root(let runtimeObject):
+            appServices.selectedRuntimeObject = runtimeObject
             inspectorCoordinator.trigger(.root(.object(runtimeObject)))
         case .next(let runtimeObject):
+            appServices.selectedRuntimeObject = runtimeObject
             inspectorCoordinator.trigger(.next(.object(runtimeObject)))
         case .back:
             inspectorCoordinator.trigger(.back)
