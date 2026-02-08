@@ -1,8 +1,10 @@
 import Foundation
 import Network
+import os
 import RuntimeViewerMCPShared
 
-final class MCPBridgeClient: Sendable {
+/// Handles TCP connection lifecycle, port file discovery, and frame-level I/O.
+final class MCPBridgeConnection: Sendable {
     private let connection: NWConnection
 
     init(host: String, port: UInt16) async throws {
@@ -17,19 +19,41 @@ final class MCPBridgeClient: Sendable {
         )
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            var didResume = false
+            let didResume = OSAllocatedUnfairLock(initialState: false)
 
             connection.stateUpdateHandler = { state in
-                guard !didResume else { return }
                 switch state {
                 case .ready:
-                    didResume = true
+                    let alreadyResumed = didResume.withLock { resumed -> Bool in
+                        if resumed { return true }
+                        resumed = true
+                        return false
+                    }
+                    guard !alreadyResumed else { return }
                     continuation.resume()
                 case .failed(let error):
-                    didResume = true
+                    let alreadyResumed = didResume.withLock { resumed -> Bool in
+                        if resumed { return true }
+                        resumed = true
+                        return false
+                    }
+                    guard !alreadyResumed else { return }
+                    continuation.resume(throwing: error)
+                case .waiting(let error):
+                    let alreadyResumed = didResume.withLock { resumed -> Bool in
+                        if resumed { return true }
+                        resumed = true
+                        return false
+                    }
+                    guard !alreadyResumed else { return }
                     continuation.resume(throwing: error)
                 case .cancelled:
-                    didResume = true
+                    let alreadyResumed = didResume.withLock { resumed -> Bool in
+                        if resumed { return true }
+                        resumed = true
+                        return false
+                    }
+                    guard !alreadyResumed else { return }
                     continuation.resume(throwing: MCPBridgeTransportError.connectionClosed)
                 default:
                     break
@@ -39,14 +63,18 @@ final class MCPBridgeClient: Sendable {
             connection.start(queue: .global(qos: .userInitiated))
 
             DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
-                guard !didResume else { return }
-                didResume = true
+                let alreadyResumed = didResume.withLock { resumed -> Bool in
+                    if resumed { return true }
+                    resumed = true
+                    return false
+                }
+                guard !alreadyResumed else { return }
                 continuation.resume(throwing: MCPBridgeTransportError.timeout)
             }
         }
     }
 
-    static func connectFromPortFile() async throws -> MCPBridgeClient {
+    static func connectFromPortFile() async throws -> MCPBridgeConnection {
         let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let portFile = appSupportURL
             .appendingPathComponent("RuntimeViewer")
@@ -61,7 +89,7 @@ final class MCPBridgeClient: Sendable {
             throw MCPBridgeTransportError.serverNotRunning
         }
 
-        return try await MCPBridgeClient(host: "127.0.0.1", port: port)
+        return try await MCPBridgeConnection(host: "127.0.0.1", port: port)
     }
 
     func sendRequest<Response: Decodable>(
@@ -75,17 +103,6 @@ final class MCPBridgeClient: Sendable {
         let responseData = try await MCPBridgeFrame.receive(from: connection)
         let responseEnvelope = try JSONDecoder().decode(MCPBridgeResponseEnvelope.self, from: responseData)
         return try JSONDecoder().decode(Response.self, from: responseEnvelope.payload)
-    }
-
-    func getSelectedType() async throws -> MCPGetSelectedTypeResponse {
-        // Send an empty payload for getSelectedType
-        struct Empty: Codable {}
-        return try await sendRequest(command: .getSelectedType, payload: Empty())
-    }
-
-    func getTypeInterface(imagePath: String, typeName: String) async throws -> MCPGetTypeInterfaceResponse {
-        let request = MCPGetTypeInterfaceRequest(imagePath: imagePath, typeName: typeName)
-        return try await sendRequest(command: .getTypeInterface, payload: request)
     }
 
     func stop() {

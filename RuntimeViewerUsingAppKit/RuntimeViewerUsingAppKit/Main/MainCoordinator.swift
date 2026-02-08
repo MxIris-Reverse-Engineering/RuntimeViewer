@@ -22,13 +22,14 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 
     init(appServices: AppServices) {
         self.appServices = appServices
-        super.init(windowController: .init(), initialRoute: .main(.shared))
+        super.init(windowController: .init(appServices: appServices), initialRoute: .main(.shared))
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
         case .main(let runtimeEngine):
             appServices.runtimeEngine = runtimeEngine
+            appServices.currentImageName = nil
             sidebarCoordinator.removeFromParent()
             contentCoordinator.removeFromParent()
             inspectorCoordinator.removeFromParent()
@@ -92,11 +93,12 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
         switch route {
         case .clickedNode(let imageNode):
-            windowController.window?.title = imageNode.name
+            appServices.currentImageName = imageNode.name
         case .selectedObject(let runtimeObject):
             appServices.selectedRuntimeObject = runtimeObject
             contentCoordinator.trigger(.root(runtimeObject))
         case .back:
+            appServices.currentImageName = nil
             appServices.selectedRuntimeObject = nil
             contentCoordinator.trigger(.placeholder)
         default:
