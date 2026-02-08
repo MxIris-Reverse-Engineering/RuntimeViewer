@@ -11,14 +11,14 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
         func sidebarRuntimeObjectCoordinator(_ sidebarCoordinator: SidebarRuntimeObjectCoordinator, completeTransition route: SidebarRuntimeObjectRoute)
     }
 
-    let appServices: AppServices
+    let appState: AppState
 
     weak var delegate: Delegate?
 
     let imageNode: RuntimeImageNode
 
-    init(appServices: AppServices, delegate: Delegate? = nil, imageNode: RuntimeImageNode) {
-        self.appServices = appServices
+    init(appState: AppState, delegate: Delegate? = nil, imageNode: RuntimeImageNode) {
+        self.appState = appState
         self.delegate = delegate
         self.imageNode = imageNode
         super.init(rootViewController: .init(), initialRoute: .initial)
@@ -28,11 +28,11 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
         switch route {
         case .initial:
             let listViewController = SidebarRuntimeObjectListViewController()
-            let listViewModel = SidebarRuntimeObjectListViewModel(imageNode: imageNode, appServices: appServices, router: self)
+            let listViewModel = SidebarRuntimeObjectListViewModel(imageNode: imageNode, appState: appState, router: self)
             listViewController.setupBindings(for: listViewModel)
 
             let bookmarkViewController = SidebarRuntimeObjectBookmarkViewController()
-            let bookmarkViewModel = SidebarRuntimeObjectBookmarkViewModel(imageNode: imageNode, appServices: appServices, router: self)
+            let bookmarkViewModel = SidebarRuntimeObjectBookmarkViewModel(imageNode: imageNode, appState: appState, router: self)
             bookmarkViewController.setupBindings(for: bookmarkViewModel)
             
             return .set([

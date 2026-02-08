@@ -11,13 +11,13 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition: ContentRoute)
     }
 
-    let appServices: AppServices
+    let appState: AppState
 
     weak var delegate: Delegate?
 
-    init(appServices: AppServices, delegate: Delegate) {
+    init(appState: AppState, delegate: Delegate) {
         self.delegate = delegate
-        self.appServices = appServices
+        self.appState = appState
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
     }
 
@@ -25,19 +25,19 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         switch route {
         case .placeholder:
             let contentPlaceholderViewController = ContentPlaceholderViewController()
-            let contentPlaceholderViewModel = ContentPlaceholderViewModel(appServices: appServices, router: self)
+            let contentPlaceholderViewModel = ContentPlaceholderViewModel(appState: appState, router: self)
             contentPlaceholderViewController.setupBindings(for: contentPlaceholderViewModel)
             contentPlaceholderViewController.loadViewIfNeeded()
             return .set([contentPlaceholderViewController], animated: true)
-        case .root(let runtimeObjectType):
+        case .root(let runtimeObject):
             let contentTextViewController = ContentTextViewController()
-            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
+            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObject, appState: appState, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
             contentTextViewController.loadViewIfNeeded()
             return .set([contentTextViewController], animated: true)
-        case .next(let runtimeObjectType):
+        case .next(let runtimeObject):
             let contentTextViewController = ContentTextViewController()
-            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObjectType, appServices: appServices, router: self)
+            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObject, appState: appState, router: self)
             contentTextViewController.setupBindings(for: contentTextViewModel)
             contentTextViewController.loadViewIfNeeded()
             return .push(contentTextViewController, animated: true)

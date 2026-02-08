@@ -16,13 +16,13 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @Observed public private(set) var isFiltering: Bool = false
     @Observed public private(set) var isSearchCaseInsensitive: Bool = false
 
-    public init(imageNode: RuntimeImageNode, appServices: AppServices, router: any Router<SidebarRuntimeObjectRoute>) {
+    public init(imageNode: RuntimeImageNode, appState: AppState, router: any Router<SidebarRuntimeObjectRoute>) {
         let imagePath = imageNode.path
-        self.runtimeEngine = appServices.runtimeEngine
+        self.runtimeEngine = appState.runtimeEngine
         self.imageNode = imageNode
         self.imagePath = imagePath
         self.imageName = imageNode.name
-        super.init(appServices: appServices, router: router)
+        super.init(appState: appState, router: router)
 
         Task {
             await runtimeEngine.reloadDataPublisher

@@ -1,8 +1,9 @@
 import Foundation
+import Observation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-public final class AppServices {
+public final class AppState {
     public init() {}
 
     @Observed

@@ -22,10 +22,10 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     @Observed
     public private(set) var isFiltering: Bool = false
 
-    public init(appServices: AppServices, router: any Router<SidebarRootRoute>, nodesSource: Observable<[RuntimeImageNode]>) {
+    public init(appState: AppState, router: any Router<SidebarRootRoute>, nodesSource: Observable<[RuntimeImageNode]>) {
         self.nodesSource = nodesSource
 
-        super.init(appServices: appServices, router: router)
+        super.init(appState: appState, router: router)
 
         nodesSource
             .observe(on: MainScheduler.instance)

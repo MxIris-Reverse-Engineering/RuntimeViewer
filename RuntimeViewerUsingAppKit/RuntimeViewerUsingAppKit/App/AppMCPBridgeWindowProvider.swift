@@ -14,7 +14,7 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider, @unchecked Send
                 identifier: "\(window.windowNumber)",
                 displayName: window.title,
                 isKeyWindow: window.isKeyWindow,
-                appServices: document.appServices
+                appState: document.appState
             )
         }
     }
@@ -29,7 +29,7 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider, @unchecked Send
                     identifier: identifier,
                     displayName: window.title,
                     isKeyWindow: window.isKeyWindow,
-                    appServices: document.appServices
+                    appState: document.appState
                 )
             }
         }

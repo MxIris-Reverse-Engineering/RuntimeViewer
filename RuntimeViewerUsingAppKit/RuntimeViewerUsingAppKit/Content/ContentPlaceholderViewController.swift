@@ -29,6 +29,6 @@ final class ContentPlaceholderViewController: UXKitViewController<ContentPlaceho
     override func viewDidAppear() {
         super.viewDidAppear()
 
-        viewModel?.appServices.currentSubtitle = ""
+        viewModel?.appState.currentSubtitle = ""
     }
 }

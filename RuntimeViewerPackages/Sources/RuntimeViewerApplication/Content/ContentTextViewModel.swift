@@ -26,10 +26,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
     public private(set) var attributedString: NSAttributedString?
 
-    public init(runtimeObject: RuntimeObject, appServices: AppServices, router: any Router<ContentRoute>) {
+    public init(runtimeObject: RuntimeObject, appState: AppState, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
         self.theme = XcodePresentationTheme()
-        super.init(appServices: appServices, router: router)
+        super.init(appState: appState, router: router)
 
         self.imageNameOfRuntimeObject = runtimeObject.imageName
 
@@ -61,7 +61,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 return Observable.async {
-                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: mergedOptions).map { ($0.interfaceString, theme, runtimeObject) }
+                    try await self.appState.runtimeEngine.interface(for: runtimeObject, options: mergedOptions).map { ($0.interfaceString, theme, runtimeObject) }
                 }
                 .trackActivity(_commonLoading)
             }
@@ -91,7 +91,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         input.runtimeObjectClicked
             .flatMapLatest { [unowned self] runtimeObject in
                 Observable.async {
-                    try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: .init())
+                    try await self.appState.runtimeEngine.interface(for: runtimeObject, options: .init())
                 }
                 .trackActivity(_commonLoading)
                 .asSignal(onErrorJustReturn: nil)
