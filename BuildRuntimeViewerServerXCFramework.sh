@@ -154,7 +154,7 @@ build_archive() {
     local archive_name=$3
     shift 3
     local extra_build_settings=("$@")
-    local derived_data_path="$OUTPUT_DIR/DerivedData/$archive_name"
+    local derived_data_path="$OUTPUT_DIR/DerivedData"
 
     echo "🛠  [$(date +%T)] Building: $archive_name (scheme: $scheme) ..."
 

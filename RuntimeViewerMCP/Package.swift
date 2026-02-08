@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "RuntimeViewerMCP",
     platforms: [
-        .macOS(.v14),
+        .macOS(.v15),
     ],
     products: [
         .library(
@@ -13,34 +13,25 @@ let package = Package(
             targets: ["RuntimeViewerMCPShared"]
         ),
         .library(
-            name: "RuntimeViewerMCPService",
-            targets: ["RuntimeViewerMCPService"]
-        ),
-        .executable(
-            name: "RuntimeViewerMCPServer",
-            targets: ["RuntimeViewerMCPServer"]
+            name: "RuntimeViewerMCPBridge",
+            targets: ["RuntimeViewerMCPBridge"]
         ),
     ],
     dependencies: [
         .package(path: "../RuntimeViewerCore"),
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.10.0"),
+        .package(path: "../RuntimeViewerPackages"),
     ],
     targets: [
         .target(
             name: "RuntimeViewerMCPShared"
         ),
         .target(
-            name: "RuntimeViewerMCPService",
+            name: "RuntimeViewerMCPBridge",
             dependencies: [
                 "RuntimeViewerMCPShared",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
-            ]
-        ),
-        .executableTarget(
-            name: "RuntimeViewerMCPServer",
-            dependencies: [
-                "RuntimeViewerMCPShared",
-                .product(name: "MCP", package: "swift-sdk"),
+                .product(name: "RuntimeViewerApplication", package: "RuntimeViewerPackages"),
+                .product(name: "RuntimeViewerSettings", package: "RuntimeViewerPackages"),
             ]
         ),
     ],

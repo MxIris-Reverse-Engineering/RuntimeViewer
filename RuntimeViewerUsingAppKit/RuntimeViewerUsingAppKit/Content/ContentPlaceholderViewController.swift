@@ -29,7 +29,6 @@ final class ContentPlaceholderViewController: UXKitViewController<ContentPlaceho
     override func viewDidAppear() {
         super.viewDidAppear()
 
-        view.window?.title = "Runtime Viewer"
-        view.window?.subtitle = ""
+        viewModel?.appServices.currentSubtitle = ""
     }
 }

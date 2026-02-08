@@ -1,19 +1,16 @@
 import AppKit
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerSettings
 import RuntimeViewerSettingsUI
 import RuntimeViewerArchitectures
+import RuntimeViewerMCPBridge
 
-#if canImport(RuntimeViewerMCPService)
-import RuntimeViewerMCPService
-#endif
-
+@Loggable
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    #if canImport(RuntimeViewerMCPService)
     private var mcpBridgeServer: MCPBridgeServer?
-    #endif
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         @Dependency(\.settings)
@@ -30,15 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        #if canImport(RuntimeViewerMCPService)
         startMCPBridgeServer()
-        #endif
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
-        #if canImport(RuntimeViewerMCPService)
         mcpBridgeServer?.stop()
-        #endif
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -53,15 +46,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SettingsWindowController.shared.showWindow(nil)
     }
 
-    #if canImport(RuntimeViewerMCPService)
     private func startMCPBridgeServer() {
         do {
-            let bridgeDelegate = AppMCPBridgeDelegate()
-            let server = try MCPBridgeServer(delegate: bridgeDelegate)
-            self.mcpBridgeServer = server
+            let windowProvider = AppMCPBridgeWindowProvider()
+            let server = try MCPBridgeServer(windowProvider: windowProvider)
+            mcpBridgeServer = server
         } catch {
-            NSLog("Failed to start MCP Bridge Server: \(error)")
+            #log(.error, "Failed to start MCP Bridge Server: \(error, privacy: .public)")
         }
     }
-    #endif
 }

@@ -81,6 +81,30 @@ When adding new features, you **MUST** follow these rules:
 - Runtime engine: `Core/Sources/RuntimeViewerCore/RuntimeEngine.swift`
 - ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/`
 
+## MCP Tool Preferences
+
+When MCP servers are available, **MUST** prefer them over shell commands and built-in tools:
+
+### Xcode MCP (Project Operations)
+Prefer Xcode MCP tools for all Xcode project-level operations:
+- **File reading**: Use `XcodeRead` instead of `Read` / `cat` for files in the Xcode project
+- **File writing**: Use `XcodeWrite` instead of `Write` for creating/overwriting files in the project
+- **File editing**: Use `XcodeUpdate` instead of `Edit` / `sed` for modifying files in the project
+- **File searching**: Use `XcodeGrep` instead of `Grep` / `grep` for searching in project files
+- **File discovery**: Use `XcodeGlob` / `XcodeLS` instead of `Glob` / `ls` for browsing project structure
+- **File management**: Use `XcodeMakeDir`, `XcodeMV`, `XcodeRM` for directory/file operations
+- **Build**: Use `BuildProject` for building the project through Xcode
+- **Tests**: Use `GetTestList`, `RunSomeTests`, `RunAllTests` for test operations
+- **Diagnostics**: Use `XcodeRefreshCodeIssuesInFile`, `XcodeListNavigatorIssues` for checking issues
+- **Preview**: Use `RenderPreview` for SwiftUI preview rendering
+- **Snippets**: Use `ExecuteSnippet` for running code snippets in project context
+- **Documentation**: Use `DocumentationSearch` for searching Apple Developer Documentation
+
+### Priority Order
+1. **Xcode MCP** — for project file operations, in-editor builds, diagnostics, and previews
+2. **RepoPrompt** — for cross-repo context building, code structure analysis, and git operations
+3. **Built-in tools** — fallback when MCP tools are unavailable or not applicable
+
 ## External Dependencies
 
 Core reverse engineering powered by:
