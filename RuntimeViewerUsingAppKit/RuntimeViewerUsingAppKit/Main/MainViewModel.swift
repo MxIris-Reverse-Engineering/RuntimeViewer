@@ -82,7 +82,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                 for url in urls {
                     do {
                         try Bundle(url: url)?.loadAndReturnError()
-                        await self.appServices.runtimeEngine.reloadData(isReloadImageNodes: false)
+                        await self.appState.runtimeEngine.reloadData(isReloadImageNodes: false)
                     } catch {
                         self.errorRelay.accept(error) // 统一错误处理
                     }
@@ -147,7 +147,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                 guard let self = self else { return }
                 Task {
                     do {
-                        let semanticString = try await self.appServices.runtimeEngine.interface(for: runtimeObject, options: self.appDefaults.options)?.interfaceString
+                        let semanticString = try await self.appState.runtimeEngine.interface(for: runtimeObject, options: self.appDefaults.options)?.interfaceString
                         try semanticString?.string.write(to: url, atomically: true, encoding: .utf8)
                     } catch {
                         self.errorRelay.accept(error)
@@ -173,7 +173,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                 Task { [weak self] in
                     guard let self else { return }
                     do {
-                        let semanticString = try await appServices.runtimeEngine.interface(for: runtimeObjectType, options: self.appDefaults.options)?.interfaceString
+                        let semanticString = try await appState.runtimeEngine.interface(for: runtimeObjectType, options: self.appDefaults.options)?.interfaceString
                         completion(semanticString?.string.data(using: .utf8), nil)
                     } catch {
                         completion(nil, error)

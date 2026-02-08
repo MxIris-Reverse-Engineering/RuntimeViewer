@@ -13,12 +13,12 @@ protocol SidebarCoordinatorDelegate: AnyObject {
 typealias SidebarTransition = NavigationTransition
 
 class SidebarCoordinator: NavigationCoordinator<SidebarRoute> {
-    let appServices: AppServices
+    let appState: AppState
 
     weak var coordinatorDelegate: SidebarCoordinatorDelegate?
 
-    init(appServices: AppServices, delegate: SidebarCoordinatorDelegate? = nil) {
-        self.appServices = appServices
+    init(appState: AppState, delegate: SidebarCoordinatorDelegate? = nil) {
+        self.appState = appState
         self.coordinatorDelegate = delegate
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .root)
     }
@@ -27,12 +27,12 @@ class SidebarCoordinator: NavigationCoordinator<SidebarRoute> {
         switch route {
         case .root:
             let viewController = SidebarRootViewController()
-            let viewModel = SidebarRootDirectoryViewModel(appServices: appServices, router: self)
+            let viewModel = SidebarRootDirectoryViewModel(appState: appState, router: self)
             viewController.setupBindings(for: viewModel)
             return .set([viewController], animation: nil)
         case let .clickedNode(clickedNode):
             let viewController = SidebarRuntimeObjectViewController()
-            let viewModel = SidebarRuntimeObjectListViewModel(imageNode: clickedNode, appServices: appServices, router: self)
+            let viewModel = SidebarRuntimeObjectListViewModel(imageNode: clickedNode, appState: appState, router: self)
             viewController.setupBindings(for: viewModel)
             return .push(viewController, animation: .default)
         case .back:

@@ -8,16 +8,16 @@ import RuntimeViewerApplication
 typealias InspectorTransition = Transition<InspectorViewController>
 
 class InspectorCoordinator: BaseCoordinator<InspectorRoute, InspectorTransition> {
-    let appServices: AppServices
-    init(appServices: AppServices) {
-        self.appServices = appServices
+    let appState: AppState
+    init(appState: AppState) {
+        self.appState = appState
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
     }
 
     override func prepareTransition(for route: InspectorRoute) -> InspectorTransition {
         switch route {
         case .placeholder:
-            let viewModel = InspectorPlaceholderViewModel(appServices: appServices, router: self)
+            let viewModel = InspectorPlaceholderViewModel(appState: appState, router: self)
             let viewController = InspectorPlaceholderViewController()
             viewController.setupBindings(for: viewModel)
             return .set([viewController])

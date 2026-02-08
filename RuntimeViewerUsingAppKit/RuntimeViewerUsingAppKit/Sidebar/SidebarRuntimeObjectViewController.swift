@@ -156,7 +156,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         output.windowInitialTitles.driveOnNext { [weak self] in
             guard let self else { return }
-            self.viewModel?.appServices.currentSubtitle = $0.subtitle
+            self.viewModel?.appState.currentSubtitle = $0.subtitle
         }
         .disposed(by: rx.disposeBag)
 
@@ -166,8 +166,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
         .disposed(by: rx.disposeBag)
         
-        outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
-        outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
+        outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appState.runtimeEngine.source.description)"
+        outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appState.runtimeEngine.source.description)"
     }
 }
 

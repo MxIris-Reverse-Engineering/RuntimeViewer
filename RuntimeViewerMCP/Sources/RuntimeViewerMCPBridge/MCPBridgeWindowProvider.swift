@@ -7,18 +7,18 @@ public struct MCPBridgeWindowContext {
     public let identifier: String
     public let displayName: String?
     public let isKeyWindow: Bool
-    public let appServices: AppServices
+    public let appState: AppState
 
     public init(
         identifier: String,
         displayName: String?,
         isKeyWindow: Bool,
-        appServices: AppServices
+        appState: AppState
     ) {
         self.identifier = identifier
         self.displayName = displayName
         self.isKeyWindow = isKeyWindow
-        self.appServices = appServices
+        self.appState = appState
     }
 }
 

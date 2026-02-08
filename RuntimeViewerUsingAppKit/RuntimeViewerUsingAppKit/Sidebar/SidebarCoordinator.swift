@@ -11,7 +11,7 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
         func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute)
     }
 
-    let appServices: AppServices
+    let appState: AppState
 
     weak var delegate: Delegate?
 
@@ -19,8 +19,8 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
 
     private var runtimeObjectCoordinator: SidebarRuntimeObjectCoordinator?
 
-    init(appServices: AppServices, delegate: Delegate? = nil) {
-        self.appServices = appServices
+    init(appState: AppState, delegate: Delegate? = nil) {
+        self.appState = appState
         self.delegate = delegate
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
     }
@@ -29,13 +29,13 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
         switch route {
         case .root:
             rootCoordinator?.removeFromParent()
-            let rootCoordinator = SidebarRootCoordinator(appServices: appServices)
+            let rootCoordinator = SidebarRootCoordinator(appState: appState)
             rootCoordinator.delegate = self
             self.rootCoordinator = rootCoordinator
             return .set([rootCoordinator], animated: false)
         case .clickedNode(let imageNode):
             runtimeObjectCoordinator?.removeFromParent()
-            let runtimeObjectCoordinator = SidebarRuntimeObjectCoordinator(appServices: appServices, delegate: self, imageNode: imageNode)
+            let runtimeObjectCoordinator = SidebarRuntimeObjectCoordinator(appState: appState, delegate: self, imageNode: imageNode)
             self.runtimeObjectCoordinator = runtimeObjectCoordinator
             return .push(runtimeObjectCoordinator, animated: true)
         case .back:

@@ -80,8 +80,8 @@ public final class MCPBridgeServer: @unchecked Sendable {
                     identifier: context.identifier,
                     displayName: context.displayName,
                     isKeyWindow: context.isKeyWindow,
-                    selectedTypeName: context.appServices.selectedRuntimeObject?.displayName,
-                    selectedTypeImagePath: context.appServices.selectedRuntimeObject?.imagePath
+                    selectedTypeName: context.appState.selectedRuntimeObject?.displayName,
+                    selectedTypeImagePath: context.appState.selectedRuntimeObject?.imagePath
                 )
             }
         }
@@ -90,7 +90,7 @@ public final class MCPBridgeServer: @unchecked Sendable {
 
     private func handleSelectedType(_ request: MCPSelectedTypeRequest) async -> MCPSelectedTypeResponse {
         guard let runtimeObject = await MainActor.run(body: {
-            windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.appServices.selectedRuntimeObject
+            windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.appState.selectedRuntimeObject
         }) else {
             return MCPSelectedTypeResponse(
                 imagePath: nil,
@@ -275,7 +275,7 @@ public final class MCPBridgeServer: @unchecked Sendable {
 
     private func runtimeEngine(forWindowIdentifier identifier: String) async -> RuntimeEngine {
         await MainActor.run {
-            windowProvider.windowContext(forIdentifier: identifier)?.appServices.runtimeEngine ?? .shared
+            windowProvider.windowContext(forIdentifier: identifier)?.appState.runtimeEngine ?? .shared
         }
     }
 
