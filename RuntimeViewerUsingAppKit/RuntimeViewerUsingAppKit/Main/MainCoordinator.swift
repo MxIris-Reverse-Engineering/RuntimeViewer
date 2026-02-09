@@ -8,34 +8,34 @@ import LateResponders
 typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewController>
 
 final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateResponderRegistering {
-    let appState: AppState
+    let documentState: DocumentState
 
-    private lazy var sidebarCoordinator = SidebarCoordinator(appState: appState, delegate: self)
+    private lazy var sidebarCoordinator = SidebarCoordinator(documentState: documentState, delegate: self)
 
-    private lazy var contentCoordinator = ContentCoordinator(appState: appState, delegate: self)
+    private lazy var contentCoordinator = ContentCoordinator(documentState: documentState, delegate: self)
 
-    private lazy var inspectorCoordinator = InspectorCoordinator(appState: appState)
+    private lazy var inspectorCoordinator = InspectorCoordinator(documentState: documentState)
 
-    private lazy var viewModel = MainViewModel(appState: appState, router: self)
+    private lazy var viewModel = MainViewModel(documentState: documentState, router: self)
     
     private(set) lazy var lateResponderRegistry = LateResponderRegistry()
 
-    init(appState: AppState) {
-        self.appState = appState
-        super.init(windowController: .init(appState: appState), initialRoute: .main(.shared))
+    init(documentState: DocumentState) {
+        self.documentState = documentState
+        super.init(windowController: .init(documentState: documentState), initialRoute: .main(.shared))
     }
 
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
         case .main(let runtimeEngine):
-            appState.runtimeEngine = runtimeEngine
-            appState.currentImageName = nil
+            documentState.runtimeEngine = runtimeEngine
+            documentState.currentImageName = nil
             sidebarCoordinator.removeFromParent()
             contentCoordinator.removeFromParent()
             inspectorCoordinator.removeFromParent()
-            sidebarCoordinator = SidebarCoordinator(appState: appState, delegate: self)
-            contentCoordinator = ContentCoordinator(appState: appState, delegate: self)
-            inspectorCoordinator = InspectorCoordinator(appState: appState)
+            sidebarCoordinator = SidebarCoordinator(documentState: documentState, delegate: self)
+            contentCoordinator = ContentCoordinator(documentState: documentState, delegate: self)
+            inspectorCoordinator = InspectorCoordinator(documentState: documentState)
             viewModel.completeTransition = sidebarCoordinator.rx.didCompleteTransition()
             windowController.setupBindings(for: viewModel)
             return .multiple(
@@ -53,7 +53,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             return .route(on: contentCoordinator, to: .back)
         case .generationOptions(let sender):
             let viewController = GenerationOptionsViewController()
-            let viewModel = GenerationOptionsViewModel(appState: appState, router: self)
+            let viewModel = GenerationOptionsViewModel(documentState: documentState, router: self)
             viewController.loadViewIfNeeded()
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
@@ -61,7 +61,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             return .none()
         case .attachToProcess:
             let viewController = AttachToProcessViewController()
-            let viewModel = AttachToProcessViewModel(appState: appState, router: self)
+            let viewModel = AttachToProcessViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
             viewController.preferredContentSize = .init(width: 800, height: 600)
             return .presentOnRoot(viewController, mode: .asSheet)
@@ -93,13 +93,13 @@ extension MainCoordinator: SidebarCoordinator.Delegate {
     func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
         switch route {
         case .clickedNode(let imageNode):
-            appState.currentImageName = imageNode.name
+            documentState.currentImageName = imageNode.name
         case .selectedObject(let runtimeObject):
-            appState.selectedRuntimeObject = runtimeObject
+            documentState.selectedRuntimeObject = runtimeObject
             contentCoordinator.trigger(.root(runtimeObject))
         case .back:
-            appState.currentImageName = nil
-            appState.selectedRuntimeObject = nil
+            documentState.currentImageName = nil
+            documentState.selectedRuntimeObject = nil
             contentCoordinator.trigger(.placeholder)
         default:
             break
@@ -114,13 +114,13 @@ extension MainCoordinator: ContentCoordinator.Delegate {
 
         switch route {
         case .placeholder:
-            appState.selectedRuntimeObject = nil
+            documentState.selectedRuntimeObject = nil
             inspectorCoordinator.trigger(.placeholder)
         case .root(let runtimeObject):
-            appState.selectedRuntimeObject = runtimeObject
+            documentState.selectedRuntimeObject = runtimeObject
             inspectorCoordinator.trigger(.root(.object(runtimeObject)))
         case .next(let runtimeObject):
-            appState.selectedRuntimeObject = runtimeObject
+            documentState.selectedRuntimeObject = runtimeObject
             inspectorCoordinator.trigger(.next(.object(runtimeObject)))
         case .back:
             inspectorCoordinator.trigger(.back)

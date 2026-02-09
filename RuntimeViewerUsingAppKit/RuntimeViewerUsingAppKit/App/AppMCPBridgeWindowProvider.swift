@@ -14,7 +14,8 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider, @unchecked Send
                 identifier: "\(window.windowNumber)",
                 displayName: window.title,
                 isKeyWindow: window.isKeyWindow,
-                appState: document.appState
+                selectedRuntimeObject: document.documentState.selectedRuntimeObject,
+                runtimeEngine: document.documentState.runtimeEngine
             )
         }
     }
@@ -29,7 +30,8 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider, @unchecked Send
                     identifier: identifier,
                     displayName: window.title,
                     isKeyWindow: window.isKeyWindow,
-                    appState: document.appState
+                    selectedRuntimeObject: document.documentState.selectedRuntimeObject,
+                    runtimeEngine: document.documentState.runtimeEngine
                 )
             }
         }

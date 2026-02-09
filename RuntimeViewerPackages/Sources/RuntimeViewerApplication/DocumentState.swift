@@ -3,7 +3,7 @@ import Observation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-public final class AppState {
+public final class DocumentState {
     public init() {}
 
     @Observed

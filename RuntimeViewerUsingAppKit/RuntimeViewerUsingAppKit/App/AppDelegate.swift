@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let windowProvider = AppMCPBridgeWindowProvider()
             let server = try MCPBridgeServer(windowProvider: windowProvider)
             mcpBridgeServer = server
+            Task { await server.start() }
         } catch {
             #log(.error, "Failed to start MCP Bridge Server: \(error, privacy: .public)")
         }

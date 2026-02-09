@@ -1,5 +1,5 @@
 #if os(macOS)
-import RuntimeViewerApplication
+import RuntimeViewerCore
 import RuntimeViewerMCPShared
 
 /// A context representing a single window for MCP bridge operations.
@@ -7,18 +7,21 @@ public struct MCPBridgeWindowContext {
     public let identifier: String
     public let displayName: String?
     public let isKeyWindow: Bool
-    public let appState: AppState
+    public let selectedRuntimeObject: RuntimeObject?
+    public let runtimeEngine: RuntimeEngine
 
     public init(
         identifier: String,
         displayName: String?,
         isKeyWindow: Bool,
-        appState: AppState
+        selectedRuntimeObject: RuntimeObject?,
+        runtimeEngine: RuntimeEngine
     ) {
         self.identifier = identifier
         self.displayName = displayName
         self.isKeyWindow = isKeyWindow
-        self.appState = appState
+        self.selectedRuntimeObject = selectedRuntimeObject
+        self.runtimeEngine = runtimeEngine
     }
 }
 

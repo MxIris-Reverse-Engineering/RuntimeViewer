@@ -15,20 +15,20 @@ public enum MainRoute: Routable {
 typealias MainTransition = Transition<MainSplitViewController>
 
 class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
-    let appState: AppState
+    let documentState: DocumentState
 
     let completeTransition: PublishRelay<SidebarRoute> = .init()
 
-    lazy var sidebarCoordinator = SidebarCoordinator(appState: appState, delegate: self)
+    lazy var sidebarCoordinator = SidebarCoordinator(documentState: documentState, delegate: self)
 
-    lazy var contentCoordinator = ContentCoordinator(appState: appState)
+    lazy var contentCoordinator = ContentCoordinator(documentState: documentState)
 
-    lazy var compactSidebarCoordinator = SidebarCoordinator(appState: appState, delegate: self)
+    lazy var compactSidebarCoordinator = SidebarCoordinator(documentState: documentState, delegate: self)
 
-    lazy var inspectorCoordinator = InspectorCoordinator(appState: appState)
+    lazy var inspectorCoordinator = InspectorCoordinator(documentState: documentState)
 
-    init(appState: AppState) {
-        self.appState = appState
+    init(documentState: DocumentState) {
+        self.documentState = documentState
         super.init(rootViewController: .init(style: .doubleColumn), initialRoute: nil)
         rootViewController.delegate = self
     }
@@ -36,7 +36,7 @@ class MainCoordinator: BaseCoordinator<MainRoute, MainTransition> {
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
         case .initial:
-            let viewModel = MainViewModel(appState: appState, router: self)
+            let viewModel = MainViewModel(documentState: documentState, router: self)
             rootViewController.setupBindings(for: viewModel)
             return .multiple(.set(sidebarCoordinator, for: .primary), .set(contentCoordinator, for: .secondary))
         case .select(let runtimeObject):

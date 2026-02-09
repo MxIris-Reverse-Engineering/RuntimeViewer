@@ -7,11 +7,11 @@ public final class SidebarRootDirectoryViewModel: SidebarRootViewModel {
     
     public let nodesSubject = BehaviorSubject<[RuntimeImageNode]>(value: [])
     
-    public init(appState: AppState, router: any Router<SidebarRootRoute>) {
-        super.init(appState: appState, router: router, nodesSource: nodesSubject.asObservable())
+    public init(documentState: DocumentState, router: any Router<SidebarRootRoute>) {
+        super.init(documentState: documentState, router: router, nodesSource: nodesSubject.asObservable())
         
         Task {
-            await appState.runtimeEngine
+            await documentState.runtimeEngine
                 .$imageNodes
                 .asObservable()
                 .bind(to: nodesSubject)
@@ -28,10 +28,10 @@ public final class SidebarRootDirectoryViewModel: SidebarRootViewModel {
 
     public func transform(_ input: Input) -> Output {
         let appDefaults = appDefaults
-        let appState = appState
+        let documentState = documentState
         input.addBookmark
             .emitOnNextMainActor { cellViewModel in
-                let bookmark = RuntimeImageBookmark(source: appState.runtimeEngine.source, imageNode: cellViewModel.node)
+                let bookmark = RuntimeImageBookmark(source: documentState.runtimeEngine.source, imageNode: cellViewModel.node)
                 appDefaults.imageBookmarks.append(bookmark)
             }
             .disposed(by: rx.disposeBag)
