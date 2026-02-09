@@ -3,7 +3,7 @@ import FoundationToolbox
 import RuntimeViewerArchitectures
 
 open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
-    public let appState: AppState
+    public let documentState: DocumentState
 
     public unowned let router: any Router<Route>
 
@@ -33,8 +33,8 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
             }
     }
 
-    public init(appState: AppState, router: any Router<Route>) {
-        self.appState = appState
+    public init(documentState: DocumentState, router: any Router<Route>) {
+        self.documentState = documentState
         self.router = router
     }
 }

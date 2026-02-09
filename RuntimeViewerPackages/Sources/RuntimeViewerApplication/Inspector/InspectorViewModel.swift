@@ -25,9 +25,9 @@ public final class InspectorPlaceholderViewModel: ViewModel<InspectorRoute> {}
 //        Output()
 //    }
 //
-//    init(runtimeObject: RuntimeObjCRuntimeObject, appState: AppState, router: any Router<InspectorRoute>) {
+//    init(runtimeObject: RuntimeObjCRuntimeObject, documentState: DocumentState, router: any Router<InspectorRoute>) {
 //        self.runtimeObject = runtimeObject
-//        super.init(appState: appState, router: router)
+//        super.init(documentState: documentState, router: router)
 ////        $runtimeObject.flatMap { appState.runtimeEngine. }
 //    }
 //}
@@ -36,8 +36,8 @@ public final class InspectorRuntimeNodeViewModel: ViewModel<InspectorRoute> {
     @Observed
     var runtimeNode: RuntimeImageNode
 
-    init(runtimeNode: RuntimeImageNode, appState: AppState, router: any Router<InspectorRoute>) {
+    init(runtimeNode: RuntimeImageNode, documentState: DocumentState, router: any Router<InspectorRoute>) {
         self.runtimeNode = runtimeNode
-        super.init(appState: appState, router: router)
+        super.init(documentState: documentState, router: router)
     }
 }

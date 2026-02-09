@@ -11,12 +11,12 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
         func sidebarRootCoordinator(_ sidebarCoordinator: SidebarRootCoordinator, completeTransition: SidebarRootRoute)
     }
 
-    let appState: AppState
+    let documentState: DocumentState
 
     weak var delegate: Delegate?
 
-    init(appState: AppState, delegate: Delegate? = nil) {
-        self.appState = appState
+    init(documentState: DocumentState, delegate: Delegate? = nil) {
+        self.documentState = documentState
         self.delegate = delegate
         super.init(rootViewController: .init(), initialRoute: .initial)
     }
@@ -25,11 +25,11 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
         switch route {
         case .initial:
             let directoryViewController = SidebarRootDirectoryViewController()
-            let directoryViewModel = SidebarRootDirectoryViewModel(appState: appState, router: self)
+            let directoryViewModel = SidebarRootDirectoryViewModel(documentState: documentState, router: self)
             directoryViewController.setupBindings(for: directoryViewModel)
 
             let bookmarkViewController = SidebarRootBookmarkViewController()
-            let bookmarkViewModel = SidebarRootBookmarkViewModel(appState: appState, router: self)
+            let bookmarkViewModel = SidebarRootBookmarkViewModel(documentState: documentState, router: self)
             bookmarkViewController.setupBindings(for: bookmarkViewModel)
             return .set([
                 TabViewItem(normalSymbol: .init(systemName: .folder), selectedSymbol: .init(systemName: .folderFill), viewController: directoryViewController),

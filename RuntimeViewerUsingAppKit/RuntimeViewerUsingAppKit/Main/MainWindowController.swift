@@ -22,7 +22,7 @@ final class MainWindow: NSWindow {
 }
 
 final class MainWindowController: XiblessWindowController<MainWindow> {
-    let appState: AppState
+    let documentState: DocumentState
 
     private(set) lazy var toolbarController = MainToolbarController(delegate: self)
 
@@ -34,19 +34,19 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
 
-    init(appState: AppState) {
-        self.appState = appState
+    init(documentState: DocumentState) {
+        self.documentState = documentState
         super.init(windowGenerator: .init())
     }
 
     override func synchronizeWindowTitleWithDocumentName() {
         // Prevent NSDocument from overriding the window title with "Untitled"
-        contentWindow.title = appState.runtimeEngine.source.description
+        contentWindow.title = documentState.runtimeEngine.source.description
     }
 
     override func windowDidLoad() {
         super.windowDidLoad()
-        contentWindow.title = appState.runtimeEngine.source.description
+        contentWindow.title = documentState.runtimeEngine.source.description
         contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
@@ -63,11 +63,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         splitViewController.setupBindings(for: viewModel)
 
-        appState.$currentImageName
+        documentState.$currentImageName
             .asDriver()
             .driveOnNext { [weak self] imageName in
                 guard let self else { return }
-                var title = appState.runtimeEngine.source.description
+                var title = documentState.runtimeEngine.source.description
 
                 if let imageName {
                     title += " - \(imageName)"
@@ -82,7 +82,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             }
             .disposed(by: rx.disposeBag)
 
-        appState.$currentSubtitle
+        documentState.$currentSubtitle
             .asDriver()
             .driveOnNext { [weak self] subtitle in
                 guard let self else { return }

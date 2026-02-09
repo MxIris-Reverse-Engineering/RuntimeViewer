@@ -1,4 +1,5 @@
 import Foundation
+import FoundationToolbox
 import Network
 import RuntimeViewerMCPShared
 import OSLog
@@ -7,11 +8,13 @@ private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: 
 
 /// Handles TCP listener setup, connection management, and frame-level I/O.
 /// Delegates request processing to a handler closure.
-final class MCPBridgeListener: @unchecked Sendable {
+final class MCPBridgeListener: Sendable {
     private let listener: NWListener
+    
     private let portFilePath: String
 
     // Set once via start(), never mutated after
+    @Mutex
     private var requestHandler: (@Sendable (MCPBridgeEnvelope) async throws -> Data)?
 
     let port: UInt16

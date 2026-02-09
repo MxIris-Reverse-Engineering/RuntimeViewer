@@ -8,7 +8,7 @@ import OSLog
 
 private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: "Server")
 
-public final class MCPBridgeServer: @unchecked Sendable {
+public actor MCPBridgeServer {
     private let listener: MCPBridgeListener
     private let windowProvider: MCPBridgeWindowProvider
 
@@ -18,13 +18,15 @@ public final class MCPBridgeServer: @unchecked Sendable {
     public init(windowProvider: MCPBridgeWindowProvider, port: UInt16 = 0) throws {
         self.windowProvider = windowProvider
         self.listener = try MCPBridgeListener(port: port)
+    }
 
+    public func start() {
         listener.start { [self] envelope in
             try await self.processRequest(envelope)
         }
     }
 
-    public func stop() {
+    public nonisolated func stop() {
         listener.stop()
     }
 
@@ -80,8 +82,8 @@ public final class MCPBridgeServer: @unchecked Sendable {
                     identifier: context.identifier,
                     displayName: context.displayName,
                     isKeyWindow: context.isKeyWindow,
-                    selectedTypeName: context.appState.selectedRuntimeObject?.displayName,
-                    selectedTypeImagePath: context.appState.selectedRuntimeObject?.imagePath
+                    selectedTypeName: context.selectedRuntimeObject?.displayName,
+                    selectedTypeImagePath: context.selectedRuntimeObject?.imagePath
                 )
             }
         }
@@ -90,7 +92,7 @@ public final class MCPBridgeServer: @unchecked Sendable {
 
     private func handleSelectedType(_ request: MCPSelectedTypeRequest) async -> MCPSelectedTypeResponse {
         guard let runtimeObject = await MainActor.run(body: {
-            windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.appState.selectedRuntimeObject
+            windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedRuntimeObject
         }) else {
             return MCPSelectedTypeResponse(
                 imagePath: nil,
@@ -275,7 +277,7 @@ public final class MCPBridgeServer: @unchecked Sendable {
 
     private func runtimeEngine(forWindowIdentifier identifier: String) async -> RuntimeEngine {
         await MainActor.run {
-            windowProvider.windowContext(forIdentifier: identifier)?.appState.runtimeEngine ?? .shared
+            windowProvider.windowContext(forIdentifier: identifier)?.runtimeEngine ?? .shared
         }
     }
 
