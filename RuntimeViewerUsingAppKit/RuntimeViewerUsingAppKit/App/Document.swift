@@ -6,9 +6,7 @@ final class Document: NSDocument {
 
     private lazy var mainCoordinator = MainCoordinator(documentState: documentState)
 
-    override class var autosavesInPlace: Bool {
-        return false
-    }
+    override class var autosavesInPlace: Bool { false }
 
     override func makeWindowControllers() {
         addWindowController(mainCoordinator.windowController)
