@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
 /// A SwiftUI Wrapper for `NSVisualEffectView`
 ///
 /// ## Usage
@@ -63,3 +64,4 @@ public struct VisualEffectView: NSViewRepresentable {
         }
     }
 }
+#endif
