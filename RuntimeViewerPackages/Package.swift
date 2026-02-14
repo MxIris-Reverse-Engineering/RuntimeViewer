@@ -462,7 +462,7 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerServiceHelper",
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
-                .product(name: "SwiftyXPC", package: "SwiftyXPC"),
+                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ]
         ),
