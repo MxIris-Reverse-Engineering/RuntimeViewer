@@ -129,13 +129,13 @@ extension RuntimeImageNode: @retroactive Sequence {
 }
 
 extension RuntimeImageNode {
-    public static let frameworkIcon: NSUIImage = icon(for: SFSymbols(systemName: .latch2Case))
+    public static let frameworkIcon: NSUIImage = SFSymbols(systemName: .latch2Case).nsuiImgae
 
-    public static let bundleIcon: NSUIImage = icon(for: SFSymbols(systemName: .shippingbox))
+    public static let bundleIcon: NSUIImage = SFSymbols(systemName: .shippingbox).nsuiImgae
 
-    public static let imageIcon: NSUIImage = icon(for: SFSymbols(systemName: .doc))
+    public static let imageIcon: NSUIImage = SFSymbols(systemName: .doc).nsuiImgae
 
-    public static let folderIcon: NSUIImage = icon(for: SFSymbols(systemName: .folder))
+    public static let folderIcon: NSUIImage = SFSymbols(systemName: .folder).nsuiImgae
 
     public var icon: NSUIImage {
         if name.hasSuffix("framework") {
@@ -147,16 +147,6 @@ extension RuntimeImageNode {
         } else {
             Self.folderIcon
         }
-    }
-
-    private static func icon(for symbol: SFSymbols) -> NSUIImage {
-        #if os(macOS)
-        symbol
-            .nsuiImgae
-        #else
-        symbol
-            .nsuiImgae
-        #endif
     }
 }
 

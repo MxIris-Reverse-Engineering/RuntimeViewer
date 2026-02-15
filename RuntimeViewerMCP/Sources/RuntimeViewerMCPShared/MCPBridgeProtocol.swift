@@ -79,10 +79,10 @@ public struct MCPSelectedTypeResponse: Codable, Sendable {
 
 public struct MCPTypeInterfaceRequest: Codable, Sendable {
     public let windowIdentifier: String
-    public let imagePath: String
+    public let imagePath: String?
     public let typeName: String
 
-    public init(windowIdentifier: String, imagePath: String, typeName: String) {
+    public init(windowIdentifier: String, imagePath: String?, typeName: String) {
         self.windowIdentifier = windowIdentifier
         self.imagePath = imagePath
         self.typeName = typeName
@@ -146,9 +146,9 @@ public struct MCPGrepMatch: Codable, Sendable {
 
 public struct MCPListTypesRequest: Codable, Sendable {
     public let windowIdentifier: String
-    public let imagePath: String
+    public let imagePath: String?
 
-    public init(windowIdentifier: String, imagePath: String) {
+    public init(windowIdentifier: String, imagePath: String?) {
         self.windowIdentifier = windowIdentifier
         self.imagePath = imagePath
     }
@@ -192,10 +192,10 @@ public struct MCPSearchTypesResponse: Codable, Sendable {
 
 public struct MCPGrepTypeInterfaceRequest: Codable, Sendable {
     public let windowIdentifier: String
-    public let imagePath: String
+    public let imagePath: String?
     public let pattern: String
 
-    public init(windowIdentifier: String, imagePath: String, pattern: String) {
+    public init(windowIdentifier: String, imagePath: String?, pattern: String) {
         self.windowIdentifier = windowIdentifier
         self.imagePath = imagePath
         self.pattern = pattern
