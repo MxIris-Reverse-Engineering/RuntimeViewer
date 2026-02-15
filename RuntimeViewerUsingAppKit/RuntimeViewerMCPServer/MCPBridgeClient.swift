@@ -24,12 +24,12 @@ final class MCPBridgeClient: Sendable {
         return try await connection.sendRequest(command: .selectedType, payload: request)
     }
 
-    func typeInterface(windowIdentifier: String, imagePath: String, typeName: String) async throws -> MCPTypeInterfaceResponse {
+    func typeInterface(windowIdentifier: String, imagePath: String?, typeName: String) async throws -> MCPTypeInterfaceResponse {
         let request = MCPTypeInterfaceRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, typeName: typeName)
         return try await connection.sendRequest(command: .typeInterface, payload: request)
     }
 
-    func listTypes(windowIdentifier: String, imagePath: String) async throws -> MCPListTypesResponse {
+    func listTypes(windowIdentifier: String, imagePath: String?) async throws -> MCPListTypesResponse {
         let request = MCPListTypesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath)
         return try await connection.sendRequest(command: .listTypes, payload: request)
     }
@@ -39,7 +39,7 @@ final class MCPBridgeClient: Sendable {
         return try await connection.sendRequest(command: .searchTypes, payload: request)
     }
 
-    func grepTypeInterface(windowIdentifier: String, imagePath: String, pattern: String) async throws -> MCPGrepTypeInterfaceResponse {
+    func grepTypeInterface(windowIdentifier: String, imagePath: String?, pattern: String) async throws -> MCPGrepTypeInterfaceResponse {
         let request = MCPGrepTypeInterfaceRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, pattern: pattern)
         return try await connection.sendRequest(command: .grepTypeInterface, payload: request)
     }

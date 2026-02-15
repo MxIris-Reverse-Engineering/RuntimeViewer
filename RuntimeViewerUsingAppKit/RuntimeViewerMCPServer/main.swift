@@ -29,7 +29,7 @@ let selectedTypeTool = Tool(
 
 let typeInterfaceTool = Tool(
     name: "get_type_interface",
-    description: "Gets the interface declaration for a specific runtime type in a given image. Returns the type's full interface text including methods, properties, and protocol conformances.",
+    description: "Gets the interface declaration for a specific runtime type. Returns the type's full interface text including methods, properties, and protocol conformances. If image_path is omitted, searches across all loaded images.",
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
@@ -39,20 +39,20 @@ let typeInterfaceTool = Tool(
             ]),
             "image_path": .object([
                 "type": .string("string"),
-                "description": .string("The full path of the image (framework/dylib) containing the type"),
+                "description": .string("Optional: the full path of the image (framework/dylib) containing the type. If omitted, searches all loaded images."),
             ]),
             "type_name": .object([
                 "type": .string("string"),
                 "description": .string("The name of the type to inspect (e.g. 'NSView', 'UIViewController')"),
             ]),
         ]),
-        "required": .array([.string("window_identifier"), .string("image_path"), .string("type_name")]),
+        "required": .array([.string("window_identifier"), .string("type_name")]),
     ])
 )
 
 let listTypesTool = Tool(
     name: "list_types",
-    description: "Lists all runtime types (classes, protocols, structs, etc.) in a specific image (framework/dylib). Use this to browse the contents of an image.",
+    description: "Lists all runtime types (classes, protocols, structs, etc.) in an image (framework/dylib). If image_path is omitted, lists types from all loaded images.",
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
@@ -62,10 +62,10 @@ let listTypesTool = Tool(
             ]),
             "image_path": .object([
                 "type": .string("string"),
-                "description": .string("The full path of the image (framework/dylib) to list types from"),
+                "description": .string("Optional: the full path of the image (framework/dylib) to list types from. If omitted, lists types from all loaded images."),
             ]),
         ]),
-        "required": .array([.string("window_identifier"), .string("image_path")]),
+        "required": .array([.string("window_identifier")]),
     ])
 )
 
@@ -94,7 +94,7 @@ let searchTypesTool = Tool(
 
 let grepTypeInterfaceTool = Tool(
     name: "grep_type_interface",
-    description: "Searches through generated interface text of all types in an image for a keyword pattern. Returns matching types with the lines that contain the pattern. Useful for finding types that declare specific methods, properties, or protocol conformances.",
+    description: "Searches through generated interface text of all types for a keyword pattern. Returns matching types with the lines that contain the pattern. Useful for finding types that declare specific methods, properties, or protocol conformances. If image_path is omitted, searches across all loaded images.",
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
@@ -104,14 +104,14 @@ let grepTypeInterfaceTool = Tool(
             ]),
             "image_path": .object([
                 "type": .string("string"),
-                "description": .string("The full path of the image (framework/dylib) to search in"),
+                "description": .string("Optional: the full path of the image (framework/dylib) to search in. If omitted, searches all loaded images."),
             ]),
             "pattern": .object([
                 "type": .string("string"),
                 "description": .string("The search pattern (case-insensitive substring match against interface text lines)"),
             ]),
         ]),
-        "required": .array([.string("window_identifier"), .string("image_path"), .string("pattern")]),
+        "required": .array([.string("window_identifier"), .string("pattern")]),
     ])
 )
 
@@ -256,13 +256,13 @@ await server.withMethodHandler(CallTool.self) { params in
                 isError: true
             )
         }
-        guard let imagePath = params.arguments?["image_path"]?.stringValue,
-              let typeName = params.arguments?["type_name"]?.stringValue else {
+        guard let typeName = params.arguments?["type_name"]?.stringValue else {
             return .init(
-                content: [.text("Error: 'image_path' and 'type_name' parameters are required.")],
+                content: [.text("Error: 'type_name' parameter is required.")],
                 isError: true
             )
         }
+        let imagePath = params.arguments?["image_path"]?.stringValue
 
         switch await connectedClient() {
         case .connected(let client):
@@ -277,7 +277,9 @@ await server.withMethodHandler(CallTool.self) { params in
                 if let kind = response.typeKind {
                     text += "Kind: \(kind)\n"
                 }
-                text += "Image: \(imagePath)\n"
+                if let responseImagePath = response.imagePath {
+                    text += "Image: \(responseImagePath)\n"
+                }
                 if let interfaceText = response.interfaceText {
                     text += "\nInterface:\n\(interfaceText)"
                 } else {
@@ -303,12 +305,7 @@ await server.withMethodHandler(CallTool.self) { params in
                 isError: true
             )
         }
-        guard let imagePath = params.arguments?["image_path"]?.stringValue else {
-            return .init(
-                content: [.text("Error: 'image_path' parameter is required.")],
-                isError: true
-            )
-        }
+        let imagePath = params.arguments?["image_path"]?.stringValue
 
         switch await connectedClient() {
         case .connected(let client):
@@ -320,7 +317,8 @@ await server.withMethodHandler(CallTool.self) { params in
                 }
 
                 if response.types.isEmpty {
-                    return .init(content: [.text("No types found in image '\(imagePath)'.")], isError: false)
+                    let scope = imagePath.map { "image '\($0)'" } ?? "all loaded images"
+                    return .init(content: [.text("No types found in \(scope).")], isError: false)
                 }
 
                 // Group types by kind
@@ -329,7 +327,13 @@ await server.withMethodHandler(CallTool.self) { params in
                     grouped[type.kind, default: []].append(type)
                 }
 
-                var text = "Types in \(imagePath.split(separator: "/").last ?? Substring(imagePath)):\n"
+                let scopeName: String
+                if let imagePath {
+                    scopeName = String(imagePath.split(separator: "/").last ?? Substring(imagePath))
+                } else {
+                    scopeName = "all loaded images"
+                }
+                var text = "Types in \(scopeName):\n"
                 text += "Total: \(response.types.count) types\n"
                 for (kind, types) in grouped.sorted(by: { $0.key < $1.key }) {
                     text += "\n[\(kind)] (\(types.count)):\n"
@@ -409,12 +413,7 @@ await server.withMethodHandler(CallTool.self) { params in
                 isError: true
             )
         }
-        guard let imagePath = params.arguments?["image_path"]?.stringValue else {
-            return .init(
-                content: [.text("Error: 'image_path' parameter is required.")],
-                isError: true
-            )
-        }
+        let imagePath = params.arguments?["image_path"]?.stringValue
         guard let pattern = params.arguments?["pattern"]?.stringValue else {
             return .init(
                 content: [.text("Error: 'pattern' parameter is required.")],
@@ -432,10 +431,17 @@ await server.withMethodHandler(CallTool.self) { params in
                 }
 
                 if response.matches.isEmpty {
-                    return .init(content: [.text("No matches for '\(pattern)' in image '\(imagePath)'.")], isError: false)
+                    let scope = imagePath.map { "image '\($0)'" } ?? "all loaded images"
+                    return .init(content: [.text("No matches for '\(pattern)' in \(scope).")], isError: false)
                 }
 
-                var text = "Grep results for '\(pattern)' in \(imagePath.split(separator: "/").last ?? Substring(imagePath)):\n"
+                let scopeName: String
+                if let imagePath {
+                    scopeName = String(imagePath.split(separator: "/").last ?? Substring(imagePath))
+                } else {
+                    scopeName = "all loaded images"
+                }
+                var text = "Grep results for '\(pattern)' in \(scopeName):\n"
                 text += "Found matches in \(response.matches.count) types\n"
                 for match in response.matches {
                     text += "\n--- \(match.typeName) [\(match.kind)] ---\n"
