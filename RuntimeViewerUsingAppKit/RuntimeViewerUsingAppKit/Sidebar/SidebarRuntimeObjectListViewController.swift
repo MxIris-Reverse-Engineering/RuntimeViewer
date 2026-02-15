@@ -89,6 +89,10 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         ) {}
     }
 
+    @IBAction func exportInterface(_ sender: Any?) {
+        
+    }
+    
     @objc private func addToBookmarkMenuItemAction(_ sender: NSMenuItem) {
         guard outlineView.hasValidClickedRow, let cellViewModel = outlineView.itemAtClickedRow as? SidebarRuntimeObjectCellViewModel else { return }
         addToBookmarkRelay.accept(cellViewModel)
