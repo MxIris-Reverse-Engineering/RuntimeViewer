@@ -7,17 +7,10 @@ import RuntimeViewerArchitectures
 typealias SidebarRootTransition = Transition<Void, SidebarRootTabViewController>
 
 final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRootTransition> {
-    protocol Delegate: AnyObject {
-        func sidebarRootCoordinator(_ sidebarCoordinator: SidebarRootCoordinator, completeTransition: SidebarRootRoute)
-    }
-
     let documentState: DocumentState
 
-    weak var delegate: Delegate?
-
-    init(documentState: DocumentState, delegate: Delegate? = nil) {
+    init(documentState: DocumentState) {
         self.documentState = documentState
-        self.delegate = delegate
         super.init(rootViewController: .init(), initialRoute: .initial)
     }
 
@@ -44,11 +37,6 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
         }
     }
 
-    override func completeTransition(for route: SidebarRootRoute) {
-        super.completeTransition(for: route)
-
-        delegate?.sidebarRootCoordinator(self, completeTransition: route)
-    }
 }
 
 

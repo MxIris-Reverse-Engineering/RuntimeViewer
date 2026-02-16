@@ -7,21 +7,16 @@ import RuntimeViewerApplication
 typealias SidebarTransition = Transition<Void, SidebarNavigationController>
 
 final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
-    protocol Delegate: AnyObject {
-        func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute)
-    }
-
     let documentState: DocumentState
-
-    weak var delegate: Delegate?
 
     private var rootCoordinator: SidebarRootCoordinator?
 
     private var runtimeObjectCoordinator: SidebarRuntimeObjectCoordinator?
 
-    init(documentState: DocumentState, delegate: Delegate? = nil) {
+    private var childEventDisposeBag = DisposeBag()
+
+    init(documentState: DocumentState) {
         self.documentState = documentState
-        self.delegate = delegate
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
     }
 
@@ -29,46 +24,35 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
         switch route {
         case .root:
             rootCoordinator?.removeFromParent()
+            childEventDisposeBag = DisposeBag()
             let rootCoordinator = SidebarRootCoordinator(documentState: documentState)
-            rootCoordinator.delegate = self
+            rootCoordinator.rx.didCompleteTransition()
+                .subscribeOnNext { [weak self] route in
+                    guard let self else { return }
+                    if case .image(let imageNode) = route {
+                        trigger(.clickedNode(imageNode))
+                    }
+                }
+                .disposed(by: childEventDisposeBag)
             self.rootCoordinator = rootCoordinator
             return .set([rootCoordinator], animated: false)
         case .clickedNode(let imageNode):
             runtimeObjectCoordinator?.removeFromParent()
-            let runtimeObjectCoordinator = SidebarRuntimeObjectCoordinator(documentState: documentState, delegate: self, imageNode: imageNode)
+            let runtimeObjectCoordinator = SidebarRuntimeObjectCoordinator(documentState: documentState, imageNode: imageNode)
+            runtimeObjectCoordinator.rx.didCompleteTransition()
+                .subscribeOnNext { [weak self] route in
+                    guard let self else { return }
+                    if case .selectedObject(let runtimeObject) = route {
+                        trigger(.selectedObject(runtimeObject))
+                    }
+                }
+                .disposed(by: childEventDisposeBag)
             self.runtimeObjectCoordinator = runtimeObjectCoordinator
             return .push(runtimeObjectCoordinator, animated: true)
         case .back:
             return .pop(animated: true)
         default:
             return .none()
-        }
-    }
-
-    override func completeTransition(for route: SidebarRoute) {
-        super.completeTransition(for: route)
-        delegate?.sidebarCoordinator(self, completeTransition: route)
-    }
-}
-
-extension SidebarCoordinator: SidebarRootCoordinator.Delegate {
-    func sidebarRootCoordinator(_ sidebarCoordinator: SidebarRootCoordinator, completeTransition route: SidebarRootRoute) {
-        switch route {
-        case .image(let imageNode):
-            trigger(.clickedNode(imageNode))
-        default:
-            break
-        }
-    }
-}
-
-extension SidebarCoordinator: SidebarRuntimeObjectCoordinator.Delegate {
-    func sidebarRuntimeObjectCoordinator(_ sidebarCoordinator: SidebarRuntimeObjectCoordinator, completeTransition route: SidebarRuntimeObjectRoute) {
-        switch route {
-        case .selectedObject(let runtimeObjectName):
-            trigger(.selectedObject(runtimeObjectName))
-        default:
-            break
         }
     }
 }

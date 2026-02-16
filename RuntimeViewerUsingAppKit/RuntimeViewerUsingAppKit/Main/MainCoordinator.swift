@@ -10,15 +10,17 @@ typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewCo
 final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateResponderRegistering {
     let documentState: DocumentState
 
-    private lazy var sidebarCoordinator = SidebarCoordinator(documentState: documentState, delegate: self)
+    private lazy var sidebarCoordinator = SidebarCoordinator(documentState: documentState)
 
-    private lazy var contentCoordinator = ContentCoordinator(documentState: documentState, delegate: self)
+    private lazy var contentCoordinator = ContentCoordinator(documentState: documentState)
 
     private lazy var inspectorCoordinator = InspectorCoordinator(documentState: documentState)
 
     private lazy var viewModel = MainViewModel(documentState: documentState, router: self)
-    
+
     private(set) lazy var lateResponderRegistry = LateResponderRegistry()
+
+    private var childEventDisposeBag = DisposeBag()
 
     init(documentState: DocumentState) {
         self.documentState = documentState
@@ -33,9 +35,10 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             sidebarCoordinator.removeFromParent()
             contentCoordinator.removeFromParent()
             inspectorCoordinator.removeFromParent()
-            sidebarCoordinator = SidebarCoordinator(documentState: documentState, delegate: self)
-            contentCoordinator = ContentCoordinator(documentState: documentState, delegate: self)
+            sidebarCoordinator = SidebarCoordinator(documentState: documentState)
+            contentCoordinator = ContentCoordinator(documentState: documentState)
             inspectorCoordinator = InspectorCoordinator(documentState: documentState)
+            bindChildEvents()
             viewModel.completeTransition = sidebarCoordinator.rx.didCompleteTransition()
             windowController.setupBindings(for: viewModel)
             return .multiple(
@@ -78,7 +81,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             break
         }
     }
-    
+
     override var nextResponder: NSResponder? {
         set {
             lateResponderRegistry.lastResponder.nextResponder = newValue
@@ -87,43 +90,48 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             lateResponderRegistry.initialResponder
         }
     }
-}
 
-extension MainCoordinator: SidebarCoordinator.Delegate {
-    func sidebarCoordinator(_ sidebarCoordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
-        switch route {
-        case .clickedNode(let imageNode):
-            documentState.currentImageName = imageNode.name
-        case .selectedObject(let runtimeObject):
-            documentState.selectedRuntimeObject = runtimeObject
-            contentCoordinator.trigger(.root(runtimeObject))
-        case .back:
-            documentState.currentImageName = nil
-            documentState.selectedRuntimeObject = nil
-            contentCoordinator.trigger(.placeholder)
-        default:
-            break
-        }
-    }
-}
+    private func bindChildEvents() {
+        childEventDisposeBag = DisposeBag()
 
-extension MainCoordinator: ContentCoordinator.Delegate {
-    func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition route: ContentRoute) {
-        let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
-        viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
+        sidebarCoordinator.rx.didCompleteTransition()
+            .subscribeOnNext { [weak self] route in
+                guard let self else { return }
+                switch route {
+                case .clickedNode(let imageNode):
+                    documentState.currentImageName = imageNode.name
+                case .selectedObject(let runtimeObject):
+                    documentState.selectedRuntimeObject = runtimeObject
+                    contentCoordinator.trigger(.root(runtimeObject))
+                case .back:
+                    documentState.currentImageName = nil
+                    documentState.selectedRuntimeObject = nil
+                    contentCoordinator.trigger(.placeholder)
+                default:
+                    break
+                }
+            }
+            .disposed(by: childEventDisposeBag)
 
-        switch route {
-        case .placeholder:
-            documentState.selectedRuntimeObject = nil
-            inspectorCoordinator.trigger(.placeholder)
-        case .root(let runtimeObject):
-            documentState.selectedRuntimeObject = runtimeObject
-            inspectorCoordinator.trigger(.root(.object(runtimeObject)))
-        case .next(let runtimeObject):
-            documentState.selectedRuntimeObject = runtimeObject
-            inspectorCoordinator.trigger(.next(.object(runtimeObject)))
-        case .back:
-            inspectorCoordinator.trigger(.back)
-        }
+        contentCoordinator.rx.didCompleteTransition()
+            .subscribeOnNext { [weak self] route in
+                guard let self else { return }
+                let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
+                viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
+                switch route {
+                case .placeholder:
+                    documentState.selectedRuntimeObject = nil
+                    inspectorCoordinator.trigger(.placeholder)
+                case .root(let runtimeObject):
+                    documentState.selectedRuntimeObject = runtimeObject
+                    inspectorCoordinator.trigger(.root(.object(runtimeObject)))
+                case .next(let runtimeObject):
+                    documentState.selectedRuntimeObject = runtimeObject
+                    inspectorCoordinator.trigger(.next(.object(runtimeObject)))
+                case .back:
+                    inspectorCoordinator.trigger(.back)
+                }
+            }
+            .disposed(by: childEventDisposeBag)
     }
 }
