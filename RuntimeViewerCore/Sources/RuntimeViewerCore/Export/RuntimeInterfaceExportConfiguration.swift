@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 
 public struct RuntimeInterfaceExportConfiguration: Sendable {
     public let scope: Scope

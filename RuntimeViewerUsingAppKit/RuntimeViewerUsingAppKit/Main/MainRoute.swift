@@ -16,4 +16,5 @@ public enum MainRoute: Routable {
     case loadFramework
     case attachToProcess
     case dismiss
+    case exportInterfaces
 }

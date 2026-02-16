@@ -44,7 +44,7 @@ extension RuntimeEngine {
 
 // MARK: - RuntimeEngine
 
-@Loggable
+@Loggable(.private)
 public actor RuntimeEngine {
     fileprivate enum CommandNames: String, CaseIterable {
         case imageList

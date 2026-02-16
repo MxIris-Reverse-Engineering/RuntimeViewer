@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 
 public struct RuntimeInterfaceExportItem: Sendable {
     public let object: RuntimeObject
