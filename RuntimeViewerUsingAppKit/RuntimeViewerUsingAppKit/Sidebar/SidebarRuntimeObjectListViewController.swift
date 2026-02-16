@@ -90,7 +90,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
     }
 
     @IBAction func exportInterface(_ sender: Any?) {
-        
+        viewModel?.router.trigger(.exportInterface)
     }
     
     @objc private func addToBookmarkMenuItemAction(_ sender: NSMenuItem) {

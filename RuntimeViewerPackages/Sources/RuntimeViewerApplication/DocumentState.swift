@@ -16,5 +16,8 @@ public final class DocumentState {
     public var currentImageName: String?
 
     @Observed
+    public var currentImagePath: String?
+
+    @Observed
     public var currentSubtitle: String = ""
 }

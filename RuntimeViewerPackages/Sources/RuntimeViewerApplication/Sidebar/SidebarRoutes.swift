@@ -11,6 +11,7 @@ public enum SidebarRoute: Routable {
     case selectedNode(RuntimeImageNode)
     case clickedNode(RuntimeImageNode)
     case selectedObject(RuntimeObject)
+    case exportInterface
 }
 
 #if os(macOS)
@@ -29,6 +30,7 @@ public enum SidebarRuntimeObjectRoute: Routable {
     case objects
     case bookmarks
     case selectedObject(RuntimeObject)
+    case exportInterface
 }
 #else
 public typealias SidebarRootRoute = SidebarRoute

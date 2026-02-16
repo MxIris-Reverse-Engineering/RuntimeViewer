@@ -29,8 +29,11 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
             rootCoordinator.rx.didCompleteTransition()
                 .subscribeOnNext { [weak self] route in
                     guard let self else { return }
-                    if case .image(let imageNode) = route {
+                    switch route {
+                    case .image(let imageNode):
                         trigger(.clickedNode(imageNode))
+                    default:
+                        break
                     }
                 }
                 .disposed(by: childEventDisposeBag)
@@ -42,8 +45,13 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
             runtimeObjectCoordinator.rx.didCompleteTransition()
                 .subscribeOnNext { [weak self] route in
                     guard let self else { return }
-                    if case .selectedObject(let runtimeObject) = route {
-                        trigger(.selectedObject(runtimeObject))
+                    switch route {
+                    case .selectedObject(let runtimeObjectName):
+                        trigger(.selectedObject(runtimeObjectName))
+                    case .exportInterface:
+                        trigger(.exportInterface)
+                    default:
+                        break
                     }
                 }
                 .disposed(by: childEventDisposeBag)
