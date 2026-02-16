@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
 final class ExportingViewController: AppKitViewController<ExportingViewModel> {
-    // MARK: - Shared
+    // MARK: - Relays
 
     private let cancelRelay = PublishRelay<Void>()
     private let exportRelay = PublishRelay<Void>()
@@ -15,92 +15,125 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
 
     // MARK: - Configuration Page
 
+    private let configImageNameLabel = Label()
+
+    private let configSingleFileRadio = NSButton()
+
+    private let configDirectoryRadio = NSButton()
+
     private lazy var configPageView: NSView = {
         let container = NSView()
 
-        let iconImageView = NSImageView()
-        iconImageView.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
-        iconImageView.symbolConfiguration = .init(pointSize: 32, weight: .light)
-        iconImageView.contentTintColor = .controlAccentColor
+        let iconImageView = ImageView().then {
+            $0.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
+            $0.symbolConfiguration = .init(pointSize: 32, weight: .light)
+            $0.contentTintColor = .controlAccentColor
+        }
 
-        let titleLabel = NSTextField(labelWithString: "Export Interfaces")
-        titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        let titleLabel = Label("Export Interfaces").then {
+            $0.font = .systemFont(ofSize: 18, weight: .semibold)
+        }
 
-        let headerStack = NSStackView(views: [iconImageView, titleLabel])
-        headerStack.orientation = .horizontal
-        headerStack.spacing = 10
-        headerStack.alignment = .centerY
+        let headerStack = HStackView(spacing: 10) {
+            iconImageView
+            titleLabel
+        }.then {
+            $0.alignment = .centerY
+        }
 
-        let imageNameTitleLabel = NSTextField(labelWithString: "Image:")
-        imageNameTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        let imageNameTitleLabel = Label("Image:").then {
+            $0.font = .systemFont(ofSize: 13, weight: .medium)
+        }
 
-        imageNameLabel.font = .systemFont(ofSize: 13)
-        imageNameLabel.textColor = .secondaryLabelColor
+        configImageNameLabel.do {
+            $0.font = .systemFont(ofSize: 13)
+            $0.textColor = .secondaryLabelColor
+        }
 
-        let imageNameStack = NSStackView(views: [imageNameTitleLabel, imageNameLabel])
-        imageNameStack.orientation = .horizontal
-        imageNameStack.spacing = 4
+        let imageNameStack = HStackView(spacing: 4) {
+            imageNameTitleLabel
+            configImageNameLabel
+        }
 
-        let formatTitleLabel = NSTextField(labelWithString: "Export Format:")
-        formatTitleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        configSingleFileRadio.do {
+            $0.setButtonType(.radio)
+            $0.title = "Single File"
+            $0.font = .systemFont(ofSize: 13)
+            $0.state = .on
+            $0.target = self
+            $0.action = #selector(formatRadioChanged(_:))
+            $0.tag = 0
+        }
 
-        singleFileRadio.setButtonType(.radio)
-        singleFileRadio.title = "Single File"
-        singleFileRadio.font = .systemFont(ofSize: 13)
-        singleFileRadio.state = .on
-        singleFileRadio.target = self
-        singleFileRadio.action = #selector(formatRadioChanged(_:))
-        singleFileRadio.tag = 0
+        let singleFileDescLabel = Label("Combine all interfaces into one .h and one .swiftinterface file").then {
+            $0.font = .systemFont(ofSize: 11)
+            $0.textColor = .tertiaryLabelColor
+        }
 
-        let singleFileDesc = NSTextField(labelWithString: "Combine all interfaces into one .h and one .swiftinterface file")
-        singleFileDesc.font = .systemFont(ofSize: 11)
-        singleFileDesc.textColor = .tertiaryLabelColor
+        let singleFileStack = VStackView(alignment: .leading, spacing: 2) {
+            configSingleFileRadio
+            singleFileDescLabel
+        }
 
-        directoryRadio.setButtonType(.radio)
-        directoryRadio.title = "Directory Structure"
-        directoryRadio.font = .systemFont(ofSize: 13)
-        directoryRadio.state = .off
-        directoryRadio.target = self
-        directoryRadio.action = #selector(formatRadioChanged(_:))
-        directoryRadio.tag = 1
+        configDirectoryRadio.do {
+            $0.setButtonType(.radio)
+            $0.title = "Directory Structure"
+            $0.font = .systemFont(ofSize: 13)
+            $0.state = .off
+            $0.target = self
+            $0.action = #selector(formatRadioChanged(_:))
+            $0.tag = 1
+        }
 
-        let directoryDesc = NSTextField(labelWithString: "Individual files organized by ObjC/Swift subdirectories")
-        directoryDesc.font = .systemFont(ofSize: 11)
-        directoryDesc.textColor = .tertiaryLabelColor
+        let directoryDescLabel = Label("Individual files organized by ObjC/Swift subdirectories").then {
+            $0.font = .systemFont(ofSize: 11)
+            $0.textColor = .tertiaryLabelColor
+        }
 
-        let singleFileStack = NSStackView(views: [singleFileRadio, singleFileDesc])
-        singleFileStack.orientation = .vertical
-        singleFileStack.alignment = .leading
-        singleFileStack.spacing = 2
+        let directoryStack = VStackView(alignment: .leading, spacing: 2) {
+            configDirectoryRadio
+            directoryDescLabel
+        }
 
-        let directoryStack = NSStackView(views: [directoryRadio, directoryDesc])
-        directoryStack.orientation = .vertical
-        directoryStack.alignment = .leading
-        directoryStack.spacing = 2
+        let formatTitleLabel = Label("Export Format:").then {
+            $0.font = .systemFont(ofSize: 13, weight: .medium)
+        }
 
-        let formatStack = NSStackView(views: [formatTitleLabel, singleFileStack, directoryStack])
-        formatStack.orientation = .vertical
-        formatStack.alignment = .leading
-        formatStack.spacing = 8
+        let formatStack = VStackView(alignment: .leading, spacing: 8) {
+            formatTitleLabel
+            singleFileStack
+            directoryStack
+        }
 
-        let contentStack = NSStackView(views: [headerStack, imageNameStack, formatStack])
-        contentStack.orientation = .vertical
-        contentStack.alignment = .leading
-        contentStack.spacing = 16
+        let contentStack = VStackView(alignment: .leading, spacing: 16) {
+            headerStack
+            imageNameStack
+            formatStack
+        }
 
-        let configCancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelClicked))
-        configCancelButton.keyEquivalent = "\u{1b}" // Escape
+        let cancelButton = PushButton().then {
+            $0.title = "Cancel"
+            $0.keyEquivalent = "\u{1b}"
+            $0.target = self
+            $0.action = #selector(cancelClicked)
+        }
 
-        let exportButton = NSButton(title: "Export\u{2026}", target: self, action: #selector(exportClicked))
-        exportButton.keyEquivalent = "\r"
-        exportButton.bezelStyle = .rounded
+        let exportButton = PushButton().then {
+            $0.title = "Export\u{2026}"
+            $0.keyEquivalent = "\r"
+            $0.target = self
+            $0.action = #selector(exportClicked)
+        }
 
-        let buttonStack = NSStackView(views: [configCancelButton, exportButton])
-        buttonStack.orientation = .horizontal
-        buttonStack.spacing = 8
+        let buttonStack = HStackView(spacing: 8) {
+            cancelButton
+            exportButton
+        }
 
-        container.addSubview(contentStack)
-        container.addSubview(buttonStack)
+        container.hierarchy {
+            contentStack
+            buttonStack
+        }
 
         contentStack.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview().inset(20)
@@ -113,37 +146,46 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
         return container
     }()
 
-    private let imageNameLabel = NSTextField(labelWithString: "")
-    private let singleFileRadio = NSButton()
-    private let directoryRadio = NSButton()
-
     // MARK: - Progress Page
+
+    private let progressPhaseLabel = Label("Preparing...").then {
+        $0.font = .systemFont(ofSize: 15, weight: .medium)
+        $0.alignment = .center
+    }
+
+    private let progressIndicator = NSProgressIndicator().then {
+        $0.style = .bar
+        $0.isIndeterminate = false
+        $0.minValue = 0
+        $0.maxValue = 1
+    }
+
+    private let progressObjectLabel = Label().then {
+        $0.font = .systemFont(ofSize: 12)
+        $0.textColor = .secondaryLabelColor
+        $0.alignment = .center
+    }
 
     private lazy var progressPageView: NSView = {
         let container = NSView()
 
-        phaseLabel.font = .systemFont(ofSize: 15, weight: .medium)
-        phaseLabel.alignment = .center
+        let contentStack = VStackView(alignment: .centerX, spacing: 12) {
+            progressPhaseLabel
+            progressIndicator
+            progressObjectLabel
+        }
 
-        progressIndicator.style = .bar
-        progressIndicator.isIndeterminate = false
-        progressIndicator.minValue = 0
-        progressIndicator.maxValue = 1
+        let cancelButton = PushButton().then {
+            $0.title = "Cancel"
+            $0.keyEquivalent = "\u{1b}"
+            $0.target = self
+            $0.action = #selector(cancelClicked)
+        }
 
-        objectLabel.font = .systemFont(ofSize: 12)
-        objectLabel.textColor = .secondaryLabelColor
-        objectLabel.alignment = .center
-
-        let progressCancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelClicked))
-        progressCancelButton.keyEquivalent = "\u{1b}"
-
-        let contentStack = NSStackView(views: [phaseLabel, progressIndicator, objectLabel])
-        contentStack.orientation = .vertical
-        contentStack.alignment = .centerX
-        contentStack.spacing = 12
-
-        container.addSubview(contentStack)
-        container.addSubview(progressCancelButton)
+        container.hierarchy {
+            contentStack
+            cancelButton
+        }
 
         progressIndicator.snp.makeConstraints { make in
             make.width.equalTo(350)
@@ -156,53 +198,65 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
             make.trailing.lessThanOrEqualToSuperview().offset(-20)
         }
 
-        progressCancelButton.snp.makeConstraints { make in
+        cancelButton.snp.makeConstraints { make in
             make.trailing.bottom.equalToSuperview().inset(20)
         }
 
         return container
     }()
 
-    private let phaseLabel = NSTextField(labelWithString: "Preparing...")
-    private let progressIndicator = NSProgressIndicator()
-    private let objectLabel = NSTextField(labelWithString: "")
-
     // MARK: - Completion Page
+
+    private let completionSummaryLabel = Label().then {
+        $0.font = .systemFont(ofSize: 13)
+        $0.textColor = .secondaryLabelColor
+        $0.alignment = .center
+        $0.maximumNumberOfLines = 0
+        $0.preferredMaxLayoutWidth = 350
+    }
 
     private lazy var completionPageView: NSView = {
         let container = NSView()
 
-        let checkmarkImageView = NSImageView()
-        checkmarkImageView.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
-        checkmarkImageView.symbolConfiguration = .init(pointSize: 48, weight: .light)
-        checkmarkImageView.contentTintColor = .systemGreen
+        let checkmarkImageView = ImageView().then {
+            $0.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
+            $0.symbolConfiguration = .init(pointSize: 48, weight: .light)
+            $0.contentTintColor = .systemGreen
+        }
 
-        let completeTitleLabel = NSTextField(labelWithString: "Export Complete")
-        completeTitleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-        completeTitleLabel.alignment = .center
+        let titleLabel = Label("Export Complete").then {
+            $0.font = .systemFont(ofSize: 18, weight: .semibold)
+            $0.alignment = .center
+        }
 
-        summaryLabel.font = .systemFont(ofSize: 13)
-        summaryLabel.textColor = .secondaryLabelColor
-        summaryLabel.alignment = .center
-        summaryLabel.maximumNumberOfLines = 0
-        summaryLabel.preferredMaxLayoutWidth = 350
+        let contentStack = VStackView(alignment: .centerX, spacing: 8) {
+            checkmarkImageView
+            titleLabel
+            completionSummaryLabel
+        }
 
-        let contentStack = NSStackView(views: [checkmarkImageView, completeTitleLabel, summaryLabel])
-        contentStack.orientation = .vertical
-        contentStack.alignment = .centerX
-        contentStack.spacing = 8
+        let showInFinderButton = PushButton().then {
+            $0.title = "Show in Finder"
+            $0.target = self
+            $0.action = #selector(showInFinderClicked)
+        }
 
-        let showInFinderButton = NSButton(title: "Show in Finder", target: self, action: #selector(showInFinderClicked))
+        let doneButton = PushButton().then {
+            $0.title = "Done"
+            $0.keyEquivalent = "\r"
+            $0.target = self
+            $0.action = #selector(doneClicked)
+        }
 
-        let doneButton = NSButton(title: "Done", target: self, action: #selector(doneClicked))
-        doneButton.keyEquivalent = "\r"
+        let buttonStack = HStackView(spacing: 8) {
+            showInFinderButton
+            doneButton
+        }
 
-        let buttonStack = NSStackView(views: [showInFinderButton, doneButton])
-        buttonStack.orientation = .horizontal
-        buttonStack.spacing = 8
-
-        container.addSubview(contentStack)
-        container.addSubview(buttonStack)
+        container.hierarchy {
+            contentStack
+            buttonStack
+        }
 
         contentStack.snp.makeConstraints { make in
             make.centerX.equalToSuperview()
@@ -216,8 +270,6 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
         return container
     }()
 
-    private let summaryLabel = NSTextField(labelWithString: "")
-
     // MARK: - Container
 
     private let containerView = NSView()
@@ -227,9 +279,11 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
     override func loadView() {
         view = NSView()
         view.addSubview(containerView)
+
         containerView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
+
         preferredContentSize = NSSize(width: 500, height: 350)
     }
 
@@ -257,8 +311,8 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
     }
 
     @objc private func formatRadioChanged(_ sender: NSButton) {
-        singleFileRadio.state = sender.tag == 0 ? .on : .off
-        directoryRadio.state = sender.tag == 1 ? .on : .off
+        configSingleFileRadio.state = sender.tag == 0 ? .on : .off
+        configDirectoryRadio.state = sender.tag == 1 ? .on : .off
         formatSelectedRelay.accept(sender.tag)
     }
 
@@ -287,64 +341,49 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
 
         let output = viewModel.transform(input)
 
-        output.currentPage
-            .driveOnNext { [weak self] page in
-                guard let self else { return }
-                switch page {
-                case .configuration:
-                    showPage(configPageView)
-                case .progress:
-                    showPage(progressPageView)
-                case .completion:
-                    showPage(completionPageView)
-                }
+        output.currentPage.driveOnNext { [weak self] page in
+            guard let self else { return }
+            switch page {
+            case .configuration:
+                showPage(configPageView)
+            case .progress:
+                showPage(progressPageView)
+            case .completion:
+                showPage(completionPageView)
             }
-            .disposed(by: rx.disposeBag)
+        }
+        .disposed(by: rx.disposeBag)
 
-        output.imageName
-            .driveOnNext { [weak self] name in
-                self?.imageNameLabel.stringValue = name
+        output.imageName.drive(configImageNameLabel.rx.stringValue).disposed(by: rx.disposeBag)
+
+        output.phaseText.drive(progressPhaseLabel.rx.stringValue).disposed(by: rx.disposeBag)
+
+        output.progressValue.driveOnNext { [weak self] value in
+            guard let self else { return }
+            progressIndicator.doubleValue = value
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.currentObjectText.drive(progressObjectLabel.rx.stringValue).disposed(by: rx.disposeBag)
+
+        output.result.compactMap { $0 }.driveOnNext { [weak self] result in
+            guard let self else { return }
+            var lines: [String] = []
+            lines.append("\(result.succeeded) interfaces exported successfully")
+            if result.failed > 0 {
+                lines.append("\(result.failed) failed")
             }
-            .disposed(by: rx.disposeBag)
+            lines.append(String(format: "Duration: %.1fs", result.totalDuration))
+            lines.append("ObjC: \(result.objcCount) | Swift: \(result.swiftCount)")
+            completionSummaryLabel.stringValue = lines.joined(separator: "\n")
+        }
+        .disposed(by: rx.disposeBag)
 
-        output.phaseText
-            .driveOnNext { [weak self] text in
-                self?.phaseLabel.stringValue = text
-            }
-            .disposed(by: rx.disposeBag)
-
-        output.progressValue
-            .driveOnNext { [weak self] value in
-                self?.progressIndicator.doubleValue = value
-            }
-            .disposed(by: rx.disposeBag)
-
-        output.currentObjectText
-            .driveOnNext { [weak self] text in
-                self?.objectLabel.stringValue = text
-            }
-            .disposed(by: rx.disposeBag)
-
-        output.result
-            .compactMap { $0 }
-            .driveOnNext { [weak self] result in
-                guard let self else { return }
-                var lines: [String] = []
-                lines.append("\(result.succeeded) interfaces exported successfully")
-                if result.failed > 0 {
-                    lines.append("\(result.failed) failed")
-                }
-                lines.append(String(format: "Duration: %.1fs", result.totalDuration))
-                lines.append("ObjC: \(result.objcCount) | Swift: \(result.swiftCount)")
-                summaryLabel.stringValue = lines.joined(separator: "\n")
-            }
-            .disposed(by: rx.disposeBag)
-
-        output.requestDirectorySelection
-            .emit(onNext: { [weak self] in
-                self?.presentDirectoryPicker()
-            })
-            .disposed(by: rx.disposeBag)
+        output.requestDirectorySelection.emit(onNext: { [weak self] in
+            guard let self else { return }
+            presentDirectoryPicker()
+        })
+        .disposed(by: rx.disposeBag)
     }
 
     private func presentDirectoryPicker() {
@@ -357,7 +396,8 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
 
         guard let window = view.window else { return }
         panel.beginSheetModal(for: window) { [weak self] response in
-            guard let self, response == .OK, let url = panel.url else { return }
+            guard let self else { return }
+            guard response == .OK, let url = panel.url else { return }
             viewModel?.startExport(to: url)
         }
     }
