@@ -442,3 +442,79 @@ extension RuntimeConnection {
         return try await sendMessage(name: name.commandName, request: request)
     }
 }
+
+// MARK: - Export
+
+extension RuntimeEngine {
+    public enum RuntimeExportError: Error {
+        case interfaceGenerationFailed(RuntimeObject)
+    }
+
+    public func exportInterface(
+        for object: RuntimeObject,
+        options: RuntimeObjectInterface.GenerationOptions
+    ) async throws -> RuntimeInterfaceExportItem {
+        guard let runtimeInterface = try await interface(for: object, options: options) else {
+            throw RuntimeExportError.interfaceGenerationFailed(object)
+        }
+        return RuntimeInterfaceExportItem(
+            object: object,
+            plainText: runtimeInterface.interfaceString.string,
+            suggestedFileName: object.exportFileName
+        )
+    }
+
+    public func exportInterfaces(
+        in imagePath: String,
+        options: RuntimeObjectInterface.GenerationOptions,
+        reporter: RuntimeInterfaceExportReporter
+    ) async throws -> [RuntimeInterfaceExportItem] {
+        let startTime = CFAbsoluteTimeGetCurrent()
+
+        reporter.send(.phaseStarted(.preparing))
+        let allObjects = try await objects(in: imagePath)
+        reporter.send(.phaseCompleted(.preparing))
+
+        reporter.send(.phaseStarted(.exporting))
+        var results: [RuntimeInterfaceExportItem] = []
+        var succeeded = 0
+        var failed = 0
+        var objcCount = 0
+        var swiftCount = 0
+        let total = allObjects.count
+
+        for (index, object) in allObjects.enumerated() {
+            reporter.send(.objectStarted(object, current: index + 1, total: total))
+            do {
+                guard let runtimeInterface = try await interface(for: object, options: options) else {
+                    throw RuntimeExportError.interfaceGenerationFailed(object)
+                }
+                let item = RuntimeInterfaceExportItem(
+                    object: object,
+                    plainText: runtimeInterface.interfaceString.string,
+                    suggestedFileName: object.exportFileName
+                )
+                results.append(item)
+                succeeded += 1
+                if item.isSwift { swiftCount += 1 } else { objcCount += 1 }
+                reporter.send(.objectCompleted(object, runtimeInterface.interfaceString))
+            } catch {
+                failed += 1
+                reporter.send(.objectFailed(object, error))
+            }
+        }
+        reporter.send(.phaseCompleted(.exporting))
+
+        let duration = CFAbsoluteTimeGetCurrent() - startTime
+        let result = RuntimeInterfaceExportResult(
+            succeeded: succeeded,
+            failed: failed,
+            totalDuration: duration,
+            objcCount: objcCount,
+            swiftCount: swiftCount
+        )
+        reporter.send(.completed(result))
+        reporter.finish()
+        return results
+    }
+}
