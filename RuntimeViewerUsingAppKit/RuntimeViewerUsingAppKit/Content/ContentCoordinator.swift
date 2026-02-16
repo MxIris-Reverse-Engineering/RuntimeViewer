@@ -7,16 +7,9 @@ import RuntimeViewerApplication
 typealias ContentTransition = Transition<Void, ContentNavigationController>
 
 final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
-    protocol Delegate: AnyObject {
-        func contentCoordinator(_ contentCoordinator: ContentCoordinator, completeTransition: ContentRoute)
-    }
-
     let documentState: DocumentState
 
-    weak var delegate: Delegate?
-
-    init(documentState: DocumentState, delegate: Delegate) {
-        self.delegate = delegate
+    init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
     }
@@ -44,9 +37,5 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         case .back:
             return .pop(animated: true)
         }
-    }
-
-    override func completeTransition(for route: ContentRoute) {
-        delegate?.contentCoordinator(self, completeTransition: route)
     }
 }

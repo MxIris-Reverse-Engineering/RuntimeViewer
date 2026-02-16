@@ -25,7 +25,7 @@ public struct SwiftGenerationOptions: Sendable, Equatable {
     public var synthesizeOpaqueType: Bool = false
 }
 
-@Loggable
+@Loggable(.private)
 actor RuntimeSwiftSection {
     enum Error: Swift.Error {
         case invalidMachOImage
@@ -291,14 +291,14 @@ actor RuntimeSwiftSection {
     }
 
     func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface {
-        #log(.debug, "Generating Swift interface for: \(object.name, privacy: .public)")
+        #log(.debug, "Generating Swift interface for: \(object.displayName, privacy: .public)")
         if let interface = interfaceByName[object] {
             #log(.debug, "Using cached interface")
             return interface
         }
 
         guard let interfaceDefinitionName = nameToInterfaceDefinitionName[object] else {
-            #log(.default, "Invalid runtime object: \(object.name, privacy: .public)")
+            #log(.default, "Invalid runtime object: \(object.displayName, privacy: .public)")
             throw Error.invalidRuntimeObject
         }
         var newInterfaceString: SemanticString = ""
@@ -368,7 +368,7 @@ actor RuntimeSwiftSection {
     }
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
-        #log(.debug, "Getting Swift class hierarchy for: \(object.name, privacy: .public)")
+        #log(.debug, "Getting Swift class hierarchy for: \(object.displayName, privacy: .public)")
         guard case .swift(.type(.class)) = object.kind,
               let classDefinitionName = nameToInterfaceDefinitionName[object]?.typeName,
               let classDefinition = indexer.allTypeDefinitions[classDefinitionName],
@@ -486,7 +486,7 @@ extension SemanticString {
     }
 }
 
-@Loggable
+@Loggable(.private)
 actor RuntimeSwiftSectionFactory {
     private var sections: [String: RuntimeSwiftSection] = [:]
 

@@ -7,19 +7,12 @@ import RuntimeViewerArchitectures
 typealias SidebarRuntimeObjectTransition = Transition<Void, SidebarRuntimeObjectTabViewController>
 
 final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjectRoute, SidebarRuntimeObjectTransition> {
-    protocol Delegate: AnyObject {
-        func sidebarRuntimeObjectCoordinator(_ sidebarCoordinator: SidebarRuntimeObjectCoordinator, completeTransition route: SidebarRuntimeObjectRoute)
-    }
-
     let documentState: DocumentState
-
-    weak var delegate: Delegate?
 
     let imageNode: RuntimeImageNode
 
-    init(documentState: DocumentState, delegate: Delegate? = nil, imageNode: RuntimeImageNode) {
+    init(documentState: DocumentState, imageNode: RuntimeImageNode) {
         self.documentState = documentState
-        self.delegate = delegate
         self.imageNode = imageNode
         super.init(rootViewController: .init(), initialRoute: .initial)
     }
@@ -48,9 +41,4 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
         }
     }
 
-    override func completeTransition(for route: SidebarRuntimeObjectRoute) {
-        super.completeTransition(for: route)
-
-        delegate?.sidebarRuntimeObjectCoordinator(self, completeTransition: route)
-    }
 }
