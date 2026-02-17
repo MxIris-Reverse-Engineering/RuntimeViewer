@@ -11,9 +11,12 @@
 		E92124642F447AE1007481E4 /* ExportingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124632F447AE1007481E4 /* ExportingState.swift */; };
 		E92124672F447AFE007481E4 /* ExportingSelectionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124662F447AFE007481E4 /* ExportingSelectionViewModel.swift */; };
 		E92124692F447B26007481E4 /* ExportingSelectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124682F447B26007481E4 /* ExportingSelectionViewController.swift */; };
+		E921246B2F447BA1007481E4 /* ExportingConfigurationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E921246A2F447BA1007481E4 /* ExportingConfigurationViewModel.swift */; };
+		E921246D2F447BBF007481E4 /* ExportingConfigurationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E921246C2F447BBF007481E4 /* ExportingConfigurationViewController.swift */; };
+		E921246F2F447BE1007481E4 /* ExportingProgressViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E921246E2F447BE1007481E4 /* ExportingProgressViewModel.swift */; };
+		E92124712F447C7F007481E4 /* ExportingProgressViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124702F447C7F007481E4 /* ExportingProgressViewController.swift */; };
+		E92124732F447C94007481E4 /* ExportingTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124722F447C94007481E4 /* ExportingTabViewController.swift */; };
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
-		E92CB2E82F41E7AF0091450B /* ExportingViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92CB2E72F41E7AF0091450B /* ExportingViewModel.swift */; };
-		E92CB2EA2F41E7EB0091450B /* ExportingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92CB2E92F41E7EB0091450B /* ExportingViewController.swift */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACBE2C28865100A2F3D3 /* MainRoute.swift */; };
@@ -219,9 +222,12 @@
 		E92124632F447AE1007481E4 /* ExportingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingState.swift; sourceTree = "<group>"; };
 		E92124662F447AFE007481E4 /* ExportingSelectionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingSelectionViewModel.swift; sourceTree = "<group>"; };
 		E92124682F447B26007481E4 /* ExportingSelectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingSelectionViewController.swift; sourceTree = "<group>"; };
+		E921246A2F447BA1007481E4 /* ExportingConfigurationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingConfigurationViewModel.swift; sourceTree = "<group>"; };
+		E921246C2F447BBF007481E4 /* ExportingConfigurationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingConfigurationViewController.swift; sourceTree = "<group>"; };
+		E921246E2F447BE1007481E4 /* ExportingProgressViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingProgressViewModel.swift; sourceTree = "<group>"; };
+		E92124702F447C7F007481E4 /* ExportingProgressViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingProgressViewController.swift; sourceTree = "<group>"; };
+		E92124722F447C94007481E4 /* ExportingTabViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingTabViewController.swift; sourceTree = "<group>"; };
 		E927C22D2E9444F300084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
-		E92CB2E72F41E7AF0091450B /* ExportingViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingViewModel.swift; sourceTree = "<group>"; };
-		E92CB2E92F41E7EB0091450B /* ExportingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingViewController.swift; sourceTree = "<group>"; };
 		E942ACBE2C28865100A2F3D3 /* MainRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRoute.swift; sourceTree = "<group>"; };
 		E9432FE22C0D614900362862 /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FE52C0D614900362862 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -373,11 +379,14 @@
 		E92CB2E52F41E7560091450B /* Exporting */ = {
 			isa = PBXGroup;
 			children = (
-				E92CB2E72F41E7AF0091450B /* ExportingViewModel.swift */,
-				E92CB2E92F41E7EB0091450B /* ExportingViewController.swift */,
 				E92124632F447AE1007481E4 /* ExportingState.swift */,
 				E92124662F447AFE007481E4 /* ExportingSelectionViewModel.swift */,
 				E92124682F447B26007481E4 /* ExportingSelectionViewController.swift */,
+				E921246A2F447BA1007481E4 /* ExportingConfigurationViewModel.swift */,
+				E921246C2F447BBF007481E4 /* ExportingConfigurationViewController.swift */,
+				E921246E2F447BE1007481E4 /* ExportingProgressViewModel.swift */,
+				E92124702F447C7F007481E4 /* ExportingProgressViewController.swift */,
+				E92124722F447C94007481E4 /* ExportingTabViewController.swift */,
 			);
 			path = Exporting;
 			sourceTree = "<group>";
@@ -933,6 +942,7 @@
 				E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */,
 				E943301C2C0DB75B00362862 /* Then.swift in Sources */,
 				E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */,
+				E921246F2F447BE1007481E4 /* ExportingProgressViewModel.swift in Sources */,
 				E9D470632F12A52A008BF7A9 /* SidebarRootViewController.swift in Sources */,
 				E9F11E162F12671D0052B0A3 /* TabViewController.swift in Sources */,
 				E9F759422CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift in Sources */,
@@ -943,22 +953,25 @@
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
 				E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */,
 				E9D470652F134210008BF7A9 /* SidebarRootTabViewController.swift in Sources */,
+				E92124712F447C7F007481E4 /* ExportingProgressViewController.swift in Sources */,
 				E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */,
 				E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */,
 				E94BA6962E7EEB64006B553D /* SidebarRootTableRowView.swift in Sources */,
 				E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */,
 				E9EEF7672E085420008D85D1 /* InspectorDisclosureView.swift in Sources */,
-				E92CB2EA2F41E7EB0091450B /* ExportingViewController.swift in Sources */,
 				E9A825462C0E0B4900D9A85D /* ViewControllers.swift in Sources */,
 				E9862AD52F377E9C00139991 /* AppMCPBridgeWindowProvider.swift in Sources */,
 				E9A825522C0E0F9F00D9A85D /* ContentNavigationController.swift in Sources */,
+				E921246D2F447BBF007481E4 /* ExportingConfigurationViewController.swift in Sources */,
 				E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */,
 				E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */,
 				E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorNavigationController.swift in Sources */,
+				E92124732F447C94007481E4 /* ExportingTabViewController.swift in Sources */,
 				E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */,
 				E94330182C0DA62500362862 /* SidebarRootDirectoryViewController.swift in Sources */,
 				E9F11E0B2F123EEC0052B0A3 /* SidebarRootCoordinator.swift in Sources */,
+				E921246B2F447BA1007481E4 /* ExportingConfigurationViewModel.swift in Sources */,
 				E92124672F447AFE007481E4 /* ExportingSelectionViewModel.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
 				E9D4706B2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift in Sources */,
@@ -971,7 +984,6 @@
 				E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */,
 				E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */,
 				E9D470692F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift in Sources */,
-				E92CB2E82F41E7AF0091450B /* ExportingViewModel.swift in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,

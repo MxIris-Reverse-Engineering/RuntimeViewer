@@ -4,147 +4,12 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingViewController: AppKitViewController<ExportingViewModel> {
+final class ExportingProgressViewController: AppKitViewController<ExportingProgressViewModel> {
     // MARK: - Relays
 
     private let cancelRelay = PublishRelay<Void>()
-    private let exportRelay = PublishRelay<Void>()
     private let doneRelay = PublishRelay<Void>()
     private let showInFinderRelay = PublishRelay<Void>()
-    private let formatSelectedRelay = PublishRelay<Int>()
-
-    // MARK: - Configuration Page
-
-    private let configImageNameLabel = Label()
-
-    private let configSingleFileRadio = NSButton()
-
-    private let configDirectoryRadio = NSButton()
-
-    private lazy var configPageView: NSView = {
-        let container = NSView()
-
-        let iconImageView = ImageView().then {
-            $0.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
-            $0.symbolConfiguration = .init(pointSize: 32, weight: .light)
-            $0.contentTintColor = .controlAccentColor
-        }
-
-        let titleLabel = Label("Export Interfaces").then {
-            $0.font = .systemFont(ofSize: 18, weight: .semibold)
-        }
-
-        let headerStack = HStackView(spacing: 10) {
-            iconImageView
-            titleLabel
-        }.then {
-            $0.alignment = .centerY
-        }
-
-        let imageNameTitleLabel = Label("Image:").then {
-            $0.font = .systemFont(ofSize: 13, weight: .medium)
-        }
-
-        configImageNameLabel.do {
-            $0.font = .systemFont(ofSize: 13)
-            $0.textColor = .secondaryLabelColor
-        }
-
-        let imageNameStack = HStackView(spacing: 4) {
-            imageNameTitleLabel
-            configImageNameLabel
-        }
-
-        configSingleFileRadio.do {
-            $0.setButtonType(.radio)
-            $0.title = "Single File"
-            $0.font = .systemFont(ofSize: 13)
-            $0.state = .on
-            $0.target = self
-            $0.action = #selector(formatRadioChanged(_:))
-            $0.tag = 0
-        }
-
-        let singleFileDescLabel = Label("Combine all interfaces into one .h and one .swiftinterface file").then {
-            $0.font = .systemFont(ofSize: 11)
-            $0.textColor = .tertiaryLabelColor
-        }
-
-        let singleFileStack = VStackView(alignment: .leading, spacing: 2) {
-            configSingleFileRadio
-            singleFileDescLabel
-        }
-
-        configDirectoryRadio.do {
-            $0.setButtonType(.radio)
-            $0.title = "Directory Structure"
-            $0.font = .systemFont(ofSize: 13)
-            $0.state = .off
-            $0.target = self
-            $0.action = #selector(formatRadioChanged(_:))
-            $0.tag = 1
-        }
-
-        let directoryDescLabel = Label("Individual files organized by ObjC/Swift subdirectories").then {
-            $0.font = .systemFont(ofSize: 11)
-            $0.textColor = .tertiaryLabelColor
-        }
-
-        let directoryStack = VStackView(alignment: .leading, spacing: 2) {
-            configDirectoryRadio
-            directoryDescLabel
-        }
-
-        let formatTitleLabel = Label("Export Format:").then {
-            $0.font = .systemFont(ofSize: 13, weight: .medium)
-        }
-
-        let formatStack = VStackView(alignment: .leading, spacing: 8) {
-            formatTitleLabel
-            singleFileStack
-            directoryStack
-        }
-
-        let contentStack = VStackView(alignment: .leading, spacing: 16) {
-            headerStack
-            imageNameStack
-            formatStack
-        }
-
-        let cancelButton = PushButton().then {
-            $0.title = "Cancel"
-            $0.keyEquivalent = "\u{1b}"
-            $0.target = self
-            $0.action = #selector(cancelClicked)
-        }
-
-        let exportButton = PushButton().then {
-            $0.title = "Export\u{2026}"
-            $0.keyEquivalent = "\r"
-            $0.target = self
-            $0.action = #selector(exportClicked)
-        }
-
-        let buttonStack = HStackView(spacing: 8) {
-            cancelButton
-            exportButton
-        }
-
-        container.hierarchy {
-            contentStack
-            buttonStack
-        }
-
-        contentStack.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview().inset(20)
-        }
-
-        buttonStack.snp.makeConstraints { make in
-            make.trailing.bottom.equalToSuperview().inset(20)
-        }
-
-        return container
-    }()
 
     // MARK: - Progress Page
 
@@ -283,13 +148,11 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
         containerView.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
-
-        preferredContentSize = NSSize(width: 500, height: 350)
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        showPage(configPageView)
+        showPage(progressPageView)
     }
 
     // MARK: - Actions
@@ -298,22 +161,12 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
         cancelRelay.accept(())
     }
 
-    @objc private func exportClicked() {
-        exportRelay.accept(())
-    }
-
     @objc private func doneClicked() {
         doneRelay.accept(())
     }
 
     @objc private func showInFinderClicked() {
         showInFinderRelay.accept(())
-    }
-
-    @objc private func formatRadioChanged(_ sender: NSButton) {
-        configSingleFileRadio.state = sender.tag == 0 ? .on : .off
-        configDirectoryRadio.state = sender.tag == 1 ? .on : .off
-        formatSelectedRelay.accept(sender.tag)
     }
 
     // MARK: - Page Management
@@ -328,15 +181,13 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
 
     // MARK: - Bindings
 
-    override func setupBindings(for viewModel: ExportingViewModel) {
+    override func setupBindings(for viewModel: ExportingProgressViewModel) {
         super.setupBindings(for: viewModel)
 
-        let input = ExportingViewModel.Input(
+        let input = ExportingProgressViewModel.Input(
             cancelClick: cancelRelay.asSignal(),
-            exportClick: exportRelay.asSignal(),
             doneClick: doneRelay.asSignal(),
-            showInFinderClick: showInFinderRelay.asSignal(),
-            formatSelected: formatSelectedRelay.asSignal()
+            showInFinderClick: showInFinderRelay.asSignal()
         )
 
         let output = viewModel.transform(input)
@@ -344,8 +195,6 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
         output.currentPage.driveOnNext { [weak self] page in
             guard let self else { return }
             switch page {
-            case .configuration:
-                showPage(configPageView)
             case .progress:
                 showPage(progressPageView)
             case .completion:
@@ -353,8 +202,6 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
             }
         }
         .disposed(by: rx.disposeBag)
-
-        output.imageName.drive(configImageNameLabel.rx.stringValue).disposed(by: rx.disposeBag)
 
         output.phaseText.drive(progressPhaseLabel.rx.stringValue).disposed(by: rx.disposeBag)
 
@@ -378,27 +225,5 @@ final class ExportingViewController: AppKitViewController<ExportingViewModel> {
             completionSummaryLabel.stringValue = lines.joined(separator: "\n")
         }
         .disposed(by: rx.disposeBag)
-
-        output.requestDirectorySelection.emit(onNext: { [weak self] in
-            guard let self else { return }
-            presentDirectoryPicker()
-        })
-        .disposed(by: rx.disposeBag)
-    }
-
-    private func presentDirectoryPicker() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.canCreateDirectories = true
-        panel.prompt = "Export"
-        panel.message = "Choose a destination folder for exported interfaces"
-
-        guard let window = view.window else { return }
-        panel.beginSheetModal(for: window) { [weak self] response in
-            guard let self else { return }
-            guard response == .OK, let url = panel.url else { return }
-            viewModel?.startExport(to: url)
-        }
     }
 }
