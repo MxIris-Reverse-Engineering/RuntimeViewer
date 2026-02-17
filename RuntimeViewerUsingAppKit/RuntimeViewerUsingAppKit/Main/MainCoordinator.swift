@@ -75,10 +75,13 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                   let imageName = documentState.currentImageName else {
                 return .none()
             }
-            let viewController = ExportingViewController()
-            let viewModel = ExportingViewModel(imagePath: imagePath, imageName: imageName, documentState: documentState, router: self)
-            viewController.setupBindings(for: viewModel)
-            return .presentOnRoot(viewController, mode: .asSheet)
+            let state = ExportingState(imagePath: imagePath, imageName: imageName)
+            let tabViewController = ExportingTabViewController(
+                exportingState: state,
+                documentState: documentState,
+                router: self
+            )
+            return .presentOnRoot(tabViewController, mode: .asSheet)
         }
     }
 
