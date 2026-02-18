@@ -3,11 +3,8 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingConfigurationViewModel: ViewModel<MainRoute> {
+final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     struct Input {
-        let cancelClick: Signal<Void>
-        let backClick: Signal<Void>
-        let exportClick: Signal<Void>
         let objcFormatSelected: Signal<Int>
         let swiftFormatSelected: Signal<Int>
     }
@@ -18,51 +15,34 @@ final class ExportingConfigurationViewModel: ViewModel<MainRoute> {
         let hasObjC: Driver<Bool>
         let hasSwift: Driver<Bool>
         let imageName: Driver<String>
+        let objcFormat: Driver<ExportFormat>
+        let swiftFormat: Driver<ExportFormat>
     }
 
-    @Observed private(set) var objcCount: Int = 0
-    @Observed private(set) var swiftCount: Int = 0
-    @Observed private(set) var hasObjC: Bool = false
-    @Observed private(set) var hasSwift: Bool = false
+    let exportingState: ExportingState
 
-    let backRelay = PublishRelay<Void>()
-    let exportClickedRelay = PublishRelay<Void>()
+    @Observed private(set) var isLoading: Bool = true
 
-    private let exportingState: ExportingState
-
-    init(exportingState: ExportingState, documentState: DocumentState, router: any Router<MainRoute>) {
+    init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
+        loadObjects()
     }
 
-    func refreshFromState() {
-        let objc = exportingState.selectedObjcObjects
-        let swift = exportingState.selectedSwiftObjects
-        objcCount = objc.count
-        swiftCount = swift.count
-        hasObjC = !objc.isEmpty
-        hasSwift = !swift.isEmpty
+    private func loadObjects() {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let objects = try await documentState.runtimeEngine.objects(in: exportingState.imagePath)
+                exportingState.allObjects = objects
+                isLoading = false
+            } catch {
+                errorRelay.accept(error)
+            }
+        }
     }
 
     func transform(_ input: Input) -> Output {
-        input.cancelClick.emitOnNext { [weak self] in
-            guard let self else { return }
-            router.trigger(.dismiss)
-        }
-        .disposed(by: rx.disposeBag)
-
-        input.backClick.emitOnNext { [weak self] in
-            guard let self else { return }
-            backRelay.accept(())
-        }
-        .disposed(by: rx.disposeBag)
-
-        input.exportClick.emitOnNext { [weak self] in
-            guard let self else { return }
-            exportClickedRelay.accept(())
-        }
-        .disposed(by: rx.disposeBag)
-
         input.objcFormatSelected.emitOnNext { [weak self] index in
             guard let self else { return }
             exportingState.objcFormat = ExportFormat(rawValue: index) ?? .singleFile
@@ -76,11 +56,27 @@ final class ExportingConfigurationViewModel: ViewModel<MainRoute> {
         .disposed(by: rx.disposeBag)
 
         return Output(
-            objcCount: $objcCount.asDriver(),
-            swiftCount: $swiftCount.asDriver(),
-            hasObjC: $hasObjC.asDriver(),
-            hasSwift: $hasSwift.asDriver(),
-            imageName: .just(exportingState.imageName)
+            objcCount: exportingState.$allObjects.asDriver().map { $0.count { $0.kind.isObjC } },
+            swiftCount: exportingState.$allObjects.asDriver().map { $0.count { $0.kind.isSwift } },
+            hasObjC: exportingState.$allObjects.asDriver().map { $0.contains { $0.kind.isObjC } },
+            hasSwift: exportingState.$allObjects.asDriver().map { $0.contains { $0.kind.isSwift } },
+            imageName: .just(exportingState.imageName),
+            objcFormat: exportingState.$objcFormat.asDriver(),
+            swiftFormat: exportingState.$swiftFormat.asDriver()
         )
+    }
+}
+
+extension ExportingConfigurationViewModel: ExportingStepViewModel {
+    var title: Driver<String> {
+        "Export Configuration:"
+    }
+
+    var isPreviousEnabled: Driver<Bool> {
+        false
+    }
+
+    var isNextEnabled: Driver<Bool> {
+        true
     }
 }

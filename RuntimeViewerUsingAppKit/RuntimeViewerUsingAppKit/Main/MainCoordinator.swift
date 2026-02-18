@@ -21,7 +21,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
     private(set) lazy var lateResponderRegistry = LateResponderRegistry()
 
     private var childEventDisposeBag = DisposeBag()
-
+    
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowController: .init(documentState: documentState), initialRoute: .main(.local))
@@ -71,17 +71,9 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         case .dismiss:
             return .dismiss()
         case .exportInterfaces:
-            guard let imagePath = documentState.currentImagePath,
-                  let imageName = documentState.currentImageName else {
-                return .none()
-            }
-            let state = ExportingState(imagePath: imagePath, imageName: imageName)
-            let tabViewController = ExportingTabViewController(
-                exportingState: state,
-                documentState: documentState,
-                router: self
-            )
-            return .presentOnRoot(tabViewController, mode: .asSheet)
+            guard let exportingCoordinator = ExportingCoordinator(documentState: documentState) else { return .none() }
+            addChild(exportingCoordinator)
+            return .beginSheet(exportingCoordinator)
         }
     }
 

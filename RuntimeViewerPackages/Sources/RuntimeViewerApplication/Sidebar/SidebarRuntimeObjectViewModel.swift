@@ -3,7 +3,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
-public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>, @unchecked Sendable {
+public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute> {
     public let imageNode: RuntimeImageNode
     public let imagePath: String
     public let imageName: String

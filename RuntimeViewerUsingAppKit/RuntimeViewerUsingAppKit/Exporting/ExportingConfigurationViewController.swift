@@ -4,212 +4,109 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingConfigurationViewController: AppKitViewController<ExportingConfigurationViewModel> {
-    // MARK: - Relays
-
-    private let cancelRelay = PublishRelay<Void>()
-    private let backRelay = PublishRelay<Void>()
-    private let exportRelay = PublishRelay<Void>()
-    private let objcFormatRelay = PublishRelay<Int>()
-    private let swiftFormatRelay = PublishRelay<Int>()
-
-    // MARK: - UI
+final class ExportingConfigurationViewController: AppKitViewController<ExportingConfigurationViewModel>, ExportingStepViewController {
 
     private let summaryLabel = Label()
 
-    private let objcSectionView = NSView()
-    private let objcSingleFileRadio = NSButton()
-    private let objcDirectoryRadio = NSButton()
+    private let objcSingleFileRadio = RadioButton()
+    private let objcDirectoryRadio = RadioButton()
 
-    private let swiftSectionView = NSView()
-    private let swiftSingleFileRadio = NSButton()
-    private let swiftDirectoryRadio = NSButton()
+    private let swiftSingleFileRadio = RadioButton()
+    private let swiftDirectoryRadio = RadioButton()
 
-    // MARK: - Lifecycle
+    private let objcTitleLabel = Label("Objective-C:").then {
+        $0.font = .systemFont(ofSize: 13, weight: .medium)
+    }
 
-    override func loadView() {
-        view = NSView()
+    private let objcSingleDesc = Label("Combine all ObjC interfaces into one .h file").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
 
-        let headerLabel = Label("Export Format").then {
-            $0.font = .systemFont(ofSize: 18, weight: .semibold)
+    private let objcDirDesc = Label("Individual .h files in ObjCHeaders/ subdirectory").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
+    private let swiftTitleLabel = Label("Swift:").then {
+        $0.font = .systemFont(ofSize: 13, weight: .medium)
+    }
+
+    private let swiftSingleDesc = Label("Combine all Swift interfaces into one .swiftinterface file").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
+    private let swiftDirDesc = Label("Individual files in SwiftInterfaces/ subdirectory").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
+    private lazy var contentStack = VStackView(alignment: .leading, spacing: 16) {
+        summaryLabel
+        objcStack
+        swiftStack
+    }
+
+    private lazy var objcStack = VStackView(alignment: .leading, spacing: 12) {
+        objcTitleLabel
+        VStackView(alignment: .leading, spacing: 4) {
+            objcSingleFileRadio
+            objcSingleDesc
         }
+        VStackView(alignment: .leading, spacing: 4) {
+            objcDirectoryRadio
+            objcDirDesc
+        }
+    }
+
+    private lazy var swiftStack = VStackView(alignment: .leading, spacing: 12) {
+        swiftTitleLabel
+        VStackView(alignment: .leading, spacing: 4) {
+            swiftSingleFileRadio
+            swiftSingleDesc
+        }
+        VStackView(alignment: .leading, spacing: 4) {
+            swiftDirectoryRadio
+            swiftDirDesc
+        }
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
 
         summaryLabel.do {
             $0.font = .systemFont(ofSize: 13)
             $0.textColor = .secondaryLabelColor
         }
 
-        // ObjC section
-        let objcTitleLabel = Label("Objective-C:").then {
-            $0.font = .systemFont(ofSize: 13, weight: .medium)
-        }
-
         objcSingleFileRadio.do {
-            $0.setButtonType(.radio)
             $0.title = "Single File (.h)"
             $0.font = .systemFont(ofSize: 13)
-            $0.state = .on
-            $0.target = self
-            $0.action = #selector(objcFormatChanged(_:))
-            $0.tag = 0
-        }
-
-        let objcSingleDesc = Label("Combine all ObjC interfaces into one .h file").then {
-            $0.font = .systemFont(ofSize: 11)
-            $0.textColor = .tertiaryLabelColor
         }
 
         objcDirectoryRadio.do {
-            $0.setButtonType(.radio)
             $0.title = "Directory Structure"
             $0.font = .systemFont(ofSize: 13)
-            $0.state = .off
-            $0.target = self
-            $0.action = #selector(objcFormatChanged(_:))
-            $0.tag = 1
-        }
-
-        let objcDirDesc = Label("Individual .h files in ObjCHeaders/ subdirectory").then {
-            $0.font = .systemFont(ofSize: 11)
-            $0.textColor = .tertiaryLabelColor
-        }
-
-        let objcStack = VStackView(alignment: .leading, spacing: 6) {
-            objcTitleLabel
-            VStackView(alignment: .leading, spacing: 2) {
-                objcSingleFileRadio
-                objcSingleDesc
-            }
-            VStackView(alignment: .leading, spacing: 2) {
-                objcDirectoryRadio
-                objcDirDesc
-            }
-        }
-
-        // Swift section
-        let swiftTitleLabel = Label("Swift:").then {
-            $0.font = .systemFont(ofSize: 13, weight: .medium)
         }
 
         swiftSingleFileRadio.do {
-            $0.setButtonType(.radio)
             $0.title = "Single File (.swiftinterface)"
             $0.font = .systemFont(ofSize: 13)
-            $0.state = .on
-            $0.target = self
-            $0.action = #selector(swiftFormatChanged(_:))
-            $0.tag = 0
-        }
-
-        let swiftSingleDesc = Label("Combine all Swift interfaces into one .swiftinterface file").then {
-            $0.font = .systemFont(ofSize: 11)
-            $0.textColor = .tertiaryLabelColor
         }
 
         swiftDirectoryRadio.do {
-            $0.setButtonType(.radio)
             $0.title = "Directory Structure"
             $0.font = .systemFont(ofSize: 13)
-            $0.state = .off
-            $0.target = self
-            $0.action = #selector(swiftFormatChanged(_:))
-            $0.tag = 1
         }
 
-        let swiftDirDesc = Label("Individual files in SwiftInterfaces/ subdirectory").then {
-            $0.font = .systemFont(ofSize: 11)
-            $0.textColor = .tertiaryLabelColor
-        }
-
-        let swiftStack = VStackView(alignment: .leading, spacing: 6) {
-            swiftTitleLabel
-            VStackView(alignment: .leading, spacing: 2) {
-                swiftSingleFileRadio
-                swiftSingleDesc
-            }
-            VStackView(alignment: .leading, spacing: 2) {
-                swiftDirectoryRadio
-                swiftDirDesc
-            }
-        }
-
-        objcSectionView.hierarchy { objcStack }
-        objcStack.snp.makeConstraints { $0.edges.equalToSuperview() }
-
-        swiftSectionView.hierarchy { swiftStack }
-        swiftStack.snp.makeConstraints { $0.edges.equalToSuperview() }
-
-        let contentStack = VStackView(alignment: .leading, spacing: 16) {
-            headerLabel
-            summaryLabel
-            objcSectionView
-            swiftSectionView
-        }
-
-        let backButton = PushButton().then {
-            $0.title = "Back"
-            $0.target = self
-            $0.action = #selector(backClicked)
-        }
-
-        let cancelButton = PushButton().then {
-            $0.title = "Cancel"
-            $0.keyEquivalent = "\u{1b}"
-            $0.target = self
-            $0.action = #selector(cancelClicked)
-        }
-
-        let exportButton = PushButton().then {
-            $0.title = "Export\u{2026}"
-            $0.keyEquivalent = "\r"
-            $0.target = self
-            $0.action = #selector(exportClicked)
-        }
-
-        let buttonStack = HStackView(spacing: 8) {
-            backButton
-            cancelButton
-            exportButton
-        }
-
-        view.hierarchy {
+        hierarchy {
             contentStack
-            buttonStack
         }
 
         contentStack.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview().inset(20)
         }
-
-        buttonStack.snp.makeConstraints { make in
-            make.trailing.bottom.equalToSuperview().inset(20)
-        }
-    }
-
-    // MARK: - Actions
-
-    @objc private func cancelClicked() {
-        cancelRelay.accept(())
-    }
-
-    @objc private func backClicked() {
-        backRelay.accept(())
-    }
-
-    @objc private func exportClicked() {
-        exportRelay.accept(())
-    }
-
-    @objc private func objcFormatChanged(_ sender: NSButton) {
-        objcSingleFileRadio.state = sender.tag == 0 ? .on : .off
-        objcDirectoryRadio.state = sender.tag == 1 ? .on : .off
-        objcFormatRelay.accept(sender.tag)
-    }
-
-    @objc private func swiftFormatChanged(_ sender: NSButton) {
-        swiftSingleFileRadio.state = sender.tag == 0 ? .on : .off
-        swiftDirectoryRadio.state = sender.tag == 1 ? .on : .off
-        swiftFormatRelay.accept(sender.tag)
     }
 
     // MARK: - Bindings
@@ -218,31 +115,39 @@ final class ExportingConfigurationViewController: AppKitViewController<Exporting
         super.setupBindings(for: viewModel)
 
         let input = ExportingConfigurationViewModel.Input(
-            cancelClick: cancelRelay.asSignal(),
-            backClick: backRelay.asSignal(),
-            exportClick: exportRelay.asSignal(),
-            objcFormatSelected: objcFormatRelay.asSignal(),
-            swiftFormatSelected: swiftFormatRelay.asSignal()
+            objcFormatSelected: Signal.merge(
+                objcSingleFileRadio.rx.click.asSignal().map { ExportFormat.singleFile.rawValue },
+                objcDirectoryRadio.rx.click.asSignal().map { ExportFormat.directory.rawValue }
+            ),
+            swiftFormatSelected: Signal.merge(
+                swiftSingleFileRadio.rx.click.asSignal().map { ExportFormat.singleFile.rawValue },
+                swiftDirectoryRadio.rx.click.asSignal().map { ExportFormat.directory.rawValue }
+            )
         )
 
         let output = viewModel.transform(input)
 
+        output.objcFormat.map { $0 == .singleFile }.drive(objcSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
+        output.objcFormat.map { $0 == .directory }.drive(objcDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
+        output.swiftFormat.map { $0 == .singleFile }.drive(swiftSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
+        output.swiftFormat.map { $0 == .directory }.drive(swiftDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
+
         output.hasObjC.driveOnNext { [weak self] hasObjC in
             guard let self else { return }
-            objcSectionView.isHidden = !hasObjC
+            objcStack.isHidden = !hasObjC
         }
         .disposed(by: rx.disposeBag)
 
         output.hasSwift.driveOnNext { [weak self] hasSwift in
             guard let self else { return }
-            swiftSectionView.isHidden = !hasSwift
+            swiftStack.isHidden = !hasSwift
         }
         .disposed(by: rx.disposeBag)
 
         Driver.combineLatest(output.objcCount, output.swiftCount, output.imageName)
             .driveOnNext { [weak self] objcCount, swiftCount, imageName in
                 guard let self else { return }
-                var parts: [String] = ["Image: \(imageName)"]
+                var parts = ["Image: \(imageName)"]
                 if objcCount > 0 { parts.append("\(objcCount) ObjC") }
                 if swiftCount > 0 { parts.append("\(swiftCount) Swift") }
                 summaryLabel.stringValue = parts.joined(separator: " · ")

@@ -1,3 +1,7 @@
+import SwiftStdlibToolbox
+
+//@AssociatedValue(.public)
+//@CaseCheckable(.public)
 public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, CaseIterable, CustomStringConvertible, Sendable {
     public enum C: Codable, Hashable, Identifiable, CaseIterable, Sendable {
         case `struct`
@@ -5,7 +9,8 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         
         public var id: Self { self }
     }
-
+//    @AssociatedValue(.public)
+//    @CaseCheckable(.public)
     public enum ObjectiveC: Codable, Hashable, Identifiable, CaseIterable, Sendable {
         public enum Kind: Codable, Hashable, Identifiable, CaseIterable, Sendable {
             case `class`
@@ -20,7 +25,8 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         
         public static let allCases: [RuntimeObjectKind.ObjectiveC] = Kind.allCases.map { .type($0) } + Kind.allCases.map { .category($0) }
     }
-
+//    @AssociatedValue(.public)
+//    @CaseCheckable(.public)
     public enum Swift: Codable, Hashable, Identifiable, CaseIterable, Sendable {
         public enum Kind: Codable, Hashable, Identifiable, CaseIterable, Sendable {
             case `enum`
@@ -197,6 +203,27 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
                     "Swift TypeAlias Conformance"
                 }
             }
+        }
+    }
+    
+    public var isC: Bool {
+        switch self {
+        case .c: return true
+        default: return false
+        }
+    }
+    
+    public var isObjC: Bool {
+        switch self {
+        case .objc: return true
+        default: return false
+        }
+    }
+    
+    public var isSwift: Bool {
+        switch self {
+        case .swift: return true
+        default: return false
         }
     }
 }
