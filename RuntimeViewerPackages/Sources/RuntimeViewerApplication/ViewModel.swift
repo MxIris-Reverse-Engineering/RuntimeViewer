@@ -1,7 +1,9 @@
 import Foundation
 import FoundationToolbox
+import RuntimeViewerSettings
 import RuntimeViewerArchitectures
 
+@MainActor
 open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
     public let documentState: DocumentState
 
@@ -10,11 +12,16 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
     @Dependency(\.appDefaults)
     public var appDefaults
 
+    @Dependency(\.settings)
+    public var settings
+
     public let errorRelay = PublishRelay<Error>()
 
     package let _commonLoading = ActivityIndicator()
 
-    public var commonLoading: Driver<Bool> { _commonLoading.asDriver() }
+    public var commonLoading: Driver<Bool> {
+        _commonLoading.asDriver()
+    }
 
     public var delayedLoading: Driver<Bool> {
         _commonLoading

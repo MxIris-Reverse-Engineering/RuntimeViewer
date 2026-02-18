@@ -47,13 +47,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startMCPBridgeServer() {
-        do {
-            let windowProvider = AppMCPBridgeWindowProvider()
-            let server = try MCPBridgeServer(windowProvider: windowProvider)
-            mcpBridgeServer = server
-            Task { await server.start() }
-        } catch {
-            #log(.error, "Failed to start MCP Bridge Server: \(error, privacy: .public)")
+        Task { @MainActor in
+            do {
+                let windowProvider = AppMCPBridgeWindowProvider()
+                let server = try MCPBridgeServer(windowProvider: windowProvider)
+                mcpBridgeServer = server
+                await server.start()
+            } catch {
+                #log(.error, "Failed to start MCP Bridge Server: \(error, privacy: .public)")
+            }
         }
     }
 }

@@ -4,9 +4,10 @@ import RuntimeViewerArchitectures
 import MemberwiseInit
 
 public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
-    
-    override var isFilterEmptyNodes: Bool { false }
-    
+    override var isFilterEmptyNodes: Bool {
+        false
+    }
+
     public init(documentState: DocumentState, router: any Router<SidebarRootRoute>) {
         @Dependency(\.appDefaults)
         var appDefaults
@@ -15,16 +16,16 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
 
         super.init(documentState: documentState, router: router, nodesSource: nodesSource)
     }
-    
+
     @MemberwiseInit(.public)
     public struct Input {
         public let removeBookmark: Signal<Int>
     }
-    
+
     public struct Output {
         public let isEmptyBookmark: Driver<Bool>
     }
-    
+
     public func transform(_ input: Input) -> Output {
         input.removeBookmark
             .emitOnNext { [weak self] index in

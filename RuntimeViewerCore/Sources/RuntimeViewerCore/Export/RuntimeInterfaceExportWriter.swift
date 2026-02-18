@@ -1,14 +1,11 @@
-public import Foundation
+import Foundation
 
-public enum RuntimeInterfaceExportWriter {
-    public static func writeSingleFile(
+enum RuntimeInterfaceExportWriter {
+    static func writeSingleFile(
         items: [RuntimeInterfaceExportItem],
         to directory: URL,
-        imageName: String,
-        reporter: RuntimeInterfaceExportReporter
+        imageName: String
     ) throws {
-        reporter.send(.phaseStarted(.writing))
-
         let objcItems = items.filter { !$0.isSwift }
         let swiftItems = items.filter { $0.isSwift }
 
@@ -23,17 +20,12 @@ public enum RuntimeInterfaceExportWriter {
             let file = directory.appendingPathComponent("\(imageName).swiftinterface")
             try combined.write(to: file, atomically: true, encoding: .utf8)
         }
-
-        reporter.send(.phaseCompleted(.writing))
     }
 
-    public static func writeDirectory(
+    static func writeDirectory(
         items: [RuntimeInterfaceExportItem],
-        to directory: URL,
-        reporter: RuntimeInterfaceExportReporter
+        to directory: URL
     ) throws {
-        reporter.send(.phaseStarted(.writing))
-
         let objcItems = items.filter { !$0.isSwift }
         let swiftItems = items.filter { $0.isSwift }
 
@@ -54,7 +46,5 @@ public enum RuntimeInterfaceExportWriter {
                 try item.plainText.write(to: file, atomically: true, encoding: .utf8)
             }
         }
-
-        reporter.send(.phaseCompleted(.writing))
     }
 }

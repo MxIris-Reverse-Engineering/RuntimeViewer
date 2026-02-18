@@ -97,7 +97,7 @@ public actor RuntimeEngine {
     public private(set) var imageList: [String] = []
 
     public private(set) var loadedImagePaths: [String] = []
-    
+
     @Published
     public private(set) var imageNodes: [RuntimeImageNode] = []
 
@@ -122,7 +122,7 @@ public actor RuntimeEngine {
         self.swiftSectionFactory = .init()
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
-    
+
     public func connect() async throws {
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
@@ -130,7 +130,7 @@ public actor RuntimeEngine {
             switch role {
             case .server:
                 #log(.info, "Starting as server")
-                self.connection = try await communicator.connect(to: source) { connection in
+                connection = try await communicator.connect(to: source) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForServer()
                     self.observeConnectionState(connection)
@@ -140,7 +140,7 @@ public actor RuntimeEngine {
                 stateSubject.send(.connected)
             case .client:
                 #log(.info, "Starting as client")
-                self.connection = try await communicator.connect(to: source) { connection in
+                connection = try await communicator.connect(to: source) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForClient()
                     self.observeConnectionState(connection)
@@ -253,7 +253,7 @@ public actor RuntimeEngine {
     public func reloadData(isReloadImageNodes: Bool) {
         #log(.info, "Reloading data, isReloadImageNodes=\(isReloadImageNodes, privacy: .public)")
         imageList = DyldUtilities.imageNames()
-        #log(.debug, "Loaded \(self.imageList.count, privacy: .public) images")
+        #log(.debug, "Loaded \(imageList.count, privacy: .public) images")
         if isReloadImageNodes {
             imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
             #log(.debug, "Reloaded image nodes")
@@ -265,7 +265,7 @@ public actor RuntimeEngine {
     private func observeRuntime() async {
         #log(.info, "Starting runtime observation")
         imageList = DyldUtilities.imageNames()
-        #log(.debug, "Initial image list contains \(self.imageList.count, privacy: .public) images")
+        #log(.debug, "Initial image list contains \(imageList.count, privacy: .public) images")
 
         await Task.detached {
             await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
@@ -311,7 +311,6 @@ public actor RuntimeEngine {
 
         switch name.kind {
         case .swift:
-
             let swiftSection = await swiftSectionFactory.existingSection(for: name.imagePath)
             try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
             return try? await swiftSection?.interface(for: name)
@@ -450,29 +449,14 @@ extension RuntimeEngine {
         case interfaceGenerationFailed(RuntimeObject)
     }
 
-    public func exportInterface(
-        for object: RuntimeObject,
-        options: RuntimeObjectInterface.GenerationOptions
-    ) async throws -> RuntimeInterfaceExportItem {
-        guard let runtimeInterface = try await interface(for: object, options: options) else {
-            throw RuntimeExportError.interfaceGenerationFailed(object)
-        }
-        return RuntimeInterfaceExportItem(
-            object: object,
-            plainText: runtimeInterface.interfaceString.string,
-            suggestedFileName: object.exportFileName
-        )
-    }
-
     public func exportInterfaces(
-        in imagePath: String,
-        options: RuntimeObjectInterface.GenerationOptions,
+        with configuration: RuntimeInterfaceExportConfiguration,
         reporter: RuntimeInterfaceExportReporter
-    ) async throws -> [RuntimeInterfaceExportItem] {
+    ) async throws {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         reporter.send(.phaseStarted(.preparing))
-        let allObjects = try await objects(in: imagePath)
+        let allObjects = try await objects(in: configuration.imagePath)
         reporter.send(.phaseCompleted(.preparing))
 
         reporter.send(.phaseStarted(.exporting))
@@ -486,7 +470,7 @@ extension RuntimeEngine {
         for (index, object) in allObjects.enumerated() {
             reporter.send(.objectStarted(object, current: index + 1, total: total))
             do {
-                guard let runtimeInterface = try await interface(for: object, options: options) else {
+                guard let runtimeInterface = try await interface(for: object, options: configuration.generationOptions) else {
                     throw RuntimeExportError.interfaceGenerationFailed(object)
                 }
                 let item = RuntimeInterfaceExportItem(
@@ -505,6 +489,45 @@ extension RuntimeEngine {
         }
         reporter.send(.phaseCompleted(.exporting))
 
+        reporter.send(.phaseStarted(.writing))
+
+        let objcItems = results.filter { !$0.isSwift }
+        let swiftItems = results.filter { $0.isSwift }
+
+        if !objcItems.isEmpty {
+            switch configuration.objcFormat {
+            case .singleFile:
+                try RuntimeInterfaceExportWriter.writeSingleFile(
+                    items: objcItems,
+                    to: configuration.directory,
+                    imageName: configuration.imageName
+                )
+            case .directory:
+                try RuntimeInterfaceExportWriter.writeDirectory(
+                    items: objcItems,
+                    to: configuration.directory
+                )
+            }
+        }
+
+        if !swiftItems.isEmpty {
+            switch configuration.swiftFormat {
+            case .singleFile:
+                try RuntimeInterfaceExportWriter.writeSingleFile(
+                    items: swiftItems,
+                    to: configuration.directory,
+                    imageName: configuration.imageName
+                )
+            case .directory:
+                try RuntimeInterfaceExportWriter.writeDirectory(
+                    items: swiftItems,
+                    to: configuration.directory
+                )
+            }
+        }
+
+        reporter.send(.phaseCompleted(.writing))
+
         let duration = CFAbsoluteTimeGetCurrent() - startTime
         let result = RuntimeInterfaceExportResult(
             succeeded: succeeded,
@@ -515,6 +538,5 @@ extension RuntimeEngine {
         )
         reporter.send(.completed(result))
         reporter.finish()
-        return results
     }
 }

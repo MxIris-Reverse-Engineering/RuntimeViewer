@@ -36,8 +36,8 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let transformerObservable: Observable<Transformer.Configuration>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         transformerObservable = Observable<Transformer.Configuration>.create { observer in
-            nonisolated(unsafe) let settings = Settings.shared
-            nonisolated(unsafe) let observer = observer
+            let settings = Settings.shared
+            
             observer.onNext(settings.transformer)
             func observe() {
                 withObservationTracking {

@@ -4,8 +4,8 @@ import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
 import RuntimeViewerMCPShared
 
-final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider, @unchecked Sendable {
-    @MainActor
+@MainActor
+final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
     func allWindowContexts() -> [MCPBridgeWindowContext] {
         NSDocumentController.shared.documents.compactMap { document -> MCPBridgeWindowContext? in
             guard let document = document as? Document else { return nil }
@@ -20,12 +20,11 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider, @unchecked Send
         }
     }
 
-    @MainActor
     func windowContext(forIdentifier identifier: String) -> MCPBridgeWindowContext? {
         for document in NSDocumentController.shared.documents {
             guard let document = document as? Document else { continue }
             guard let window = document.windowControllers.first?.window else { continue }
-            if "\(window.windowNumber)" == identifier {
+            if identifier == "\(window.windowNumber)" {
                 return MCPBridgeWindowContext(
                     identifier: identifier,
                     displayName: window.title,

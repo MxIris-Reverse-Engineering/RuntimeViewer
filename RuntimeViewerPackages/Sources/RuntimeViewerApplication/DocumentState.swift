@@ -3,6 +3,7 @@ import Observation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
+@MainActor
 public final class DocumentState {
     public init() {}
 

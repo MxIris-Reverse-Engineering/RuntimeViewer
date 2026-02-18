@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 
 extension RuntimeObject {
     public var exportFileName: String {

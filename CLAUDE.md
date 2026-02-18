@@ -111,6 +111,271 @@ When adding new features, you **MUST** follow these rules:
 4. **No SwiftUI** in non-Settings areas — keep the codebase consistent
 5. **Swift Language Mode**: All packages use `swiftLanguageModes: [.v5]`
 
+## Code Style
+
+### ViewModel Conventions
+
+**Base class**: All ViewModels inherit `ViewModel<Route>`, which provides `documentState`, `router`, `appDefaults`, `errorRelay`, `_commonLoading`.
+
+**State properties** — use `@Observed` (NOT `BehaviorRelay`):
+```swift
+@Observed private(set) var currentPage: Page = .configuration
+@Observed private(set) var nodes: [CellViewModel] = []
+```
+- Exposed as Driver/Signal via `$property.asDriver()` or `$property.asSignal()`
+- Mutate by direct assignment: `currentPage = .progress`
+
+**Input/Output transform pattern**:
+```swift
+@MemberwiseInit(.public)
+struct Input {
+    let cancelClick: Signal<Void>
+    let searchString: Signal<String>
+}
+
+struct Output {
+    let nodes: Driver<[CellViewModel]>        // State → Driver
+    let requestSelection: Signal<Void>         // One-shot events → Signal
+}
+
+func transform(_ input: Input) -> Output {
+    input.cancelClick.emitOnNext { [weak self] in
+        guard let self else { return }
+        router.trigger(.dismiss)
+    }
+    .disposed(by: rx.disposeBag)
+
+    return Output(
+        nodes: $nodes.asDriver(),
+        requestSelection: requestSelectionRelay.asSignal()
+    )
+}
+```
+
+**One-shot events from ViewModel** — use `PublishRelay`:
+```swift
+private let requestDirectorySelectionRelay = PublishRelay<Void>()
+```
+
+**Dependency injection**: `@Dependency(\.appDefaults) var appDefaults`
+
+### ViewController Conventions
+
+**Base classes**: `AppKitViewController<VM>` (simple) or `UXKitViewController<VM>` (with contentView support).
+
+**UI events** — use `PublishRelay` at the top, fire from `@objc` actions:
+```swift
+private let cancelRelay = PublishRelay<Void>()
+private let exportRelay = PublishRelay<Void>()
+
+@objc private func cancelClicked() {
+    cancelRelay.accept(())
+}
+```
+
+**setupBindings pattern**:
+```swift
+override func setupBindings(for viewModel: MyViewModel) {
+    super.setupBindings(for: viewModel)
+    let input = MyViewModel.Input(cancelClick: cancelRelay.asSignal(), ...)
+    let output = viewModel.transform(input)
+
+    output.nodes.drive(outlineView.rx.nodes) { ... }.disposed(by: rx.disposeBag)
+
+    output.currentPage.driveOnNext { [weak self] page in
+        guard let self else { return }
+        showPage(page)
+    }
+    .disposed(by: rx.disposeBag)
+}
+```
+
+### UI Components
+
+**Always use project wrapper types** (from RuntimeViewerUI / UIFoundation), NOT raw AppKit classes:
+
+| Use | Instead of |
+|-----|-----------|
+| `Label()` / `Label("text")` | `NSTextField(labelWithString:)` |
+| `PushButton()` | `NSButton()` |
+| `ImageView()` | `NSImageView()` |
+| `VStackView(alignment:spacing:) { ... }` | `NSStackView(orientation: .vertical)` |
+| `HStackView(spacing:) { ... }` | `NSStackView(orientation: .horizontal)` |
+| `ScrollView()` | `NSScrollView()` |
+
+**View initialization** — `.then {}` returns the configured object (for assignment):
+```swift
+let titleLabel = Label("Export").then {
+    $0.font = .systemFont(ofSize: 18, weight: .semibold)
+}
+```
+
+**View configuration** — `.do {}` mutates in place (for already-declared properties):
+```swift
+configRadioButton.do {
+    $0.setButtonType(.radio)
+    $0.title = "Single File"
+    $0.state = .on
+}
+```
+
+**Adding subviews** — use `hierarchy {}` result builder (NOT `addSubview`):
+```swift
+container.hierarchy {
+    contentStack
+    buttonStack
+}
+```
+
+**Stack views** — use result builder initializer:
+```swift
+let contentStack = VStackView(alignment: .leading, spacing: 16) {
+    headerStack
+    imageNameStack
+    formatStack
+}
+
+let buttonStack = HStackView(spacing: 8) {
+    cancelButton
+    exportButton
+}
+```
+
+### Layout
+
+**All layout uses SnapKit** — constraints grouped together after `hierarchy {}`:
+```swift
+container.hierarchy {
+    contentStack
+    buttonStack
+}
+
+contentStack.snp.makeConstraints { make in
+    make.top.leading.trailing.equalToSuperview().inset(20)
+}
+
+buttonStack.snp.makeConstraints { make in
+    make.trailing.bottom.equalToSuperview().inset(20)
+}
+```
+
+### RxSwift Subscription Style
+
+**Always use trailing-closure variants** (NOT `.emit(onNext:)` / `.drive(onNext:)` / `.subscribe(onNext:)` label syntax):
+
+| Use (trailing closure) | Instead of (label syntax) |
+|------------------------|--------------------------|
+| `.emitOnNext { }` | `.emit(onNext: { })` |
+| `.emitOnNextMainActor { }` | — |
+| `.driveOnNext { }` | `.drive(onNext: { })` |
+| `.driveOnNextMainActor { }` | — |
+| `.subscribeOnNext { }` | `.subscribe(onNext: { })` |
+| `.subscribeOnNextMainActor { }` | — |
+
+```swift
+// Signal
+input.cancelClick.emitOnNext { [weak self] in
+    guard let self else { return }
+    router.trigger(.dismiss)
+}
+.disposed(by: rx.disposeBag)
+
+// Driver
+output.currentPage.driveOnNext { [weak self] page in
+    guard let self else { return }
+    showPage(page)
+}
+.disposed(by: rx.disposeBag)
+
+// Observable
+source.subscribeOnNext { [weak self] value in
+    guard let self else { return }
+    handleValue(value)
+}
+.disposed(by: rx.disposeBag)
+```
+
+For direct binding without closure logic, `.drive()` / `.bind(to:)` are fine:
+```swift
+output.imageName.drive(label.rx.stringValue).disposed(by: rx.disposeBag)
+```
+
+### Closures & Self Capture
+
+**Always** use `guard let self else { return }` (NOT `strongSelf`, NOT `if let self`):
+```swift
+output.result.driveOnNext { [weak self] value in
+    guard let self else { return }
+    handleResult(value)
+}
+.disposed(by: rx.disposeBag)
+```
+
+### Coordinator Conventions
+
+**Route enums** — use `@AssociatedValue` and `@CaseCheckable` macros:
+```swift
+@AssociatedValue(.public)
+@CaseCheckable(.public)
+public enum MyRoute: Routable {
+    case root
+    case detail(RuntimeObject)
+    case dismiss
+}
+```
+
+**ViewController creation** — always in Coordinator's `prepareTransition`, not in ViewController:
+```swift
+override func prepareTransition(for route: MainRoute) -> MainTransition {
+    case .exportInterfaces:
+        let viewController = ExportingViewController()
+        let viewModel = ExportingViewModel(documentState: documentState, router: self)
+        viewController.setupBindings(for: viewModel)
+        return .presentOnRoot(viewController, mode: .asSheet)
+}
+```
+
+**Delegate pattern** — nested protocol inside Coordinator, implemented by parent Coordinator:
+```swift
+// In child
+protocol Delegate: AnyObject {
+    func sidebarCoordinator(_ coordinator: SidebarCoordinator, completeTransition route: SidebarRoute)
+}
+weak var delegate: Delegate?
+
+// In parent
+extension MainCoordinator: SidebarCoordinator.Delegate {
+    func sidebarCoordinator(_ coordinator: SidebarCoordinator, completeTransition route: SidebarRoute) {
+        switch route { ... }
+    }
+}
+```
+
+### MARK Groups
+
+Organize ViewController code with `// MARK: -` sections:
+```
+// MARK: - Relays
+// MARK: - Configuration Page  (or other UI sections)
+// MARK: - Lifecycle
+// MARK: - Actions
+// MARK: - Page Management
+// MARK: - Bindings
+```
+
+### Error Handling
+
+Use base class `errorRelay` — ViewController base class auto-presents alerts:
+```swift
+// In ViewModel
+errorRelay.accept(error)
+
+// In async context
+do { ... } catch {
+    await MainActor.run { self.errorRelay.accept(error) }
+}
+```
+
 ### Platform Requirements
 
 - Swift 6.2, Xcode 15+

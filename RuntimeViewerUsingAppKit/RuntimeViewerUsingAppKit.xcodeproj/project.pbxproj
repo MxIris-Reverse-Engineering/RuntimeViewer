@@ -9,13 +9,11 @@
 /* Begin PBXBuildFile section */
 		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
 		E92124642F447AE1007481E4 /* ExportingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124632F447AE1007481E4 /* ExportingState.swift */; };
-		E92124672F447AFE007481E4 /* ExportingSelectionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124662F447AFE007481E4 /* ExportingSelectionViewModel.swift */; };
-		E92124692F447B26007481E4 /* ExportingSelectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124682F447B26007481E4 /* ExportingSelectionViewController.swift */; };
 		E921246B2F447BA1007481E4 /* ExportingConfigurationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E921246A2F447BA1007481E4 /* ExportingConfigurationViewModel.swift */; };
 		E921246D2F447BBF007481E4 /* ExportingConfigurationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E921246C2F447BBF007481E4 /* ExportingConfigurationViewController.swift */; };
 		E921246F2F447BE1007481E4 /* ExportingProgressViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E921246E2F447BE1007481E4 /* ExportingProgressViewModel.swift */; };
 		E92124712F447C7F007481E4 /* ExportingProgressViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124702F447C7F007481E4 /* ExportingProgressViewController.swift */; };
-		E92124732F447C94007481E4 /* ExportingTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124722F447C94007481E4 /* ExportingTabViewController.swift */; };
+		E92124732F447C94007481E4 /* ExportingViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124722F447C94007481E4 /* ExportingViewController.swift */; };
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
@@ -50,6 +48,9 @@
 		E98BEF552F1CBE870041DB20 /* com.mxiris.runtimeviewer.service in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */; };
+		E9935B922F44886A006DB4EC /* ExportingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */; };
+		E9935B952F448900006DB4EC /* ExportingCompletionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */; };
+		E9935B972F448910006DB4EC /* ExportingCompletionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */; };
 		E995B8942ED97D140083D9D7 /* RuntimeEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */; };
 		E995B8972F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8962F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift */; };
 		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
@@ -220,13 +221,11 @@
 /* Begin PBXFileReference section */
 		E91CD9962C2127AD00C989CC /* EventMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
 		E92124632F447AE1007481E4 /* ExportingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingState.swift; sourceTree = "<group>"; };
-		E92124662F447AFE007481E4 /* ExportingSelectionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingSelectionViewModel.swift; sourceTree = "<group>"; };
-		E92124682F447B26007481E4 /* ExportingSelectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingSelectionViewController.swift; sourceTree = "<group>"; };
 		E921246A2F447BA1007481E4 /* ExportingConfigurationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingConfigurationViewModel.swift; sourceTree = "<group>"; };
 		E921246C2F447BBF007481E4 /* ExportingConfigurationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingConfigurationViewController.swift; sourceTree = "<group>"; };
 		E921246E2F447BE1007481E4 /* ExportingProgressViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingProgressViewModel.swift; sourceTree = "<group>"; };
 		E92124702F447C7F007481E4 /* ExportingProgressViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingProgressViewController.swift; sourceTree = "<group>"; };
-		E92124722F447C94007481E4 /* ExportingTabViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingTabViewController.swift; sourceTree = "<group>"; };
+		E92124722F447C94007481E4 /* ExportingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingViewController.swift; sourceTree = "<group>"; };
 		E927C22D2E9444F300084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		E942ACBE2C28865100A2F3D3 /* MainRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRoute.swift; sourceTree = "<group>"; };
 		E9432FE22C0D614900362862 /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -263,6 +262,9 @@
 		E9862A0B2F36F58900139991 /* RuntimeViewerMCPServer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = RuntimeViewerMCPServer; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9862AD42F377E9C00139991 /* AppMCPBridgeWindowProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMCPBridgeWindowProvider.swift; sourceTree = "<group>"; };
 		E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = ../RuntimeViewerServer/RuntimeViewerServer.xcodeproj; sourceTree = SOURCE_ROOT; };
+		E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCoordinator.swift; sourceTree = "<group>"; };
+		E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewModel.swift; sourceTree = "<group>"; };
+		E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewController.swift; sourceTree = "<group>"; };
 		E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
 		E995B8962F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeConnectionNotificationService.swift; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
@@ -379,14 +381,15 @@
 		E92CB2E52F41E7560091450B /* Exporting */ = {
 			isa = PBXGroup;
 			children = (
+				E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */,
+				E92124722F447C94007481E4 /* ExportingViewController.swift */,
 				E92124632F447AE1007481E4 /* ExportingState.swift */,
-				E92124662F447AFE007481E4 /* ExportingSelectionViewModel.swift */,
-				E92124682F447B26007481E4 /* ExportingSelectionViewController.swift */,
 				E921246A2F447BA1007481E4 /* ExportingConfigurationViewModel.swift */,
 				E921246C2F447BBF007481E4 /* ExportingConfigurationViewController.swift */,
 				E921246E2F447BE1007481E4 /* ExportingProgressViewModel.swift */,
 				E92124702F447C7F007481E4 /* ExportingProgressViewController.swift */,
-				E92124722F447C94007481E4 /* ExportingTabViewController.swift */,
+				E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */,
+				E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */,
 			);
 			path = Exporting;
 			sourceTree = "<group>";
@@ -967,12 +970,14 @@
 				E9EEF7692E085426008D85D1 /* InspectorClassHierarchyView.swift in Sources */,
 				E9EEF7712E086841008D85D1 /* AttachToProcessViewModel.swift in Sources */,
 				E9A825502C0E0EB400D9A85D /* InspectorNavigationController.swift in Sources */,
-				E92124732F447C94007481E4 /* ExportingTabViewController.swift in Sources */,
+				E92124732F447C94007481E4 /* ExportingViewController.swift in Sources */,
 				E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */,
+				E9935B922F44886A006DB4EC /* ExportingCoordinator.swift in Sources */,
+				E9935B952F448900006DB4EC /* ExportingCompletionViewModel.swift in Sources */,
+				E9935B972F448910006DB4EC /* ExportingCompletionViewController.swift in Sources */,
 				E94330182C0DA62500362862 /* SidebarRootDirectoryViewController.swift in Sources */,
 				E9F11E0B2F123EEC0052B0A3 /* SidebarRootCoordinator.swift in Sources */,
 				E921246B2F447BA1007481E4 /* ExportingConfigurationViewModel.swift in Sources */,
-				E92124672F447AFE007481E4 /* ExportingSelectionViewModel.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
 				E9D4706B2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift in Sources */,
 				E9EEF7612E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift in Sources */,
@@ -988,7 +993,6 @@
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
 				E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */,
-				E92124692F447B26007481E4 /* ExportingSelectionViewController.swift in Sources */,
 				E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */,
 				E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */,
 				E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */,

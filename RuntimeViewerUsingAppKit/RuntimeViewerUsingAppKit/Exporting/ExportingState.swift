@@ -1,41 +1,48 @@
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerArchitectures
+import OrderedCollections
 
-enum ExportFormat: Int {
-    case singleFile = 0
-    case directory = 1
+typealias ExportFormat = RuntimeInterfaceExportConfiguration.Format
+
+enum ExportingStep: Int {
+    case configuration
+    case progress
+    case completion
 }
 
+@MainActor
 final class ExportingState {
     let imagePath: String
+
     let imageName: String
 
+    @Observed
     var allObjects: [RuntimeObject] = []
-    var selectedObjects: Set<RuntimeObject> = []
 
-    var objcFormat: ExportFormat = .singleFile
+    @Observed
+    var objcFormat: ExportFormat = .directory
+
+    @Observed
     var swiftFormat: ExportFormat = .singleFile
 
+    @Observed
     var destinationURL: URL?
 
-    var objcObjects: [RuntimeObject] {
-        allObjects.filter { if case .swift = $0.kind { return false } else { return true } }
-    }
+    @Observed
+    var exportResult: RuntimeInterfaceExportResult?
 
-    var swiftObjects: [RuntimeObject] {
-        allObjects.filter { if case .swift = $0.kind { return true } else { return false } }
-    }
-
-    var selectedObjcObjects: [RuntimeObject] {
-        objcObjects.filter { selectedObjects.contains($0) }
-    }
-
-    var selectedSwiftObjects: [RuntimeObject] {
-        swiftObjects.filter { selectedObjects.contains($0) }
-    }
+    @Observed
+    var currentStep: ExportingStep = .configuration
 
     init(imagePath: String, imageName: String) {
         self.imagePath = imagePath
         self.imageName = imageName
     }
+    
+    static let completionStepTesting = ExportingState(imagePath: "/System/Library/Frameworks/AppKit.framework/AppKit", imageName: "AppKit").then {
+        $0.exportResult = .init(succeeded: 300, failed: 0, totalDuration: 5.0, objcCount: 100, swiftCount: 200)
+    }
 }
+
+extension ExportingState: Then {}

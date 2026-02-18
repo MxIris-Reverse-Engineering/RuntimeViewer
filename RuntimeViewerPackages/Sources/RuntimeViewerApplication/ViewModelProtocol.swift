@@ -1,5 +1,6 @@
 import RuntimeViewerArchitectures
 
+@MainActor
 public protocol ViewModelProtocol<Route>: AnyObject {
     associatedtype Route: Routable
     var documentState: DocumentState { get }
