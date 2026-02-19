@@ -7,7 +7,7 @@ public final class DocumentState {
     public init() {}
 
     @Observed
-    public var runtimeEngine: RuntimeEngine = .shared
+    public var runtimeEngine: RuntimeEngine = .local
 
     @Observed
     public var selectedRuntimeObject: RuntimeObject?
