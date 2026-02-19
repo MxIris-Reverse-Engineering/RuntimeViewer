@@ -10,6 +10,7 @@ private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: 
 
 public actor MCPBridgeServer {
     private let listener: MCPBridgeListener
+    
     private let windowProvider: MCPBridgeWindowProvider
 
     @Dependency(\.appDefaults)
@@ -131,57 +132,73 @@ public actor MCPBridgeServer {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
         let options = generationOptions()
 
-        do {
-            let objects = try await engine.objects(in: request.imagePath)
-            guard let runtimeObject = findObject(named: request.typeName, in: objects) else {
-                return MCPTypeInterfaceResponse(
-                    imagePath: request.imagePath,
-                    typeName: request.typeName,
-                    displayName: nil,
-                    typeKind: nil,
-                    interfaceText: nil,
-                    error: "Type '\(request.typeName)' not found in image '\(request.imagePath)'"
-                )
-            }
-
-            let interface = try await engine.interface(for: runtimeObject, options: options)
-            return MCPTypeInterfaceResponse(
-                imagePath: runtimeObject.imagePath,
-                typeName: runtimeObject.name,
-                displayName: runtimeObject.displayName,
-                typeKind: runtimeObject.kind.description,
-                interfaceText: interface?.interfaceString.string,
-                error: nil
-            )
-        } catch {
-            return MCPTypeInterfaceResponse(
-                imagePath: request.imagePath,
-                typeName: request.typeName,
-                displayName: nil,
-                typeKind: nil,
-                interfaceText: nil,
-                error: error.localizedDescription
-            )
+        let imagePaths: [String]
+        if let imagePath = request.imagePath {
+            imagePaths = [imagePath]
+        } else {
+            imagePaths = await engine.loadedImagePaths
         }
+
+        for imagePath in imagePaths {
+            do {
+                let objects = try await engine.objects(in: imagePath)
+                if let runtimeObject = findObject(named: request.typeName, in: objects) {
+                    let interface = try await engine.interface(for: runtimeObject, options: options)
+                    return MCPTypeInterfaceResponse(
+                        imagePath: runtimeObject.imagePath,
+                        typeName: runtimeObject.name,
+                        displayName: runtimeObject.displayName,
+                        typeKind: runtimeObject.kind.description,
+                        interfaceText: interface?.interfaceString.string,
+                        error: nil
+                    )
+                }
+            } catch {
+                logger.warning("Failed to load objects from image \(imagePath): \(error)")
+                continue
+            }
+        }
+
+        let searchScope = request.imagePath ?? "all loaded images"
+        return MCPTypeInterfaceResponse(
+            imagePath: request.imagePath,
+            typeName: request.typeName,
+            displayName: nil,
+            typeKind: nil,
+            interfaceText: nil,
+            error: "Type '\(request.typeName)' not found in \(searchScope)"
+        )
     }
 
     private func handleListTypes(_ request: MCPListTypesRequest) async -> MCPListTypesResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
 
-        do {
-            let objects = try await engine.objects(in: request.imagePath)
-            let types = flattenObjects(objects).map { obj in
-                MCPRuntimeTypeInfo(
-                    name: obj.name,
-                    displayName: obj.displayName,
-                    kind: obj.kind.description,
-                    imagePath: obj.imagePath
-                )
-            }
-            return MCPListTypesResponse(types: types, error: nil)
-        } catch {
-            return MCPListTypesResponse(types: [], error: error.localizedDescription)
+        let imagePaths: [String]
+        if let imagePath = request.imagePath {
+            imagePaths = [imagePath]
+        } else {
+            imagePaths = await engine.loadedImagePaths
         }
+
+        var allTypes: [MCPRuntimeTypeInfo] = []
+        for imagePath in imagePaths {
+            do {
+                let objects = try await engine.objects(in: imagePath)
+                let types = flattenObjects(objects).map { obj in
+                    MCPRuntimeTypeInfo(
+                        name: obj.name,
+                        displayName: obj.displayName,
+                        kind: obj.kind.description,
+                        imagePath: obj.imagePath
+                    )
+                }
+                allTypes.append(contentsOf: types)
+            } catch {
+                logger.warning("Failed to load objects from image \(imagePath): \(error)")
+                continue
+            }
+        }
+        return MCPListTypesResponse(types: allTypes, error: nil)
     }
 
     private func handleSearchTypes(_ request: MCPSearchTypesRequest) async -> MCPSearchTypesResponse {
@@ -207,10 +224,10 @@ public actor MCPBridgeServer {
                 }
             } else {
                 // Search across all loaded images
-                let imageList = await engine.imageList
-                for image in imageList {
+                let imagePaths = await engine.loadedImagePaths
+                for imagePath in imagePaths {
                     do {
-                        let objects = try await engine.objects(in: image)
+                        let objects = try await engine.objects(in: imagePath)
                         let flattened = flattenObjects(objects)
                         for obj in flattened {
                             if obj.name.lowercased().contains(queryLowercased) || obj.displayName.lowercased().contains(queryLowercased) {
@@ -223,7 +240,7 @@ public actor MCPBridgeServer {
                             }
                         }
                     } catch {
-                        logger.warning("Failed to load objects from image \(image): \(error)")
+                        logger.warning("Failed to load objects from image \(imagePath): \(error)")
                         continue
                     }
                 }
@@ -240,44 +257,55 @@ public actor MCPBridgeServer {
         let options = generationOptions()
         let patternLowercased = request.pattern.lowercased()
 
-        do {
-            let objects = try await engine.objects(in: request.imagePath)
-            let flattened = flattenObjects(objects)
-            var matches: [MCPGrepMatch] = []
-
-            for obj in flattened {
-                do {
-                    let interface = try await engine.interface(for: obj, options: options)
-                    guard let text = interface?.interfaceString.string else { continue }
-
-                    let matchingLines = text.components(separatedBy: .newlines).filter {
-                        $0.lowercased().contains(patternLowercased)
-                    }
-
-                    if !matchingLines.isEmpty {
-                        matches.append(MCPGrepMatch(
-                            typeName: obj.name,
-                            kind: obj.kind.description,
-                            matchingLines: matchingLines
-                        ))
-                    }
-                } catch {
-                    logger.warning("Failed to generate interface for \(obj.name): \(error)")
-                    continue
-                }
-            }
-
-            return MCPGrepTypeInterfaceResponse(matches: matches, error: nil)
-        } catch {
-            return MCPGrepTypeInterfaceResponse(matches: [], error: error.localizedDescription)
+        let imagePaths: [String]
+        if let imagePath = request.imagePath {
+            imagePaths = [imagePath]
+        } else {
+            imagePaths = await engine.loadedImagePaths
         }
+
+        var matches: [MCPGrepMatch] = []
+
+        for imagePath in imagePaths {
+            do {
+                let objects = try await engine.objects(in: imagePath)
+                let flattened = flattenObjects(objects)
+
+                for obj in flattened {
+                    do {
+                        let interface = try await engine.interface(for: obj, options: options)
+                        guard let text = interface?.interfaceString.string else { continue }
+
+                        let matchingLines = text.components(separatedBy: .newlines).filter {
+                            $0.lowercased().contains(patternLowercased)
+                        }
+
+                        if !matchingLines.isEmpty {
+                            matches.append(MCPGrepMatch(
+                                typeName: obj.name,
+                                kind: obj.kind.description,
+                                matchingLines: matchingLines
+                            ))
+                        }
+                    } catch {
+                        logger.warning("Failed to generate interface for \(obj.name): \(error)")
+                        continue
+                    }
+                }
+            } catch {
+                logger.warning("Failed to load objects from image \(imagePath): \(error)")
+                continue
+            }
+        }
+
+        return MCPGrepTypeInterfaceResponse(matches: matches, error: nil)
     }
 
     // MARK: - Private Helpers
 
     private func runtimeEngine(forWindowIdentifier identifier: String) async -> RuntimeEngine {
         await MainActor.run {
-            windowProvider.windowContext(forIdentifier: identifier)?.runtimeEngine ?? .shared
+            windowProvider.windowContext(forIdentifier: identifier)?.runtimeEngine ?? .local
         }
     }
 

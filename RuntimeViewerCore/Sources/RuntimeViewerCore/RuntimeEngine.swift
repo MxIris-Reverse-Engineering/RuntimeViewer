@@ -66,7 +66,13 @@ public actor RuntimeEngine {
         }
     }
 
-    public static let shared = RuntimeEngine()
+    public static let local: RuntimeEngine = {
+        let runtimeEngine = RuntimeEngine(source: .local)
+        Task {
+            try await runtimeEngine.connect()
+        }
+        return runtimeEngine
+    }()
 
     public nonisolated let source: RuntimeSource
 
@@ -90,6 +96,8 @@ public actor RuntimeEngine {
 
     public private(set) var imageList: [String] = []
 
+    public private(set) var loadedImagePaths: [String] = []
+    
     @Published
     public private(set) var imageNodes: [RuntimeImageNode] = []
 
@@ -108,24 +116,14 @@ public actor RuntimeEngine {
     /// The connection to the sender or receiver
     private var connection: RuntimeConnection?
 
-    public init() {
-        self.source = .local
-        self.objcSectionFactory = .init()
-        self.swiftSectionFactory = .init()
-        #log(.info, "Initializing RuntimeEngine with local source")
-
-        Task {
-            await observeRuntime()
-            stateSubject.send(.localOnly)
-        }
-    }
-
-    public init(source: RuntimeSource) async throws {
+    public init(source: RuntimeSource) {
         self.source = source
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
-
+    }
+    
+    public func connect() async throws {
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
 
@@ -372,6 +370,7 @@ extension RuntimeEngine {
             _ = try await objcSectionFactory.section(for: path)
             _ = try await swiftSectionFactory.section(for: path)
             reloadData(isReloadImageNodes: false)
+            loadedImagePaths.append(path)
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
         }

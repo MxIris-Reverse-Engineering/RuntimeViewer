@@ -35,7 +35,9 @@ public final class RuntimeEngineManager: Loggable {
             guard let self else { return }
             Task { @MainActor in
                 do {
-                    try await self.appendBonjourRuntimeEngine(.init(source: .bonjourClient(endpoint: endpoint)))
+                    let runtimeEngine = RuntimeEngine(source: .bonjourClient(endpoint: endpoint))
+                    try await runtimeEngine.connect()
+                    self.appendBonjourRuntimeEngine(runtimeEngine)
                 } catch {
                     Self.logger.error("Failed to connect to bonjour runtime engine at endpoint: \("\(endpoint)", privacy: .public) with error: \(error, privacy: .public)")
                 }
@@ -61,9 +63,10 @@ public final class RuntimeEngineManager: Loggable {
 
     @concurrent
     public func launchSystemRuntimeEngines() async throws {
-        systemRuntimeEngines.append(.shared)
+        systemRuntimeEngines.append(.local)
         #if os(macOS)
-        let macCatalystClientEngine = try await RuntimeEngine(source: .macCatalystClient)
+        let macCatalystClientEngine = RuntimeEngine(source: .macCatalystClient)
+        try await macCatalystClientEngine.connect()
         try await runtimeHelperClient.launchMacCatalystHelper()
         systemRuntimeEngines.append(macCatalystClientEngine)
         observeRuntimeEngineState(macCatalystClientEngine)
@@ -78,7 +81,8 @@ public final class RuntimeEngineManager: Loggable {
             RuntimeSource.remote(name: name, identifier: .init(rawValue: identifier), role: .client)
         }
 
-        let runtimeEngine = try await RuntimeEngine(source: runtimeSource)
+        let runtimeEngine = RuntimeEngine(source: runtimeSource)
+        try await runtimeEngine.connect()
         attachedRuntimeEngines.append(runtimeEngine)
         observeRuntimeEngineState(runtimeEngine)
     }
