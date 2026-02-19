@@ -1,6 +1,7 @@
 import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
+import RuntimeViewerApplication
 import UniformTypeIdentifiers
 
 final class MainWindow: NSWindow {
@@ -11,12 +12,18 @@ final class MainWindow: NSWindow {
         super.init(contentRect: .zero, styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
     }
 
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool {
+        true
+    }
 
-    override var canBecomeMain: Bool { true }
+    override var canBecomeMain: Bool {
+        true
+    }
 }
 
 final class MainWindowController: XiblessWindowController<MainWindow> {
+    let documentState: DocumentState
+
     private(set) lazy var toolbarController = MainToolbarController(delegate: self)
 
     private(set) lazy var splitViewController = MainSplitViewController()
@@ -27,13 +34,20 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
 
-    init() {
+    init(documentState: DocumentState) {
+        self.documentState = documentState
         super.init(windowGenerator: .init())
+    }
+
+    override func synchronizeWindowTitleWithDocumentName() {
+        // Prevent NSDocument from overriding the window title with "Untitled"
+        contentWindow.title = documentState.runtimeEngine.source.description
     }
 
     override func windowDidLoad() {
         super.windowDidLoad()
-        contentWindow.title = "Runtime Viewer"
+        contentWindow.title = documentState.runtimeEngine.source.description
+        contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
         contentWindow.box.positionCenter()
@@ -48,6 +62,33 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         self.viewModel = viewModel
 
         splitViewController.setupBindings(for: viewModel)
+
+        documentState.$currentImageName
+            .asDriver()
+            .driveOnNext { [weak self] imageName in
+                guard let self else { return }
+                var title = documentState.runtimeEngine.source.description
+
+                if let imageName {
+                    title += " - \(imageName)"
+                }
+
+                contentWindow.title = title
+                if let imageName {
+                    toolbarController.titleItem.displayTitle = imageName
+                } else {
+                    toolbarController.titleItem.displayTitle = "RuntimeViewer"
+                }
+            }
+            .disposed(by: rx.disposeBag)
+
+        documentState.$currentSubtitle
+            .asDriver()
+            .driveOnNext { [weak self] subtitle in
+                guard let self else { return }
+                toolbarController.titleItem.displaySubtitle = subtitle
+            }
+            .disposed(by: rx.disposeBag)
 
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
@@ -84,13 +125,16 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             .bind(to: toolbarController.sharingServicePickerItem.rx.items)
             .disposed(by: rx.disposeBag)
 
-        output.requestFrameworkSelection.emit(onNext: { [weak self] in
-            self?.presentOpenPanel()
-        }).disposed(by: rx.disposeBag)
+        output.requestFrameworkSelection.emitOnNext { [weak self] in
+            guard let self else { return }
+            presentOpenPanel()
+        }
+        .disposed(by: rx.disposeBag)
 
-        output.requestSaveLocation.emit(onNext: { [weak self] name, type in
-            self?.presentSavePanel(name: name, type: type)
-        }).disposed(by: rx.disposeBag)
+        output.requestSaveLocation.emitOnNext { [weak self] name, type in
+            guard let self else { return }
+            presentSavePanel(name: name, type: type)
+        }.disposed(by: rx.disposeBag)
 
         output.isSavable.drive(toolbarController.saveItem.button.rx.isEnabled).disposed(by: rx.disposeBag)
 

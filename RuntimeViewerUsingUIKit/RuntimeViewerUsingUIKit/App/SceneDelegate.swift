@@ -11,9 +11,9 @@ import RuntimeViewerApplication
 class SceneDelegate: UIResponder, UIWindowSceneDelegate, UISplitViewControllerDelegate {
     var window: UIWindow?
 
-    let appServices = AppServices()
+    let documentState = DocumentState()
 
-    lazy var mainCoordinator = MainCoordinator(appServices: appServices)
+    lazy var mainCoordinator = MainCoordinator(documentState: documentState)
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = (scene as? UIWindowScene) else { return }

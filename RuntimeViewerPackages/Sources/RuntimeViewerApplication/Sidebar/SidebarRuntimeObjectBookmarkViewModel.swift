@@ -4,8 +4,8 @@ import RuntimeViewerArchitectures
 import MemberwiseInit
 
 public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectViewModel, @unchecked Sendable {
-    public override init(imageNode: RuntimeImageNode, appServices: AppServices, router: any Router<SidebarRuntimeObjectRoute>) {
-        super.init(imageNode: imageNode, appServices: appServices, router: router)
+    public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
+        super.init(imageNode: imageNode, documentState: documentState, router: router)
 
         appDefaults.$objectBookmarks
             .asObservable()
@@ -20,7 +20,7 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     }
 
     override func buildRuntimeObjects() async throws -> [RuntimeObject] {
-        appDefaults.objectBookmarks.filter { $0.source == appServices.runtimeEngine.source && $0.object.imagePath == imagePath }.map { $0.object }
+        appDefaults.objectBookmarks.filter { $0.source == documentState.runtimeEngine.source && $0.object.imagePath == imagePath }.map { $0.object }
     }
 
     @MemberwiseInit(.public)

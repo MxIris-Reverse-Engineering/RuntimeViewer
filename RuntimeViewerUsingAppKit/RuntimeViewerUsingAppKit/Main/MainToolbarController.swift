@@ -24,6 +24,90 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
+    class TitleToolbarItem: NSToolbarItem {
+        private let imageView = NSImageView()
+        private let titleLabel = NSTextField(labelWithString: "")
+        private let subtitleLabel = NSTextField(labelWithString: "")
+        private let textStackView = NSStackView()
+        private let containerStackView = NSStackView()
+
+        var displayTitle: String {
+            get { titleLabel.stringValue }
+            set { titleLabel.stringValue = newValue }
+        }
+
+        var displaySubtitle: String {
+            get { subtitleLabel.stringValue }
+            set {
+                let hadSubtitle = !subtitleLabel.stringValue.isEmpty
+                let hasSubtitle = !newValue.isEmpty
+                subtitleLabel.stringValue = newValue
+                subtitleLabel.isHidden = newValue.isEmpty
+                if hadSubtitle != hasSubtitle {
+                    updateTitleFont()
+                }
+            }
+        }
+
+        var displayImage: NSImage? {
+            get { imageView.image }
+            set {
+                imageView.image = newValue
+                imageView.isHidden = newValue == nil
+            }
+        }
+
+        var insets: NSEdgeInsets = NSEdgeInsets(top: 0, left: 8, bottom: 0, right: 0) {
+            didSet { containerStackView.edgeInsets = insets }
+        }
+
+        init() {
+            super.init(itemIdentifier: .Main.title)
+            isNavigational = true
+            isBordered = false
+
+            imageView.imageScaling = .scaleProportionallyDown
+            imageView.isHidden = true
+            imageView.setContentHuggingPriority(.required, for: .horizontal)
+
+            titleLabel.textColor = .labelColor
+            titleLabel.lineBreakMode = .byTruncatingTail
+            titleLabel.alignment = .left
+            titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+            subtitleLabel.font = .systemFont(ofSize: 11, weight: .regular)
+            subtitleLabel.textColor = .secondaryLabelColor
+            subtitleLabel.lineBreakMode = .byTruncatingTail
+            subtitleLabel.alignment = .left
+            subtitleLabel.isHidden = true
+            subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+            textStackView.setViews([titleLabel, subtitleLabel], in: .center)
+            textStackView.orientation = .vertical
+            textStackView.alignment = .leading
+            textStackView.spacing = 0
+
+            containerStackView.setViews([imageView, textStackView], in: .center)
+            containerStackView.orientation = .horizontal
+            containerStackView.alignment = .centerY
+            containerStackView.spacing = 10
+            containerStackView.edgeInsets = insets
+
+            updateTitleFont()
+
+            view = containerStackView
+        }
+
+        private func updateTitleFont() {
+            let hasSubtitle = !subtitleLabel.isHidden
+            if hasSubtitle {
+                titleLabel.font = .systemFont(ofSize: 13, weight: .bold)
+            } else {
+                titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+            }
+        }
+    }
+
     class SwitchSourceToolbarItem: NSToolbarItem {
         let popUpButton = NSPopUpButton()
 
@@ -47,6 +131,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         $0.isNavigational = true
         $0.label = "Back"
     }
+
+    let titleItem = TitleToolbarItem()
 
     let attachItem = IconButtonToolbarItem(itemIdentifier: .Main.attach, icon: .inject).then {
         $0.label = "Attach Process"
@@ -99,6 +185,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .flexibleSpace,
             .sidebarTrackingSeparator,
             .Main.contentBack,
+            .Main.title,
+            .flexibleSpace,
             .Main.switchSource,
             .Main.attach,
             .Main.loadFrameworks,
@@ -117,6 +205,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         [
             .Main.sidebarBack,
             .Main.contentBack,
+            .Main.title,
             .flexibleSpace,
             .toggleSidebar,
             .sidebarTrackingSeparator,
@@ -139,6 +228,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return sidebarBackItem
         case .Main.contentBack:
             return contentBackItem
+        case .Main.title:
+            return titleItem
         case .Main.share:
             return sharingServicePickerItem
         case .Main.save:
@@ -173,6 +264,7 @@ extension NSToolbarItem.Identifier {
     enum Main {
         static let sidebarBack: NSToolbarItem.Identifier = "sidebarBack"
         static let contentBack: NSToolbarItem.Identifier = "contentBack"
+        static let title: NSToolbarItem.Identifier = "title"
         static let share: NSToolbarItem.Identifier = "share"
         static let save: NSToolbarItem.Identifier = "save"
         static let switchSource: NSToolbarItem.Identifier = "switchSource"

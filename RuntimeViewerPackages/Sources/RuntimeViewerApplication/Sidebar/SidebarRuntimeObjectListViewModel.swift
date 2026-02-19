@@ -11,9 +11,9 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
     @Observed public private(set) var filteredNodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var isFilteringForOpenQuickly: Bool = false
 
-    public override init(imageNode: RuntimeImageNode, appServices: AppServices, router: any Router<SidebarRuntimeObjectRoute>) {
+    public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         self.openQuicklySearchQueue = DispatchQueue(label: "com.MxIris.RuntimeViewerApplication.\(Self.self)")
-        super.init(imageNode: imageNode, appServices: appServices, router: router)
+        super.init(imageNode: imageNode, documentState: documentState, router: router)
     }
 
     @MemberwiseInit(.public)
@@ -48,7 +48,7 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
         input.addBookmark.emitOnNext { [weak self] viewModel in
             guard let self else { return }
             
-            appDefaults.objectBookmarks.append(.init(source: appServices.runtimeEngine.source, object: viewModel.runtimeObject))
+            appDefaults.objectBookmarks.append(.init(source: documentState.runtimeEngine.source, object: viewModel.runtimeObject))
         }
         .disposed(by: rx.disposeBag)
         

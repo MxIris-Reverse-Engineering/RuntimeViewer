@@ -126,8 +126,8 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
                 guard let self, let dataSource else { return }
                 outlineView.rx.setDataSource(dataSource).disposed(by: rx.disposeBag)
                 outlineView.autosaveExpandedItems = true
-                outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
-                outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
+                outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
+                outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
             }
             .disposed(by: rx.disposeBag)
     }

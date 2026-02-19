@@ -8,7 +8,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     
     var isReorderable: Bool { false }
     
-    private let tabView = NSTabView()
+    @ViewLoading
+    private var tabView: NSTabView
 
     let imageNotLoadedView = ImageLoadableView()
 
@@ -26,10 +27,6 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     private let bottomSeparatorView = NSBox()
 
-    private var previousWindowSubtitle: String = ""
-
-    private var previousWindowTitle: String = ""
-
     private let filterModeDidChange = PublishRelay<Void>()
 
     private var searchCaseInsensitiveButton: NSButton?
@@ -41,6 +38,16 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     override func viewDidLoad() {
         super.viewDidLoad()
+
+        tabView = NSTabView()
+        tabView.addTabViewItem(NSTabViewItem(view: imageNotLoadedView, loadState: .notLoaded))
+        tabView.addTabViewItem(NSTabViewItem(view: imageLoadingView, loadState: .loading))
+        tabView.addTabViewItem(NSTabViewItem(view: imageLoadedView, loadState: .loaded))
+        tabView.addTabViewItem(NSTabViewItem(view: imageLoadErrorView, loadState: .loadError(Optional.none)))
+        tabView.addTabViewItem(NSTabViewItem(view: imageUnknownView, loadState: .unknown))
+        tabView.tabViewType = .noTabsNoBorder
+        tabView.tabPosition = .none
+        tabView.tabViewBorderType = .none
 
         contentView.hierarchy {
             tabView
@@ -95,17 +102,6 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
             $0.addFilterButton(systemSymbolName: "textformat", toolTip: "Case Insensitive").do { searchCaseInsensitiveButton = $0 }
         }
-
-        tabView.do {
-            $0.addTabViewItem(NSTabViewItem(view: imageNotLoadedView, loadState: .notLoaded))
-            $0.addTabViewItem(NSTabViewItem(view: imageLoadingView, loadState: .loading))
-            $0.addTabViewItem(NSTabViewItem(view: imageLoadedView, loadState: .loaded))
-            $0.addTabViewItem(NSTabViewItem(view: imageLoadErrorView, loadState: .loadError(Optional.none)))
-            $0.addTabViewItem(NSTabViewItem(view: imageUnknownView, loadState: .unknown))
-            $0.tabViewType = .noTabsNoBorder
-            $0.tabPosition = .none
-            $0.tabViewBorderType = .none
-        }
     }
 
     override func setupBindings(for viewModel: ViewModel) {
@@ -159,11 +155,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         .disposed(by: rx.disposeBag)
 
         output.windowInitialTitles.driveOnNext { [weak self] in
-            guard let self, let window = view.window else { return }
-            previousWindowTitle = window.title
-            previousWindowSubtitle = window.subtitle
-            window.title = $0.title
-            window.subtitle = $0.subtitle
+            guard let self else { return }
+            self.viewModel?.documentState.currentSubtitle = $0.subtitle
         }
         .disposed(by: rx.disposeBag)
 
@@ -173,8 +166,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
         .disposed(by: rx.disposeBag)
         
-        outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.appServices.runtimeEngine.source.description)"
-        outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.appServices.runtimeEngine.source.description)"
+        outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
+        outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
     }
 }
 

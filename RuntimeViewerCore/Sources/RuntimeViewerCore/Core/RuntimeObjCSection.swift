@@ -40,6 +40,8 @@ actor RuntimeObjCSection {
 
     private let machO: MachOImage
 
+    private let factory: RuntimeObjCSectionFactory
+
     private var classes: [String: ObjCClassGroup] = [:]
 
     private var protocols: [String: ObjCProtocolGroup] = [:]
@@ -97,15 +99,7 @@ actor RuntimeObjCSection {
         }
     }
 
-    init(ptr: UnsafeRawPointer) async throws {
-        guard let machO = MachOImage.image(for: ptr) else {
-            #log(.error, "Failed to create MachOImage from pointer")
-            throw Error.invalidMachOImage
-        }
-        try await self.init(machO: machO)
-    }
-
-    init(imagePath: String) async throws {
+    init(imagePath: String, factory: RuntimeObjCSectionFactory) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
         guard let machO = MachOImage(name: imageName) else {
@@ -114,13 +108,15 @@ actor RuntimeObjCSection {
         }
         self.machO = machO
         self.imagePath = imagePath
+        self.factory = factory
         try await prepare()
     }
 
-    init(machO: MachOImage) async throws {
+    init(machO: MachOImage, factory: RuntimeObjCSectionFactory) async throws {
         #log(.info, "Initializing ObjC section from MachO: \(machO.imagePath, privacy: .public)")
         self.machO = machO
         self.imagePath = machO.imagePath
+        self.factory = factory
         try await prepare()
     }
 
@@ -542,6 +538,58 @@ actor RuntimeObjCSection {
         let hierarchy = classGroups.info.map(\.name)
         #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
         return hierarchy
+    }
+}
+
+@Loggable
+actor RuntimeObjCSectionFactory {
+    private var sections: [String: RuntimeObjCSection] = [:]
+
+    func existingSection(for imagePath: String) -> RuntimeObjCSection? {
+        sections[imagePath]
+    }
+
+    func section(for imagePath: String) async throws -> RuntimeObjCSection {
+        if let section = sections[imagePath] {
+            #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
+            return section
+        }
+        #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
+        let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self)
+        sections[imagePath] = section
+        #log(.debug, "ObjC section created and cached")
+        return section
+    }
+
+    func section(for name: RuntimeObjCName) async throws -> RuntimeObjCSection? {
+        #log(.debug, "Looking up ObjC section for name: \(String(describing: name), privacy: .public)")
+        do {
+            guard let machO = MachOImage.image(forName: name) else {
+                #log(.debug, "No MachO image found for name")
+                return nil
+            }
+
+            if let existObjCSection = sections[machO.imagePath] {
+                #log(.debug, "Using cached ObjC section")
+                return existObjCSection
+            }
+
+            #log(.debug, "Creating ObjC section from MachO: \(machO.imagePath, privacy: .public)")
+            let objcSection = try await RuntimeObjCSection(machO: machO, factory: self)
+            sections[machO.imagePath] = objcSection
+            return objcSection
+        } catch {
+            #log(.error, "Failed to create ObjC section: \(error, privacy: .public)")
+            return nil
+        }
+    }
+
+    func removeSection(for imagePath: String) {
+        sections.removeValue(forKey: imagePath)
+    }
+
+    func removeAllSections() {
+        sections.removeAll()
     }
 }
 

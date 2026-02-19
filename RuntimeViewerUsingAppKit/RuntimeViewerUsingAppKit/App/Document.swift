@@ -1,11 +1,12 @@
 import AppKit
+import RuntimeViewerApplication
 
 final class Document: NSDocument {
-    private lazy var mainCoordinator = MainCoordinator(appServices: .init())
+    let documentState = DocumentState()
 
-    override class var autosavesInPlace: Bool {
-        return false
-    }
+    private lazy var mainCoordinator = MainCoordinator(documentState: documentState)
+
+    override class var autosavesInPlace: Bool { false }
 
     override func makeWindowControllers() {
         addWindowController(mainCoordinator.windowController)

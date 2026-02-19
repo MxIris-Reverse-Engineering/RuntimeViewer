@@ -7,13 +7,13 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
     
     override var isFilterEmptyNodes: Bool { false }
     
-    public init(appServices: AppServices, router: any Router<SidebarRootRoute>) {
+    public init(documentState: DocumentState, router: any Router<SidebarRootRoute>) {
         @Dependency(\.appDefaults)
         var appDefaults
 
-        let nodesSource = appDefaults.$imageBookmarks.map { $0.compactMap { if $0.source == appServices.runtimeEngine.source { $0.imageNode } else { nil } } }
+        let nodesSource = appDefaults.$imageBookmarks.map { $0.compactMap { if $0.source == documentState.runtimeEngine.source { $0.imageNode } else { nil } } }
 
-        super.init(appServices: appServices, router: router, nodesSource: nodesSource)
+        super.init(documentState: documentState, router: router, nodesSource: nodesSource)
     }
     
     @MemberwiseInit(.public)
