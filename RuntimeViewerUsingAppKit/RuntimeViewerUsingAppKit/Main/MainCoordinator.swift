@@ -21,7 +21,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
     private(set) lazy var lateResponderRegistry = LateResponderRegistry()
 
     private var childEventDisposeBag = DisposeBag()
-
+    
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowController: .init(documentState: documentState), initialRoute: .main(.local))
@@ -70,6 +70,10 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             return .presentOnRoot(viewController, mode: .asSheet)
         case .dismiss:
             return .dismiss()
+        case .exportInterfaces:
+            guard let exportingCoordinator = ExportingCoordinator(documentState: documentState) else { return .none() }
+            addChild(exportingCoordinator)
+            return .beginSheet(exportingCoordinator)
         }
     }
 
@@ -93,26 +97,30 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 
     private func bindChildEvents() {
         childEventDisposeBag = DisposeBag()
-
+        
         sidebarCoordinator.rx.didCompleteTransition()
             .subscribeOnNext { [weak self] route in
                 guard let self else { return }
                 switch route {
                 case .clickedNode(let imageNode):
                     documentState.currentImageName = imageNode.name
+                    documentState.currentImagePath = imageNode.path
                 case .selectedObject(let runtimeObject):
                     documentState.selectedRuntimeObject = runtimeObject
                     contentCoordinator.trigger(.root(runtimeObject))
                 case .back:
                     documentState.currentImageName = nil
+                    documentState.currentImagePath = nil
                     documentState.selectedRuntimeObject = nil
                     contentCoordinator.trigger(.placeholder)
+                case .exportInterface:
+                    trigger(.exportInterfaces)
                 default:
                     break
                 }
             }
             .disposed(by: childEventDisposeBag)
-
+        
         contentCoordinator.rx.didCompleteTransition()
             .subscribeOnNext { [weak self] route in
                 guard let self else { return }

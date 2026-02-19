@@ -3,6 +3,7 @@ import Observation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
+@MainActor
 public final class DocumentState {
     public init() {}
 
@@ -14,6 +15,9 @@ public final class DocumentState {
 
     @Observed
     public var currentImageName: String?
+
+    @Observed
+    public var currentImagePath: String?
 
     @Observed
     public var currentSubtitle: String = ""

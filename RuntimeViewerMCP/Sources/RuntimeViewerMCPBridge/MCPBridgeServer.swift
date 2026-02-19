@@ -35,8 +35,6 @@ public actor MCPBridgeServer {
         stop()
     }
 
-    // MARK: - Request Routing
-
     private func processRequest(_ envelope: MCPBridgeEnvelope) async throws -> Data {
         guard let command = MCPBridgeCommand(rawValue: envelope.identifier) else {
             throw MCPBridgeTransportError.decodingFailed
@@ -73,8 +71,6 @@ public actor MCPBridgeServer {
             return try JSONEncoder().encode(response)
         }
     }
-
-    // MARK: - Command Handlers
 
     private func handleListWindows() async -> MCPListWindowsResponse {
         let windows = await MainActor.run {
@@ -301,8 +297,6 @@ public actor MCPBridgeServer {
         return MCPGrepTypeInterfaceResponse(matches: matches, error: nil)
     }
 
-    // MARK: - Private Helpers
-
     private func runtimeEngine(forWindowIdentifier identifier: String) async -> RuntimeEngine {
         await MainActor.run {
             windowProvider.windowContext(forIdentifier: identifier)?.runtimeEngine ?? .local
@@ -314,8 +308,6 @@ public actor MCPBridgeServer {
         options.transformer = Settings.shared.transformer
         return options
     }
-
-    // MARK: - Helpers
 
     private func flattenObjects(_ objects: [RuntimeObject]) -> [RuntimeObject] {
         var result: [RuntimeObject] = []

@@ -175,6 +175,10 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             saveLocationSelectedRelay.accept(url)
         }
     }
+    
+//    @IBAction func exportInterface(_ sender: Any?) {
+//        viewModel?.router.trigger(.exportInterfaces)
+//    }
 }
 
 extension MainWindowController: MainToolbarController.Delegate {}
