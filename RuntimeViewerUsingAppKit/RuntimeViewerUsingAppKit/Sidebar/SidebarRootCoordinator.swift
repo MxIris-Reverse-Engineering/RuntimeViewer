@@ -7,17 +7,10 @@ import RuntimeViewerArchitectures
 typealias SidebarRootTransition = Transition<Void, SidebarRootTabViewController>
 
 final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRootTransition> {
-    protocol Delegate: AnyObject {
-        func sidebarRootCoordinator(_ sidebarCoordinator: SidebarRootCoordinator, completeTransition: SidebarRootRoute)
-    }
+    let documentState: DocumentState
 
-    let appServices: AppServices
-
-    weak var delegate: Delegate?
-
-    init(appServices: AppServices, delegate: Delegate? = nil) {
-        self.appServices = appServices
-        self.delegate = delegate
+    init(documentState: DocumentState) {
+        self.documentState = documentState
         super.init(rootViewController: .init(), initialRoute: .initial)
     }
 
@@ -25,11 +18,11 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
         switch route {
         case .initial:
             let directoryViewController = SidebarRootDirectoryViewController()
-            let directoryViewModel = SidebarRootDirectoryViewModel(appServices: appServices, router: self)
+            let directoryViewModel = SidebarRootDirectoryViewModel(documentState: documentState, router: self)
             directoryViewController.setupBindings(for: directoryViewModel)
 
             let bookmarkViewController = SidebarRootBookmarkViewController()
-            let bookmarkViewModel = SidebarRootBookmarkViewModel(appServices: appServices, router: self)
+            let bookmarkViewModel = SidebarRootBookmarkViewModel(documentState: documentState, router: self)
             bookmarkViewController.setupBindings(for: bookmarkViewModel)
             return .set([
                 TabViewItem(normalSymbol: .init(systemName: .folder), selectedSymbol: .init(systemName: .folderFill), viewController: directoryViewController),
@@ -44,11 +37,6 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
         }
     }
 
-    override func completeTransition(for route: SidebarRootRoute) {
-        super.completeTransition(for: route)
-
-        delegate?.sidebarRootCoordinator(self, completeTransition: route)
-    }
 }
 
 

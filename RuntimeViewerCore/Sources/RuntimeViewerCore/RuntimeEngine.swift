@@ -61,7 +61,9 @@ public actor RuntimeEngine {
         case runtimeObjectsInImage
         case reloadData
 
-        var commandName: String { "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)" }
+        var commandName: String {
+            "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
+        }
     }
 
     public static let shared = RuntimeEngine()
@@ -97,9 +99,9 @@ public actor RuntimeEngine {
 
     private let reloadDataSubject = PassthroughSubject<Void, Never>()
 
-    private var imageToObjCSection: [String: RuntimeObjCSection] = [:]
+    private let objcSectionFactory: RuntimeObjCSectionFactory
 
-    private var imageToSwiftSection: [String: RuntimeSwiftSection] = [:]
+    private let swiftSectionFactory: RuntimeSwiftSectionFactory
 
     private let communicator = RuntimeCommunicator()
 
@@ -108,6 +110,8 @@ public actor RuntimeEngine {
 
     public init() {
         self.source = .local
+        self.objcSectionFactory = .init()
+        self.swiftSectionFactory = .init()
         #log(.info, "Initializing RuntimeEngine with local source")
 
         Task {
@@ -118,6 +122,8 @@ public actor RuntimeEngine {
 
     public init(source: RuntimeSource) async throws {
         self.source = source
+        self.objcSectionFactory = .init()
+        self.swiftSectionFactory = .init()
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
 
         if let role = source.remoteRole {
@@ -272,12 +278,8 @@ public actor RuntimeEngine {
         #log(.info, "Runtime observation started")
     }
 
-    private func setImageNodes(_ imageNodes: [RuntimeImageNode]) async {
+    private func setImageNodes(_ imageNodes: [RuntimeImageNode]) {
         self.imageNodes = imageNodes
-    }
-
-    private func setSwiftSection(_ section: RuntimeSwiftSection, forImage image: String) async {
-        imageToSwiftSection[image] = section
     }
 
     private func sendRemoteDataIfNeeded(isReloadImageNodes: Bool) {
@@ -300,8 +302,8 @@ public actor RuntimeEngine {
     private func _objects(in image: String) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects in image: \(image, privacy: .public)")
         let image = DyldUtilities.patchImagePathForDyld(image)
-        let objcObjects = try await _objcSection(for: image).allObjects()
-        let swiftObjects = try await _swiftSection(for: image).allObjects()
+        let objcObjects = try await objcSectionFactory.section(for: image).allObjects()
+        let swiftObjects = try await swiftSectionFactory.section(for: image).allObjects()
         #log(.debug, "Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects")
         return objcObjects + swiftObjects
     }
@@ -311,23 +313,24 @@ public actor RuntimeEngine {
 
         switch name.kind {
         case .swift:
-            let swiftSection = imageToSwiftSection[name.imagePath]
+
+            let swiftSection = await swiftSectionFactory.existingSection(for: name.imagePath)
             try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
-            rawInterface = try? await swiftSection?.interface(for: name)
+            return try? await swiftSection?.interface(for: name)
         case .c,
              .objc:
-            let objcSection = imageToObjCSection[name.imagePath]
+            let objcSection = await objcSectionFactory.existingSection(for: name.imagePath)
             let objcTransformer = options.transformer.objc
             if let interface = try? await objcSection?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer) {
-                rawInterface = interface
+                return interface
             } else {
                 switch name.kind {
                 case .objc(.type(let kind)):
                     switch kind {
                     case .class:
-                        rawInterface = try? await _objcSection(forName: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
+                        return try? await objcSectionFactory.section(for: .class(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
                     case .protocol:
-                        rawInterface = try? await _objcSection(forName: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
+                        return try? await objcSectionFactory.section(for: .protocol(name.name))?.interface(for: name, using: options.objcHeaderOptions, transformer: objcTransformer)
                     }
                 default:
                     rawInterface = nil
@@ -336,55 +339,6 @@ public actor RuntimeEngine {
         }
 
         return rawInterface
-    }
-
-    private func _objcSection(for imagePath: String) async throws -> RuntimeObjCSection {
-        if let objcSection = imageToObjCSection[imagePath] {
-            #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
-            return objcSection
-        } else {
-            #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
-            let objcSection = try await RuntimeObjCSection(imagePath: imagePath)
-            imageToObjCSection[imagePath] = objcSection
-            #log(.debug, "ObjC section created and cached")
-            return objcSection
-        }
-    }
-
-    private func _objcSection(forName name: RuntimeObjCName) async -> RuntimeObjCSection? {
-        #log(.debug, "Looking up ObjC section for name: \(String(describing: name), privacy: .public)")
-        do {
-            guard let machO = MachOImage.image(forName: name) else {
-                #log(.debug, "No MachO image found for name")
-                return nil
-            }
-
-            if let existObjCSection = imageToObjCSection[machO.imagePath] {
-                #log(.debug, "Using cached ObjC section")
-                return existObjCSection
-            }
-
-            #log(.debug, "Creating ObjC section from MachO: \(machO.imagePath, privacy: .public)")
-            let objcSection = try await RuntimeObjCSection(machO: machO)
-            imageToObjCSection[machO.imagePath] = objcSection
-            return objcSection
-        } catch {
-            #log(.error, "Failed to create ObjC section: \(error, privacy: .public)")
-            return nil
-        }
-    }
-
-    private func _swiftSection(for imagePath: String) async throws -> RuntimeSwiftSection {
-        if let swiftSection = imageToSwiftSection[imagePath] {
-            #log(.debug, "Using cached Swift section for: \(imagePath, privacy: .public)")
-            return swiftSection
-        } else {
-            #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
-            let swiftSection = try await RuntimeSwiftSection(imagePath: imagePath)
-            imageToSwiftSection[imagePath] = swiftSection
-            #log(.debug, "Swift section created and cached")
-            return swiftSection
-        }
     }
 }
 
@@ -415,8 +369,8 @@ extension RuntimeEngine {
     public func loadImage(at path: String) async throws {
         try await request {
             try DyldUtilities.loadImage(at: path)
-            _ = try await _objcSection(for: path)
-            _ = try await _swiftSection(for: path)
+            _ = try await objcSectionFactory.section(for: path)
+            _ = try await swiftSectionFactory.section(for: path)
             reloadData(isReloadImageNodes: false)
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
@@ -462,9 +416,9 @@ extension RuntimeEngine {
             case .c:
                 return []
             case .objc:
-                return try await imageToObjCSection[object.imagePath]?.classHierarchy(for: object) ?? []
+                return try await objcSectionFactory.existingSection(for: object.imagePath)?.classHierarchy(for: object) ?? []
             case .swift:
-                return try await imageToSwiftSection[object.imagePath]?.classHierarchy(for: object) ?? []
+                return try await swiftSectionFactory.existingSection(for: object.imagePath)?.classHierarchy(for: object) ?? []
             }
         } remote: {
             return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: object)

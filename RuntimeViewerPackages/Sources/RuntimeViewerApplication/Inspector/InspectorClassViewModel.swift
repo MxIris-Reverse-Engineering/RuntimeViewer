@@ -19,7 +19,7 @@ public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
         return Output(
             classHierarchy: $runtimeObject.flatMapLatest { [unowned self] runtimeObject in
                 do {
-                    return try await appServices.runtimeEngine.hierarchy(for: runtimeObject).joined(separator: "\n")
+                    return try await documentState.runtimeEngine.hierarchy(for: runtimeObject).joined(separator: "\n")
                 } catch {
                     logger.error("Failed to fetch class hierarchy for runtime object: \("\(runtimeObject)", privacy: .public) with error: \(error, privacy: .public)")
                     return runtimeObject.displayName
@@ -28,8 +28,8 @@ public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
         )
     }
 
-    public init(runtimeObject: RuntimeObject, appServices: AppServices, router: any Router<InspectorRoute>) {
+    public init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<InspectorRoute>) {
         self.runtimeObject = runtimeObject
-        super.init(appServices: appServices, router: router)
+        super.init(documentState: documentState, router: router)
     }
 }
