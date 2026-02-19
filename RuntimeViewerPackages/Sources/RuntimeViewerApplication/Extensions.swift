@@ -151,7 +151,7 @@ extension RuntimeImageNode {
 }
 
 extension NSUIColor {
-    convenience init(light: NSUIColor, dark: NSUIColor) {
+    public convenience init(light: NSUIColor, dark: NSUIColor) {
         #if os(macOS)
         self.init(name: nil) { appearance in
             appearance.isLight ? light : dark

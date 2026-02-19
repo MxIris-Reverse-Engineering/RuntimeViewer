@@ -1,4 +1,5 @@
 import AppKit
+import FoundationToolbox
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -71,10 +72,10 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         .disposed(by: rx.disposeBag)
     }
 
+    @ArrayBuilder<Selector>
     override func lateResponderSelectors() -> [Selector] {
-        [
-            #selector(openQuickly(_:)),
-        ]
+        #selector(openQuickly(_:))
+        #selector(exportInterface(_:))
     }
 
     @IBAction func openQuickly(_ sender: Any?) {
@@ -89,10 +90,24 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         ) {}
     }
 
+    @IBAction func exportInterface(_ sender: Any?) {
+        viewModel?.router.trigger(.exportInterface)
+    }
+
     @objc private func addToBookmarkMenuItemAction(_ sender: NSMenuItem) {
         guard outlineView.hasValidClickedRow, let cellViewModel = outlineView.itemAtClickedRow as? SidebarRuntimeObjectCellViewModel else { return }
         addToBookmarkRelay.accept(cellViewModel)
         addToBookmarkHUD.show(delay: 1)
+    }
+    
+    override func responds(to aSelector: Selector!) -> Bool {
+        guard let aSelector else { return super.responds(to: aSelector) }
+        switch aSelector {
+        case #selector(exportInterface(_:)), #selector(openQuickly(_:)):
+            return viewModel?.loadState == .loaded
+        default:
+            return super.responds(to: aSelector)
+        }
     }
 }
 

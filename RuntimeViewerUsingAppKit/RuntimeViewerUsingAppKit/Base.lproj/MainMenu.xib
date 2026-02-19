@@ -104,6 +104,12 @@
                             <menuItem title="Save…" enabled="NO" keyEquivalent="s" id="pxx-59-PXV"/>
                             <menuItem title="Save As…" enabled="NO" keyEquivalent="S" id="Bw7-FT-i3A"/>
                             <menuItem title="Revert to Saved" enabled="NO" keyEquivalent="r" id="KaW-ft-85H"/>
+                            <menuItem title="Export" secondaryImage="square.and.arrow.up" catalog="system" id="7Dd-Q9-1Hk">
+                                <modifierMask key="keyEquivalentModifierMask"/>
+                                <connections>
+                                    <action selector="exportInterface:" target="-1" id="2R7-oW-otZ"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="aJh-i4-bef"/>
                             <menuItem title="Page Setup…" keyEquivalent="P" id="qIS-W8-SiK">
                                 <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
@@ -675,5 +681,6 @@
     </objects>
     <resources>
         <image name="bolt" catalog="system" width="13" height="17"/>
+        <image name="square.and.arrow.up" catalog="system" width="15" height="18"/>
     </resources>
 </document>
