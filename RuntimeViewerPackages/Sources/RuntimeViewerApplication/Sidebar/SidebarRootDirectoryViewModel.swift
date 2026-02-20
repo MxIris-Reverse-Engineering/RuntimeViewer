@@ -31,8 +31,9 @@ public final class SidebarRootDirectoryViewModel: SidebarRootViewModel {
         let documentState = documentState
         input.addBookmark
             .emitOnNextMainActor { cellViewModel in
-                let bookmark = RuntimeImageBookmark(source: documentState.runtimeEngine.source, imageNode: cellViewModel.node)
-                appDefaults.imageBookmarks.append(bookmark)
+                let runtimeSource = documentState.runtimeEngine.source
+                let bookmark = RuntimeImageBookmark(source: runtimeSource, imageNode: cellViewModel.node)
+                appDefaults.imageBookmarksByRuntimeSource[runtimeSource, default: []].append(bookmark)
             }
             .disposed(by: rx.disposeBag)
         return .init()

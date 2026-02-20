@@ -9,6 +9,8 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     public let imageName: String
     public let runtimeEngine: RuntimeEngine
 
+    var isSorted: Bool { false }
+    
     @Observed public private(set) var loadState: RuntimeImageLoadState = .unknown
     @Observed public private(set) var searchString: String = ""
     @Observed public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
@@ -160,7 +162,11 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         await MainActor.run {
             self.loadState = .loaded
             self.searchString = ""
-            self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, parent: nil, forOpenQuickly: false) }
+            if isSorted {
+                self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+            } else {
+                self.nodes = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
+            }
             self.filteredNodes = self.nodes
         }
     }

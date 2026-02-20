@@ -37,7 +37,7 @@ public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
 }
 
-public struct RuntimeNetworkEndpoint: Sendable, Codable, Equatable {
+public struct RuntimeNetworkEndpoint: Sendable, Codable, Hashable {
     public let name: String
     
     let endpoint: NWEndpoint

@@ -253,7 +253,7 @@ public actor RuntimeEngine {
     public func reloadData(isReloadImageNodes: Bool) {
         #log(.info, "Reloading data, isReloadImageNodes=\(isReloadImageNodes, privacy: .public)")
         imageList = DyldUtilities.imageNames()
-        #log(.debug, "Loaded \(imageList.count, privacy: .public) images")
+        #log(.debug, "Loaded \(self.imageList.count, privacy: .public) images")
         if isReloadImageNodes {
             imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
             #log(.debug, "Reloaded image nodes")
@@ -265,7 +265,7 @@ public actor RuntimeEngine {
     private func observeRuntime() async {
         #log(.info, "Starting runtime observation")
         imageList = DyldUtilities.imageNames()
-        #log(.debug, "Initial image list contains \(imageList.count, privacy: .public) images")
+        #log(.debug, "Initial image list contains \(self.imageList.count, privacy: .public) images")
 
         await Task.detached {
             await self.setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])

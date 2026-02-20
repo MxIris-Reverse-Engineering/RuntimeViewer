@@ -1,13 +1,29 @@
 import Foundation
 import RxDefaultsPlus
+import RuntimeViewerCommunication
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import Dependencies
+import OrderedCollections
 
 public final class AppDefaults {
     fileprivate static let shared = AppDefaults()
 
-    private init() {}
+    private init() {
+        
+        var imageBookmarksByRuntimeSource: [RuntimeSource: [RuntimeImageBookmark]] = [:]
+        for bookmarks in _imageBookmarks.wrappedValue {
+            imageBookmarksByRuntimeSource[bookmarks.source, default: []].append(bookmarks)
+        }
+        
+        _imageBookmarksByRuntimeSource = .init(wrappedValue: imageBookmarksByRuntimeSource, "imageBookmarksByRuntimeSource")
+        
+        var objectBookmarksBySourceAndImagePath: [RuntimeSource: [String: [RuntimeObjectBookmark]]] = [:]
+        for objectBookmarks in _objectBookmarks.wrappedValue {
+            objectBookmarksBySourceAndImagePath[objectBookmarks.source, default: [:]][objectBookmarks.object.imagePath, default: []].append(objectBookmarks)
+        }
+        _objectBookmarksBySourceAndImagePath = .init(wrappedValue: objectBookmarksBySourceAndImagePath, "objectBookmarksBySourceAndImagePath")
+    }
     
     @UserDefault(key: "generationOptions", defaultValue: .init())
     public var options: RuntimeObjectInterface.GenerationOptions
@@ -18,11 +34,19 @@ public final class AppDefaults {
     @UserDefault(key: "filterMode", defaultValue: nil)
     public var filterMode: FilterMode?
     
+    @available(*, deprecated, renamed: "imageBookmarksByRuntimeSource")
     @FileStorage("imageBookmarks", directory: .applicationSupportDirectory)
     public var imageBookmarks: [RuntimeImageBookmark] = []
     
+    @available(*, deprecated, renamed: "objectBookmarksBySourceAndImagePath")
     @FileStorage("objectBookmarks", directory: .applicationSupportDirectory)
     public var objectBookmarks: [RuntimeObjectBookmark] = []
+    
+    @FileStorage("imageBookmarksByRuntimeSource", directory: .applicationSupportDirectory)
+    public var imageBookmarksByRuntimeSource: [RuntimeSource: [RuntimeImageBookmark]] = [:]
+    
+    @FileStorage("objectBookmarksBySourceAndImagePath", directory: .applicationSupportDirectory)
+    public var objectBookmarksBySourceAndImagePath: [RuntimeSource: [String: [RuntimeObjectBookmark]]] = [:]
 }
 
 private enum AppDefaultsKey: DependencyKey {

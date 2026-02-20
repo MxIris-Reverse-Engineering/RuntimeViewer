@@ -14,16 +14,22 @@ import RuntimeViewerArchitectures
 public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @unchecked Sendable {
     public let node: RuntimeImageNode
 
-    public weak var parent: SidebarRootCellViewModel?
-
-    public var children: [SidebarRootCellViewModel] { _filteredChildren }
+    public var children: [SidebarRootCellViewModel] {
+        set {
+            _children = newValue
+            _filteredChildren = _children
+        }
+        get {
+            _filteredChildren
+        }
+    }
 
     public var isLeaf: Bool { children.isEmpty }
 
     private lazy var _filteredChildren: [SidebarRootCellViewModel] = _children
 
     private lazy var _children: [SidebarRootCellViewModel] = {
-        let children = node.children.map { SidebarRootCellViewModel(node: $0, parent: self) }
+        let children = node.children.map { SidebarRootCellViewModel(node: $0) }
         return children.sorted { $0.node.name < $1.node.name }
     }()
 
@@ -54,9 +60,8 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
     @Observed
     public private(set) var name: NSAttributedString
 
-    public init(node: RuntimeImageNode, parent: SidebarRootCellViewModel?) {
+    public init(node: RuntimeImageNode) {
         self.node = node
-        self.parent = parent
         self.name = NSAttributedString {
             AText(node.name)
                 .foregroundColor(.labelColor)
@@ -69,6 +74,10 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
     public func makeIterator() -> Iterator {
         return Iterator(node: self)
     }
+    
+//    func applyMove(to roots: inout [Self]) {
+//        
+//    }
 
     public struct Iterator: IteratorProtocol {
         var stack: [SidebarRootCellViewModel] = []
