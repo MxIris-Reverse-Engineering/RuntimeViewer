@@ -37,9 +37,13 @@ struct MxIrisStudioWorkspace: RawRepresentable, ExpressibleByStringLiteral, Cust
 
     static let personalLibraryMacOSDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library/macOS"
 
+    static let personalLibraryIOSDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library/iOS"
+
     static let personalLibraryMuiltplePlatfromDirectory: MxIrisStudioWorkspace = "../../../../Personal/Library/Multi"
 
-    var description: String { rawValue }
+    var description: String {
+        rawValue
+    }
 
     func libraryPath(_ libraryName: String) -> String {
         "\(rawValue)/\(libraryName)"
@@ -148,9 +152,22 @@ let package = Package(
         ),
 
         .package(
-            url: "https://github.com/MxIris-Library-Forks/XCoordinator",
-            branch: "master"
+            local: .package(
+                path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("XCoordinator"),
+                isRelative: true,
+                isEnabled: true
+            ),
+            .package(
+                path: "../../XCoordinator",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Library-Forks/XCoordinator",
+                branch: "master"
+            )
         ),
+
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
@@ -230,8 +247,20 @@ let package = Package(
             )
         ),
         .package(
-            url: "https://github.com/Mx-Iris/RxUIKit",
-            from: "0.1.0"
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryIOSDirectory.libraryPath("RxUIKit"),
+                isRelative: true,
+                isEnabled: true
+            ),
+            .package(
+                path: "../../RxUIKit",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/Mx-Iris/RxUIKit",
+                branch: "main"
+            )
         ),
         .package(
             local: .package(
@@ -382,7 +411,7 @@ let package = Package(
             ],
             swiftSettings: sharedSwiftSettings
         ),
-        
+
         .target(
             name: "RuntimeViewerUI",
             dependencies: [
@@ -407,7 +436,7 @@ let package = Package(
             ],
             swiftSettings: sharedSwiftSettings
         ),
-        
+
         .target(
             name: "RuntimeViewerSettings",
             dependencies: [
@@ -415,7 +444,7 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
             ]
         ),
-        
+
         .target(
             name: "RuntimeViewerSettingsUI",
             dependencies: [
@@ -429,7 +458,7 @@ let package = Package(
                 .process("Resources"),
             ]
         ),
-        
+
         .target(
             name: "RuntimeViewerApplication",
             dependencies: [
@@ -452,7 +481,7 @@ let package = Package(
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
-        
+
         .target(
             name: "RuntimeViewerServiceHelper"
         ),
@@ -477,10 +506,10 @@ let package = Package(
 )
 
 extension SwiftSetting {
-    static let existentialAny: Self = .enableUpcomingFeature("ExistentialAny")                                    // SE-0335, Swift 5.6,  SwiftPM 5.8+
-    static let internalImportsByDefault: Self = .enableUpcomingFeature("InternalImportsByDefault")                // SE-0409, Swift 6.0,  SwiftPM 6.0+
-    static let memberImportVisibility: Self = .enableUpcomingFeature("MemberImportVisibility")                    // SE-0444, Swift 6.1,  SwiftPM 6.1+
-    static let inferIsolatedConformances: Self = .enableUpcomingFeature("InferIsolatedConformances")              // SE-0470, Swift 6.2,  SwiftPM 6.2+
-    static let nonisolatedNonsendingByDefault: Self = .enableUpcomingFeature("NonisolatedNonsendingByDefault")    // SE-0461, Swift 6.2,  SwiftPM 6.2+
-    static let immutableWeakCaptures: Self = .enableUpcomingFeature("ImmutableWeakCaptures")                      // SE-0481, Swift 6.2,  SwiftPM 6.2+
+    static let existentialAny: Self = .enableUpcomingFeature("ExistentialAny") // SE-0335, Swift 5.6,  SwiftPM 5.8+
+    static let internalImportsByDefault: Self = .enableUpcomingFeature("InternalImportsByDefault") // SE-0409, Swift 6.0,  SwiftPM 6.0+
+    static let memberImportVisibility: Self = .enableUpcomingFeature("MemberImportVisibility") // SE-0444, Swift 6.1,  SwiftPM 6.1+
+    static let inferIsolatedConformances: Self = .enableUpcomingFeature("InferIsolatedConformances") // SE-0470, Swift 6.2,  SwiftPM 6.2+
+    static let nonisolatedNonsendingByDefault: Self = .enableUpcomingFeature("NonisolatedNonsendingByDefault") // SE-0461, Swift 6.2,  SwiftPM 6.2+
+    static let immutableWeakCaptures: Self = .enableUpcomingFeature("ImmutableWeakCaptures") // SE-0481, Swift 6.2,  SwiftPM 6.2+
 }

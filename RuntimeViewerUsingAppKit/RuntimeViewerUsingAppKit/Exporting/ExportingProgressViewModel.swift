@@ -41,7 +41,11 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
         )
     }
 
+    private var isExporting: Bool = false
+    
     func startExport() {
+        if isExporting { return }
+        isExporting = true 
         guard let directory = exportingState.destinationURL else { return }
 
         var generationOptions = appDefaults.options
@@ -72,9 +76,6 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
                     with: configuration,
                     reporter: reporter
                 )
-                guard !Task.isCancelled else { return }
-                router.trigger(.next)
-
             } catch {
                 errorRelay.accept(error)
             }
@@ -116,6 +117,7 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
             }
             parts.append(String(format: "%.1fs", result.totalDuration))
             currentObjectText = parts.joined(separator: " · ")
+            router.trigger(.next)
         }
     }
 }

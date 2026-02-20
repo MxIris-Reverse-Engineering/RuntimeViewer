@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
@@ -66,3 +68,6 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
 extension RuntimeObjectBookmark: @retroactive OutlineNodeType {
     public var children: [RuntimeObjectBookmark] { object.children.map { .init(source: source, object: $0) } }
 }
+
+
+#endif
