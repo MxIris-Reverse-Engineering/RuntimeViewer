@@ -5,9 +5,10 @@ import RuntimeViewerCore
 import RuntimeViewerApplication
 
 class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewModel>: UXKitViewController<ViewModel> {
-    
-    var isReorderable: Bool { false }
-    
+    var isReorderable: Bool {
+        false
+    }
+
     @ViewLoading
     private var tabView: NSTabView
 
@@ -34,20 +35,14 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     @Dependency(\.appDefaults)
     private var appDefaults
 
-    var outlineView: StatefulOutlineView { imageLoadedView.outlineView }
+    var outlineView: StatefulOutlineView {
+        imageLoadedView.outlineView
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         tabView = NSTabView()
-        tabView.addTabViewItem(NSTabViewItem(view: imageNotLoadedView, loadState: .notLoaded))
-        tabView.addTabViewItem(NSTabViewItem(view: imageLoadingView, loadState: .loading))
-        tabView.addTabViewItem(NSTabViewItem(view: imageLoadedView, loadState: .loaded))
-        tabView.addTabViewItem(NSTabViewItem(view: imageLoadErrorView, loadState: .loadError(Optional.none)))
-        tabView.addTabViewItem(NSTabViewItem(view: imageUnknownView, loadState: .unknown))
-        tabView.tabViewType = .noTabsNoBorder
-        tabView.tabPosition = .none
-        tabView.tabViewBorderType = .none
 
         contentView.hierarchy {
             tabView
@@ -76,6 +71,17 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             make.left.equalTo(filterModeButton.snp.right).offset(8)
             make.right.equalToSuperview().inset(10)
             make.bottom.equalToSuperview().inset(8)
+        }
+
+        tabView.do {
+            $0.addTabViewItem(NSTabViewItem(view: imageNotLoadedView, loadState: .notLoaded))
+            $0.addTabViewItem(NSTabViewItem(view: imageLoadingView, loadState: .loading))
+            $0.addTabViewItem(NSTabViewItem(view: imageLoadedView, loadState: .loaded))
+            $0.addTabViewItem(NSTabViewItem(view: imageLoadErrorView, loadState: .loadError(NSTabViewItem.PlaceholderLoadStateError.main)))
+            $0.addTabViewItem(NSTabViewItem(view: imageUnknownView, loadState: .unknown))
+            $0.tabViewType = .noTabsNoBorder
+            $0.tabPosition = .none
+            $0.tabViewBorderType = .none
         }
 
         bottomSeparatorView.do {
@@ -133,7 +139,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         output.emptyText.drive(imageLoadedView.emptyLabel.rx.stringValue).disposed(by: rx.disposeBag)
 
         output.isEmpty.not().drive(imageLoadedView.emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
-        
+
         output.isEmpty.drive(imageLoadedView.scrollView.rx.isHidden).disposed(by: rx.disposeBag)
 
         output.didBeginFiltering.emitOnNext { [weak self] in
@@ -165,7 +171,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             tabView.selectTabViewItem(withIdentifier: loadState.tabViewItemIdentifier)
         }
         .disposed(by: rx.disposeBag)
-        
+
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
         outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
     }
@@ -175,7 +181,7 @@ extension SidebarRuntimeObjectViewController {
     final class ImageUnknownView: XiblessView {}
 
     final class ImageLoadedView: XiblessView {
-        let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
+        let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableSingleColumnOutlineView()
 
         let emptyLabel = Label()
 
@@ -205,13 +211,6 @@ extension SidebarRuntimeObjectViewController {
 
             scrollView.do {
                 $0.isHiddenVisualEffectView = true
-            }
-
-            outlineView.do {
-                $0.headerView = nil
-                $0.style = .inset
-                $0.addTableColumn(.init(identifier: "Default Column"))
-                $0.autoresizesOutlineColumn = false
             }
         }
     }
@@ -272,8 +271,6 @@ extension SidebarRuntimeObjectViewController {
     }
 }
 
-extension Void?: @retroactive Error {}
-
 extension RuntimeImageLoadState {
     fileprivate var tabViewItemIdentifier: String {
         switch self {
@@ -292,14 +289,14 @@ extension RuntimeImageLoadState {
 }
 
 extension NSTabViewItem {
+    fileprivate enum PlaceholderLoadStateError: Error {
+        case main
+    }
+
     fileprivate convenience init(view: NSView, loadState: RuntimeImageLoadState) {
         self.init(identifier: loadState.tabViewItemIdentifier)
         let vc = NSViewController()
         vc.view = view
         self.viewController = vc
     }
-}
-
-extension NSTableView {
-    
 }

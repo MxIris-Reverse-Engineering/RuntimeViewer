@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
@@ -41,19 +43,16 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
                 appDefaults.imageBookmarksByRuntimeSource[documentState.runtimeEngine.source, default: []].remove(at: index)
             }
             .disposed(by: rx.disposeBag)
-        #if os(macOS)
         return Output(
             isMoveBookmarkEnabled: $isFiltering.asDriver().not(),
             isBookmarkEmpty: appDefaults.$imageBookmarks.asDriver(onErrorJustReturn: []).map { $0.isEmpty }
         )
-        #else
-        return Output(
-            isBookmarkEmpty: appDefaults.$imageBookmarks.asDriver(onErrorJustReturn: []).map { $0.isEmpty }
-        )
-        #endif
     }
 }
 
 extension RuntimeImageBookmark: @retroactive OutlineNodeType {
     public var children: [RuntimeImageBookmark] { imageNode.children.map { .init(source: source, imageNode: $0) } }
 }
+
+
+#endif

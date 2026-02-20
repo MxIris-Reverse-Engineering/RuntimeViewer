@@ -9,7 +9,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
         false
     }
 
-    let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableOutlineView()
+    let (scrollView, outlineView): (ScrollView, StatefulOutlineView) = StatefulOutlineView.scrollableSingleColumnOutlineView()
 
     private let filterSearchField = FilterSearchField()
 
@@ -59,7 +59,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
                 $0.controlSize = .extraLarge
                 $0.font = .systemFont(ofSize: NSFont.systemFontSize)
                 $0.cell?.font = .systemFont(ofSize: NSFont.systemFontSize)
-                ($0.cell as? NSTextFieldCell)?.placeholderString = nil
+                $0.textFieldCell?.placeholderString = nil
             } else {
                 $0.controlSize = .large
             }
@@ -67,12 +67,6 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
 
         scrollView.do {
             $0.isHiddenVisualEffectView = true
-        }
-
-        outlineView.do {
-            $0.addTableColumn(NSTableColumn(identifier: .init("Default")))
-            $0.headerView = nil
-            $0.autoresizesOutlineColumn = false
         }
     }
 
@@ -127,7 +121,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
             .asObservable()
             .subscribeOnNext { [weak self] _ in
                 guard let self, let dataSource else { return }
-
+                
                 outlineView.rx.setDataSource(dataSource).disposed(by: rx.disposeBag)
                 outlineView.autosaveExpandedItems = true
                 outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
