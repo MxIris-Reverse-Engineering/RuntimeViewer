@@ -29,7 +29,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
 
         nodesSource
             .observe(on: MainScheduler.instance)
-            .map { $0.map { SidebarRootCellViewModel(node: $0, parent: nil) } }
+            .map { $0.map { SidebarRootCellViewModel(node: $0) } }
             .bind(to: $nodes)
             .disposed(by: rx.disposeBag)
 

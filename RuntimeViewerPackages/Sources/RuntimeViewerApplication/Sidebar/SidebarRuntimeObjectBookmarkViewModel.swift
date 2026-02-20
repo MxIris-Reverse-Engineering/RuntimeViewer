@@ -7,11 +7,10 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         super.init(imageNode: imageNode, documentState: documentState, router: router)
 
-        appDefaults.$objectBookmarks
+        appDefaults.$objectBookmarksBySourceAndImagePath
             .asObservable()
             .subscribeOnNext { [weak self] _ in
                 guard let self else { return }
-
                 Task {
                     try await self.reloadData()
                 }
@@ -20,24 +19,50 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     }
 
     override func buildRuntimeObjects() async throws -> [RuntimeObject] {
-        appDefaults.objectBookmarks.filter { $0.source == documentState.runtimeEngine.source && $0.object.imagePath == imagePath }.map { $0.object }
+        currentImageObjectBookmarks.map { $0.object }
     }
-
+    
+    private var currentImageObjectBookmarks: [RuntimeObjectBookmark] {
+        set {
+            appDefaults.objectBookmarksBySourceAndImagePath[documentState.runtimeEngine.source, default: [:]][imagePath] = newValue
+        }
+        get {
+            appDefaults.objectBookmarksBySourceAndImagePath[documentState.runtimeEngine.source, default: [:]][imagePath, default: []]
+        }
+    }
+    
     @MemberwiseInit(.public)
     public struct Input {
+        public let moveBookmark: Signal<OutlineMove>
         public let removeBookmark: Signal<Int>
     }
 
-    public struct Output {}
+    public struct Output {
+        public let isMoveBookmarkEnabled: Driver<Bool>
+        public let isBookmarkEmpty: Driver<Bool>
+    }
 
     public func transform(_ input: Input) -> Output {
+        input.moveBookmark.emitOnNext { [weak self] outlineMove in
+            guard let self else { return }
+            outlineMove.applyToRoots(&currentImageObjectBookmarks)
+        }
+        .disposed(by: rx.disposeBag)
+
         input.removeBookmark
             .emitOnNext { [weak self] index in
                 guard let self else { return }
-                appDefaults.objectBookmarks.remove(at: index)
+                currentImageObjectBookmarks.remove(at: index)
             }
             .disposed(by: rx.disposeBag)
 
-        return Output()
+        return Output(
+            isMoveBookmarkEnabled: $isFiltering.asDriver().not(),
+            isBookmarkEmpty: appDefaults.$objectBookmarks.asDriver(onErrorJustReturn: []).map { $0.isEmpty }
+        )
     }
+}
+
+extension RuntimeObjectBookmark: @retroactive OutlineNodeType {
+    public var children: [RuntimeObjectBookmark] { object.children.map { .init(source: source, object: $0) } }
 }

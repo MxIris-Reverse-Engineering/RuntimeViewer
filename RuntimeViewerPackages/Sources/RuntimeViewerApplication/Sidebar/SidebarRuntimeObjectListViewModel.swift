@@ -9,6 +9,8 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
     @Observed public private(set) var filteredNodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var isFilteringForOpenQuickly: Bool = false
 
+    override var isSorted: Bool { true }
+    
     public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         super.init(imageNode: imageNode, documentState: documentState, router: router)
     }
@@ -34,7 +36,7 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
 
         await MainActor.run {
             self.searchStringForOpenQuickly = ""
-            self.nodesForOpenQuickly = nodes.map { $0.runtimeObject }.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, parent: nil, forOpenQuickly: true) }
+            self.nodesForOpenQuickly = nodes.map { $0.runtimeObject }.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: true) }
             self.filteredNodesForOpenQuickly = []
         }
     }
@@ -42,8 +44,8 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
     public func transform(_ input: Input) -> Output {
         input.addBookmark.emitOnNext { [weak self] viewModel in
             guard let self else { return }
-
-            appDefaults.objectBookmarks.append(.init(source: documentState.runtimeEngine.source, object: viewModel.runtimeObject))
+            let runtimeSource = documentState.runtimeEngine.source
+            appDefaults.objectBookmarksBySourceAndImagePath[runtimeSource, default: [:]][imagePath, default: []].append(.init(source: runtimeSource, object: viewModel.runtimeObject))
         }
         .disposed(by: rx.disposeBag)
 

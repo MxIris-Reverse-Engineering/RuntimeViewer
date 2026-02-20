@@ -6,6 +6,8 @@ import RuntimeViewerApplication
 
 final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectViewController<SidebarRuntimeObjectBookmarkViewModel> {
     
+    override var isReorderable: Bool { true }
+    
     private let removeBookmarkRelay = PublishRelay<Int>()
     
     override func viewDidLoad() {
@@ -27,10 +29,15 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
         super.setupBindings(for: viewModel)
         
         let input = SidebarRuntimeObjectBookmarkViewModel.Input(
+            moveBookmark: outlineView.rx.nodeMoved().asSignal(),
             removeBookmark: removeBookmarkRelay.asSignal(),
         )
         
-        _ = viewModel.transform(input)
+        let output = viewModel.transform(input)
+        
+        output.isMoveBookmarkEnabled.drive(outlineView.rx.isReorderingEnabled).disposed(by: rx.disposeBag)
+        
+        Driver.just(true).drive(outlineView.rx.isRootLevelReorderingOnly).disposed(by: rx.disposeBag)
         
         imageLoadedView.emptyLabel.stringValue = "No Bookmarks"
     }
