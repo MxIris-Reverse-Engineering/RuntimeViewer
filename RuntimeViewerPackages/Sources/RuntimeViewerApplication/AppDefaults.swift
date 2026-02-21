@@ -10,19 +10,28 @@ public final class AppDefaults {
     fileprivate static let shared = AppDefaults()
 
     private init() {
-        
-        var imageBookmarksByRuntimeSource: [RuntimeSource: [RuntimeImageBookmark]] = [:]
-        for bookmarks in _imageBookmarks.wrappedValue {
-            imageBookmarksByRuntimeSource[bookmarks.source, default: []].append(bookmarks)
+        guard !bookmarkMigrationCompleted else { return }
+
+        // One-time migration from old flat storage to new structured storage
+        let oldImageBookmarks = _imageBookmarks.wrappedValue
+        if !oldImageBookmarks.isEmpty {
+            var dict: [RuntimeSource: [RuntimeImageBookmark]] = [:]
+            for bookmark in oldImageBookmarks {
+                dict[bookmark.source, default: []].append(bookmark)
+            }
+            self.imageBookmarksByRuntimeSource = dict
         }
-        
-        _imageBookmarksByRuntimeSource = .init(wrappedValue: imageBookmarksByRuntimeSource, "imageBookmarksByRuntimeSource", directory: .applicationSupportDirectory)
-        
-        var objectBookmarksBySourceAndImagePath: [RuntimeSource: [String: [RuntimeObjectBookmark]]] = [:]
-        for objectBookmarks in _objectBookmarks.wrappedValue {
-            objectBookmarksBySourceAndImagePath[objectBookmarks.source, default: [:]][objectBookmarks.object.imagePath, default: []].append(objectBookmarks)
+
+        let oldObjectBookmarks = _objectBookmarks.wrappedValue
+        if !oldObjectBookmarks.isEmpty {
+            var dict: [RuntimeSource: [String: [RuntimeObjectBookmark]]] = [:]
+            for bookmark in oldObjectBookmarks {
+                dict[bookmark.source, default: [:]][bookmark.object.imagePath, default: []].append(bookmark)
+            }
+            self.objectBookmarksBySourceAndImagePath = dict
         }
-        _objectBookmarksBySourceAndImagePath = .init(wrappedValue: objectBookmarksBySourceAndImagePath, "objectBookmarksBySourceAndImagePath", directory: .applicationSupportDirectory)
+
+        bookmarkMigrationCompleted = true
     }
     
     @UserDefault(key: "generationOptions", defaultValue: .init())
@@ -33,6 +42,9 @@ public final class AppDefaults {
     
     @UserDefault(key: "filterMode", defaultValue: nil)
     public var filterMode: FilterMode?
+
+    @UserDefault(key: "bookmarkMigrationCompleted", defaultValue: false)
+    private var bookmarkMigrationCompleted: Bool
     
     @available(*, deprecated, renamed: "imageBookmarksByRuntimeSource")
     @FileStorage("imageBookmarks", directory: .applicationSupportDirectory)

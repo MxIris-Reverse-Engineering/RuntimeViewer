@@ -60,7 +60,7 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
 
         return Output(
             isMoveBookmarkEnabled: $isFiltering.asDriver().not(),
-            isBookmarkEmpty: appDefaults.$objectBookmarks.asDriver(onErrorJustReturn: []).map { $0.isEmpty }
+            isBookmarkEmpty: appDefaults.$objectBookmarksBySourceAndImagePath.asDriver(onErrorJustReturn: [:]).map { [weak self] _ in self?.currentImageObjectBookmarks.isEmpty ?? true }
         )
     }
 }

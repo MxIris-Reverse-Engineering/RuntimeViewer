@@ -45,7 +45,7 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
             .disposed(by: rx.disposeBag)
         return Output(
             isMoveBookmarkEnabled: $isFiltering.asDriver().not(),
-            isBookmarkEmpty: appDefaults.$imageBookmarks.asDriver(onErrorJustReturn: []).map { $0.isEmpty }
+            isBookmarkEmpty: appDefaults.$imageBookmarksByRuntimeSource.asDriver(onErrorJustReturn: [:]).map { $0[self.documentState.runtimeEngine.source, default: []].isEmpty }
         )
     }
 }
