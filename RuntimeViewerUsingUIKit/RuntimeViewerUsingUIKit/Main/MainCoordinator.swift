@@ -75,6 +75,7 @@ extension MainCoordinator: SidebarCoordinatorDelegate {
     }
 }
 
+@MainActor
 extension Transition where RootViewController: UISplitViewController {
     @available(iOS 14, tvOS 14, *)
     public static func show(column: UISplitViewController.Column) -> Transition {
@@ -84,6 +85,7 @@ extension Transition where RootViewController: UISplitViewController {
     }
 }
 
+@MainActor
 @available(iOS 14, tvOS 14, *)
 public struct SplitShowColumn<RootViewController> {
     // MARK: Stored Properties
