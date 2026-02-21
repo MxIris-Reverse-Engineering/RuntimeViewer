@@ -6,8 +6,10 @@ on:
   workflow_dispatch:
 
 # Required GitHub Secrets:
-#   CERTIFICATE_P12       - Base64-encoded Developer ID Application certificate (.p12)
-#   CERTIFICATE_PASSWORD  - Password for the .p12 certificate
+#   DEVELOPER_ID_P12          - Base64-encoded Developer ID Application certificate (.p12)
+#   DEVELOPER_ID_PASSWORD     - Password for the Developer ID .p12
+#   MAC_DEVELOPMENT_P12       - Base64-encoded Mac Development certificate (.p12)
+#   MAC_DEVELOPMENT_PASSWORD  - Password for the Mac Development .p12
 #   NOTARY_KEY_ID         - App Store Connect API Key ID
 #   NOTARY_ISSUER_ID      - App Store Connect API Issuer ID
 #   NOTARY_AUTH_KEY       - App Store Connect API Key content (.p8)
@@ -42,10 +44,12 @@ jobs:
         with:
           xcode-version: '26.2'
 
-      - name: Import code signing certificate
+      - name: Import code signing certificates
         env:
-          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_PASSWORD: ${{ secrets.DEVELOPER_ID_PASSWORD }}
+          MAC_DEVELOPMENT_P12: ${{ secrets.MAC_DEVELOPMENT_P12 }}
+          MAC_DEVELOPMENT_PASSWORD: ${{ secrets.MAC_DEVELOPMENT_PASSWORD }}
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
@@ -54,9 +58,15 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
-          security import "$RUNNER_TEMP/certificate.p12" \
-            -P "$CERTIFICATE_PASSWORD" \
+          echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer_id.p12"
+          security import "$RUNNER_TEMP/developer_id.p12" \
+            -P "$DEVELOPER_ID_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          echo "$MAC_DEVELOPMENT_P12" | base64 --decode > "$RUNNER_TEMP/mac_development.p12"
+          security import "$RUNNER_TEMP/mac_development.p12" \
+            -P "$MAC_DEVELOPMENT_PASSWORD" \
             -A -t cert -f pkcs12 \
             -k "$KEYCHAIN_PATH"
 
@@ -84,14 +94,24 @@ jobs:
             -archivePath $BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive \
             -skipPackagePluginValidation \
             -skipMacroValidation \
-            CODE_SIGN_IDENTITY="Developer ID Application" \
             CURRENT_PROJECT_VERSION=$(date +"%Y%m%d.%H.%M")
 
-      - name: Copy Catalyst helper into place
+      - name: Export Catalyst helper
         run: |
-          rm -rf RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
-          cp -R "$BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive/Products/Applications/RuntimeViewerCatalystHelper.app" \
-            RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
+          EXPORT_PATH=RuntimeViewerUsingAppKit
+
+          rm -rf "$EXPORT_PATH/RuntimeViewerCatalystHelper.app"
+
+          xcodebuild -exportArchive \
+            -archivePath $BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive \
+            -configuration Release \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist ArchiveExportConfig-Catalyst.plist \
+            -quiet
+
+          rm -f "$EXPORT_PATH/Packaging.log"
+          rm -f "$EXPORT_PATH/DistributionSummary.plist"
+          rm -f "$EXPORT_PATH/ExportOptions.plist"
 
       # ── macOS: Archive & Export Main App ──
 
