@@ -74,34 +74,24 @@ jobs:
 
       # ── macOS: Archive & Export Catalyst Helper ──
 
-      - name: Archive Catalyst helper
+      - name: Build Catalyst helper
         run: |
-          xcodebuild archive \
+          xcodebuild build \
             -workspace $WORKSPACE \
             -scheme RuntimeViewerCatalystHelper \
             -configuration Release \
             -destination 'generic/platform=macOS,variant=Mac Catalyst' \
-            -archivePath $BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive \
+            -derivedDataPath ./DerivedData \
             -skipPackagePluginValidation \
             -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION=$(date +"%Y%m%d.%H.%M")
 
-      - name: Export Catalyst helper
+      - name: Copy Catalyst helper into place
         run: |
-          EXPORT_PATH=RuntimeViewerUsingAppKit
-
-          rm -rf "$EXPORT_PATH/RuntimeViewerCatalystHelper.app"
-
-          xcodebuild -exportArchive \
-            -archivePath $BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive \
-            -configuration Release \
-            -exportPath "$EXPORT_PATH" \
-            -exportOptionsPlist ArchiveExportConfig-Catalyst.plist \
-            -quiet
-
-          rm -f "$EXPORT_PATH/Packaging.log"
-          rm -f "$EXPORT_PATH/DistributionSummary.plist"
-          rm -f "$EXPORT_PATH/ExportOptions.plist"
+          rm -rf RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
+          cp -R ./DerivedData/Build/Products/Release-maccatalyst/RuntimeViewerCatalystHelper.app \
+            RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
 
       # ── macOS: Archive & Export Main App ──
 
