@@ -44,42 +44,42 @@ class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
 }
 
 extension ContentTextViewController: UITextViewDelegate {
-    #if !os(tvOS)
-    @available(iOS 17.0, *)
-    func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
-        return UIAction { _ in
-            print(textItem.content)
-        }
-    }
-
-    @available(iOS 17.0, *)
-    func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
-        switch textItem.content {
-        case .link(let url):
-            let jumpToDefinitionAction = UIAction(title: "Jump to Definition") { [weak self] _ in
-                guard let self = self else { return }
-//                #warning("RuntimeObjectType is not used in this context, consider using RuntimeObject")
-                if let scheme = url.scheme, let host = url.host {
-//                    var runtimeObject: RuntimeObjCRuntimeObject?
-//                    switch scheme {
-//                    case "class":
-//                        runtimeObject = .class(named: host)
-//                    case "protocol":
-//                        runtimeObject = .protocol(named: host)
-//                    default:
-//                        break
-//                    }
-//                    if let runtimeObject {
-//                        runtimeObjectClicked.accept(runtimeObject)
-//                    }
-                }
-            }
-            return .init(menu: UIMenu(children: [jumpToDefinitionAction]))
-        default:
-            return nil
-        }
-    }
-    #endif
+//    #if !os(tvOS)
+//    @available(iOS 17.0, *)
+//    func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
+//        return UIAction { _ in
+//            print(textItem.content)
+//        }
+//    }
+//
+//    @available(iOS 17.0, *)
+//    func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
+//        switch textItem.content {
+//        case .link(let url):
+//            let jumpToDefinitionAction = UIAction(title: "Jump to Definition") { [weak self] _ in
+//                guard let self = self else { return }
+////                #warning("RuntimeObjectType is not used in this context, consider using RuntimeObject")
+//                if let scheme = url.scheme, let host = url.host {
+////                    var runtimeObject: RuntimeObjCRuntimeObject?
+////                    switch scheme {
+////                    case "class":
+////                        runtimeObject = .class(named: host)
+////                    case "protocol":
+////                        runtimeObject = .protocol(named: host)
+////                    default:
+////                        break
+////                    }
+////                    if let runtimeObject {
+////                        runtimeObjectClicked.accept(runtimeObject)
+////                    }
+//                }
+//            }
+//            return .init(menu: UIMenu(children: [jumpToDefinitionAction]))
+//        default:
+//            return nil
+//        }
+//    }
+//    #endif
 }
 
 #endif
