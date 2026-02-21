@@ -8,7 +8,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         DispatchQueue.global().async {
-            _ = RuntimeEngine.shared
+            _ = RuntimeEngine.local
         }
         Task {
             remoteRuntimeEngine = try await RuntimeEngine(source: .bonjourServer(name: UIDevice.current.name, identifier: .init(rawValue: UIDevice.current.name)))

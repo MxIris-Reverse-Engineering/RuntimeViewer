@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
@@ -12,29 +14,45 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
         @Dependency(\.appDefaults)
         var appDefaults
 
-        let nodesSource = appDefaults.$imageBookmarks.map { $0.compactMap { if $0.source == documentState.runtimeEngine.source { $0.imageNode } else { nil } } }
+        let nodesSource = appDefaults.$imageBookmarksByRuntimeSource.map { $0[documentState.runtimeEngine.source, default: []].map(\.imageNode) }
 
         super.init(documentState: documentState, router: router, nodesSource: nodesSource)
     }
 
     @MemberwiseInit(.public)
     public struct Input {
+        public let moveBookmark: Signal<OutlineMove>
         public let removeBookmark: Signal<Int>
     }
 
     public struct Output {
-        public let isEmptyBookmark: Driver<Bool>
+        public let isMoveBookmarkEnabled: Driver<Bool>
+        public let isBookmarkEmpty: Driver<Bool>
     }
 
     public func transform(_ input: Input) -> Output {
+        input.moveBookmark.emitOnNext { [weak self] outlineMove in
+            guard let self else { return }
+            outlineMove.applyToRoots(&appDefaults.imageBookmarksByRuntimeSource[documentState.runtimeEngine.source, default: []])
+        }
+        .disposed(by: rx.disposeBag)
+
         input.removeBookmark
             .emitOnNext { [weak self] index in
                 guard let self else { return }
-                appDefaults.imageBookmarks.remove(at: index)
+                appDefaults.imageBookmarksByRuntimeSource[documentState.runtimeEngine.source, default: []].remove(at: index)
             }
             .disposed(by: rx.disposeBag)
         return Output(
-            isEmptyBookmark: appDefaults.$imageBookmarks.asDriver(onErrorJustReturn: []).map { $0.isEmpty }
+            isMoveBookmarkEnabled: $isFiltering.asDriver().not(),
+            isBookmarkEmpty: appDefaults.$imageBookmarks.asDriver(onErrorJustReturn: []).map { $0.isEmpty }
         )
     }
 }
+
+extension RuntimeImageBookmark: @retroactive OutlineNodeType {
+    public var children: [RuntimeImageBookmark] { imageNode.children.map { .init(source: source, imageNode: $0) } }
+}
+
+
+#endif

@@ -5,6 +5,9 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
 final class SidebarRootBookmarkViewController: SidebarRootViewController<SidebarRootBookmarkViewModel> {
+    
+    override var isReorderable: Bool { true }
+    
     private let removeBookmarkRelay = PublishRelay<Int>()
 
     private let noBookmarkLabel = Label()
@@ -39,14 +42,19 @@ final class SidebarRootBookmarkViewController: SidebarRootViewController<Sidebar
         super.setupBindings(for: viewModel)
 
         let input = SidebarRootBookmarkViewModel.Input(
-            removeBookmark: removeBookmarkRelay.asSignal()
+            moveBookmark: outlineView.rx.nodeMoved().asSignal(),
+            removeBookmark: removeBookmarkRelay.asSignal(),
         )
 
         let output = viewModel.transform(input)
         
-        output.isEmptyBookmark.not().drive(noBookmarkLabel.rx.isHidden).disposed(by: rx.disposeBag)
+        output.isMoveBookmarkEnabled.drive(outlineView.rx.isReorderingEnabled).disposed(by: rx.disposeBag)
         
-        output.isEmptyBookmark.drive(scrollView.rx.isHidden).disposed(by: rx.disposeBag)
+        output.isBookmarkEmpty.not().drive(noBookmarkLabel.rx.isHidden).disposed(by: rx.disposeBag)
+        
+        output.isBookmarkEmpty.drive(scrollView.rx.isHidden).disposed(by: rx.disposeBag)
+        
+        Driver.just(true).drive(outlineView.rx.isRootLevelReorderingOnly).disposed(by: rx.disposeBag)
     }
 
     @objc private func removeBookmarkMenuItemAction(_ sender: NSMenuItem) {

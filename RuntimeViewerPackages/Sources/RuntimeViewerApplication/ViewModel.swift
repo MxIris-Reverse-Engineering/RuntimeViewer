@@ -1,7 +1,10 @@
 import Foundation
 import FoundationToolbox
-import RuntimeViewerSettings
 import RuntimeViewerArchitectures
+
+#if canImport(RuntimeViewerSettings)
+import RuntimeViewerSettings
+#endif
 
 @MainActor
 open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
@@ -11,10 +14,10 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
 
     @Dependency(\.appDefaults)
     public var appDefaults
-
+    #if canImport(RuntimeViewerSettings)
     @Dependency(\.settings)
     public var settings
-
+    #endif
     public let errorRelay = PublishRelay<Error>()
 
     package let _commonLoading = ActivityIndicator()
