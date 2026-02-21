@@ -125,7 +125,8 @@ jobs:
             -archivePath $BUILD_PATH/RuntimeViewer.xcarchive \
             -skipPackagePluginValidation \
             -skipMacroValidation \
-            CURRENT_PROJECT_VERSION=$(date +"%Y%m%d.%H.%M")
+            CURRENT_PROJECT_VERSION=$(date +"%Y%m%d.%H.%M") \
+            ASSETCATALOG_COMPILER_APPICON_NAME=""
 
       - name: Export macOS app
         run: |
