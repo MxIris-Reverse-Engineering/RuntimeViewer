@@ -12,7 +12,7 @@ on:
 #   MAC_DEVELOPMENT_PASSWORD  - Password for the Mac Development .p12
 #   NOTARY_KEY_ID         - App Store Connect API Key ID
 #   NOTARY_ISSUER_ID      - App Store Connect API Issuer ID
-#   NOTARY_AUTH_KEY       - App Store Connect API Key content (.p8)
+#   NOTARY_AUTH_KEY       - Base64-encoded App Store Connect API Key (.p8)
 
 jobs:
   release:
@@ -164,7 +164,7 @@ jobs:
 
           API_KEY_DIR="$RUNNER_TEMP/notary_keys/private_keys"
           mkdir -p "$API_KEY_DIR"
-          printf '%s\n' "$NOTARY_AUTH_KEY" > "$API_KEY_DIR/AuthKey_${NOTARY_KEY_ID}.p8"
+          echo "$NOTARY_AUTH_KEY" | base64 --decode > "$API_KEY_DIR/AuthKey_${NOTARY_KEY_ID}.p8"
 
           echo "Zipping app for notarization..."
           /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
