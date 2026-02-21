@@ -16,13 +16,13 @@ public final class AppDefaults {
             imageBookmarksByRuntimeSource[bookmarks.source, default: []].append(bookmarks)
         }
         
-        _imageBookmarksByRuntimeSource = .init(wrappedValue: imageBookmarksByRuntimeSource, "imageBookmarksByRuntimeSource")
+        _imageBookmarksByRuntimeSource = .init(wrappedValue: imageBookmarksByRuntimeSource, "imageBookmarksByRuntimeSource", directory: .applicationSupportDirectory)
         
         var objectBookmarksBySourceAndImagePath: [RuntimeSource: [String: [RuntimeObjectBookmark]]] = [:]
         for objectBookmarks in _objectBookmarks.wrappedValue {
             objectBookmarksBySourceAndImagePath[objectBookmarks.source, default: [:]][objectBookmarks.object.imagePath, default: []].append(objectBookmarks)
         }
-        _objectBookmarksBySourceAndImagePath = .init(wrappedValue: objectBookmarksBySourceAndImagePath, "objectBookmarksBySourceAndImagePath")
+        _objectBookmarksBySourceAndImagePath = .init(wrappedValue: objectBookmarksBySourceAndImagePath, "objectBookmarksBySourceAndImagePath", directory: .applicationSupportDirectory)
     }
     
     @UserDefault(key: "generationOptions", defaultValue: .init())
