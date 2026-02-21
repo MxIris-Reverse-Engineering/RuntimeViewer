@@ -15,8 +15,6 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     public let runtimeObject: RuntimeObject
 
     public let forOpenQuickly: Bool
-    
-    public weak var parent: SidebarRuntimeObjectCellViewModel?
 
     public var children: [SidebarRuntimeObjectCellViewModel] { _filteredChildren }
 
@@ -25,7 +23,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     private lazy var _filteredChildren: [SidebarRuntimeObjectCellViewModel] = _children
 
     private lazy var _children: [SidebarRuntimeObjectCellViewModel] = {
-        let children = runtimeObject.children.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, parent: self, forOpenQuickly: forOpenQuickly) }
+        let children = runtimeObject.children.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: forOpenQuickly) }
         return children.sorted { $0.runtimeObject.displayName < $1.runtimeObject.displayName }
     }()
 
@@ -109,11 +107,10 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
     }
 
-    public init(runtimeObject: RuntimeObject, parent: SidebarRuntimeObjectCellViewModel?, forOpenQuickly: Bool) {
+    public init(runtimeObject: RuntimeObject, forOpenQuickly: Bool) {
         self.runtimeObject = runtimeObject
         self.forOpenQuickly = forOpenQuickly
         super.init()
-        self.parent = parent
         if forOpenQuickly {
             self.primaryIcon = runtimeObject.kind.icon(size: 24)
             self.secondaryIcon = runtimeObject.secondaryKind?.icon(size: 24)

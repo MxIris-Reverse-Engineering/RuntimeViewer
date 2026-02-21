@@ -17,7 +17,7 @@ extension RuntimeSource {
     }
 
     /// A unique identifier for a runtime connection endpoint.
-    public struct Identifier: Sendable, Codable, RawRepresentable, ExpressibleByStringLiteral, Equatable {
+    public struct Identifier: Sendable, Codable, RawRepresentable, ExpressibleByStringLiteral, Hashable {
         public let rawValue: String
 
         public init(rawValue: String) {
@@ -57,7 +57,7 @@ extension RuntimeSource {
 ///
 /// This inversion is necessary because sandboxed apps cannot call `bind()`.
 /// See `RuntimeLocalSocketConnection` documentation for detailed explanation.
-public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Equatable {
+public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Hashable {
     /// Local runtime inspection (same process).
     case local
 

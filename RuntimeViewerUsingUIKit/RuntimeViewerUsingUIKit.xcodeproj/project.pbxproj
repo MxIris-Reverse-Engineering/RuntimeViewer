@@ -47,15 +47,12 @@
 		E9432FC82C0D612000362862 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC72C0D612000362862 /* SceneDelegate.swift */; };
 		E9432FCA2C0D612000362862 /* ViewControllers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FC92C0D612000362862 /* ViewControllers.swift */; };
 		E9432FCF2C0D612100362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FCE2C0D612100362862 /* Assets.xcassets */; };
-		E9432FF82C0D638200362862 /* RuntimeViewerUI in Frameworks */ = {isa = PBXBuildFile; productRef = E9432FF72C0D638200362862 /* RuntimeViewerUI */; };
 		E947C39E2C2AB7E400296B2E /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C39D2C2AB7E400296B2E /* Then.swift */; };
-		E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */ = {isa = PBXBuildFile; productRef = E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */; };
 		E95441BC2C26E99400DFFD40 /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */; };
 		E96CF52D2EC7848700CBC159 /* XiblessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF52C2EC7848700CBC159 /* XiblessView.swift */; };
 		E96CF52E2EC7848700CBC159 /* XiblessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF52C2EC7848700CBC159 /* XiblessView.swift */; };
 		E96CF5302EC784C000CBC159 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF52F2EC784C000CBC159 /* Extensions.swift */; };
 		E96CF5312EC784C000CBC159 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF52F2EC784C000CBC159 /* Extensions.swift */; };
-		E985A9D42D9AF51E005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D32D9AF51E005A573C /* RuntimeViewerCore */; };
 		E985A9D62D9AF52E005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D52D9AF52E005A573C /* RuntimeViewerCore */; };
 		E9AA36242C318A7300A9B2E4 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */; platformFilter = ios; };
 /* End PBXBuildFile section */
@@ -107,10 +104,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E985A9D42D9AF51E005A573C /* RuntimeViewerCore in Frameworks */,
-				E95441B82C26E94700DFFD40 /* RuntimeViewerArchitectures in Frameworks */,
 				E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */,
-				E9432FF82C0D638200362862 /* RuntimeViewerUI in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -279,10 +273,7 @@
 			);
 			name = RuntimeViewerUsingUIKit;
 			packageProductDependencies = (
-				E9432FF72C0D638200362862 /* RuntimeViewerUI */,
-				E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */,
 				E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */,
-				E985A9D32D9AF51E005A573C /* RuntimeViewerCore */,
 			);
 			productName = RuntimeViewerUsingUIKit;
 			productReference = E9432FC22C0D612000362862 /* RuntimeViewer.app */;
@@ -712,18 +703,6 @@
 		E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerApplication;
-		};
-		E9432FF72C0D638200362862 /* RuntimeViewerUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerUI;
-		};
-		E95441B72C26E94700DFFD40 /* RuntimeViewerArchitectures */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerArchitectures;
-		};
-		E985A9D32D9AF51E005A573C /* RuntimeViewerCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerCore;
 		};
 		E985A9D52D9AF52E005A573C /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
