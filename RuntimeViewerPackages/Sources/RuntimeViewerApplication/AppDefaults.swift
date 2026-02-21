@@ -9,10 +9,8 @@ import OrderedCollections
 public final class AppDefaults {
     fileprivate static let shared = AppDefaults()
 
-    private static let bookmarkMigrationKey = "bookmarkMigrationCompleted"
-
     private init() {
-        guard !UserDefaults.standard.bool(forKey: Self.bookmarkMigrationKey) else { return }
+        guard !bookmarkMigrationCompleted else { return }
 
         // One-time migration from old flat storage to new structured storage
         let oldImageBookmarks = _imageBookmarks.wrappedValue
@@ -33,7 +31,7 @@ public final class AppDefaults {
             self.objectBookmarksBySourceAndImagePath = dict
         }
 
-        UserDefaults.standard.set(true, forKey: Self.bookmarkMigrationKey)
+        bookmarkMigrationCompleted = true
     }
     
     @UserDefault(key: "generationOptions", defaultValue: .init())
@@ -44,6 +42,9 @@ public final class AppDefaults {
     
     @UserDefault(key: "filterMode", defaultValue: nil)
     public var filterMode: FilterMode?
+
+    @UserDefault(key: "bookmarkMigrationCompleted", defaultValue: false)
+    private var bookmarkMigrationCompleted: Bool
     
     @available(*, deprecated, renamed: "imageBookmarksByRuntimeSource")
     @FileStorage("imageBookmarks", directory: .applicationSupportDirectory)
