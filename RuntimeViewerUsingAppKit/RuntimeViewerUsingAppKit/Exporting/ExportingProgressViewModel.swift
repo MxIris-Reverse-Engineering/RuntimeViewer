@@ -33,13 +33,6 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
         eventsTask?.cancel()
     }
 
-    func cancelExport() {
-        exportTask?.cancel()
-        eventsTask?.cancel()
-        exportTask = nil
-        eventsTask = nil
-    }
-
     func transform(_ input: Input) -> Output {
         input.startExport
             .emitOnNext { [weak self] in
