@@ -6,15 +6,17 @@ on:
   workflow_dispatch:
 
 # Required GitHub Secrets:
-#   CERTIFICATE_P12       - Base64-encoded Developer ID Application certificate (.p12)
-#   CERTIFICATE_PASSWORD  - Password for the .p12 certificate
+#   DEVELOPER_ID_P12          - Base64-encoded Developer ID Application certificate (.p12)
+#   DEVELOPER_ID_PASSWORD     - Password for the Developer ID .p12
+#   MAC_DEVELOPMENT_P12       - Base64-encoded Mac Development certificate (.p12)
+#   MAC_DEVELOPMENT_PASSWORD  - Password for the Mac Development .p12
 #   NOTARY_KEY_ID         - App Store Connect API Key ID
 #   NOTARY_ISSUER_ID      - App Store Connect API Issuer ID
-#   NOTARY_AUTH_KEY       - App Store Connect API Key content (.p8)
+#   NOTARY_AUTH_KEY       - Base64-encoded App Store Connect API Key (.p8)
 
 jobs:
   release:
-    runs-on: macos-15
+    runs-on: self-hosted
     permissions:
       contents: write
 
@@ -42,10 +44,12 @@ jobs:
         with:
           xcode-version: '26.2'
 
-      - name: Import code signing certificate
+      - name: Import code signing certificates
         env:
-          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_PASSWORD: ${{ secrets.DEVELOPER_ID_PASSWORD }}
+          MAC_DEVELOPMENT_P12: ${{ secrets.MAC_DEVELOPMENT_P12 }}
+          MAC_DEVELOPMENT_PASSWORD: ${{ secrets.MAC_DEVELOPMENT_PASSWORD }}
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
@@ -54,9 +58,15 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
-          security import "$RUNNER_TEMP/certificate.p12" \
-            -P "$CERTIFICATE_PASSWORD" \
+          echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer_id.p12"
+          security import "$RUNNER_TEMP/developer_id.p12" \
+            -P "$DEVELOPER_ID_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          echo "$MAC_DEVELOPMENT_P12" | base64 --decode > "$RUNNER_TEMP/mac_development.p12"
+          security import "$RUNNER_TEMP/mac_development.p12" \
+            -P "$MAC_DEVELOPMENT_PASSWORD" \
             -A -t cert -f pkcs12 \
             -k "$KEYCHAIN_PATH"
 
@@ -115,7 +125,8 @@ jobs:
             -archivePath $BUILD_PATH/RuntimeViewer.xcarchive \
             -skipPackagePluginValidation \
             -skipMacroValidation \
-            CURRENT_PROJECT_VERSION=$(date +"%Y%m%d.%H.%M")
+            CURRENT_PROJECT_VERSION=$(date +"%Y%m%d.%H.%M") \
+            ASSETCATALOG_COMPILER_APPICON_NAME=""
 
       - name: Export macOS app
         run: |
@@ -151,15 +162,16 @@ jobs:
           APP_PATH="$EXPORT_PATH/RuntimeViewer.app"
           ZIP_PATH="$EXPORT_PATH/RuntimeViewer-notarize.zip"
 
-          AUTH_KEY_PATH="$RUNNER_TEMP/AuthKey_${NOTARY_KEY_ID}.p8"
-          echo "$NOTARY_AUTH_KEY" > "$AUTH_KEY_PATH"
+          API_KEY_DIR="$RUNNER_TEMP/notary_keys/private_keys"
+          mkdir -p "$API_KEY_DIR"
+          echo "$NOTARY_AUTH_KEY" | base64 --decode > "$API_KEY_DIR/AuthKey_${NOTARY_KEY_ID}.p8"
 
           echo "Zipping app for notarization..."
           /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
 
           echo "Submitting to Apple Notary Service..."
           xcrun notarytool submit "$ZIP_PATH" \
-            --key "$AUTH_KEY_PATH" \
+            --key "$API_KEY_DIR/AuthKey_${NOTARY_KEY_ID}.p8" \
             --key-id "$NOTARY_KEY_ID" \
             --issuer "$NOTARY_ISSUER_ID" \
             --wait
