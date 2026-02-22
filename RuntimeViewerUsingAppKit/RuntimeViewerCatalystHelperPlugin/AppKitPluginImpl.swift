@@ -34,7 +34,8 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
 
     func launch() {
         Task {
-            runtimeEngine = try await RuntimeEngine(source: .macCatalystServer)
+            runtimeEngine = RuntimeEngine(source: .macCatalystServer)
+            try await runtimeEngine?.connect()
         }
     }
 }

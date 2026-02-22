@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import AppKit
 import SwiftUI
 import SettingsKit
@@ -746,3 +748,5 @@ private struct FlowLayout: Layout {
         return (CGSize(width: maxX, height: currentY + lineHeight), positions)
     }
 }
+
+#endif
