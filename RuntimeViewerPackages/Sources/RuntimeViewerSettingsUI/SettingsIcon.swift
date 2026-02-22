@@ -53,7 +53,7 @@ struct SettingsIcon: View {
                     getSafeImage(named: name)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                         .padding(size / 8)
                 case .text(let text, let textColor):
                     Text(text)

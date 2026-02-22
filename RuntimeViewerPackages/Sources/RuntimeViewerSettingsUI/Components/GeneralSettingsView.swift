@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import SwiftUI
 import SettingsKit
 import Dependencies
@@ -105,3 +107,5 @@ private struct AppearanceOptionView: View {
         }
     }
 }
+
+#endif
