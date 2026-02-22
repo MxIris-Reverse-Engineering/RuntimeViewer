@@ -453,6 +453,7 @@ extension RuntimeEngine {
         with configuration: RuntimeInterfaceExportConfiguration,
         reporter: RuntimeInterfaceExportReporter
     ) async throws {
+        defer { reporter.finish() }
         let startTime = CFAbsoluteTimeGetCurrent()
 
         reporter.send(.phaseStarted(.preparing))
@@ -468,6 +469,7 @@ extension RuntimeEngine {
         let total = allObjects.count
 
         for (index, object) in allObjects.enumerated() {
+            try Task.checkCancellation()
             reporter.send(.objectStarted(object, current: index + 1, total: total))
             do {
                 guard let runtimeInterface = try await interface(for: object, options: configuration.generationOptions) else {
@@ -537,6 +539,5 @@ extension RuntimeEngine {
             swiftCount: swiftCount
         )
         reporter.send(.completed(result))
-        reporter.finish()
     }
 }

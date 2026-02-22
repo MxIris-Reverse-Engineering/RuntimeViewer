@@ -33,14 +33,20 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
     public func transform(_ input: Input) -> Output {
         input.moveBookmark.emitOnNext { [weak self] outlineMove in
             guard let self else { return }
-            outlineMove.applyToRoots(&appDefaults.imageBookmarksByRuntimeSource[documentState.runtimeEngine.source, default: []])
+            var bookmarks = appDefaults.imageBookmarksByRuntimeSource
+            var sourceBookmarks = bookmarks[documentState.runtimeEngine.source, default: []]
+            outlineMove.applyToRoots(&sourceBookmarks)
+            bookmarks[documentState.runtimeEngine.source] = sourceBookmarks
+            appDefaults.imageBookmarksByRuntimeSource = bookmarks
         }
         .disposed(by: rx.disposeBag)
 
         input.removeBookmark
             .emitOnNext { [weak self] index in
                 guard let self else { return }
-                appDefaults.imageBookmarksByRuntimeSource[documentState.runtimeEngine.source, default: []].remove(at: index)
+                var bookmarks = appDefaults.imageBookmarksByRuntimeSource
+                bookmarks[documentState.runtimeEngine.source, default: []].remove(at: index)
+                appDefaults.imageBookmarksByRuntimeSource = bookmarks
             }
             .disposed(by: rx.disposeBag)
         return Output(

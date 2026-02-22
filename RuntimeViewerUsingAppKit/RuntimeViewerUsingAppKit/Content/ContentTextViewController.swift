@@ -112,7 +112,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
             .disposed(by: rx.disposeBag)
 
         eventMonitor.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
-            guard let self = self else { return event }
+            guard let self else { return event }
             isPressedCommand = event.modifierFlags.contains(.command)
             if isPressedCommand {
                 textView.linkTextAttributes = [

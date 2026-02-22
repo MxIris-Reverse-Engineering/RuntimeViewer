@@ -84,7 +84,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
 
     public func transform(_ input: Input) -> Output {
         input.clickedNode.emitOnNextMainActor { [weak self] viewModel in
-            guard let self = self else { return }
+            guard let self else { return }
 
             if viewModel.node.isLeaf {
                 #if os(macOS)

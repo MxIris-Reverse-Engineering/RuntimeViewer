@@ -76,19 +76,19 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         let requestFrameworkSelection = input.loadFrameworksClick.asSignal()
 
-        input.frameworksSelected.emit(onNext: { [weak self] urls in
-            guard let self = self else { return }
+        input.frameworksSelected.emitOnNext { [weak self] urls in
+            guard let self else { return }
             Task { @MainActor in
                 for url in urls {
                     do {
                         try Bundle(url: url)?.loadAndReturnError()
                         await self.documentState.runtimeEngine.reloadData(isReloadImageNodes: false)
                     } catch {
-                        self.errorRelay.accept(error) // 统一错误处理
+                        self.errorRelay.accept(error)
                     }
                 }
             }
-        }).disposed(by: rx.disposeBag)
+        }.disposed(by: rx.disposeBag)
 
         
 
@@ -143,8 +143,8 @@ final class MainViewModel: ViewModel<MainRoute> {
                 selectedRuntimeObject.map { (saveLocation, $0) }
             }
             .filterNil()
-            .emit(onNext: { [weak self] url, runtimeObject in
-                guard let self = self else { return }
+            .emitOnNext { [weak self] url, runtimeObject in
+                guard let self else { return }
                 Task {
                     do {
                         let semanticString = try await self.documentState.runtimeEngine.interface(for: runtimeObject, options: self.appDefaults.options)?.interfaceString
@@ -153,7 +153,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                         self.errorRelay.accept(error)
                     }
                 }
-            }).disposed(by: rx.disposeBag)
+            }.disposed(by: rx.disposeBag)
 
         input.switchSource.emit(with: self) {
             $0.router.trigger(.main($0.runtimeEngineManager.runtimeEngines[$1]))
@@ -161,7 +161,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         }.disposed(by: rx.disposeBag)
 
         let sharingServiceData = completeTransition?.map { [weak self] router -> [SharingData] in
-            guard let self = self, case .selectedObject(let runtimeObjectType) = router else { return [] }
+            guard let self, case .selectedObject(let runtimeObjectType) = router else { return [] }
             
             let item = NSItemProvider()
             
@@ -188,7 +188,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         return Output(
             sharingServiceData: sharingServiceData ?? .empty(),
             isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
-            isSidebarBackHidden: completeTransition?.map { if $0.isClickedNode || $0.isSelectedObject { false } else { true } }.asDriver(onErrorJustReturn: true) ?? .empty(),
+            isSidebarBackHidden: completeTransition?.map { if $0.isClickedNode || $0.isSelectedObject { false } else { true } }.startWith(true).asDriver(onErrorJustReturn: true) ?? .just(true),
             isContentBackHidden: isContentStackDepthGreaterThanOne.map {
                 !$0
             }.asDriver(onErrorJustReturn: true),
