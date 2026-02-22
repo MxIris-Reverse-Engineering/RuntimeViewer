@@ -11,7 +11,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
 
     private let (scrollView, textView): (NSScrollView, ContentTextView) = {
         let scrollView = NSScrollView()
-        let textView = ContentTextView(usingTextLayoutManager: false)
+        let textView = ContentTextView(usingTextLayoutManager: true)
 
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.heightTracksTextView = false
