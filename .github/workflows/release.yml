@@ -79,6 +79,15 @@ jobs:
             -A -t cert -f pkcs12 \
             -k "$KEYCHAIN_PATH"
 
+          # Import Apple intermediate certificates (required on self-hosted runners)
+          for cert_url in \
+            https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer \
+            https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer; do
+            cert_file="$RUNNER_TEMP/$(basename "$cert_url")"
+            curl -sL "$cert_url" -o "$cert_file"
+            security import "$cert_file" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          done
+
           security list-keychain -d user -s \
             "$KEYCHAIN_PATH" \
             $(security list-keychain -d user | tr -d '"')
