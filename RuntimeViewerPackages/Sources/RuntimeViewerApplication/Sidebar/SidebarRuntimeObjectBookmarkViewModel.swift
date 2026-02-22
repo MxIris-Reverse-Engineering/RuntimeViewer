@@ -14,7 +14,11 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
             .subscribeOnNext { [weak self] _ in
                 guard let self else { return }
                 Task {
-                    try await self.reloadData()
+                    do {
+                        try await self.reloadData()
+                    } catch {
+                        await MainActor.run { self.errorRelay.accept(error) }
+                    }
                 }
             }
             .disposed(by: rx.disposeBag)
@@ -26,7 +30,9 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     
     private var currentImageObjectBookmarks: [RuntimeObjectBookmark] {
         set {
-            appDefaults.objectBookmarksBySourceAndImagePath[documentState.runtimeEngine.source, default: [:]][imagePath] = newValue
+            var dict = appDefaults.objectBookmarksBySourceAndImagePath
+            dict[documentState.runtimeEngine.source, default: [:]][imagePath] = newValue
+            appDefaults.objectBookmarksBySourceAndImagePath = dict
         }
         get {
             appDefaults.objectBookmarksBySourceAndImagePath[documentState.runtimeEngine.source, default: [:]][imagePath, default: []]

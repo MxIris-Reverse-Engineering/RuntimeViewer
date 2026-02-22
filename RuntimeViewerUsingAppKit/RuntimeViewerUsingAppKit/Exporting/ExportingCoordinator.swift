@@ -70,10 +70,12 @@ final class ExportingCoordinator: SceneCoordinator<ExportingRoute, ExportingTran
             case .progress:
                 exportingState.currentStep = .completion
             case .completion:
+                removeFromParent()
                 return .endSheetOnTop()
             }
             return .select(index: exportingState.currentStep.rawValue)
         case .cancel:
+            removeFromParent()
             return .endSheetOnTop()
         case .directoryPicker:
             let panel = NSOpenPanel()

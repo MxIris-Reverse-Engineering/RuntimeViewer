@@ -35,12 +35,26 @@ final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
     }
 
     func transform(_ input: Input) -> Output {
+        exportingState.$exportResult
+            .asObservable()
+            .compactMap { $0 }
+            .subscribeOnNext { [weak self] result in
+                guard let self else { return }
+                var lines: [String] = []
+                lines.append("\(result.succeeded) interfaces exported successfully")
+                if result.failed > 0 { lines.append("\(result.failed) failed") }
+                lines.append(String(format: "Duration: %.1fs", result.totalDuration))
+                lines.append("ObjC: \(result.objcCount) | Swift: \(result.swiftCount)")
+                summaryText = lines.joined(separator: "\n")
+            }
+            .disposed(by: rx.disposeBag)
+
         input.refresh.emitOnNext { [weak self] in
             guard let self else { return }
             refreshFromState()
         }
         .disposed(by: rx.disposeBag)
-        
+
         input.showInFinderClick.emitOnNext { [weak self] in
             guard let self else { return }
             guard let url = exportingState.destinationURL else { return }

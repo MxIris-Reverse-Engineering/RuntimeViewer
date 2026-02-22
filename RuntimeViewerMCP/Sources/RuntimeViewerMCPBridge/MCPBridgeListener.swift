@@ -17,7 +17,8 @@ final class MCPBridgeListener: Sendable {
     @Mutex
     private var requestHandler: (@Sendable (MCPBridgeEnvelope) async throws -> Data)?
 
-    let port: UInt16
+    @Mutex
+    private(set) var port: UInt16 = 0
 
     init(port: UInt16 = 0) throws {
         let tcpOptions = NWProtocolTCP.Options()
@@ -38,13 +39,11 @@ final class MCPBridgeListener: Sendable {
         let runtimeViewerDir = appSupportURL.appendingPathComponent("RuntimeViewer")
         try FileManager.default.createDirectory(at: runtimeViewerDir, withIntermediateDirectories: true)
         self.portFilePath = runtimeViewerDir.appendingPathComponent("mcp-bridge-port").path
-
-        // Temporarily store 0, will be updated when listener becomes ready
-        self.port = 0
     }
 
     func start(requestHandler: @escaping @Sendable (MCPBridgeEnvelope) async throws -> Data) {
         self.requestHandler = requestHandler
+        removePortFile()
         setupListener()
     }
 
@@ -60,6 +59,7 @@ final class MCPBridgeListener: Sendable {
             switch state {
             case .ready:
                 if let port = self.listener.port {
+                    self.port = port.rawValue
                     logger.info("MCP Bridge server listening on port \(port.rawValue)")
                     self.writePortFile(port: port.rawValue)
                 }
@@ -108,7 +108,11 @@ final class MCPBridgeListener: Sendable {
                 while true {
                     let requestData = try await MCPBridgeFrame.receive(from: connection)
                     let envelope = try JSONDecoder().decode(MCPBridgeEnvelope.self, from: requestData)
-                    let responseData = try await requestHandler!(envelope)
+                    guard let handler = requestHandler else {
+                        logger.warning("No request handler set, dropping request")
+                        continue
+                    }
+                    let responseData = try await handler(envelope)
                     let responseEnvelope = MCPBridgeResponseEnvelope(payload: responseData)
                     let responseJSON = try JSONEncoder().encode(responseEnvelope)
                     try await MCPBridgeFrame.send(responseJSON, on: connection)

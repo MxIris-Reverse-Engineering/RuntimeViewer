@@ -30,7 +30,7 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
 
     func transform(_ input: Input) -> Output {
         input.cancel.emit(to: router.rx.trigger(.dismiss)).disposed(by: rx.disposeBag)
-        input.attachToProcess.emit(onNext: { [weak self] application in
+        input.attachToProcess.emitOnNext { [weak self] application in
             guard let self,
                   let name = application.localizedName,
                   let bundleIdentifier = application.bundleIdentifier
@@ -50,7 +50,7 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                     errorRelay.accept(error)
                 }
             }
-        }).disposed(by: rx.disposeBag)
+        }.disposed(by: rx.disposeBag)
 
         return Output()
     }

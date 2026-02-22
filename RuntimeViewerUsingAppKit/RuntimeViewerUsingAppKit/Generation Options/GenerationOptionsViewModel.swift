@@ -19,12 +19,12 @@ final class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
 
     func transform(_ input: Input) -> Output {
         input.updateOption
-            .emit(onNext: { [weak self] (keyPath, value) in
-                guard let self = self else { return }
+            .emitOnNext { [weak self] (keyPath, value) in
+                guard let self else { return }
                 var currentOptions = appDefaults.options
                 currentOptions[keyPath: keyPath] = value
                 appDefaults.options = currentOptions
-            })
+            }
             .disposed(by: rx.disposeBag)
 
         return Output(
