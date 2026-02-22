@@ -97,12 +97,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 .asSignal(onErrorJustReturn: nil)
             }
             .emit(with: self) { target, interface in
-                Task { @MainActor in
-                    if let interface {
-                        target.router.trigger(.next(interface.object))
-                    } else {
-                        runtimeObjectNotFoundRelay.accept()
-                    }
+                if let interface {
+                    target.router.trigger(.next(interface.object))
+                } else {
+                    runtimeObjectNotFoundRelay.accept(())
                 }
             }
             .disposed(by: rx.disposeBag)

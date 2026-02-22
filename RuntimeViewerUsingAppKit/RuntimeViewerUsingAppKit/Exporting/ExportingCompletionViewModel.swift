@@ -17,13 +17,7 @@ final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
 
     private let exportingState: ExportingState
 
-    init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
-        self.exportingState = exportingState
-        super.init(documentState: documentState, router: router)
-    }
-
-    func refreshFromState() {
-        guard let result = exportingState.exportResult else { return }
+    private func updateSummaryText(with result: RuntimeInterfaceExportResult) {
         var lines: [String] = []
         lines.append("\(result.succeeded) interfaces exported successfully")
         if result.failed > 0 {
@@ -34,13 +28,32 @@ final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
         summaryText = lines.joined(separator: "\n")
     }
 
+    init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
+        self.exportingState = exportingState
+        super.init(documentState: documentState, router: router)
+    }
+
+    func refreshFromState() {
+        guard let result = exportingState.exportResult else { return }
+        updateSummaryText(with: result)
+    }
+
     func transform(_ input: Input) -> Output {
+        exportingState.$exportResult
+            .asObservable()
+            .compactMap { $0 }
+            .subscribeOnNext { [weak self] result in
+                guard let self else { return }
+                updateSummaryText(with: result)
+            }
+            .disposed(by: rx.disposeBag)
+
         input.refresh.emitOnNext { [weak self] in
             guard let self else { return }
             refreshFromState()
         }
         .disposed(by: rx.disposeBag)
-        
+
         input.showInFinderClick.emitOnNext { [weak self] in
             guard let self else { return }
             guard let url = exportingState.destinationURL else { return }

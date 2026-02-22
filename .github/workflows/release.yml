@@ -230,9 +230,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "RuntimeViewer ${{ github.ref_name }}" \
-            --generate-notes \
+          TAG="${{ github.ref_name }}"
+          CHANGELOG_FILE="Changelogs/${TAG}.md"
+
+          NOTES_ARGS=()
+          if [ -f "$CHANGELOG_FILE" ]; then
+            echo "Using changelog from $CHANGELOG_FILE"
+            NOTES_ARGS=(--notes-file "$CHANGELOG_FILE")
+          else
+            echo "No changelog found for $TAG, using auto-generated notes"
+            NOTES_ARGS=(--generate-notes)
+          fi
+
+          gh release create "$TAG" \
+            --title "RuntimeViewer $TAG" \
+            "${NOTES_ARGS[@]}" \
             RuntimeViewer-macOS.zip \
             RuntimeViewer-iOS-Simulator.zip
 

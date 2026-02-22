@@ -115,7 +115,9 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                     contentCoordinator.trigger(.placeholder)
                 case .exportInterface:
                     trigger(.exportInterfaces)
-                default:
+                case .selectedNode:
+                    break
+                case .root:
                     break
                 }
             }
