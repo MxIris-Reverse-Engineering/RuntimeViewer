@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import SwiftUI
 import SettingsKit
 import Dependencies
@@ -33,3 +35,5 @@ struct NotificationSettingsView: SettingsContent {
         }
     }
 }
+
+#endif
