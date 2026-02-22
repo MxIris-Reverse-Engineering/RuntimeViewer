@@ -4,6 +4,14 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner to use'
+        type: choice
+        default: 'macos-latest'
+        options:
+          - macos-latest
+          - self-hosted
 
 # Required GitHub Secrets:
 #   DEVELOPER_ID_P12          - Base64-encoded Developer ID Application certificate (.p12)
@@ -16,7 +24,7 @@ on:
 
 jobs:
   release:
-    runs-on: self-hosted
+    runs-on: ${{ inputs.runner || 'macos-latest' }}
     permissions:
       contents: write
 
@@ -31,9 +39,10 @@ jobs:
       - name: Clone sibling dependencies
         run: |
           cd ..
-          git clone --depth 1 https://github.com/MxIris-Reverse-Engineering/MachOKit.git
-          git clone --depth 1 https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git
-          git clone --depth 1 https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection.git
+          for repo in MachOKit MachOObjCSection MachOSwiftSection; do
+            rm -rf "$repo"
+            git clone --depth 1 "https://github.com/MxIris-Reverse-Engineering/${repo}.git"
+          done
 
       # TODO: The sibling repos use branch: "main" in Package.swift remote
       # fallbacks. They should be pinned to specific revisions or tags for
@@ -70,7 +79,9 @@ jobs:
             -A -t cert -f pkcs12 \
             -k "$KEYCHAIN_PATH"
 
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security list-keychain -d user -s \
+            "$KEYCHAIN_PATH" \
+            $(security list-keychain -d user | tr -d '"')
           security set-key-partition-list -S apple-tool:,apple: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
