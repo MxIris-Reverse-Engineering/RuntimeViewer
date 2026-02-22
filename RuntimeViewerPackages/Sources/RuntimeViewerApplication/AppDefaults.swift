@@ -31,7 +31,10 @@ public final class AppDefaults {
             self.objectBookmarksBySourceAndImagePath = dict
         }
 
-        bookmarkMigrationCompleted = true
+        // Defer setting the flag to allow FileStorage barrier writes to complete
+        DispatchQueue.main.async {
+            self.bookmarkMigrationCompleted = true
+        }
     }
     
     @UserDefault(key: "generationOptions", defaultValue: .init())

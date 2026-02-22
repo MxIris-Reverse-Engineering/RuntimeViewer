@@ -92,14 +92,13 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
         let output = viewModel.transform(input)
 
         output.options
-            .drive(onNext: { [weak self] options in
-                guard let self = self else { return }
-
-                for (keyPath, checkbox) in self.checkboxMap {
+            .driveOnNext { [weak self] options in
+                guard let self else { return }
+                for (keyPath, checkbox) in checkboxMap {
                     let isChecked = options[keyPath: keyPath]
                     checkbox.state = isChecked ? .on : .off
                 }
-            })
+            }
             .disposed(by: rx.disposeBag)
     }
 }

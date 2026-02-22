@@ -21,10 +21,16 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
     private let exportingState: ExportingState
 
     private var exportTask: Task<Void, Never>?
+    private var eventsTask: Task<Void, Never>?
 
     init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
+    }
+
+    deinit {
+        exportTask?.cancel()
+        eventsTask?.cancel()
     }
 
     func transform(_ input: Input) -> Output {
@@ -45,8 +51,11 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
     
     func startExport() {
         if isExporting { return }
-        isExporting = true 
-        guard let directory = exportingState.destinationURL else { return }
+        isExporting = true
+        guard let directory = exportingState.destinationURL else {
+            isExporting = false
+            return
+        }
 
         var generationOptions = appDefaults.options
         generationOptions.transformer = settings.transformer
@@ -62,7 +71,7 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
 
         let reporter = RuntimeInterfaceExportReporter()
 
-        Task { @MainActor [weak self] in
+        eventsTask = Task { @MainActor [weak self] in
             guard let self else { return }
             for await event in reporter.events {
                 handleExportEvent(event)

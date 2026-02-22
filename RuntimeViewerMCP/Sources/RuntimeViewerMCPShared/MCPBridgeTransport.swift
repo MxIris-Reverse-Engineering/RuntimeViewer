@@ -77,19 +77,26 @@ public enum MCPBridgeFrame {
     }
 
     private static func receiveExact(from connection: NWConnection, count: Int) async throws -> Data {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
-            connection.receive(minimumIncompleteLength: count, maximumLength: count) { content, _, isComplete, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else if let content, content.count == count {
-                    continuation.resume(returning: content)
-                } else if isComplete {
-                    continuation.resume(throwing: MCPBridgeTransportError.connectionClosed)
-                } else {
-                    continuation.resume(throwing: MCPBridgeTransportError.incompleteRead)
+        var buffer = Data()
+        buffer.reserveCapacity(count)
+        while buffer.count < count {
+            let remaining = count - buffer.count
+            let chunk = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Data, Error>) in
+                connection.receive(minimumIncompleteLength: 1, maximumLength: remaining) { content, _, isComplete, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if let content, !content.isEmpty {
+                        continuation.resume(returning: content)
+                    } else if isComplete {
+                        continuation.resume(throwing: MCPBridgeTransportError.connectionClosed)
+                    } else {
+                        continuation.resume(throwing: MCPBridgeTransportError.incompleteRead)
+                    }
                 }
             }
+            buffer.append(chunk)
         }
+        return buffer
     }
 }
 
