@@ -93,8 +93,4 @@ final class ExportingCoordinator: SceneCoordinator<ExportingRoute, ExportingTran
             return .none()
         }
     }
-    
-    deinit {
-        #log(.debug, "\(Self.self) deinit.")
-    }
 }
