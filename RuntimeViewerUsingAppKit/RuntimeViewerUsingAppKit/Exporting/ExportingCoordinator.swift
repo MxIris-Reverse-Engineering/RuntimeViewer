@@ -1,4 +1,5 @@
 import AppKit
+import FoundationToolbox
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
@@ -12,6 +13,7 @@ enum ExportingRoute: Routable {
 
 typealias ExportingTransition = Transition<ExportingWindowController, ExportingViewController>
 
+@Loggable(.private)
 final class ExportingCoordinator: SceneCoordinator<ExportingRoute, ExportingTransition> {
     let exportingState: ExportingState
 
@@ -90,5 +92,9 @@ final class ExportingCoordinator: SceneCoordinator<ExportingRoute, ExportingTran
             }
             return .none()
         }
+    }
+    
+    deinit {
+        #log(.debug, "\(Self.self) deinit.")
     }
 }
