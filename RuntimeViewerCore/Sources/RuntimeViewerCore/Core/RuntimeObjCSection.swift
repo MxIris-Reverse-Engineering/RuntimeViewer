@@ -549,16 +549,16 @@ actor RuntimeObjCSectionFactory {
         sections[imagePath]
     }
 
-    func section(for imagePath: String) async throws -> RuntimeObjCSection {
+    func section(for imagePath: String) async throws -> (isExisted: Bool, section: RuntimeObjCSection) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
-            return section
+            return (true, section)
         }
         #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
         let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self)
         sections[imagePath] = section
         #log(.debug, "ObjC section created and cached")
-        return section
+        return (false, section)
     }
 
     func section(for name: RuntimeObjCName) async throws -> RuntimeObjCSection? {
