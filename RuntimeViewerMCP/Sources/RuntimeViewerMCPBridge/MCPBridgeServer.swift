@@ -69,6 +69,11 @@ public actor MCPBridgeServer {
             let request = try envelope.decode(MCPGrepTypeInterfaceRequest.self)
             let response = await handleGrepTypeInterface(request)
             return try JSONEncoder().encode(response)
+
+        case .memberAddresses:
+            let request = try envelope.decode(MCPMemberAddressesRequest.self)
+            let response = await handleMemberAddresses(request)
+            return try JSONEncoder().encode(response)
         }
     }
 
@@ -295,6 +300,45 @@ public actor MCPBridgeServer {
         }
 
         return MCPGrepTypeInterfaceResponse(matches: matches, error: nil)
+    }
+
+    private func handleMemberAddresses(_ request: MCPMemberAddressesRequest) async -> MCPMemberAddressesResponse {
+        let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
+
+        let imagePaths: [String]
+        if let imagePath = request.imagePath {
+            imagePaths = [imagePath]
+        } else {
+            imagePaths = await engine.loadedImagePaths
+        }
+
+        for imagePath in imagePaths {
+            do {
+                let objects = try await engine.objects(in: imagePath)
+                if let runtimeObject = findObject(named: request.typeName, in: objects) {
+                    let addresses = try await engine.memberAddresses(for: runtimeObject, memberName: request.memberName)
+                    let members = addresses.map { addr in
+                        MCPMemberAddressInfo(
+                            name: addr.name,
+                            kind: addr.kind,
+                            symbolName: addr.symbolName,
+                            address: addr.address
+                        )
+                    }
+                    return MCPMemberAddressesResponse(typeName: runtimeObject.displayName, members: members, error: nil)
+                }
+            } catch {
+                logger.warning("Failed to load objects from image \(imagePath): \(error)")
+                continue
+            }
+        }
+
+        let searchScope = request.imagePath ?? "all loaded images"
+        return MCPMemberAddressesResponse(
+            typeName: request.typeName,
+            members: [],
+            error: "Type '\(request.typeName)' not found in \(searchScope)"
+        )
     }
 
     private func runtimeEngine(forWindowIdentifier identifier: String) async -> RuntimeEngine {

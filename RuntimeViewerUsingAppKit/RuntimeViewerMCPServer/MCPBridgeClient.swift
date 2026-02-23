@@ -44,6 +44,11 @@ final class MCPBridgeClient: Sendable {
         return try await connection.sendRequest(command: .grepTypeInterface, payload: request)
     }
 
+    func memberAddresses(windowIdentifier: String, imagePath: String?, typeName: String, memberName: String?) async throws -> MCPMemberAddressesResponse {
+        let request = MCPMemberAddressesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, typeName: typeName, memberName: memberName)
+        return try await connection.sendRequest(command: .memberAddresses, payload: request)
+    }
+
     func stop() {
         connection.stop()
     }
