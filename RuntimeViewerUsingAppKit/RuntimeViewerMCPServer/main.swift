@@ -115,6 +115,33 @@ let grepTypeInterfaceTool = Tool(
     ])
 )
 
+let memberAddressesTool = Tool(
+    name: "get_member_addresses",
+    description: "Gets the runtime memory addresses of Swift functions and computed property accessors for a specific type. Returns the mangled symbol name and hex address for each member. Only works for Swift types (not ObjC/C). If member_name is provided, filters results to members whose name contains the given string (case-insensitive). If image_path is omitted, searches across all loaded images.",
+    inputSchema: .object([
+        "type": .string("object"),
+        "properties": .object([
+            "window_identifier": .object([
+                "type": .string("string"),
+                "description": .string("The window identifier obtained from list_windows"),
+            ]),
+            "image_path": .object([
+                "type": .string("string"),
+                "description": .string("Optional: the full path of the image (framework/dylib) containing the type. If omitted, searches all loaded images."),
+            ]),
+            "type_name": .object([
+                "type": .string("string"),
+                "description": .string("The name of the Swift type to inspect (e.g. 'MyClass', 'MyStruct')"),
+            ]),
+            "member_name": .object([
+                "type": .string("string"),
+                "description": .string("Optional: filter members by name (case-insensitive substring match). If omitted, returns all members with addresses."),
+            ]),
+        ]),
+        "required": .array([.string("window_identifier"), .string("type_name")]),
+    ])
+)
+
 // MARK: - Main
 
 let server = Server(
@@ -125,7 +152,7 @@ let server = Server(
 
 // Register tool list handler
 await server.withMethodHandler(ListTools.self) { _ in
-    .init(tools: [listWindowsTool, selectedTypeTool, typeInterfaceTool, listTypesTool, searchTypesTool, grepTypeInterfaceTool])
+    .init(tools: [listWindowsTool, selectedTypeTool, typeInterfaceTool, listTypesTool, searchTypesTool, grepTypeInterfaceTool, memberAddressesTool])
 }
 
 // Lazily connect to bridge when first tool call happens
@@ -448,6 +475,59 @@ await server.withMethodHandler(CallTool.self) { params in
                     for line in match.matchingLines {
                         text += "  \(line)\n"
                     }
+                }
+
+                return .init(content: [.text(text)], isError: false)
+            } catch {
+                await bridge.reset()
+                return .init(
+                    content: [.text("Error communicating with RuntimeViewer: \(error.localizedDescription)")],
+                    isError: true
+                )
+            }
+        case .error(let errorResult):
+            return errorResult
+        }
+
+    case "get_member_addresses":
+        guard let windowIdentifier = params.arguments?["window_identifier"]?.stringValue else {
+            return .init(
+                content: [.text("Error: 'window_identifier' parameter is required. Use list_windows to get available window identifiers.")],
+                isError: true
+            )
+        }
+        guard let typeName = params.arguments?["type_name"]?.stringValue else {
+            return .init(
+                content: [.text("Error: 'type_name' parameter is required.")],
+                isError: true
+            )
+        }
+        let imagePath = params.arguments?["image_path"]?.stringValue
+        let memberName = params.arguments?["member_name"]?.stringValue
+
+        switch await connectedClient() {
+        case .connected(let client):
+            do {
+                let response = try await client.memberAddresses(windowIdentifier: windowIdentifier, imagePath: imagePath, typeName: typeName, memberName: memberName)
+
+                if let error = response.error {
+                    return .init(content: [.text("Error: \(error)")], isError: true)
+                }
+
+                if response.members.isEmpty {
+                    let filterNote = memberName.map { " matching '\($0)'" } ?? ""
+                    return .init(content: [.text("No member addresses found\(filterNote) for '\(typeName)'. This may not be a Swift type, or the type has no functions/computed properties with symbols.")], isError: false)
+                }
+
+                var text = "Member addresses for \(response.typeName ?? typeName):\n"
+                if let memberName {
+                    text += "Filter: '\(memberName)'\n"
+                }
+                text += "Found \(response.members.count) member(s)\n\n"
+                for member in response.members {
+                    text += "  [\(member.kind)] \(member.name)\n"
+                    text += "    Address:    \(member.address)\n"
+                    text += "    Symbol:     \(member.symbolName)\n"
                 }
 
                 return .init(content: [.text(text)], isError: false)
