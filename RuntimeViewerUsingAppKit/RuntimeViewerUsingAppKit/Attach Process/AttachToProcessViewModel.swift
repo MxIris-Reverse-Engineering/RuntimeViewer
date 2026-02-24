@@ -6,6 +6,7 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerHelperClient
 
+@Loggable(.private)
 final class AttachToProcessViewModel: ViewModel<MainRoute> {
     struct Input {
         let attachToProcess: Signal<NSRunningApplication>
@@ -46,7 +47,7 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                     router.trigger(.dismiss)
                 } catch {
                     runtimeEngineManager.terminateAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
-                    logger.error("\(error, privacy: .public)")
+                    #log(.error, "\(error, privacy: .public)")
                     errorRelay.accept(error)
                 }
             }

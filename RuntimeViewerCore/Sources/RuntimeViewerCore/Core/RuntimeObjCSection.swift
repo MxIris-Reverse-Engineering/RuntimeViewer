@@ -29,7 +29,7 @@ public struct ObjCGenerationOptions: Sendable, Equatable {
     public var addPropertyAttributesComments: Bool = false
 }
 
-@Loggable
+@Loggable(.private)
 actor RuntimeObjCSection {
     enum Error: Swift.Error {
         case invalidMachOImage
@@ -541,7 +541,7 @@ actor RuntimeObjCSection {
     }
 }
 
-@Loggable
+@Loggable(.private)
 actor RuntimeObjCSectionFactory {
     private var sections: [String: RuntimeObjCSection] = [:]
 

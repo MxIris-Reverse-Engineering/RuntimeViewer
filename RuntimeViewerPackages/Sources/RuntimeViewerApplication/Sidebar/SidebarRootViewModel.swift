@@ -1,8 +1,10 @@
 import Foundation
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
+@Loggable(.private)
 public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     private let nodesSource: Observable<[RuntimeImageNode]>
 
@@ -40,7 +42,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
             }
             .observe(on: ConcurrentDispatchQueueScheduler(qos: .userInteractive))
             .flatMapLatest { nodes -> [String: SidebarRootCellViewModel] in
-                Self.logger.info("\(Self.self, privacy: .public) Indexing sidebar nodes...")
+                #log(.info, "\(Self.self, privacy: .public) Indexing sidebar nodes...")
                 var allNodes: [String: SidebarRootCellViewModel] = [:]
                 for rootNode in nodes {
                     allNodes[rootNode.node.name] = rootNode

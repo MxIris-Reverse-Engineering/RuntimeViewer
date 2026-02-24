@@ -133,7 +133,7 @@ public actor MCPBridgeServer {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
         let options = generationOptions()
 
-        let imagePaths: [String]
+        let imagePaths: Set<String>
         if let imagePath = request.imagePath {
             imagePaths = [imagePath]
         } else {
@@ -174,7 +174,7 @@ public actor MCPBridgeServer {
     private func handleListTypes(_ request: MCPListTypesRequest) async -> MCPListTypesResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
 
-        let imagePaths: [String]
+        let imagePaths: Set<String>
         if let imagePath = request.imagePath {
             imagePaths = [imagePath]
         } else {
@@ -258,7 +258,7 @@ public actor MCPBridgeServer {
         let options = generationOptions()
         let patternLowercased = request.pattern.lowercased()
 
-        let imagePaths: [String]
+        let imagePaths: Set<String>
         if let imagePath = request.imagePath {
             imagePaths = [imagePath]
         } else {
@@ -305,7 +305,7 @@ public actor MCPBridgeServer {
     private func handleMemberAddresses(_ request: MCPMemberAddressesRequest) async -> MCPMemberAddressesResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
 
-        let imagePaths: [String]
+        let imagePaths: Set<String>
         if let imagePath = request.imagePath {
             imagePaths = [imagePath]
         } else {
