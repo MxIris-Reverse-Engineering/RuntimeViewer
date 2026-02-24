@@ -1,8 +1,10 @@
 import Foundation
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
+@Loggable(.private)
 public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute> {
     public let imageNode: RuntimeImageNode
     public let imagePath: String
@@ -41,7 +43,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 try await reloadData()
             } catch {
                 self.loadState = .loadError(error)
-                logger.error("\(error)")
+                #log(.error, "\(error)")
             }
         }
     }
@@ -50,8 +52,8 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     public struct Input {
         public let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel>
         public let loadImageClicked: Signal<Void>
-        public let searchString: Signal<String>
-        public let isSearchCaseInsensitive: Driver<Bool>?
+        public let searchString: Driver<String>
+        public let isSearchCaseInsensitive: Driver<Bool>
     }
 
     public struct Output {
@@ -70,13 +72,19 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
     @MainActor
     public func transform(_ input: Input) -> Output {
-        input.isSearchCaseInsensitive?.drive($isSearchCaseInsensitive).disposed(by: rx.disposeBag)
+//        input.isSearchCaseInsensitive.drive($isSearchCaseInsensitive).disposed(by: rx.disposeBag)
 
-        input.searchString
+        Driver.combineLatest(input.searchString, input.isSearchCaseInsensitive)
             .debounce(.milliseconds(500))
-            .emitOnNextMainActor { [weak self] filter in
+            .driveOnNextMainActor { [weak self] searchString, isSearchCaseInsensitive in
                 guard let self else { return }
-                if filter.isEmpty {
+                guard (self.searchString != searchString) || (self.isSearchCaseInsensitive != isSearchCaseInsensitive) else { return }
+
+                self.searchString = searchString
+                self.isSearchCaseInsensitive = isSearchCaseInsensitive
+                
+                
+                if searchString.isEmpty {
                     if isFiltering {
                         isFiltering = false
                     }
@@ -85,7 +93,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                         isFiltering = true
                     }
                 }
-                filteredNodes = FilterEngine.filter(filter, items: nodes, mode: appDefaults.filterMode, isCaseInsensitive: isSearchCaseInsensitive)
+                filteredNodes = FilterEngine.filter(searchString, items: nodes, mode: appDefaults.filterMode, isCaseInsensitive: isSearchCaseInsensitive)
             }
             .disposed(by: rx.disposeBag)
 

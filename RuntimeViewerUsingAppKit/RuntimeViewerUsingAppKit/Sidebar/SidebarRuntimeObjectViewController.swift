@@ -28,9 +28,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     private let bottomSeparatorView = NSBox()
 
-    private let filterModeDidChange = PublishRelay<Void>()
+    private let filterModeDidChange = BehaviorRelay<Void>(value: ())
 
-    private var searchCaseInsensitiveButton: NSButton?
+    @ViewLoading
+    private var searchCaseInsensitiveButton: NSButton
 
     @Dependency(\.appDefaults)
     private var appDefaults
@@ -117,10 +118,12 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             runtimeObjectClicked: imageLoadedView.outlineView.rx.modelSelected().asSignal(),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
-                imageLoadErrorView.loadImageButton.rx.click.asSignal()
+                imageLoadErrorView.loadImageButton.rx.click.asSignal(),
             ).merge(),
-            searchString: .combineLatest(filterSearchField.rx.stringValue.asSignal(), filterModeDidChange.asSignal().startWith(()), resultSelector: { a, b in a }),
-            isSearchCaseInsensitive: searchCaseInsensitiveButton?.rx.state.asDriver().map { $0 == .on }
+            searchString: .combineLatest(filterSearchField.rx.stringValue.asDriver(), filterModeDidChange.asDriver(), resultSelector: { a, b in a }),
+            isSearchCaseInsensitive: searchCaseInsensitiveButton.rx.state.asDriver().map {
+                $0 == .on
+            }
         )
 
         let output = viewModel.transform(input)

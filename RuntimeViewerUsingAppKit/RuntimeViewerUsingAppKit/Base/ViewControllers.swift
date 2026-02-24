@@ -57,6 +57,8 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
     }
 
     open func setupBindings(for viewModel: ViewModel) {
+        loadViewIfNeeded()
+        
         rx.disposeBag = DisposeBag()
 
         self.viewModel = viewModel
