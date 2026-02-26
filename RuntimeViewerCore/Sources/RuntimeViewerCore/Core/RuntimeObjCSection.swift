@@ -312,7 +312,7 @@ actor RuntimeObjCSection {
         #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
         let cTypeReplacements = transformer.cType.isEnabled ? transformer.cType.replacements : [:]
-        let objcDumpContext = ObjCDumpContext(options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
+        let objcDumpContext = ObjCDumpContext(machO: machO, options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
             guard let name else { return true }
             if isStruct {
                 return self.structs[name] == nil

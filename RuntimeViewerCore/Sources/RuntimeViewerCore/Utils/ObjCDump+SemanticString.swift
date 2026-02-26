@@ -1,4 +1,6 @@
 import Foundation
+import MachOKit
+import MachOExtensions
 import Semantic
 import ObjCDump
 import ObjCTypeDecodeKit
@@ -6,6 +8,7 @@ import MemberwiseInit
 
 @MemberwiseInit()
 final class ObjCDumpContext {
+    let machO: MachOImage
     var options: ObjCGenerationOptions
     var cTypeReplacements: [Transformer.CType.Pattern: String] = [:]
     var currentArray: SemanticString?
@@ -360,6 +363,10 @@ extension ObjCMethodInfo {
         }
 
         ";"
+        
+        Space()
+        
+        Comment("IMP: 0x\(context.machO.addressString(forOffset: .init(imp.uint - context.machO.ptr.bitPattern.uint)))")
     }
 }
 
