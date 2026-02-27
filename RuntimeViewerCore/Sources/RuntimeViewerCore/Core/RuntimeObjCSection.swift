@@ -27,6 +27,8 @@ public struct ObjCGenerationOptions: Sendable, Equatable {
     public var addIvarOffsetComments: Bool = false
     @Default(ifMissing: false)
     public var addPropertyAttributesComments: Bool = false
+    @Default(ifMissing: false)
+    public var addMethodIMPAddressComments: Bool = false
 }
 
 @Loggable(.private)
@@ -525,6 +527,62 @@ actor RuntimeObjCSection {
         }
         #log(.default, "Invalid runtime object: \(object.name, privacy: .public) kind: \(String(describing: object.kind), privacy: .public)")
         throw Error.invalidRuntimeObject
+    }
+
+    func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
+        #log(.debug, "Getting member addresses for: \(object.name, privacy: .public)")
+
+        func shouldInclude(_ name: String) -> Bool {
+            guard let filter = memberName else { return true }
+            return name.lowercased().contains(filter.lowercased())
+        }
+
+        func formatAddress(_ imp: UInt64) -> String {
+            "0x" + machO.addressString(forOffset: .init(imp.uint - machO.ptr.bitPattern.uint))
+        }
+
+        func collectMethods(_ methods: [ObjCMethodInfo], typeName: String) -> [RuntimeMemberAddress] {
+            var result: [RuntimeMemberAddress] = []
+            for method in methods {
+                guard method.imp != 0, shouldInclude(method.name) else { continue }
+                let prefix = method.isClassMethod ? "+" : "-"
+                result.append(
+                    RuntimeMemberAddress(
+                        name: method.name,
+                        kind: method.isClassMethod ? "class method" : "method",
+                        symbolName: "\(prefix)[\(typeName) \(method.name)]",
+                        address: formatAddress(method.imp)
+                    )
+                )
+            }
+            return result
+        }
+
+        let name = object.withImagePath(imagePath)
+        var result: [RuntimeMemberAddress] = []
+
+        switch name.kind {
+        case .objc(.type(.class)):
+            if let classGroup = classes[name.name], let classInfo = classGroup.info.first {
+                result.append(contentsOf: collectMethods(classInfo.methods + classInfo.classMethods, typeName: classInfo.name))
+            }
+        case .objc(.type(.protocol)):
+            if let protocolInfo = protocols[name.name]?.info {
+                result.append(contentsOf: collectMethods(
+                    protocolInfo.methods + protocolInfo.classMethods + protocolInfo.optionalMethods + protocolInfo.optionalClassMethods,
+                    typeName: protocolInfo.name
+                ))
+            }
+        case .objc(.category(.class)):
+            if let categoryInfo = categories[name.name]?.info {
+                result.append(contentsOf: collectMethods(categoryInfo.methods + categoryInfo.classMethods, typeName: categoryInfo.uniqueName))
+            }
+        default:
+            break
+        }
+
+        #log(.debug, "Found \(result.count, privacy: .public) ObjC member addresses")
+        return result
     }
 
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {

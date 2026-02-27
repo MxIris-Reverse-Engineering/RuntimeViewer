@@ -364,9 +364,10 @@ extension ObjCMethodInfo {
 
         ";"
         
-        Space()
-        
-        Comment("IMP: 0x\(context.machO.addressString(forOffset: .init(imp.uint - context.machO.ptr.bitPattern.uint)))")
+        if context.options.addMethodIMPAddressComments {
+            Space()
+            Comment("IMP: 0x\(context.machO.addressString(forOffset: .init(imp.uint - context.machO.ptr.bitPattern.uint)))")
+        }
     }
 }
 

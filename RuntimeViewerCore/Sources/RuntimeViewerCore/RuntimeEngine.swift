@@ -428,8 +428,14 @@ extension RuntimeEngine {
     }
 
     public func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
-        guard case .swift = object.kind else { return [] }
-        return try await swiftSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
+        switch object.kind {
+        case .swift:
+            return try await swiftSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
+        case .objc:
+            return try await objcSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
+        default:
+            return []
+        }
     }
 }
 
