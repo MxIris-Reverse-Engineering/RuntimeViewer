@@ -175,10 +175,19 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             saveLocationSelectedRelay.accept(url)
         }
     }
-    
-//    @IBAction func exportInterface(_ sender: Any?) {
-//        viewModel?.router.trigger(.exportInterfaces)
-//    }
+
+    @IBAction func exportInterface(_ sender: Any?) {
+        viewModel?.router.trigger(.exportInterfaces)
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        switch aSelector {
+        case #selector(exportInterface(_:)):
+            return documentState.currentImageName != nil
+        default:
+            return super.responds(to: aSelector)
+        }
+    }
 }
 
 extension MainWindowController: MainToolbarController.Delegate {}
