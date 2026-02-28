@@ -113,8 +113,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                     documentState.currentImagePath = nil
                     documentState.selectedRuntimeObject = nil
                     contentCoordinator.trigger(.placeholder)
-                case .exportInterface:
-                    trigger(.exportInterfaces)
                 case .selectedNode:
                     break
                 case .root:
