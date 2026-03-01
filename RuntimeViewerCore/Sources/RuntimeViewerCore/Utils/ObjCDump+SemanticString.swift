@@ -12,6 +12,8 @@ final class ObjCDumpContext {
     var options: ObjCGenerationOptions
     var cTypeReplacements: [Transformer.CType.Pattern: String] = [:]
     var currentArray: SemanticString?
+    var methodIMPs: [String: UInt64] = [:]
+    var classMethodIMPs: [String: UInt64] = [:]
     var isExpandHandler: (_ name: String?, _ isStruct: Bool) -> Bool = { _, _ in true }
 }
 
@@ -311,6 +313,21 @@ extension ObjCPropertyInfo {
                     } else {
                         Comment("@synthesize \(name) = \(ivar)")
                     }
+                }
+            }
+        }
+
+        if context.options.addPropertyAccessorAddressComments {
+            let imps = isClassProperty ? context.classMethodIMPs : context.methodIMPs
+            let getterName = customGetter ?? name
+            let setterName = customSetter ?? "set\(name.uppercasedFirst):"
+
+            Joined(separator: " ", prefix: " ") {
+                if let getterIMP = imps[getterName], getterIMP != 0 {
+                    Comment("getter IMP: 0x\(context.machO.addressString(forOffset: .init(getterIMP.uint - context.machO.ptr.bitPattern.uint)))")
+                }
+                if let setterIMP = imps[setterName], setterIMP != 0 {
+                    Comment("setter IMP: 0x\(context.machO.addressString(forOffset: .init(setterIMP.uint - context.machO.ptr.bitPattern.uint)))")
                 }
             }
         }

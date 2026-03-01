@@ -29,6 +29,8 @@ public struct ObjCGenerationOptions: Sendable, Equatable {
     public var addPropertyAttributesComments: Bool = false
     @Default(ifMissing: false)
     public var addMethodIMPAddressComments: Bool = false
+    @Default(ifMissing: false)
+    public var addPropertyAccessorAddressComments: Bool = false
 }
 
 @Loggable(.private)
@@ -425,6 +427,14 @@ actor RuntimeObjCSection {
                 )
 
                 if let finalClassInfo {
+                    if options.addPropertyAccessorAddressComments {
+                        for method in currentClassInfo.methods where method.imp != 0 {
+                            objcDumpContext.methodIMPs[method.name] = method.imp
+                        }
+                        for method in currentClassInfo.classMethods where method.imp != 0 {
+                            objcDumpContext.classMethodIMPs[method.name] = method.imp
+                        }
+                    }
                     return .init(object: name, interfaceString: finalClassInfo.semanticString(using: objcDumpContext))
                 }
             }
@@ -511,8 +521,16 @@ actor RuntimeObjCSection {
                 return .init(object: name, interfaceString: finalProtocolInfo.semanticString(using: objcDumpContext))
             }
         case .objc(.category(.class)):
-            if let interfaceString = categories[name.name]?.info.semanticString(using: objcDumpContext) {
-                return .init(object: name, interfaceString: interfaceString)
+            if let categoryInfo = categories[name.name]?.info {
+                if options.addPropertyAccessorAddressComments {
+                    for method in categoryInfo.methods where method.imp != 0 {
+                        objcDumpContext.methodIMPs[method.name] = method.imp
+                    }
+                    for method in categoryInfo.classMethods where method.imp != 0 {
+                        objcDumpContext.classMethodIMPs[method.name] = method.imp
+                    }
+                }
+                return .init(object: name, interfaceString: categoryInfo.semanticString(using: objcDumpContext))
             }
         case .c(.struct):
             if let interfaceString = structs[name.name]?.semanticString(isStruct: true, context: objcDumpContext) {
