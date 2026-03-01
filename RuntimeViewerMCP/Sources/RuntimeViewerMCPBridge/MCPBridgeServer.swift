@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: 
 
 public actor MCPBridgeServer {
     private let listener: MCPBridgeListener
-    
+
     private let windowProvider: MCPBridgeWindowProvider
 
     @Dependency(\.appDefaults)
@@ -78,24 +78,21 @@ public actor MCPBridgeServer {
     }
 
     private func handleListWindows() async -> MCPListWindowsResponse {
-        let windows = await MainActor.run {
-            windowProvider.allWindowContexts().map { context in
-                MCPWindowInfo(
-                    identifier: context.identifier,
-                    displayName: context.displayName,
-                    isKeyWindow: context.isKeyWindow,
-                    selectedTypeName: context.selectedRuntimeObject?.displayName,
-                    selectedTypeImagePath: context.selectedRuntimeObject?.imagePath
-                )
-            }
+        let windows = await windowProvider.allWindowContexts().map { context in
+            MCPWindowInfo(
+                identifier: context.identifier,
+                displayName: context.displayName,
+                isKeyWindow: context.isKeyWindow,
+                selectedTypeName: context.selectedRuntimeObject?.displayName,
+                selectedTypeImagePath: context.selectedRuntimeObject?.imagePath
+            )
         }
+
         return MCPListWindowsResponse(windows: windows)
     }
 
     private func handleSelectedType(_ request: MCPSelectedTypeRequest) async -> MCPSelectedTypeResponse {
-        guard let runtimeObject = await MainActor.run(body: {
-            windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedRuntimeObject
-        }) else {
+        guard let runtimeObject = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedRuntimeObject else {
             return MCPSelectedTypeResponse(
                 imagePath: nil,
                 typeName: nil,
@@ -132,9 +129,9 @@ public actor MCPBridgeServer {
     private func handleTypeInterface(_ request: MCPTypeInterfaceRequest) async -> MCPTypeInterfaceResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
         let options = generationOptions()
-
+        let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
         let imagePaths: Set<String>
-        if let imagePath = request.imagePath {
+        if let imagePath = request.imagePath ?? selectedImagePath {
             imagePaths = [imagePath]
         } else {
             imagePaths = await engine.loadedImagePaths
@@ -175,7 +172,8 @@ public actor MCPBridgeServer {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
 
         let imagePaths: Set<String>
-        if let imagePath = request.imagePath {
+        let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
+        if let imagePath = request.imagePath ?? selectedImagePath {
             imagePaths = [imagePath]
         } else {
             imagePaths = await engine.loadedImagePaths
@@ -342,13 +340,11 @@ public actor MCPBridgeServer {
     }
 
     private func runtimeEngine(forWindowIdentifier identifier: String) async -> RuntimeEngine {
-        await MainActor.run {
-            windowProvider.windowContext(forIdentifier: identifier)?.runtimeEngine ?? .local
-        }
+        await windowProvider.windowContext(forIdentifier: identifier)?.runtimeEngine ?? .local
     }
 
     private func generationOptions() -> RuntimeObjectInterface.GenerationOptions {
-        var options = appDefaults.options
+        var options = RuntimeObjectInterface.GenerationOptions.mcp
         options.transformer = Settings.shared.transformer
         return options
     }
@@ -365,11 +361,11 @@ public actor MCPBridgeServer {
     }
 
     private func findObject(named name: String, in objects: [RuntimeObject]) -> RuntimeObject? {
-        for obj in objects {
-            if obj.name == name || obj.displayName == name {
-                return obj
+        for object in objects {
+            if object.name == name || object.displayName == name {
+                return object
             }
-            if let found = findObject(named: name, in: obj.children) {
+            if let found = findObject(named: name, in: object.children) {
                 return found
             }
         }

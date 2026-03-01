@@ -64,8 +64,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         splitViewController.setupBindings(for: viewModel)
 
-        documentState.$currentImageName
+        documentState.$currentImageNode
             .asDriver()
+            .map { $0?.name }
             .driveOnNext { [weak self] imageName in
                 guard let self else { return }
                 var title = documentState.runtimeEngine.source.description
@@ -184,7 +185,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
     override func responds(to aSelector: Selector!) -> Bool {
         switch aSelector {
         case #selector(exportInterface(_:)):
-            return documentState.currentImageName != nil
+            return documentState.currentImageNode != nil
         default:
             return super.responds(to: aSelector)
         }

@@ -6,7 +6,12 @@ import RuntimeViewerMCPShared
 
 let listWindowsTool = Tool(
     name: "list_windows",
-    description: "Lists all open RuntimeViewer windows with their identifiers. Call this first to get the window_identifier needed by other tools.",
+    description: """
+        Lists all open RuntimeViewer document windows. Call this first — every other tool requires a window_identifier returned here. \
+        Each entry contains: identifier (stable per window session), display title, key-window flag, \
+        and the currently selected type's name and image path (if any). \
+        Returns an empty list when no documents are open; in that case, ask the user to launch RuntimeViewer and open a document.
+        """,
     inputSchema: .object([
         "type": .string("object"),
     ])
@@ -14,7 +19,15 @@ let listWindowsTool = Tool(
 
 let selectedTypeTool = Tool(
     name: "get_selected_type",
-    description: "Returns the currently selected type in a specific RuntimeViewer window, including its image path, type name, kind, and full interface text.",
+    description: """
+        Returns the type currently selected in the sidebar of a RuntimeViewer window. \
+        Response includes: name (internal/mangled for Swift), display name (human-readable), \
+        kind (e.g. "Objective-C Class", "Swift Struct", "Swift Protocol", etc.), \
+        image path (the framework or dylib it belongs to), and the full generated interface text. \
+        For ObjC types the interface is an @interface header; for Swift types it is a Swift-style declaration \
+        including methods, properties, protocol conformances, and all extensions/conformance extensions. \
+        Returns a "no type selected" message if the sidebar has no selection.
+        """,
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
@@ -29,7 +42,15 @@ let selectedTypeTool = Tool(
 
 let typeInterfaceTool = Tool(
     name: "get_type_interface",
-    description: "Gets the interface declaration for a specific runtime type. Returns the type's full interface text including methods, properties, and protocol conformances. If image_path is omitted, searches across all loaded images.",
+    description: """
+        Retrieves the full generated interface declaration for a type by exact name match. \
+        Matches against both the internal name and display name of each type. \
+        For ObjC types the output is an @interface header with methods, properties, and protocol conformances. \
+        For Swift types it is a Swift declaration followed by all extension and conformance extension blocks. \
+        Providing image_path restricts the search to a single image and is significantly faster; \
+        omitting it searches all previously loaded images. \
+        Use search_types first if you are unsure of the exact type name or image path.
+        """,
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
@@ -39,11 +60,11 @@ let typeInterfaceTool = Tool(
             ]),
             "image_path": .object([
                 "type": .string("string"),
-                "description": .string("Optional: the full path of the image (framework/dylib) containing the type. If omitted, searches all loaded images."),
+                "description": .string("Full path of the image (framework/dylib) containing the type. Strongly recommended for faster lookup. If omitted, searches all loaded images."),
             ]),
             "type_name": .object([
                 "type": .string("string"),
-                "description": .string("The name of the type to inspect (e.g. 'NSView', 'UIViewController')"),
+                "description": .string("Exact type name — matches against both internal name (e.g. mangled Swift name) and display name (e.g. 'NSView', 'SwiftUI.Text')"),
             ]),
         ]),
         "required": .array([.string("window_identifier"), .string("type_name")]),
@@ -52,7 +73,16 @@ let typeInterfaceTool = Tool(
 
 let listTypesTool = Tool(
     name: "list_types",
-    description: "Lists all runtime types (classes, protocols, structs, etc.) in an image (framework/dylib). If image_path is omitted, lists types from all loaded images.",
+    description: """
+        Lists all runtime types in an image, grouped by kind with a total count. \
+        Returned kinds include: Objective-C Class, Objective-C Protocol, Objective-C Class Category, \
+        Swift Class, Swift Struct, Swift Enum, Swift Protocol, Swift TypeAlias, \
+        and their Extension/Conformance variants, as well as C Struct and C Union. \
+        Each entry has a display name and kind. Results are flattened from the type hierarchy tree. \
+        WARNING: omitting image_path enumerates every type across all loaded images — \
+        this can produce an extremely large response and trigger heavy I/O. Always provide image_path when possible. \
+        If you only need to find types by name, prefer search_types instead.
+        """,
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
@@ -62,7 +92,7 @@ let listTypesTool = Tool(
             ]),
             "image_path": .object([
                 "type": .string("string"),
-                "description": .string("Optional: the full path of the image (framework/dylib) to list types from. If omitted, lists types from all loaded images."),
+                "description": .string("Full path of the image (framework/dylib) to list types from. Strongly recommended — omitting it dumps ALL loaded images which can be extremely large."),
             ]),
         ]),
         "required": .array([.string("window_identifier")]),
@@ -71,7 +101,14 @@ let listTypesTool = Tool(
 
 let searchTypesTool = Tool(
     name: "search_types",
-    description: "Searches for runtime types by name across all loaded images or within a specific image. Performs case-insensitive substring matching. Use this to find types when you don't know the exact image path.",
+    description: """
+        Searches for runtime types by name using case-insensitive substring matching against both \
+        the internal name (mangled for Swift) and the display name (human-readable). \
+        Returns each match with its display name, kind, and full image path. \
+        This is the preferred way to locate a type when you do not know its exact name or image path. \
+        Typical workflow: search_types to find the type → use the returned image_path and display name \
+        with get_type_interface for efficient lookup.
+        """,
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
@@ -81,43 +118,52 @@ let searchTypesTool = Tool(
             ]),
             "query": .object([
                 "type": .string("string"),
-                "description": .string("The search query string (case-insensitive substring match against type names)"),
+                "description": .string("Case-insensitive substring to match against type names (e.g. 'ViewController', 'NSWindow', 'Text')"),
             ]),
             "image_path": .object([
                 "type": .string("string"),
-                "description": .string("Optional: limit search to a specific image path. If omitted, searches all loaded images."),
+                "description": .string("Restrict search to a specific image path. If omitted, searches all loaded images."),
             ]),
         ]),
         "required": .array([.string("window_identifier"), .string("query")]),
     ])
 )
 
-let grepTypeInterfaceTool = Tool(
-    name: "grep_type_interface",
-    description: "Searches through generated interface text of all types for a keyword pattern. Returns matching types with the lines that contain the pattern. Useful for finding types that declare specific methods, properties, or protocol conformances. If image_path is omitted, searches across all loaded images.",
-    inputSchema: .object([
-        "type": .string("object"),
-        "properties": .object([
-            "window_identifier": .object([
-                "type": .string("string"),
-                "description": .string("The window identifier obtained from list_windows"),
-            ]),
-            "image_path": .object([
-                "type": .string("string"),
-                "description": .string("Optional: the full path of the image (framework/dylib) to search in. If omitted, searches all loaded images."),
-            ]),
-            "pattern": .object([
-                "type": .string("string"),
-                "description": .string("The search pattern (case-insensitive substring match against interface text lines)"),
-            ]),
-        ]),
-        "required": .array([.string("window_identifier"), .string("pattern")]),
-    ])
-)
+//let grepTypeInterfaceTool = Tool(
+//    name: "grep_type_interface",
+//    description: "Searches through generated interface text of all types for a keyword pattern. Returns matching types with the lines that contain the pattern. Useful for finding types that declare specific methods, properties, or protocol conformances. If image_path is omitted, searches across all loaded images.",
+//    inputSchema: .object([
+//        "type": .string("object"),
+//        "properties": .object([
+//            "window_identifier": .object([
+//                "type": .string("string"),
+//                "description": .string("The window identifier obtained from list_windows"),
+//            ]),
+//            "image_path": .object([
+//                "type": .string("string"),
+//                "description": .string("Optional: the full path of the image (framework/dylib) to search in. If omitted, searches all loaded images."),
+//            ]),
+//            "pattern": .object([
+//                "type": .string("string"),
+//                "description": .string("The search pattern (case-insensitive substring match against interface text lines)"),
+//            ]),
+//        ]),
+//        "required": .array([.string("window_identifier"), .string("pattern")]),
+//    ])
+//)
 
 let memberAddressesTool = Tool(
     name: "get_member_addresses",
-    description: "Gets the runtime memory addresses of Swift functions and computed property accessors for a specific type. Returns the mangled symbol name and hex address for each member. Only works for Swift types (not ObjC/C). If member_name is provided, filters results to members whose name contains the given string (case-insensitive). If image_path is omitted, searches across all loaded images.",
+    description: """
+        Returns runtime memory addresses of a type's members. Supports both Swift and Objective-C types (not C structs/unions). \
+        For Swift types: returns functions, static functions, initializers, computed property accessors (getter/setter/modify/read), \
+        and subscript accessors, with mangled symbol names and hex addresses. \
+        For ObjC types (classes, protocols, categories): returns instance/class methods with their IMP addresses, \
+        plus property getter and setter accessors (respects custom getter/setter names). \
+        Members with a zero IMP (e.g. from the dyld shared cache) are excluded. \
+        Each entry includes: kind, demangled/readable name, symbol name (e.g. "-[Class method]" for ObjC), and hex address. \
+        Useful for setting breakpoints, hooking functions, or correlating disassembly with source symbols.
+        """,
     inputSchema: .object([
         "type": .string("object"),
         "properties": .object([
@@ -127,15 +173,15 @@ let memberAddressesTool = Tool(
             ]),
             "image_path": .object([
                 "type": .string("string"),
-                "description": .string("Optional: the full path of the image (framework/dylib) containing the type. If omitted, searches all loaded images."),
+                "description": .string("Full path of the image (framework/dylib) containing the type. Recommended for faster lookup. If omitted, searches all loaded images."),
             ]),
             "type_name": .object([
                 "type": .string("string"),
-                "description": .string("The name of the Swift type to inspect (e.g. 'MyClass', 'MyStruct')"),
+                "description": .string("The name of the type to inspect — works for both Swift (e.g. 'MyClass') and ObjC (e.g. 'NSView') types"),
             ]),
             "member_name": .object([
                 "type": .string("string"),
-                "description": .string("Optional: filter members by name (case-insensitive substring match). If omitted, returns all members with addresses."),
+                "description": .string("Filter to members whose name contains this string (case-insensitive substring match). If omitted, returns all members."),
             ]),
         ]),
         "required": .array([.string("window_identifier"), .string("type_name")]),
@@ -152,7 +198,7 @@ let server = Server(
 
 // Register tool list handler
 await server.withMethodHandler(ListTools.self) { _ in
-    .init(tools: [listWindowsTool, selectedTypeTool, typeInterfaceTool, listTypesTool, searchTypesTool, grepTypeInterfaceTool, memberAddressesTool])
+    .init(tools: [listWindowsTool, selectedTypeTool, typeInterfaceTool, listTypesTool, searchTypesTool, /*grepTypeInterfaceTool,*/ memberAddressesTool])
 }
 
 // Lazily connect to bridge when first tool call happens

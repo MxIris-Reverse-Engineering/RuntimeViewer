@@ -14,10 +14,7 @@ public final class DocumentState {
     public var selectedRuntimeObject: RuntimeObject?
 
     @Observed
-    public var currentImageName: String?
-
-    @Observed
-    public var currentImagePath: String?
+    public var currentImageNode: RuntimeImageNode?
 
     @Observed
     public var currentSubtitle: String = ""

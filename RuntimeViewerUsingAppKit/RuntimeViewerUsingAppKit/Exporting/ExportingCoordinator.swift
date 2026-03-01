@@ -20,10 +20,9 @@ final class ExportingCoordinator: SceneCoordinator<ExportingRoute, ExportingTran
     let documentState: DocumentState
 
     init?(documentState: DocumentState) {
-        guard let imageName = documentState.currentImageName,
-              let imagePath = documentState.currentImagePath
+        guard let currentImageNode = documentState.currentImageNode
         else { return nil }
-        self.exportingState = .init(imagePath: imagePath, imageName: imageName)
+        self.exportingState = .init(imagePath: currentImageNode.path, imageName: currentImageNode.name)
         self.documentState = documentState
         super.init(windowController: .init(), initialRoute: nil)
         windowController.contentViewController = ExportingViewController(router: self)
