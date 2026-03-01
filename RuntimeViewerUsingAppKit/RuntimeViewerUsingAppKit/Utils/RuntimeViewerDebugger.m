@@ -1,20 +1,14 @@
-//
-//  UIDebugger.m
-//  UIDebugger
-//
-//  Created by Guilherme Rambo on 25/03/16.
-//  Copyright © 2016 Guilherme Rambo. All rights reserved.
-//
+#ifdef DEBUG
 
-#import "UIDebugger.h"
+#import "RuntimeViewerDebugger.h"
 
-@interface UIDebuggerMenuItem: NSMenuItem
+@interface RuntimeViewerDebuggerMenuItem: NSMenuItem
+
 + (void)insertInMainMenu;
+
 @end
 
-@implementation UIDebugger
-
-#ifdef DEBUG
+@implementation RuntimeViewerDebugger
 
 + (void)load
 {
@@ -24,17 +18,14 @@
     [[NSUserDefaults standardUserDefaults] setVolatileDomain:argValues forName:NSArgumentDomain];
 
     [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidFinishLaunchingNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification * _Nonnull note) {
-        [UIDebuggerMenuItem insertInMainMenu];
+        [RuntimeViewerDebuggerMenuItem insertInMainMenu];
     }];
 }
 
-#endif
 
 @end
 
-@implementation UIDebuggerMenuItem
-
-#ifdef DEBUG
+@implementation RuntimeViewerDebuggerMenuItem
 
 + (void)insertInMainMenu
 {
@@ -44,19 +35,23 @@
 
 - (id)init
 {
-    return [self initWithTitle:@"Debug UI" action:@selector(submenuAction:) keyEquivalent:@""];
+    return [self initWithTitle:@"Debug" action:@selector(submenuAction:) keyEquivalent:@""];
 }
 
 - (id)initWithTitle:(NSString *)itemName action:(SEL)anAction keyEquivalent:(NSString *)charCode
 {
     if (self = [super initWithTitle:itemName action:anAction keyEquivalent:charCode])
     {
-        NSMenu *submenu = [[NSMenu alloc] initWithTitle:@"Debug UI"];
+        NSMenu *submenu = [[NSMenu alloc] initWithTitle:@"Debug"];
         
         NSMenuItem *item1 = [[NSMenuItem alloc] initWithTitle:@"Visualize Constraints" action:@selector(visualizeConstraints:) keyEquivalent:@""];
         [item1 setTarget:self];
         [submenu addItem:item1];
-        
+
+        NSMenuItem *item2 = [[NSMenuItem alloc] initWithTitle:@"Copy MCP Server Path" action:@selector(copyMCPServerPath:) keyEquivalent:@""];
+        [item2 setTarget:self];
+        [submenu addItem:item2];
+
         [self setSubmenu:submenu];
         
         return self;
@@ -68,7 +63,7 @@
 {
     NSWindow *window = [NSApp mainWindow];
     NSView *firstResponderView = (NSView *)window.firstResponder;
-    
+
     if ([firstResponderView respondsToSelector:@selector(constraints)]) {
         [window visualizeConstraints:firstResponderView.constraints];
     } else {
@@ -76,6 +71,15 @@
     }
 }
 
-#endif
+- (IBAction)copyMCPServerPath:(id)sender
+{
+    NSString *path = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"RuntimeViewerMCPServer"];
+    if (path) {
+        [[NSPasteboard generalPasteboard] clearContents];
+        [[NSPasteboard generalPasteboard] setString:path forType:NSPasteboardTypeString];
+    }
+}
 
 @end
+
+#endif

@@ -48,8 +48,6 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
                     switch route {
                     case .selectedObject(let runtimeObjectName):
                         trigger(.selectedObject(runtimeObjectName))
-                    case .exportInterface:
-                        trigger(.exportInterface)
                     default:
                         break
                     }

@@ -31,7 +31,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         switch route {
         case .main(let runtimeEngine):
             documentState.runtimeEngine = runtimeEngine
-            documentState.currentImageName = nil
+            documentState.currentImageNode = nil
             sidebarCoordinator.removeFromParent()
             contentCoordinator.removeFromParent()
             inspectorCoordinator.removeFromParent()
@@ -103,18 +103,14 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 guard let self else { return }
                 switch route {
                 case .clickedNode(let imageNode):
-                    documentState.currentImageName = imageNode.name
-                    documentState.currentImagePath = imageNode.path
+                    documentState.currentImageNode = imageNode
                 case .selectedObject(let runtimeObject):
                     documentState.selectedRuntimeObject = runtimeObject
                     contentCoordinator.trigger(.root(runtimeObject))
                 case .back:
-                    documentState.currentImageName = nil
-                    documentState.currentImagePath = nil
+                    documentState.currentImageNode = nil
                     documentState.selectedRuntimeObject = nil
                     contentCoordinator.trigger(.placeholder)
-                case .exportInterface:
-                    trigger(.exportInterfaces)
                 case .selectedNode:
                     break
                 case .root:

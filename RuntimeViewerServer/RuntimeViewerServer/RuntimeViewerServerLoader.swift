@@ -56,9 +56,11 @@ private enum RuntimeViewerServerLoader {
                 #if os(macOS) || targetEnvironment(macCatalyst)
 
                 if LSBundleProxy.forCurrentProcess().isSandboxed {
-                    runtimeEngine = try await RuntimeEngine(source: .localSocketServer(name: processName, identifier: .init(rawValue: identifier)))
+                    runtimeEngine = RuntimeEngine(source: .localSocketServer(name: processName, identifier: .init(rawValue: identifier)))
+                    try await runtimeEngine?.connect()
                 } else {
-                    runtimeEngine = try await RuntimeEngine(source: .remote(name: processName, identifier: .init(rawValue: identifier), role: .server))
+                    runtimeEngine = RuntimeEngine(source: .remote(name: processName, identifier: .init(rawValue: identifier), role: .server))
+                    try await runtimeEngine?.connect()
                 }
 
                 #else
@@ -69,7 +71,8 @@ private enum RuntimeViewerServerLoader {
                 let name = await UIDevice.current.name
                 #endif
 
-                runtimeEngine = try await RuntimeEngine(source: .bonjourServer(name: name, identifier: .init(rawValue: name)))
+                runtimeEngine = RuntimeEngine(source: .bonjourServer(name: name, identifier: .init(rawValue: name)))
+                try await runtimeEngine?.connect()
 
                 #endif
 

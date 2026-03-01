@@ -96,7 +96,7 @@ public actor RuntimeEngine {
 
     public private(set) var imageList: [String] = []
 
-    public private(set) var loadedImagePaths: [String] = []
+    public private(set) var loadedImagePaths: Set<String> = []
 
     @Published
     public private(set) var imageNodes: [RuntimeImageNode] = []
@@ -300,8 +300,13 @@ public actor RuntimeEngine {
     private func _objects(in image: String) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects in image: \(image, privacy: .public)")
         let image = DyldUtilities.patchImagePathForDyld(image)
-        let objcObjects = try await objcSectionFactory.section(for: image).allObjects()
-        let swiftObjects = try await swiftSectionFactory.section(for: image).allObjects()
+        let (isObjCSectionExisted, objcSection) = try await objcSectionFactory.section(for: image)
+        let objcObjects = try await objcSection.allObjects()
+        let (isSwiftSectionExisted, swiftSection) = try await swiftSectionFactory.section(for: image)
+        let swiftObjects = try await swiftSection.allObjects()
+        if !isObjCSectionExisted || !isSwiftSectionExisted {
+            loadedImagePaths.insert(image)
+        }
         #log(.debug, "Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects")
         return objcObjects + swiftObjects
     }
@@ -369,7 +374,7 @@ extension RuntimeEngine {
             _ = try await objcSectionFactory.section(for: path)
             _ = try await swiftSectionFactory.section(for: path)
             reloadData(isReloadImageNodes: false)
-            loadedImagePaths.append(path)
+            loadedImagePaths.insert(path)
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
         }
@@ -420,6 +425,17 @@ extension RuntimeEngine {
             }
         } remote: {
             return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: object)
+        }
+    }
+
+    public func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
+        switch object.kind {
+        case .swift:
+            return try await swiftSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
+        case .objc:
+            return try await objcSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
+        default:
+            return []
         }
     }
 }

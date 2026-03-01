@@ -18,6 +18,8 @@ public struct SwiftGenerationOptions: Sendable, Equatable {
     @Default(ifMissing: false)
     public var emitOffsetComments: Bool = false
     @Default(ifMissing: false)
+    public var printMemberAddress: Bool = false
+    @Default(ifMissing: false)
     public var printTypeLayout: Bool = false
     @Default(ifMissing: false)
     public var printEnumLayout: Bool = false
@@ -37,7 +39,7 @@ actor RuntimeSwiftSection {
     private let machO: MachOImage
 
     private let factory: RuntimeSwiftSectionFactory
-    
+
     private var indexer: SwiftInterfaceIndexer<MachOImage>
 
     private var printer: SwiftInterfacePrinter<MachOImage>
@@ -214,6 +216,7 @@ actor RuntimeSwiftSection {
         let newPrintConfiguration = SwiftInterfacePrintConfiguration(
             printStrippedSymbolicItem: options.printStrippedSymbolicItem,
             printFieldOffset: options.emitOffsetComments,
+            printMemberAddress: options.printMemberAddress,
             printTypeLayout: options.printTypeLayout,
             printEnumLayout: options.printEnumLayout,
             fieldOffsetTransformer: fieldOffsetTransformer,
@@ -367,6 +370,139 @@ actor RuntimeSwiftSection {
         return newInterface
     }
 
+    func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
+        #log(.debug, "Getting member addresses for: \(object.displayName, privacy: .public)")
+        // Ensure the definition is indexed by generating the interface (uses internal cache)
+        _ = try? await interface(for: object)
+
+        guard let definitionName = nameToInterfaceDefinitionName[object] else {
+            #log(.debug, "No definition found for: \(object.displayName, privacy: .public)")
+            return []
+        }
+
+        var result: [RuntimeMemberAddress] = []
+
+        func shouldInclude(_ name: String) -> Bool {
+            guard let filter = memberName else { return true }
+            return name.lowercased().contains(filter.lowercased())
+        }
+
+        func collect(from definition: any Definition, prefix: String = "") {
+            for funcDef in definition.functions where shouldInclude(funcDef.name) {
+                result.append(
+                    RuntimeMemberAddress(
+                        name: funcDef.name,
+                        kind: prefix + "func",
+                        symbolName: funcDef.symbol.symbol.name,
+                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO)
+                    )
+                )
+            }
+            for funcDef in definition.staticFunctions where shouldInclude(funcDef.name) {
+                result.append(
+                    RuntimeMemberAddress(
+                        name: funcDef.name,
+                        kind: prefix + "static func",
+                        symbolName: funcDef.symbol.symbol.name,
+                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO)
+                    )
+                )
+            }
+            for funcDef in definition.constructors where shouldInclude(funcDef.name) {
+                result.append(
+                    RuntimeMemberAddress(
+                        name: funcDef.name,
+                        kind: prefix + "init",
+                        symbolName: funcDef.symbol.symbol.name,
+                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO)
+                    )
+                )
+            }
+            for funcDef in definition.allocators where shouldInclude(funcDef.name) {
+                result.append(
+                    RuntimeMemberAddress(
+                        name: funcDef.name,
+                        kind: prefix + "allocator",
+                        symbolName: funcDef.symbol.symbol.name,
+                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO)
+                    )
+                )
+            }
+            for varDef in definition.variables where shouldInclude(varDef.name) {
+                for accessor in varDef.accessors where accessor.kind != .none {
+                    result.append(
+                        RuntimeMemberAddress(
+                            name: varDef.name,
+                            kind: prefix + accessor.kind.kindString,
+                            symbolName: accessor.symbol.symbol.name,
+                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO)
+                        )
+                    )
+                }
+            }
+            for varDef in definition.staticVariables where shouldInclude(varDef.name) {
+                for accessor in varDef.accessors where accessor.kind != .none {
+                    result.append(
+                        RuntimeMemberAddress(
+                            name: varDef.name,
+                            kind: prefix + "static \(accessor.kind.kindString)",
+                            symbolName: accessor.symbol.symbol.name,
+                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO)
+                        )
+                    )
+                }
+            }
+            for subscriptDef in definition.subscripts where shouldInclude("subscript") {
+                for accessor in subscriptDef.accessors where accessor.kind != .none {
+                    result.append(
+                        RuntimeMemberAddress(
+                            name: "subscript",
+                            kind: prefix + "subscript.\(accessor.kind.kindString)",
+                            symbolName: accessor.symbol.symbol.name,
+                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO)
+                        )
+                    )
+                }
+            }
+            for subscriptDef in definition.staticSubscripts where shouldInclude("subscript") {
+                for accessor in subscriptDef.accessors where accessor.kind != .none {
+                    result.append(
+                        RuntimeMemberAddress(
+                            name: "subscript",
+                            kind: prefix + "static subscript.\(accessor.kind.kindString)",
+                            symbolName: accessor.symbol.symbol.name,
+                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO)
+                        )
+                    )
+                }
+            }
+        }
+
+        switch definitionName {
+        case .rootType(let typeName),
+             .childType(let typeName):
+            if let typeDefinition = indexer.allTypeDefinitions[typeName] {
+                collect(from: typeDefinition)
+            }
+        case .rootProtocol(let protocolName),
+             .childProtocol(let protocolName):
+            if let protocolDefinition = indexer.allProtocolDefinitions[protocolName] {
+                collect(from: protocolDefinition)
+            }
+        case .typeExtension(let extName):
+            indexer.typeExtensionDefinitions[extName]?.forEach { collect(from: $0) }
+        case .protocolExtension(let extName):
+            indexer.protocolExtensionDefinitions[extName]?.forEach { collect(from: $0) }
+        case .typeAliasExtension(let extName):
+            indexer.typeAliasExtensionDefinitions[extName]?.forEach { collect(from: $0) }
+        case .conformance(let extName):
+            indexer.conformanceExtensionDefinitions[extName]?.forEach { collect(from: $0) }
+        }
+
+        #log(.debug, "Found \(result.count, privacy: .public) member addresses")
+        return result
+    }
+
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
         #log(.debug, "Getting Swift class hierarchy for: \(object.displayName, privacy: .public)")
         guard case .swift(.type(.class)) = object.kind,
@@ -494,16 +630,16 @@ actor RuntimeSwiftSectionFactory {
         sections[imagePath]
     }
 
-    func section(for imagePath: String) async throws -> RuntimeSwiftSection {
+    func section(for imagePath: String) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached Swift section for: \(imagePath, privacy: .public)")
-            return section
+            return (true, section)
         }
         #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
         let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self)
         sections[imagePath] = section
         #log(.debug, "Swift section created and cached")
-        return section
+        return (false, section)
     }
 
     func removeSection(for imagePath: String) {
@@ -517,3 +653,15 @@ actor RuntimeSwiftSectionFactory {
 
 @FrameworkToolboxExtension(.internal)
 extension SwiftInterface.Definition {}
+
+extension SwiftInterface.AccessorKind {
+    fileprivate var kindString: String {
+        switch self {
+        case .getter: return "getter"
+        case .setter: return "setter"
+        case .modifyAccessor: return "modifyAccessor"
+        case .readAccessor: return "readAccessor"
+        case .none: return "none"
+        }
+    }
+}
