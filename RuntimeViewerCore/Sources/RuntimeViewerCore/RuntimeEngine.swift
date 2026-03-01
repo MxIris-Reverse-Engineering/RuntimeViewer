@@ -374,6 +374,7 @@ extension RuntimeEngine {
             _ = try await objcSectionFactory.section(for: path)
             _ = try await swiftSectionFactory.section(for: path)
             reloadData(isReloadImageNodes: false)
+            loadedImagePaths.insert(path)
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
         }

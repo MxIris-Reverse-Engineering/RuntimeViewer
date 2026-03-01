@@ -576,6 +576,48 @@ actor RuntimeObjCSection {
             return result
         }
 
+        func collectPropertyAccessors(
+            properties: [ObjCPropertyInfo],
+            methods: [ObjCMethodInfo],
+            typeName: String
+        ) -> [RuntimeMemberAddress] {
+            // Build method name -> IMP lookup table
+            var methodIMPs: [String: UInt64] = [:]
+            for method in methods where method.imp != 0 {
+                methodIMPs[method.name] = method.imp
+            }
+
+            var result: [RuntimeMemberAddress] = []
+            for property in properties {
+                let getterName = property.customGetter ?? property.name
+                let setterName = property.customSetter ?? "set\(property.name.uppercasedFirst):"
+                let prefix = property.isClassProperty ? "+" : "-"
+
+                if let getterIMP = methodIMPs[getterName], shouldInclude(property.name) {
+                    result.append(
+                        RuntimeMemberAddress(
+                            name: property.name,
+                            kind: property.isClassProperty ? "class property getter" : "property getter",
+                            symbolName: "\(prefix)[\(typeName) \(getterName)]",
+                            address: formatAddress(getterIMP)
+                        )
+                    )
+                }
+
+                if let setterIMP = methodIMPs[setterName], shouldInclude(property.name) {
+                    result.append(
+                        RuntimeMemberAddress(
+                            name: property.name,
+                            kind: property.isClassProperty ? "class property setter" : "property setter",
+                            symbolName: "\(prefix)[\(typeName) \(setterName)]",
+                            address: formatAddress(setterIMP)
+                        )
+                    )
+                }
+            }
+            return result
+        }
+
         let name = object.withImagePath(imagePath)
         var result: [RuntimeMemberAddress] = []
 
@@ -583,17 +625,30 @@ actor RuntimeObjCSection {
         case .objc(.type(.class)):
             if let classGroup = classes[name.name], let classInfo = classGroup.info.first {
                 result.append(contentsOf: collectMethods(classInfo.methods + classInfo.classMethods, typeName: classInfo.name))
+                result.append(contentsOf: collectPropertyAccessors(
+                    properties: classInfo.properties + classInfo.classProperties,
+                    methods: classInfo.methods + classInfo.classMethods,
+                    typeName: classInfo.name
+                ))
             }
         case .objc(.type(.protocol)):
             if let protocolInfo = protocols[name.name]?.info {
-                result.append(contentsOf: collectMethods(
-                    protocolInfo.methods + protocolInfo.classMethods + protocolInfo.optionalMethods + protocolInfo.optionalClassMethods,
+                let allMethods = protocolInfo.methods + protocolInfo.classMethods + protocolInfo.optionalMethods + protocolInfo.optionalClassMethods
+                result.append(contentsOf: collectMethods(allMethods, typeName: protocolInfo.name))
+                result.append(contentsOf: collectPropertyAccessors(
+                    properties: protocolInfo.properties + protocolInfo.classProperties + protocolInfo.optionalProperties + protocolInfo.optionalClassProperties,
+                    methods: allMethods,
                     typeName: protocolInfo.name
                 ))
             }
         case .objc(.category(.class)):
             if let categoryInfo = categories[name.name]?.info {
                 result.append(contentsOf: collectMethods(categoryInfo.methods + categoryInfo.classMethods, typeName: categoryInfo.uniqueName))
+                result.append(contentsOf: collectPropertyAccessors(
+                    properties: categoryInfo.properties + categoryInfo.classProperties,
+                    methods: categoryInfo.methods + categoryInfo.classMethods,
+                    typeName: categoryInfo.uniqueName
+                ))
             }
         default:
             break
