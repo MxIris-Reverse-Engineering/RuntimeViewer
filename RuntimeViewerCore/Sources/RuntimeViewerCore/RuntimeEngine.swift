@@ -60,6 +60,7 @@ public actor RuntimeEngine {
         case runtimeObjectsOfKindInImage
         case runtimeObjectsInImage
         case reloadData
+        case memberAddresses
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
@@ -196,6 +197,7 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .runtimeObjectsInImage, of: self) { $0.objects(in:) }
         setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
+        setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
         #log(.debug, "Server message handlers setup complete")
     }
 
@@ -428,15 +430,29 @@ extension RuntimeEngine {
         }
     }
 
+    private struct MemberAddressesRequest: Codable {
+        let object: RuntimeObject
+        let memberName: String?
+    }
+    
     public func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
-        switch object.kind {
-        case .swift:
-            return try await swiftSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
-        case .objc:
-            return try await objcSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
-        default:
-            return []
+        try await memberAddresses(for: .init(object: object, memberName: memberName))
+    }
+    
+    private func memberAddresses(for request: MemberAddressesRequest) async throws -> [RuntimeMemberAddress] {
+        try await self.request {
+            switch request.object.kind {
+            case .swift:
+                return try await swiftSectionFactory.existingSection(for: request.object.imagePath)?.memberAddresses(for: request.object, memberName: request.memberName) ?? []
+            case .objc:
+                return try await objcSectionFactory.existingSection(for: request.object.imagePath)?.memberAddresses(for: request.object, memberName: request.memberName) ?? []
+            default:
+                return []
+            }
+        } remote: { senderConnection in
+            return try await senderConnection.sendMessage(name: .memberAddresses, request: request)
         }
+
     }
 }
 
