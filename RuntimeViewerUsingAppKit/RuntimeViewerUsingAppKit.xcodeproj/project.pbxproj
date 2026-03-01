@@ -30,6 +30,7 @@
 		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
 		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
+		E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Copy RuntimeViewerServer Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */; };
 		E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */; };
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
@@ -143,6 +144,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		E961FEEB2F54511E00ED3419 /* Copy RuntimeViewerServer Framework */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Copy RuntimeViewerServer Framework */,
+			);
+			name = "Copy RuntimeViewerServer Framework";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E9862A092F36F58900139991 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -655,6 +667,7 @@
 				E9432FDE2C0D614900362862 /* Sources */,
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
+				E961FEEB2F54511E00ED3419 /* Copy RuntimeViewerServer Framework */,
 				E9F6CD052D9A7B1700DBFB50 /* Embed LaunchDaemon */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */,
