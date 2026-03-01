@@ -18,6 +18,8 @@ public struct SwiftGenerationOptions: Sendable, Equatable {
     @Default(ifMissing: false)
     public var emitOffsetComments: Bool = false
     @Default(ifMissing: false)
+    public var printMemberAddress: Bool = false
+    @Default(ifMissing: false)
     public var printTypeLayout: Bool = false
     @Default(ifMissing: false)
     public var printEnumLayout: Bool = false
@@ -214,6 +216,7 @@ actor RuntimeSwiftSection {
         let newPrintConfiguration = SwiftInterfacePrintConfiguration(
             printStrippedSymbolicItem: options.printStrippedSymbolicItem,
             printFieldOffset: options.emitOffsetComments,
+            printMemberAddress: options.printMemberAddress,
             printTypeLayout: options.printTypeLayout,
             printEnumLayout: options.printEnumLayout,
             fieldOffsetTransformer: fieldOffsetTransformer,

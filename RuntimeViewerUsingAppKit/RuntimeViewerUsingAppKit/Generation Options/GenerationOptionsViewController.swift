@@ -24,10 +24,13 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
             OptionItem(title: "Strip Dtor Method", keyPath: \.objcHeaderOptions.stripDtorMethod),
             OptionItem(title: "Add Ivar Offset Comments", keyPath: \.objcHeaderOptions.addIvarOffsetComments),
             OptionItem(title: "Add Property Attributes Comments", keyPath: \.objcHeaderOptions.addPropertyAttributesComments),
+            OptionItem(title: "Add Property Accessor Address Comments", keyPath: \.objcHeaderOptions.addPropertyAccessorAddressComments),
+            OptionItem(title: "Add Method IMP Address Comments", keyPath: \.objcHeaderOptions.addMethodIMPAddressComments),
         ]),
         Section(title: "Swift", items: [
             OptionItem(title: "Print Stripped Symbol Description", keyPath: \.swiftInterfaceOptions.printStrippedSymbolicItem),
             OptionItem(title: "Print Offset Comments", keyPath: \.swiftInterfaceOptions.emitOffsetComments),
+            OptionItem(title: "Print Member Address", keyPath: \.swiftInterfaceOptions.printMemberAddress),
             OptionItem(title: "Print Type Layout", keyPath: \.swiftInterfaceOptions.printTypeLayout),
             OptionItem(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
             OptionItem(title: "Synthesize Opaque Type (WIP)", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
