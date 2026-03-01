@@ -27,9 +27,13 @@ public struct ObjCGenerationOptions: Sendable, Equatable {
     public var addIvarOffsetComments: Bool = false
     @Default(ifMissing: false)
     public var addPropertyAttributesComments: Bool = false
+    @Default(ifMissing: false)
+    public var addMethodIMPAddressComments: Bool = false
+    @Default(ifMissing: false)
+    public var addPropertyAccessorAddressComments: Bool = false
 }
 
-@Loggable
+@Loggable(.private)
 actor RuntimeObjCSection {
     enum Error: Swift.Error {
         case invalidMachOImage
@@ -312,7 +316,7 @@ actor RuntimeObjCSection {
         #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
         let cTypeReplacements = transformer.cType.isEnabled ? transformer.cType.replacements : [:]
-        let objcDumpContext = ObjCDumpContext(options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
+        let objcDumpContext = ObjCDumpContext(machO: machO, options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
             guard let name else { return true }
             if isStruct {
                 return self.structs[name] == nil
@@ -423,6 +427,14 @@ actor RuntimeObjCSection {
                 )
 
                 if let finalClassInfo {
+                    if options.addPropertyAccessorAddressComments {
+                        for method in currentClassInfo.methods where method.imp != 0 {
+                            objcDumpContext.methodIMPs[method.name] = method.imp
+                        }
+                        for method in currentClassInfo.classMethods where method.imp != 0 {
+                            objcDumpContext.classMethodIMPs[method.name] = method.imp
+                        }
+                    }
                     return .init(object: name, interfaceString: finalClassInfo.semanticString(using: objcDumpContext))
                 }
             }
@@ -509,8 +521,16 @@ actor RuntimeObjCSection {
                 return .init(object: name, interfaceString: finalProtocolInfo.semanticString(using: objcDumpContext))
             }
         case .objc(.category(.class)):
-            if let interfaceString = categories[name.name]?.info.semanticString(using: objcDumpContext) {
-                return .init(object: name, interfaceString: interfaceString)
+            if let categoryInfo = categories[name.name]?.info {
+                if options.addPropertyAccessorAddressComments {
+                    for method in categoryInfo.methods where method.imp != 0 {
+                        objcDumpContext.methodIMPs[method.name] = method.imp
+                    }
+                    for method in categoryInfo.classMethods where method.imp != 0 {
+                        objcDumpContext.classMethodIMPs[method.name] = method.imp
+                    }
+                }
+                return .init(object: name, interfaceString: categoryInfo.semanticString(using: objcDumpContext))
             }
         case .c(.struct):
             if let interfaceString = structs[name.name]?.semanticString(isStruct: true, context: objcDumpContext) {
@@ -527,6 +547,117 @@ actor RuntimeObjCSection {
         throw Error.invalidRuntimeObject
     }
 
+    func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
+        #log(.debug, "Getting member addresses for: \(object.name, privacy: .public)")
+
+        func shouldInclude(_ name: String) -> Bool {
+            guard let filter = memberName else { return true }
+            return name.lowercased().contains(filter.lowercased())
+        }
+
+        func formatAddress(_ imp: UInt64) -> String {
+            "0x" + machO.addressString(forOffset: .init(imp.uint - machO.ptr.bitPattern.uint))
+        }
+
+        func collectMethods(_ methods: [ObjCMethodInfo], typeName: String) -> [RuntimeMemberAddress] {
+            var result: [RuntimeMemberAddress] = []
+            for method in methods {
+                guard method.imp != 0, shouldInclude(method.name) else { continue }
+                let prefix = method.isClassMethod ? "+" : "-"
+                result.append(
+                    RuntimeMemberAddress(
+                        name: method.name,
+                        kind: method.isClassMethod ? "class method" : "method",
+                        symbolName: "\(prefix)[\(typeName) \(method.name)]",
+                        address: formatAddress(method.imp)
+                    )
+                )
+            }
+            return result
+        }
+
+        func collectPropertyAccessors(
+            properties: [ObjCPropertyInfo],
+            methods: [ObjCMethodInfo],
+            typeName: String
+        ) -> [RuntimeMemberAddress] {
+            // Build method name -> IMP lookup table
+            var methodIMPs: [String: UInt64] = [:]
+            for method in methods where method.imp != 0 {
+                methodIMPs[method.name] = method.imp
+            }
+
+            var result: [RuntimeMemberAddress] = []
+            for property in properties {
+                let getterName = property.customGetter ?? property.name
+                let setterName = property.customSetter ?? "set\(property.name.uppercasedFirst):"
+                let prefix = property.isClassProperty ? "+" : "-"
+
+                if let getterIMP = methodIMPs[getterName], shouldInclude(property.name) {
+                    result.append(
+                        RuntimeMemberAddress(
+                            name: property.name,
+                            kind: property.isClassProperty ? "class property getter" : "property getter",
+                            symbolName: "\(prefix)[\(typeName) \(getterName)]",
+                            address: formatAddress(getterIMP)
+                        )
+                    )
+                }
+
+                if let setterIMP = methodIMPs[setterName], shouldInclude(property.name) {
+                    result.append(
+                        RuntimeMemberAddress(
+                            name: property.name,
+                            kind: property.isClassProperty ? "class property setter" : "property setter",
+                            symbolName: "\(prefix)[\(typeName) \(setterName)]",
+                            address: formatAddress(setterIMP)
+                        )
+                    )
+                }
+            }
+            return result
+        }
+
+        let name = object.withImagePath(imagePath)
+        var result: [RuntimeMemberAddress] = []
+
+        switch name.kind {
+        case .objc(.type(.class)):
+            if let classGroup = classes[name.name], let classInfo = classGroup.info.first {
+                result.append(contentsOf: collectMethods(classInfo.methods + classInfo.classMethods, typeName: classInfo.name))
+                result.append(contentsOf: collectPropertyAccessors(
+                    properties: classInfo.properties + classInfo.classProperties,
+                    methods: classInfo.methods + classInfo.classMethods,
+                    typeName: classInfo.name
+                ))
+            }
+        case .objc(.type(.protocol)):
+            if let protocolInfo = protocols[name.name]?.info {
+                let allMethods = protocolInfo.methods + protocolInfo.classMethods + protocolInfo.optionalMethods + protocolInfo.optionalClassMethods
+                result.append(contentsOf: collectMethods(allMethods, typeName: protocolInfo.name))
+                result.append(contentsOf: collectPropertyAccessors(
+                    properties: protocolInfo.properties + protocolInfo.classProperties + protocolInfo.optionalProperties + protocolInfo.optionalClassProperties,
+                    methods: allMethods,
+                    typeName: protocolInfo.name
+                ))
+            }
+        case .objc(.category(.class)):
+            if let categoryInfo = categories[name.name]?.info {
+                result.append(contentsOf: collectMethods(categoryInfo.methods + categoryInfo.classMethods, typeName: categoryInfo.uniqueName))
+                result.append(contentsOf: collectPropertyAccessors(
+                    properties: categoryInfo.properties + categoryInfo.classProperties,
+                    methods: categoryInfo.methods + categoryInfo.classMethods,
+                    typeName: categoryInfo.uniqueName
+                ))
+            }
+        default:
+            break
+        }
+
+        #log(.debug, "Found \(result.count, privacy: .public) ObjC member addresses")
+        return result
+    }
+
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
         #log(.debug, "Getting class hierarchy for: \(object.name, privacy: .public)")
         guard case .objc(.type(.class)) = object.kind,
@@ -541,7 +672,7 @@ actor RuntimeObjCSection {
     }
 }
 
-@Loggable
+@Loggable(.private)
 actor RuntimeObjCSectionFactory {
     private var sections: [String: RuntimeObjCSection] = [:]
 
@@ -549,16 +680,16 @@ actor RuntimeObjCSectionFactory {
         sections[imagePath]
     }
 
-    func section(for imagePath: String) async throws -> RuntimeObjCSection {
+    func section(for imagePath: String) async throws -> (isExisted: Bool, section: RuntimeObjCSection) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
-            return section
+            return (true, section)
         }
         #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
         let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self)
         sections[imagePath] = section
         #log(.debug, "ObjC section created and cached")
-        return section
+        return (false, section)
     }
 
     func section(for name: RuntimeObjCName) async throws -> RuntimeObjCSection? {

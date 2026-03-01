@@ -41,7 +41,7 @@ final class ExportingViewController: XiblessViewController<NSView> {
 
     private let previousButton = PushButton(title: "Previous", titleFont: .systemFont(ofSize: 13))
 
-    private let router: any Router<ExportingRoute>
+    private unowned let router: any Router<ExportingRoute>
 
     private let navigationComponentsDisposeBag = DisposeBag()
     
@@ -117,7 +117,7 @@ final class ExportingViewController: XiblessViewController<NSView> {
         preferredContentSize = NSSize(width: 745, height: 450)
     }
 
-    func setupBinding(for viewModel: any ExportingStepViewModel) {
+    func setupBinding(for viewModel: some ExportingStepViewModel) {
         rx.disposeBag = DisposeBag()
 
         viewModel.title.drive(titleLabel.rx.stringValue).disposed(by: rx.disposeBag)

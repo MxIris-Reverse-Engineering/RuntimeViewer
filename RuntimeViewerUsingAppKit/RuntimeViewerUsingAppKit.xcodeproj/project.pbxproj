@@ -30,13 +30,14 @@
 		E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */; };
 		E94E36C92CF87BD6006101C8 /* RuntimeViewerSymbols.swift in Sources */ = {isa = PBXBuildFile; fileRef = E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */; };
 		E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */; };
+		E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Copy RuntimeViewerServer Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */; };
 		E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */; };
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
 		E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */; };
 		E97544A42C42D11C00CC9DDD /* GenerationOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */; };
 		E978F2792F1BA1DE004C09B4 /* com.mxiris.runtimeviewer.service.plist in Embed LaunchDaemon */ = {isa = PBXBuildFile; fileRef = E978F2782F1BA1A1004C09B4 /* com.mxiris.runtimeviewer.service.plist */; };
-		E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */ = {isa = PBXBuildFile; fileRef = E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */; };
+		E97B1C972EC9AE5D00FF5375 /* RuntimeViewerDebugger.m in Sources */ = {isa = PBXBuildFile; fileRef = E97B1C962EC9AE5D00FF5375 /* RuntimeViewerDebugger.m */; };
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
 		E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D92D9AF7E5005A573C /* RuntimeViewerService */; };
 		E9862A212F36F60800139991 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = E9862A202F36F60800139991 /* MCP */; };
@@ -143,6 +144,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		E961FEEB2F54511E00ED3419 /* Copy RuntimeViewerServer Framework */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+				E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Copy RuntimeViewerServer Framework */,
+			);
+			name = "Copy RuntimeViewerServer Framework";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		E9862A092F36F58900139991 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -257,8 +269,8 @@
 		E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = LoadFrameworksViewController.xib; sourceTree = "<group>"; };
 		E97544A32C42D11C00CC9DDD /* GenerationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationOptionsViewModel.swift; sourceTree = "<group>"; };
 		E978F2782F1BA1A1004C09B4 /* com.mxiris.runtimeviewer.service.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = com.mxiris.runtimeviewer.service.plist; sourceTree = "<group>"; };
-		E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UIDebugger.h; sourceTree = "<group>"; };
-		E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UIDebugger.m; sourceTree = "<group>"; };
+		E97B1C952EC9AE5D00FF5375 /* RuntimeViewerDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerDebugger.h; sourceTree = "<group>"; };
+		E97B1C962EC9AE5D00FF5375 /* RuntimeViewerDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RuntimeViewerDebugger.m; sourceTree = "<group>"; };
 		E9862A0B2F36F58900139991 /* RuntimeViewerMCPServer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = RuntimeViewerMCPServer; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9862AD42F377E9C00139991 /* AppMCPBridgeWindowProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMCPBridgeWindowProvider.swift; sourceTree = "<group>"; };
 		E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = ../RuntimeViewerServer/RuntimeViewerServer.xcodeproj; sourceTree = SOURCE_ROOT; };
@@ -599,8 +611,8 @@
 		E9CE07BF2C14981D0070A6E8 /* Utils */ = {
 			isa = PBXGroup;
 			children = (
-				E97B1C952EC9AE5D00FF5375 /* UIDebugger.h */,
-				E97B1C962EC9AE5D00FF5375 /* UIDebugger.m */,
+				E97B1C952EC9AE5D00FF5375 /* RuntimeViewerDebugger.h */,
+				E97B1C962EC9AE5D00FF5375 /* RuntimeViewerDebugger.m */,
 				E91CD9962C2127AD00C989CC /* EventMonitor.swift */,
 				E943301B2C0DB75B00362862 /* Then.swift */,
 				E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */,
@@ -655,6 +667,7 @@
 				E9432FDE2C0D614900362862 /* Sources */,
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
+				E961FEEB2F54511E00ED3419 /* Copy RuntimeViewerServer Framework */,
 				E9F6CD052D9A7B1700DBFB50 /* Embed LaunchDaemon */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */,
@@ -789,7 +802,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2630;
-				LastUpgradeCheck = 2620;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					E9432FE12C0D614900362862 = {
 						CreatedOnToolsVersion = 15.4;
@@ -987,7 +1000,7 @@
 				E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */,
 				E975449B2C42BA5B00CC9DDD /* LoadFrameworksViewController.swift in Sources */,
 				E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */,
-				E97B1C972EC9AE5D00FF5375 /* UIDebugger.m in Sources */,
+				E97B1C972EC9AE5D00FF5375 /* RuntimeViewerDebugger.m in Sources */,
 				E9D470692F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,

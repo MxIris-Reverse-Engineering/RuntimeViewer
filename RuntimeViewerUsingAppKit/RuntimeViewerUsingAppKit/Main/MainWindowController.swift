@@ -54,6 +54,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.identifier = .makeIdentifier(of: Self.self)
         contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
         contentWindow.animationBehavior = .documentWindow
+        contentWindow.toolbarStyle = .unified
     }
 
     func setupBindings(for viewModel: MainViewModel) {
@@ -63,8 +64,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         splitViewController.setupBindings(for: viewModel)
 
-        documentState.$currentImageName
+        documentState.$currentImageNode
             .asDriver()
+            .map { $0?.name }
             .driveOnNext { [weak self] imageName in
                 guard let self else { return }
                 var title = documentState.runtimeEngine.source.description
@@ -175,10 +177,19 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             saveLocationSelectedRelay.accept(url)
         }
     }
-    
-//    @IBAction func exportInterface(_ sender: Any?) {
-//        viewModel?.router.trigger(.exportInterfaces)
-//    }
+
+    @IBAction func exportInterface(_ sender: Any?) {
+        viewModel?.router.trigger(.exportInterfaces)
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        switch aSelector {
+        case #selector(exportInterface(_:)):
+            return documentState.currentImageNode != nil
+        default:
+            return super.responds(to: aSelector)
+        }
+    }
 }
 
 extension MainWindowController: MainToolbarController.Delegate {}

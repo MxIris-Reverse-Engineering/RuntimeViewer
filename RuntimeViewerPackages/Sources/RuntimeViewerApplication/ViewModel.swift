@@ -7,7 +7,7 @@ import RuntimeViewerSettings
 #endif
 
 @MainActor
-open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol, Loggable {
+open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
     public let documentState: DocumentState
 
     public unowned let router: any Router<Route>

@@ -75,7 +75,6 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
     @ArrayBuilder<Selector>
     override func lateResponderSelectors() -> [Selector] {
         #selector(openQuickly(_:))
-        #selector(exportInterface(_:))
     }
 
     @IBAction func openQuickly(_ sender: Any?) {
@@ -90,9 +89,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         ) {}
     }
 
-    @IBAction func exportInterface(_ sender: Any?) {
-        viewModel?.router.trigger(.exportInterface)
-    }
+    
 
     @objc private func addToBookmarkMenuItemAction(_ sender: NSMenuItem) {
         guard outlineView.hasValidClickedRow, let cellViewModel = outlineView.itemAtClickedRow as? SidebarRuntimeObjectCellViewModel else { return }
@@ -103,7 +100,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
     override func responds(to aSelector: Selector!) -> Bool {
         guard let aSelector else { return super.responds(to: aSelector) }
         switch aSelector {
-        case #selector(exportInterface(_:)), #selector(openQuickly(_:)):
+        case #selector(openQuickly(_:)):
             return viewModel?.loadState == .loaded
         default:
             return super.responds(to: aSelector)

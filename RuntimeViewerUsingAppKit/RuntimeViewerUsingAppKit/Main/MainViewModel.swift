@@ -188,7 +188,13 @@ final class MainViewModel: ViewModel<MainRoute> {
         return Output(
             sharingServiceData: sharingServiceData ?? .empty(),
             isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
-            isSidebarBackHidden: completeTransition?.map { if $0.isClickedNode || $0.isSelectedObject { false } else { true } }.asDriver(onErrorJustReturn: true) ?? .just(true),
+            isSidebarBackHidden: completeTransition?.map {
+                if $0.isClickedNode || $0.isSelectedObject {
+                    false
+                } else {
+                    true
+                }
+            }.asDriver(onErrorJustReturn: true) ?? .just(true),
             isContentBackHidden: isContentStackDepthGreaterThanOne.map {
                 !$0
             }.asDriver(onErrorJustReturn: true),

@@ -1,9 +1,11 @@
 import Foundation
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
+@Loggable(.private)
 public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
     @Observed
     private var runtimeObject: RuntimeObject
@@ -21,7 +23,7 @@ public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
                 do {
                     return try await documentState.runtimeEngine.hierarchy(for: runtimeObject).joined(separator: "\n")
                 } catch {
-                    logger.error("Failed to fetch class hierarchy for runtime object: \("\(runtimeObject)", privacy: .public) with error: \(error, privacy: .public)")
+                    #log(.error, "Failed to fetch class hierarchy for runtime object: \("\(runtimeObject)", privacy: .public) with error: \(error, privacy: .public)")
                     return runtimeObject.displayName
                 }
             }.catchAndReturn(runtimeObject.displayName).observeOnMainScheduler().asDriverOnErrorJustComplete()

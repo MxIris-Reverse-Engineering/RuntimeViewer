@@ -9,6 +9,7 @@ public enum MCPBridgeCommand: String, Sendable {
     case listTypes = "com.RuntimeViewer.MCP.listTypes"
     case searchTypes = "com.RuntimeViewer.MCP.searchTypes"
     case grepTypeInterface = "com.RuntimeViewer.MCP.grepTypeInterface"
+    case memberAddresses = "com.RuntimeViewer.MCP.memberAddresses"
 }
 
 // MARK: - List Windows
@@ -208,6 +209,48 @@ public struct MCPGrepTypeInterfaceResponse: Codable, Sendable {
 
     public init(matches: [MCPGrepMatch], error: String?) {
         self.matches = matches
+        self.error = error
+    }
+}
+
+// MARK: - Member Addresses
+
+public struct MCPMemberAddressesRequest: Codable, Sendable {
+    public let windowIdentifier: String
+    public let imagePath: String?
+    public let typeName: String
+    public let memberName: String?
+
+    public init(windowIdentifier: String, imagePath: String?, typeName: String, memberName: String?) {
+        self.windowIdentifier = windowIdentifier
+        self.imagePath = imagePath
+        self.typeName = typeName
+        self.memberName = memberName
+    }
+}
+
+public struct MCPMemberAddressInfo: Codable, Sendable {
+    public let name: String
+    public let kind: String
+    public let symbolName: String
+    public let address: String
+
+    public init(name: String, kind: String, symbolName: String, address: String) {
+        self.name = name
+        self.kind = kind
+        self.symbolName = symbolName
+        self.address = address
+    }
+}
+
+public struct MCPMemberAddressesResponse: Codable, Sendable {
+    public let typeName: String?
+    public let members: [MCPMemberAddressInfo]
+    public let error: String?
+
+    public init(typeName: String?, members: [MCPMemberAddressInfo], error: String?) {
+        self.typeName = typeName
+        self.members = members
         self.error = error
     }
 }

@@ -17,6 +17,8 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
 
     private var dataSource: OutlineViewDataSource?
 
+    private var delegate: OutlineViewDelegate?
+
     override var shouldDisplayCommonLoading: Bool {
         true
     }
@@ -74,6 +76,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
         super.setupBindings(for: viewModel)
 
         dataSource = .init(viewModel: viewModel)
+        delegate = .init(viewModel: viewModel)
 
         let input = ViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
@@ -120,9 +123,10 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
             .first()
             .asObservable()
             .subscribeOnNext { [weak self] _ in
-                guard let self, let dataSource else { return }
-                
+                guard let self, let dataSource, let delegate else { return }
+
                 outlineView.rx.setDataSource(dataSource).disposed(by: rx.disposeBag)
+                outlineView.rx.setDelegate(delegate).disposed(by: rx.disposeBag)
                 outlineView.autosaveExpandedItems = true
                 outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
                 outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
@@ -132,6 +136,15 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
 }
 
 extension SidebarRootViewController {
+    private final class OutlineViewDelegate: NSObject, NSOutlineViewDelegate {
+        private unowned let viewModel: ViewModel
+
+        init(viewModel: ViewModel) {
+            self.viewModel = viewModel
+            super.init()
+        }
+    }
+
     private final class OutlineViewDataSource: NSObject, NSOutlineViewDataSource {
         private unowned let viewModel: ViewModel
 
