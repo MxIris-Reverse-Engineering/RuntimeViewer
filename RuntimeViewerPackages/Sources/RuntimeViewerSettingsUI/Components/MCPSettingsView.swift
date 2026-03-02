@@ -27,10 +27,11 @@ struct MCPSettingsView: SettingsContent {
 
                     if settings.useFixedPort {
                         LabeledContent {
-                            TextField("Port", value: $settings.fixedPort, format: .number)
+                            TextField("", value: $settings.fixedPort, format: .number)
                                 .frame(width: 80)
                                 .multilineTextAlignment(.trailing)
                                 .disabled(!settings.isEnabled)
+                            
                         } label: {
                             Text("Port")
                         }
@@ -90,6 +91,7 @@ private struct CopyMCPConfigButton: View {
             {
               "mcpServers": {
                 "RuntimeViewer": {
+                  "type": "http"
                   "url": "http://127.0.0.1:\(port)/mcp"
                 }
               }
@@ -100,6 +102,7 @@ private struct CopyMCPConfigButton: View {
             {
               "mcpServers": {
                 "RuntimeViewer": {
+                  "type": "http",
                   "url": "http://127.0.0.1:<port>/mcp"
                 }
               }
