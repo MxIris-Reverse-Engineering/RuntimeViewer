@@ -10,27 +10,30 @@ import Utilities
 import MetaCodable
 
 @Codable
+@MemberInit
 public struct ObjCGenerationOptions: Sendable, Equatable {
-    @Default(ifMissing: false)
-    public var stripProtocolConformance: Bool = false
-    @Default(ifMissing: false)
-    public var stripOverrides: Bool = false
-    @Default(ifMissing: false)
-    public var stripSynthesizedIvars: Bool = false
-    @Default(ifMissing: false)
-    public var stripSynthesizedMethods: Bool = false
-    @Default(ifMissing: false)
-    public var stripCtorMethod: Bool = false
-    @Default(ifMissing: false)
-    public var stripDtorMethod: Bool = false
-    @Default(ifMissing: false)
-    public var addIvarOffsetComments: Bool = false
-    @Default(ifMissing: false)
-    public var addPropertyAttributesComments: Bool = false
-    @Default(ifMissing: false)
-    public var addMethodIMPAddressComments: Bool = false
-    @Default(ifMissing: false)
-    public var addPropertyAccessorAddressComments: Bool = false
+    @Default(false)
+    public var stripProtocolConformance: Bool
+    @Default(false)
+    public var stripOverrides: Bool
+    @Default(false)
+    public var stripSynthesizedIvars: Bool
+    @Default(false)
+    public var stripSynthesizedMethods: Bool
+    @Default(false)
+    public var stripCtorMethod: Bool
+    @Default(false)
+    public var stripDtorMethod: Bool
+    @Default(false)
+    public var addIvarOffsetComments: Bool
+    @Default(false)
+    public var addPropertyAttributesComments: Bool
+    @Default(false)
+    public var addMethodIMPAddressComments: Bool
+    @Default(false)
+    public var addPropertyAccessorAddressComments: Bool
+    
+    public static let `default` = Self()
 }
 
 @Loggable(.private)

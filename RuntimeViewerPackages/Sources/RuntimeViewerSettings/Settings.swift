@@ -11,22 +11,22 @@ public final class Settings {
 
     private static var storage: SettingsStorageStrategy = SettingsFileSystemStorage()
 
-    @Default(ifMissing: General())
+    @Default(General.default)
     public var general: General = .init() {
         didSet { scheduleAutoSave() }
     }
 
-    @Default(ifMissing: Notifications())
+    @Default(Notifications.default)
     public var notifications: Notifications = .init() {
         didSet { scheduleAutoSave() }
     }
 
-    @Default(ifMissing: TransformerSettings())
+    @Default(TransformerSettings())
     public var transformer: TransformerSettings = .init() {
         didSet { scheduleAutoSave() }
     }
 
-    @Default(ifMissing: MCP())
+    @Default(MCP.default)
     public var mcp: MCP = .init() {
         didSet { scheduleAutoSave() }
     }

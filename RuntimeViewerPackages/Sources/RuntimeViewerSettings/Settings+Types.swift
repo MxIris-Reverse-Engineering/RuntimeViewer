@@ -1,5 +1,6 @@
 import Foundation
 import RuntimeViewerCore
+import MetaCodable
 
 extension Settings {
     /// The appearance of the app
@@ -12,31 +13,50 @@ extension Settings {
         case dark
     }
 
-    public struct General: Codable {
-        public var appearance: Appearances = .system
+    @Codable
+    @MemberInit
+    public struct General {
+        @Default(Settings.Appearances.system)
+        public var appearance: Settings.Appearances
+        
+        public static let `default` = Self()
     }
 
-    public struct Notifications: Codable {
+    @Codable
+    @MemberInit
+    public struct Notifications {
         /// Whether notifications are enabled globally
-        public var isEnabled: Bool = true
+        @Default(true)
+        public var isEnabled: Bool
 
         /// Whether to show notification when connected to a runtime engine
-        public var showOnConnect: Bool = true
+        @Default(true)
+        public var showOnConnect: Bool
 
         /// Whether to show notification when disconnected from a runtime engine
-        public var showOnDisconnect: Bool = true
+        @Default(true)
+        public var showOnDisconnect: Bool
+        
+        public static let `default` = Self()
     }
 
     public typealias TransformerSettings = RuntimeViewerCore.Transformer.Configuration
 
-    public struct MCP: Codable {
+    @Codable
+    @MemberInit
+    public struct MCP {
         /// Whether the MCP server is enabled
-        public var isEnabled: Bool = true
+        @Default(true)
+        public var isEnabled: Bool
 
         /// Whether to use a fixed port instead of automatic assignment
-        public var useFixedPort: Bool = false
+        @Default(false)
+        public var useFixedPort: Bool
 
         /// The fixed port number to use when useFixedPort is true
-        public var fixedPort: UInt16 = 9277
+        @Default(9277)
+        public var fixedPort: UInt16
+        
+        public static let `default` = Self()
     }
 }
