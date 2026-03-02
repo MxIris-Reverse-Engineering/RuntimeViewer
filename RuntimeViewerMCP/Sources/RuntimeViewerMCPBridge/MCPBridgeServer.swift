@@ -1,7 +1,6 @@
 import Foundation
 import RuntimeViewerCore
 import RuntimeViewerApplication
-import RuntimeViewerMCPShared
 import RuntimeViewerSettings
 import Dependencies
 import OSLog
@@ -9,75 +8,18 @@ import OSLog
 private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: "Server")
 
 public actor MCPBridgeServer {
-    private let listener: MCPBridgeListener
-
     private let windowProvider: MCPBridgeWindowProvider
 
     @Dependency(\.appDefaults)
     private var appDefaults
 
-    public init(windowProvider: MCPBridgeWindowProvider, port: UInt16 = 0) throws {
+    public init(windowProvider: MCPBridgeWindowProvider) {
         self.windowProvider = windowProvider
-        self.listener = try MCPBridgeListener(port: port)
     }
 
-    public func start() {
-        listener.start { [self] envelope in
-            try await self.processRequest(envelope)
-        }
-    }
+    // MARK: - Public Handle Methods
 
-    public nonisolated func stop() {
-        listener.stop()
-    }
-
-    deinit {
-        stop()
-    }
-
-    private func processRequest(_ envelope: MCPBridgeEnvelope) async throws -> Data {
-        guard let command = MCPBridgeCommand(rawValue: envelope.identifier) else {
-            throw MCPBridgeTransportError.decodingFailed
-        }
-
-        switch command {
-        case .listWindows:
-            let response = await handleListWindows()
-            return try JSONEncoder().encode(response)
-
-        case .selectedType:
-            let request = try envelope.decode(MCPSelectedTypeRequest.self)
-            let response = await handleSelectedType(request)
-            return try JSONEncoder().encode(response)
-
-        case .typeInterface:
-            let request = try envelope.decode(MCPTypeInterfaceRequest.self)
-            let response = await handleTypeInterface(request)
-            return try JSONEncoder().encode(response)
-
-        case .listTypes:
-            let request = try envelope.decode(MCPListTypesRequest.self)
-            let response = await handleListTypes(request)
-            return try JSONEncoder().encode(response)
-
-        case .searchTypes:
-            let request = try envelope.decode(MCPSearchTypesRequest.self)
-            let response = await handleSearchTypes(request)
-            return try JSONEncoder().encode(response)
-
-        case .grepTypeInterface:
-            let request = try envelope.decode(MCPGrepTypeInterfaceRequest.self)
-            let response = await handleGrepTypeInterface(request)
-            return try JSONEncoder().encode(response)
-
-        case .memberAddresses:
-            let request = try envelope.decode(MCPMemberAddressesRequest.self)
-            let response = await handleMemberAddresses(request)
-            return try JSONEncoder().encode(response)
-        }
-    }
-
-    private func handleListWindows() async -> MCPListWindowsResponse {
+    public func handleListWindows() async -> MCPListWindowsResponse {
         let windows = await windowProvider.allWindowContexts().map { context in
             MCPWindowInfo(
                 identifier: context.identifier,
@@ -91,7 +33,7 @@ public actor MCPBridgeServer {
         return MCPListWindowsResponse(windows: windows)
     }
 
-    private func handleSelectedType(_ request: MCPSelectedTypeRequest) async -> MCPSelectedTypeResponse {
+    public func handleSelectedType(_ request: MCPSelectedTypeRequest) async -> MCPSelectedTypeResponse {
         guard let runtimeObject = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedRuntimeObject else {
             return MCPSelectedTypeResponse(
                 imagePath: nil,
@@ -126,7 +68,7 @@ public actor MCPBridgeServer {
         }
     }
 
-    private func handleTypeInterface(_ request: MCPTypeInterfaceRequest) async -> MCPTypeInterfaceResponse {
+    public func handleTypeInterface(_ request: MCPTypeInterfaceRequest) async -> MCPTypeInterfaceResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
         let options = generationOptions()
         let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
@@ -168,7 +110,7 @@ public actor MCPBridgeServer {
         )
     }
 
-    private func handleListTypes(_ request: MCPListTypesRequest) async -> MCPListTypesResponse {
+    public func handleListTypes(_ request: MCPListTypesRequest) async -> MCPListTypesResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
 
         let imagePaths: Set<String>
@@ -200,15 +142,15 @@ public actor MCPBridgeServer {
         return MCPListTypesResponse(types: allTypes, error: nil)
     }
 
-    private func handleSearchTypes(_ request: MCPSearchTypesRequest) async -> MCPSearchTypesResponse {
+    public func handleSearchTypes(_ request: MCPSearchTypesRequest) async -> MCPSearchTypesResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
         let queryLowercased = request.query.lowercased()
 
         do {
             var results: [MCPRuntimeTypeInfo] = []
 
-            if let imagePath = request.imagePath {
-                // Search within a specific image
+            let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
+            if let imagePath = request.imagePath ?? selectedImagePath {
                 let objects = try await engine.objects(in: imagePath)
                 let flattened = flattenObjects(objects)
                 for obj in flattened {
@@ -222,7 +164,6 @@ public actor MCPBridgeServer {
                     }
                 }
             } else {
-                // Search across all loaded images
                 let imagePaths = await engine.loadedImagePaths
                 for imagePath in imagePaths {
                     do {
@@ -251,7 +192,7 @@ public actor MCPBridgeServer {
         }
     }
 
-    private func handleGrepTypeInterface(_ request: MCPGrepTypeInterfaceRequest) async -> MCPGrepTypeInterfaceResponse {
+    public func handleGrepTypeInterface(_ request: MCPGrepTypeInterfaceRequest) async -> MCPGrepTypeInterfaceResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
         let options = generationOptions()
         let patternLowercased = request.pattern.lowercased()
@@ -300,11 +241,14 @@ public actor MCPBridgeServer {
         return MCPGrepTypeInterfaceResponse(matches: matches, error: nil)
     }
 
-    private func handleMemberAddresses(_ request: MCPMemberAddressesRequest) async -> MCPMemberAddressesResponse {
+    public func handleMemberAddresses(_ request: MCPMemberAddressesRequest) async -> MCPMemberAddressesResponse {
         let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
 
         let imagePaths: Set<String>
-        if let imagePath = request.imagePath {
+
+        let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
+
+        if let imagePath = request.imagePath ?? selectedImagePath {
             imagePaths = [imagePath]
         } else {
             imagePaths = await engine.loadedImagePaths
@@ -338,6 +282,8 @@ public actor MCPBridgeServer {
             error: "Type '\(request.typeName)' not found in \(searchScope)"
         )
     }
+
+    // MARK: - Private Helpers
 
     private func runtimeEngine(forWindowIdentifier identifier: String) async -> RuntimeEngine {
         await windowProvider.windowContext(forIdentifier: identifier)?.runtimeEngine ?? .local

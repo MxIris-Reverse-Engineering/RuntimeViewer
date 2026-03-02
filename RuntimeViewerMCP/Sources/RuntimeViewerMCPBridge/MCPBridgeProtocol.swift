@@ -1,17 +1,5 @@
 import Foundation
 
-// MARK: - Command identifiers
-
-public enum MCPBridgeCommand: String, Sendable {
-    case listWindows = "com.RuntimeViewer.MCP.listWindows"
-    case selectedType = "com.RuntimeViewer.MCP.selectedType"
-    case typeInterface = "com.RuntimeViewer.MCP.typeInterface"
-    case listTypes = "com.RuntimeViewer.MCP.listTypes"
-    case searchTypes = "com.RuntimeViewer.MCP.searchTypes"
-    case grepTypeInterface = "com.RuntimeViewer.MCP.grepTypeInterface"
-    case memberAddresses = "com.RuntimeViewer.MCP.memberAddresses"
-}
-
 // MARK: - List Windows
 
 public struct MCPWindowInfo: Codable, Sendable {

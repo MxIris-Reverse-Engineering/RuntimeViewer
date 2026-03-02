@@ -2,7 +2,6 @@
 import AppKit
 import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
-import RuntimeViewerMCPShared
 
 //@MainActor
 final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
