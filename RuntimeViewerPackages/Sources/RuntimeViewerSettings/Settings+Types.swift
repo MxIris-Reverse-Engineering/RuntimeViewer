@@ -28,4 +28,15 @@ extension Settings {
     }
 
     public typealias TransformerSettings = RuntimeViewerCore.Transformer.Configuration
+
+    public struct MCP: Codable {
+        /// Whether the MCP server is enabled
+        public var isEnabled: Bool = true
+
+        /// Whether to use a fixed port instead of automatic assignment
+        public var useFixedPort: Bool = false
+
+        /// The fixed port number to use when useFixedPort is true
+        public var fixedPort: UInt16 = 9277
+    }
 }

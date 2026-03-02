@@ -26,6 +26,11 @@ public final class Settings {
         didSet { scheduleAutoSave() }
     }
 
+    @Default(ifMissing: MCP())
+    public var mcp: MCP = .init() {
+        didSet { scheduleAutoSave() }
+    }
+
     @IgnoreCoding
     @ObservationIgnored
     private var saveTask: Task<Void, Error>?
@@ -63,6 +68,7 @@ public final class Settings {
             general = decoded.general
             notifications = decoded.notifications
             transformer = decoded.transformer
+            mcp = decoded.mcp
             #log(.debug, "Settings loaded successfully.")
         } catch {
             #log(.debug, "No saved settings found or load failed, using defaults. (\(error, privacy: .public))")

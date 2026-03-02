@@ -26,6 +26,7 @@ private struct SettingsView: SettingsContainer {
         GeneralSettingsView()
         NotificationSettingsView()
         TransformerSettingsView()
+        MCPSettingsView()
         HelperServiceSettingsView()
     }
 }
