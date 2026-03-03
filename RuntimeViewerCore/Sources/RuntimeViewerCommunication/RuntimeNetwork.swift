@@ -72,10 +72,26 @@ public class RuntimeNetworkBrowser {
     }
 
     public func start(handler: @escaping (RuntimeNetworkEndpoint) -> Void) {
+        #log(.info, "Starting Bonjour browser for service type: \(RuntimeNetworkBonjour.type, privacy: .public)")
         browser.stateUpdateHandler = { newState in
-            #log(.info, "browser.stateUpdateHandler \(String(describing: newState), privacy: .public)")
+            #log(.info, "Browser state changed: \(String(describing: newState), privacy: .public)")
         }
         browser.browseResultsChangedHandler = { results, changes in
+            #log(.info, "Browse results changed: \(results.count, privacy: .public) result(s), \(changes.count, privacy: .public) change(s)")
+            for change in changes {
+                switch change {
+                case .added(let result):
+                    if case .service(let name, _, _, _) = result.endpoint {
+                        #log(.info, "Discovered new endpoint: \(name, privacy: .public)")
+                    }
+                case .removed(let result):
+                    if case .service(let name, _, _, _) = result.endpoint {
+                        #log(.info, "Endpoint removed: \(name, privacy: .public)")
+                    }
+                default:
+                    break
+                }
+            }
             for result in results {
                 switch result.endpoint {
                 case .service(let name, _, _, _):

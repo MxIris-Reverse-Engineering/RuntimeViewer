@@ -171,10 +171,17 @@ public actor RuntimeEngine {
     private func handleConnectionStateChange(_ connectionState: RuntimeConnectionState) {
         switch connectionState {
         case .connecting:
+            #log(.info, "Connection state -> connecting (source: \(String(describing: self.source), privacy: .public))")
             stateSubject.send(.connecting)
         case .connected:
+            #log(.info, "Connection state -> connected (source: \(String(describing: self.source), privacy: .public))")
             stateSubject.send(.connected)
         case .disconnected(let error):
+            if let error {
+                #log(.error, "Connection state -> disconnected with error: \(error.localizedDescription, privacy: .public) (source: \(String(describing: self.source), privacy: .public))")
+            } else {
+                #log(.info, "Connection state -> disconnected (source: \(String(describing: self.source), privacy: .public))")
+            }
             stateSubject.send(.disconnected(error: error))
         }
     }

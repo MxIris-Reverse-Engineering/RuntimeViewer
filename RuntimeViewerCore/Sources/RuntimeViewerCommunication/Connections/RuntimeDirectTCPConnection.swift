@@ -309,6 +309,7 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
 ///
 /// let classes = try await client.sendMessage(request: GetClassListRequest())
 /// ```
+@Loggable
 final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirectTCPConnection>, @unchecked Sendable {
     private var connectionStateCancellable: AnyCancellable?
 
@@ -321,6 +322,8 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
     init(host: String, port: UInt16, timeout: TimeInterval = 10) async throws {
         super.init()
 
+        #log(.info, "Connecting to direct TCP server at \(host, privacy: .public):\(port, privacy: .public) (timeout: \(timeout, privacy: .public)s)")
+
         let connection = RuntimeDirectTCPConnection(host: host, port: port)
         self.underlyingConnection = connection
 
@@ -330,17 +333,21 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
             // Observe connection state
             self.connectionStateCancellable = connection.statePublisher
                 .sink { state in
+                    #log(.info, "Direct TCP client connection state: \(String(describing: state), privacy: .public)")
                     if state.isConnected {
                         if didResume.withLock({ !$0 }) {
                             didResume.withLock { $0 = true }
+                            #log(.info, "Direct TCP client connected to \(host, privacy: .public):\(port, privacy: .public)")
                             continuation.resume()
                         }
                     } else if state.isDisconnected {
                         if didResume.withLock({ !$0 }) {
                             didResume.withLock { $0 = true }
                             if case .disconnected(let error) = state, let error {
+                                #log(.error, "Direct TCP client connection failed: \(error.localizedDescription, privacy: .public)")
                                 continuation.resume(throwing: error)
                             } else {
+                                #log(.error, "Direct TCP client connection failed (no error)")
                                 continuation.resume(throwing: RuntimeDirectTCPError.connectionFailed)
                             }
                         }
@@ -352,6 +359,7 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
             } catch {
                 if didResume.withLock({ !$0 }) {
                     didResume.withLock { $0 = true }
+                    #log(.error, "Failed to start direct TCP client: \(error, privacy: .public)")
                     continuation.resume(throwing: error)
                 }
             }
@@ -359,6 +367,7 @@ final class RuntimeDirectTCPClientConnection: RuntimeConnectionBase<RuntimeDirec
             DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
                 if didResume.withLock({ !$0 }) {
                     didResume.withLock { $0 = true }
+                    #log(.error, "Direct TCP client connection timed out after \(timeout, privacy: .public)s")
                     connection.stop(with: .timeout)
                     continuation.resume(throwing: RuntimeDirectTCPError.timeout)
                 }
@@ -409,6 +418,8 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
     init(port: UInt16 = 0) async throws {
         super.init()
 
+        #log(.info, "Creating direct TCP server on port \(port, privacy: .public) (0 = auto-assign)")
+
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
@@ -432,6 +443,8 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
             listener.stateUpdateHandler = { [weak self] listenerState in
                 guard let self else { return }
 
+                #log(.info, "Direct TCP listener state: \(String(describing: listenerState), privacy: .public)")
+
                 switch listenerState {
                 case .ready:
                     if let port = listener.port {
@@ -452,7 +465,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
             listener.newConnectionHandler = { [weak self] newConnection in
                 guard let self else { return }
 
-                #log(.info, "Accepted new connection")
+                #log(.info, "Accepted new direct TCP connection: \(newConnection.debugDescription, privacy: .public)")
 
                 let tcpConnection = RuntimeDirectTCPConnection(connection: newConnection)
                 self.underlyingConnection = tcpConnection
@@ -460,20 +473,24 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                 // Observe connection state
                 self.connectionStateCancellable = tcpConnection.statePublisher
                     .sink { [weak self] state in
+                        #log(.info, "Direct TCP connection state: \(String(describing: state), privacy: .public)")
                         if state.isConnected {
                             if didResume.withLock({ !$0 }) {
                                 didResume.withLock { $0 = true }
+                                #log(.info, "Initial direct TCP connection ready")
                                 continuation.resume()
                             }
                         } else if state.isDisconnected {
                             if didResume.withLock({ !$0 }) {
                                 // Connection failed before becoming ready
                                 if case .disconnected(let error) = state, let error {
+                                    #log(.error, "Direct TCP connection failed before ready: \(error.localizedDescription, privacy: .public)")
                                     didResume.withLock { $0 = true }
                                     continuation.resume(throwing: error)
                                 }
                             } else {
                                 // Connection was ready and then disconnected, restart listening
+                                #log(.info, "Direct TCP connection disconnected, restarting listener...")
                                 Task { [weak self] in
                                     try await self?.restartListening()
                                 }
@@ -484,7 +501,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                 do {
                     try tcpConnection.start()
                 } catch {
-                    #log(.error, "Failed to start connection: \(error, privacy: .public)")
+                    #log(.error, "Failed to start direct TCP connection: \(error, privacy: .public)")
                     Task { [weak self] in
                         try await self?.restartListening()
                     }
@@ -496,33 +513,39 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
     }
 
     private func restartListening() async throws {
+        #log(.info, "Restarting direct TCP listener on \(self.host, privacy: .public):\(self.port, privacy: .public)...")
+
         listener?.newConnectionHandler = { [weak self] newConnection in
             guard let self else { return }
 
-            #log(.info, "Accepted new connection")
+            #log(.info, "Accepted new direct TCP connection after restart: \(newConnection.debugDescription, privacy: .public)")
 
             let tcpConnection = RuntimeDirectTCPConnection(connection: newConnection)
             self.underlyingConnection = tcpConnection
 
             // Observe connection state to restart listening when disconnected
             self.connectionStateCancellable = tcpConnection.statePublisher
-                .filter { $0.isDisconnected }
-                .sink { [weak self] _ in
-                    Task { [weak self] in
-                        try await self?.restartListening()
+                .sink { [weak self] state in
+                    #log(.info, "Direct TCP reconnected connection state: \(String(describing: state), privacy: .public)")
+                    if state.isDisconnected {
+                        #log(.info, "Direct TCP reconnected connection disconnected, restarting listener...")
+                        Task { [weak self] in
+                            try await self?.restartListening()
+                        }
                     }
                 }
 
             do {
                 try tcpConnection.start()
             } catch {
-                #log(.error, "Failed to start connection: \(error, privacy: .public)")
+                #log(.error, "Failed to start direct TCP connection on restart: \(error, privacy: .public)")
             }
         }
     }
 
     /// Stops the server and closes all connections.
     override func stop() {
+        #log(.info, "Stopping direct TCP server on \(self.host, privacy: .public):\(self.port, privacy: .public)")
         connectionStateCancellable?.cancel()
         connectionStateCancellable = nil
         underlyingConnection?.stop()
