@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import ServiceManagement
+import SystemConfiguration
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
@@ -25,6 +26,8 @@ public final class RuntimeEngineManager: Loggable {
     private static let maxRetryAttempts = 3
     private static let retryBaseDelay: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
 
+    private var bonjourServerEngine: RuntimeEngine?
+
     @Dependency(\.helperServiceManager)
     private var helperServiceManager
 
@@ -35,10 +38,15 @@ public final class RuntimeEngineManager: Loggable {
     private var runtimeHelperClient
 
     private init() {
-        Self.logger.info("RuntimeEngineManager initializing...")
+        Self.logger.info("RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public)")
+
         browser.start(
             onAdded: { [weak self] endpoint in
                 guard let self else { return }
+                if endpoint.instanceID == RuntimeNetworkBonjour.localInstanceID {
+                    Self.logger.info("Skipping self Bonjour endpoint: \(endpoint.name, privacy: .public)")
+                    return
+                }
                 Self.logger.info("Bonjour endpoint discovered: \(endpoint.name, privacy: .public), attempting connection...")
                 Task { @MainActor in
                     await self.connectToBonjourEndpoint(endpoint)
@@ -52,6 +60,9 @@ public final class RuntimeEngineManager: Loggable {
                 }
             }
         )
+
+        startBonjourServer()
+
         Task {
             do {
                 Self.logger.info("Launching system runtime engines...")
@@ -59,6 +70,23 @@ public final class RuntimeEngineManager: Loggable {
                 Self.logger.info("System runtime engines launched successfully")
             } catch {
                 Self.logger.error("Failed to launch system runtime engines with error: \(error, privacy: .public)")
+            }
+        }
+    }
+
+    private func startBonjourServer() {
+        let name = SCDynamicStoreCopyComputerName(nil, nil) as? String ?? ProcessInfo.processInfo.hostName
+        let engine = RuntimeEngine(source: .bonjourServer(name: name, identifier: .init(rawValue: name)))
+        bonjourServerEngine = engine
+
+        Self.logger.info("Starting Bonjour server with name: \(name, privacy: .public)")
+
+        Task {
+            do {
+                try await engine.connect()
+                Self.logger.info("Bonjour server connected with name: \(name, privacy: .public)")
+            } catch {
+                Self.logger.error("Failed to start Bonjour server: \(error, privacy: .public)")
             }
         }
     }
