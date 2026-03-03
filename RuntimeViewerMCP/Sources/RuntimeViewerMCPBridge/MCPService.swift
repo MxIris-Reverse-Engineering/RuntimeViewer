@@ -41,6 +41,11 @@ public final class MCPService {
             } catch {
                 #log(.error, "Failed to start MCP HTTP Server: \(error, privacy: .public)")
             }
+            // Initialize previous values before observing to avoid a spurious restart
+            let currentMCP = settings.mcp
+            previousMCPEnabled = currentMCP.isEnabled
+            previousMCPUsesFixedPort = currentMCP.useFixedPort
+            previousMCPFixedPort = currentMCP.fixedPort
             observe()
         }
     }

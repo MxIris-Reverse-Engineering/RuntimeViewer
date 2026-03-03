@@ -34,7 +34,8 @@ public actor MCPBridgeServer {
     }
 
     public func handleSelectedType(_ request: MCPSelectedTypeRequest) async -> MCPSelectedTypeResponse {
-        guard let runtimeObject = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedRuntimeObject else {
+        let context = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)
+        guard let runtimeObject = context?.selectedRuntimeObject else {
             return MCPSelectedTypeResponse(
                 imagePath: nil,
                 typeName: nil,
@@ -44,7 +45,7 @@ public actor MCPBridgeServer {
             )
         }
 
-        let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
+        let engine = context?.runtimeEngine ?? .local
         let options = generationOptions()
 
         do {
@@ -69,15 +70,10 @@ public actor MCPBridgeServer {
     }
 
     public func handleTypeInterface(_ request: MCPTypeInterfaceRequest) async -> MCPTypeInterfaceResponse {
-        let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
+        let context = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)
+        let engine = context?.runtimeEngine ?? .local
         let options = generationOptions()
-        let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
-        let imagePaths: Set<String>
-        if let imagePath = request.imagePath ?? selectedImagePath {
-            imagePaths = [imagePath]
-        } else {
-            imagePaths = await engine.loadedImagePaths
-        }
+        let imagePaths = await resolveImagePaths(requestImagePath: request.imagePath, selectedImagePath: context?.selectedImageNode?.path, engine: engine)
 
         for imagePath in imagePaths {
             do {
@@ -111,28 +107,15 @@ public actor MCPBridgeServer {
     }
 
     public func handleListTypes(_ request: MCPListTypesRequest) async -> MCPListTypesResponse {
-        let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
-
-        let imagePaths: Set<String>
-        let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
-        if let imagePath = request.imagePath ?? selectedImagePath {
-            imagePaths = [imagePath]
-        } else {
-            imagePaths = await engine.loadedImagePaths
-        }
+        let context = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)
+        let engine = context?.runtimeEngine ?? .local
+        let imagePaths = await resolveImagePaths(requestImagePath: request.imagePath, selectedImagePath: context?.selectedImageNode?.path, engine: engine)
 
         var allTypes: [MCPRuntimeTypeInfo] = []
         for imagePath in imagePaths {
             do {
                 let objects = try await engine.objects(in: imagePath)
-                let types = flattenObjects(objects).map { obj in
-                    MCPRuntimeTypeInfo(
-                        name: obj.name,
-                        displayName: obj.displayName,
-                        kind: obj.kind.description,
-                        imagePath: obj.imagePath
-                    )
-                }
+                let types = flattenObjects(objects).map { MCPRuntimeTypeInfo(from: $0) }
                 allTypes.append(contentsOf: types)
             } catch {
                 logger.warning("Failed to load objects from image \(imagePath): \(error)")
@@ -143,60 +126,36 @@ public actor MCPBridgeServer {
     }
 
     public func handleSearchTypes(_ request: MCPSearchTypesRequest) async -> MCPSearchTypesResponse {
-        let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
+        let context = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)
+        let engine = context?.runtimeEngine ?? .local
+        let imagePaths = await resolveImagePaths(requestImagePath: request.imagePath, selectedImagePath: context?.selectedImageNode?.path, engine: engine)
         let queryLowercased = request.query.lowercased()
 
-        do {
-            var results: [MCPRuntimeTypeInfo] = []
-
-            let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
-            if let imagePath = request.imagePath ?? selectedImagePath {
+        var results: [MCPRuntimeTypeInfo] = []
+        for imagePath in imagePaths {
+            do {
                 let objects = try await engine.objects(in: imagePath)
                 let flattened = flattenObjects(objects)
                 for obj in flattened {
                     if obj.name.lowercased().contains(queryLowercased) || obj.displayName.lowercased().contains(queryLowercased) {
-                        results.append(MCPRuntimeTypeInfo(
-                            name: obj.name,
-                            displayName: obj.displayName,
-                            kind: obj.kind.description,
-                            imagePath: obj.imagePath
-                        ))
+                        results.append(MCPRuntimeTypeInfo(from: obj))
                     }
                 }
-            } else {
-                let imagePaths = await engine.loadedImagePaths
-                for imagePath in imagePaths {
-                    do {
-                        let objects = try await engine.objects(in: imagePath)
-                        let flattened = flattenObjects(objects)
-                        for obj in flattened {
-                            if obj.name.lowercased().contains(queryLowercased) || obj.displayName.lowercased().contains(queryLowercased) {
-                                results.append(MCPRuntimeTypeInfo(
-                                    name: obj.name,
-                                    displayName: obj.displayName,
-                                    kind: obj.kind.description,
-                                    imagePath: obj.imagePath
-                                ))
-                            }
-                        }
-                    } catch {
-                        logger.warning("Failed to load objects from image \(imagePath): \(error)")
-                        continue
-                    }
-                }
+            } catch {
+                logger.warning("Failed to load objects from image \(imagePath): \(error)")
+                continue
             }
-
-            return MCPSearchTypesResponse(types: results, error: nil)
-        } catch {
-            return MCPSearchTypesResponse(types: [], error: error.localizedDescription)
         }
+        return MCPSearchTypesResponse(types: results, error: nil)
     }
 
     public func handleGrepTypeInterface(_ request: MCPGrepTypeInterfaceRequest) async -> MCPGrepTypeInterfaceResponse {
-        let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
+        let context = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)
+        let engine = context?.runtimeEngine ?? .local
         let options = generationOptions()
         let patternLowercased = request.pattern.lowercased()
 
+        // Note: grep does not fall back to selectedImageNode, only explicit imagePath or all loaded images
         let imagePaths: Set<String>
         if let imagePath = request.imagePath {
             imagePaths = [imagePath]
@@ -242,31 +201,15 @@ public actor MCPBridgeServer {
     }
 
     public func handleMemberAddresses(_ request: MCPMemberAddressesRequest) async -> MCPMemberAddressesResponse {
-        let engine = await runtimeEngine(forWindowIdentifier: request.windowIdentifier)
-
-        let imagePaths: Set<String>
-
-        let selectedImagePath = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)?.selectedImageNode?.path
-
-        if let imagePath = request.imagePath ?? selectedImagePath {
-            imagePaths = [imagePath]
-        } else {
-            imagePaths = await engine.loadedImagePaths
-        }
+        let context = await windowProvider.windowContext(forIdentifier: request.windowIdentifier)
+        let engine = context?.runtimeEngine ?? .local
+        let imagePaths = await resolveImagePaths(requestImagePath: request.imagePath, selectedImagePath: context?.selectedImageNode?.path, engine: engine)
 
         for imagePath in imagePaths {
             do {
                 let objects = try await engine.objects(in: imagePath)
                 if let runtimeObject = findObject(named: request.typeName, in: objects) {
-                    let addresses = try await engine.memberAddresses(for: runtimeObject, memberName: request.memberName)
-                    let members = addresses.map { addr in
-                        MCPMemberAddressInfo(
-                            name: addr.name,
-                            kind: addr.kind,
-                            symbolName: addr.symbolName,
-                            address: addr.address
-                        )
-                    }
+                    let members = try await engine.memberAddresses(for: runtimeObject, memberName: request.memberName)
                     return MCPMemberAddressesResponse(typeName: runtimeObject.displayName, members: members, error: nil)
                 }
             } catch {
@@ -285,8 +228,15 @@ public actor MCPBridgeServer {
 
     // MARK: - Private Helpers
 
-    private func runtimeEngine(forWindowIdentifier identifier: String) async -> RuntimeEngine {
-        await windowProvider.windowContext(forIdentifier: identifier)?.runtimeEngine ?? .local
+    private func resolveImagePaths(
+        requestImagePath: String?,
+        selectedImagePath: String?,
+        engine: RuntimeEngine
+    ) async -> Set<String> {
+        if let imagePath = requestImagePath ?? selectedImagePath {
+            return [imagePath]
+        }
+        return await engine.loadedImagePaths
     }
 
     private func generationOptions() -> RuntimeObjectInterface.GenerationOptions {
@@ -297,12 +247,15 @@ public actor MCPBridgeServer {
 
     private func flattenObjects(_ objects: [RuntimeObject]) -> [RuntimeObject] {
         var result: [RuntimeObject] = []
-        for obj in objects {
-            result.append(obj)
-            if !obj.children.isEmpty {
-                result.append(contentsOf: flattenObjects(obj.children))
+        func collect(_ objects: [RuntimeObject]) {
+            for obj in objects {
+                result.append(obj)
+                if !obj.children.isEmpty {
+                    collect(obj.children)
+                }
             }
         }
+        collect(objects)
         return result
     }
 

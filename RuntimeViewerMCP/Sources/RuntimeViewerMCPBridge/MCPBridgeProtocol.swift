@@ -1,4 +1,5 @@
 import Foundation
+import RuntimeViewerCore
 
 // MARK: - List Windows
 
@@ -117,6 +118,13 @@ public struct MCPRuntimeTypeInfo: Codable, Sendable {
         self.kind = kind
         self.imagePath = imagePath
     }
+
+    public init(from object: RuntimeObject) {
+        self.name = object.name
+        self.displayName = object.displayName
+        self.kind = object.kind.description
+        self.imagePath = object.imagePath
+    }
 }
 
 public struct MCPGrepMatch: Codable, Sendable {
@@ -217,26 +225,12 @@ public struct MCPMemberAddressesRequest: Codable, Sendable {
     }
 }
 
-public struct MCPMemberAddressInfo: Codable, Sendable {
-    public let name: String
-    public let kind: String
-    public let symbolName: String
-    public let address: String
-
-    public init(name: String, kind: String, symbolName: String, address: String) {
-        self.name = name
-        self.kind = kind
-        self.symbolName = symbolName
-        self.address = address
-    }
-}
-
 public struct MCPMemberAddressesResponse: Codable, Sendable {
     public let typeName: String?
-    public let members: [MCPMemberAddressInfo]
+    public let members: [RuntimeMemberAddress]
     public let error: String?
 
-    public init(typeName: String?, members: [MCPMemberAddressInfo], error: String?) {
+    public init(typeName: String?, members: [RuntimeMemberAddress], error: String?) {
         self.typeName = typeName
         self.members = members
         self.error = error

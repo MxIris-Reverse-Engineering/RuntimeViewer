@@ -3,21 +3,13 @@ import AppKit
 import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
 
-//@MainActor
 final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
     func allWindowContexts() async -> [MCPBridgeWindowContext] {
         await MainActor.run {
             NSDocumentController.shared.documents.compactMap { document -> MCPBridgeWindowContext? in
                 guard let document = document as? Document else { return nil }
                 guard let window = document.windowControllers.first?.window else { return nil }
-                return MCPBridgeWindowContext(
-                    identifier: "\(window.windowNumber)",
-                    displayName: window.title,
-                    isKeyWindow: window.isKeyWindow,
-                    selectedRuntimeObject: document.documentState.selectedRuntimeObject,
-                    selectedImageNode: document.documentState.currentImageNode,
-                    runtimeEngine: document.documentState.runtimeEngine
-                )
+                return makeContext(from: document, window: window)
             }
         }
     }
@@ -28,18 +20,23 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
                 guard let document = document as? Document else { continue }
                 guard let window = document.windowControllers.first?.window else { continue }
                 if identifier == "\(window.windowNumber)" {
-                    return MCPBridgeWindowContext(
-                        identifier: identifier,
-                        displayName: window.title,
-                        isKeyWindow: window.isKeyWindow,
-                        selectedRuntimeObject: document.documentState.selectedRuntimeObject,
-                        selectedImageNode: document.documentState.currentImageNode,
-                        runtimeEngine: document.documentState.runtimeEngine
-                    )
+                    return makeContext(from: document, window: window)
                 }
             }
             return nil
         }
+    }
+
+    @MainActor
+    private func makeContext(from document: Document, window: NSWindow) -> MCPBridgeWindowContext {
+        MCPBridgeWindowContext(
+            identifier: "\(window.windowNumber)",
+            displayName: window.title,
+            isKeyWindow: window.isKeyWindow,
+            selectedRuntimeObject: document.documentState.selectedRuntimeObject,
+            selectedImageNode: document.documentState.currentImageNode,
+            runtimeEngine: document.documentState.runtimeEngine
+        )
     }
 }
 #endif
