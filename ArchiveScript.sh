@@ -101,7 +101,7 @@ xcodebuild \
 -quiet || exit
 
 app_path="${final_export_path}/${project_name}.app"
-zip_path="${final_export_path}/${project_name}.zip"
+zip_path="${final_export_path}/${project_name}-macOS.zip"
 
 if [ ! -d "$app_path" ]; then
     echo "Error: App not found at $app_path"
