@@ -91,7 +91,7 @@ private struct CopyMCPConfigButton: View {
             {
               "mcpServers": {
                 "RuntimeViewer": {
-                  "type": "http"
+                  "type": "http",
                   "url": "http://127.0.0.1:\(port)/mcp"
                 }
               }

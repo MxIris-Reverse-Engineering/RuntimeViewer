@@ -474,35 +474,33 @@ actor RuntimeObjCSection {
 
                 if options.stripSynthesizedMethods {
                     for property in currentProtocolInfo.properties + currentProtocolInfo.classProperties + currentProtocolInfo.optionalProperties + currentProtocolInfo.optionalClassProperties {
-                        if options.stripSynthesizedMethods {
-                            let propertyName = property.name
-                            if let customGetter = property.customGetter {
-                                if property.isClassProperty {
-                                    needsStripClassMethods.insert(customGetter)
-                                } else {
-                                    needsStripMethods.insert(customGetter)
-                                }
+                        let propertyName = property.name
+                        if let customGetter = property.customGetter {
+                            if property.isClassProperty {
+                                needsStripClassMethods.insert(customGetter)
                             } else {
-                                if property.isClassProperty {
-                                    needsStripClassMethods.insert(propertyName)
-                                } else {
-                                    needsStripMethods.insert(propertyName)
-                                }
+                                needsStripMethods.insert(customGetter)
                             }
-
-                            if let customSetter = property.customSetter {
-                                if property.isClassProperty {
-                                    needsStripClassMethods.insert(customSetter)
-                                } else {
-                                    needsStripMethods.insert(customSetter)
-                                }
+                        } else {
+                            if property.isClassProperty {
+                                needsStripClassMethods.insert(propertyName)
                             } else {
-                                let setterMethodName = "set" + propertyName.uppercasedFirst
-                                if property.isClassProperty {
-                                    needsStripClassMethods.insert(setterMethodName)
-                                } else {
-                                    needsStripMethods.insert(setterMethodName)
-                                }
+                                needsStripMethods.insert(propertyName)
+                            }
+                        }
+
+                        if let customSetter = property.customSetter {
+                            if property.isClassProperty {
+                                needsStripClassMethods.insert(customSetter)
+                            } else {
+                                needsStripMethods.insert(customSetter)
+                            }
+                        } else {
+                            let setterMethodName = "set" + propertyName.uppercasedFirst
+                            if property.isClassProperty {
+                                needsStripClassMethods.insert(setterMethodName)
+                            } else {
+                                needsStripMethods.insert(setterMethodName)
                             }
                         }
                     }

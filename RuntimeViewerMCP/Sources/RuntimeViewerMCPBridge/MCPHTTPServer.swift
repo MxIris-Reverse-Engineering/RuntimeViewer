@@ -11,6 +11,7 @@ public actor MCPHTTPServer {
     private let bridgeServer: MCPBridgeServer
     private let toolRegistry: MCPToolRegistry
     private var serverTask: Task<Void, any Error>?
+    private var cleanupTask: Task<Void, Never>?
     private var sessions: [String: SessionContext] = [:]
     private var port: UInt16 = 0
 
@@ -72,7 +73,7 @@ public actor MCPHTTPServer {
             logger.info("MCP HTTP server listening on port \(self.port)")
         }
 
-        Task { await sessionCleanupLoop() }
+        cleanupTask = Task { await sessionCleanupLoop() }
     }
 
     public nonisolated func stop() {
@@ -82,6 +83,8 @@ public actor MCPHTTPServer {
     private func performStop() {
         serverTask?.cancel()
         serverTask = nil
+        cleanupTask?.cancel()
+        cleanupTask = nil
         removePortFile()
         logger.info("MCP HTTP server stopped")
     }
@@ -218,7 +221,8 @@ public actor MCPHTTPServer {
     private func convertToHBResponse(_ mcpResponse: MCP.HTTPResponse) -> Response {
         var hbHeaders = HTTPFields()
         for (key, value) in mcpResponse.headers {
-            hbHeaders.append(HTTPField(name: HTTPField.Name(key)!, value: value))
+            guard let fieldName = HTTPField.Name(key) else { continue }
+            hbHeaders.append(HTTPField(name: fieldName, value: value))
         }
 
         switch mcpResponse {
