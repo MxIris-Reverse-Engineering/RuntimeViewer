@@ -12,7 +12,8 @@ cpu_cores=$(sysctl -n hw.ncpu 2>/dev/null || echo 8)
 
 derived_data_path="${project_path}/DerivedData"
 build_products_path="${derived_data_path}/Build/Products/${configuration}-iphonesimulator"
-output_zip="${project_path}/${project_name}-iOS-Simulator.zip"
+export_path="${project_path}/Products/Archives/Products/Export"
+output_zip="${export_path}/${project_name}-iOS-Simulator.zip"
 
 echo '///-----------'
 echo '/// Building iOS Simulator App'
@@ -45,6 +46,7 @@ echo '///-----------'
 echo '/// Packaging iOS Simulator App'
 echo '///-----------'
 
+mkdir -p "${export_path}"
 rm -f "${output_zip}"
 /usr/bin/ditto -c -k --keepParent "${app_path}" "${output_zip}"
 
