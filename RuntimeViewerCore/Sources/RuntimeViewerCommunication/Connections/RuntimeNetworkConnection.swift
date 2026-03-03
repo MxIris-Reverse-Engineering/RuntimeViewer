@@ -461,19 +461,6 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
             }
 
             listener.start(queue: .main)
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
-                let shouldResume = didResume.withLock { val -> Bool in
-                    guard !val else { return false }
-                    val = true
-                    return true
-                }
-                if shouldResume {
-                    #log(.error, "Bonjour listener timeout: no client connected within 30 seconds")
-                    listener.cancel()
-                    continuation.resume(throwing: RuntimeConnectionError.timeout)
-                }
-            }
         }
     }
 
