@@ -1,6 +1,5 @@
 #if os(macOS)
 import RuntimeViewerCore
-import RuntimeViewerMCPShared
 import MemberwiseInit
 
 /// A context representing a single window for MCP bridge operations.

@@ -86,20 +86,15 @@ extension Transformer {
 extension Transformer {
     /// Aggregated configuration for all transformer modules (used for persistence).
     @Codable
+    @MemberInit
     public struct Configuration: Sendable, Equatable, Hashable {
-        @Default(ifMissing: Transformer.ObjCConfiguration())
+        @Default(Transformer.ObjCConfiguration())
         public var objc: Transformer.ObjCConfiguration
-        @Default(ifMissing: Transformer.SwiftConfiguration())
+        @Default(Transformer.SwiftConfiguration())
         public var swift: Transformer.SwiftConfiguration
 
-        public init(
-            objc: ObjCConfiguration = .init(),
-            swift: SwiftConfiguration = .init()
-        ) {
-            self.objc = objc
-            self.swift = swift
-        }
-
+        public static let `default` = Self()
+        
         /// Whether any module is enabled.
         public var hasEnabledModules: Bool {
             objc.cType.isEnabled || swift.swiftFieldOffset.isEnabled || swift.swiftTypeLayout.isEnabled || swift.swiftEnumLayout.isEnabled
