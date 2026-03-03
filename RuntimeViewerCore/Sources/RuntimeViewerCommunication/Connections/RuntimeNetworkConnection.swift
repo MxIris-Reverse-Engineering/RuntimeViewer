@@ -328,6 +328,8 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
     init(name: String) async throws {
         super.init()
 
+        #log(.info, "Creating Bonjour server with name: \(name, privacy: .public), service type: \(RuntimeNetworkBonjour.type, privacy: .public)")
+
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
@@ -340,7 +342,9 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         listener.service = NWListener.Service(name: name, type: RuntimeNetworkBonjour.type)
         self.listener = listener
 
+        #log(.info, "Waiting for incoming Bonjour connection...")
         try await waitForConnection(listener: listener)
+        #log(.info, "Bonjour server connection established for name: \(name, privacy: .public)")
     }
 
     private func waitForConnection(listener: NWListener) async throws {
@@ -348,10 +352,14 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
 
             let didResume = Mutex<Bool>(false)
 
+            listener.stateUpdateHandler = { state in
+                #log(.info, "Bonjour listener state: \(String(describing: state), privacy: .public)")
+            }
+
             listener.newConnectionHandler = { [weak self] newConnection in
                 guard let self, didResume.withLock({ !$0 }) else { return }
 
-                #log(.info, "Accepted new connection")
+                #log(.info, "Accepted new Bonjour connection: \(newConnection.debugDescription, privacy: .public)")
 
                 do {
                     let connection = try RuntimeNetworkConnection(connection: newConnection)
@@ -360,20 +368,24 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                     // Observe connection state
                     self.connectionStateCancellable = connection.statePublisher
                         .sink { [weak self] state in
+                            #log(.info, "Bonjour connection state changed: \(String(describing: state), privacy: .public)")
                             if state.isConnected {
                                 if didResume.withLock({ !$0 }) {
                                     didResume.withLock { $0 = true }
+                                    #log(.info, "Initial Bonjour connection ready")
                                     continuation.resume()
                                 }
                             } else if state.isDisconnected {
                                 if didResume.withLock({ !$0 }) {
                                     // Connection failed before becoming ready
                                     if case .disconnected(let error) = state, let error {
+                                        #log(.error, "Bonjour connection failed before ready: \(error.localizedDescription, privacy: .public)")
                                         didResume.withLock { $0 = true }
                                         continuation.resume(throwing: error)
                                     }
                                 } else {
                                     // Connection was ready and then disconnected, restart listening
+                                    #log(.info, "Bonjour connection disconnected, restarting listener...")
                                     Task { [weak self] in
                                         try await self?.restartListening()
                                     }
@@ -381,6 +393,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                             }
                         }
                 } catch {
+                    #log(.error, "Failed to create Bonjour connection: \(error, privacy: .public)")
                     if didResume.withLock({ !$0 }) {
                         didResume.withLock { $0 = true }
                         continuation.resume(throwing: error)
@@ -396,12 +409,17 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
     }
 
     private func restartListening() async throws {
-        guard let listener else { return }
+        guard let listener else {
+            #log(.error, "Cannot restart listening: listener is nil")
+            return
+        }
+
+        #log(.info, "Restarting Bonjour listener for new connections...")
 
         listener.newConnectionHandler = { [weak self] newConnection in
             guard let self else { return }
 
-            #log(.info, "Accepted new connection")
+            #log(.info, "Accepted new Bonjour connection after restart: \(newConnection.debugDescription, privacy: .public)")
 
             do {
                 let connection = try RuntimeNetworkConnection(connection: newConnection)
@@ -409,19 +427,23 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
 
                 // Observe connection state to restart listening when disconnected
                 self.connectionStateCancellable = connection.statePublisher
-                    .filter { $0.isDisconnected }
-                    .sink { [weak self] _ in
-                        Task { [weak self] in
-                            try await self?.restartListening()
+                    .sink { [weak self] state in
+                        #log(.info, "Bonjour reconnected connection state: \(String(describing: state), privacy: .public)")
+                        if state.isDisconnected {
+                            #log(.info, "Bonjour reconnected connection disconnected, restarting listener...")
+                            Task { [weak self] in
+                                try await self?.restartListening()
+                            }
                         }
                     }
             } catch {
-                #log(.error, "Failed to create connection: \(error, privacy: .public)")
+                #log(.error, "Failed to create Bonjour connection on restart: \(error, privacy: .public)")
             }
         }
     }
 
     override func stop() {
+        #log(.info, "Stopping Bonjour server connection")
         connectionStateCancellable?.cancel()
         connectionStateCancellable = nil
         underlyingConnection?.stop()
