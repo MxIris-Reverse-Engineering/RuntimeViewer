@@ -46,12 +46,16 @@ protocol MainMenuItemRepresentable: RxMenuItemRepresentable {
 extension Reactive where Base: NSPopUpButton {
     func items<MenuItemRepresentable: MainMenuItemRepresentable>() -> Binder<[MenuItemRepresentable]> {
         Binder(base) { (target: NSPopUpButton, items: [MenuItemRepresentable]) in
+            let previousIndex = target.indexOfSelectedItem
             target.removeAllItems()
             items.forEach { item in
                 target.addItem(withTitle: item.title)
                 if let menuItem = target.item(withTitle: item.title) {
                     menuItem.image = item.icon
                 }
+            }
+            if previousIndex >= 0 && previousIndex < items.count {
+                target.selectItem(at: previousIndex)
             }
         }
     }

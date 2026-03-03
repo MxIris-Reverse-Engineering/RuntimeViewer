@@ -21,6 +21,10 @@ public final class RuntimeEngineManager: Loggable {
 
     private let browser = RuntimeNetworkBrowser()
 
+    private var knownBonjourEndpointNames: Set<String> = []
+    private static let maxRetryAttempts = 3
+    private static let retryBaseDelay: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
+
     @Dependency(\.helperServiceManager)
     private var helperServiceManager
 
@@ -29,23 +33,25 @@ public final class RuntimeEngineManager: Loggable {
 
     @Dependency(\.runtimeHelperClient)
     private var runtimeHelperClient
-    
+
     private init() {
         Self.logger.info("RuntimeEngineManager initializing...")
-        browser.start { [weak self] endpoint in
-            guard let self else { return }
-            Self.logger.info("Bonjour endpoint discovered: \(endpoint.name, privacy: .public), attempting connection...")
-            Task { @MainActor in
-                do {
-                    let runtimeEngine = RuntimeEngine(source: .bonjourClient(endpoint: endpoint))
-                    try await runtimeEngine.connect()
-                    self.appendBonjourRuntimeEngine(runtimeEngine)
-                    Self.logger.info("Successfully connected to Bonjour endpoint: \(endpoint.name, privacy: .public)")
-                } catch {
-                    Self.logger.error("Failed to connect to bonjour runtime engine at endpoint: \("\(endpoint)", privacy: .public) with error: \(error, privacy: .public)")
+        browser.start(
+            onAdded: { [weak self] endpoint in
+                guard let self else { return }
+                Self.logger.info("Bonjour endpoint discovered: \(endpoint.name, privacy: .public), attempting connection...")
+                Task { @MainActor in
+                    await self.connectToBonjourEndpoint(endpoint)
+                }
+            },
+            onRemoved: { [weak self] endpoint in
+                guard let self else { return }
+                Self.logger.info("Bonjour endpoint removed: \(endpoint.name, privacy: .public)")
+                Task { @MainActor in
+                    self.knownBonjourEndpointNames.remove(endpoint.name)
                 }
             }
-        }
+        )
         Task {
             do {
                 Self.logger.info("Launching system runtime engines...")
@@ -53,6 +59,35 @@ public final class RuntimeEngineManager: Loggable {
                 Self.logger.info("System runtime engines launched successfully")
             } catch {
                 Self.logger.error("Failed to launch system runtime engines with error: \(error, privacy: .public)")
+            }
+        }
+    }
+
+    @MainActor
+    private func connectToBonjourEndpoint(_ endpoint: RuntimeNetworkEndpoint, attempt: Int = 0) async {
+        guard !knownBonjourEndpointNames.contains(endpoint.name) else {
+            Self.logger.info("Skipping duplicate Bonjour endpoint: \(endpoint.name, privacy: .public)")
+            return
+        }
+        knownBonjourEndpointNames.insert(endpoint.name)
+
+        do {
+            let runtimeEngine = RuntimeEngine(source: .bonjourClient(endpoint: endpoint))
+            try await runtimeEngine.connect()
+            appendBonjourRuntimeEngine(runtimeEngine)
+            Self.logger.info("Successfully connected to Bonjour endpoint: \(endpoint.name, privacy: .public)")
+        } catch {
+            Self.logger.error("Failed to connect to Bonjour endpoint: \(endpoint.name, privacy: .public) (attempt \(attempt + 1, privacy: .public)): \(error, privacy: .public)")
+
+            if attempt < Self.maxRetryAttempts {
+                let delay = Self.retryBaseDelay * UInt64(1 << attempt) // 2s, 4s, 8s
+                Self.logger.info("Retrying Bonjour connection to \(endpoint.name, privacy: .public) in \(delay / 1_000_000_000, privacy: .public)s...")
+                try? await Task.sleep(nanoseconds: delay)
+                knownBonjourEndpointNames.remove(endpoint.name)
+                await connectToBonjourEndpoint(endpoint, attempt: attempt + 1)
+            } else {
+                knownBonjourEndpointNames.remove(endpoint.name)
+                Self.logger.error("Exhausted retry attempts for Bonjour endpoint: \(endpoint.name, privacy: .public)")
             }
         }
     }
@@ -127,6 +162,9 @@ public final class RuntimeEngineManager: Loggable {
 
     public func terminateRuntimeEngine(for source: RuntimeSource) {
         Self.logger.info("Terminating runtime engine: \(source.description, privacy: .public)")
+        if case .bonjourClient(let endpoint) = source {
+            knownBonjourEndpointNames.remove(endpoint.name)
+        }
         systemRuntimeEngines.removeAll { $0.source == source }
         attachedRuntimeEngines.removeAll { $0.source == source }
         bonjourRuntimeEngines.removeAll { $0.source == source }

@@ -71,7 +71,10 @@ public class RuntimeNetworkBrowser {
         self.browser = NWBrowser(for: .bonjour(type: RuntimeNetworkBonjour.type, domain: nil), using: parameters)
     }
 
-    public func start(handler: @escaping (RuntimeNetworkEndpoint) -> Void) {
+    public func start(
+        onAdded: @escaping (RuntimeNetworkEndpoint) -> Void,
+        onRemoved: @escaping (RuntimeNetworkEndpoint) -> Void
+    ) {
         #log(.info, "Starting Bonjour browser for service type: \(RuntimeNetworkBonjour.type, privacy: .public)")
         browser.stateUpdateHandler = { newState in
             #log(.info, "Browser state changed: \(String(describing: newState), privacy: .public)")
@@ -83,19 +86,13 @@ public class RuntimeNetworkBrowser {
                 case .added(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
                         #log(.info, "Discovered new endpoint: \(name, privacy: .public)")
+                        onAdded(.init(name: name, endpoint: result.endpoint))
                     }
                 case .removed(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
                         #log(.info, "Endpoint removed: \(name, privacy: .public)")
+                        onRemoved(.init(name: name, endpoint: result.endpoint))
                     }
-                default:
-                    break
-                }
-            }
-            for result in results {
-                switch result.endpoint {
-                case .service(let name, _, _, _):
-                    handler(.init(name: name, endpoint: result.endpoint))
                 default:
                     break
                 }
