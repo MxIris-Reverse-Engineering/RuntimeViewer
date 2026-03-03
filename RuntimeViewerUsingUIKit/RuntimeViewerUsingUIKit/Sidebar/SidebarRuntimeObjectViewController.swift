@@ -61,8 +61,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageNotLoadedView.loadImageButton.rx.tap.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.tap.asSignal()
             ).merge(),
-            searchString: imageLoadedView.searchBar.rx.text.asSignalOnErrorJustComplete().filterNil(),
-            isSearchCaseInsensitive: nil
+            searchString: imageLoadedView.searchBar.rx.text.asDriver().filterNil(),
+            isSearchCaseInsensitive: .just(false)
         )
 
         let output = viewModel.transform(input)
