@@ -12,19 +12,22 @@ import SwiftInspection
 import MetaCodable
 
 @Codable
+@MemberInit
 public struct SwiftGenerationOptions: Sendable, Equatable {
-    @Default(ifMissing: true)
-    public var printStrippedSymbolicItem: Bool = true
-    @Default(ifMissing: false)
-    public var emitOffsetComments: Bool = false
-    @Default(ifMissing: false)
-    public var printMemberAddress: Bool = false
-    @Default(ifMissing: false)
-    public var printTypeLayout: Bool = false
-    @Default(ifMissing: false)
-    public var printEnumLayout: Bool = false
-    @Default(ifMissing: false)
-    public var synthesizeOpaqueType: Bool = false
+    @Default(true)
+    public var printStrippedSymbolicItem: Bool
+    @Default(false)
+    public var emitOffsetComments: Bool
+    @Default(false)
+    public var printMemberAddress: Bool
+    @Default(false)
+    public var printTypeLayout: Bool
+    @Default(false)
+    public var printEnumLayout: Bool
+    @Default(false)
+    public var synthesizeOpaqueType: Bool
+    
+    public static let `default` = Self()
 }
 
 @Loggable(.private)

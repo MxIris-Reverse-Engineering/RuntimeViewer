@@ -7,16 +7,17 @@ import RuntimeViewerSettingsUI
 import RuntimeViewerArchitectures
 import RuntimeViewerMCPBridge
 
-@Loggable
+@Loggable(.private)
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var mcpBridgeServer: MCPBridgeServer?
+    @Dependency(\.settings)
+    private var settings
+
+    private var mcpService: MCPService?
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        @Dependency(\.settings)
-        var settings
-
-        observe {
+        observe { [weak self] in
+            guard let self else { return }
             switch settings.general.appearance {
             case .system:
                 NSApp.appearance = nil
@@ -27,35 +28,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        startMCPBridgeServer()
-    }
-
-    func applicationWillTerminate(_ aNotification: Notification) {
-        mcpBridgeServer?.stop()
+        mcpService = MCPService().then {
+            $0.start(for: AppMCPBridgeWindowProvider())
+        }
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
-        return false
+        false
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false
+        false
     }
 
     @IBAction func showSettings(_ sender: Any?) {
         SettingsWindowController.shared.showWindow(nil)
     }
-
-    private func startMCPBridgeServer() {
-        Task { @MainActor in
-            do {
-                let windowProvider = AppMCPBridgeWindowProvider()
-                let server = try MCPBridgeServer(windowProvider: windowProvider)
-                mcpBridgeServer = server
-                await server.start()
-            } catch {
-                #log(.error, "Failed to start MCP Bridge Server: \(error, privacy: .public)")
-            }
-        }
-    }
 }
+
+extension MCPService: Then {}

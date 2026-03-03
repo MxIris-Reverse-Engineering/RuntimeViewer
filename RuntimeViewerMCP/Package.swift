@@ -9,10 +9,6 @@ let package = Package(
     ],
     products: [
         .library(
-            name: "RuntimeViewerMCPShared",
-            targets: ["RuntimeViewerMCPShared"]
-        ),
-        .library(
             name: "RuntimeViewerMCPBridge",
             targets: ["RuntimeViewerMCPBridge"]
         ),
@@ -20,18 +16,18 @@ let package = Package(
     dependencies: [
         .package(path: "../RuntimeViewerCore"),
         .package(path: "../RuntimeViewerPackages"),
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.11.0"),
+        .package(url: "https://github.com/hummingbird-project/hummingbird.git", from: "2.0.0"),
     ],
     targets: [
         .target(
-            name: "RuntimeViewerMCPShared"
-        ),
-        .target(
             name: "RuntimeViewerMCPBridge",
             dependencies: [
-                "RuntimeViewerMCPShared",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "RuntimeViewerApplication", package: "RuntimeViewerPackages"),
                 .product(name: "RuntimeViewerSettings", package: "RuntimeViewerPackages"),
+                .product(name: "MCP", package: "swift-sdk"),
+                .product(name: "Hummingbird", package: "hummingbird"),
             ]
         ),
     ],
