@@ -11,7 +11,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             _ = RuntimeEngine.local
         }
         Task {
-            remoteRuntimeEngine = try await RuntimeEngine(source: .bonjourServer(name: UIDevice.current.name, identifier: .init(rawValue: UIDevice.current.name)))
+            remoteRuntimeEngine = RuntimeEngine(source: .bonjourServer(name: UIDevice.current.name, identifier: .init(rawValue: UIDevice.current.name)))
+            try await remoteRuntimeEngine?.connect()
         }
         return true
     }
