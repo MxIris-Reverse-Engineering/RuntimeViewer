@@ -83,6 +83,11 @@ public actor RuntimeEngine {
 
     private var connectionStateCancellable: AnyCancellable?
 
+    /// Flag indicating that message handlers need to be re-registered on next connection.
+    /// Set to `true` when a server connection disconnects, so that reconnection
+    /// triggers handler re-registration and data push.
+    private var needsReregistrationOnConnect = false
+
     /// Publisher that emits engine state changes.
     public nonisolated var statePublisher: some Publisher<State, Never> {
         stateSubject.eraseToAnyPublisher()
@@ -176,6 +181,13 @@ public actor RuntimeEngine {
         case .connected:
             #log(.info, "Connection state -> connected (source: \(String(describing: self.source), privacy: .public))")
             stateSubject.send(.connected)
+            // Re-register handlers and push data when server reconnects to a new client
+            if needsReregistrationOnConnect, source.remoteRole == .server {
+                needsReregistrationOnConnect = false
+                #log(.info, "Server reconnected, re-registering handlers and pushing data")
+                setupMessageHandlerForServer()
+                Task { await self.observeRuntime() }
+            }
         case .disconnected(let error):
             if let error {
                 #log(.error, "Connection state -> disconnected with error: \(error.localizedDescription, privacy: .public) (source: \(String(describing: self.source), privacy: .public))")
@@ -183,6 +195,9 @@ public actor RuntimeEngine {
                 #log(.info, "Connection state -> disconnected (source: \(String(describing: self.source), privacy: .public))")
             }
             stateSubject.send(.disconnected(error: error))
+            if source.remoteRole == .server {
+                needsReregistrationOnConnect = true
+            }
         }
     }
 

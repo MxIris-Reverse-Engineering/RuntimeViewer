@@ -70,8 +70,9 @@ private enum RuntimeViewerServerLoader {
                 #else
                 let name = await UIDevice.current.name
                 #endif
+                let deviceID = DeviceIdentifier.uniqueDeviceID
 
-                runtimeEngine = RuntimeEngine(source: .bonjour(name: name, identifier: .init(rawValue: name), role: .server))
+                runtimeEngine = RuntimeEngine(source: .bonjour(name: name, identifier: .init(rawValue: deviceID), role: .server))
                 try await runtimeEngine?.connect()
 
                 #endif

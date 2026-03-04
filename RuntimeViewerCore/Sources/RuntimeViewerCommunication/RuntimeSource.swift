@@ -17,7 +17,7 @@ extension RuntimeSource {
     }
 
     /// A unique identifier for a runtime connection endpoint.
-    public struct Identifier: Sendable, Codable, RawRepresentable, ExpressibleByStringLiteral, Hashable {
+    public struct Identifier: Sendable, Hashable, Codable, RawRepresentable, ExpressibleByStringLiteral, ExpressibleByStringInterpolation {
         public let rawValue: String
 
         public init(rawValue: String) {
@@ -58,7 +58,7 @@ extension RuntimeSource {
 ///
 /// This inversion is necessary because sandboxed apps cannot call `bind()`.
 /// See `RuntimeLocalSocketConnection` documentation for detailed explanation.
-public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Hashable {
+public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
     /// Local runtime inspection (same process).
     case local
 
@@ -138,6 +138,51 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable, Hashable 
         switch self {
         case .remote: return true
         default: return false
+        }
+    }
+}
+
+extension RuntimeSource: Equatable {
+    public static func == (lhs: RuntimeSource, rhs: RuntimeSource) -> Bool {
+        switch (lhs, rhs) {
+        case (.local, .local):
+            return true
+        case (.remote(_, let lId, let lRole), .remote(_, let rId, let rRole)):
+            return lId == rId && lRole == rRole
+        case (.bonjour(_, let lId, let lRole), .bonjour(_, let rId, let rRole)):
+            return lId == rId && lRole == rRole
+        case (.localSocket(_, let lId, let lRole), .localSocket(_, let rId, let rRole)):
+            return lId == rId && lRole == rRole
+        case (.directTCP(_, let lHost, let lPort, let lRole), .directTCP(_, let rHost, let rPort, let rRole)):
+            return lHost == rHost && lPort == rPort && lRole == rRole
+        default:
+            return false
+        }
+    }
+}
+
+extension RuntimeSource: Hashable {
+    public func hash(into hasher: inout Hasher) {
+        switch self {
+        case .local:
+            hasher.combine(0)
+        case .remote(_, let identifier, let role):
+            hasher.combine(1)
+            hasher.combine(identifier)
+            hasher.combine(role)
+        case .bonjour(_, let identifier, let role):
+            hasher.combine(2)
+            hasher.combine(identifier)
+            hasher.combine(role)
+        case .localSocket(_, let identifier, let role):
+            hasher.combine(3)
+            hasher.combine(identifier)
+            hasher.combine(role)
+        case .directTCP(_, let host, let port, let role):
+            hasher.combine(4)
+            hasher.combine(host)
+            hasher.combine(port)
+            hasher.combine(role)
         }
     }
 }

@@ -118,6 +118,10 @@ let package = Package(
         .package(
             url: "https://github.com/SwiftyLab/MetaCodable",
             from: "1.6.0"
+        ),
+        .package(
+            url: "https://github.com/p-x9/swift-mobile-gestalt",
+            branch: "main"
         )
     ],
     targets: [
@@ -134,6 +138,7 @@ let package = Package(
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
                 .product(name: "MetaCodable", package: "MetaCodable"),
+                .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
             ],
             swiftSettings: [
                 .internalImportsByDefault,
