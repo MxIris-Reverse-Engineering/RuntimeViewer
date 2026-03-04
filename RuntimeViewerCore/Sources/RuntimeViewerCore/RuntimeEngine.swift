@@ -124,14 +124,14 @@ public actor RuntimeEngine {
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
-    public func connect() async throws {
+    public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil) async throws {
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
 
             switch role {
             case .server:
                 #log(.info, "Starting as server")
-                connection = try await communicator.connect(to: source) { connection in
+                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForServer()
                     self.observeConnectionState(connection)
@@ -141,7 +141,7 @@ public actor RuntimeEngine {
                 stateSubject.send(.connected)
             case .client:
                 #log(.info, "Starting as client")
-                connection = try await communicator.connect(to: source) { connection in
+                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForClient()
                     self.observeConnectionState(connection)
