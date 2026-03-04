@@ -18,8 +18,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
         Task {
             let deviceName = UIDevice.current.name
-            logger.info("Creating Bonjour server runtime engine with name: \(deviceName, privacy: .public)")
-            remoteRuntimeEngine = RuntimeEngine(source: .bonjour(name: deviceName, identifier: .init(rawValue: deviceName), role: .server))
+            let deviceID = DeviceIdentifier.uniqueDeviceID
+            logger.info("Creating Bonjour server runtime engine with name: \(deviceName, privacy: .public), identifier: \(deviceID, privacy: .public)")
+            remoteRuntimeEngine = RuntimeEngine(source: .bonjour(name: deviceName, identifier: .init(rawValue: deviceID), role: .server))
             do {
                 try await remoteRuntimeEngine?.connect()
                 logger.info("Bonjour server runtime engine connected successfully")

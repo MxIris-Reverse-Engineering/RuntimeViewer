@@ -22,7 +22,9 @@ public final class RuntimeEngineManager: Loggable {
     private let browser = RuntimeNetworkBrowser()
 
     private var knownBonjourEndpointNames: Set<String> = []
+    
     private static let maxRetryAttempts = 3
+    
     private static let retryBaseDelay: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
 
     @Dependency(\.helperServiceManager)

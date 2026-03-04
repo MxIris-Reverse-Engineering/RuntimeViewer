@@ -344,6 +344,19 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
     private let serviceName: String
     private let listenerParameters: NWParameters
 
+    /// Stable state subject that bridges state from underlying connections across reconnections.
+    /// This ensures subscribers (e.g., RuntimeEngine) always receive state updates,
+    /// even when the underlying connection is replaced after a client reconnects.
+    private let ownStateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
+
+    override var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
+        ownStateSubject.eraseToAnyPublisher()
+    }
+
+    override var state: RuntimeConnectionState {
+        ownStateSubject.value
+    }
+
     init(name: String) async throws {
         self.serviceName = name
 
@@ -414,6 +427,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                                 }
                                 if shouldResume {
                                     #log(.info, "Initial Bonjour connection ready")
+                                    self?.ownStateSubject.send(.connected)
                                     continuation.resume()
                                 }
                             } else if state.isDisconnected {
@@ -434,6 +448,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                                 } else {
                                     // Connection was ready and then disconnected, restart listening
                                     #log(.info, "Bonjour connection disconnected, restarting listener...")
+                                    self?.ownStateSubject.send(state)
                                     Task { [weak self] in
                                         do {
                                             try await self?.restartListening()
@@ -466,6 +481,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
 
     private func restartListening() async throws {
         #log(.info, "Restarting Bonjour listener with new instance...")
+        ownStateSubject.send(.connecting)
 
         let newListener = try NWListener(using: listenerParameters)
         newListener.service = NWListener.Service(name: serviceName, type: RuntimeNetworkBonjour.type)
@@ -491,8 +507,11 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                 self.connectionStateCancellable = connection.statePublisher
                     .sink { [weak self] state in
                         #log(.info, "Bonjour reconnected connection state: \(String(describing: state), privacy: .public)")
-                        if state.isDisconnected {
+                        if state.isConnected {
+                            self?.ownStateSubject.send(.connected)
+                        } else if state.isDisconnected {
                             #log(.info, "Bonjour reconnected connection disconnected, restarting listener...")
+                            self?.ownStateSubject.send(state)
                             Task { [weak self] in
                                 do {
                                     try await self?.restartListening()
@@ -520,6 +539,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         underlyingConnection?.stop()
         listener?.cancel()
         listener = nil
+        ownStateSubject.send(.disconnected(error: nil))
     }
 }
 

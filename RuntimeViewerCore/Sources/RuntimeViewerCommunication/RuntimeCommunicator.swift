@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 public import FoundationToolbox
 
 public enum RuntimeCommunicatorError: Error, LocalizedError, Sendable {
