@@ -37,7 +37,7 @@ public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
 }
 
-public struct RuntimeNetworkEndpoint: Sendable, Codable, Hashable {
+public struct RuntimeNetworkEndpoint: Sendable, Hashable {
     public let name: String
     
     let endpoint: NWEndpoint
@@ -45,18 +45,6 @@ public struct RuntimeNetworkEndpoint: Sendable, Codable, Hashable {
     init(name: String, endpoint: NWEndpoint) {
         self.name = name
         self.endpoint = endpoint
-    }
-    
-    private enum CodableError: Error {
-        case unsupported
-    }
-    
-    public init(from decoder: any Decoder) throws {
-        throw CodableError.unsupported
-    }
-    
-    public func encode(to encoder: any Encoder) throws {
-        throw CodableError.unsupported
     }
 }
 

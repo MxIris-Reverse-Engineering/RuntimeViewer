@@ -72,8 +72,8 @@ public final class RuntimeEngineManager: Loggable {
         knownBonjourEndpointNames.insert(endpoint.name)
 
         do {
-            let runtimeEngine = RuntimeEngine(source: .bonjourClient(endpoint: endpoint))
-            try await runtimeEngine.connect()
+            let runtimeEngine = RuntimeEngine(source: .bonjour(name: endpoint.name, identifier: .init(rawValue: endpoint.name), role: .client))
+            try await runtimeEngine.connect(bonjourEndpoint: endpoint)
             appendBonjourRuntimeEngine(runtimeEngine)
             Self.logger.info("Successfully connected to Bonjour endpoint: \(endpoint.name, privacy: .public)")
         } catch {
@@ -120,7 +120,7 @@ public final class RuntimeEngineManager: Loggable {
     @concurrent
     public func launchAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) async throws {
         let runtimeSource = if isSandbox {
-            RuntimeSource.localSocketClient(name: name, identifier: .init(rawValue: identifier))
+            RuntimeSource.localSocket(name: name, identifier: .init(rawValue: identifier), role: .client)
         } else {
             RuntimeSource.remote(name: name, identifier: .init(rawValue: identifier), role: .client)
         }
@@ -162,8 +162,8 @@ public final class RuntimeEngineManager: Loggable {
 
     public func terminateRuntimeEngine(for source: RuntimeSource) {
         Self.logger.info("Terminating runtime engine: \(source.description, privacy: .public)")
-        if case .bonjourClient(let endpoint) = source {
-            knownBonjourEndpointNames.remove(endpoint.name)
+        if case .bonjour(let name, _, let role) = source, role.isClient {
+            knownBonjourEndpointNames.remove(name)
         }
         systemRuntimeEngines.removeAll { $0.source == source }
         attachedRuntimeEngines.removeAll { $0.source == source }
@@ -172,7 +172,7 @@ public final class RuntimeEngineManager: Loggable {
 
     public func terminateAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) {
         if isSandbox {
-            terminateRuntimeEngine(for: .localSocketClient(name: name, identifier: .init(rawValue: identifier)))
+            terminateRuntimeEngine(for: .localSocket(name: name, identifier: .init(rawValue: identifier), role: .client))
         } else {
             terminateRuntimeEngine(for: .remote(name: name, identifier: .init(rawValue: identifier), role: .client))
         }
