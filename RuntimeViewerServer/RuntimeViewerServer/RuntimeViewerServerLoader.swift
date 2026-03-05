@@ -2,6 +2,7 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerUtilities
 
 #if os(macOS) || targetEnvironment(macCatalyst)
 import LaunchServicesPrivate
