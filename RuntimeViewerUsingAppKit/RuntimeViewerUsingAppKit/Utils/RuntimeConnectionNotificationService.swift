@@ -115,14 +115,10 @@ extension RuntimeSource {
             return "Local Runtime"
         case .macCatalystClient:
             return "Mac Catalyst Runtime"
-        case .remote(let name, _, _):
-            return name
         case .bonjour(let name, _, _):
             return "Bonjour: \(name)"
-        case .localSocket(let name, _, _):
-            return name
-        case .directTCP(let name, _, _, _):
-            return name
+        default:
+            return description
         }
     }
 
