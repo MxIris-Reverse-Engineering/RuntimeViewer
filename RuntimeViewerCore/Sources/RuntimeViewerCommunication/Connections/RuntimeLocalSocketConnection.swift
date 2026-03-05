@@ -567,11 +567,9 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
         // Retry connection until server is ready or timeout
         let startTime = Date()
         var lastError: Error?
-        var retryCount = 0
 
         while Date().timeIntervalSince(startTime) < timeout {
             do {
-                retryCount += 1
                 let connection = try RuntimeLocalSocketConnection(port: port)
                 self.underlyingConnection = connection
                 try connection.start()

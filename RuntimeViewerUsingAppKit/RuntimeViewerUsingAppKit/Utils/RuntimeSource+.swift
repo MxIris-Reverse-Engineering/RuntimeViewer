@@ -21,9 +21,7 @@ extension RuntimeSource: MainMenuItemRepresentable {
             }
         case .bonjour:
             return .symbol(systemName: .bonjour)
-        case .localSocket:
-            return .symbol(systemName: .network)
-        case .directTCP:
+        case .localSocket, .directTCP:
             return .symbol(systemName: .network)
         }
     }
@@ -50,7 +48,7 @@ extension Reactive where Base: NSPopUpButton {
             target.removeAllItems()
             items.forEach { item in
                 target.addItem(withTitle: item.title)
-                if let menuItem = target.item(withTitle: item.title) {
+                if let menuItem = target.lastItem {
                     menuItem.image = item.icon
                 }
             }
