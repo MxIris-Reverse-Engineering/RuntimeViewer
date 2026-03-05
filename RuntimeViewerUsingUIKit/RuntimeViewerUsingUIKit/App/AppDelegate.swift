@@ -1,6 +1,7 @@
 import UIKit
 import os.log
 import RuntimeViewerCore
+import RuntimeViewerUtilities
 import RuntimeViewerCommunication
 
 private let logger = Logger(subsystem: "com.RuntimeViewer", category: "AppDelegate")
@@ -19,7 +20,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         Task {
             let deviceName = UIDevice.current.name
             let deviceID = DeviceIdentifier.uniqueDeviceID
-            logger.info("Creating Bonjour server runtime engine with name: \(deviceName, privacy: .public), identifier: \(deviceID, privacy: .public)")
+            logger.info("Creating Bonjour server runtime engine with name: \(deviceName, privacy: .public), identifier: \(deviceID, privacy: .private)")
             remoteRuntimeEngine = RuntimeEngine(source: .bonjour(name: deviceName, identifier: .init(rawValue: deviceID), role: .server))
             do {
                 try await remoteRuntimeEngine?.connect()

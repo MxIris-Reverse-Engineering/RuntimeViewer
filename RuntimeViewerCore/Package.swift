@@ -55,7 +55,10 @@ let package = Package(
             name: "RuntimeViewerCommunication",
             targets: ["RuntimeViewerCommunication"]
         ),
-
+        .library(
+            name: "RuntimeViewerUtilities",
+            targets: ["RuntimeViewerUtilities"]
+        ),
     ],
     dependencies: [
         .package(
@@ -122,7 +125,7 @@ let package = Package(
         .package(
             url: "https://github.com/p-x9/swift-mobile-gestalt",
             branch: "main"
-        )
+        ),
     ],
     targets: [
         .target(
@@ -138,7 +141,6 @@ let package = Package(
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
                 .product(name: "MetaCodable", package: "MetaCodable"),
-                .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
             ],
             swiftSettings: [
                 .internalImportsByDefault,
@@ -158,6 +160,12 @@ let package = Package(
             swiftSettings: [
                 .internalImportsByDefault,
                 .immutableWeakCaptures,
+            ]
+        ),
+        .target(
+            name: "RuntimeViewerUtilities",
+            dependencies: [
+                .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
             ]
         ),
         .testTarget(

@@ -62,9 +62,9 @@ Unlike `bonjourServer` which awaits the first client connection, `bonjourClient`
 
 Instead of immediately stopping on `.waiting`, a `DispatchWorkItem` timer gives the connection 10 seconds to transition to `.ready`. If `.ready` is reached, the timer is cancelled. If the timer fires, the connection is stopped.
 
-### Fix 2: NWListener `.failed` handling + 30s total timeout
+### Fix 2: NWListener `.failed` handling
 
-The listener's `stateUpdateHandler` now handles `.failed` by resuming the continuation with an error. A 30-second timeout is added to `waitForConnection` to prevent indefinite hangs when no client connects.
+The listener's `stateUpdateHandler` now handles `.failed` by resuming the continuation with an error. `waitForConnection` completes once a client connects or the listener fails.
 
 ### Fix 3: Recreate NWListener in `restartListening`
 

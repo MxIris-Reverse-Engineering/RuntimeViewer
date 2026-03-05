@@ -9,8 +9,10 @@
 /* Begin PBXBuildFile section */
 		E978F9272F1C98A8004C09B4 /* LaunchServicesPrivate in Frameworks */ = {isa = PBXBuildFile; productRef = E978F9262F1C98A8004C09B4 /* LaunchServicesPrivate */; };
 		E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */; };
+		E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */; };
 		E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E994E3C72F325593009DD28A /* RuntimeViewerCore */; };
 		E994E3CA2F3255D1009DD28A /* LaunchServicesPrivate in Frameworks */ = {isa = PBXBuildFile; productRef = E994E3C92F3255D1009DD28A /* LaunchServicesPrivate */; };
+		E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +35,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */,
+				E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */,
 				E978F9272F1C98A8004C09B4 /* LaunchServicesPrivate in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -42,6 +45,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */,
+				E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */,
 				E994E3CA2F3255D1009DD28A /* LaunchServicesPrivate in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -115,6 +119,7 @@
 			packageProductDependencies = (
 				E978F9262F1C98A8004C09B4 /* LaunchServicesPrivate */,
 				E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */,
+				E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerServer;
 			productReference = E978F9192F1BBB38004C09B4 /* RuntimeViewerServer.framework */;
@@ -140,6 +145,7 @@
 			packageProductDependencies = (
 				E994E3C72F325593009DD28A /* RuntimeViewerCore */,
 				E994E3C92F3255D1009DD28A /* LaunchServicesPrivate */,
+				E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerServer;
 			productReference = E994E2962F323A51009DD28A /* RuntimeViewerServer.framework */;
@@ -773,6 +779,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E978F9252F1C98A8004C09B4 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */;
 			productName = LaunchServicesPrivate;
+		};
+		E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
+		};
+		E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
