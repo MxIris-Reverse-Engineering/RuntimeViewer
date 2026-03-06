@@ -9,19 +9,22 @@ public struct MCPWindowInfo: Codable, Sendable {
     public let isKeyWindow: Bool
     public let selectedTypeName: String?
     public let selectedTypeImagePath: String?
+    public let selectedTypeImageName: String?
 
     public init(
         identifier: String,
         displayName: String?,
         isKeyWindow: Bool,
         selectedTypeName: String?,
-        selectedTypeImagePath: String?
+        selectedTypeImagePath: String?,
+        selectedTypeImageName: String?
     ) {
         self.identifier = identifier
         self.displayName = displayName
         self.isKeyWindow = isKeyWindow
         self.selectedTypeName = selectedTypeName
         self.selectedTypeImagePath = selectedTypeImagePath
+        self.selectedTypeImageName = selectedTypeImageName
     }
 }
 
@@ -45,6 +48,7 @@ public struct MCPSelectedTypeRequest: Codable, Sendable {
 
 public struct MCPSelectedTypeResponse: Codable, Sendable {
     public let imagePath: String?
+    public let imageName: String?
     public let typeName: String?
     public let displayName: String?
     public let typeKind: String?
@@ -52,12 +56,14 @@ public struct MCPSelectedTypeResponse: Codable, Sendable {
 
     public init(
         imagePath: String?,
+        imageName: String?,
         typeName: String?,
         displayName: String?,
         typeKind: String?,
         interfaceText: String?
     ) {
         self.imagePath = imagePath
+        self.imageName = imageName
         self.typeName = typeName
         self.displayName = displayName
         self.typeKind = typeKind
@@ -70,17 +76,20 @@ public struct MCPSelectedTypeResponse: Codable, Sendable {
 public struct MCPTypeInterfaceRequest: Codable, Sendable {
     public let windowIdentifier: String
     public let imagePath: String?
+    public let imageName: String?
     public let typeName: String
 
-    public init(windowIdentifier: String, imagePath: String?, typeName: String) {
+    public init(windowIdentifier: String, imagePath: String?, imageName: String? = nil, typeName: String) {
         self.windowIdentifier = windowIdentifier
         self.imagePath = imagePath
+        self.imageName = imageName
         self.typeName = typeName
     }
 }
 
 public struct MCPTypeInterfaceResponse: Codable, Sendable {
     public let imagePath: String?
+    public let imageName: String?
     public let typeName: String?
     public let displayName: String?
     public let typeKind: String?
@@ -89,6 +98,7 @@ public struct MCPTypeInterfaceResponse: Codable, Sendable {
 
     public init(
         imagePath: String?,
+        imageName: String?,
         typeName: String?,
         displayName: String?,
         typeKind: String?,
@@ -96,6 +106,7 @@ public struct MCPTypeInterfaceResponse: Codable, Sendable {
         error: String?
     ) {
         self.imagePath = imagePath
+        self.imageName = imageName
         self.typeName = typeName
         self.displayName = displayName
         self.typeKind = typeKind
@@ -111,12 +122,14 @@ public struct MCPRuntimeTypeInfo: Codable, Sendable {
     public let displayName: String
     public let kind: String
     public let imagePath: String
+    public let imageName: String
 
-    public init(name: String, displayName: String, kind: String, imagePath: String) {
+    public init(name: String, displayName: String, kind: String, imagePath: String, imageName: String) {
         self.name = name
         self.displayName = displayName
         self.kind = kind
         self.imagePath = imagePath
+        self.imageName = imageName
     }
 
     public init(from object: RuntimeObject) {
@@ -124,6 +137,7 @@ public struct MCPRuntimeTypeInfo: Codable, Sendable {
         self.displayName = object.displayName
         self.kind = object.kind.description
         self.imagePath = object.imagePath
+        self.imageName = object.imageName
     }
 }
 
@@ -144,10 +158,12 @@ public struct MCPGrepMatch: Codable, Sendable {
 public struct MCPListTypesRequest: Codable, Sendable {
     public let windowIdentifier: String
     public let imagePath: String?
+    public let imageName: String?
 
-    public init(windowIdentifier: String, imagePath: String?) {
+    public init(windowIdentifier: String, imagePath: String?, imageName: String? = nil) {
         self.windowIdentifier = windowIdentifier
         self.imagePath = imagePath
+        self.imageName = imageName
     }
 }
 
@@ -167,11 +183,13 @@ public struct MCPSearchTypesRequest: Codable, Sendable {
     public let windowIdentifier: String
     public let query: String
     public let imagePath: String?
+    public let imageName: String?
 
-    public init(windowIdentifier: String, query: String, imagePath: String?) {
+    public init(windowIdentifier: String, query: String, imagePath: String?, imageName: String? = nil) {
         self.windowIdentifier = windowIdentifier
         self.query = query
         self.imagePath = imagePath
+        self.imageName = imageName
     }
 }
 
@@ -190,11 +208,13 @@ public struct MCPSearchTypesResponse: Codable, Sendable {
 public struct MCPGrepTypeInterfaceRequest: Codable, Sendable {
     public let windowIdentifier: String
     public let imagePath: String?
+    public let imageName: String?
     public let pattern: String
 
-    public init(windowIdentifier: String, imagePath: String?, pattern: String) {
+    public init(windowIdentifier: String, imagePath: String?, imageName: String? = nil, pattern: String) {
         self.windowIdentifier = windowIdentifier
         self.imagePath = imagePath
+        self.imageName = imageName
         self.pattern = pattern
     }
 }
@@ -214,23 +234,46 @@ public struct MCPGrepTypeInterfaceResponse: Codable, Sendable {
 public struct MCPMemberAddressesRequest: Codable, Sendable {
     public let windowIdentifier: String
     public let imagePath: String?
+    public let imageName: String?
     public let typeName: String
     public let memberName: String?
 
-    public init(windowIdentifier: String, imagePath: String?, typeName: String, memberName: String?) {
+    public init(windowIdentifier: String, imagePath: String?, imageName: String? = nil, typeName: String, memberName: String?) {
         self.windowIdentifier = windowIdentifier
         self.imagePath = imagePath
+        self.imageName = imageName
         self.typeName = typeName
         self.memberName = memberName
     }
 }
 
+public struct MCPMemberAddressInfo: Codable, Sendable {
+    public let name: String
+    public let kind: String
+    public let symbolName: String
+    public let address: String
+
+    public init(name: String, kind: String, symbolName: String, address: String) {
+        self.name = name
+        self.kind = kind
+        self.symbolName = symbolName
+        self.address = address
+    }
+
+    public init(from member: RuntimeMemberAddress) {
+        self.name = member.name
+        self.kind = member.kind
+        self.symbolName = member.symbolName
+        self.address = member.address
+    }
+}
+
 public struct MCPMemberAddressesResponse: Codable, Sendable {
     public let typeName: String?
-    public let members: [RuntimeMemberAddress]
+    public let members: [MCPMemberAddressInfo]
     public let error: String?
 
-    public init(typeName: String?, members: [RuntimeMemberAddress], error: String?) {
+    public init(typeName: String?, members: [MCPMemberAddressInfo], error: String?) {
         self.typeName = typeName
         self.members = members
         self.error = error

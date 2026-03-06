@@ -33,6 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        mcpService?.stop()
+    }
+
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         false
     }

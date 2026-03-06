@@ -114,7 +114,8 @@ private struct CopyMCPConfigButton: View {
         NSPasteboard.general.setString(json, forType: .string)
 
         copied = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        Task {
+            try? await Task.sleep(for: .seconds(2))
             copied = false
         }
     }
@@ -127,7 +128,7 @@ private struct CopyMCPConfigButton: View {
         let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         let portFilePath = appSupportURL?
             .appendingPathComponent("RuntimeViewer")
-            .appendingPathComponent("mcp-http-port")
+            .appendingPathComponent(Settings.MCP.portFileName)
             .path
         guard let portFilePath,
               let content = try? String(contentsOfFile: portFilePath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),

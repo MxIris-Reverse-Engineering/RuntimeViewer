@@ -756,6 +756,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
     /// and the port file has been written for client discovery.
     /// Connections are accepted asynchronously in the background.
     func start() async throws {
+        #log(.info, "Starting local socket server on port \(self.port, privacy: .public) for identifier: \(self.identifier, privacy: .public)")
         errno = 0
         serverSocketFD = socket(AF_INET, SOCK_STREAM, 0)
         guard serverSocketFD >= 0 else {
@@ -800,6 +801,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Starts accepting connections asynchronously in background.
     private func startAcceptingConnections() {
+        #log(.info, "Waiting for local socket client connection on port \(self.port, privacy: .public)...")
         DispatchQueue.global().async { [weak self] in
             self?.acceptConnectionLoop()
         }
@@ -807,7 +809,12 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Continuously accepts client connections.
     private func acceptConnectionLoop() {
-        guard serverSocketFD >= 0 else { return }
+        guard serverSocketFD >= 0 else {
+            #log(.error, "Accept loop aborted: server socket is invalid (fd=\(self.serverSocketFD, privacy: .public))")
+            return
+        }
+
+        #log(.debug, "Blocking on accept() for port \(self.port, privacy: .public)...")
 
         var clientAddr = sockaddr_in()
         var clientAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
@@ -819,9 +826,12 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         }
 
         guard clientFD >= 0 else {
-            // Accept failed, likely server was stopped
+            let acceptErrno = errno
+            #log(.info, "Accept returned -1 (errno=\(acceptErrno, privacy: .public)), server likely stopped")
             return
         }
+
+        #log(.info, "Accepted local socket client connection (fd=\(clientFD, privacy: .public)) on port \(self.port, privacy: .public)")
 
         // Disable Nagle algorithm for lower latency
         var noDelay: Int32 = 1
@@ -835,15 +845,19 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
         // Observe connection state to restart accepting when disconnected
         connectionStateCancellable = socketConnection.statePublisher
-            .filter { $0.isDisconnected }
-            .sink { [weak self] _ in
-                self?.startAcceptingConnections()
+            .sink { [weak self] state in
+                #log(.info, "Local socket connection state: \(String(describing: state), privacy: .public)")
+                if state.isDisconnected {
+                    #log(.info, "Local socket client disconnected, waiting for new connection...")
+                    self?.startAcceptingConnections()
+                }
             }
 
         do {
             try socketConnection.start()
+            #log(.info, "Local socket connection started successfully")
         } catch {
-            #log(.error, "Failed to start connection: \(error, privacy: .public)")
+            #log(.error, "Failed to start local socket connection: \(error, privacy: .public), retrying accept...")
             // Try accepting again
             startAcceptingConnections()
         }
@@ -851,6 +865,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Stops the server and cleans up resources.
     override func stop() {
+        #log(.info, "Stopping local socket server on port \(self.port, privacy: .public)")
         connectionStateCancellable?.cancel()
         connectionStateCancellable = nil
         underlyingConnection?.stop()
