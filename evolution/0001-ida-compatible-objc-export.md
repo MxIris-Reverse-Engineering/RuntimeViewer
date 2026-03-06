@@ -1,6 +1,6 @@
 # 0001 - IDA Compatible ObjC Export Mode
 
-- **Status**: Draft
+- **Status**: Implemented
 - **Date**: 2026-03-06
 - **Last Updated**: 2026-03-06
 - **Author**: JH
@@ -216,3 +216,5 @@ Ship a Python script that parses RuntimeViewer's comment format and applies type
 | Date | Decision | Details |
 |------|----------|---------|
 | 2026-03-06 | Created as Draft | Add IDA Compatible export mode with ivar layout structs, clean headers, and IMP mapping file |
+| 2026-03-06 | Changed to In Progress | Implementation started |
+| 2026-03-06 | Changed to Implemented | All changes implemented and build verified |

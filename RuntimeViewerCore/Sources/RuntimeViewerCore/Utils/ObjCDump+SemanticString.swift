@@ -19,7 +19,32 @@ final class ObjCDumpContext {
 
 extension ObjCClassInfo {
     @SemanticStringBuilder
+    func idaIvarLayoutStruct(using context: ObjCDumpContext) -> SemanticString {
+        Keyword("struct")
+        Space()
+        "__fixed(\(String(format: "0x%04X", instanceSize)))"
+        Space()
+        TypeDeclaration(kind: .struct, "\(name)_IVARS")
+        Space()
+        "{"
+
+        MemberList(level: 1) {
+            for ivar in ivars {
+                ivar.idaLayoutEntry(using: context)
+            }
+        }
+
+        "};"
+        BreakLine()
+        BreakLine()
+    }
+
+    @SemanticStringBuilder
     func semanticString(using context: ObjCDumpContext) -> SemanticString {
+        if context.options.idaCompatible, !ivars.isEmpty {
+            idaIvarLayoutStruct(using: context)
+        }
+
         Keyword("@interface")
         Space()
         TypeDeclaration(kind: .class, name)
@@ -233,6 +258,42 @@ extension ObjCIvarInfo {
         if context.options.addIvarOffsetComments {
             Space()
             Comment("offset: \(offset)")
+        }
+    }
+
+    @SemanticStringBuilder
+    func idaLayoutEntry(using context: ObjCDumpContext) -> SemanticString {
+        "__at(\(String(format: "0x%04X", offset)))"
+        Space()
+
+        if let type, case .bitField(let width) = type {
+            ObjCField(type: .int, name: name, bitWidth: width)
+                .semanticString(fallbackName: name, context: context)
+        } else {
+            if [.char, .uchar].contains(type) {
+                Keyword("BOOL")
+                Space()
+                Variable(name)
+                ";"
+            } else {
+                if let type = type?.semanticDecoded(context: context) {
+                    type
+                    if type.string.last != "*" {
+                        Space()
+                    }
+                    Variable(name)
+                    if let currentArray = context.currentArray {
+                        currentArray
+                        context.currentArray = nil
+                    }
+                    ";"
+                } else {
+                    UnknownError()
+                    Space()
+                    Variable(name)
+                    ";"
+                }
+            }
         }
     }
 }

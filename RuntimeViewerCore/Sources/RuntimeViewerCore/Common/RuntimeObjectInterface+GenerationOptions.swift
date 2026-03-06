@@ -38,5 +38,23 @@ extension RuntimeObjectInterface {
                 synthesizeOpaqueType: true
             )
         )
+
+        /// Options tuned for IDA Pro 9.3+: generates ivar layout structs,
+        /// strips comments that confuse IDA's Clang parser, collects IMP mappings.
+        public static let ida = GenerationOptions(
+            objcHeaderOptions: ObjCGenerationOptions(
+                stripProtocolConformance: false,
+                stripOverrides: false,
+                stripSynthesizedIvars: false,
+                stripSynthesizedMethods: false,
+                stripCtorMethod: true,
+                stripDtorMethod: true,
+                addIvarOffsetComments: false,
+                addPropertyAttributesComments: false,
+                addMethodIMPAddressComments: false,
+                addPropertyAccessorAddressComments: false,
+                idaCompatible: true
+            )
+        )
     }
 }

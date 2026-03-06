@@ -32,7 +32,9 @@ public struct ObjCGenerationOptions: Sendable, Equatable {
     public var addMethodIMPAddressComments: Bool
     @Default(false)
     public var addPropertyAccessorAddressComments: Bool
-    
+    @Default(false)
+    public var idaCompatible: Bool
+
     public static let `default` = Self()
 }
 
@@ -318,8 +320,17 @@ actor RuntimeObjCSection {
     func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
+
+        var effectiveOptions = options
+        if effectiveOptions.idaCompatible {
+            effectiveOptions.addIvarOffsetComments = false
+            effectiveOptions.addMethodIMPAddressComments = false
+            effectiveOptions.addPropertyAccessorAddressComments = false
+            effectiveOptions.addPropertyAttributesComments = false
+        }
+
         let cTypeReplacements = transformer.cType.isEnabled ? transformer.cType.replacements : [:]
-        let objcDumpContext = ObjCDumpContext(machO: machO, options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
+        let objcDumpContext = ObjCDumpContext(machO: machO, options: effectiveOptions, cTypeReplacements: cTypeReplacements) { name, isStruct in
             guard let name else { return true }
             if isStruct {
                 return self.structs[name] == nil
@@ -430,7 +441,7 @@ actor RuntimeObjCSection {
                 )
 
                 if let finalClassInfo {
-                    if options.addPropertyAccessorAddressComments {
+                    if effectiveOptions.addPropertyAccessorAddressComments || effectiveOptions.idaCompatible {
                         for method in currentClassInfo.methods where method.imp != 0 {
                             objcDumpContext.methodIMPs[method.name] = method.imp
                         }
@@ -438,7 +449,23 @@ actor RuntimeObjCSection {
                             objcDumpContext.classMethodIMPs[method.name] = method.imp
                         }
                     }
-                    return .init(object: name, interfaceString: finalClassInfo.semanticString(using: objcDumpContext))
+
+                    let impMappings: [RuntimeIMPMapping]
+                    if effectiveOptions.idaCompatible {
+                        impMappings = buildIMPMappings(
+                            className: currentClassInfo.name,
+                            methods: currentClassInfo.methods,
+                            classMethods: currentClassInfo.classMethods
+                        )
+                    } else {
+                        impMappings = []
+                    }
+
+                    return .init(
+                        object: name,
+                        interfaceString: finalClassInfo.semanticString(using: objcDumpContext),
+                        impMappings: impMappings
+                    )
                 }
             }
         case .objc(.type(.protocol)):
@@ -523,7 +550,7 @@ actor RuntimeObjCSection {
             }
         case .objc(.category(.class)):
             if let categoryInfo = categories[name.name]?.info {
-                if options.addPropertyAccessorAddressComments {
+                if effectiveOptions.addPropertyAccessorAddressComments || effectiveOptions.idaCompatible {
                     for method in categoryInfo.methods where method.imp != 0 {
                         objcDumpContext.methodIMPs[method.name] = method.imp
                     }
@@ -531,7 +558,23 @@ actor RuntimeObjCSection {
                         objcDumpContext.classMethodIMPs[method.name] = method.imp
                     }
                 }
-                return .init(object: name, interfaceString: categoryInfo.semanticString(using: objcDumpContext))
+
+                let impMappings: [RuntimeIMPMapping]
+                if effectiveOptions.idaCompatible {
+                    impMappings = buildIMPMappings(
+                        className: "\(categoryInfo.className)(\(categoryInfo.name))",
+                        methods: categoryInfo.methods,
+                        classMethods: categoryInfo.classMethods
+                    )
+                } else {
+                    impMappings = []
+                }
+
+                return .init(
+                    object: name,
+                    interfaceString: categoryInfo.semanticString(using: objcDumpContext),
+                    impMappings: impMappings
+                )
             }
         case .c(.struct):
             if let interfaceString = structs[name.name]?.semanticString(isStruct: true, context: objcDumpContext) {
@@ -546,6 +589,23 @@ actor RuntimeObjCSection {
         }
         #log(.default, "Invalid runtime object: \(object.name, privacy: .public) kind: \(String(describing: object.kind), privacy: .public)")
         throw Error.invalidRuntimeObject
+    }
+
+    private func buildIMPMappings(
+        className: String,
+        methods: [ObjCMethodInfo],
+        classMethods: [ObjCMethodInfo]
+    ) -> [RuntimeIMPMapping] {
+        var mappings: [RuntimeIMPMapping] = []
+        for method in methods where method.imp != 0 {
+            let address = "0x" + machO.addressString(forOffset: .init(method.imp.uint - machO.ptr.bitPattern.uint))
+            mappings.append(.init(address: address, selector: "-[\(className) \(method.name)]"))
+        }
+        for method in classMethods where method.imp != 0 {
+            let address = "0x" + machO.addressString(forOffset: .init(method.imp.uint - machO.ptr.bitPattern.uint))
+            mappings.append(.init(address: address, selector: "+[\(className) \(method.name)]"))
+        }
+        return mappings
     }
 
     func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {

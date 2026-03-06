@@ -35,6 +35,9 @@ final class ExportingState {
     @Observed
     var currentStep: ExportingStep = .configuration
 
+    @Observed
+    var idaCompatible: Bool = false
+
     init(imagePath: String, imageName: String) {
         self.imagePath = imagePath
         self.imageName = imageName

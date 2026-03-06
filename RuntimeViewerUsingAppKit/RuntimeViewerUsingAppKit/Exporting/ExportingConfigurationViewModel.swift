@@ -7,6 +7,7 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     struct Input {
         let objcFormatSelected: Signal<Int>
         let swiftFormatSelected: Signal<Int>
+        let idaCompatibleToggled: Signal<Bool>
     }
 
     struct Output {
@@ -17,6 +18,7 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
         let imageName: Driver<String>
         let objcFormat: Driver<ExportFormat>
         let swiftFormat: Driver<ExportFormat>
+        let idaCompatible: Driver<Bool>
     }
 
     let exportingState: ExportingState
@@ -55,6 +57,12 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        input.idaCompatibleToggled.emitOnNext { [weak self] isOn in
+            guard let self else { return }
+            exportingState.idaCompatible = isOn
+        }
+        .disposed(by: rx.disposeBag)
+
         return Output(
             objcCount: exportingState.$allObjects.asDriver().map { $0.count { $0.kind.isObjC } },
             swiftCount: exportingState.$allObjects.asDriver().map { $0.count { $0.kind.isSwift } },
@@ -62,7 +70,8 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
             hasSwift: exportingState.$allObjects.asDriver().map { $0.contains { $0.kind.isSwift } },
             imageName: .just(exportingState.imageName),
             objcFormat: exportingState.$objcFormat.asDriver(),
-            swiftFormat: exportingState.$swiftFormat.asDriver()
+            swiftFormat: exportingState.$swiftFormat.asDriver(),
+            idaCompatible: exportingState.$idaCompatible.asDriver()
         )
     }
 }
