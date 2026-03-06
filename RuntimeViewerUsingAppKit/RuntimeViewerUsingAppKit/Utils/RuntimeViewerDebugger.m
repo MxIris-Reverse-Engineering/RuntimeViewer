@@ -48,10 +48,6 @@
         [item1 setTarget:self];
         [submenu addItem:item1];
 
-        NSMenuItem *item2 = [[NSMenuItem alloc] initWithTitle:@"Copy MCP Server Path" action:@selector(copyMCPServerPath:) keyEquivalent:@""];
-        [item2 setTarget:self];
-        [submenu addItem:item2];
-
         [self setSubmenu:submenu];
         
         return self;
@@ -68,15 +64,6 @@
         [window visualizeConstraints:firstResponderView.constraints];
     } else {
         [window visualizeConstraints:window.contentView.constraints];
-    }
-}
-
-- (IBAction)copyMCPServerPath:(id)sender
-{
-    NSString *path = [[NSBundle mainBundle] pathForAuxiliaryExecutable:@"RuntimeViewerMCPServer"];
-    if (path) {
-        [[NSPasteboard generalPasteboard] clearContents];
-        [[NSPasteboard generalPasteboard] setString:path forType:NSPasteboardTypeString];
     }
 }
 
