@@ -1,39 +1,59 @@
 import Foundation
+import Security
 import SwiftMobileGestalt
-
-#if canImport(UIKit) && !os(watchOS)
-import UIKit
-#endif
-
-#if os(watchOS)
-import WatchKit
-#endif
 
 public enum DeviceIdentifier {
     /// Returns the device's UniqueDeviceID (UDID) from MobileGestalt.
-    /// Falls back to identifierForVendor (iOS) or a generated UUID stored in UserDefaults.
-    public static var uniqueDeviceID: String {
+    public static let uniqueDeviceID: String = {
         if let udid = SMGCopyAnswerAsString(.identifying(.uniqueDeviceID)), !udid.isEmpty {
             return udid
         }
-
-        #if canImport(UIKit) && !os(watchOS)
-        if let vendorID = UIDevice.current.identifierForVendor?.uuidString {
-            return vendorID
-        }
-        #endif
-
         return fallbackDeviceID
-    }
+    }()
 
-    private static let fallbackDeviceIDKey = "com.RuntimeViewer.fallbackDeviceID"
+    private static let fallbackService = "com.RuntimeViewer"
+    private static let fallbackAccount = "fallbackDeviceID"
 
-    private static var fallbackDeviceID: String {
-        if let existing = UserDefaults.standard.string(forKey: fallbackDeviceIDKey) {
+    private static let fallbackDeviceID: String = {
+        if let existing = readFromKeychain() {
             return existing
         }
         let id = UUID().uuidString
-        UserDefaults.standard.set(id, forKey: fallbackDeviceIDKey)
+        saveToKeychain(id)
         return id
+    }()
+
+    private static func readFromKeychain() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: fallbackService,
+            kSecAttrAccount as String: fallbackAccount,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func saveToKeychain(_ value: String) {
+        guard let data = value.data(using: .utf8) else { return }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: fallbackService,
+            kSecAttrAccount as String: fallbackAccount,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+        let attributes: [String: Any] = [kSecValueData as String: data]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            var addQuery = query
+            addQuery[kSecValueData as String] = data
+            SecItemAdd(addQuery as CFDictionary, nil)
+        }
     }
 }
