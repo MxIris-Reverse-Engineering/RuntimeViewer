@@ -47,4 +47,23 @@ enum RuntimeInterfaceExportWriter {
             }
         }
     }
+
+    static func writeIMPMappings(
+        _ mappings: [RuntimeIMPMapping],
+        to directory: URL,
+        imageName: String
+    ) throws {
+        guard !mappings.isEmpty else { return }
+        let sorted = mappings.sorted { $0.address < $1.address }
+        var lines = [
+            "# RuntimeViewer IDA IMP Mapping",
+            "# Image: \(imageName)",
+        ]
+        for mapping in sorted {
+            lines.append("\(mapping.address) \(mapping.selector)")
+        }
+        let content = lines.joined(separator: "\n") + "\n"
+        let file = directory.appendingPathComponent("\(imageName).ida_map")
+        try content.write(to: file, atomically: true, encoding: .utf8)
+    }
 }

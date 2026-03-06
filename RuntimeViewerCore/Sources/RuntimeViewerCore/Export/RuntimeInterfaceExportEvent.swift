@@ -19,6 +19,16 @@ public enum RuntimeInterfaceExportEvent: Sendable {
     }
 }
 
+public struct RuntimeIMPMapping: Sendable, Codable {
+    public let address: String
+    public let selector: String
+
+    public init(address: String, selector: String) {
+        self.address = address
+        self.selector = selector
+    }
+}
+
 public struct RuntimeInterfaceExportResult: Sendable {
     public let succeeded: Int
     public let failed: Int

@@ -14,6 +14,13 @@ final class ExportingConfigurationViewController: AppKitViewController<Exporting
     private let swiftSingleFileRadio = RadioButton()
     private let swiftDirectoryRadio = RadioButton()
 
+    private let idaCompatibleCheckbox = CheckboxButton(title: "IDA Compatible")
+
+    private let idaCompatibleDesc = Label("Generate ivar layout structs and IMP mapping file for IDA Pro 9.3+").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
     private let objcTitleLabel = Label("Objective-C:").then {
         $0.font = .systemFont(ofSize: 13, weight: .medium)
     }
@@ -48,6 +55,11 @@ final class ExportingConfigurationViewController: AppKitViewController<Exporting
         swiftStack
     }
 
+    private lazy var idaCompatibleStack = VStackView(alignment: .leading, spacing: 4) {
+        idaCompatibleCheckbox
+        idaCompatibleDesc
+    }
+
     private lazy var objcStack = VStackView(alignment: .leading, spacing: 12) {
         objcTitleLabel
         VStackView(alignment: .leading, spacing: 4) {
@@ -58,6 +70,7 @@ final class ExportingConfigurationViewController: AppKitViewController<Exporting
             objcDirectoryRadio
             objcDirDesc
         }
+        idaCompatibleStack
     }
 
     private lazy var swiftStack = VStackView(alignment: .leading, spacing: 12) {
@@ -122,7 +135,10 @@ final class ExportingConfigurationViewController: AppKitViewController<Exporting
             swiftFormatSelected: Signal.merge(
                 swiftSingleFileRadio.rx.click.asSignal().map { ExportFormat.singleFile.rawValue },
                 swiftDirectoryRadio.rx.click.asSignal().map { ExportFormat.directory.rawValue }
-            )
+            ),
+            idaCompatibleToggled: idaCompatibleCheckbox.rx.click.asSignal().map { [weak self] in
+                self?.idaCompatibleCheckbox.state == .on
+            }
         )
 
         let output = viewModel.transform(input)
@@ -131,6 +147,8 @@ final class ExportingConfigurationViewController: AppKitViewController<Exporting
         output.objcFormat.map { $0 == .directory }.drive(objcDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .singleFile }.drive(swiftSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .directory }.drive(swiftDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
+
+        output.idaCompatible.drive(idaCompatibleCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
 
         output.hasObjC.driveOnNext { [weak self] hasObjC in
             guard let self else { return }

@@ -49,6 +49,7 @@
 		E9432FCF2C0D612100362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FCE2C0D612100362862 /* Assets.xcassets */; };
 		E947C39E2C2AB7E400296B2E /* Then.swift in Sources */ = {isa = PBXBuildFile; fileRef = E947C39D2C2AB7E400296B2E /* Then.swift */; };
 		E95441BC2C26E99400DFFD40 /* MainSplitViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */; };
+		E95A85862F5B0A1500C53071 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E95A85852F5B0A1500C53071 /* RuntimeViewerUtilities */; };
 		E96CF52D2EC7848700CBC159 /* XiblessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF52C2EC7848700CBC159 /* XiblessView.swift */; };
 		E96CF52E2EC7848700CBC159 /* XiblessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF52C2EC7848700CBC159 /* XiblessView.swift */; };
 		E96CF5302EC784C000CBC159 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF52F2EC784C000CBC159 /* Extensions.swift */; };
@@ -104,6 +105,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E95A85862F5B0A1500C53071 /* RuntimeViewerUtilities in Frameworks */,
 				E942AC8A2C27556800A2F3D3 /* RuntimeViewerApplication in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -274,6 +276,7 @@
 			name = RuntimeViewerUsingUIKit;
 			packageProductDependencies = (
 				E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */,
+				E95A85852F5B0A1500C53071 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerUsingUIKit;
 			productReference = E9432FC22C0D612000362862 /* RuntimeViewer.app */;
@@ -287,7 +290,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1640;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					E9038F972C31A81F0051B6AC = {
 						CreatedOnToolsVersion = 15.4;
@@ -513,6 +516,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -572,6 +576,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
@@ -587,6 +592,8 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingUIKit/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
@@ -625,6 +632,8 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingUIKit/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
@@ -703,6 +712,10 @@
 		E942AC892C27556800A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerApplication;
+		};
+		E95A85852F5B0A1500C53071 /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
 		};
 		E985A9D52D9AF52E005A573C /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;

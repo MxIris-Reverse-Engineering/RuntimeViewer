@@ -57,7 +57,12 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
             return
         }
 
-        var generationOptions = appDefaults.options
+        var generationOptions: RuntimeObjectInterface.GenerationOptions
+        if exportingState.idaCompatible {
+            generationOptions = .ida
+        } else {
+            generationOptions = appDefaults.options
+        }
         generationOptions.transformer = settings.transformer
 
         let configuration = RuntimeInterfaceExportConfiguration(
@@ -66,7 +71,8 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
             directory: directory,
             objcFormat: exportingState.objcFormat,
             swiftFormat: exportingState.swiftFormat,
-            generationOptions: generationOptions
+            generationOptions: generationOptions,
+            idaCompatible: exportingState.idaCompatible
         )
 
         let reporter = RuntimeInterfaceExportReporter()

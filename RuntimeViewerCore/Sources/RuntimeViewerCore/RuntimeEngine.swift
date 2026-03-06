@@ -516,6 +516,7 @@ extension RuntimeEngine {
 
         reporter.send(.phaseStarted(.exporting))
         var results: [RuntimeInterfaceExportItem] = []
+        var allIMPMappings: [RuntimeIMPMapping] = []
         var succeeded = 0
         var failed = 0
         var objcCount = 0
@@ -537,6 +538,11 @@ extension RuntimeEngine {
                 results.append(item)
                 succeeded += 1
                 if item.isSwift { swiftCount += 1 } else { objcCount += 1 }
+
+                if configuration.idaCompatible {
+                    allIMPMappings.append(contentsOf: runtimeInterface.impMappings)
+                }
+
                 reporter.send(.objectCompleted(object, runtimeInterface.interfaceString))
             } catch {
                 failed += 1
@@ -580,6 +586,14 @@ extension RuntimeEngine {
                     to: configuration.directory
                 )
             }
+        }
+
+        if configuration.idaCompatible {
+            try RuntimeInterfaceExportWriter.writeIMPMappings(
+                allIMPMappings,
+                to: configuration.directory,
+                imageName: configuration.imageName
+            )
         }
 
         reporter.send(.phaseCompleted(.writing))

@@ -12,6 +12,7 @@ public struct RuntimeInterfaceExportConfiguration: Sendable {
     public let objcFormat: Format
     public let swiftFormat: Format
     public let generationOptions: RuntimeObjectInterface.GenerationOptions
+    public let idaCompatible: Bool
 
     public init(
         imagePath: String,
@@ -19,7 +20,8 @@ public struct RuntimeInterfaceExportConfiguration: Sendable {
         directory: URL,
         objcFormat: Format,
         swiftFormat: Format,
-        generationOptions: RuntimeObjectInterface.GenerationOptions
+        generationOptions: RuntimeObjectInterface.GenerationOptions,
+        idaCompatible: Bool = false
     ) {
         self.imagePath = imagePath
         self.imageName = imageName
@@ -27,5 +29,6 @@ public struct RuntimeInterfaceExportConfiguration: Sendable {
         self.objcFormat = objcFormat
         self.swiftFormat = swiftFormat
         self.generationOptions = generationOptions
+        self.idaCompatible = idaCompatible
     }
 }
