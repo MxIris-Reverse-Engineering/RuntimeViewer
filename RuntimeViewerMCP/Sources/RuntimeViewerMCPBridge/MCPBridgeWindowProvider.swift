@@ -1,4 +1,3 @@
-#if os(macOS)
 import RuntimeViewerCore
 import MemberwiseInit
 
@@ -19,4 +18,3 @@ public protocol MCPBridgeWindowProvider: AnyObject, Sendable {
     func allWindowContexts() async -> [MCPBridgeWindowContext]
     func windowContext(forIdentifier identifier: String) async -> MCPBridgeWindowContext?
 }
-#endif

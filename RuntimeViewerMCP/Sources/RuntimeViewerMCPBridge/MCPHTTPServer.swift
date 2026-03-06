@@ -4,6 +4,7 @@ import Hummingbird
 import MCP
 import NIOCore
 import OSLog
+import RuntimeViewerSettings
 
 private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: "HTTPServer")
 
@@ -30,7 +31,7 @@ public actor MCPHTTPServer {
         let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let runtimeViewerDir = appSupportURL.appendingPathComponent("RuntimeViewer")
         try FileManager.default.createDirectory(at: runtimeViewerDir, withIntermediateDirectories: true)
-        self.portFilePath = runtimeViewerDir.appendingPathComponent("mcp-http-port").path
+        self.portFilePath = runtimeViewerDir.appendingPathComponent(Settings.MCP.portFileName).path
     }
 
     // MARK: - Lifecycle
@@ -76,11 +77,7 @@ public actor MCPHTTPServer {
         cleanupTask = Task { await sessionCleanupLoop() }
     }
 
-    public nonisolated func stop() {
-        Task { await performStop() }
-    }
-
-    private func performStop() {
+    public func stop() {
         serverTask?.cancel()
         serverTask = nil
         cleanupTask?.cancel()
