@@ -12,6 +12,8 @@ public final class MCPService {
 
     private var httpServer: MCPHTTPServer?
 
+    private var startTask: Task<Void, Never>?
+
     private var observeToken: ObserveToken?
 
     private var previousMCPEnabled: Bool?
@@ -21,6 +23,8 @@ public final class MCPService {
     private var previousMCPFixedPort: UInt16?
 
     private var windowProvider: MCPBridgeWindowProvider?
+
+    private var restartTask: Task<Void, Never>?
     
     public init() {}
     
@@ -29,7 +33,7 @@ public final class MCPService {
     }
 
     public func start(for windowProvider: some MCPBridgeWindowProvider) {
-        Task {
+        startTask = Task {
             let mcpSettings = settings.mcp
             let port: UInt16 = mcpSettings.useFixedPort ? mcpSettings.fixedPort : 0
             do {
@@ -51,7 +55,13 @@ public final class MCPService {
     }
 
     public func stop() {
-        httpServer?.stop()
+        startTask?.cancel()
+        startTask = nil
+        restartTask?.cancel()
+        restartTask = nil
+        if let httpServer {
+            Task { await httpServer.stop() }
+        }
         httpServer = nil
         observeToken?.cancel()
         observeToken = nil
@@ -73,14 +83,24 @@ public final class MCPService {
             previousMCPFixedPort = fixedPort
 
             if enabledChanged || portChanged {
-                if isMCPEnabled {
-                    stop()
-                    if let windowProvider {
-                        start(for: windowProvider)
-                    }
-                } else {
-                    stop()
+                scheduleRestart(enabled: isMCPEnabled)
+            }
+        }
+    }
+
+    private func scheduleRestart(enabled: Bool) {
+        restartTask?.cancel()
+        restartTask = Task {
+            // Debounce: wait for settings to stabilize (e.g. user typing port number)
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            if enabled {
+                stop()
+                if let windowProvider {
+                    start(for: windowProvider)
                 }
+            } else {
+                stop()
             }
         }
     }

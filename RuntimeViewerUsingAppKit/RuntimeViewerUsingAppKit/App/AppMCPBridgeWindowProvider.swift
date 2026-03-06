@@ -1,4 +1,3 @@
-#if canImport(RuntimeViewerMCPBridge)
 import AppKit
 import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
@@ -19,7 +18,7 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
             for document in NSDocumentController.shared.documents {
                 guard let document = document as? Document else { continue }
                 guard let window = document.windowControllers.first?.window else { continue }
-                if identifier == "\(window.windowNumber)" {
+                if identifier == document.mcpIdentifier {
                     return makeContext(from: document, window: window)
                 }
             }
@@ -30,7 +29,7 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
     @MainActor
     private func makeContext(from document: Document, window: NSWindow) -> MCPBridgeWindowContext {
         MCPBridgeWindowContext(
-            identifier: "\(window.windowNumber)",
+            identifier: document.mcpIdentifier,
             displayName: window.title,
             isKeyWindow: window.isKeyWindow,
             selectedRuntimeObject: document.documentState.selectedRuntimeObject,
@@ -39,4 +38,3 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
         )
     }
 }
-#endif

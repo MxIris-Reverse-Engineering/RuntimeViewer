@@ -58,5 +58,8 @@ extension Settings {
         public var fixedPort: UInt16
         
         public static let `default` = Self()
+
+        /// The port file name used by both the MCP HTTP server and the settings UI.
+        public static let portFileName = "mcp-http-port"
     }
 }
