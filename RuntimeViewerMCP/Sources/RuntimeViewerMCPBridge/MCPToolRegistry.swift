@@ -19,7 +19,7 @@ public struct MCPToolRegistry: Sendable {
             description: """
                 Lists all open RuntimeViewer document windows. Call this first — every other tool requires a window_identifier returned here. \
                 Each entry contains: identifier (stable per window session), display title, key-window flag, \
-                and the currently selected type's name and image path (if any). \
+                and the currently selected type's name, image path, and image name (if any). \
                 Returns an empty list when no documents are open; in that case, ask the user to launch RuntimeViewer and open a document.
                 """,
             inputSchema: .object([
@@ -55,9 +55,9 @@ public struct MCPToolRegistry: Sendable {
                 Matches against both the internal name and display name of each type. \
                 For ObjC types the output is an @interface header with methods, properties, and protocol conformances. \
                 For Swift types it is a Swift declaration followed by all extension and conformance extension blocks. \
-                Providing image_path restricts the search to a single image and is significantly faster; \
-                omitting it searches all previously loaded images. \
-                Use search_types first if you are unsure of the exact type name or image path.
+                Providing image_path or image_name restricts the search and is significantly faster; \
+                omitting both searches all previously loaded images. \
+                Use search_types first if you are unsure of the exact type name or image.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -68,7 +68,11 @@ public struct MCPToolRegistry: Sendable {
                     ]),
                     "image_path": .object([
                         "type": .string("string"),
-                        "description": .string("Full path of the image (framework/dylib) containing the type. Strongly recommended for faster lookup. If omitted, searches all loaded images."),
+                        "description": .string("Full path of the image (framework/dylib) containing the type. Strongly recommended for faster lookup. If omitted, searches all loaded images. Mutually exclusive with image_name."),
+                    ]),
+                    "image_name": .object([
+                        "type": .string("string"),
+                        "description": .string("Short name of the image without path or extension (e.g. 'AppKit', 'UIKitCore', 'SwiftUI'). Case-insensitive. Use this when you don't know the full path. Mutually exclusive with image_path."),
                     ]),
                     "type_name": .object([
                         "type": .string("string"),
@@ -82,8 +86,8 @@ public struct MCPToolRegistry: Sendable {
             name: "list_types",
             description: """
                 Lists all runtime types in an image, grouped by kind with a total count. \
-                WARNING: omitting image_path enumerates every type across all loaded images — \
-                this can produce an extremely large response and trigger heavy I/O. Always provide image_path when possible. \
+                WARNING: omitting both image_path and image_name enumerates every type across all loaded images — \
+                this can produce an extremely large response and trigger heavy I/O. Always provide image_path or image_name when possible. \
                 If you only need to find types by name, prefer search_types instead.
                 """,
             inputSchema: .object([
@@ -95,7 +99,11 @@ public struct MCPToolRegistry: Sendable {
                     ]),
                     "image_path": .object([
                         "type": .string("string"),
-                        "description": .string("Full path of the image (framework/dylib) to list types from. Strongly recommended — omitting it dumps ALL loaded images which can be extremely large."),
+                        "description": .string("Full path of the image (framework/dylib) to list types from. Strongly recommended — omitting it dumps ALL loaded images which can be extremely large. Mutually exclusive with image_name."),
+                    ]),
+                    "image_name": .object([
+                        "type": .string("string"),
+                        "description": .string("Short name of the image without path or extension (e.g. 'AppKit', 'UIKitCore', 'SwiftUI'). Case-insensitive. Mutually exclusive with image_path."),
                     ]),
                 ]),
                 "required": .array([.string("window_identifier")]),
@@ -106,8 +114,8 @@ public struct MCPToolRegistry: Sendable {
             description: """
                 Searches for runtime types by name using case-insensitive substring matching against both \
                 the internal name (mangled for Swift) and the display name (human-readable). \
-                Returns each match with its display name, kind, and full image path. \
-                This is the preferred way to locate a type when you do not know its exact name or image path.
+                Returns each match with its display name, kind, full image path, and image name. \
+                This is the preferred way to locate a type when you do not know its exact name or image.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
@@ -122,7 +130,11 @@ public struct MCPToolRegistry: Sendable {
                     ]),
                     "image_path": .object([
                         "type": .string("string"),
-                        "description": .string("Restrict search to a specific image path. If omitted, searches all loaded images."),
+                        "description": .string("Restrict search to a specific image path. If omitted, searches all loaded images. Mutually exclusive with image_name."),
+                    ]),
+                    "image_name": .object([
+                        "type": .string("string"),
+                        "description": .string("Restrict search to images matching this short name (e.g. 'AppKit', 'UIKitCore'). Case-insensitive. Mutually exclusive with image_path."),
                     ]),
                 ]),
                 "required": .array([.string("window_identifier"), .string("query")]),
@@ -144,7 +156,11 @@ public struct MCPToolRegistry: Sendable {
                     ]),
                     "image_path": .object([
                         "type": .string("string"),
-                        "description": .string("Full path of the image (framework/dylib) containing the type. Recommended for faster lookup. If omitted, searches all loaded images."),
+                        "description": .string("Full path of the image (framework/dylib) containing the type. Recommended for faster lookup. Mutually exclusive with image_name."),
+                    ]),
+                    "image_name": .object([
+                        "type": .string("string"),
+                        "description": .string("Short name of the image without path or extension (e.g. 'AppKit', 'UIKitCore'). Case-insensitive. Mutually exclusive with image_path."),
                     ]),
                     "type_name": .object([
                         "type": .string("string"),
@@ -200,25 +216,29 @@ public struct MCPToolRegistry: Sendable {
             let windowIdentifier = try requireParam(params, "window_identifier")
             let typeName = try requireParam(params, "type_name")
             let imagePath = params.arguments?["image_path"]?.stringValue
-            return try await handleTypeInterface(windowIdentifier: windowIdentifier, imagePath: imagePath, typeName: typeName, bridgeServer: bridgeServer)
+            let imageName = params.arguments?["image_name"]?.stringValue
+            return try await handleTypeInterface(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName, bridgeServer: bridgeServer)
 
         case "list_types":
             let windowIdentifier = try requireParam(params, "window_identifier")
             let imagePath = params.arguments?["image_path"]?.stringValue
-            return try await handleListTypes(windowIdentifier: windowIdentifier, imagePath: imagePath, bridgeServer: bridgeServer)
+            let imageName = params.arguments?["image_name"]?.stringValue
+            return try await handleListTypes(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, bridgeServer: bridgeServer)
 
         case "search_types":
             let windowIdentifier = try requireParam(params, "window_identifier")
             let query = try requireParam(params, "query")
             let imagePath = params.arguments?["image_path"]?.stringValue
-            return try await handleSearchTypes(windowIdentifier: windowIdentifier, query: query, imagePath: imagePath, bridgeServer: bridgeServer)
+            let imageName = params.arguments?["image_name"]?.stringValue
+            return try await handleSearchTypes(windowIdentifier: windowIdentifier, query: query, imagePath: imagePath, imageName: imageName, bridgeServer: bridgeServer)
 
         case "get_member_addresses":
             let windowIdentifier = try requireParam(params, "window_identifier")
             let typeName = try requireParam(params, "type_name")
             let imagePath = params.arguments?["image_path"]?.stringValue
+            let imageName = params.arguments?["image_name"]?.stringValue
             let memberName = params.arguments?["member_name"]?.stringValue
-            return try await handleMemberAddresses(windowIdentifier: windowIdentifier, imagePath: imagePath, typeName: typeName, memberName: memberName, bridgeServer: bridgeServer)
+            return try await handleMemberAddresses(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName, memberName: memberName, bridgeServer: bridgeServer)
 
         default:
             throw MCPError.invalidParams("Unknown tool: \(params.name)")
@@ -252,7 +272,10 @@ public struct MCPToolRegistry: Sendable {
                 text += "\n  Selected Type: \(selectedType)"
             }
             if let imagePath = window.selectedTypeImagePath {
-                text += "\n  Selected Type Image: \(imagePath)"
+                text += "\n  Selected Type Image Path: \(imagePath)"
+            }
+            if let imageName = window.selectedTypeImageName {
+                text += "\n  Selected Type Image Name: \(imageName)"
             }
             text += "\n"
         }
@@ -267,19 +290,21 @@ public struct MCPToolRegistry: Sendable {
         var text = "Selected Type:\n"
         text += "  Name: \(response.displayName ?? typeName)\n"
         if let kind = response.typeKind { text += "  Kind: \(kind)\n" }
-        if let imagePath = response.imagePath { text += "  Image: \(imagePath)\n" }
+        if let imageName = response.imageName { text += "  Image Name: \(imageName)\n" }
+        if let imagePath = response.imagePath { text += "  Image Path: \(imagePath)\n" }
         if let interfaceText = response.interfaceText { text += "\nInterface:\n\(interfaceText)" }
         return .init(content: [.text(text)])
     }
 
-    private static func handleTypeInterface(windowIdentifier: String, imagePath: String?, typeName: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleTypeInterface(MCPTypeInterfaceRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, typeName: typeName))
+    private static func handleTypeInterface(windowIdentifier: String, imagePath: String?, imageName: String?, typeName: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = await bridgeServer.handleTypeInterface(MCPTypeInterfaceRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName))
         if let error = response.error {
             return .init(content: [.text("Error: \(error)")], isError: true)
         }
         var text = "Type: \(response.displayName ?? typeName)\n"
         if let kind = response.typeKind { text += "Kind: \(kind)\n" }
-        if let responseImagePath = response.imagePath { text += "Image: \(responseImagePath)\n" }
+        if let responseImageName = response.imageName { text += "Image Name: \(responseImageName)\n" }
+        if let responseImagePath = response.imagePath { text += "Image Path: \(responseImagePath)\n" }
         if let interfaceText = response.interfaceText {
             text += "\nInterface:\n\(interfaceText)"
         } else {
@@ -288,8 +313,8 @@ public struct MCPToolRegistry: Sendable {
         return .init(content: [.text(text)])
     }
 
-    private static func handleListTypes(windowIdentifier: String, imagePath: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleListTypes(MCPListTypesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath))
+    private static func handleListTypes(windowIdentifier: String, imagePath: String?, imageName: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = await bridgeServer.handleListTypes(MCPListTypesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName))
         if let error = response.error {
             return .init(content: [.text("Error: \(error)")], isError: true)
         }
@@ -310,8 +335,8 @@ public struct MCPToolRegistry: Sendable {
         return .init(content: [.text(text)])
     }
 
-    private static func handleSearchTypes(windowIdentifier: String, query: String, imagePath: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleSearchTypes(MCPSearchTypesRequest(windowIdentifier: windowIdentifier, query: query, imagePath: imagePath))
+    private static func handleSearchTypes(windowIdentifier: String, query: String, imagePath: String?, imageName: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = await bridgeServer.handleSearchTypes(MCPSearchTypesRequest(windowIdentifier: windowIdentifier, query: query, imagePath: imagePath, imageName: imageName))
         if let error = response.error {
             return .init(content: [.text("Error: \(error)")], isError: true)
         }
@@ -322,14 +347,13 @@ public struct MCPToolRegistry: Sendable {
         }
         var text = "Search results for '\(query)':\nFound \(response.types.count) matching types\n\n"
         for type in response.types {
-            let imageName = type.imagePath.split(separator: "/").last ?? Substring(type.imagePath)
-            text += "  \(type.displayName) [\(type.kind)] — \(imageName)\n"
+            text += "  \(type.displayName) [\(type.kind)] — \(type.imageName)\n"
         }
         return .init(content: [.text(text)])
     }
 
-    private static func handleMemberAddresses(windowIdentifier: String, imagePath: String?, typeName: String, memberName: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleMemberAddresses(MCPMemberAddressesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, typeName: typeName, memberName: memberName))
+    private static func handleMemberAddresses(windowIdentifier: String, imagePath: String?, imageName: String?, typeName: String, memberName: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = await bridgeServer.handleMemberAddresses(MCPMemberAddressesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName, memberName: memberName))
         if let error = response.error {
             return .init(content: [.text("Error: \(error)")], isError: true)
         }
