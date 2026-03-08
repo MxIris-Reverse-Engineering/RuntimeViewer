@@ -7,8 +7,15 @@ protocol SettingsStorageStrategy {
 
 struct SettingsFileSystemStorage: SettingsStorageStrategy {
     let fileName: String
+    
     let directory: FileManager.SearchPathDirectory
-
+    
+    #if DEBUG
+    let appDirectoryName = "RuntimeViewer-Debug"
+    #else
+    let appDirectoryName = "RuntimeViewer"
+    #endif
+    
     init(fileName: String = "settings.json", directory: FileManager.SearchPathDirectory = .applicationSupportDirectory) {
         self.fileName = fileName
         self.directory = directory
@@ -16,7 +23,7 @@ struct SettingsFileSystemStorage: SettingsStorageStrategy {
 
     private var fileURL: URL {
         let paths = FileManager.default.urls(for: directory, in: .userDomainMask)
-        let dir = paths[0].appendingPathComponent("RuntimeViewer")
+        let dir = paths[0].appendingPathComponent(appDirectoryName)
 
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent(fileName)

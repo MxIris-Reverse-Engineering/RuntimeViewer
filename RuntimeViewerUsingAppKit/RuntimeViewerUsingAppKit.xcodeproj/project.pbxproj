@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E90329732F5C6A450080B9CC /* dev.mxiris.runtimeviewer.service.plist in Embed LaunchDaemon */ = {isa = PBXBuildFile; fileRef = E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */; };
 		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
 		E92124642F447AE1007481E4 /* ExportingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124632F447AE1007481E4 /* ExportingState.swift */; };
 		E921246B2F447BA1007481E4 /* ExportingConfigurationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E921246A2F447BA1007481E4 /* ExportingConfigurationViewModel.swift */; };
@@ -41,9 +42,9 @@
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
 		E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D92D9AF7E5005A573C /* RuntimeViewerService */; };
 		E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */ = {isa = PBXBuildFile; productRef = E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */; };
-		E9862AD52F377E9C00139991 /* AppMCPBridgeWindowProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9862AD42F377E9C00139991 /* AppMCPBridgeWindowProvider.swift */; };
+		E9862AD52F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9862AD42F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift */; };
 		E98BEF542F1CBE180041DB20 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E98BEF532F1CBE180041DB20 /* RuntimeViewerService */; };
-		E98BEF552F1CBE870041DB20 /* com.mxiris.runtimeviewer.service in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E98BEF552F1CBE870041DB20 /* dev.mxiris.runtimeviewer.service in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9EC5BC52F1CBDBA00859091 /* dev.mxiris.runtimeviewer.service */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E9935B922F44886A006DB4EC /* ExportingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */; };
@@ -148,7 +149,7 @@
 			dstPath = Contents/Library/LaunchServices;
 			dstSubfolder = Wrapper;
 			files = (
-				E98BEF552F1CBE870041DB20 /* com.mxiris.runtimeviewer.service in Embed LaunchServices */,
+				E98BEF552F1CBE870041DB20 /* dev.mxiris.runtimeviewer.service in Embed LaunchServices */,
 			);
 			name = "Embed LaunchServices";
 		};
@@ -184,12 +185,14 @@
 			dstSubfolder = Wrapper;
 			files = (
 				E978F2792F1BA1DE004C09B4 /* com.mxiris.runtimeviewer.service.plist in Embed LaunchDaemon */,
+				E90329732F5C6A450080B9CC /* dev.mxiris.runtimeviewer.service.plist in Embed LaunchDaemon */,
 			);
 			name = "Embed LaunchDaemon";
 		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = dev.mxiris.runtimeviewer.service.plist; sourceTree = "<group>"; };
 		E91CD9962C2127AD00C989CC /* EventMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
 		E92124632F447AE1007481E4 /* ExportingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingState.swift; sourceTree = "<group>"; };
 		E921246A2F447BA1007481E4 /* ExportingConfigurationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingConfigurationViewModel.swift; sourceTree = "<group>"; };
@@ -230,7 +233,7 @@
 		E978F2782F1BA1A1004C09B4 /* com.mxiris.runtimeviewer.service.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = com.mxiris.runtimeviewer.service.plist; sourceTree = "<group>"; };
 		E97B1C952EC9AE5D00FF5375 /* RuntimeViewerDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerDebugger.h; sourceTree = "<group>"; };
 		E97B1C962EC9AE5D00FF5375 /* RuntimeViewerDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RuntimeViewerDebugger.m; sourceTree = "<group>"; };
-		E9862AD42F377E9C00139991 /* AppMCPBridgeWindowProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMCPBridgeWindowProvider.swift; sourceTree = "<group>"; };
+		E9862AD42F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMCPBridgeDocumentProvider.swift; sourceTree = "<group>"; };
 		E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = ../RuntimeViewerServer/RuntimeViewerServer.xcodeproj; sourceTree = SOURCE_ROOT; };
 		E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCoordinator.swift; sourceTree = "<group>"; };
 		E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewModel.swift; sourceTree = "<group>"; };
@@ -272,7 +275,7 @@
 		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900EA2C2D0D5B00FADDCC /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassViewController.swift; sourceTree = "<group>"; };
-		E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9EC5BC52F1CBDBA00859091 /* dev.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonLoadingView.swift; sourceTree = "<group>"; };
 		E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCoordinator.swift; sourceTree = "<group>"; };
 		E9EEF7642E08540B008D85D1 /* ContentTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextView.swift; sourceTree = "<group>"; };
@@ -367,7 +370,7 @@
 				E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */,
 				E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */,
 				E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
-				E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */,
+				E9EC5BC52F1CBDBA00859091 /* dev.mxiris.runtimeviewer.service */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -394,6 +397,7 @@
 				E95CDA682DAA970900D97B03 /* Release.xcconfig */,
 				E9C9E9CE2C2D10C600C4AA34 /* Info.plist */,
 				E978F2782F1BA1A1004C09B4 /* com.mxiris.runtimeviewer.service.plist */,
+				E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */,
 			);
 			path = RuntimeViewerUsingAppKit;
 			sourceTree = "<group>";
@@ -561,7 +565,7 @@
 			isa = PBXGroup;
 			children = (
 				E9432FE52C0D614900362862 /* AppDelegate.swift */,
-				E9862AD42F377E9C00139991 /* AppMCPBridgeWindowProvider.swift */,
+				E9862AD42F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift */,
 				E99AE0BB2CBD4A840028B11E /* Document.swift */,
 			);
 			path = App;
@@ -692,7 +696,7 @@
 				E98BEF532F1CBE180041DB20 /* RuntimeViewerService */,
 			);
 			productName = com.mxiris.runtimeviewer.service;
-			productReference = E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */;
+			productReference = E9EC5BC52F1CBDBA00859091 /* dev.mxiris.runtimeviewer.service */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -865,7 +869,7 @@
 				E9A825382C0E085200D9A85D /* MainCoordinator.swift in Sources */,
 				E9EEF7672E085420008D85D1 /* InspectorDisclosureView.swift in Sources */,
 				E9A825462C0E0B4900D9A85D /* ViewControllers.swift in Sources */,
-				E9862AD52F377E9C00139991 /* AppMCPBridgeWindowProvider.swift in Sources */,
+				E9862AD52F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift in Sources */,
 				E9A825522C0E0F9F00D9A85D /* ContentNavigationController.swift in Sources */,
 				E921246D2F447BBF007481E4 /* ExportingConfigurationViewController.swift in Sources */,
 				E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */,
@@ -1109,6 +1113,7 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				EXCLUDED_SOURCE_FILE_NAMES = com.mxiris.runtimeviewer.service.plist;
 				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
@@ -1163,6 +1168,7 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				EXCLUDED_SOURCE_FILE_NAMES = dev.mxiris.runtimeviewer.service.plist;
 				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
@@ -1224,7 +1230,7 @@
 				);
 				MARKETING_VERSION = 2.0.0;
 				ONLY_ACTIVE_ARCH = NO;
-				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelper;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCatalystHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
@@ -1379,7 +1385,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = dev.mxiris.runtimeviewer.service;
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
