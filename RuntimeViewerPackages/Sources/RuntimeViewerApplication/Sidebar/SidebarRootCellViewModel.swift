@@ -47,7 +47,12 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
             if filter.isEmpty {
                 _children.forEach { $0.filter = filter }
                 _filteredChildren = _children
+            } else if node.name.localizedCaseInsensitiveContains(filter) {
+                // Node itself matches - show all children unfiltered
+                _children.forEach { $0.filter = "" }
+                _filteredChildren = _children
             } else {
+                // Node doesn't match - filter children recursively
                 _children.forEach { $0.filter = filter }
                 _filteredChildren = _children.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
             }
