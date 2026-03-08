@@ -9,7 +9,7 @@ import OSLog
 public final class RuntimeViewerService {
     private let listener: SwiftyXPC.XPCListener
 
-    private var catalystHelperApplication: NSRunningApplication?
+    private var launchedApplicationsByCallerBundleID: [String: [NSRunningApplication]] = [:]
 
     private var endpointByIdentifier: [String: SwiftyXPC.XPCEndpoint] = [:]
 
@@ -45,7 +45,8 @@ public final class RuntimeViewerService {
         configuration.createsNewApplicationInstance = false
         configuration.addsToRecentItems = false
         configuration.activates = false
-        catalystHelperApplication = try await NSWorkspace.shared.openApplication(at: request.url, configuration: configuration)
+        let launchedApp = try await NSWorkspace.shared.openApplication(at: request.url, configuration: configuration)
+        launchedApplicationsByCallerBundleID[request.callerBundleIdentifier, default: []].append(launchedApp)
         return .empty
     }
 
@@ -83,19 +84,23 @@ public final class RuntimeViewerService {
             let service = try RuntimeViewerService()
             Task {
                 let notifications = NSWorkspace.shared.notificationCenter.notifications(named: NSWorkspace.didTerminateApplicationNotification)
-                
+
                 for await notification in notifications {
                     do {
                         try Task.checkCancellation()
-                        
-                        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication, app.isMainApp else { continue }
-                        
-                        if NSWorkspace.shared.runningApplications.contains(where: \.isMainApp) { continue }
-                        
-                        if let catalystHelperApplication = service.catalystHelperApplication, catalystHelperApplication.terminate() { continue }
-                        
-                        if let macCatalystHelper = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "" }), macCatalystHelper.terminate() { continue }
-                        
+
+                        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                              let bundleID = app.bundleIdentifier,
+                              let launchedApps = service.launchedApplicationsByCallerBundleID.removeValue(forKey: bundleID) else { continue }
+
+                        // Check if there's still another instance of the caller app running
+                        if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID }) { continue }
+
+                        for launchedApp in launchedApps {
+                            if !launchedApp.isTerminated {
+                                launchedApp.terminate()
+                            }
+                        }
                     } catch {
                         logger.error("\(error, privacy: .public)")
                     }
@@ -103,15 +108,6 @@ public final class RuntimeViewerService {
             }
             RunLoop.current.run()
         }
-    }
-}
-
-extension NSRunningApplication {
-    fileprivate var isMainApp: Bool {
-        [
-            "com.JH.RuntimeViewer",
-            "dev.JH.RuntimeViewer",
-        ].contains(bundleIdentifier)
     }
 }
 
