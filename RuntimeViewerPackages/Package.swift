@@ -303,7 +303,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             .package(
                 path: "../../RunningApplicationKit",

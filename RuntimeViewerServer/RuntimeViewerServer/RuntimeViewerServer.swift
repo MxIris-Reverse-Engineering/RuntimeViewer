@@ -18,11 +18,11 @@ import UIKit.UIDevice
 
 @_cdecl("swift_initializeRuntimeViewerServer")
 func initializeRuntimeViewerServer() {
-    RuntimeViewerServerLoader.main()
+    RuntimeViewerServer.main()
 }
 
-@Loggable
-private enum RuntimeViewerServerLoader {
+@Loggable(.private)
+private enum RuntimeViewerServer {
     private static var runtimeEngine: RuntimeEngine?
 
     private static var processName: String {
