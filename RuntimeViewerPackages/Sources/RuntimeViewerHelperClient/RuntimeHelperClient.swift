@@ -89,7 +89,8 @@ public final class RuntimeHelperClient: @unchecked Sendable {
     }
 
     public func launchMacCatalystHelper() async throws {
-        try await connectionIfNeeded().sendMessage(request: OpenApplicationRequest(url: RuntimeViewerCatalystHelperLauncher.helperURL))
+        let callerBundleIdentifier = Bundle.main.bundleIdentifier ?? ""
+        try await connectionIfNeeded().sendMessage(request: OpenApplicationRequest(url: RuntimeViewerCatalystHelperLauncher.helperURL, callerBundleIdentifier: callerBundleIdentifier))
     }
 }
 
