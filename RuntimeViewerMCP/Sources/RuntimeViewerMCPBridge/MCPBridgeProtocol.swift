@@ -229,6 +229,142 @@ public struct MCPGrepTypeInterfaceResponse: Codable, Sendable {
     }
 }
 
+// MARK: - List Images
+
+public struct MCPListImagesRequest: Codable, Sendable {
+    public let windowIdentifier: String
+
+    public init(windowIdentifier: String) {
+        self.windowIdentifier = windowIdentifier
+    }
+}
+
+public struct MCPListImagesResponse: Codable, Sendable {
+    public let imagePaths: [String]
+
+    public init(imagePaths: [String]) {
+        self.imagePaths = imagePaths
+    }
+}
+
+// MARK: - Search Images
+
+public struct MCPSearchImagesRequest: Codable, Sendable {
+    public let windowIdentifier: String
+    public let query: String
+
+    public init(windowIdentifier: String, query: String) {
+        self.windowIdentifier = windowIdentifier
+        self.query = query
+    }
+}
+
+public struct MCPSearchImagesResponse: Codable, Sendable {
+    public let imagePaths: [String]
+
+    public init(imagePaths: [String]) {
+        self.imagePaths = imagePaths
+    }
+}
+
+// MARK: - Load Image
+
+public struct MCPLoadImageRequest: Codable, Sendable {
+    public let windowIdentifier: String
+    public let imagePath: String
+    public let loadObjects: Bool
+
+    public init(windowIdentifier: String, imagePath: String, loadObjects: Bool = false) {
+        self.windowIdentifier = windowIdentifier
+        self.imagePath = imagePath
+        self.loadObjects = loadObjects
+    }
+}
+
+public struct MCPLoadImageResponse: Codable, Sendable {
+    public let imagePath: String
+    public let alreadyLoaded: Bool
+    public let objectsLoaded: Bool
+    public let error: String?
+
+    public init(imagePath: String, alreadyLoaded: Bool, objectsLoaded: Bool, error: String?) {
+        self.imagePath = imagePath
+        self.alreadyLoaded = alreadyLoaded
+        self.objectsLoaded = objectsLoaded
+        self.error = error
+    }
+}
+
+// MARK: - Is Image Loaded
+
+public struct MCPIsImageLoadedRequest: Codable, Sendable {
+    public let windowIdentifier: String
+    public let imagePath: String
+
+    public init(windowIdentifier: String, imagePath: String) {
+        self.windowIdentifier = windowIdentifier
+        self.imagePath = imagePath
+    }
+}
+
+public struct MCPIsImageLoadedResponse: Codable, Sendable {
+    public let imagePath: String
+    public let isLoaded: Bool
+
+    public init(imagePath: String, isLoaded: Bool) {
+        self.imagePath = imagePath
+        self.isLoaded = isLoaded
+    }
+}
+
+// MARK: - Load Objects
+
+public struct MCPLoadObjectsRequest: Codable, Sendable {
+    public let windowIdentifier: String
+    public let imagePath: String
+
+    public init(windowIdentifier: String, imagePath: String) {
+        self.windowIdentifier = windowIdentifier
+        self.imagePath = imagePath
+    }
+}
+
+public struct MCPLoadObjectsResponse: Codable, Sendable {
+    public let imagePath: String
+    public let alreadyLoaded: Bool
+    public let objectCount: Int
+    public let error: String?
+
+    public init(imagePath: String, alreadyLoaded: Bool, objectCount: Int, error: String?) {
+        self.imagePath = imagePath
+        self.alreadyLoaded = alreadyLoaded
+        self.objectCount = objectCount
+        self.error = error
+    }
+}
+
+// MARK: - Is Objects Loaded
+
+public struct MCPIsObjectsLoadedRequest: Codable, Sendable {
+    public let windowIdentifier: String
+    public let imagePath: String
+
+    public init(windowIdentifier: String, imagePath: String) {
+        self.windowIdentifier = windowIdentifier
+        self.imagePath = imagePath
+    }
+}
+
+public struct MCPIsObjectsLoadedResponse: Codable, Sendable {
+    public let imagePath: String
+    public let isLoaded: Bool
+
+    public init(imagePath: String, isLoaded: Bool) {
+        self.imagePath = imagePath
+        self.isLoaded = isLoaded
+    }
+}
+
 // MARK: - Member Addresses
 
 public struct MCPMemberAddressesRequest: Codable, Sendable {

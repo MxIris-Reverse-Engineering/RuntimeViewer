@@ -2,10 +2,10 @@ import AppKit
 import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
 
-final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
-    func allWindowContexts() async -> [MCPBridgeWindowContext] {
+final class AppMCPBridgeDocumentProvider: MCPBridgeDocumentProvider {
+    func allDocumentContexts() async -> [MCPBridgeDocumentContext] {
         await MainActor.run {
-            NSDocumentController.shared.documents.compactMap { document -> MCPBridgeWindowContext? in
+            NSDocumentController.shared.documents.compactMap { document -> MCPBridgeDocumentContext? in
                 guard let document = document as? Document else { return nil }
                 guard let window = document.windowControllers.first?.window else { return nil }
                 return makeContext(from: document, window: window)
@@ -13,8 +13,8 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
         }
     }
 
-    func windowContext(forIdentifier identifier: String) async -> MCPBridgeWindowContext? {
-        await MainActor.run {
+    func documentContext(forIdentifier identifier: String) async throws -> MCPBridgeDocumentContext {
+        try await MainActor.run {
             for document in NSDocumentController.shared.documents {
                 guard let document = document as? Document else { continue }
                 guard let window = document.windowControllers.first?.window else { continue }
@@ -22,13 +22,13 @@ final class AppMCPBridgeWindowProvider: MCPBridgeWindowProvider {
                     return makeContext(from: document, window: window)
                 }
             }
-            return nil
+            throw MCPBridgeDocumentProviderError.documentNotFound(identifier: identifier)
         }
     }
 
     @MainActor
-    private func makeContext(from document: Document, window: NSWindow) -> MCPBridgeWindowContext {
-        MCPBridgeWindowContext(
+    private func makeContext(from document: Document, window: NSWindow) -> MCPBridgeDocumentContext {
+        MCPBridgeDocumentContext(
             identifier: document.mcpIdentifier,
             displayName: window.title,
             isKeyWindow: window.isKeyWindow,
