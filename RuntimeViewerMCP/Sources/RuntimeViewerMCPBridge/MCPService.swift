@@ -22,7 +22,7 @@ public final class MCPService {
 
     private var previousMCPFixedPort: UInt16?
 
-    private var windowProvider: MCPBridgeWindowProvider?
+    private var documentProvider: MCPBridgeDocumentProvider?
 
     private var restartTask: Task<Void, Never>?
     
@@ -32,16 +32,16 @@ public final class MCPService {
         stop()
     }
 
-    public func start(for windowProvider: some MCPBridgeWindowProvider) {
+    public func start(for documentProvider: some MCPBridgeDocumentProvider) {
         startTask = Task {
             let mcpSettings = settings.mcp
             let port: UInt16 = mcpSettings.useFixedPort ? mcpSettings.fixedPort : 0
             do {
-                let bridgeServer = MCPBridgeServer(windowProvider: windowProvider)
+                let bridgeServer = MCPBridgeServer(documentProvider: documentProvider)
                 let httpServer = try MCPHTTPServer(bridgeServer: bridgeServer)
                 self.httpServer = httpServer
                 try await httpServer.start(port: port)
-                self.windowProvider = windowProvider
+                self.documentProvider = documentProvider
             } catch {
                 #log(.error, "Failed to start MCP HTTP Server: \(error, privacy: .public)")
             }
@@ -96,8 +96,8 @@ public final class MCPService {
             guard !Task.isCancelled else { return }
             if enabled {
                 stop()
-                if let windowProvider {
-                    start(for: windowProvider)
+                if let documentProvider {
+                    start(for: documentProvider)
                 }
             } else {
                 stop()

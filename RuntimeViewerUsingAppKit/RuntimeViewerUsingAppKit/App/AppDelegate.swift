@@ -29,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         mcpService = MCPService().then {
-            $0.start(for: AppMCPBridgeWindowProvider())
+            $0.start(for: AppMCPBridgeDocumentProvider())
         }
     }
 

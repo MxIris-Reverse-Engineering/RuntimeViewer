@@ -141,6 +141,50 @@ public struct MCPToolRegistry: Sendable {
             ])
         ),
         Tool(
+            name: "list_images",
+            description: """
+                Lists all image paths (frameworks, dylibs, executables) visible to the runtime, including images \
+                that have not yet been loaded/parsed by RuntimeViewer. Returns the full file system path of every image \
+                registered in dyld. Use this to discover available images before querying types with list_types, search_types, \
+                or get_type_interface. To inspect types in an unloaded image, call load_image first.
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "window_identifier": .object([
+                        "type": .string("string"),
+                        "description": .string("The window identifier obtained from list_windows"),
+                    ]),
+                ]),
+                "required": .array([.string("window_identifier")]),
+            ])
+        ),
+        Tool(
+            name: "search_images",
+            description: """
+                Searches all image paths (including unloaded) by case-insensitive substring matching. \
+                Matches against the full path of each image visible to the runtime (e.g. searching 'UIKit' matches \
+                '/System/Library/Frameworks/UIKit.framework/UIKit'). \
+                Returns matching image paths sorted alphabetically. \
+                Use this to find the correct image_path before calling other tools like list_types or get_type_interface. \
+                To inspect types in an unloaded image, call load_image first.
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "window_identifier": .object([
+                        "type": .string("string"),
+                        "description": .string("The window identifier obtained from list_windows"),
+                    ]),
+                    "query": .object([
+                        "type": .string("string"),
+                        "description": .string("Case-insensitive substring to match against image paths (e.g. 'AppKit', 'UIKit', 'SwiftUI', 'Foundation')"),
+                    ]),
+                ]),
+                "required": .array([.string("window_identifier"), .string("query")]),
+            ])
+        ),
+        Tool(
             name: "get_member_addresses",
             description: """
                 Returns runtime memory addresses of a type's members. Supports both Swift and Objective-C types (not C structs/unions). \
@@ -172,6 +216,105 @@ public struct MCPToolRegistry: Sendable {
                     ]),
                 ]),
                 "required": .array([.string("window_identifier"), .string("type_name")]),
+            ])
+        ),
+        Tool(
+            name: "load_image",
+            description: """
+                Loads and parses an image (framework, dylib, executable) into RuntimeViewer. \
+                Images listed by list_images or search_images may not yet be parsed by RuntimeViewer; calling this tool \
+                triggers parsing of the image's ObjC/Swift metadata sections. \
+                Set load_objects to true to also enumerate runtime objects (types) in a single call — \
+                this is equivalent to calling load_image followed by load_objects. \
+                Returns immediately if the image (and objects, if requested) are already loaded.
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "window_identifier": .object([
+                        "type": .string("string"),
+                        "description": .string("The window identifier obtained from list_windows"),
+                    ]),
+                    "image_path": .object([
+                        "type": .string("string"),
+                        "description": .string("Full file system path of the image to load (as returned by list_images or search_images)"),
+                    ]),
+                    "load_objects": .object([
+                        "type": .string("boolean"),
+                        "description": .string("If true, also enumerate and cache runtime objects (types) from this image after loading. Defaults to false."),
+                    ]),
+                ]),
+                "required": .array([.string("window_identifier"), .string("image_path")]),
+            ])
+        ),
+        Tool(
+            name: "is_image_loaded",
+            description: """
+                Checks whether an image has been loaded and parsed by RuntimeViewer. \
+                An image being in the dyld image list (returned by list_images) does NOT mean it has been parsed — \
+                only images that have been explicitly loaded via load_image or accessed by other tools are considered loaded. \
+                Use this to check before deciding whether to call load_image.
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "window_identifier": .object([
+                        "type": .string("string"),
+                        "description": .string("The window identifier obtained from list_windows"),
+                    ]),
+                    "image_path": .object([
+                        "type": .string("string"),
+                        "description": .string("Full file system path of the image to check"),
+                    ]),
+                ]),
+                "required": .array([.string("window_identifier"), .string("image_path")]),
+            ])
+        ),
+        Tool(
+            name: "load_objects",
+            description: """
+                Enumerates and caches all runtime objects (types) from a loaded image. \
+                An image can be loaded (sections parsed) without its objects being enumerated. \
+                This tool triggers the full object enumeration (ObjC classes, Swift types, etc.) and returns the count. \
+                If the image is not yet loaded, it will be loaded automatically. \
+                Once loaded, objects are available for list_types, search_types, get_type_interface, etc.
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "window_identifier": .object([
+                        "type": .string("string"),
+                        "description": .string("The window identifier obtained from list_windows"),
+                    ]),
+                    "image_path": .object([
+                        "type": .string("string"),
+                        "description": .string("Full file system path of the image to load objects from"),
+                    ]),
+                ]),
+                "required": .array([.string("window_identifier"), .string("image_path")]),
+            ])
+        ),
+        Tool(
+            name: "is_objects_loaded",
+            description: """
+                Checks whether runtime objects (types) have been enumerated for a given image. \
+                Returns true only if load_objects (or load_image with load_objects=true) has been previously called \
+                for this image in the current session. Use this to decide whether to call load_objects before \
+                querying types with list_types, search_types, etc.
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "window_identifier": .object([
+                        "type": .string("string"),
+                        "description": .string("The window identifier obtained from list_windows"),
+                    ]),
+                    "image_path": .object([
+                        "type": .string("string"),
+                        "description": .string("Full file system path of the image to check"),
+                    ]),
+                ]),
+                "required": .array([.string("window_identifier"), .string("image_path")]),
             ])
         ),
     ]
@@ -232,6 +375,15 @@ public struct MCPToolRegistry: Sendable {
             let imageName = params.arguments?["image_name"]?.stringValue
             return try await handleSearchTypes(windowIdentifier: windowIdentifier, query: query, imagePath: imagePath, imageName: imageName, bridgeServer: bridgeServer)
 
+        case "list_images":
+            let windowIdentifier = try requireParam(params, "window_identifier")
+            return try await handleListImages(windowIdentifier: windowIdentifier, bridgeServer: bridgeServer)
+
+        case "search_images":
+            let windowIdentifier = try requireParam(params, "window_identifier")
+            let query = try requireParam(params, "query")
+            return try await handleSearchImages(windowIdentifier: windowIdentifier, query: query, bridgeServer: bridgeServer)
+
         case "get_member_addresses":
             let windowIdentifier = try requireParam(params, "window_identifier")
             let typeName = try requireParam(params, "type_name")
@@ -239,6 +391,27 @@ public struct MCPToolRegistry: Sendable {
             let imageName = params.arguments?["image_name"]?.stringValue
             let memberName = params.arguments?["member_name"]?.stringValue
             return try await handleMemberAddresses(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName, memberName: memberName, bridgeServer: bridgeServer)
+
+        case "load_image":
+            let windowIdentifier = try requireParam(params, "window_identifier")
+            let imagePath = try requireParam(params, "image_path")
+            let loadObjects = params.arguments?["load_objects"]?.boolValue ?? false
+            return try await handleLoadImage(windowIdentifier: windowIdentifier, imagePath: imagePath, loadObjects: loadObjects, bridgeServer: bridgeServer)
+
+        case "is_image_loaded":
+            let windowIdentifier = try requireParam(params, "window_identifier")
+            let imagePath = try requireParam(params, "image_path")
+            return try await handleIsImageLoaded(windowIdentifier: windowIdentifier, imagePath: imagePath, bridgeServer: bridgeServer)
+
+        case "load_objects":
+            let windowIdentifier = try requireParam(params, "window_identifier")
+            let imagePath = try requireParam(params, "image_path")
+            return try await handleLoadObjects(windowIdentifier: windowIdentifier, imagePath: imagePath, bridgeServer: bridgeServer)
+
+        case "is_objects_loaded":
+            let windowIdentifier = try requireParam(params, "window_identifier")
+            let imagePath = try requireParam(params, "image_path")
+            return try await handleIsObjectsLoaded(windowIdentifier: windowIdentifier, imagePath: imagePath, bridgeServer: bridgeServer)
 
         default:
             throw MCPError.invalidParams("Unknown tool: \(params.name)")
@@ -283,7 +456,7 @@ public struct MCPToolRegistry: Sendable {
     }
 
     private static func handleSelectedType(windowIdentifier: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleSelectedType(MCPSelectedTypeRequest(windowIdentifier: windowIdentifier))
+        let response = try await bridgeServer.handleSelectedType(MCPSelectedTypeRequest(windowIdentifier: windowIdentifier))
         guard let typeName = response.typeName else {
             return .init(content: [.text("No type is currently selected in the specified window.")])
         }
@@ -297,7 +470,7 @@ public struct MCPToolRegistry: Sendable {
     }
 
     private static func handleTypeInterface(windowIdentifier: String, imagePath: String?, imageName: String?, typeName: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleTypeInterface(MCPTypeInterfaceRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName))
+        let response = try await bridgeServer.handleTypeInterface(MCPTypeInterfaceRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName))
         if let error = response.error {
             return .init(content: [.text("Error: \(error)")], isError: true)
         }
@@ -314,7 +487,7 @@ public struct MCPToolRegistry: Sendable {
     }
 
     private static func handleListTypes(windowIdentifier: String, imagePath: String?, imageName: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleListTypes(MCPListTypesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName))
+        let response = try await bridgeServer.handleListTypes(MCPListTypesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName))
         if let error = response.error {
             return .init(content: [.text("Error: \(error)")], isError: true)
         }
@@ -336,7 +509,7 @@ public struct MCPToolRegistry: Sendable {
     }
 
     private static func handleSearchTypes(windowIdentifier: String, query: String, imagePath: String?, imageName: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleSearchTypes(MCPSearchTypesRequest(windowIdentifier: windowIdentifier, query: query, imagePath: imagePath, imageName: imageName))
+        let response = try await bridgeServer.handleSearchTypes(MCPSearchTypesRequest(windowIdentifier: windowIdentifier, query: query, imagePath: imagePath, imageName: imageName))
         if let error = response.error {
             return .init(content: [.text("Error: \(error)")], isError: true)
         }
@@ -352,8 +525,32 @@ public struct MCPToolRegistry: Sendable {
         return .init(content: [.text(text)])
     }
 
+    private static func handleListImages(windowIdentifier: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = try await bridgeServer.handleListImages(MCPListImagesRequest(windowIdentifier: windowIdentifier))
+        if response.imagePaths.isEmpty {
+            return .init(content: [.text("No images found in the runtime.")])
+        }
+        var text = "Runtime Images (\(response.imagePaths.count)):\n\n"
+        for path in response.imagePaths {
+            text += "  \(path)\n"
+        }
+        return .init(content: [.text(text)])
+    }
+
+    private static func handleSearchImages(windowIdentifier: String, query: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = try await bridgeServer.handleSearchImages(MCPSearchImagesRequest(windowIdentifier: windowIdentifier, query: query))
+        if response.imagePaths.isEmpty {
+            return .init(content: [.text("No images matching '\(query)'.")])
+        }
+        var text = "Images matching '\(query)' (\(response.imagePaths.count)):\n\n"
+        for path in response.imagePaths {
+            text += "  \(path)\n"
+        }
+        return .init(content: [.text(text)])
+    }
+
     private static func handleMemberAddresses(windowIdentifier: String, imagePath: String?, imageName: String?, typeName: String, memberName: String?, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
-        let response = await bridgeServer.handleMemberAddresses(MCPMemberAddressesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName, memberName: memberName))
+        let response = try await bridgeServer.handleMemberAddresses(MCPMemberAddressesRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, imageName: imageName, typeName: typeName, memberName: memberName))
         if let error = response.error {
             return .init(content: [.text("Error: \(error)")], isError: true)
         }
@@ -370,5 +567,39 @@ public struct MCPToolRegistry: Sendable {
             text += "    Symbol:     \(member.symbolName)\n"
         }
         return .init(content: [.text(text)])
+    }
+
+    private static func handleLoadImage(windowIdentifier: String, imagePath: String, loadObjects: Bool, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = try await bridgeServer.handleLoadImage(MCPLoadImageRequest(windowIdentifier: windowIdentifier, imagePath: imagePath, loadObjects: loadObjects))
+        if let error = response.error {
+            return .init(content: [.text("Error: \(error)")], isError: true)
+        }
+        var text = response.alreadyLoaded ? "Image already loaded" : "Successfully loaded image"
+        text += ": \(response.imagePath)"
+        if loadObjects {
+            text += response.objectsLoaded ? " (objects loaded)" : " (objects not yet loaded)"
+        }
+        return .init(content: [.text(text)])
+    }
+
+    private static func handleIsImageLoaded(windowIdentifier: String, imagePath: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = try await bridgeServer.handleIsImageLoaded(MCPIsImageLoadedRequest(windowIdentifier: windowIdentifier, imagePath: imagePath))
+        let status = response.isLoaded ? "loaded" : "not loaded"
+        return .init(content: [.text("Image \(status): \(response.imagePath)")])
+    }
+
+    private static func handleLoadObjects(windowIdentifier: String, imagePath: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = try await bridgeServer.handleLoadObjects(MCPLoadObjectsRequest(windowIdentifier: windowIdentifier, imagePath: imagePath))
+        if let error = response.error {
+            return .init(content: [.text("Error: \(error)")], isError: true)
+        }
+        let status = response.alreadyLoaded ? "Objects already loaded" : "Successfully loaded objects"
+        return .init(content: [.text("\(status) from \(response.imagePath): \(response.objectCount) types found")])
+    }
+
+    private static func handleIsObjectsLoaded(windowIdentifier: String, imagePath: String, bridgeServer: MCPBridgeServer) async throws -> CallTool.Result {
+        let response = try await bridgeServer.handleIsObjectsLoaded(MCPIsObjectsLoadedRequest(windowIdentifier: windowIdentifier, imagePath: imagePath))
+        let status = response.isLoaded ? "loaded" : "not loaded"
+        return .init(content: [.text("Objects \(status) for image: \(response.imagePath)")])
     }
 }
