@@ -44,7 +44,6 @@
 		E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */ = {isa = PBXBuildFile; productRef = E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */; };
 		E9862AD52F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9862AD42F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift */; };
 		E98BEF542F1CBE180041DB20 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E98BEF532F1CBE180041DB20 /* RuntimeViewerService */; };
-		E98BEF552F1CBE870041DB20 /* dev.mxiris.runtimeviewer.service in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9EC5BC52F1CBDBA00859091 /* dev.mxiris.runtimeviewer.service */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E9935B922F44886A006DB4EC /* ExportingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */; };
@@ -67,6 +66,10 @@
 		E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */; };
 		E9A825562C0E0FF300D9A85D /* ContentPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */; };
 		E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A825572C0E202600D9A85D /* MainViewModel.swift */; };
+		E9A9CCDC2F5D86C500A10DD3 /* com.mxiris.runtimeviewer.service in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E9A9CCE02F5D880400A10DD3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B4C6542F35E9C800823FE0 /* main.swift */; };
+		E9A9CCE22F5D880400A10DD3 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */; };
+		E9A9CCF12F5D884900A10DD3 /* dev.mxiris.runtimeviewer.service in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */; };
 		E9B4C6562F35E9C800823FE0 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B4C6542F35E9C800823FE0 /* main.swift */; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -125,6 +128,13 @@
 			remoteGlobalIDString = E978F9192F1BBB38004C09B4;
 			remoteInfo = RuntimeViewerServer;
 		};
+		E9A9CCE82F5D882E00A10DD3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E9A9CCDD2F5D880400A10DD3;
+			remoteInfo = dev.mxiris.runtimeviewer.service;
+		};
 		E9C9E9D82C2D161000C4AA34 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
@@ -144,12 +154,21 @@
 			);
 			name = "Copy RuntimeViewerServer Framework";
 		};
+		E9A9CCE32F5D880400A10DD3 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolder = None;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
 		E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = Contents/Library/LaunchServices;
 			dstSubfolder = Wrapper;
 			files = (
-				E98BEF552F1CBE870041DB20 /* dev.mxiris.runtimeviewer.service in Embed LaunchServices */,
+				E9A9CCF12F5D884900A10DD3 /* dev.mxiris.runtimeviewer.service in Embed LaunchServices */,
+				E9A9CCDC2F5D86C500A10DD3 /* com.mxiris.runtimeviewer.service in Embed LaunchServices */,
 			);
 			name = "Embed LaunchServices";
 		};
@@ -256,6 +275,7 @@
 		E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarNavigationController.swift; sourceTree = "<group>"; };
 		E9A825552C0E0FF300D9A85D /* ContentPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentPlaceholderViewController.swift; sourceTree = "<group>"; };
 		E9A825572C0E202600D9A85D /* MainViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewModel.swift; sourceTree = "<group>"; };
+		E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPlaceholderViewController.swift; sourceTree = "<group>"; };
 		E9B4C6542F35E9C800823FE0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
@@ -275,7 +295,7 @@
 		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900EA2C2D0D5B00FADDCC /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassViewController.swift; sourceTree = "<group>"; };
-		E9EC5BC52F1CBDBA00859091 /* dev.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonLoadingView.swift; sourceTree = "<group>"; };
 		E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCoordinator.swift; sourceTree = "<group>"; };
 		E9EEF7642E08540B008D85D1 /* ContentTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextView.swift; sourceTree = "<group>"; };
@@ -304,6 +324,12 @@
 		E947C3642C2A4D0400296B2E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+			);
+		};
+		E9A9CCE12F5D880400A10DD3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				E9A9CCE22F5D880400A10DD3 /* RuntimeViewerService in Frameworks */,
 			);
 		};
 		E9E900D92C2CF9A500FADDCC /* Frameworks */ = {
@@ -370,7 +396,8 @@
 				E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */,
 				E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */,
 				E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
-				E9EC5BC52F1CBDBA00859091 /* dev.mxiris.runtimeviewer.service */,
+				E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */,
+				E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -612,6 +639,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				E9A9CCE92F5D882E00A10DD3 /* PBXTargetDependency */,
 				E9862A292F36F66400139991 /* PBXTargetDependency */,
 				E98BEF572F1CBEAF0041DB20 /* PBXTargetDependency */,
 			);
@@ -644,6 +672,24 @@
 			productName = RuntimeViewerCatalystHelper;
 			productReference = E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */;
 			productType = "com.apple.product-type.application";
+		};
+		E9A9CCDD2F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E9A9CCE42F5D880400A10DD3 /* Build configuration list for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */;
+			buildPhases = (
+				E9A9CCDF2F5D880400A10DD3 /* Sources */,
+				E9A9CCE12F5D880400A10DD3 /* Frameworks */,
+				E9A9CCE32F5D880400A10DD3 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			name = dev.mxiris.runtimeviewer.service;
+			packageProductDependencies = (
+				E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */,
+			);
+			productName = com.mxiris.runtimeviewer.service;
+			productReference = E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */;
+			productType = "com.apple.product-type.tool";
 		};
 		E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */ = {
 			isa = PBXNativeTarget;
@@ -696,7 +742,7 @@
 				E98BEF532F1CBE180041DB20 /* RuntimeViewerService */,
 			);
 			productName = com.mxiris.runtimeviewer.service;
-			productReference = E9EC5BC52F1CBDBA00859091 /* dev.mxiris.runtimeviewer.service */;
+			productReference = E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -753,6 +799,7 @@
 				E947C3662C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
 				E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */,
 				E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
+				E9A9CCDD2F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */,
 				E9EC5BC42F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */,
 			);
 		};
@@ -915,6 +962,12 @@
 				E947C36C2C2A4D0400296B2E /* SceneDelegate.swift in Sources */,
 			);
 		};
+		E9A9CCDF2F5D880400A10DD3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				E9A9CCE02F5D880400A10DD3 /* main.swift in Sources */,
+			);
+		};
 		E9E900D82C2CF9A500FADDCC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -946,6 +999,11 @@
 			isa = PBXTargetDependency;
 			target = E9EC5BC42F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */;
 			targetProxy = E98BEF562F1CBEAF0041DB20 /* PBXContainerItemProxy */;
+		};
+		E9A9CCE92F5D882E00A10DD3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E9A9CCDD2F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */;
+			targetProxy = E9A9CCE82F5D882E00A10DD3 /* PBXContainerItemProxy */;
 		};
 		E9C9E9D92C2D161000C4AA34 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1113,7 +1171,10 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				EXCLUDED_SOURCE_FILE_NAMES = com.mxiris.runtimeviewer.service.plist;
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					com.mxiris.runtimeviewer.service.plist,
+					com.mxiris.runtimeviewer.service,
+				);
 				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
@@ -1168,7 +1229,10 @@
 				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
-				EXCLUDED_SOURCE_FILE_NAMES = dev.mxiris.runtimeviewer.service.plist;
+				EXCLUDED_SOURCE_FILE_NAMES = (
+					dev.mxiris.runtimeviewer.service.plist,
+					dev.mxiris.runtimeviewer.service,
+				);
 				FUSE_BUILD_SCRIPT_PHASES = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingAppKit/Info.plist;
@@ -1290,6 +1354,38 @@
 			};
 			name = Release;
 		};
+		E9A9CCE52F5D880400A10DD3 /* Debug configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E9A9CCE62F5D880400A10DD3 /* Release configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = D5Q73692VW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		E9E900DE2C2CF9A500FADDCC /* Debug configuration for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1385,7 +1481,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = dev.mxiris.runtimeviewer.service;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -1433,6 +1529,14 @@
 			buildConfigurations = (
 				E947C3782C2A4D0500296B2E /* Debug configuration for PBXNativeTarget "RuntimeViewerCatalystHelper" */,
 				E947C3792C2A4D0500296B2E /* Release configuration for PBXNativeTarget "RuntimeViewerCatalystHelper" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		E9A9CCE42F5D880400A10DD3 /* Build configuration list for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9A9CCE52F5D880400A10DD3 /* Debug configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */,
+				E9A9CCE62F5D880400A10DD3 /* Release configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */,
 			);
 			defaultConfigurationName = Release;
 		};
@@ -1501,6 +1605,10 @@
 		E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCatalystExtensions;
+		};
+		E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerService;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
