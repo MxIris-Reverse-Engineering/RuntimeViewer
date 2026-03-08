@@ -153,7 +153,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         output.didChangeFiltering.emitOnNext { [weak self] in
             guard let self else { return }
-            imageLoadedView.outlineView.expandItem(nil, expandChildren: true)
+            imageLoadedView.outlineView.reloadData()
         }
         .disposed(by: rx.disposeBag)
 
