@@ -8,10 +8,37 @@ import OSLog
 
 private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: "Service")
 
+public enum MCPServerState: Equatable, Sendable {
+    case disabled
+    case stopped
+    case running(port: UInt16)
+
+    public var isRunning: Bool {
+        if case .running = self { return true }
+        return false
+    }
+
+    public var port: UInt16? {
+        if case .running(let port) = self { return port }
+        return nil
+    }
+}
+
 @MainActor
 public final class MCPService {
+    public static let shared = MCPService()
+
     @Dependency(\.settings)
     private var settings
+
+    public private(set) var serverState: MCPServerState = .stopped {
+        didSet {
+            guard oldValue != serverState else { return }
+            onStateChange?(serverState)
+        }
+    }
+
+    public var onStateChange: ((MCPServerState) -> Void)?
 
     private var transport: HTTPSSETransport?
 
@@ -31,7 +58,7 @@ public final class MCPService {
 
     private let portFilePath: String
 
-    public init() {
+    private init() {
         let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let runtimeViewerDir = appSupportURL.appendingPathComponent("RuntimeViewer")
         try? FileManager.default.createDirectory(at: runtimeViewerDir, withIntermediateDirectories: true)
@@ -43,6 +70,11 @@ public final class MCPService {
     }
 
     public func start(for documentProvider: some MCPBridgeDocumentProvider) {
+        let mcpSettings = settings.mcp
+        guard mcpSettings.isEnabled else {
+            serverState = .disabled
+            return
+        }
         startTask = Task {
             let mcpSettings = settings.mcp
             let port: UInt16 = mcpSettings.useFixedPort ? mcpSettings.fixedPort : 0
@@ -66,8 +98,10 @@ public final class MCPService {
                 let boundPort = UInt16(transport.port)
                 writePortFile(port: boundPort)
                 logger.info("MCP HTTP+SSE server listening on port \(boundPort)")
+                self.serverState = .running(port: boundPort)
             } catch {
                 logger.error("Failed to start MCP server: \(error)")
+                self.serverState = .stopped
             }
             // Initialize previous values before observing to avoid a spurious restart
             let currentMCP = settings.mcp
@@ -84,6 +118,8 @@ public final class MCPService {
         restartTask?.cancel()
         restartTask = nil
         transport = nil
+        let isEnabled = settings.mcp.isEnabled
+        serverState = isEnabled ? .stopped : .disabled
         removePortFile()
         observeToken?.cancel()
         observeToken = nil
@@ -105,6 +141,9 @@ public final class MCPService {
             previousMCPFixedPort = fixedPort
 
             if enabledChanged || portChanged {
+                if !isMCPEnabled {
+                    serverState = .disabled
+                }
                 scheduleRestart(enabled: isMCPEnabled)
             }
         }

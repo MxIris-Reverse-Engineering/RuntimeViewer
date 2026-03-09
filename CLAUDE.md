@@ -383,6 +383,11 @@ do { ... } catch {
 - RuntimeViewerPackages: macOS 15+, iOS 18+, macCatalyst 18+, tvOS 18+, visionOS 2+
 - RuntimeViewerMCP: macOS 15+
 
+## Documentation
+
+- Design documents and implementation plans: `Documentations/Plans/`
+- Evolution proposals: `Documentations/Evolution/`
+
 ## Key Source Locations
 
 - Main app entry: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift`
