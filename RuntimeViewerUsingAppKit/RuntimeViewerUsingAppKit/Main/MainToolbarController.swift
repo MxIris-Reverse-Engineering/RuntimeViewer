@@ -1,6 +1,7 @@
 import AppKit
 import RxAppKit
 import RuntimeViewerUI
+import RuntimeViewerMCPBridge
 
 final class MainToolbarController: NSObject, NSToolbarDelegate {
     protocol Delegate: AnyObject {}
@@ -8,16 +9,23 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     class IconButtonToolbarItem: NSToolbarItem {
         let button = ToolbarButton()
         
-        convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbols.SystemSymbolName) {
-            self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbols.SymbolName)
+        init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbols.SystemSymbolName) {
+            super.init(itemIdentifier: itemIdentifier)
+            commonInit(icon: icon)
         }
 
-        convenience init(itemIdentifier: NSToolbarItem.Identifier, icon: RuntimeViewerSymbols) {
-            self.init(itemIdentifier: itemIdentifier, icon: icon as SFSymbols.SymbolName)
+        init(itemIdentifier: NSToolbarItem.Identifier, icon: RuntimeViewerSymbols) {
+            super.init(itemIdentifier: itemIdentifier)
+            commonInit(icon: icon)
         }
 
         init(itemIdentifier: NSToolbarItem.Identifier, icon: SFSymbols.SymbolName) {
             super.init(itemIdentifier: itemIdentifier)
+            commonInit(icon: icon)
+
+        }
+        
+        private func commonInit(icon: SFSymbols.SymbolName) {
             view = button
             button.title = ""
             button.image = SFSymbols(name: icon).nsImage
@@ -108,6 +116,25 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
+    class MCPStatusToolbarItem: IconButtonToolbarItem {
+        init() {
+            super.init(itemIdentifier: .Main.mcpStatus, icon: .serverRack)
+
+            updateAppearance(for: .stopped)
+        }
+
+        func updateAppearance(for state: MCPServerState) {
+            switch state {
+            case .disabled:
+                button.contentTintColor = .systemGray
+            case .stopped:
+                button.contentTintColor = .systemRed
+            case .running:
+                button.contentTintColor = .systemGreen
+            }
+        }
+    }
+
     class SwitchSourceToolbarItem: NSToolbarItem {
         let popUpButton = NSPopUpButton()
 
@@ -168,6 +195,10 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         $0.label = "Install Helper"
     }
 
+    let mcpStatusItem = MCPStatusToolbarItem().then {
+        $0.label = "MCP Status"
+    }
+
     init(delegate: Delegate) {
         self.delegate = delegate
         self.toolbar = NSToolbar()
@@ -195,6 +226,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.generationOptions,
             .Main.save,
             .Main.share,
+            .Main.mcpStatus,
             .inspectorTrackingSeparator,
             .flexibleSpace,
             .toggleInspector,
@@ -219,6 +251,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.fontSizeLarger,
             .Main.loadFrameworks,
             .Main.attach,
+            .Main.mcpStatus,
         ]
     }
 
@@ -248,6 +281,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return installHelperItem
         case .Main.attach:
             return attachItem
+        case .Main.mcpStatus:
+            return mcpStatusItem
         default:
             return nil
         }
@@ -275,5 +310,6 @@ extension NSToolbarItem.Identifier {
         static let installHelper: NSToolbarItem.Identifier = "installHelper"
         static let helperStatus: NSToolbarItem.Identifier = "helperStatus"
         static let attach: NSToolbarItem.Identifier = "attach"
+        static let mcpStatus: NSToolbarItem.Identifier = "mcpStatus"
     }
 }
