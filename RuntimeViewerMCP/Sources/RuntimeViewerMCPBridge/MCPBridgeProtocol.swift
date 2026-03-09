@@ -1,14 +1,23 @@
 import Foundation
 import RuntimeViewerCore
+import SwiftMCP
 
 // MARK: - List Windows
 
+/// A RuntimeViewer document window
+@Schema
 public struct MCPWindowInfo: Codable, Sendable {
+    /// The stable window identifier used by all other tools
     public let identifier: String
+    /// The display title of the window
     public let displayName: String?
+    /// Whether this is the key (frontmost) window
     public let isKeyWindow: Bool
+    /// The name of the currently selected type in the sidebar
     public let selectedTypeName: String?
+    /// The image path of the currently selected type
     public let selectedTypeImagePath: String?
+    /// The image name of the currently selected type
     public let selectedTypeImageName: String?
 
     public init(
@@ -28,6 +37,7 @@ public struct MCPWindowInfo: Codable, Sendable {
     }
 }
 
+@Schema
 public struct MCPListWindowsResponse: Codable, Sendable {
     public let windows: [MCPWindowInfo]
 
@@ -46,12 +56,19 @@ public struct MCPSelectedTypeRequest: Codable, Sendable {
     }
 }
 
+@Schema
 public struct MCPSelectedTypeResponse: Codable, Sendable {
+    /// The full path of the image (framework/dylib) containing this type
     public let imagePath: String?
+    /// The short name of the image
     public let imageName: String?
+    /// The internal type name (may be mangled for Swift types)
     public let typeName: String?
+    /// The human-readable display name
     public let displayName: String?
+    /// The kind of type (e.g. "Objective-C Class", "Swift Struct", "Swift Protocol")
     public let typeKind: String?
+    /// The full generated interface text (ObjC @interface header or Swift declaration)
     public let interfaceText: String?
 
     public init(
@@ -87,13 +104,21 @@ public struct MCPTypeInterfaceRequest: Codable, Sendable {
     }
 }
 
+@Schema
 public struct MCPTypeInterfaceResponse: Codable, Sendable {
+    /// The full path of the image (framework/dylib) containing this type
     public let imagePath: String?
+    /// The short name of the image
     public let imageName: String?
+    /// The internal type name (may be mangled for Swift types)
     public let typeName: String?
+    /// The human-readable display name
     public let displayName: String?
+    /// The kind of type (e.g. "Objective-C Class", "Swift Struct", "Swift Protocol")
     public let typeKind: String?
+    /// The full generated interface text (ObjC @interface header or Swift declaration)
     public let interfaceText: String?
+    /// Error message if the operation failed
     public let error: String?
 
     public init(
@@ -117,11 +142,18 @@ public struct MCPTypeInterfaceResponse: Codable, Sendable {
 
 // MARK: - Shared Data Types
 
+/// Summary information about a runtime type
+@Schema
 public struct MCPRuntimeTypeInfo: Codable, Sendable {
+    /// The internal type name
     public let name: String
+    /// The human-readable display name
     public let displayName: String
+    /// The kind of type (e.g. "Objective-C Class", "Swift Struct", "Swift Protocol")
     public let kind: String
+    /// The full image path
     public let imagePath: String
+    /// The short image name
     public let imageName: String
 
     public init(name: String, displayName: String, kind: String, imagePath: String, imageName: String) {
@@ -167,8 +199,12 @@ public struct MCPListTypesRequest: Codable, Sendable {
     }
 }
 
+/// List of runtime types in an image
+@Schema
 public struct MCPListTypesResponse: Codable, Sendable {
+    /// The matching runtime types
     public let types: [MCPRuntimeTypeInfo]
+    /// Error message if the operation failed
     public let error: String?
 
     public init(types: [MCPRuntimeTypeInfo], error: String?) {
@@ -193,8 +229,12 @@ public struct MCPSearchTypesRequest: Codable, Sendable {
     }
 }
 
+/// Search results for runtime types
+@Schema
 public struct MCPSearchTypesResponse: Codable, Sendable {
+    /// The matching runtime types
     public let types: [MCPRuntimeTypeInfo]
+    /// Error message if the operation failed
     public let error: String?
 
     public init(types: [MCPRuntimeTypeInfo], error: String?) {
@@ -239,7 +279,10 @@ public struct MCPListImagesRequest: Codable, Sendable {
     }
 }
 
+/// List of image paths visible to the runtime
+@Schema
 public struct MCPListImagesResponse: Codable, Sendable {
+    /// The full file system paths of all registered images
     public let imagePaths: [String]
 
     public init(imagePaths: [String]) {
@@ -259,7 +302,10 @@ public struct MCPSearchImagesRequest: Codable, Sendable {
     }
 }
 
+/// Search results for image paths
+@Schema
 public struct MCPSearchImagesResponse: Codable, Sendable {
+    /// The matching image paths
     public let imagePaths: [String]
 
     public init(imagePaths: [String]) {
@@ -281,10 +327,16 @@ public struct MCPLoadImageRequest: Codable, Sendable {
     }
 }
 
+/// Result of an image loading operation
+@Schema
 public struct MCPLoadImageResponse: Codable, Sendable {
+    /// The image path that was loaded
     public let imagePath: String
+    /// Whether the image was already loaded before this call
     public let alreadyLoaded: Bool
+    /// Whether objects have been enumerated
     public let objectsLoaded: Bool
+    /// Error message if the operation failed
     public let error: String?
 
     public init(imagePath: String, alreadyLoaded: Bool, objectsLoaded: Bool, error: String?) {
@@ -307,8 +359,12 @@ public struct MCPIsImageLoadedRequest: Codable, Sendable {
     }
 }
 
+/// Result of an image status check
+@Schema
 public struct MCPIsImageLoadedResponse: Codable, Sendable {
+    /// The image path that was checked
     public let imagePath: String
+    /// Whether the image is loaded
     public let isLoaded: Bool
 
     public init(imagePath: String, isLoaded: Bool) {
@@ -329,10 +385,16 @@ public struct MCPLoadObjectsRequest: Codable, Sendable {
     }
 }
 
+/// Result of an objects loading operation
+@Schema
 public struct MCPLoadObjectsResponse: Codable, Sendable {
+    /// The image path that was loaded
     public let imagePath: String
+    /// Whether the objects were already loaded before this call
     public let alreadyLoaded: Bool
+    /// Number of types found
     public let objectCount: Int
+    /// Error message if the operation failed
     public let error: String?
 
     public init(imagePath: String, alreadyLoaded: Bool, objectCount: Int, error: String?) {
@@ -355,8 +417,12 @@ public struct MCPIsObjectsLoadedRequest: Codable, Sendable {
     }
 }
 
+/// Result of an objects status check
+@Schema
 public struct MCPIsObjectsLoadedResponse: Codable, Sendable {
+    /// The image path that was checked
     public let imagePath: String
+    /// Whether the objects are loaded
     public let isLoaded: Bool
 
     public init(imagePath: String, isLoaded: Bool) {
@@ -383,10 +449,16 @@ public struct MCPMemberAddressesRequest: Codable, Sendable {
     }
 }
 
+/// A runtime member's address information
+@Schema
 public struct MCPMemberAddressInfo: Codable, Sendable {
+    /// The demangled/readable member name
     public let name: String
+    /// The member kind (e.g. method, property)
     public let kind: String
+    /// The linker symbol name
     public let symbolName: String
+    /// The hex memory address
     public let address: String
 
     public init(name: String, kind: String, symbolName: String, address: String) {
@@ -404,9 +476,14 @@ public struct MCPMemberAddressInfo: Codable, Sendable {
     }
 }
 
+/// Runtime memory addresses of a type's members
+@Schema
 public struct MCPMemberAddressesResponse: Codable, Sendable {
+    /// The type name that was inspected
     public let typeName: String?
+    /// The member address entries
     public let members: [MCPMemberAddressInfo]
+    /// Error message if the operation failed
     public let error: String?
 
     public init(typeName: String?, members: [MCPMemberAddressInfo], error: String?) {

@@ -3,14 +3,17 @@ import FoundationToolbox
 import Dependencies
 import SwiftNavigation
 import RuntimeViewerSettings
+import SwiftMCP
+import OSLog
 
-@Loggable(.private)
+private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: "Service")
+
 @MainActor
 public final class MCPService {
     @Dependency(\.settings)
     private var settings
 
-    private var httpServer: MCPHTTPServer?
+    private var transport: HTTPSSETransport?
 
     private var startTask: Task<Void, Never>?
 
@@ -25,9 +28,16 @@ public final class MCPService {
     private var documentProvider: MCPBridgeDocumentProvider?
 
     private var restartTask: Task<Void, Never>?
-    
-    public init() {}
-    
+
+    private let portFilePath: String
+
+    public init() {
+        let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let runtimeViewerDir = appSupportURL.appendingPathComponent("RuntimeViewer")
+        try? FileManager.default.createDirectory(at: runtimeViewerDir, withIntermediateDirectories: true)
+        self.portFilePath = runtimeViewerDir.appendingPathComponent(Settings.MCP.portFileName).path
+    }
+
     isolated deinit {
         stop()
     }
@@ -37,13 +47,27 @@ public final class MCPService {
             let mcpSettings = settings.mcp
             let port: UInt16 = mcpSettings.useFixedPort ? mcpSettings.fixedPort : 0
             do {
-                let bridgeServer = MCPBridgeServer(documentProvider: documentProvider)
-                let httpServer = try MCPHTTPServer(bridgeServer: bridgeServer)
-                self.httpServer = httpServer
-                try await httpServer.start(port: port)
+                let mcpServer = MCPBridgeServer(documentProvider: documentProvider)
+                let transport = HTTPSSETransport(server: mcpServer, host: "127.0.0.1", port: Int(port))
+                self.transport = transport
                 self.documentProvider = documentProvider
+
+                // Run transport in a detached task (run() blocks on the NIO event loop)
+                Task.detached {
+                    do {
+                        try await transport.run()
+                    } catch {
+                        logger.error("MCP transport run failed: \(error)")
+                    }
+                }
+
+                // Wait for server to bind, then write port file
+                try await Task.sleep(for: .milliseconds(500))
+                let boundPort = UInt16(transport.port)
+                writePortFile(port: boundPort)
+                logger.info("MCP HTTP+SSE server listening on port \(boundPort)")
             } catch {
-                #log(.error, "Failed to start MCP HTTP Server: \(error, privacy: .public)")
+                logger.error("Failed to start MCP server: \(error)")
             }
             // Initialize previous values before observing to avoid a spurious restart
             let currentMCP = settings.mcp
@@ -59,10 +83,8 @@ public final class MCPService {
         startTask = nil
         restartTask?.cancel()
         restartTask = nil
-        if let httpServer {
-            Task { await httpServer.stop() }
-        }
-        httpServer = nil
+        transport = nil
+        removePortFile()
         observeToken?.cancel()
         observeToken = nil
     }
@@ -103,5 +125,20 @@ public final class MCPService {
                 stop()
             }
         }
+    }
+
+    // MARK: - Port File
+
+    private func writePortFile(port: UInt16) {
+        do {
+            try "\(port)".write(toFile: portFilePath, atomically: true, encoding: .utf8)
+            logger.info("Wrote MCP HTTP+SSE port \(port) to \(self.portFilePath)")
+        } catch {
+            logger.error("Failed to write port file: \(error)")
+        }
+    }
+
+    private nonisolated func removePortFile() {
+        try? FileManager.default.removeItem(atPath: portFilePath)
     }
 }
