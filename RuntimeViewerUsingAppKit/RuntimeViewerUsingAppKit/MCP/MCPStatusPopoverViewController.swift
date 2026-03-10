@@ -1,11 +1,11 @@
 import AppKit
 import RuntimeViewerUI
+import RuntimeViewerArchitectures
+import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
 import RuntimeViewerSettingsUI
-import RxSwift
-import RxCocoa
 
-final class MCPStatusPopoverController: NSViewController {
+final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopoverViewModel<MainRoute>> {
 
     // MARK: - Views
 
@@ -16,36 +16,18 @@ final class MCPStatusPopoverController: NSViewController {
     private let copyPortButton = NSButton()
     private let actionButton = PushButton()
 
-    // MARK: - State
+    // MARK: - Relays
 
-    private var currentState: MCPServerState = .stopped
-    private let stateRelay: BehaviorRelay<MCPServerState>
-    private let disposeBag = DisposeBag()
-
-    // MARK: - Init
-
-    init(stateRelay: BehaviorRelay<MCPServerState>) {
-        self.stateRelay = stateRelay
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
+    private let actionButtonRelay = PublishRelay<Void>()
+    private let copyPortRelay = PublishRelay<Void>()
 
     // MARK: - Lifecycle
-
-    override func loadView() {
-        view = UXView()
-    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
         setupViews()
         setupLayout()
-        setupBindings()
     }
 
     // MARK: - Setup
@@ -76,7 +58,7 @@ final class MCPStatusPopoverController: NSViewController {
             $0.isBordered = true
             $0.toolTip = "Copy Port"
             $0.target = self
-            $0.action = #selector(copyPort)
+            $0.action = #selector(copyPortClicked)
             $0.setContentHuggingPriority(.required, for: .horizontal)
         }
 
@@ -122,21 +104,19 @@ final class MCPStatusPopoverController: NSViewController {
         }
     }
 
-    // MARK: - Bindings
+    // MARK: - Actions
 
-    private func setupBindings() {
-        stateRelay.asDriver()
-            .driveOnNext { [weak self] state in
-                guard let self else { return }
-                updateUI(for: state)
-            }
-            .disposed(by: disposeBag)
+    @objc private func copyPortClicked() {
+        copyPortRelay.accept(())
+    }
+
+    @objc private func actionButtonClicked() {
+        actionButtonRelay.accept(())
     }
 
     // MARK: - UI Update
 
     private func updateUI(for state: MCPServerState) {
-        currentState = state
         let circleImage = SFSymbols(name: SFSymbols.SystemSymbolName.circleFill).nsImage
 
         switch state {
@@ -170,22 +150,27 @@ final class MCPStatusPopoverController: NSViewController {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - Bindings
 
-    @objc private func copyPort() {
-        guard let port = currentState.port else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("\(port)", forType: .string)
-    }
+    override func setupBindings(for viewModel: MCPStatusPopoverViewModel<MainRoute>) {
+        super.setupBindings(for: viewModel)
 
-    @objc private func actionButtonClicked() {
-        switch currentState {
-        case .disabled:
-            SettingsWindowController.shared.showWindow(nil)
-        case .stopped:
-            MCPService.shared.start(for: AppMCPBridgeDocumentProvider())
-        case .running:
-            MCPService.shared.stop()
+        let input = MCPStatusPopoverViewModel<MainRoute>.Input(
+            actionButtonClick: actionButtonRelay.asSignal(),
+            copyPortClick: copyPortRelay.asSignal()
+        )
+
+        let output = viewModel.transform(input)
+
+        output.state.driveOnNext { [weak self] state in
+            guard let self else { return }
+            updateUI(for: state)
         }
+        .disposed(by: rx.disposeBag)
+
+        output.openSettings.emitOnNext {
+            SettingsWindowController.shared.showWindow(nil)
+        }
+        .disposed(by: rx.disposeBag)
     }
 }

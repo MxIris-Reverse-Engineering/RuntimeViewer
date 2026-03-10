@@ -2,7 +2,6 @@ import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
-import RuntimeViewerMCPBridge
 import UniformTypeIdentifiers
 
 final class MainWindow: NSWindow {
@@ -35,7 +34,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
 
-    let mcpStateRelay = BehaviorRelay<MCPServerState>(value: MCPService.shared.serverState)
 
     init(documentState: DocumentState) {
         self.documentState = documentState
@@ -157,20 +155,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             .emitOnNextMainActor { [weak self] error in
                 guard let self else { return }
                 NSAlert(error: error).beginSheetModal(for: contentWindow)
-            }
-            .disposed(by: rx.disposeBag)
-
-        // MARK: - MCP Status
-
-        MCPService.shared.onStateChange = { [weak self] state in
-            guard let self else { return }
-            mcpStateRelay.accept(state)
-        }
-
-        mcpStateRelay.asDriver()
-            .driveOnNext { [weak self] state in
-                guard let self else { return }
-                toolbarController.mcpStatusItem.updateAppearance(for: state)
             }
             .disposed(by: rx.disposeBag)
     }
