@@ -119,19 +119,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     class MCPStatusToolbarItem: IconButtonToolbarItem {
         init() {
             super.init(itemIdentifier: .Main.mcpStatus, icon: .serverRack)
-
-            updateAppearance(for: .stopped)
-        }
-
-        func updateAppearance(for state: MCPServerState) {
-            switch state {
-            case .disabled:
-                button.contentTintColor = .systemGray
-            case .stopped:
-                button.contentTintColor = .systemRed
-            case .running:
-                button.contentTintColor = .systemGreen
-            }
         }
     }
 
