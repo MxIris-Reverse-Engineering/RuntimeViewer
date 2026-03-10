@@ -16,7 +16,7 @@ let package = Package(
     dependencies: [
         .package(path: "../RuntimeViewerCore"),
         .package(path: "../RuntimeViewerPackages"),
-        .package(url: "https://github.com/Cocoanetics/SwiftMCP.git", branch: "main"),
+        .package(url: "https://github.com/MxIris-Library-Forks/SwiftMCP", branch: "main"),
     ],
     targets: [
         .target(

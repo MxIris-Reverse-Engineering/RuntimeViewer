@@ -532,7 +532,7 @@ public actor MCPBridgeServer {
     func isImageLoaded(windowIdentifier: String, imagePath: String) async throws -> MCPIsImageLoadedResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
-        let isLoaded = await engine.loadedImagePaths.contains(imagePath)
+        let isLoaded = try await engine.isImageLoaded(path: imagePath)
         return MCPIsImageLoadedResponse(imagePath: imagePath, isLoaded: isLoaded)
     }
 
@@ -577,8 +577,13 @@ public actor MCPBridgeServer {
         engine: RuntimeEngine
     ) async throws -> Set<String> {
         if let imagePath = requestImagePath {
-            let loadedPaths = await engine.loadedImagePaths
-            if !loadedPaths.contains(imagePath) {
+            let isLoaded: Bool
+            do {
+                isLoaded = try await engine.isImageLoaded(path: imagePath)
+            } catch {
+                throw MCPBridgeError.operationFailed("Failed to check image status for '\(imagePath)': \(error.localizedDescription)")
+            }
+            if !isLoaded {
                 do {
                     try await engine.loadImage(at: imagePath)
                     logger.info("Auto-loaded image at path: \(imagePath)")
@@ -589,20 +594,36 @@ public actor MCPBridgeServer {
             return [imagePath]
         }
         if let imageName = requestImageName {
+            // First check already-loaded images by short name
             let paths = await resolveImageName(imageName, engine: engine)
             if !paths.isEmpty {
                 return paths
             }
-            // Image not currently loaded — try loading by name as a full path
-            let loadedPaths = await engine.loadedImagePaths
-            if !loadedPaths.contains(imageName) {
+            // Resolve full path from dyld image list
+            let fullPath = await resolveImageNameFromImageList(imageName, engine: engine)
+            if let fullPath {
+                let isLoaded: Bool
                 do {
-                    try await engine.loadImage(at: imageName)
-                    logger.info("Auto-loaded image at path: \(imageName)")
+                    isLoaded = try await engine.isImageLoaded(path: fullPath)
                 } catch {
-                    // Loading by name as path failed — this is expected, fall through to imageNotFound
-                    logger.info("Could not load '\(imageName)' as a direct path: \(error)")
+                    throw MCPBridgeError.operationFailed("Failed to check image status for '\(fullPath)': \(error.localizedDescription)")
                 }
+                if !isLoaded {
+                    do {
+                        try await engine.loadImage(at: fullPath)
+                        logger.info("Auto-loaded image at path: \(fullPath)")
+                    } catch {
+                        throw MCPBridgeError.imageLoadFailed(path: fullPath, reason: error.localizedDescription)
+                    }
+                }
+                return [fullPath]
+            }
+            // Not found in image list — last resort: try loading by name as a direct path
+            do {
+                try await engine.loadImage(at: imageName)
+                logger.info("Auto-loaded image at path: \(imageName)")
+            } catch {
+                logger.info("Could not load '\(imageName)' as a direct path: \(error)")
             }
             let retryPaths = await resolveImageName(imageName, engine: engine)
             if retryPaths.isEmpty {
@@ -618,6 +639,24 @@ public actor MCPBridgeServer {
             throw MCPBridgeError.noImagesLoaded
         }
         return loadedPaths
+    }
+
+    private func resolveImageNameFromImageList(_ imageName: String, engine: RuntimeEngine) async -> String? {
+        let allImages = await engine.imageList
+        let nameLowercased = imageName.lowercased()
+        // Exact name match (without extension)
+        if let match = allImages.first(where: { path in
+            let lastComponent = (path as NSString).lastPathComponent
+            let nameWithoutExtension = (lastComponent as NSString).deletingPathExtension
+            return nameWithoutExtension.lowercased() == nameLowercased
+        }) {
+            return match
+        }
+        // Fallback: substring match
+        return allImages.first(where: { path in
+            let lastComponent = (path as NSString).lastPathComponent
+            return lastComponent.lowercased().contains(nameLowercased)
+        })
     }
 
     private func resolveImageName(_ imageName: String, engine: RuntimeEngine) async -> Set<String> {
