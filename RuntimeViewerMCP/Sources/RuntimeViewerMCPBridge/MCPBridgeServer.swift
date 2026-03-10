@@ -13,6 +13,13 @@ private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: 
 enum MCPBridgeError: LocalizedError {
     case noTypeSelected
     case typeNotFound(name: String, scope: String)
+    case imageNotLoaded(path: String)
+    case imageNotFound(name: String)
+    case imageLoadFailed(path: String, reason: String)
+    case noImagesLoaded
+    case noMatchingImages(query: String)
+    case noTypesFound(scope: String)
+    case interfaceGenerationFailed(typeName: String, reason: String)
     case operationFailed(String)
 
     var errorDescription: String? {
@@ -20,11 +27,32 @@ enum MCPBridgeError: LocalizedError {
         case .noTypeSelected:
             return "No type is currently selected in the specified window."
         case .typeNotFound(let name, let scope):
-            return "Type '\(name)' not found in \(scope)."
+            return "Type '\(name)' not found in \(scope). Please verify the type name is correct, or use searchTypes to find available types."
+        case .imageNotLoaded(let path):
+            return "Image '\(path)' is not loaded. Please call loadImage with this imagePath first."
+        case .imageNotFound(let name):
+            return "No loaded image matches '\(name)'. Please call searchImages to find the correct image path, then call loadImage to load it."
+        case .imageLoadFailed(let path, let reason):
+            return "Failed to load image '\(path)': \(reason). The file may not exist or may not be a valid Mach-O binary."
+        case .noImagesLoaded:
+            return "No images are currently loaded. Please call loadImage to load an image first, or open a document in RuntimeViewer."
+        case .noMatchingImages(let query):
+            return "No images match '\(query)'. Please call listImages to see all available image paths, or verify the query string."
+        case .noTypesFound(let scope):
+            return "No types found in \(scope). The image may not contain any Objective-C or Swift types, or objects may not have been loaded yet — try calling loadObjects first."
+        case .interfaceGenerationFailed(let typeName, let reason):
+            return "Failed to generate interface for type '\(typeName)': \(reason)"
         case .operationFailed(let message):
             return message
         }
     }
+}
+
+// MARK: - Object Load Result
+
+private enum ObjectLoadResult<T> {
+    case success([T])
+    case failure(path: String, error: String)
 }
 
 // MARK: - MCP Bridge Server
@@ -106,7 +134,7 @@ public actor MCPBridgeServer {
     /// Each entry contains: identifier (stable per window session), display title, key-window flag,
     /// and the currently selected type's name, image path, and image name (if any).
     /// Returns an empty list when no documents are open; in that case, ask the user to launch RuntimeViewer and open a document.
-    @MCPTool(hints: [.readOnly])
+    @MCPTool(naming: .pascalCase, hints: [.readOnly])
     func listWindows() async -> MCPListWindowsResponse {
         let windows = await documentProvider.allDocumentContexts().map { context in
             MCPWindowInfo(
@@ -127,8 +155,8 @@ public actor MCPBridgeServer {
     /// Response includes: name, display name, kind, image path, and the full generated interface text.
     /// Throws an error if no type is selected.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
-    @MCPTool(hints: [.readOnly])
-    func getSelectedType(windowIdentifier: String) async throws -> MCPSelectedTypeResponse {
+    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    func selectedType(windowIdentifier: String) async throws -> MCPSelectedTypeResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         guard let runtimeObject = context.selectedRuntimeObject else {
             throw MCPBridgeError.noTypeSelected
@@ -137,27 +165,22 @@ public actor MCPBridgeServer {
         let engine = context.runtimeEngine
         let options = generationOptions()
 
+        let interface: RuntimeObjectInterface?
         do {
-            let interface = try await engine.interface(for: runtimeObject, options: options)
-            return MCPSelectedTypeResponse(
-                imagePath: runtimeObject.imagePath,
-                imageName: runtimeObject.imageName,
-                typeName: runtimeObject.name,
-                displayName: runtimeObject.displayName,
-                typeKind: runtimeObject.kind.description,
-                interfaceText: interface?.interfaceString.string
-            )
+            interface = try await engine.interface(for: runtimeObject, options: options)
         } catch {
-            logger.error("Failed to generate interface for selected type: \(error)")
-            return MCPSelectedTypeResponse(
-                imagePath: runtimeObject.imagePath,
-                imageName: runtimeObject.imageName,
-                typeName: runtimeObject.name,
-                displayName: runtimeObject.displayName,
-                typeKind: runtimeObject.kind.description,
-                interfaceText: nil
-            )
+            logger.error("Failed to generate interface for selected type '\(runtimeObject.displayName)': \(error)")
+            throw MCPBridgeError.interfaceGenerationFailed(typeName: runtimeObject.displayName, reason: error.localizedDescription)
         }
+
+        return MCPSelectedTypeResponse(
+            imagePath: runtimeObject.imagePath,
+            imageName: runtimeObject.imageName,
+            typeName: runtimeObject.name,
+            displayName: runtimeObject.displayName,
+            typeKind: runtimeObject.kind.description,
+            interfaceText: interface?.interfaceString.string
+        )
     }
 
     /// Retrieves the full generated interface declaration for a type by exact name match.
@@ -168,18 +191,25 @@ public actor MCPBridgeServer {
     /// - Parameter typeName: Exact type name — matches against both internal name and display name
     /// - Parameter imagePath: Full path of the image (framework/dylib) containing the type. Mutually exclusive with imageName.
     /// - Parameter imageName: Short name of the image without path or extension (e.g. 'AppKit'). Case-insensitive. Mutually exclusive with imagePath.
-    @MCPTool(hints: [.readOnly])
-    func getTypeInterface(windowIdentifier: String, typeName: String, imagePath: String? = nil, imageName: String? = nil) async throws -> MCPTypeInterfaceResponse {
+    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    func typeInterface(windowIdentifier: String, typeName: String, imagePath: String? = nil, imageName: String? = nil) async throws -> MCPTypeInterfaceResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
         let options = generationOptions()
-        let resolvedPaths = await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
+        let resolvedPaths = try await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
+
+        var objectLoadErrors: [(path: String, error: String)] = []
 
         for path in resolvedPaths {
             do {
                 let objects = try await engine.objects(in: path)
                 if let runtimeObject = findObject(named: typeName, in: objects) {
-                    let interface = try await engine.interface(for: runtimeObject, options: options)
+                    let interface: RuntimeObjectInterface?
+                    do {
+                        interface = try await engine.interface(for: runtimeObject, options: options)
+                    } catch {
+                        throw MCPBridgeError.interfaceGenerationFailed(typeName: runtimeObject.displayName, reason: error.localizedDescription)
+                    }
                     return MCPTypeInterfaceResponse(
                         imagePath: runtimeObject.imagePath,
                         imageName: runtimeObject.imageName,
@@ -190,10 +220,19 @@ public actor MCPBridgeServer {
                         error: nil
                     )
                 }
+            } catch let error as MCPBridgeError {
+                throw error
             } catch {
                 logger.warning("Failed to load objects from image \(path): \(error)")
+                objectLoadErrors.append((path: path, error: error.localizedDescription))
                 continue
             }
+        }
+
+        // If all paths failed to load objects, report that instead of "type not found"
+        if !objectLoadErrors.isEmpty && objectLoadErrors.count == resolvedPaths.count {
+            let details = objectLoadErrors.map { "'\($0.path)': \($0.error)" }.joined(separator: "; ")
+            throw MCPBridgeError.operationFailed("Failed to load objects from all resolved images. Details: \(details). Try calling loadObjects for the target image first.")
         }
 
         throw MCPBridgeError.typeNotFound(name: typeName, scope: imagePath ?? imageName ?? "all loaded images")
@@ -205,68 +244,107 @@ public actor MCPBridgeServer {
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full path of the image to list types from. Mutually exclusive with imageName.
     /// - Parameter imageName: Short name of the image without path or extension. Case-insensitive. Mutually exclusive with imagePath.
-    @MCPTool(hints: [.readOnly])
+    @MCPTool(naming: .pascalCase, hints: [.idempotent])
     func listTypes(windowIdentifier: String, imagePath: String? = nil, imageName: String? = nil) async throws -> MCPListTypesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
-        let resolvedPaths = await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
+        let resolvedPaths = try await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
 
-        let allTypes = await withTaskGroup(of: [MCPRuntimeTypeInfo].self) { group in
+        var objectLoadErrors: [(path: String, error: String)] = []
+
+        let allTypes = await withTaskGroup(of: ObjectLoadResult<MCPRuntimeTypeInfo>.self) { group in
             for path in resolvedPaths {
                 group.addTask {
                     do {
                         let objects = try await engine.objects(in: path)
-                        return self.flattenObjects(objects).map { MCPRuntimeTypeInfo(from: $0) }
+                        return .success(self.flattenObjects(objects).map { MCPRuntimeTypeInfo(from: $0) })
                     } catch {
                         logger.warning("Failed to load objects from image \(path): \(error)")
-                        return []
+                        return .failure(path: path, error: error.localizedDescription)
                     }
                 }
             }
             var result: [MCPRuntimeTypeInfo] = []
-            for await types in group {
-                result.append(contentsOf: types)
+            for await taskResult in group {
+                switch taskResult {
+                case .success(let types):
+                    result.append(contentsOf: types)
+                case .failure(let path, let error):
+                    objectLoadErrors.append((path: path, error: error))
+                }
             }
             return result
         }
+
+        // If all paths failed to load objects, report the errors
+        if allTypes.isEmpty && !objectLoadErrors.isEmpty {
+            let details = objectLoadErrors.map { "'\($0.path)': \($0.error)" }.joined(separator: "; ")
+            throw MCPBridgeError.operationFailed("Failed to load objects from all resolved images. Details: \(details). Try calling loadObjects for the target image first.")
+        }
+
+        if allTypes.isEmpty {
+            let scope = imagePath ?? imageName ?? "all loaded images"
+            throw MCPBridgeError.noTypesFound(scope: scope)
+        }
+
         return MCPListTypesResponse(types: allTypes, error: nil)
     }
 
     /// Searches for runtime types by name using case-insensitive substring matching.
     /// Returns each match with its display name, kind, full image path, and image name.
     /// This is the preferred way to locate a type when you do not know its exact name or image.
+    /// Throws an error if the specified image is not loaded or if no types match the query.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter query: Case-insensitive substring to match against type names
     /// - Parameter imagePath: Restrict search to a specific image path. Mutually exclusive with imageName.
     /// - Parameter imageName: Restrict search to images matching this short name. Case-insensitive. Mutually exclusive with imagePath.
-    @MCPTool(hints: [.readOnly])
+    @MCPTool(naming: .pascalCase, hints: [.idempotent])
     func searchTypes(windowIdentifier: String, query: String, imagePath: String? = nil, imageName: String? = nil) async throws -> MCPSearchTypesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
-        let resolvedPaths = await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
-        let queryLowercased = query.lowercased()
+        let resolvedPaths = try await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
 
-        let results = await withTaskGroup(of: [MCPRuntimeTypeInfo].self) { group in
+        let queryLowercased = query.lowercased()
+        var objectLoadErrors: [(path: String, error: String)] = []
+
+        let results = await withTaskGroup(of: ObjectLoadResult<MCPRuntimeTypeInfo>.self) { group in
             for path in resolvedPaths {
                 group.addTask {
                     do {
                         let objects = try await engine.objects(in: path)
-                        return self.flattenObjects(objects).compactMap { obj -> MCPRuntimeTypeInfo? in
+                        return .success(self.flattenObjects(objects).compactMap { obj -> MCPRuntimeTypeInfo? in
                             guard obj.name.lowercased().contains(queryLowercased) || obj.displayName.lowercased().contains(queryLowercased) else { return nil }
                             return MCPRuntimeTypeInfo(from: obj)
-                        }
+                        })
                     } catch {
                         logger.warning("Failed to load objects from image \(path): \(error)")
-                        return []
+                        return .failure(path: path, error: error.localizedDescription)
                     }
                 }
             }
             var result: [MCPRuntimeTypeInfo] = []
-            for await matches in group {
-                result.append(contentsOf: matches)
+            for await taskResult in group {
+                switch taskResult {
+                case .success(let types):
+                    result.append(contentsOf: types)
+                case .failure(let path, let error):
+                    objectLoadErrors.append((path: path, error: error))
+                }
             }
             return result
         }
+
+        // If all paths failed to load objects, report the errors
+        if results.isEmpty && !objectLoadErrors.isEmpty {
+            let details = objectLoadErrors.map { "'\($0.path)': \($0.error)" }.joined(separator: "; ")
+            throw MCPBridgeError.operationFailed("Failed to load objects from all resolved images. Details: \(details). Try calling loadObjects for the target image first.")
+        }
+
+        if results.isEmpty {
+            let scope = imagePath ?? imageName ?? "all loaded images"
+            throw MCPBridgeError.typeNotFound(name: query, scope: scope)
+        }
+
         return MCPSearchTypesResponse(types: results, error: nil)
     }
 
@@ -342,7 +420,7 @@ public actor MCPBridgeServer {
     /// Returns the full file system path of every image registered in dyld.
     /// Use this to discover available images before querying types.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
-    @MCPTool(hints: [.readOnly])
+    @MCPTool(naming: .pascalCase, hints: [.readOnly])
     func listImages(windowIdentifier: String) async throws -> MCPListImagesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -354,13 +432,18 @@ public actor MCPBridgeServer {
     /// Use this to find the correct imagePath before calling other tools.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter query: Case-insensitive substring to match against image paths
-    @MCPTool(hints: [.readOnly])
+    @MCPTool(naming: .pascalCase, hints: [.readOnly])
     func searchImages(windowIdentifier: String, query: String) async throws -> MCPSearchImagesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
         let imagePaths = await engine.imageList
         let queryLowercased = query.lowercased()
         let matched = imagePaths.filter { $0.lowercased().contains(queryLowercased) }.sorted()
+
+        if matched.isEmpty {
+            throw MCPBridgeError.noMatchingImages(query: query)
+        }
+
         return MCPSearchImagesResponse(imagePaths: matched)
     }
 
@@ -374,11 +457,13 @@ public actor MCPBridgeServer {
     /// - Parameter imagePath: Full path of the image containing the type. Mutually exclusive with imageName.
     /// - Parameter imageName: Short name of the image. Case-insensitive. Mutually exclusive with imagePath.
     /// - Parameter memberName: Filter to members whose name contains this string (case-insensitive).
-    @MCPTool(hints: [.readOnly])
-    func getMemberAddresses(windowIdentifier: String, typeName: String, imagePath: String? = nil, imageName: String? = nil, memberName: String? = nil) async throws -> MCPMemberAddressesResponse {
+    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    func memberAddresses(windowIdentifier: String, typeName: String, imagePath: String? = nil, imageName: String? = nil, memberName: String? = nil) async throws -> MCPMemberAddressesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
-        let resolvedPaths = await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
+        let resolvedPaths = try await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
+
+        var objectLoadErrors: [(path: String, error: String)] = []
 
         for path in resolvedPaths {
             do {
@@ -389,8 +474,15 @@ public actor MCPBridgeServer {
                 }
             } catch {
                 logger.warning("Failed to load objects from image \(path): \(error)")
+                objectLoadErrors.append((path: path, error: error.localizedDescription))
                 continue
             }
+        }
+
+        // If all paths failed to load objects, report that instead of "type not found"
+        if !objectLoadErrors.isEmpty && objectLoadErrors.count == resolvedPaths.count {
+            let details = objectLoadErrors.map { "'\($0.path)': \($0.error)" }.joined(separator: "; ")
+            throw MCPBridgeError.operationFailed("Failed to load objects from all resolved images. Details: \(details). Try calling loadObjects for the target image first.")
         }
 
         throw MCPBridgeError.typeNotFound(name: typeName, scope: imagePath ?? imageName ?? "all loaded images")
@@ -404,7 +496,7 @@ public actor MCPBridgeServer {
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full file system path of the image to load
     /// - Parameter loadObjects: If true, also enumerate and cache runtime objects. Defaults to false.
-    @MCPTool(hints: [.idempotent])
+    @MCPTool(naming: .pascalCase, hints: [.idempotent])
     func loadImage(windowIdentifier: String, imagePath: String, loadObjects: Bool = false) async throws -> MCPLoadImageResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -436,7 +528,7 @@ public actor MCPBridgeServer {
     /// Use this to check before deciding whether to call loadImage.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full file system path of the image to check
-    @MCPTool(hints: [.readOnly])
+    @MCPTool(naming: .pascalCase, hints: [.readOnly])
     func isImageLoaded(windowIdentifier: String, imagePath: String) async throws -> MCPIsImageLoadedResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -449,7 +541,7 @@ public actor MCPBridgeServer {
     /// Once loaded, objects are available for listTypes, searchTypes, getTypeInterface, etc.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full file system path of the image to load objects from
-    @MCPTool(hints: [.idempotent])
+    @MCPTool(naming: .pascalCase, hints: [.idempotent])
     func loadObjects(windowIdentifier: String, imagePath: String) async throws -> MCPLoadObjectsResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -471,7 +563,7 @@ public actor MCPBridgeServer {
     /// Use this to decide whether to call loadObjects before querying types.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full file system path of the image to check
-    @MCPTool(hints: [.readOnly])
+    @MCPTool(naming: .pascalCase, hints: [.readOnly])
     func isObjectsLoaded(windowIdentifier: String, imagePath: String) async throws -> MCPIsObjectsLoadedResponse {
         MCPIsObjectsLoadedResponse(imagePath: imagePath, isLoaded: objectsLoadedPaths.contains(imagePath))
     }
@@ -483,9 +575,17 @@ public actor MCPBridgeServer {
         requestImageName: String?,
         selectedImagePath: String?,
         engine: RuntimeEngine
-    ) async -> Set<String> {
+    ) async throws -> Set<String> {
         if let imagePath = requestImagePath {
-            await ensureImageLoaded(at: imagePath, engine: engine)
+            let loadedPaths = await engine.loadedImagePaths
+            if !loadedPaths.contains(imagePath) {
+                do {
+                    try await engine.loadImage(at: imagePath)
+                    logger.info("Auto-loaded image at path: \(imagePath)")
+                } catch {
+                    throw MCPBridgeError.imageLoadFailed(path: imagePath, reason: error.localizedDescription)
+                }
+            }
             return [imagePath]
         }
         if let imageName = requestImageName {
@@ -494,24 +594,30 @@ public actor MCPBridgeServer {
                 return paths
             }
             // Image not currently loaded — try loading by name as a full path
-            await ensureImageLoaded(at: imageName, engine: engine)
-            return await resolveImageName(imageName, engine: engine)
+            let loadedPaths = await engine.loadedImagePaths
+            if !loadedPaths.contains(imageName) {
+                do {
+                    try await engine.loadImage(at: imageName)
+                    logger.info("Auto-loaded image at path: \(imageName)")
+                } catch {
+                    // Loading by name as path failed — this is expected, fall through to imageNotFound
+                    logger.info("Could not load '\(imageName)' as a direct path: \(error)")
+                }
+            }
+            let retryPaths = await resolveImageName(imageName, engine: engine)
+            if retryPaths.isEmpty {
+                throw MCPBridgeError.imageNotFound(name: imageName)
+            }
+            return retryPaths
         }
         if let selectedImagePath {
             return [selectedImagePath]
         }
-        return await engine.loadedImagePaths
-    }
-
-    private func ensureImageLoaded(at path: String, engine: RuntimeEngine) async {
         let loadedPaths = await engine.loadedImagePaths
-        guard !loadedPaths.contains(path) else { return }
-        do {
-            try await engine.loadImage(at: path)
-            logger.info("Loaded image at path: \(path)")
-        } catch {
-            logger.warning("Failed to load image at path \(path): \(error)")
+        if loadedPaths.isEmpty {
+            throw MCPBridgeError.noImagesLoaded
         }
+        return loadedPaths
     }
 
     private func resolveImageName(_ imageName: String, engine: RuntimeEngine) async -> Set<String> {
