@@ -28,6 +28,13 @@ let package = Package(
                 .product(name: "SwiftMCP", package: "SwiftMCP"),
             ]
         ),
+        .testTarget(
+            name: "RuntimeViewerMCPBridgeTests",
+            dependencies: [
+                "RuntimeViewerMCPBridge",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+            ]
+        ),
     ],
     swiftLanguageModes: [.v5]
 )

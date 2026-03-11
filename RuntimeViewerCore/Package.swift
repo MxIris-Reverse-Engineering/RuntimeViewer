@@ -76,11 +76,11 @@ let package = Package(
             local: .package(
                 path: "../../MachOObjCSection",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
-                branch: "main"
+                from: "0.6.0-patch.1"
             )
         ),
         .package(
