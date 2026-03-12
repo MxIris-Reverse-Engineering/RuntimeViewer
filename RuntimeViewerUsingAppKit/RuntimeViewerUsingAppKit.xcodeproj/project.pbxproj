@@ -244,6 +244,7 @@
 		E95CDA662DAA6FA900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		E95CDA672DAA970300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		E95CDA682DAA970900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = RuntimeViewerUsingAppKit.xctestplan; sourceTree = "<group>"; };
 		E9668FFB2CEF7140007B344A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9668FFC2CEF7140007B344A /* launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = launchd.plist; sourceTree = "<group>"; };
 		E96BF91C2F60541F009C40D2 /* MCPStatusPopoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPStatusPopoverViewModel.swift; sourceTree = "<group>"; };
@@ -377,6 +378,7 @@
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
+				E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */,
 				E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */,
 				E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */,
 				E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */,

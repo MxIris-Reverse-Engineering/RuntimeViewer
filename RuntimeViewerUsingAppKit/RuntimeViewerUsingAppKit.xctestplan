@@ -1,0 +1,44 @@
+{
+  "configurations" : [
+    {
+      "id" : "034C2BE8-18FB-4218-A483-8A59BDBD423E",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:RuntimeViewerUsingAppKit.xcodeproj",
+      "identifier" : "E9432FE12C0D614900362862",
+      "name" : "RuntimeViewerUsingAppKit"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:..\/RuntimeViewerMCP",
+        "identifier" : "RuntimeViewerMCPBridgeTests",
+        "name" : "RuntimeViewerMCPBridgeTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/RuntimeViewerCore",
+        "identifier" : "RuntimeViewerCoreTests",
+        "name" : "RuntimeViewerCoreTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/RuntimeViewerCore",
+        "identifier" : "RuntimeViewerCommunicationTests",
+        "name" : "RuntimeViewerCommunicationTests"
+      }
+    }
+  ],
+  "version" : 1
+}
