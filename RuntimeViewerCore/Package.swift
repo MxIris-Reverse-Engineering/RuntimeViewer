@@ -169,6 +169,13 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "RuntimeViewerCoreTests",
+            dependencies: [
+                "RuntimeViewerCore",
+                "RuntimeViewerCommunication",
+            ]
+        ),
+        .testTarget(
             name: "RuntimeViewerCommunicationTests",
             dependencies: [
                 "RuntimeViewerCommunication",
