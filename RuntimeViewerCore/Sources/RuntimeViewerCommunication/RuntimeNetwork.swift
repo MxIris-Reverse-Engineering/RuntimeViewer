@@ -37,7 +37,7 @@ public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
 }
 
-public struct RuntimeNetworkEndpoint: Sendable, Codable, Hashable {
+public struct RuntimeNetworkEndpoint: Sendable, Hashable {
     public let name: String
     
     let endpoint: NWEndpoint
@@ -45,18 +45,6 @@ public struct RuntimeNetworkEndpoint: Sendable, Codable, Hashable {
     init(name: String, endpoint: NWEndpoint) {
         self.name = name
         self.endpoint = endpoint
-    }
-    
-    private enum CodableError: Error {
-        case unsupported
-    }
-    
-    public init(from decoder: any Decoder) throws {
-        throw CodableError.unsupported
-    }
-    
-    public func encode(to encoder: any Encoder) throws {
-        throw CodableError.unsupported
     }
 }
 
@@ -71,15 +59,28 @@ public class RuntimeNetworkBrowser {
         self.browser = NWBrowser(for: .bonjour(type: RuntimeNetworkBonjour.type, domain: nil), using: parameters)
     }
 
-    public func start(handler: @escaping (RuntimeNetworkEndpoint) -> Void) {
+    public func start(
+        onAdded: @escaping (RuntimeNetworkEndpoint) -> Void,
+        onRemoved: @escaping (RuntimeNetworkEndpoint) -> Void
+    ) {
+        #log(.info, "Starting Bonjour browser for service type: \(RuntimeNetworkBonjour.type, privacy: .public)")
         browser.stateUpdateHandler = { newState in
-            #log(.info, "browser.stateUpdateHandler \(String(describing: newState), privacy: .public)")
+            #log(.info, "Browser state changed: \(String(describing: newState), privacy: .public)")
         }
         browser.browseResultsChangedHandler = { results, changes in
-            for result in results {
-                switch result.endpoint {
-                case .service(let name, _, _, _):
-                    handler(.init(name: name, endpoint: result.endpoint))
+            #log(.info, "Browse results changed: \(results.count, privacy: .public) result(s), \(changes.count, privacy: .public) change(s)")
+            for change in changes {
+                switch change {
+                case .added(let result):
+                    if case .service(let name, _, _, _) = result.endpoint {
+                        #log(.info, "Discovered new endpoint: \(name, privacy: .public)")
+                        onAdded(.init(name: name, endpoint: result.endpoint))
+                    }
+                case .removed(let result):
+                    if case .service(let name, _, _, _) = result.endpoint {
+                        #log(.info, "Endpoint removed: \(name, privacy: .public)")
+                        onRemoved(.init(name: name, endpoint: result.endpoint))
+                    }
                 default:
                     break
                 }

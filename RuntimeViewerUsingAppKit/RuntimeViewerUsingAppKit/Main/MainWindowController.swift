@@ -34,6 +34,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
 
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowGenerator: .init())
@@ -102,6 +103,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
             loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
             attachToProcessClick: toolbarController.attachItem.button.rx.click.asSignal(),
+            mcpStatusClick: toolbarController.mcpStatusItem.button.rx.clickWithSelf.asSignal().map { $0 },
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal()
         )

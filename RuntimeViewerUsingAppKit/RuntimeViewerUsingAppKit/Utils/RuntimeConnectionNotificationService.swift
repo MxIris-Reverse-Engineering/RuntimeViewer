@@ -113,22 +113,12 @@ extension RuntimeSource {
         switch self {
         case .local:
             return "Local Runtime"
-        case .remote(let name, _, _):
-            return name
-        case .bonjourClient(let endpoint):
-            return "Bonjour: \(endpoint.name)"
-        case .bonjourServer(let name, _):
-            return name
         case .macCatalystClient:
             return "Mac Catalyst Runtime"
-        case .localSocketClient(let name, _):
-            return name
-        case .localSocketServer(let name, _):
-            return name
-        case .directTCPClient(let name, _, _):
-            return name
-        case .directTCPServer(let name, _):
-            return name
+        case .bonjour(let name, _, _):
+            return "Bonjour: \(name)"
+        default:
+            return description
         }
     }
 
@@ -136,22 +126,16 @@ extension RuntimeSource {
         switch self {
         case .local:
             return "local"
-        case .remote(_, let id, _):
-            return id.rawValue
-        case .bonjourClient(let endpoint):
-            return "bonjour.\(endpoint.name)"
-        case .bonjourServer(let name, _):
-            return "bonjourServer.\(name)"
         case .macCatalystClient:
             return "macCatalyst"
-        case .localSocketClient(_, let id):
+        case .remote(_, let id, _):
             return id.rawValue
-        case .localSocketServer(_, let id):
-            return "localSocketServer.\(id.rawValue)"
-        case .directTCPClient(let name, let host, let port):
-            return "tcp.\(name).\(host).\(port)"
-        case .directTCPServer(let name, let port):
-            return "tcpServer.\(name).\(port)"
+        case .bonjour(let name, let id, let role):
+            return role.isClient ? "bonjour.\(name)" : "bonjourServer.\(id.rawValue)"
+        case .localSocket(_, let id, let role):
+            return role.isClient ? id.rawValue : "localSocketServer.\(id.rawValue)"
+        case .directTCP(let name, let host, let port, let role):
+            return role.isClient ? "tcp.\(name).\(host ?? "").\(port)" : "tcpServer.\(name).\(port)"
         }
     }
 }

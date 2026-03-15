@@ -2,6 +2,7 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerUtilities
 
 #if os(macOS) || targetEnvironment(macCatalyst)
 import LaunchServicesPrivate
@@ -17,11 +18,11 @@ import UIKit.UIDevice
 
 @_cdecl("swift_initializeRuntimeViewerServer")
 func initializeRuntimeViewerServer() {
-    RuntimeViewerServerLoader.main()
+    RuntimeViewerServer.main()
 }
 
-@Loggable
-private enum RuntimeViewerServerLoader {
+@Loggable(.private)
+private enum RuntimeViewerServer {
     private static var runtimeEngine: RuntimeEngine?
 
     private static var processName: String {
@@ -56,7 +57,7 @@ private enum RuntimeViewerServerLoader {
                 #if os(macOS) || targetEnvironment(macCatalyst)
 
                 if LSBundleProxy.forCurrentProcess().isSandboxed {
-                    runtimeEngine = RuntimeEngine(source: .localSocketServer(name: processName, identifier: .init(rawValue: identifier)))
+                    runtimeEngine = RuntimeEngine(source: .localSocket(name: processName, identifier: .init(rawValue: identifier), role: .server))
                     try await runtimeEngine?.connect()
                 } else {
                     runtimeEngine = RuntimeEngine(source: .remote(name: processName, identifier: .init(rawValue: identifier), role: .server))
@@ -70,8 +71,9 @@ private enum RuntimeViewerServerLoader {
                 #else
                 let name = await UIDevice.current.name
                 #endif
+                let deviceID = DeviceIdentifier.uniqueDeviceID
 
-                runtimeEngine = RuntimeEngine(source: .bonjourServer(name: name, identifier: .init(rawValue: name)))
+                runtimeEngine = RuntimeEngine(source: .bonjour(name: name, identifier: .init(rawValue: deviceID), role: .server))
                 try await runtimeEngine?.connect()
 
                 #endif

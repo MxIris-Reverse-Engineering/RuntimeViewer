@@ -113,6 +113,42 @@ When adding new features, you **MUST** follow these rules:
 
 ## Code Style
 
+### Naming Conventions
+
+- **ViewController** classes must always end with `ViewController` suffix (e.g., `MCPStatusPopoverViewController`, NOT `MCPStatusPopoverController`)
+- **ViewModel** classes must always end with `ViewModel` suffix (e.g., `MCPStatusPopoverViewModel`)
+
+### Access Control
+
+- All members should be `private` by default; only widen the access level when external access is actually needed
+- ViewModel `@Observed` state properties: `@Observed private(set) var`
+- ViewController relays: `private let xxxRelay = PublishRelay<Void>()`
+- ViewController views: `private let xxxLabel = Label()`
+
+### MVVM-C Completeness
+
+**Every ViewController MUST have a corresponding ViewModel.** Never put business logic (service calls, state management, pasteboard operations) directly in the ViewController. The ViewController only handles:
+- View setup and layout
+- Firing relay events from `@objc` actions
+- Binding ViewModel outputs to UI in `setupBindings(for:)`
+
+### ViewController Base Class Selection
+
+- **`AppKitViewController<VM>`**: Default choice for simple view controllers that don't need UXKit features (contentView, loading indicator, skeleton effects)
+- **`UXKitViewController<VM>`**: Use when the ViewController needs `contentView` support, loading indicators (`CommonLoadingView`), or skeleton effects
+- **`UXEffectViewController<VM>`**: Use when a visual effect background is needed (inherits `UXKitViewController`)
+
+### UI Component Selection
+
+**Always check for project wrapper types first** (from RuntimeViewerUI / UIFoundation). When a wrapper type cannot satisfy a specific need (e.g., `PushButton` has a fixed `.push` bezelStyle), fall back to the raw AppKit class (e.g., `NSButton()` for `.accessoryBarAction` bezelStyle).
+
+**Private nested types for specialized views**: When a ViewController needs a custom view for a specific purpose, define it as a private nested type with namespace:
+```swift
+extension MyViewController {
+    private class HeaderView: NSView { ... }
+}
+```
+
 ### ViewModel Conventions
 
 **Base class**: All ViewModels inherit `ViewModel<Route>`, which provides `documentState`, `router`, `appDefaults`, `errorRelay`, `_commonLoading`.
@@ -382,6 +418,11 @@ do { ... } catch {
 - RuntimeViewerCore: macOS 10.15+, iOS 13+, macCatalyst 13+, watchOS 6+, tvOS 13+, visionOS 1+
 - RuntimeViewerPackages: macOS 15+, iOS 18+, macCatalyst 18+, tvOS 18+, visionOS 2+
 - RuntimeViewerMCP: macOS 15+
+
+## Documentation
+
+- Design documents and implementation plans: `Documentations/Plans/`
+- Evolution proposals: `Documentations/Evolution/`
 
 ## Key Source Locations
 

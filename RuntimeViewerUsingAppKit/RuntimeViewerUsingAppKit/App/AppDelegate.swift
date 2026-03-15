@@ -13,8 +13,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.settings)
     private var settings
 
-    private var mcpService: MCPService?
-
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         observe { [weak self] in
             guard let self else { return }
@@ -28,9 +26,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        mcpService = MCPService().then {
-            $0.start(for: AppMCPBridgeWindowProvider())
-        }
+        MCPService.shared.start(for: AppMCPBridgeDocumentProvider())
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        MCPService.shared.stop()
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -45,5 +45,3 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SettingsWindowController.shared.showWindow(nil)
     }
 }
-
-extension MCPService: Then {}

@@ -48,6 +48,13 @@ struct RuntimeStdioConnectionTests {
             outputHandle: clientToServer.fileHandleForWriting
         )
 
+        defer {
+            server.stop()
+            client.stop()
+            try? clientToServer.fileHandleForWriting.close()
+            try? serverToClient.fileHandleForWriting.close()
+        }
+
         // Setup echo handler on server
         server.setMessageHandler(requestType: EchoRequest.self) { request in
             return EchoResponse(message: "Echo: \(request.message)")
@@ -73,6 +80,13 @@ struct RuntimeStdioConnectionTests {
             inputHandle: serverToClient.fileHandleForReading,
             outputHandle: clientToServer.fileHandleForWriting
         )
+
+        defer {
+            server.stop()
+            client.stop()
+            try? clientToServer.fileHandleForWriting.close()
+            try? serverToClient.fileHandleForWriting.close()
+        }
 
         server.setMessageHandler(requestType: AddRequest.self) { request in
             return AddResponse(result: request.a + request.b)
@@ -104,6 +118,13 @@ struct RuntimeStdioConnectionTests {
             outputHandle: clientToServer.fileHandleForWriting
         )
 
+        defer {
+            server.stop()
+            client.stop()
+            try? clientToServer.fileHandleForWriting.close()
+            try? serverToClient.fileHandleForWriting.close()
+        }
+
         // Register handler by name
         server.setMessageHandler(name: "uppercase") { (input: String) -> String in
             return input.uppercased()
@@ -127,6 +148,13 @@ struct RuntimeStdioConnectionTests {
             inputHandle: serverToClient.fileHandleForReading,
             outputHandle: clientToServer.fileHandleForWriting
         )
+
+        defer {
+            server.stop()
+            client.stop()
+            try? clientToServer.fileHandleForWriting.close()
+            try? serverToClient.fileHandleForWriting.close()
+        }
 
         server.setMessageHandler(requestType: EchoRequest.self) { request in
             return EchoResponse(message: request.message)
@@ -156,6 +184,13 @@ struct RuntimeStdioConnectionTests {
             inputHandle: pipe1.fileHandleForReading,
             outputHandle: pipe2.fileHandleForWriting
         )
+
+        defer {
+            connectionA.stop()
+            connectionB.stop()
+            try? pipe1.fileHandleForWriting.close()
+            try? pipe2.fileHandleForWriting.close()
+        }
 
         // Both sides register handlers
         connectionA.setMessageHandler(name: "fromB") { (msg: String) -> String in
@@ -195,6 +230,11 @@ struct RuntimeStdioErrorTests {
             inputHandle: serverToClient.fileHandleForReading,
             outputHandle: clientToServer.fileHandleForWriting
         )
+
+        defer {
+            server.stop()
+            client.stop()
+        }
 
         // Close the pipes to simulate connection failure
         try clientToServer.fileHandleForWriting.close()

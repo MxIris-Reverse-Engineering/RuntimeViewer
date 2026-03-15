@@ -107,7 +107,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
 
         output.didChangeFiltering.emitOnNext { [weak self] in
             guard let self else { return }
-            outlineView.expandItem(nil, expandChildren: true)
+            outlineView.reloadData()
         }
         .disposed(by: rx.disposeBag)
 

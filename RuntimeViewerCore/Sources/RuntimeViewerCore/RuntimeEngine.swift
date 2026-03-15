@@ -83,6 +83,11 @@ public actor RuntimeEngine {
 
     private var connectionStateCancellable: AnyCancellable?
 
+    /// Flag indicating that message handlers need to be re-registered on next connection.
+    /// Set to `true` when a server connection disconnects, so that reconnection
+    /// triggers handler re-registration and data push.
+    private var needsReregistrationOnConnect = false
+
     /// Publisher that emits engine state changes.
     public nonisolated var statePublisher: some Publisher<State, Never> {
         stateSubject.eraseToAnyPublisher()
@@ -124,14 +129,14 @@ public actor RuntimeEngine {
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
-    public func connect() async throws {
+    public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil) async throws {
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
 
             switch role {
             case .server:
                 #log(.info, "Starting as server")
-                connection = try await communicator.connect(to: source) { connection in
+                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForServer()
                     self.observeConnectionState(connection)
@@ -141,7 +146,7 @@ public actor RuntimeEngine {
                 stateSubject.send(.connected)
             case .client:
                 #log(.info, "Starting as client")
-                connection = try await communicator.connect(to: source) { connection in
+                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForClient()
                     self.observeConnectionState(connection)
@@ -171,11 +176,28 @@ public actor RuntimeEngine {
     private func handleConnectionStateChange(_ connectionState: RuntimeConnectionState) {
         switch connectionState {
         case .connecting:
+            #log(.info, "Connection state -> connecting (source: \(String(describing: self.source), privacy: .public))")
             stateSubject.send(.connecting)
         case .connected:
+            #log(.info, "Connection state -> connected (source: \(String(describing: self.source), privacy: .public))")
             stateSubject.send(.connected)
+            // Re-register handlers and push data when server reconnects to a new client
+            if needsReregistrationOnConnect, source.remoteRole == .server {
+                needsReregistrationOnConnect = false
+                #log(.info, "Server reconnected, re-registering handlers and pushing data")
+                setupMessageHandlerForServer()
+                Task { await self.observeRuntime() }
+            }
         case .disconnected(let error):
+            if let error {
+                #log(.error, "Connection state -> disconnected with error: \(error.localizedDescription, privacy: .public) (source: \(String(describing: self.source), privacy: .public))")
+            } else {
+                #log(.info, "Connection state -> disconnected (source: \(String(describing: self.source), privacy: .public))")
+            }
             stateSubject.send(.disconnected(error: error))
+            if source.remoteRole == .server {
+                needsReregistrationOnConnect = true
+            }
         }
     }
 
