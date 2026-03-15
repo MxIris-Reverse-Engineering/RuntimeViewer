@@ -76,9 +76,17 @@ public final class MCPService {
     }
 
     public func start(for documentProvider: some MCPBridgeDocumentProvider) {
-        let mcpSettings = settings.mcp
-        guard mcpSettings.isEnabled else {
+        self.documentProvider = documentProvider
+
+        // Initialize previous values before observing to avoid a spurious restart
+        let currentMCP = settings.mcp
+        previousMCPEnabled = currentMCP.isEnabled
+        previousMCPUsesFixedPort = currentMCP.useFixedPort
+        previousMCPFixedPort = currentMCP.fixedPort
+
+        guard currentMCP.isEnabled else {
             serverState = .disabled
+            observe()
             return
         }
         startTask = Task {
@@ -88,7 +96,6 @@ public final class MCPService {
                 let mcpServer = MCPBridgeServer(documentProvider: documentProvider)
                 let transport = HTTPSSETransport(server: mcpServer, host: "127.0.0.1", port: Int(port))
                 self.transport = transport
-                self.documentProvider = documentProvider
 
                 // Run transport in a detached task (run() blocks on the NIO event loop)
                 self.transportTask = Task.detached {
@@ -109,11 +116,6 @@ public final class MCPService {
                 logger.error("Failed to start MCP server: \(error)")
                 self.serverState = .stopped
             }
-            // Initialize previous values before observing to avoid a spurious restart
-            let currentMCP = settings.mcp
-            previousMCPEnabled = currentMCP.isEnabled
-            previousMCPUsesFixedPort = currentMCP.useFixedPort
-            previousMCPFixedPort = currentMCP.fixedPort
             observe()
         }
     }
