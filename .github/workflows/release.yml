@@ -1,10 +1,14 @@
-name: Release
+name: Build & Release
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
+      tag:
+        description: 'Tag to release (e.g. v2.0.0-RC.3)'
+        required: true
+        type: string
       runner:
         description: 'Runner to use'
         type: choice
@@ -12,6 +16,10 @@ on:
         options:
           - macos-latest
           - self-hosted
+      create_release:
+        description: 'Create GitHub Release'
+        type: boolean
+        default: true
 
 # Required GitHub Secrets:
 #   DEVELOPER_ID_P12          - Base64-encoded Developer ID Application certificate (.p12)
@@ -29,12 +37,14 @@ jobs:
       contents: write
 
     env:
-      WORKSPACE: RuntimeViewer.xcworkspace
+      WORKSPACE: RuntimeViewer-arm64e.xcworkspace
       BUILD_PATH: ./Products/Archives
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Clone sibling dependencies
         run: |
@@ -80,12 +90,13 @@ jobs:
             -k "$KEYCHAIN_PATH"
 
           # Import Apple intermediate certificates (required on self-hosted runners)
+          # Use || true because these may already exist on GitHub-hosted runners
           for cert_url in \
             https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer \
             https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer; do
             cert_file="$RUNNER_TEMP/$(basename "$cert_url")"
             curl -sL "$cert_url" -o "$cert_file"
-            security import "$cert_file" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+            security import "$cert_file" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign || true
           done
 
           security list-keychain -d user -s \
@@ -213,7 +224,7 @@ jobs:
             -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO
 
-      # ── Package & Release ──
+      # ── Package ──
 
       - name: Package artifacts
         run: |
@@ -226,11 +237,22 @@ jobs:
           /usr/bin/ditto -c -k --keepParent RuntimeViewer.app \
             "$GITHUB_WORKSPACE/RuntimeViewer-iOS-Simulator.zip"
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: |
+            RuntimeViewer-macOS.zip
+            RuntimeViewer-iOS-Simulator.zip
+
+      # ── Release (manual only) ──
+
       - name: Create Release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.create_release }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="${{ github.ref_name }}"
+          TAG="${{ inputs.tag }}"
           CHANGELOG_FILE="Changelogs/${TAG}.md"
 
           NOTES_ARGS=()
