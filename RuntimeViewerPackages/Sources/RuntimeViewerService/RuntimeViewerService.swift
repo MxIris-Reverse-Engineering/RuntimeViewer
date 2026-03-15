@@ -91,10 +91,12 @@ public final class RuntimeViewerService {
 
                         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                               let bundleID = app.bundleIdentifier,
-                              let launchedApps = service.launchedApplicationsByCallerBundleID.removeValue(forKey: bundleID) else { continue }
+                              let launchedApps = service.launchedApplicationsByCallerBundleID[bundleID] else { continue }
 
                         // Check if there's still another instance of the caller app running
-                        if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID }) { continue }
+                        if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID && $0 != app }) { continue }
+
+                        service.launchedApplicationsByCallerBundleID.removeValue(forKey: bundleID)
 
                         for launchedApp in launchedApps {
                             if !launchedApp.isTerminated {
