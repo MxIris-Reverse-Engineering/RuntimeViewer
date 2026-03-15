@@ -126,7 +126,6 @@ let package = Package(
             targets: ["RuntimeViewerCatalystExtensions"]
         ),
 
-
     ],
     dependencies: [
         .package(
@@ -149,7 +148,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                branch: "main"
+                from: "0.3.1"
             )
         ),
 
@@ -214,11 +213,11 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/NSAttributedStringBuilder",
-            branch: "master"
+            from: "0.4.2"
         ),
         .package(
             url: "https://github.com/Mx-Iris/SFSymbols",
-            branch: "main"
+            from: "0.2.0"
         ),
         .package(
             url: "https://github.com/CombineCommunity/RxCombine",
@@ -245,7 +244,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
-                branch: "main"
+                from: "0.3.0"
             )
         ),
         .package(
@@ -261,7 +260,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxUIKit",
-                branch: "main"
+                from: "0.1.1"
             )
         ),
         .package(
@@ -272,7 +271,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
-                branch: "main"
+                from: "0.1.1"
             )
         ),
         .package(
@@ -297,7 +296,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-            branch: "main"
+            from: "0.5.100"
         ),
         .package(
             local: .package(
@@ -323,13 +322,9 @@ let package = Package(
             url: "https://github.com/pointfreeco/swift-dependencies",
             from: "1.9.4"
         ),
-//        .package(
-//            url: "https://github.com/dagronf/DSFInspectorPanes",
-//            from: "3.0.0"
-//        ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/LateResponders",
-            branch: "develop"
+            from: "1.1.0"
         ),
         .package(
             url: "https://github.com/ukushu/Ifrit",
@@ -337,10 +332,6 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/database-utility/fuzzy-search.git",
-            branch: "main"
-        ),
-        .package(
-            url: "https://github.com/MxIris-macOS-Library-Forks/AppKitUI",
             branch: "main"
         ),
         .package(
@@ -360,7 +351,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-macOS-Library-Forks/DSFQuickActionBar",
-                branch: "main"
+                from: "6.2.100"
             )
         ),
         .package(
@@ -371,7 +362,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/SystemHUD",
-                branch: "main"
+                from: "0.1.0"
             )
         ),
         .package(
@@ -386,7 +377,6 @@ let package = Package(
             url: "https://github.com/siteline/swiftui-introspect",
             from: "26.0.0"
         ),
-
 
     ],
     targets: [
@@ -409,7 +399,6 @@ let package = Package(
                 .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "SwiftNavigation", package: "swift-navigation"),
-//                .product(name: "SwiftUINavigation", package: "swift-navigation"),
                 .product(name: "AppKitNavigation", package: "swift-navigation", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIKitNavigation", package: "swift-navigation", condition: .when(platforms: uikitPlatforms)),
             ],
@@ -431,10 +420,8 @@ let package = Package(
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
                 .product(name: "LateResponders", package: "LateResponders"),
-                .product(name: "AppKitUI", package: "AppKitUI", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DSFQuickActionBar", package: "DSFQuickActionBar", condition: .when(platforms: appkitPlatforms)),
-//                .product(name: "DSFInspectorPanes", package: "DSFInspectorPanes", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "SystemHUD", package: "SystemHUD", condition: .when(platforms: appkitPlatforms)),
 
             ],
@@ -505,7 +492,6 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
             ]
         ),
-
 
     ],
     swiftLanguageModes: [.v5]

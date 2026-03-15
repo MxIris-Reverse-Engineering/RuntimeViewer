@@ -69,7 +69,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
-                branch: "main"
+                from: "0.46.100"
             )
         ),
         .package(
@@ -80,7 +80,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
-                from: "0.6.0-patch.1"
+                from: "0.6.100"
             )
         ),
         .package(
@@ -104,7 +104,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
-            branch: "main"
+            from: "0.4.0"
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
