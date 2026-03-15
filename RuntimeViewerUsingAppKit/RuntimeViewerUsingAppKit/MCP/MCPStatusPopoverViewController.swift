@@ -6,7 +6,6 @@ import RuntimeViewerMCPBridge
 import RuntimeViewerSettingsUI
 
 final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopoverViewModel<MainRoute>> {
-
     // MARK: - Views
 
     private let statusCircle = ImageView()
@@ -16,23 +15,59 @@ final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopove
     private let copyPortButton = NSButton()
     private let actionButton = PushButton()
 
-    // MARK: - Relays
+    private let configTitleLabel = Label("Copy Install Command:")
+    private let claudeCodeButton = NSButton()
+    private let codexButton = NSButton()
+    private let jsonButton = NSButton()
 
-    private let actionButtonRelay = PublishRelay<Void>()
-    private let copyPortRelay = PublishRelay<Void>()
+    private lazy var statusRow = HStackView(spacing: 6) {
+        statusCircle
+        statusLabel
+    }
 
-    // MARK: - Lifecycle
+    private lazy var portRow = HStackView(spacing: 6) {
+        portTitleLabel
+        portValueLabel
+        copyPortButton
+    }
+
+    private lazy var configButtonRow = HStackView(spacing: 6) {
+        claudeCodeButton
+        codexButton
+        jsonButton
+    }
+
+    private lazy var configSection = VStackView(alignment: .leading, spacing: 6) {
+        configTitleLabel
+        configButtonRow
+    }
+
+    private lazy var contentStack = VStackView(alignment: .leading, spacing: 10) {
+        statusRow
+        portRow
+        configSection
+        actionButton
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        setupViews()
-        setupLayout()
-    }
+        hierarchy {
+            contentStack
+        }
 
-    // MARK: - Setup
+        contentStack.snp.makeConstraints { make in
+            make.edges.equalToSuperview().inset(16)
+        }
 
-    private func setupViews() {
+        statusCircle.snp.makeConstraints { make in
+            make.size.equalTo(10)
+        }
+
+        actionButton.snp.makeConstraints { make in
+            make.width.greaterThanOrEqualTo(120)
+        }
+
         statusCircle.do {
             $0.imageScaling = .scaleProportionallyDown
         }
@@ -57,64 +92,52 @@ final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopove
             $0.bezelStyle = .accessoryBarAction
             $0.isBordered = true
             $0.toolTip = "Copy Port"
-            $0.target = self
-            $0.action = #selector(copyPortClicked)
             $0.setContentHuggingPriority(.required, for: .horizontal)
         }
 
         actionButton.do {
             $0.controlSize = .regular
-            $0.target = self
-            $0.action = #selector(actionButtonClicked)
         }
+
+        configTitleLabel.do {
+            $0.font = .systemFont(ofSize: 11, weight: .medium)
+            $0.textColor = .secondaryLabelColor
+        }
+
+        let copyImage = SFSymbols(name: SFSymbols.SystemSymbolName.docOnDoc).nsImage
+
+        claudeCodeButton.do {
+            $0.title = "Claude Code"
+            $0.image = copyImage
+            $0.imagePosition = .imageTrailing
+            $0.bezelStyle = .accessoryBarAction
+            $0.isBordered = true
+            $0.font = .systemFont(ofSize: 11)
+            $0.toolTip = "Copy claude mcp add command"
+        }
+
+        codexButton.do {
+            $0.title = "Codex"
+            $0.image = copyImage
+            $0.imagePosition = .imageTrailing
+            $0.bezelStyle = .accessoryBarAction
+            $0.isBordered = true
+            $0.font = .systemFont(ofSize: 11)
+            $0.toolTip = "Copy codex mcp add command"
+        }
+
+        jsonButton.do {
+            $0.title = "JSON"
+            $0.image = copyImage
+            $0.imagePosition = .imageTrailing
+            $0.bezelStyle = .accessoryBarAction
+            $0.isBordered = true
+            $0.font = .systemFont(ofSize: 11)
+            $0.toolTip = "Copy generic MCP JSON configuration"
+        }
+
+        preferredContentSize = view.fittingSize
     }
-
-    private func setupLayout() {
-        let statusRow = HStackView(spacing: 6) {
-            statusCircle
-            statusLabel
-        }
-
-        let portRow = HStackView(spacing: 6) {
-            portTitleLabel
-            portValueLabel
-            copyPortButton
-        }
-
-        let contentStack = VStackView(alignment: .leading, spacing: 10) {
-            statusRow
-            portRow
-            actionButton
-        }
-
-        view.hierarchy {
-            contentStack
-        }
-
-        contentStack.snp.makeConstraints { make in
-            make.edges.equalToSuperview().inset(NSEdgeInsets(top: 12, left: 16, bottom: 12, right: 16))
-        }
-
-        statusCircle.snp.makeConstraints { make in
-            make.size.equalTo(10)
-        }
-
-        actionButton.snp.makeConstraints { make in
-            make.width.greaterThanOrEqualTo(120)
-        }
-    }
-
-    // MARK: - Actions
-
-    @objc private func copyPortClicked() {
-        copyPortRelay.accept(())
-    }
-
-    @objc private func actionButtonClicked() {
-        actionButtonRelay.accept(())
-    }
-
-    // MARK: - UI Update
 
     private func updateUI(for state: MCPServerState) {
         let circleImage = SFSymbols(name: SFSymbols.SystemSymbolName.circleFill).nsImage
@@ -124,28 +147,25 @@ final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopove
             statusCircle.contentTintColor = .systemGray
             statusCircle.image = circleImage
             statusLabel.stringValue = "MCP Server Disabled"
-            portTitleLabel.isHidden = true
-            portValueLabel.isHidden = true
-            copyPortButton.isHidden = true
+            portRow.isHidden = true
+            configSection.isHidden = true
             actionButton.title = "Open Settings…"
 
         case .stopped:
             statusCircle.contentTintColor = .systemRed
             statusCircle.image = circleImage
             statusLabel.stringValue = "MCP Server Stopped"
-            portTitleLabel.isHidden = true
-            portValueLabel.isHidden = true
-            copyPortButton.isHidden = true
+            portRow.isHidden = true
+            configSection.isHidden = true
             actionButton.title = "Start Server"
 
         case .running(let port):
             statusCircle.contentTintColor = .systemGreen
             statusCircle.image = circleImage
             statusLabel.stringValue = "MCP Server Running"
-            portTitleLabel.isHidden = false
-            portValueLabel.isHidden = false
+            portRow.isHidden = false
+            configSection.isHidden = false
             portValueLabel.stringValue = "\(port)"
-            copyPortButton.isHidden = false
             actionButton.title = "Stop Server"
         }
     }
@@ -155,9 +175,16 @@ final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopove
     override func setupBindings(for viewModel: MCPStatusPopoverViewModel<MainRoute>) {
         super.setupBindings(for: viewModel)
 
+        let copyConfigSignal = Signal.merge(
+            claudeCodeButton.rx.click.asSignal().map { MCPConfigType.claudeCode },
+            codexButton.rx.click.asSignal().map { MCPConfigType.codex },
+            jsonButton.rx.click.asSignal().map { MCPConfigType.json }
+        )
+
         let input = MCPStatusPopoverViewModel<MainRoute>.Input(
-            actionButtonClick: actionButtonRelay.asSignal(),
-            copyPortClick: copyPortRelay.asSignal()
+            actionButtonClick: actionButton.rx.click.asSignal(),
+            copyPortClick: copyPortButton.rx.click.asSignal(),
+            copyConfig: copyConfigSignal
         )
 
         let output = viewModel.transform(input)
