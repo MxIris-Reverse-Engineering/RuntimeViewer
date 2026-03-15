@@ -168,6 +168,8 @@ final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopove
             portValueLabel.stringValue = "\(port)"
             actionButton.title = "Stop Server"
         }
+
+        preferredContentSize = view.fittingSize
     }
 
     // MARK: - Bindings

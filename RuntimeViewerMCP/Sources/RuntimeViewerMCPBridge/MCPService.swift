@@ -42,6 +42,8 @@ public final class MCPService {
 
     private var transport: HTTPSSETransport?
 
+    private var transportTask: Task<Void, Never>?
+
     private var startTask: Task<Void, Never>?
 
     private var observeToken: ObserveToken?
@@ -61,7 +63,11 @@ public final class MCPService {
     private init() {
         let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let runtimeViewerDir = appSupportURL.appendingPathComponent("RuntimeViewer")
-        try? FileManager.default.createDirectory(at: runtimeViewerDir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: runtimeViewerDir, withIntermediateDirectories: true)
+        } catch {
+            logger.error("Failed to create app support directory: \(error)")
+        }
         self.portFilePath = runtimeViewerDir.appendingPathComponent(Settings.MCP.portFileName).path
     }
 
@@ -70,9 +76,17 @@ public final class MCPService {
     }
 
     public func start(for documentProvider: some MCPBridgeDocumentProvider) {
-        let mcpSettings = settings.mcp
-        guard mcpSettings.isEnabled else {
+        self.documentProvider = documentProvider
+
+        // Initialize previous values before observing to avoid a spurious restart
+        let currentMCP = settings.mcp
+        previousMCPEnabled = currentMCP.isEnabled
+        previousMCPUsesFixedPort = currentMCP.useFixedPort
+        previousMCPFixedPort = currentMCP.fixedPort
+
+        guard currentMCP.isEnabled else {
             serverState = .disabled
+            observe()
             return
         }
         startTask = Task {
@@ -82,10 +96,9 @@ public final class MCPService {
                 let mcpServer = MCPBridgeServer(documentProvider: documentProvider)
                 let transport = HTTPSSETransport(server: mcpServer, host: "127.0.0.1", port: Int(port))
                 self.transport = transport
-                self.documentProvider = documentProvider
 
                 // Run transport in a detached task (run() blocks on the NIO event loop)
-                Task.detached {
+                self.transportTask = Task.detached {
                     do {
                         try await transport.run()
                     } catch {
@@ -103,11 +116,6 @@ public final class MCPService {
                 logger.error("Failed to start MCP server: \(error)")
                 self.serverState = .stopped
             }
-            // Initialize previous values before observing to avoid a spurious restart
-            let currentMCP = settings.mcp
-            previousMCPEnabled = currentMCP.isEnabled
-            previousMCPUsesFixedPort = currentMCP.useFixedPort
-            previousMCPFixedPort = currentMCP.fixedPort
             observe()
         }
     }
@@ -117,6 +125,13 @@ public final class MCPService {
         startTask = nil
         restartTask?.cancel()
         restartTask = nil
+        transportTask?.cancel()
+        transportTask = nil
+        if let transport {
+            Task.detached {
+                try? await transport.stop()
+            }
+        }
         transport = nil
         let isEnabled = settings.mcp.isEnabled
         serverState = isEnabled ? .stopped : .disabled
@@ -178,6 +193,12 @@ public final class MCPService {
     }
 
     private nonisolated func removePortFile() {
-        try? FileManager.default.removeItem(atPath: portFilePath)
+        do {
+            try FileManager.default.removeItem(atPath: portFilePath)
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
+            // File already removed, ignore
+        } catch {
+            logger.error("Failed to remove port file: \(error)")
+        }
     }
 }
