@@ -3,6 +3,7 @@ import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import RuntimeViewerMCPBridge
 import LateResponders
 
 typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewController>
@@ -58,6 +59,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             let viewController = GenerationOptionsViewController()
             let viewModel = GenerationOptionsViewModel(documentState: documentState, router: self)
             viewController.loadViewIfNeeded()
+            viewController.setupBindings(for: viewModel)
+            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
+        case .mcpStatus(let sender):
+            let viewController = MCPStatusPopoverViewController()
+            let viewModel = MCPStatusPopoverViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         case .loadFramework:

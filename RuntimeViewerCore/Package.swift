@@ -55,7 +55,10 @@ let package = Package(
             name: "RuntimeViewerCommunication",
             targets: ["RuntimeViewerCommunication"]
         ),
-
+        .library(
+            name: "RuntimeViewerUtilities",
+            targets: ["RuntimeViewerUtilities"]
+        ),
     ],
     dependencies: [
         .package(
@@ -73,11 +76,11 @@ let package = Package(
             local: .package(
                 path: "../../MachOObjCSection",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
-                branch: "main"
+                from: "0.6.0-patch.1"
             )
         ),
         .package(
@@ -118,7 +121,11 @@ let package = Package(
         .package(
             url: "https://github.com/SwiftyLab/MetaCodable",
             from: "1.6.0"
-        )
+        ),
+        .package(
+            url: "https://github.com/p-x9/swift-mobile-gestalt",
+            branch: "main"
+        ),
     ],
     targets: [
         .target(
@@ -153,6 +160,19 @@ let package = Package(
             swiftSettings: [
                 .internalImportsByDefault,
                 .immutableWeakCaptures,
+            ]
+        ),
+        .target(
+            name: "RuntimeViewerUtilities",
+            dependencies: [
+                .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
+            ]
+        ),
+        .testTarget(
+            name: "RuntimeViewerCoreTests",
+            dependencies: [
+                "RuntimeViewerCore",
+                "RuntimeViewerCommunication",
             ]
         ),
         .testTarget(

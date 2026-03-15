@@ -125,6 +125,8 @@ let package = Package(
             name: "RuntimeViewerCatalystExtensions",
             targets: ["RuntimeViewerCatalystExtensions"]
         ),
+
+
     ],
     dependencies: [
         .package(
@@ -301,7 +303,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             .package(
                 path: "../../RunningApplicationKit",
@@ -384,6 +386,8 @@ let package = Package(
             url: "https://github.com/siteline/swiftui-introspect",
             from: "26.0.0"
         ),
+
+
     ],
     targets: [
         .target(
@@ -501,6 +505,8 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
             ]
         ),
+
+
     ],
     swiftLanguageModes: [.v5]
 )

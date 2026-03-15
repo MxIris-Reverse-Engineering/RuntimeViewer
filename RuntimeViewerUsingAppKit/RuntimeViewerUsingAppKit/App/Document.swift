@@ -2,6 +2,14 @@ import AppKit
 import RuntimeViewerApplication
 
 final class Document: NSDocument {
+    private static var nextDocumentNumber = 1
+    
+    let mcpIdentifier: String = {
+        let id = "document\(Document.nextDocumentNumber)"
+        Document.nextDocumentNumber += 1
+        return id
+    }()
+    
     let documentState = DocumentState()
 
     private lazy var mainCoordinator = MainCoordinator(documentState: documentState)

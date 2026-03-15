@@ -1,7 +1,11 @@
 import Foundation
 import OSLog
 
+#if DEBUG
+public let RuntimeViewerMachServiceName = "dev.mxiris.runtimeviewer.service"
+#else
 public let RuntimeViewerMachServiceName = "com.mxiris.runtimeviewer.service"
+#endif
 
 public protocol RuntimeRequest: Codable {
     associatedtype Response: RuntimeResponse
