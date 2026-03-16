@@ -100,7 +100,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/Semaphore",
-            branch: "main"
+            from: "0.1.0"
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
@@ -108,7 +108,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-            branch: "main"
+            from: "0.5.100"
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",

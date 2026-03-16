@@ -177,7 +177,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
-                from: "0.4.0"
+                branch: "main"
             )
         ),
         .package(
@@ -311,7 +311,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
-                from: "0.1.1"
+                from: "0.2.0"
             )
         ),
         .package(
