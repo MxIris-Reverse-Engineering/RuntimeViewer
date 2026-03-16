@@ -177,7 +177,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
-                branch: "main"
+                from: "0.4.0"
             )
         ),
         .package(
@@ -197,7 +197,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
-                branch: "main"
+                from: "0.2.2"
             )
         ),
         .package(
@@ -331,8 +331,8 @@ let package = Package(
             from: "3.0.0"
         ),
         .package(
-            url: "https://github.com/database-utility/fuzzy-search.git",
-            branch: "main"
+            url: "https://github.com/MxIris-Library-Forks/fuzzy-search",
+            from: "0.1.0"
         ),
         .package(
             url: "https://github.com/sindresorhus/KeyboardShortcuts",
@@ -370,8 +370,8 @@ let package = Package(
             from: "2.0.1"
         ),
         .package(
-            url: "https://github.com/MxIris-Library-Forks/swift-navigation",
-            branch: "main"
+            url: "https://github.com/pointfreeco/swift-navigation",
+            from: "2.7.0"
         ),
         .package(
             url: "https://github.com/siteline/swiftui-introspect",
@@ -399,8 +399,6 @@ let package = Package(
                 .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "SwiftNavigation", package: "swift-navigation"),
-                .product(name: "AppKitNavigation", package: "swift-navigation", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "UIKitNavigation", package: "swift-navigation", condition: .when(platforms: uikitPlatforms)),
             ],
             swiftSettings: sharedSwiftSettings
         ),
