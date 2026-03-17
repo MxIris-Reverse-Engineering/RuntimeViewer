@@ -57,7 +57,7 @@ private enum ObjectLoadResult<T> {
 
 // MARK: - MCP Bridge Server
 
-@MCPServer(name: "RuntimeViewer")
+@MCPServer(name: "RuntimeViewer", toolNaming: .pascalCase)
 public actor MCPBridgeServer {
     private let documentProvider: MCPBridgeDocumentProvider
     private var objectsLoadedPaths: Set<String> = []
@@ -134,7 +134,7 @@ public actor MCPBridgeServer {
     /// Each entry contains: identifier (stable per window session), display title, key-window flag,
     /// and the currently selected type's name, image path, and image name (if any).
     /// Returns an empty list when no documents are open; in that case, ask the user to launch RuntimeViewer and open a document.
-    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    @MCPTool(hints: [.readOnly])
     func listWindows() async -> MCPListWindowsResponse {
         let windows = await documentProvider.allDocumentContexts().map { context in
             MCPWindowInfo(
@@ -155,7 +155,7 @@ public actor MCPBridgeServer {
     /// Response includes: name, display name, kind, image path, and the full generated interface text.
     /// Throws an error if no type is selected.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
-    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    @MCPTool(hints: [.readOnly])
     func selectedType(windowIdentifier: String) async throws -> MCPSelectedTypeResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         guard let runtimeObject = context.selectedRuntimeObject else {
@@ -191,7 +191,7 @@ public actor MCPBridgeServer {
     /// - Parameter typeName: Exact type name — matches against both internal name and display name
     /// - Parameter imagePath: Full path of the image (framework/dylib) containing the type. Mutually exclusive with imageName.
     /// - Parameter imageName: Short name of the image without path or extension (e.g. 'AppKit'). Case-insensitive. Mutually exclusive with imagePath.
-    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    @MCPTool(hints: [.readOnly])
     func typeInterface(windowIdentifier: String, typeName: String, imagePath: String? = nil, imageName: String? = nil) async throws -> MCPTypeInterfaceResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -244,7 +244,7 @@ public actor MCPBridgeServer {
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full path of the image to list types from. Mutually exclusive with imageName.
     /// - Parameter imageName: Short name of the image without path or extension. Case-insensitive. Mutually exclusive with imagePath.
-    @MCPTool(naming: .pascalCase, hints: [.idempotent])
+    @MCPTool(hints: [.idempotent])
     func listTypes(windowIdentifier: String, imagePath: String? = nil, imageName: String? = nil) async throws -> MCPListTypesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -298,7 +298,7 @@ public actor MCPBridgeServer {
     /// - Parameter query: Case-insensitive substring to match against type names
     /// - Parameter imagePath: Restrict search to a specific image path. Mutually exclusive with imageName.
     /// - Parameter imageName: Restrict search to images matching this short name. Case-insensitive. Mutually exclusive with imagePath.
-    @MCPTool(naming: .pascalCase, hints: [.idempotent])
+    @MCPTool(hints: [.idempotent])
     func searchTypes(windowIdentifier: String, query: String, imagePath: String? = nil, imageName: String? = nil) async throws -> MCPSearchTypesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -354,7 +354,7 @@ public actor MCPBridgeServer {
     /// Returns the full file system path of every image registered in dyld.
     /// Use this to discover available images before querying types.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
-    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    @MCPTool(hints: [.readOnly])
     func listImages(windowIdentifier: String) async throws -> MCPListImagesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -366,7 +366,7 @@ public actor MCPBridgeServer {
     /// Use this to find the correct imagePath before calling other tools.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter query: Case-insensitive substring to match against image paths
-    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    @MCPTool(hints: [.readOnly])
     func searchImages(windowIdentifier: String, query: String) async throws -> MCPSearchImagesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -391,7 +391,7 @@ public actor MCPBridgeServer {
     /// - Parameter imagePath: Full path of the image containing the type. Mutually exclusive with imageName.
     /// - Parameter imageName: Short name of the image. Case-insensitive. Mutually exclusive with imagePath.
     /// - Parameter memberName: Filter to members whose name contains this string (case-insensitive).
-    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    @MCPTool(hints: [.readOnly])
     func memberAddresses(windowIdentifier: String, typeName: String, imagePath: String? = nil, imageName: String? = nil, memberName: String? = nil) async throws -> MCPMemberAddressesResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -430,7 +430,7 @@ public actor MCPBridgeServer {
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full file system path of the image to load
     /// - Parameter loadObjects: If true, also enumerate and cache runtime objects. Defaults to false.
-    @MCPTool(naming: .pascalCase, hints: [.idempotent])
+    @MCPTool(hints: [.idempotent])
     func loadImage(windowIdentifier: String, imagePath: String, loadObjects: Bool = false) async throws -> MCPLoadImageResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -462,7 +462,7 @@ public actor MCPBridgeServer {
     /// Use this to check before deciding whether to call loadImage.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full file system path of the image to check
-    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    @MCPTool(hints: [.readOnly])
     func isImageLoaded(windowIdentifier: String, imagePath: String) async throws -> MCPIsImageLoadedResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -475,7 +475,7 @@ public actor MCPBridgeServer {
     /// Once loaded, objects are available for listTypes, searchTypes, getTypeInterface, etc.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full file system path of the image to load objects from
-    @MCPTool(naming: .pascalCase, hints: [.idempotent])
+    @MCPTool(hints: [.idempotent])
     func loadObjects(windowIdentifier: String, imagePath: String) async throws -> MCPLoadObjectsResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
@@ -497,7 +497,7 @@ public actor MCPBridgeServer {
     /// Use this to decide whether to call loadObjects before querying types.
     /// - Parameter windowIdentifier: The window identifier obtained from listWindows
     /// - Parameter imagePath: Full file system path of the image to check
-    @MCPTool(naming: .pascalCase, hints: [.readOnly])
+    @MCPTool(hints: [.readOnly])
     func isObjectsLoaded(windowIdentifier: String, imagePath: String) async throws -> MCPIsObjectsLoadedResponse {
         MCPIsObjectsLoadedResponse(imagePath: imagePath, isLoaded: objectsLoadedPaths.contains(imagePath))
     }

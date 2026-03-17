@@ -42,10 +42,7 @@ private enum RuntimeViewerServer {
             return bundleID
         }
 
-        let processName = ProcessInfo.processInfo.processName
-        let sanitizedName = processName.components(separatedBy: .whitespacesAndNewlines).joined()
-
-        return "com.RuntimeViewer.UnknownBinary.\(sanitizedName)"
+        return ProcessInfo.processInfo.processName
     }
 
     fileprivate static func main() {
@@ -56,7 +53,7 @@ private enum RuntimeViewerServer {
 
                 #if os(macOS) || targetEnvironment(macCatalyst)
 
-                if LSBundleProxy.forCurrentProcess().isSandboxed {
+                if LSBundleProxy.forCurrentProcess().isSandbox {
                     runtimeEngine = RuntimeEngine(source: .localSocket(name: processName, identifier: .init(rawValue: identifier), role: .server))
                     try await runtimeEngine?.connect()
                 } else {
@@ -85,13 +82,3 @@ private enum RuntimeViewerServer {
         }
     }
 }
-
-#if os(macOS) || targetEnvironment(macCatalyst)
-extension LSBundleProxy {
-    fileprivate var isSandboxed: Bool {
-        guard let entitlements = entitlements else { return false }
-        guard let isSandboxed = entitlements["com.apple.security.app-sandbox"] as? Bool else { return false }
-        return isSandboxed
-    }
-}
-#endif

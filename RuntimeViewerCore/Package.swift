@@ -126,6 +126,10 @@ let package = Package(
             url: "https://github.com/p-x9/swift-mobile-gestalt",
             branch: "main"
         ),
+        .package(
+            url: "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate",
+            from: "0.1.0"
+        ),
     ],
     targets: [
         .target(
@@ -166,6 +170,7 @@ let package = Package(
             name: "RuntimeViewerUtilities",
             dependencies: [
                 .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
+                .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
             ]
         ),
         .testTarget(

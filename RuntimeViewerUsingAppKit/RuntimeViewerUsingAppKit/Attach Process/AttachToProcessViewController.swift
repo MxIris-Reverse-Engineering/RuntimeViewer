@@ -5,15 +5,16 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
 final class AttachToProcessViewController: AppKitViewController<AttachToProcessViewModel> {
-    private let pickerViewController: RunningApplicationPickerViewController
+    private let pickerViewController: RunningPickerTabViewController
 
-    private let attachRelay = PublishRelay<NSRunningApplication>()
+    private let attachRelay = PublishRelay<any RunningItem>()
 
     private let cancelRelay = PublishRelay<Void>()
 
     override init(viewModel: AttachToProcessViewModel? = nil) {
-        let configuration = RunningApplicationPickerViewController.Configuration(title: "Attach To Process", description: "Select a running application to attach to", cancelButtonTitle: "Cancel", confirmButtonTitle: "Attach")
-        self.pickerViewController = RunningApplicationPickerViewController(configuration: configuration)
+        let applicationConfiguration = RunningPickerTabViewController.ApplicationConfiguration(title: "Attach To Process", description: "Select a running application to attach to", cancelButtonTitle: "Cancel", confirmButtonTitle: "Attach")
+        let processConfiguration = RunningPickerTabViewController.ProcessConfiguration(title: "Attach To Process", description: "Select a running application to attach to", cancelButtonTitle: "Cancel", confirmButtonTitle: "Attach")
+        self.pickerViewController = RunningPickerTabViewController(applicationConfiguration: applicationConfiguration, processConfiguration: processConfiguration)
         super.init(viewModel: viewModel)
     }
 
@@ -25,7 +26,7 @@ final class AttachToProcessViewController: AppKitViewController<AttachToProcessV
         }
 
         pickerViewController.view.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
+            make.edges.equalToSuperview().inset(NSEdgeInsets(top: 16, left: 0, bottom: 0, right: 0))
         }
 
         pickerViewController.delegate = self
@@ -40,12 +41,16 @@ final class AttachToProcessViewController: AppKitViewController<AttachToProcessV
     }
 }
 
-extension AttachToProcessViewController: RunningApplicationPickerViewController.Delegate {
-    func runningApplicationPickerViewController(_ viewController: RunningApplicationPickerViewController, didConfirmApplication application: NSRunningApplication) {
+extension AttachToProcessViewController: RunningPickerTabViewController.Delegate {
+    func runningPickerTabViewController(_ viewController: RunningPickerTabViewController, didConfirmProcess process: RunningProcess) {
+        attachRelay.accept(process)
+    }
+
+    func runningPickerTabViewController(_ viewController: RunningPickerTabViewController, didConfirmApplication application: RunningApplication) {
         attachRelay.accept(application)
     }
 
-    func runningApplicationPickerViewControllerWasCancelled(_ viewController: RunningApplicationPickerViewController) {
-        cancelRelay.accept(())
+    func runningPickerTabViewControllerWasCancelled(_ viewController: RunningPickerTabViewController) {
+        cancelRelay.accept()
     }
 }

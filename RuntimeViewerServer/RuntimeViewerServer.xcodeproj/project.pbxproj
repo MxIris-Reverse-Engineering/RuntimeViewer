@@ -7,10 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		E978F9272F1C98A8004C09B4 /* LaunchServicesPrivate in Frameworks */ = {isa = PBXBuildFile; productRef = E978F9262F1C98A8004C09B4 /* LaunchServicesPrivate */; };
 		E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */; };
 		E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E994E3C72F325593009DD28A /* RuntimeViewerCore */; };
-		E994E3CA2F3255D1009DD28A /* LaunchServicesPrivate in Frameworks */ = {isa = PBXBuildFile; productRef = E994E3C92F3255D1009DD28A /* LaunchServicesPrivate */; };
 		E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */; };
 		E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
@@ -36,7 +34,6 @@
 			files = (
 				E978F92A2F1C98F1004C09B4 /* RuntimeViewerCore in Frameworks */,
 				E9F1A0012F4C0001004C09B4 /* RuntimeViewerUtilities in Frameworks */,
-				E978F9272F1C98A8004C09B4 /* LaunchServicesPrivate in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -46,7 +43,6 @@
 			files = (
 				E994E3C82F325593009DD28A /* RuntimeViewerCore in Frameworks */,
 				E9F1A0032F4C0002004C09B4 /* RuntimeViewerUtilities in Frameworks */,
-				E994E3CA2F3255D1009DD28A /* LaunchServicesPrivate in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -117,7 +113,6 @@
 			);
 			name = RuntimeViewerServer;
 			packageProductDependencies = (
-				E978F9262F1C98A8004C09B4 /* LaunchServicesPrivate */,
 				E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */,
 				E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */,
 			);
@@ -144,7 +139,6 @@
 			name = RuntimeViewerMobileServer;
 			packageProductDependencies = (
 				E994E3C72F325593009DD28A /* RuntimeViewerCore */,
-				E994E3C92F3255D1009DD28A /* LaunchServicesPrivate */,
 				E9F1A0042F4C0002004C09B4 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerServer;
@@ -176,7 +170,6 @@
 			mainGroup = E978F90F2F1BBB38004C09B4;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				E978F9252F1C98A8004C09B4 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E978F91A2F1BBB38004C09B4 /* Products */;
@@ -922,23 +915,7 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		E978F9252F1C98A8004C09B4 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		E978F9262F1C98A8004C09B4 /* LaunchServicesPrivate */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = E978F9252F1C98A8004C09B4 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */;
-			productName = LaunchServicesPrivate;
-		};
 		E978F9292F1C98F1004C09B4 /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCore;
@@ -946,11 +923,6 @@
 		E994E3C72F325593009DD28A /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCore;
-		};
-		E994E3C92F3255D1009DD28A /* LaunchServicesPrivate */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = E978F9252F1C98A8004C09B4 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */;
-			productName = LaunchServicesPrivate;
 		};
 		E9F1A0022F4C0001004C09B4 /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;

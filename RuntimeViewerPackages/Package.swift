@@ -177,8 +177,12 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
-                branch: "main"
+                from: "0.4.1"
             )
+        ),
+        .package(
+            url: "https://github.com/OpenUXKit/UXKitCoordinator",
+            branch: "main"
         ),
         .package(
             url: "https://github.com/SnapKit/SnapKit",
@@ -271,7 +275,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
-                from: "0.1.1"
+                from: "0.1.2"
             )
         ),
         .package(
@@ -396,7 +400,7 @@ let package = Package(
                 .product(name: "XCoordinatorRx", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
-                .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
+                .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "UXKitCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "SwiftNavigation", package: "swift-navigation"),
             ],

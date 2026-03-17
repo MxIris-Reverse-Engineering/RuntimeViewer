@@ -79,6 +79,7 @@
 		E9C9E9DE2C2D169D00C4AA34 /* AppKitPluginImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */; };
 		E9C9E9DF2C2D16B000C4AA34 /* AppKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */; };
 		E9C9E9E02C2D172600C4AA34 /* AppKitBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */; };
+		E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */; };
 		E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07AE2C148FA00070A6E8 /* MainToolbarController.swift */; };
 		E9CE07B92C1497B30070A6E8 /* SidebarRootTableCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */; };
 		E9D470632F12A52A008BF7A9 /* SidebarRootViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D470622F12A52A008BF7A9 /* SidebarRootViewController.swift */; };
@@ -321,6 +322,7 @@
 		E9432FDF2C0D614900362862 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */,
 				E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */,
 				E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */,
 				E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */,
@@ -664,6 +666,7 @@
 				E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */,
 				E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */,
 				E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */,
+				E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerUsingAppKit;
 			productReference = E9432FE22C0D614900362862 /* RuntimeViewer.app */;
@@ -798,7 +801,6 @@
 			);
 			mainGroup = E9432FD92C0D614900362862;
 			packageReferences = (
-				E995B8992ED9834B0083D9D7 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = E9432FE32C0D614900362862 /* Products */;
@@ -1835,17 +1837,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		E995B8992ED9834B0083D9D7 /* XCRemoteSwiftPackageReference "LaunchServicesPrivate" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate";
-			requirement = {
-				branch = main;
-				kind = branch;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
 		E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1878,6 +1869,10 @@
 		E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerService;
+		};
+		E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

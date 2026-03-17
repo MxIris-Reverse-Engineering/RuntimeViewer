@@ -9,7 +9,7 @@ import RuntimeViewerHelperClient
 @Loggable(.private)
 final class AttachToProcessViewModel: ViewModel<MainRoute> {
     struct Input {
-        let attachToProcess: Signal<NSRunningApplication>
+        let attachToProcess: Signal<any RunningItem>
         let cancel: Signal<Void>
     }
 
@@ -31,22 +31,38 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
 
     func transform(_ input: Input) -> Output {
         input.cancel.emit(to: router.rx.trigger(.dismiss)).disposed(by: rx.disposeBag)
-        input.attachToProcess.emitOnNext { [weak self] application in
-            guard let self,
-                  let name = application.localizedName,
-                  let bundleIdentifier = application.bundleIdentifier
-            else { return }
+        input.attachToProcess.emitOnNext { [weak self] runningItem in
+            guard let self else { return }
+
+            let name = runningItem.name
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 do {
                     try await runtimeInjectClient.installServerFrameworkIfNeeded()
                     guard let dylibURL = Bundle(url: runtimeInjectClient.serverFrameworkDestinationURL)?.executableURL else { return }
-                    try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
-                    try await runtimeInjectClient.injectApplication(pid: application.processIdentifier, dylibURL: dylibURL)
+                    
+                    switch runningItem {
+                    case let runningApplication as RunningApplication:
+                        try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: runningApplication.bundleIdentifier ?? name, isSandbox: runningApplication.isSandboxed)
+                    case let runningProcess as RunningProcess:
+                        try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: name, isSandbox: runningProcess.isSandboxed)
+                    default:
+                        return
+                    }
+                    
+                    try await runtimeInjectClient.injectApplication(pid: runningItem.processIdentifier, dylibURL: dylibURL)
                     router.trigger(.dismiss)
                 } catch {
-                    runtimeEngineManager.terminateAttachedRuntimeEngine(name: name, identifier: bundleIdentifier, isSandbox: application.isSandbox)
+                    switch runningItem {
+                    case let runningApplication as RunningApplication:
+                        runtimeEngineManager.terminateAttachedRuntimeEngine(name: name, identifier: runningApplication.bundleIdentifier ?? name, isSandbox: runningApplication.isSandboxed)
+                    case let runningProcess as RunningProcess:
+                        runtimeEngineManager.terminateAttachedRuntimeEngine(name: name, identifier: name, isSandbox: runningProcess.isSandboxed)
+                    default:
+                        return
+                    }
+                    
                     #log(.error, "\(error, privacy: .public)")
                     errorRelay.accept(error)
                 }
@@ -54,20 +70,5 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         }.disposed(by: rx.disposeBag)
 
         return Output()
-    }
-}
-
-private import LaunchServicesPrivate
-
-extension NSRunningApplication {
-    fileprivate var applicationProxy: LSApplicationProxy? {
-        guard let bundleIdentifier else { return nil }
-        return LSApplicationProxy(forIdentifier: bundleIdentifier)
-    }
-
-    fileprivate var isSandbox: Bool {
-        guard let entitlements = applicationProxy?.entitlements else { return false }
-        guard let isSandboxed = entitlements["com.apple.security.app-sandbox"] as? Bool else { return false }
-        return isSandboxed
     }
 }
