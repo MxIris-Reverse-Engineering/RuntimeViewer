@@ -177,6 +177,7 @@ public final class MCPService {
                 }
             } else {
                 stop()
+                observe()
             }
         }
     }
