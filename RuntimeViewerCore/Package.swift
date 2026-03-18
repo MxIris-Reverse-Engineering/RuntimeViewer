@@ -76,7 +76,7 @@ let package = Package(
             local: .package(
                 path: "../../MachOObjCSection",
                 isRelative: true,
-                isEnabled: false
+                isEnabled: true
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
@@ -91,7 +91,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                branch: "main"
+                from: "0.8.0"
             )
         ),
         .package(
@@ -124,7 +124,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/p-x9/swift-mobile-gestalt",
-            branch: "main"
+            from: "0.4.0"
         ),
         .package(
             url: "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate",
@@ -169,7 +169,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerUtilities",
             dependencies: [
-                .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
+                .product(name: "SMobileGestalt", package: "swift-mobile-gestalt", moduleAliases: ["SMobileGestalt": "SwiftMobileGestalt"]),
                 .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
             ]
         ),

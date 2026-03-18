@@ -139,12 +139,12 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
@@ -156,16 +156,16 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("XCoordinator"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             .package(
                 path: "../../XCoordinator",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Library-Forks/XCoordinator",
-                branch: "master"
+                from: "3.0.0-beta"
             )
         ),
 
@@ -173,7 +173,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
@@ -197,7 +197,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("RxSwiftPlus"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
@@ -208,7 +208,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("OpenUXKit"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/OpenUXKit",
@@ -239,12 +239,12 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RxAppKit"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             .package(
                 path: "../../RxAppKit",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
@@ -255,12 +255,12 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryIOSDirectory.libraryPath("RxUIKit"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             .package(
                 path: "../../RxUIKit",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxUIKit",
@@ -271,7 +271,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("filter-ui"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
@@ -286,12 +286,12 @@ let package = Package(
             local: .package(
                 path: "../../MachInjector",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("MachInjector"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
@@ -311,7 +311,7 @@ let package = Package(
             .package(
                 path: "../../RunningApplicationKit",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
@@ -346,12 +346,12 @@ let package = Package(
             local: .package(
                 path: "../../DSFQuickActionBar",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             .package(
                 path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("DSFQuickActionBar"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-macOS-Library-Forks/DSFQuickActionBar",
@@ -362,7 +362,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("SystemHUD"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/SystemHUD",
