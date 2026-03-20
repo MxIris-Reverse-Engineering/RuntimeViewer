@@ -11,11 +11,30 @@ enum MCPConfigType {
 
     func configString(port: UInt16) -> String {
         let url = "http://127.0.0.1:\(port)/mcp"
+        #if DEBUG
         switch self {
         case .claudeCode:
-            return "claude mcp add RuntimeViewer --transport http --url \(url)"
+            return "claude mcp add RuntimeViewer-Debug --transport http \(url)"
         case .codex:
-            return "codex mcp add RuntimeViewer --transport http --url \(url)"
+            return "codex mcp add RuntimeViewer-Debug --url \(url)"
+        case .json:
+            return """
+            {
+              "mcpServers": {
+                "RuntimeViewer-Debug": {
+                  "type": "http",
+                  "url": "\(url)"
+                }
+              }
+            }
+            """
+        }
+        #else
+        switch self {
+        case .claudeCode:
+            return "claude mcp add RuntimeViewer --transport http \(url)"
+        case .codex:
+            return "codex mcp add RuntimeViewer --url \(url)"
         case .json:
             return """
             {
@@ -28,6 +47,7 @@ enum MCPConfigType {
             }
             """
         }
+        #endif
     }
 }
 
