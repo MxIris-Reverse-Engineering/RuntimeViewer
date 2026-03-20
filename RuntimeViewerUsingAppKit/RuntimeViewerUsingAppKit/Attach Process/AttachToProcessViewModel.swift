@@ -44,9 +44,9 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                     
                     switch runningItem {
                     case let runningApplication as RunningApplication:
-                        try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: runningApplication.bundleIdentifier ?? name, isSandbox: runningApplication.isSandboxed)
+                        try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: runningApplication.processIdentifier.description, isSandbox: runningApplication.isSandboxed)
                     case let runningProcess as RunningProcess:
-                        try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: name, isSandbox: runningProcess.isSandboxed)
+                        try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: runningProcess.processIdentifier.description, isSandbox: runningProcess.isSandboxed)
                     default:
                         return
                     }

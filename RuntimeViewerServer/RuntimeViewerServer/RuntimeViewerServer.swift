@@ -38,11 +38,7 @@ private enum RuntimeViewerServer {
     }
 
     private static var identifier: String {
-        if let bundleID = Bundle.main.bundleIdentifier, !bundleID.isEmpty {
-            return bundleID
-        }
-
-        return ProcessInfo.processInfo.processName
+        return ProcessInfo.processInfo.processIdentifier.description
     }
 
     fileprivate static func main() {
@@ -53,7 +49,7 @@ private enum RuntimeViewerServer {
 
                 #if os(macOS) || targetEnvironment(macCatalyst)
 
-                if LSBundleProxy.forCurrentProcess().isSandbox {
+                if let proxy = LSBundleProxy.forCurrentProcess(), proxy.isSandbox {
                     runtimeEngine = RuntimeEngine(source: .localSocket(name: processName, identifier: .init(rawValue: identifier), role: .server))
                     try await runtimeEngine?.connect()
                 } else {
