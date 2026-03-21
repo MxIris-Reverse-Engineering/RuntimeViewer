@@ -8,7 +8,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerHelperClient
 import RuntimeViewerCatalystExtensions
 
-@MainActor
+//@MainActor
 public final class RuntimeEngineManager: Loggable {
     public static let shared = RuntimeEngineManager()
 
@@ -156,7 +156,6 @@ public final class RuntimeEngineManager: Loggable {
         systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + Array(mirroredEngines.values)
     }
 
-    @concurrent
     public func launchSystemRuntimeEngines() async throws {
         Self.logger.info("Appending local runtime engine")
         systemRuntimeEngines.append(.local)
@@ -174,7 +173,6 @@ public final class RuntimeEngineManager: Loggable {
         #endif
     }
 
-    @concurrent
     public func launchAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) async throws {
         let runtimeSource = if isSandbox {
             RuntimeSource.localSocket(name: name, identifier: .init(rawValue: identifier), role: .client)
@@ -410,6 +408,7 @@ public final class RuntimeEngineManager: Loggable {
 extension RuntimeEngineManager: ReactiveCompatible {}
 
 extension Reactive where Base == RuntimeEngineManager {
+    @MainActor
     public var runtimeEngines: Driver<[RuntimeEngine]> {
         Driver.combineLatest(
             base.$systemRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []),
@@ -420,6 +419,7 @@ extension Reactive where Base == RuntimeEngineManager {
         )
     }
 
+    @MainActor
     public var runtimeEngineSections: Driver<[RuntimeEngineSection]> {
         base.$runtimeEngineSections.asObservable().asDriver(onErrorJustReturn: [])
     }

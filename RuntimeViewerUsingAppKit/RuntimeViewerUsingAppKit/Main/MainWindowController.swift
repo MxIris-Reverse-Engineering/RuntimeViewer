@@ -153,6 +153,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 sectionTitle: { $0.hostName },
                 items: { $0.engines },
                 itemTitle: { $0.source.description },
+                itemImage: { $0.source.icon },
                 itemRepresentedObject: { AnyHashable($0.source.identifier) }
             )
         ).disposed(by: rx.disposeBag)
