@@ -61,32 +61,13 @@ Describes a single shareable engine. Used as the payload for both `engineList` r
 ```swift
 public struct RemoteEngineDescriptor: Codable, Hashable {
     let engineID: String              // Unique identifier for this engine
-    let displayName: String           // Human-readable name (e.g. "Local Runtime", "Attached: Safari")
-    let engineKind: EngineKind        // Simplified source type for UI display
+    let source: RuntimeSource         // Original source type (already Codable)
     let hostName: String              // Human-readable host name
     let originChain: [String]         // Host ID chain for cycle detection (appended at each hop)
     let directTCPHost: String         // Proxy server host IP
     let directTCPPort: UInt16         // Proxy server port
 }
-
-public enum EngineKind: String, Codable {
-    case local
-    case attached       // XPC / localSocket injected process
-    case bonjour        // Bonjour-connected remote device
-    case directTCP      // Direct TCP connection
-    case macCatalyst    // Mac Catalyst helper
-}
 ```
-
-**Design note**: Uses `EngineKind` instead of `RuntimeSource` to avoid serializing internal connection details (Role, NWEndpoint, etc.) that are meaningless to the receiver. The receiver always connects via `.directTCP`.
-
-**RuntimeSource → EngineKind mapping**:
-- `.local` → `.local`
-- `.remote(_, _, _)` → `.attached` (XPC injected process)
-- `.localSocket(_, _, _)` → `.attached` (localSocket injected process)
-- `.bonjour(_, _, _)` → `.bonjour`
-- `.directTCP(_, _, _, _)` → `.directTCP`
-- `.macCatalystClient` / `.macCatalystServer` → `.macCatalyst`
 
 #### Management Flow (within RuntimeEngine)
 
@@ -414,7 +395,7 @@ Reuse existing `RuntimeConnectionNotificationService` (already supports connect/
 ## 8. Files to Create/Modify
 
 ### New Files
-- `RuntimeViewerCore/Sources/RuntimeViewerCommunication/RemoteEngineDescriptor.swift` — `RemoteEngineDescriptor`, `EngineKind`
+- `RuntimeViewerCore/Sources/RuntimeViewerCommunication/RemoteEngineDescriptor.swift` — `RemoteEngineDescriptor`
 - `RuntimeViewerCore/Sources/RuntimeViewerCommunication/HostInfo.swift` — `HostInfo`
 - `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngineProxyServer.swift` — Proxy server actor
 - `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Utils/RuntimeEngineSection.swift` — `RuntimeEngineSection`
@@ -428,7 +409,6 @@ Reuse existing `RuntimeConnectionNotificationService` (already supports connect/
   - Add new `setMessageHandlerBinding` overload (no request, has response)
 - `RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeSource.swift`:
   - Promote `identifier` from `fileprivate` to `public`
-  - Add `public var engineKind: EngineKind` computed property
 - `RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeNetwork.swift`:
   - Add `rv-host-name` to Bonjour TXT record
 - `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Utils/RuntimeEngineManager.swift`:
