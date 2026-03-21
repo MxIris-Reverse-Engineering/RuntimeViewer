@@ -46,7 +46,7 @@ extension RuntimeEngine {
 
 @Loggable(.private)
 public actor RuntimeEngine {
-    fileprivate enum CommandNames: String, CaseIterable {
+    enum CommandNames: String, CaseIterable {
         case imageList
         case imageNodes
         case loadImage
@@ -116,14 +116,23 @@ public actor RuntimeEngine {
 
     public private(set) var loadedImagePaths: Set<String> = []
 
-    @Published
-    public private(set) var imageNodes: [RuntimeImageNode] = []
+    private nonisolated let imageNodesSubject = CurrentValueSubject<[RuntimeImageNode], Never>([])
 
-    public var reloadDataPublisher: some Publisher<Void, Never> {
+    public var imageNodes: [RuntimeImageNode] {
+        get { imageNodesSubject.value }
+        set { imageNodesSubject.send(newValue) }
+    }
+
+    /// Publisher that emits image node changes. Accessible from any isolation context.
+    public nonisolated var imageNodesPublisher: some Publisher<[RuntimeImageNode], Never> {
+        imageNodesSubject.eraseToAnyPublisher()
+    }
+
+    public nonisolated var reloadDataPublisher: some Publisher<Void, Never> {
         reloadDataSubject.eraseToAnyPublisher()
     }
 
-    private let reloadDataSubject = PassthroughSubject<Void, Never>()
+    private nonisolated let reloadDataSubject = PassthroughSubject<Void, Never>()
 
     private let objcSectionFactory: RuntimeObjCSectionFactory
 
@@ -454,7 +463,7 @@ extension RuntimeEngine {
         }
     }
 
-    private struct InterfaceRequest: Codable {
+    struct InterfaceRequest: Codable {
         let object: RuntimeObject
         let options: RuntimeObjectInterface.GenerationOptions
     }
@@ -494,7 +503,7 @@ extension RuntimeEngine {
         }
     }
 
-    private struct MemberAddressesRequest: Codable {
+    struct MemberAddressesRequest: Codable {
         let object: RuntimeObject
         let memberName: String?
     }
@@ -534,19 +543,19 @@ extension RuntimeEngine {
 }
 
 extension RuntimeConnection {
-    fileprivate func sendMessage(name: RuntimeEngine.CommandNames) async throws {
+    func sendMessage(name: RuntimeEngine.CommandNames) async throws {
         return try await sendMessage(name: name.commandName)
     }
 
-    fileprivate func sendMessage<Request: Codable>(name: RuntimeEngine.CommandNames, request: Request) async throws {
+    func sendMessage<Request: Codable>(name: RuntimeEngine.CommandNames, request: Request) async throws {
         return try await sendMessage(name: name.commandName, request: request)
     }
 
-    fileprivate func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames) async throws -> Response {
+    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames) async throws -> Response {
         return try await sendMessage(name: name.commandName)
     }
 
-    fileprivate func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames, request: some Codable) async throws -> Response {
+    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames, request: some Codable) async throws -> Response {
         return try await sendMessage(name: name.commandName, request: request)
     }
 }

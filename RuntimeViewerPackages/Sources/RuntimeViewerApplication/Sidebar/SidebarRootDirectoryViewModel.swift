@@ -12,7 +12,7 @@ public final class SidebarRootDirectoryViewModel: SidebarRootViewModel {
         
         Task {
             await documentState.runtimeEngine
-                .$imageNodes
+                .imageNodesPublisher
                 .asObservable()
                 .bind(to: nodesSubject)
                 .disposed(by: rx.disposeBag)

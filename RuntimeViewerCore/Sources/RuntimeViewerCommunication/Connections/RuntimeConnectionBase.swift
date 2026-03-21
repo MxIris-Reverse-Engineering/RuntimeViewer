@@ -36,6 +36,8 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
         underlyingConnection?.state ?? .disconnected(error: nil)
     }
 
+    var connectionInfo: RuntimeConnectionInfo? { nil }
+
     func stop() {
         underlyingConnection?.stop()
     }

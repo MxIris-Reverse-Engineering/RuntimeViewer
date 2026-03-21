@@ -440,6 +440,10 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
     /// The port the server is listening on (available after initialization).
     private(set) var port: UInt16 = 0
 
+    override var connectionInfo: RuntimeConnectionInfo? {
+        RuntimeConnectionInfo(host: host, port: port)
+    }
+
     /// Creates a server that listens on the specified port.
     ///
     /// - Parameter port: The port to listen on (0 for auto-assign).
