@@ -1,6 +1,11 @@
 import Foundation
 public import FoundationToolbox
 import Network
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(SystemConfiguration)
+import SystemConfiguration
+#endif
 
 public enum RuntimeNetworkError: Error {
     case notConnected
@@ -36,13 +41,27 @@ struct RuntimeRequestData: Codable {
 public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
     public static let instanceIDKey = "rv-instance-id"
+    public static let hostNameKey = "rv-host-name"
 
     /// Unique identifier for this app process, used to filter out self-discovery in Bonjour browsing.
     public static let localInstanceID = UUID().uuidString
 
+    /// The human-readable host name for this device, used in Bonjour TXT records.
+    public static let localHostName: String = {
+        #if canImport(UIKit)
+        return UIDevice.current.name
+        #elseif canImport(SystemConfiguration)
+        return (SCDynamicStoreCopyComputerName(nil, nil) as? String)
+            ?? ProcessInfo.processInfo.hostName
+        #else
+        return ProcessInfo.processInfo.hostName
+        #endif
+    }()
+
     static func makeService(name: String) -> NWListener.Service {
         var txtRecord = NWTXTRecord()
         txtRecord[instanceIDKey] = localInstanceID
+        txtRecord[hostNameKey] = localHostName
         return NWListener.Service(name: name, type: type, txtRecord: txtRecord)
     }
 
@@ -50,21 +69,28 @@ public enum RuntimeNetworkBonjour {
         guard case .bonjour(let txtRecord) = metadata else { return nil }
         return txtRecord[instanceIDKey]
     }
+
+    static func hostName(from metadata: NWBrowser.Result.Metadata) -> String? {
+        guard case .bonjour(let record) = metadata else { return nil }
+        return record[hostNameKey]
+    }
 }
 
 public struct RuntimeNetworkEndpoint: Sendable, Hashable {
     public let name: String
     public let instanceID: String?
+    public let hostName: String?
 
     let endpoint: NWEndpoint
 
-    init(name: String, instanceID: String? = nil, endpoint: NWEndpoint) {
+    init(name: String, instanceID: String? = nil, hostName: String? = nil, endpoint: NWEndpoint) {
         self.name = name
         self.instanceID = instanceID
+        self.hostName = hostName
         self.endpoint = endpoint
     }
 
-    // Exclude instanceID from equality — it is metadata, not identity.
+    // Exclude instanceID and hostName from equality — they are metadata, not identity.
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.name == rhs.name && lhs.endpoint == rhs.endpoint
     }
@@ -101,14 +127,16 @@ public class RuntimeNetworkBrowser {
                 case .added(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
                         let instanceID = RuntimeNetworkBonjour.instanceID(from: result.metadata)
-                        #log(.info, "Discovered new endpoint: \(name, privacy: .public), instanceID: \(instanceID ?? "nil", privacy: .public)")
-                        onAdded(.init(name: name, instanceID: instanceID, endpoint: result.endpoint))
+                        let hostName = RuntimeNetworkBonjour.hostName(from: result.metadata)
+                        #log(.info, "Discovered new endpoint: \(name, privacy: .public), instanceID: \(instanceID ?? "nil", privacy: .public), hostName: \(hostName ?? "nil", privacy: .public)")
+                        onAdded(.init(name: name, instanceID: instanceID, hostName: hostName, endpoint: result.endpoint))
                     }
                 case .removed(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
                         let instanceID = RuntimeNetworkBonjour.instanceID(from: result.metadata)
+                        let hostName = RuntimeNetworkBonjour.hostName(from: result.metadata)
                         #log(.info, "Endpoint removed: \(name, privacy: .public)")
-                        onRemoved(.init(name: name, instanceID: instanceID, endpoint: result.endpoint))
+                        onRemoved(.init(name: name, instanceID: instanceID, hostName: hostName, endpoint: result.endpoint))
                     }
                 default:
                     break
