@@ -229,6 +229,8 @@ private final class TokenTemplateTextView: NSTextView {
     var didChangeTextHandler: ((String) -> Void)?
     var didChangeHeightHandler: ((CGFloat) -> Void)?
 
+    private var isTokenizing = false
+
     override var string: String {
         didSet { tokenize() }
     }
@@ -283,21 +285,38 @@ private final class TokenTemplateTextView: NSTextView {
         return true
     }
 
+    private static let defaultAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+        .foregroundColor: NSColor.textColor,
+    ]
+
+    /// Converts new ${...} text patterns into attachment characters.
+    /// Existing attachments (U+FFFC) are NOT matched by the regex, so they are preserved.
     private func tokenize() {
-        guard let textStorage else { return }
+        guard let textStorage, !isTokenizing else { return }
+        isTokenizing = true
+        defer { isTokenizing = false }
+
+        let string = textStorage.string
+        let fullRange = NSRange(location: 0, length: textStorage.length)
+
         let pattern = #"\$\{([^}]+)\}"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
-        let string = textStorage.string
-        let range = NSRange(string.startIndex..., in: string)
-        let matches = regex.matches(in: string, range: range)
+        let matches = regex.matches(in: string, range: fullRange)
 
-        let defaultAttributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
-            .foregroundColor: NSColor.textColor,
-        ]
+        let sel = selectedRange()
 
         textStorage.beginEditing()
-        textStorage.setAttributes(defaultAttributes, range: range)
+
+        // Apply default attributes only to non-attachment ranges
+        textStorage.enumerateAttribute(.attachment, in: fullRange, options: []) { value, range, _ in
+            if value == nil {
+                textStorage.setAttributes(Self.defaultAttributes, range: range)
+            }
+        }
+
+        // Replace ${...} text with attachment characters (reverse order preserves ranges)
+        var cursorAdjustment = 0
         for match in matches.reversed() {
             let nsString = string as NSString
             let fullMatch = nsString.substring(with: match.range)
@@ -308,8 +327,20 @@ private final class TokenTemplateTextView: NSTextView {
             let cell = TokenTextAttachmentCell(tokenName: tokenName)
             attachment.attachmentCell = cell
             textStorage.replaceCharacters(in: match.range, with: NSAttributedString(attachment: attachment))
+
+            // Adjust cursor position for replacements before cursor
+            if match.range.location + match.range.length <= sel.location {
+                cursorAdjustment -= (match.range.length - 1)
+            }
         }
+
         textStorage.endEditing()
+
+        // Restore cursor position accounting for text length changes
+        if cursorAdjustment != 0 {
+            let newPos = max(0, min(sel.location + cursorAdjustment, textStorage.length))
+            setSelectedRange(NSRange(location: newPos, length: 0))
+        }
     }
 }
 
