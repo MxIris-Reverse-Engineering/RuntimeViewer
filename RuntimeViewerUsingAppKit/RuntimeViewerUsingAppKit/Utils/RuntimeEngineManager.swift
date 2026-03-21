@@ -116,7 +116,15 @@ public final class RuntimeEngineManager: Loggable {
         knownBonjourEndpointNames.insert(endpoint.name)
 
         do {
-            let runtimeEngine = RuntimeEngine(source: .bonjour(name: endpoint.name, identifier: .init(rawValue: endpoint.name), role: .client))
+            let remoteHostInfo = HostInfo(
+                hostID: endpoint.instanceID ?? endpoint.name,
+                hostName: endpoint.hostName ?? endpoint.name
+            )
+            let runtimeEngine = RuntimeEngine(
+                source: .bonjour(name: endpoint.name, identifier: .init(rawValue: endpoint.name), role: .client),
+                hostInfo: remoteHostInfo,
+                originChain: [endpoint.instanceID ?? endpoint.name]
+            )
             try await runtimeEngine.connect(bonjourEndpoint: endpoint)
             appendBonjourRuntimeEngine(runtimeEngine)
             Self.logger.info("Successfully connected to Bonjour endpoint: \(endpoint.name, privacy: .public)")
@@ -408,7 +416,7 @@ public final class RuntimeEngineManager: Loggable {
 extension RuntimeEngineManager: ReactiveCompatible {}
 
 extension Reactive where Base == RuntimeEngineManager {
-    @MainActor
+//    @MainActor
     public var runtimeEngines: Driver<[RuntimeEngine]> {
         Driver.combineLatest(
             base.$systemRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []),
@@ -419,7 +427,7 @@ extension Reactive where Base == RuntimeEngineManager {
         )
     }
 
-    @MainActor
+//    @MainActor
     public var runtimeEngineSections: Driver<[RuntimeEngineSection]> {
         base.$runtimeEngineSections.asObservable().asDriver(onErrorJustReturn: [])
     }
