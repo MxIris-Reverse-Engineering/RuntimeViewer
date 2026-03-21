@@ -51,6 +51,7 @@
 		E9935B952F448900006DB4EC /* ExportingCompletionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */; };
 		E9935B972F448910006DB4EC /* ExportingCompletionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */; };
 		E995B8942ED97D140083D9D7 /* RuntimeEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */; };
+		51357F3610FA0353D06415C7 /* RuntimeEngineSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB314E4573B51DB41B47D56 /* RuntimeEngineSection.swift */; };
 		E995B8972F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8962F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift */; };
 		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
@@ -263,6 +264,7 @@
 		E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewModel.swift; sourceTree = "<group>"; };
 		E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewController.swift; sourceTree = "<group>"; };
 		E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
+		5EB314E4573B51DB41B47D56 /* RuntimeEngineSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineSection.swift; sourceTree = "<group>"; };
 		E995B8962F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeConnectionNotificationService.swift; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
@@ -600,6 +602,7 @@
 				E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */,
 				E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */,
 				E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */,
+				5EB314E4573B51DB41B47D56 /* RuntimeEngineSection.swift */,
 				E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */,
 				E995B8962F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift */,
 			);
@@ -923,6 +926,7 @@
 				E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
 				E995B8942ED97D140083D9D7 /* RuntimeEngineManager.swift in Sources */,
+				51357F3610FA0353D06415C7 /* RuntimeEngineSection.swift in Sources */,
 				E995B8972F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
 				E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */,
