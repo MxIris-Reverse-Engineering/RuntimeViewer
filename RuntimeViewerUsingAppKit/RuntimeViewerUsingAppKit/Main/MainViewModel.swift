@@ -28,7 +28,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         let sidebarBackClick: Signal<Void>
         let contentBackClick: Signal<Void>
         let saveClick: Signal<Void>
-        let switchSource: Signal<Int>
+        let switchSource: Signal<String?>
         let generationOptionsClick: Signal<NSView>
         let fontSizeSmallerClick: Signal<Void>
         let fontSizeLargerClick: Signal<Void>
@@ -45,8 +45,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         let isSavable: Driver<Bool>
         let isSidebarBackHidden: Driver<Bool>
         let isContentBackHidden: Driver<Bool>
-        let runtimeSources: Driver<[RuntimeSource]>
-        let selectedRuntimeSourceIndex: Driver<Int>
+        let runtimeEngineSections: Driver<[RuntimeEngineSection]>
+        let selectedEngineIdentifier: Driver<String>
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
         let requestRestartConfirmation: Signal<Void>
@@ -65,7 +65,7 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     let isContentStackDepthGreaterThanOne = BehaviorRelay<Bool>(value: false)
 
-    let selectedRuntimeSourceIndex = BehaviorRelay(value: 0)
+    let selectedEngineIdentifier = BehaviorRelay<String>(value: RuntimeSource.local.identifier)
 
     @Observed
     var selectedRuntimeObject: RuntimeObject?
@@ -158,9 +158,12 @@ final class MainViewModel: ViewModel<MainRoute> {
                 }
             }.disposed(by: rx.disposeBag)
 
-        input.switchSource.emit(with: self) {
-            $0.router.trigger(.main($0.runtimeEngineManager.runtimeEngines[$1]))
-            $0.selectedRuntimeSourceIndex.accept($1)
+        input.switchSource.compactMap { $0 }.emit(with: self) { owner, identifier in
+            guard let engine = owner.runtimeEngineManager.runtimeEngines.first(where: {
+                $0.source.identifier == identifier
+            }) else { return }
+            owner.router.trigger(.main(engine))
+            owner.selectedEngineIdentifier.accept(identifier)
         }.disposed(by: rx.disposeBag)
 
         let sharingServiceData = completeTransition?.map { [weak self] router -> [SharingData] in
@@ -201,8 +204,8 @@ final class MainViewModel: ViewModel<MainRoute> {
             isContentBackHidden: isContentStackDepthGreaterThanOne.map {
                 !$0
             }.asDriver(onErrorJustReturn: true),
-            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map { $0.source } },
-            selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver(),
+            runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
+            selectedEngineIdentifier: selectedEngineIdentifier.asDriver(),
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal()

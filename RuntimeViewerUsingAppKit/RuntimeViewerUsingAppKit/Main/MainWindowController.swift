@@ -97,7 +97,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
-            switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemIndex().asSignal(),
+            switchSource: toolbarController.switchSourceItem.popUpButton.rx
+                .selectedItemRepresentedObject(String.self)
+                .asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
             fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
             fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
@@ -146,9 +148,14 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         output.isContentBackHidden.drive(toolbarController.contentBackItem.rx.isHidden).disposed(by: rx.disposeBag)
 
-        output.selectedRuntimeSourceIndex.drive(toolbarController.switchSourceItem.popUpButton.rx.selectedIndex()).disposed(by: rx.disposeBag)
-
-        output.runtimeSources.drive(toolbarController.switchSourceItem.popUpButton.rx.items()).disposed(by: rx.disposeBag)
+        output.runtimeEngineSections.drive(
+            toolbarController.switchSourceItem.popUpButton.rx.sectionItems(
+                sectionTitle: { $0.hostName },
+                items: { $0.engines },
+                itemTitle: { $0.source.description },
+                itemRepresentedObject: { AnyHashable($0.source.identifier) }
+            )
+        ).disposed(by: rx.disposeBag)
 
         viewModel.errorRelay
             .asSignal()
