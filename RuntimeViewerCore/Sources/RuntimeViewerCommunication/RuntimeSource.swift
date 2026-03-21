@@ -186,3 +186,21 @@ extension RuntimeSource: Hashable {
         }
     }
 }
+
+extension RuntimeSource {
+    /// A stable string identifier for this runtime source, suitable for use as a notification or storage key.
+    public var identifier: String {
+        switch self {
+        case .local:
+            return "local"
+        case .remote(_, let id, _):
+            return id.rawValue
+        case .bonjour(let name, let id, let role):
+            return role.isClient ? "bonjour.\(name)" : "bonjourServer.\(id.rawValue)"
+        case .localSocket(_, let id, let role):
+            return role.isClient ? id.rawValue : "localSocketServer.\(id.rawValue)"
+        case .directTCP(let name, let host, let port, let role):
+            return role.isClient ? "tcp.\(name).\(host ?? "").\(port)" : "tcpServer.\(name).\(port)"
+        }
+    }
+}
