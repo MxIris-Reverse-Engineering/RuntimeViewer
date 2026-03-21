@@ -77,6 +77,10 @@ public actor RuntimeEngine {
 
     public nonisolated let source: RuntimeSource
 
+    public nonisolated let hostInfo: HostInfo
+
+    public nonisolated let originChain: [String]
+
     // MARK: - State Management
 
     private nonisolated let stateSubject = CurrentValueSubject<State, Never>(.initializing)
@@ -122,8 +126,17 @@ public actor RuntimeEngine {
     /// The connection to the sender or receiver
     private var connection: RuntimeConnection?
 
-    public init(source: RuntimeSource) {
+    public init(
+        source: RuntimeSource,
+        hostInfo: HostInfo = HostInfo(
+            hostID: RuntimeNetworkBonjour.localInstanceID,
+            hostName: RuntimeNetworkBonjour.localHostName
+        ),
+        originChain: [String] = [RuntimeNetworkBonjour.localInstanceID]
+    ) {
         self.source = source
+        self.hostInfo = hostInfo
+        self.originChain = originChain
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
