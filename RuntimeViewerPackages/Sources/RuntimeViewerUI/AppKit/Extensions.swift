@@ -8,5 +8,4 @@ extension NSPopUpButton {
     }
 }
 
-
 #endif

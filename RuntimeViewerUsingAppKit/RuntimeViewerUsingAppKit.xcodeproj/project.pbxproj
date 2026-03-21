@@ -224,7 +224,7 @@
 		E92124722F447C94007481E4 /* ExportingViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingViewController.swift; sourceTree = "<group>"; };
 		E927C22D2E9444F300084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		E942ACBE2C28865100A2F3D3 /* MainRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRoute.swift; sourceTree = "<group>"; };
-		E9432FE22C0D614900362862 /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RuntimeViewer-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FE52C0D614900362862 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E9432FE72C0D614A00362862 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E9432FEA2C0D614A00362862 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
@@ -400,7 +400,7 @@
 		E9432FE32C0D614900362862 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E9432FE22C0D614900362862 /* RuntimeViewer.app */,
+				E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */,
 				E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */,
 				E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */,
 				E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
@@ -669,7 +669,7 @@
 				E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */,
 			);
 			productName = RuntimeViewerUsingAppKit;
-			productReference = E9432FE22C0D614900362862 /* RuntimeViewer.app */;
+			productReference = E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E947C3662C2A4D0400296B2E /* RuntimeViewerCatalystHelper */ = {
@@ -1212,7 +1212,7 @@
 				MARKETING_VERSION = 2.0.0;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer;
-				PRODUCT_NAME = RuntimeViewer;
+				PRODUCT_NAME = "RuntimeViewer-Debug";
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;

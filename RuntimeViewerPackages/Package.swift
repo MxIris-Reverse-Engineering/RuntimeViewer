@@ -52,7 +52,7 @@ struct MxIrisStudioWorkspace: RawRepresentable, ExpressibleByStringLiteral, Cust
 
 extension Package.Dependency {
     enum LocalSearchPath {
-        case package(path: String, isRelative: Bool, isEnabled: Bool)
+        case package(path: String, isRelative: Bool, isEnabled: Bool, traits: Set<PackageDescription.Package.Dependency.Trait> = [.defaults])
     }
 
     static func package(local localSearchPaths: LocalSearchPath..., remote: Package.Dependency) -> Package.Dependency {
@@ -66,7 +66,7 @@ extension Package.Dependency {
         }
         for local in localSearchPaths {
             switch local {
-            case .package(let path, let isRelative, let isEnabled):
+            case .package(let path, let isRelative, let isEnabled, let traits):
                 guard isEnabled else { continue }
                 let url = if isRelative, let resolvedURL = URL(string: path, relativeTo: URL(fileURLWithPath: #filePath)) {
                     resolvedURL
@@ -75,7 +75,7 @@ extension Package.Dependency {
                 }
 
                 if FileManager.default.fileExists(atPath: url.path) {
-                    return .package(path: url.path)
+                    return .package(path: url.path, traits: traits)
                 }
             }
         }
@@ -139,16 +139,19 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
                 isRelative: true,
-                isEnabled: false
+                isEnabled: true,
+                traits: ["AppleInternal"],
             ),
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
-                isEnabled: false
+                isEnabled: true,
+                traits: ["AppleInternal"],
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.3.1"
+                from: "0.4.0",
+                traits: ["AppleInternal"],
             )
         ),
 
@@ -420,7 +423,6 @@ let package = Package(
                 .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "UIFoundationAppleInternal", package: "UIFoundation"),
                 .product(name: "LateResponders", package: "LateResponders"),
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "DSFQuickActionBar", package: "DSFQuickActionBar", condition: .when(platforms: appkitPlatforms)),

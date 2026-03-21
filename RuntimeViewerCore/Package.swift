@@ -80,7 +80,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
-                from: "0.6.100"
+                from: "0.6.101"
             )
         ),
         .package(
@@ -91,7 +91,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                from: "0.8.0"
+                from: "0.8.1"
             )
         ),
         .package(
@@ -169,7 +169,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerUtilities",
             dependencies: [
-                .product(name: "SMobileGestalt", package: "swift-mobile-gestalt", moduleAliases: ["SMobileGestalt": "SwiftMobileGestalt"]),
+                .product(name: "SMobileGestalt", package: "swift-mobile-gestalt"),
                 .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
             ]
         ),

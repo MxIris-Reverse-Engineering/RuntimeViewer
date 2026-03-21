@@ -4,7 +4,6 @@
 @_exported import IDEIcons
 @_exported import UIFoundation
 @_exported import UIFoundationToolbox
-@_exported import UIFoundationAppleInternal
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 #if USING_SYSTEM_UXKIT
 @_exported import UXKit
