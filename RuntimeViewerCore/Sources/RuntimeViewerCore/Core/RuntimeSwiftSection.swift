@@ -21,6 +21,8 @@ public struct SwiftGenerationOptions: Sendable, Equatable {
     @Default(false)
     public var printMemberAddress: Bool
     @Default(false)
+    public var printVTableOffset: Bool
+    @Default(false)
     public var printTypeLayout: Bool
     @Default(false)
     public var printEnumLayout: Bool
@@ -220,6 +222,7 @@ actor RuntimeSwiftSection {
             printStrippedSymbolicItem: options.printStrippedSymbolicItem,
             printFieldOffset: options.emitOffsetComments,
             printMemberAddress: options.printMemberAddress,
+            printVTableOffset: options.printVTableOffset,
             printTypeLayout: options.printTypeLayout,
             printEnumLayout: options.printEnumLayout,
             fieldOffsetTransformer: fieldOffsetTransformer,

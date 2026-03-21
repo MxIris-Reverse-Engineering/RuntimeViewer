@@ -70,6 +70,7 @@ struct SwiftGenerationOptionsTests {
         #expect(options.printStrippedSymbolicItem == true)
         #expect(options.emitOffsetComments == false)
         #expect(options.printMemberAddress == false)
+        #expect(options.printVTableOffset == false)
         #expect(options.printTypeLayout == false)
         #expect(options.printEnumLayout == false)
         #expect(options.synthesizeOpaqueType == false)
@@ -81,6 +82,7 @@ struct SwiftGenerationOptionsTests {
             printStrippedSymbolicItem: false,
             emitOffsetComments: true,
             printMemberAddress: true,
+            printVTableOffset: true,
             printTypeLayout: true,
             printEnumLayout: true,
             synthesizeOpaqueType: true
@@ -88,6 +90,7 @@ struct SwiftGenerationOptionsTests {
         #expect(options.printStrippedSymbolicItem == false)
         #expect(options.emitOffsetComments == true)
         #expect(options.printMemberAddress == true)
+        #expect(options.printVTableOffset == true)
         #expect(options.printTypeLayout == true)
         #expect(options.printEnumLayout == true)
         #expect(options.synthesizeOpaqueType == true)
@@ -140,6 +143,7 @@ struct GenerationOptionsTests {
         #expect(mcp.swiftInterfaceOptions.printStrippedSymbolicItem == true)
         #expect(mcp.swiftInterfaceOptions.emitOffsetComments == true)
         #expect(mcp.swiftInterfaceOptions.printMemberAddress == true)
+        #expect(mcp.swiftInterfaceOptions.printVTableOffset == true)
         #expect(mcp.swiftInterfaceOptions.printTypeLayout == true)
         #expect(mcp.swiftInterfaceOptions.printEnumLayout == true)
         #expect(mcp.swiftInterfaceOptions.synthesizeOpaqueType == true)

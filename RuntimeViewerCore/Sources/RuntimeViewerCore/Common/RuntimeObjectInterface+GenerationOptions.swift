@@ -33,6 +33,7 @@ extension RuntimeObjectInterface {
                 printStrippedSymbolicItem: true,
                 emitOffsetComments: true,
                 printMemberAddress: true,
+                printVTableOffset: true,
                 printTypeLayout: true,
                 printEnumLayout: true,
                 synthesizeOpaqueType: true
