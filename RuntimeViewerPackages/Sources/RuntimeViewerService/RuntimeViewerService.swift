@@ -9,7 +9,7 @@ import OSLog
 public final class RuntimeViewerService {
     private let listener: SwiftyXPC.XPCListener
 
-    private var launchedApplicationsByCallerBundleID: [String: [NSRunningApplication]] = [:]
+    private var launchedApplicationsByCallerPID: [Int32: [NSRunningApplication]] = [:]
 
     private var endpointByIdentifier: [String: SwiftyXPC.XPCEndpoint] = [:]
 
@@ -46,7 +46,7 @@ public final class RuntimeViewerService {
         configuration.addsToRecentItems = false
         configuration.activates = false
         let launchedApp = try await NSWorkspace.shared.openApplication(at: request.url, configuration: configuration)
-        launchedApplicationsByCallerBundleID[request.callerBundleIdentifier, default: []].append(launchedApp)
+        launchedApplicationsByCallerPID[request.callerPID, default: []].append(launchedApp)
         return .empty
     }
 
@@ -89,14 +89,10 @@ public final class RuntimeViewerService {
                     do {
                         try Task.checkCancellation()
 
-                        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-                              let bundleID = app.bundleIdentifier,
-                              let launchedApps = service.launchedApplicationsByCallerBundleID[bundleID] else { continue }
+                        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { continue }
 
-                        // Check if there's still another instance of the caller app running
-                        if NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == bundleID && $0 != app }) { continue }
-
-                        service.launchedApplicationsByCallerBundleID.removeValue(forKey: bundleID)
+                        let pid = app.processIdentifier
+                        guard let launchedApps = service.launchedApplicationsByCallerPID.removeValue(forKey: pid) else { continue }
 
                         for launchedApp in launchedApps {
                             if !launchedApp.isTerminated {

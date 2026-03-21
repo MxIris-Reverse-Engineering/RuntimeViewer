@@ -9,11 +9,11 @@ public struct OpenApplicationRequest: Codable, RuntimeRequest {
 
     public let url: URL
 
-    public let callerBundleIdentifier: String
+    public let callerPID: Int32
 
-    public init(url: URL, callerBundleIdentifier: String) {
+    public init(url: URL, callerPID: Int32) {
         self.url = url
-        self.callerBundleIdentifier = callerBundleIdentifier
+        self.callerPID = callerPID
     }
 }
 
