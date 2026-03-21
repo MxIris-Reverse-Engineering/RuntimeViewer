@@ -42,14 +42,19 @@ public final class RuntimeEngineManager: Loggable {
     private init() {
         Self.logger.info("RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public)")
 
+        // Start Bonjour server BEFORE browser so the local service's TXT record
+        // (containing localInstanceID) is registered with the Bonjour daemon
+        // by the time the browser discovers it.
+        startBonjourServer()
+
         browser.start(
             onAdded: { [weak self] endpoint in
                 guard let self else { return }
                 if endpoint.instanceID == RuntimeNetworkBonjour.localInstanceID {
-                    Self.logger.info("Skipping self Bonjour endpoint: \(endpoint.name, privacy: .public)")
+                    Self.logger.info("Skipping self Bonjour endpoint: \(endpoint.name, privacy: .public), instanceID: \(endpoint.instanceID ?? "nil", privacy: .public)")
                     return
                 }
-                Self.logger.info("Bonjour endpoint discovered: \(endpoint.name, privacy: .public), attempting connection...")
+                Self.logger.info("Bonjour endpoint discovered: \(endpoint.name, privacy: .public), instanceID: \(endpoint.instanceID ?? "nil", privacy: .public), attempting connection...")
                 Task { @MainActor in
                     await self.connectToBonjourEndpoint(endpoint)
                 }
@@ -62,8 +67,6 @@ public final class RuntimeEngineManager: Loggable {
                 }
             }
         )
-
-        startBonjourServer()
 
         Task {
             do {
@@ -78,7 +81,8 @@ public final class RuntimeEngineManager: Loggable {
 
     private func startBonjourServer() {
         let name = SCDynamicStoreCopyComputerName(nil, nil) as? String ?? ProcessInfo.processInfo.hostName
-        let engine = RuntimeEngine(source: .bonjourServer(name: name, identifier: .init(rawValue: name)))
+        let source = RuntimeSource.bonjour(name: name, identifier: .init(rawValue: name), role: .server)
+        let engine = RuntimeEngine(source: source)
         bonjourServerEngine = engine
 
         Self.logger.info("Starting Bonjour server with name: \(name, privacy: .public)")

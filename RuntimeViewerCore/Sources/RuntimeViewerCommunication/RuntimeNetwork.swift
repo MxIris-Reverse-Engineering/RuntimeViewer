@@ -36,6 +36,7 @@ struct RuntimeRequestData: Codable {
 public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
     public static let instanceIDKey = "rv-instance-id"
+
     /// Unique identifier for this app process, used to filter out self-discovery in Bonjour browsing.
     public static let localInstanceID = UUID().uuidString
 
@@ -82,7 +83,7 @@ public class RuntimeNetworkBrowser {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
 
-        self.browser = NWBrowser(for: .bonjour(type: RuntimeNetworkBonjour.type, domain: nil), using: parameters)
+        self.browser = NWBrowser(for: .bonjourWithTXTRecord(type: RuntimeNetworkBonjour.type, domain: nil), using: parameters)
     }
 
     public func start(
