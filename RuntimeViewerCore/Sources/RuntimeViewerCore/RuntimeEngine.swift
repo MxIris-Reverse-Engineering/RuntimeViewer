@@ -61,6 +61,8 @@ public actor RuntimeEngine {
         case runtimeObjectsInImage
         case reloadData
         case memberAddresses
+        case engineList
+        case engineListChanged
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
@@ -74,6 +76,12 @@ public actor RuntimeEngine {
         }
         return runtimeEngine
     }()
+
+    /// Callback for serving engine list requests. Set by RuntimeEngineManager.
+    public static var engineListProvider: (() async -> [RemoteEngineDescriptor])?
+
+    /// Callback for handling engine list change notifications. Set by RuntimeEngineManager.
+    public static var engineListChangedHandler: (([RemoteEngineDescriptor], RuntimeEngine) async -> Void)?
 
     public nonisolated let source: RuntimeSource
 
@@ -233,6 +241,9 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
         setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
+        setMessageHandlerBinding(forName: .engineList) { _ -> [RemoteEngineDescriptor] in
+            await RuntimeEngine.engineListProvider?() ?? []
+        }
         #log(.debug, "Server message handlers setup complete")
     }
 
@@ -241,6 +252,9 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
         setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
+        setMessageHandlerBinding(forName: .engineListChanged) { (engine: RuntimeEngine, descriptors: [RemoteEngineDescriptor]) in
+            await RuntimeEngine.engineListChangedHandler?(descriptors, engine)
+        }
         #log(.debug, "Client message handlers setup complete")
     }
 
@@ -284,6 +298,21 @@ public actor RuntimeEngine {
         connection.setMessageHandler(name: name.commandName) { [weak self] in
             guard let self else { return }
             try await perform(self)
+        }
+    }
+
+    /// Overload for commands with no request body but a response.
+    private func setMessageHandlerBinding<Response: Codable>(
+        forName name: CommandNames,
+        respond: @escaping (isolated RuntimeEngine) async throws -> Response
+    ) {
+        guard let connection else {
+            #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
+            return
+        }
+        connection.setMessageHandler(name: name.commandName) { [weak self] () -> Response in
+            guard let self else { throw RequestError.senderConnectionIsLose }
+            return try await respond(self)
         }
     }
 
@@ -488,6 +517,19 @@ extension RuntimeEngine {
             return try await senderConnection.sendMessage(name: .memberAddresses, request: request)
         }
 
+    }
+
+    public func requestEngineList() async throws -> [RemoteEngineDescriptor] {
+        try await request {
+            []
+        } remote: {
+            try await $0.sendMessage(name: .engineList)
+        }
+    }
+
+    public func pushEngineListChanged(_ descriptors: [RemoteEngineDescriptor]) async throws {
+        guard let connection, source.remoteRole?.isServer == true else { return }
+        try await connection.sendMessage(name: .engineListChanged, request: descriptors)
     }
 }
 
