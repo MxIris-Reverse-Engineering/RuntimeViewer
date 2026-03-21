@@ -374,7 +374,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         #log(.info, "Creating Bonjour server with name: \(name, privacy: .public), service type: \(RuntimeNetworkBonjour.type, privacy: .public)")
 
         let listener = try NWListener(using: parameters)
-        listener.service = NWListener.Service(name: name, type: RuntimeNetworkBonjour.type)
+        listener.service = RuntimeNetworkBonjour.makeService(name: name)
         self.listener = listener
 
         #log(.info, "Waiting for incoming Bonjour connection...")
@@ -484,7 +484,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         ownStateSubject.send(.connecting)
 
         let newListener = try NWListener(using: listenerParameters)
-        newListener.service = NWListener.Service(name: serviceName, type: RuntimeNetworkBonjour.type)
+        newListener.service = RuntimeNetworkBonjour.makeService(name: serviceName)
         self.listener = newListener
 
         newListener.stateUpdateHandler = { [weak self] state in

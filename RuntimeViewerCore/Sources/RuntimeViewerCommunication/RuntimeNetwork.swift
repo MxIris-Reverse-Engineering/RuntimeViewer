@@ -35,16 +35,42 @@ struct RuntimeRequestData: Codable {
 
 public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
+    public static let instanceIDKey = "rv-instance-id"
+    /// Unique identifier for this app process, used to filter out self-discovery in Bonjour browsing.
+    public static let localInstanceID = UUID().uuidString
+
+    static func makeService(name: String) -> NWListener.Service {
+        var txtRecord = NWTXTRecord()
+        txtRecord[instanceIDKey] = localInstanceID
+        return NWListener.Service(name: name, type: type, txtRecord: txtRecord)
+    }
+
+    static func instanceID(from metadata: NWBrowser.Result.Metadata) -> String? {
+        guard case .bonjour(let txtRecord) = metadata else { return nil }
+        return txtRecord[instanceIDKey]
+    }
 }
 
 public struct RuntimeNetworkEndpoint: Sendable, Hashable {
     public let name: String
-    
+    public let instanceID: String?
+
     let endpoint: NWEndpoint
-    
-    init(name: String, endpoint: NWEndpoint) {
+
+    init(name: String, instanceID: String? = nil, endpoint: NWEndpoint) {
         self.name = name
+        self.instanceID = instanceID
         self.endpoint = endpoint
+    }
+
+    // Exclude instanceID from equality — it is metadata, not identity.
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.name == rhs.name && lhs.endpoint == rhs.endpoint
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(endpoint)
     }
 }
 
@@ -73,13 +99,15 @@ public class RuntimeNetworkBrowser {
                 switch change {
                 case .added(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
-                        #log(.info, "Discovered new endpoint: \(name, privacy: .public)")
-                        onAdded(.init(name: name, endpoint: result.endpoint))
+                        let instanceID = RuntimeNetworkBonjour.instanceID(from: result.metadata)
+                        #log(.info, "Discovered new endpoint: \(name, privacy: .public), instanceID: \(instanceID ?? "nil", privacy: .public)")
+                        onAdded(.init(name: name, instanceID: instanceID, endpoint: result.endpoint))
                     }
                 case .removed(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
+                        let instanceID = RuntimeNetworkBonjour.instanceID(from: result.metadata)
                         #log(.info, "Endpoint removed: \(name, privacy: .public)")
-                        onRemoved(.init(name: name, endpoint: result.endpoint))
+                        onRemoved(.init(name: name, instanceID: instanceID, endpoint: result.endpoint))
                     }
                 default:
                     break
