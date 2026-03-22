@@ -59,10 +59,29 @@ public actor RuntimeEngineProxyServer {
                     Task {
                         await self.setupRequestHandlers()
                         await self.setupPushRelay()
+                        await self.sendInitialData()
                     }
                 }
             }
             .store(in: &subscriptions)
+    }
+
+    /// Sends current engine data to the newly connected client.
+    private func sendInitialData() async {
+        guard let connection else { return }
+        let imageList = await engine.imageList
+        let imageNodes = await engine.imageNodes
+        try? await connection.sendMessage(
+            name: RuntimeEngine.CommandNames.imageList.commandName,
+            request: imageList
+        )
+        try? await connection.sendMessage(
+            name: RuntimeEngine.CommandNames.imageNodes.commandName,
+            request: imageNodes
+        )
+        try? await connection.sendMessage(
+            name: RuntimeEngine.CommandNames.reloadData.commandName
+        )
     }
 
     /// Stops the proxy server and releases all resources.

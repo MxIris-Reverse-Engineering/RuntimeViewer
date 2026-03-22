@@ -300,9 +300,7 @@ public final class RuntimeEngineManager: Loggable {
         rx.runtimeEngines
             .driveOnNext { [weak self] engines in
                 guard let self else { return }
-                Task {
-                    await self.updateProxyServers(for: engines)
-                }
+                self.updateProxyServers(for: engines)
             }
             .disposed(by: rx.disposeBag)
 
@@ -323,7 +321,7 @@ public final class RuntimeEngineManager: Loggable {
         }
     }
 
-    private func updateProxyServers(for engines: [RuntimeEngine]) async {
+    private func updateProxyServers(for engines: [RuntimeEngine]) {
         Self.logger.info("[MIRROR-DEBUG] updateProxyServers called with \(engines.count, privacy: .public) engines")
         let currentIDs = Set(engines.map { $0.source.identifier })
         let existingIDs = Set(proxyServers.keys)
@@ -331,11 +329,11 @@ public final class RuntimeEngineManager: Loggable {
         // Remove proxy servers for engines that no longer exist
         for id in existingIDs.subtracting(currentIDs) {
             Self.logger.info("[MIRROR-DEBUG] removing proxy server: \(id, privacy: .public)")
-            await proxyServers[id]?.stop()
-            proxyServers.removeValue(forKey: id)
+            let proxy = proxyServers.removeValue(forKey: id)
+            Task.detached { await proxy?.stop() }
         }
 
-        // Add proxy servers for new engines
+        // Add proxy servers for new engines (non-blocking)
         for engine in engines {
             let id = engine.source.identifier
             guard !existingIDs.contains(id) else { continue }
@@ -344,32 +342,25 @@ public final class RuntimeEngineManager: Loggable {
                 continue
             }
 
-            do {
-                Self.logger.info("[MIRROR-DEBUG] starting proxy server for: \(id, privacy: .public)")
-                let proxy = RuntimeEngineProxyServer(engine: engine, identifier: id)
-                try await proxy.start()
-                proxyServers[id] = proxy
-                let proxyHost = await proxy.host
-                let proxyPort = await proxy.port
-                Self.logger.info("[MIRROR-DEBUG] proxy server started for: \(id, privacy: .public), host: \(proxyHost, privacy: .public), port: \(proxyPort, privacy: .public)")
-            } catch {
-                Self.logger.error("[MIRROR-DEBUG] Failed to start proxy server for \(id, privacy: .public): \(error, privacy: .public)")
-            }
-        }
+            Self.logger.info("[MIRROR-DEBUG] starting proxy server for: \(id, privacy: .public)")
+            let proxy = RuntimeEngineProxyServer(engine: engine, identifier: id)
+            proxyServers[id] = proxy
 
-        Self.logger.info("[MIRROR-DEBUG] updateProxyServers done, total proxies: \(self.proxyServers.count, privacy: .public)")
+            // Start proxy off main actor to avoid blocking
+            Task.detached { [weak self] in
+                do {
+                    try await proxy.start()
+                } catch {
+                    await MainActor.run { self?.proxyServers.removeValue(forKey: id) }
+                    return
+                }
 
-        // Notify connected Bonjour clients about the updated engine list
-        if let bonjourServerEngine {
-            let serverState = bonjourServerEngine.state
-            Self.logger.info("[MIRROR-DEBUG] bonjourServerEngine state: \(String(describing: serverState), privacy: .public)")
-            let descriptors = await buildEngineDescriptors()
-            Self.logger.info("[MIRROR-DEBUG] pushing \(descriptors.count, privacy: .public) descriptors to bonjour client")
-            do {
-                try await bonjourServerEngine.pushEngineListChanged(descriptors)
-                Self.logger.info("[MIRROR-DEBUG] push succeeded")
-            } catch {
-                Self.logger.error("[MIRROR-DEBUG] push failed: \(error, privacy: .public)")
+                // Push updated engine list after proxy is ready
+                guard let self else { return }
+                let descriptors = await self.buildEngineDescriptors()
+                if let bonjourServerEngine = await MainActor.run(body: { self.bonjourServerEngine }) {
+                    try? await bonjourServerEngine.pushEngineListChanged(descriptors)
+                }
             }
         }
     }
