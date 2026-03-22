@@ -525,6 +525,8 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                     .sink { [weak self] state in
                         #log(.info, "Direct TCP connection state: \(String(describing: state), privacy: .public)")
                         if state.isConnected {
+                            #log(.info, "Direct TCP client connected")
+                            self?.ownStateSubject.send(.connected)
                             let shouldResume = didResume.withLock { val -> Bool in
                                 guard !val else { return false }
                                 val = true
@@ -532,7 +534,6 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                             }
                             if shouldResume {
                                 #log(.info, "Initial direct TCP connection ready")
-                                self?.ownStateSubject.send(.connected)
                                 continuation.resume()
                             }
                         } else if state.isDisconnected {
