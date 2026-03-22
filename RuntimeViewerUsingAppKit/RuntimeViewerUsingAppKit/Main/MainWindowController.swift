@@ -98,9 +98,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
-            switchSource: toolbarController.switchSourceItem.popUpButton.rx
-                .selectedItemRepresentedObject(String.self)
-                .asSignal(),
+            switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemRepresentedObject(String.self).asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
             fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
             fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
@@ -154,11 +152,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 sectionTitle: { $0.hostName },
                 items: { $0.engines },
                 itemTitle: { $0.source.description },
-                itemImage: { engine in
-                    engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID
-                        ? engine.source.icon
-                        : NSImage(systemSymbolName: "arrow.2.squarepath", accessibilityDescription: nil)
-                },
+                itemImage: { $0.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID ? $0.source.icon : .symbol(systemName: .network) },
                 itemRepresentedObject: { AnyHashable($0.engineID) }
             )
         ).disposed(by: rx.disposeBag)

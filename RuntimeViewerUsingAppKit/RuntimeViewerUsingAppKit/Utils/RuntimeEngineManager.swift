@@ -9,7 +9,6 @@ import RuntimeViewerArchitectures
 import RuntimeViewerHelperClient
 import RuntimeViewerCatalystExtensions
 
-//@MainActor
 public final class RuntimeEngineManager: Loggable {
     public static let shared = RuntimeEngineManager()
 
@@ -352,7 +351,10 @@ public final class RuntimeEngineManager: Loggable {
                 do {
                     try await proxy.start()
                 } catch {
-                    await MainActor.run { self?.proxyServers.removeValue(forKey: id) }
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        proxyServers.removeValue(forKey: id)
+                    }
                     return
                 }
 
@@ -477,7 +479,6 @@ public final class RuntimeEngineManager: Loggable {
 extension RuntimeEngineManager: ReactiveCompatible {}
 
 extension Reactive where Base == RuntimeEngineManager {
-//    @MainActor
     public var runtimeEngines: Driver<[RuntimeEngine]> {
         Driver.combineLatest(
             base.$systemRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []),
@@ -488,7 +489,6 @@ extension Reactive where Base == RuntimeEngineManager {
         )
     }
 
-//    @MainActor
     public var runtimeEngineSections: Driver<[RuntimeEngineSection]> {
         base.$runtimeEngineSections.asObservable().asDriver(onErrorJustReturn: [])
     }

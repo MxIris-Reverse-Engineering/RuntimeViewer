@@ -94,8 +94,6 @@ public actor RuntimeEngine {
 
     // MARK: - State Management
 
-    private nonisolated let stateSubject = CurrentValueSubject<State, Never>(.initializing)
-
     private var connectionStateCancellable: AnyCancellable?
 
     /// Flag indicating that message handlers need to be re-registered on next connection.
@@ -103,6 +101,8 @@ public actor RuntimeEngine {
     /// triggers handler re-registration and data push.
     private var needsReregistrationOnConnect = false
 
+    private nonisolated let stateSubject = CurrentValueSubject<State, Never>(.initializing)
+    
     /// Publisher that emits engine state changes.
     public nonisolated var statePublisher: some Publisher<State, Never> {
         stateSubject.eraseToAnyPublisher()

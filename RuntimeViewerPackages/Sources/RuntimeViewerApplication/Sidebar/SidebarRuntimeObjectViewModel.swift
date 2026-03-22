@@ -11,8 +11,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     public let imageName: String
     public let runtimeEngine: RuntimeEngine
 
-    var isSorted: Bool { false }
-    
+    var isSorted: Bool {
+        false
+    }
+
     @Observed public private(set) var loadState: RuntimeImageLoadState = .unknown
     @Observed public private(set) var searchString: String = ""
     @Observed public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
@@ -28,17 +30,17 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         self.imageName = imageNode.name
         super.init(documentState: documentState, router: router)
 
-        Task {
-            await runtimeEngine.reloadDataPublisher
-                .asObservable()
-                .subscribeOnNext { [weak self] in
-                    guard let self else { return }
-                    Task {
-                        try await self.reloadData()
-                    }
+        runtimeEngine.reloadDataPublisher
+            .asObservable()
+            .subscribeOnNext { [weak self] in
+                guard let self else { return }
+                Task {
+                    try await self.reloadData()
                 }
-                .disposed(by: rx.disposeBag)
-            
+            }
+            .disposed(by: rx.disposeBag)
+
+        Task {
             do {
                 try await reloadData()
             } catch {
@@ -82,8 +84,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
                 self.searchString = searchString
                 self.isSearchCaseInsensitive = isSearchCaseInsensitive
-                
-                
+
                 if searchString.isEmpty {
                     if isFiltering {
                         isFiltering = false
@@ -179,7 +180,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         }
     }
 
-    func buildRuntimeObjects() async throws -> [RuntimeObject] { [] }
+    func buildRuntimeObjects() async throws -> [RuntimeObject] {
+        []
+    }
 
     private func tryLoadImage() {
         Task { @MainActor in
