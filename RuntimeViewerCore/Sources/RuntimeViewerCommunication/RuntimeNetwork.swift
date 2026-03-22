@@ -43,8 +43,17 @@ public enum RuntimeNetworkBonjour {
     public static let instanceIDKey = "rv-instance-id"
     public static let hostNameKey = "rv-host-name"
 
-    /// Unique identifier for this app process, used to filter out self-discovery in Bonjour browsing.
-    public static let localInstanceID = UUID().uuidString
+    /// Persistent unique identifier for this app installation, used for self-discovery filtering
+    /// and cycle detection in engine mirroring. Persisted in UserDefaults so it survives app restarts.
+    public static let localInstanceID: String = {
+        let key = "RuntimeViewer.localInstanceID"
+        if let existing = UserDefaults.standard.string(forKey: key) {
+            return existing
+        }
+        let newID = UUID().uuidString
+        UserDefaults.standard.set(newID, forKey: key)
+        return newID
+    }()
 
     /// The human-readable host name for this device, used in Bonjour TXT records.
     public static let localHostName: String = {

@@ -367,13 +367,33 @@ public final class RuntimeEngineManager: Loggable {
 
     // MARK: - Engine Mirroring (Client-Side)
 
+    private var lastReceivedDescriptorIDs: Set<String> = []
+
     func handleEngineListChanged(_ descriptors: [RemoteEngineDescriptor], from engine: RuntimeEngine) {
         Self.logger.info("[MIRROR-DEBUG] handleEngineListChanged called with \(descriptors.count, privacy: .public) descriptors from \(engine.source.description, privacy: .public)")
-        for d in descriptors {
+
+        // Filter out cycles first
+        let filteredDescriptors = descriptors.filter { descriptor in
+            if descriptor.originChain.contains(RuntimeNetworkBonjour.localInstanceID) {
+                Self.logger.info("[MIRROR-DEBUG] skipping \(descriptor.engineID, privacy: .public): cycle detected (originChain contains \(RuntimeNetworkBonjour.localInstanceID, privacy: .public))")
+                return false
+            }
+            return true
+        }
+
+        // Dedup: skip if we already processed the exact same set of descriptors
+        let newIDSet = Set(filteredDescriptors.map(\.engineID))
+        if newIDSet == lastReceivedDescriptorIDs {
+            Self.logger.info("[MIRROR-DEBUG] skipping duplicate descriptor set")
+            return
+        }
+        lastReceivedDescriptorIDs = newIDSet
+
+        for d in filteredDescriptors {
             Self.logger.info("[MIRROR-DEBUG]   descriptor: \(d.engineID, privacy: .public) host:\(d.directTCPHost, privacy: .public) port:\(d.directTCPPort, privacy: .public) originChain:\(d.originChain.joined(separator: ","), privacy: .public)")
         }
         let currentIDs = Set(mirroredEngines.keys)
-        let newIDs = Set(descriptors.map(\.engineID))
+        let newIDs = newIDSet
 
         // Remove engines no longer in the list
         for id in currentIDs.subtracting(newIDs) {
@@ -382,15 +402,9 @@ public final class RuntimeEngineManager: Loggable {
             }
         }
 
-        // Add new engines
-        for descriptor in descriptors {
+        // Add new engines (cycles already filtered above)
+        for descriptor in filteredDescriptors {
             guard !currentIDs.contains(descriptor.engineID) else { continue }
-
-            // Cycle check: skip if this instance is already in the origin chain
-            if descriptor.originChain.contains(RuntimeNetworkBonjour.localInstanceID) {
-                Self.logger.info("Skipping mirrored engine \(descriptor.engineID, privacy: .public): cycle detected")
-                continue
-            }
 
             // Dedup check: skip if already mirrored
             if mirroredEngines[descriptor.engineID] != nil {
