@@ -92,6 +92,10 @@ public actor RuntimeEngine {
 
     public nonisolated let originChain: [String]
 
+    /// Whether this engine should load and push runtime data to connected clients.
+    /// Set to `false` for management-only engines (e.g. Bonjour server) that only handle engine list operations.
+    public nonisolated let pushesRuntimeData: Bool
+
     // MARK: - State Management
 
     private var connectionStateCancellable: AnyCancellable?
@@ -153,12 +157,14 @@ public actor RuntimeEngine {
             hostID: RuntimeNetworkBonjour.localInstanceID,
             hostName: RuntimeNetworkBonjour.localHostName
         ),
-        originChain: [String] = [RuntimeNetworkBonjour.localInstanceID]
+        originChain: [String] = [RuntimeNetworkBonjour.localInstanceID],
+        pushesRuntimeData: Bool = true
     ) {
         self.engineID = engineID
         self.source = source
         self.hostInfo = hostInfo
         self.originChain = originChain
+        self.pushesRuntimeData = pushesRuntimeData
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
@@ -177,7 +183,9 @@ public actor RuntimeEngine {
                     self.observeConnectionState(connection)
                 }
                 #log(.info, "Server connection established")
-                await observeRuntime()
+                if pushesRuntimeData {
+                    await observeRuntime()
+                }
                 stateSubject.send(.connected)
             case .client:
                 #log(.info, "Starting as client for source: \(String(describing: self.source), privacy: .public)")
@@ -222,7 +230,9 @@ public actor RuntimeEngine {
                 needsReregistrationOnConnect = false
                 #log(.info, "Server reconnected, re-registering handlers and pushing data")
                 setupMessageHandlerForServer()
-                Task { await self.observeRuntime() }
+                if pushesRuntimeData {
+                    Task { await self.observeRuntime() }
+                }
             }
         case .disconnected(let error):
             if let error {

@@ -200,6 +200,10 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     /// Processes the receiving buffer and extracts complete messages.
     private func processReceivedData() {
+        let hasContinuation = receivedDataContinuation != nil
+        var extractedMessages: [Data] = []
+        var remainingBufferSize = 0
+
         receivingData.withLock { buffer in
             while true {
                 guard let endRange = buffer.range(of: Self.endMarkerData) else {
@@ -207,8 +211,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                 }
 
                 let messageData = buffer.subdata(in: 0 ..< endRange.lowerBound)
-                receivedDataContinuation?.yield(messageData)
-                onMessageReceived?(messageData)
+                extractedMessages.append(messageData)
 
                 if endRange.upperBound < buffer.count {
                     buffer = buffer.subdata(in: endRange.upperBound ..< buffer.count)
@@ -217,18 +220,29 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                     break
                 }
             }
+            remainingBufferSize = buffer.count
+        }
+
+        if extractedMessages.isEmpty {
+            #log(.info, "[MSG-DEBUG] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
+        }
+        for messageData in extractedMessages {
+            #log(.info, "[MSG-DEBUG] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
+            receivedDataContinuation?.yield(messageData)
+            onMessageReceived?(messageData)
         }
     }
 
     /// Finishes the received data stream.
     func finishReceiving(throwing error: (any Error)? = nil) {
         if let error {
-            #log(.default, "Finishing receiving with error: \(String(describing: error), privacy: .public)")
+            #log(.default, "finishReceiving: with error: \(String(describing: error), privacy: .public)")
             receivedDataContinuation?.finish(throwing: error)
         } else {
-            #log(.debug, "Finishing receiving stream normally")
+            #log(.info, "finishReceiving: stream closed normally")
             receivedDataContinuation?.finish()
         }
+        receivedDataContinuation = nil
     }
 
     /// Returns the current size of the receiving buffer.

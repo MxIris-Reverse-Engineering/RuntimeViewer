@@ -1,12 +1,18 @@
 #if canImport(Network)
 
-import Foundation
+public import Foundation
 import Combine
 public import FoundationToolbox
 import RuntimeViewerCommunication
+#if canImport(AppKit)
+import AppKit
+#endif
 
 @Loggable(.private)
 public actor RuntimeEngineProxyServer {
+    /// Command name for icon requests from remote clients.
+    public static let iconRequestCommand = "com.RuntimeViewer.ProxyServer.requestIcon"
+
     public let engine: RuntimeEngine
 
     private let communicator = RuntimeCommunicator()
@@ -143,8 +149,55 @@ public actor RuntimeEngineProxyServer {
             [engine] (request: RuntimeEngine.MemberAddressesRequest) -> [RuntimeMemberAddress] in
             try await engine.memberAddresses(for: request.object, memberName: request.memberName)
         }
+
+        #if canImport(AppKit)
+        let engineSource = engine.source
+        connection.setMessageHandler(name: Self.iconRequestCommand) {
+            () -> Data? in
+            await MainActor.run {
+                Self.appIconData(for: engineSource)
+            }
+        }
+        #endif
+
         #log(.info, "[PROXY \(self.identifier, privacy: .public)] all handlers registered")
     }
+
+    // MARK: - Icon
+
+    /// Returns the app icon PNG data for this engine's attached process, or nil.
+    public func iconData() async -> Data? {
+        #if canImport(AppKit)
+        return await MainActor.run {
+            Self.appIconData(for: engine.source)
+        }
+        #else
+        return nil
+        #endif
+    }
+
+    #if canImport(AppKit)
+    @MainActor
+    private static func appIconData(for source: RuntimeSource) -> Data? {
+        let pidString: String?
+        switch source {
+        case .remote(_, let identifier, _):
+            pidString = identifier.rawValue
+        case .localSocket(_, let identifier, _):
+            pidString = identifier.rawValue
+        default:
+            pidString = nil
+        }
+        guard let pidString, let pid = Int32(pidString) else { return nil }
+        guard let app = NSRunningApplication(processIdentifier: pid) else { return nil }
+
+        let icon = app.icon ?? app.bundleURL.flatMap { NSWorkspace.shared.icon(forFile: $0.path) }
+        guard let icon else { return nil }
+        return icon.tiffRepresentation.flatMap {
+            NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:])
+        }
+    }
+    #endif
 
     // MARK: - Push Relay
 

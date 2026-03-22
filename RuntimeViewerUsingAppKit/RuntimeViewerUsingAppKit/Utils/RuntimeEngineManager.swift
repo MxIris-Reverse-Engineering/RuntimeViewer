@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import FoundationToolbox
 import OrderedCollections
@@ -38,6 +39,9 @@ public final class RuntimeEngineManager: Loggable {
 
     @Published
     public private(set) var runtimeEngineSections: [RuntimeEngineSection] = []
+
+    /// Cache for engine icons keyed by engine ID.
+    private var engineIconCache: [String: NSImage] = [:]
 
     @Dependency(\.helperServiceManager)
     private var helperServiceManager
@@ -93,7 +97,7 @@ public final class RuntimeEngineManager: Loggable {
     private func startBonjourServer() {
         let name = SCDynamicStoreCopyComputerName(nil, nil) as? String ?? ProcessInfo.processInfo.hostName
         let source = RuntimeSource.bonjour(name: name, identifier: .init(rawValue: name), role: .server)
-        let engine = RuntimeEngine(source: source)
+        let engine = RuntimeEngine(source: source, pushesRuntimeData: false)
         bonjourServerEngine = engine
 
         Self.logger.info("Starting Bonjour server with name: \(name, privacy: .public)")
@@ -196,7 +200,18 @@ public final class RuntimeEngineManager: Loggable {
         Self.logger.info("Attached runtime engine connected: \(name, privacy: .public)")
         attachedRuntimeEngines.append(runtimeEngine)
         observeRuntimeEngineState(runtimeEngine)
+        cacheLocalAppIcon(for: runtimeEngine, processIdentifier: identifier)
         rebuildSections()
+    }
+
+    private func cacheLocalAppIcon(for engine: RuntimeEngine, processIdentifier pidString: String) {
+        guard let pid = Int32(pidString) else { return }
+        let app = NSRunningApplication(processIdentifier: pid)
+        if let icon = app?.icon {
+            engineIconCache[engine.engineID] = icon
+        } else if let bundleURL = app?.bundleURL {
+            engineIconCache[engine.engineID] = NSWorkspace.shared.icon(forFile: bundleURL.path)
+        }
     }
 
     private func observeRuntimeEngineState(_ runtimeEngine: RuntimeEngine) {
@@ -224,6 +239,7 @@ public final class RuntimeEngineManager: Loggable {
                     for (id, engine) in self.mirroredEngines where engine.hostInfo.hostID == hostID {
                         Task { await engine.stop() }
                         self.mirroredEngines.removeValue(forKey: id)
+                        self.engineIconCache.removeValue(forKey: id)
                     }
 
                     terminateRuntimeEngine(for: runtimeEngine.source)
@@ -253,6 +269,13 @@ public final class RuntimeEngineManager: Loggable {
         }
     }
 
+    // MARK: - Icon Management
+
+    /// Returns the cached icon for a given engine, or nil if not yet available.
+    public func cachedIcon(for engine: RuntimeEngine) -> NSImage? {
+        engineIconCache[engine.engineID]
+    }
+
     // MARK: - Engine Sharing (Server-Side)
 
     func buildEngineDescriptors() async -> [RemoteEngineDescriptor] {
@@ -273,7 +296,9 @@ public final class RuntimeEngineManager: Loggable {
                 hostName: engine.hostInfo.hostName,
                 originChain: engine.originChain,
                 directTCPHost: await proxy.host,
-                directTCPPort: await proxy.port
+                directTCPPort: await proxy.port,
+                metadata: engine.hostInfo.metadata,
+                iconData: await proxy.iconData()
             )
             let proxyHost = await proxy.host
             let proxyPort = await proxy.port
@@ -300,6 +325,8 @@ public final class RuntimeEngineManager: Loggable {
         rx.runtimeEngines
             .driveOnNext { [weak self] engines in
                 guard let self else { return }
+                let ids = engines.map { $0.source.identifier }
+                Self.logger.info("[ICON-DEBUG] rx.runtimeEngines emitted \(engines.count, privacy: .public) engines: \(ids.joined(separator: ", "), privacy: .public)")
                 self.updateProxyServers(for: engines)
             }
             .disposed(by: rx.disposeBag)
@@ -360,9 +387,16 @@ public final class RuntimeEngineManager: Loggable {
 
                 // Push updated engine list after proxy is ready
                 guard let self else { return }
+                Self.logger.info("[ICON-DEBUG] proxy \(id, privacy: .public) started, building descriptors to push...")
                 let descriptors = await self.buildEngineDescriptors()
+                Self.logger.info("[ICON-DEBUG] pushing \(descriptors.count, privacy: .public) descriptors after proxy \(id, privacy: .public) ready")
                 if let bonjourServerEngine = await MainActor.run(body: { self.bonjourServerEngine }) {
+                    let serverState = bonjourServerEngine.state
+                    Self.logger.info("[ICON-DEBUG] bonjourServerEngine state: \(String(describing: serverState), privacy: .public)")
                     try? await bonjourServerEngine.pushEngineListChanged(descriptors)
+                    Self.logger.info("[ICON-DEBUG] pushEngineListChanged completed")
+                } else {
+                    Self.logger.info("[ICON-DEBUG] bonjourServerEngine is nil, cannot push")
                 }
             }
         }
@@ -386,11 +420,14 @@ public final class RuntimeEngineManager: Loggable {
 
         // Dedup: skip if we already processed the exact same set of descriptors
         let newIDSet = Set(filteredDescriptors.map(\.engineID))
+        Self.logger.info("[ICON-DEBUG] handleEngineListChanged dedup check: lastIDs=\(self.lastReceivedDescriptorIDs.sorted().joined(separator: ", "), privacy: .public)")
+        Self.logger.info("[ICON-DEBUG] handleEngineListChanged dedup check: newIDs=\(newIDSet.sorted().joined(separator: ", "), privacy: .public)")
         if newIDSet == lastReceivedDescriptorIDs {
-            Self.logger.info("[MIRROR-DEBUG] skipping duplicate descriptor set")
+            Self.logger.info("[ICON-DEBUG] skipping duplicate descriptor set!")
             return
         }
         lastReceivedDescriptorIDs = newIDSet
+        Self.logger.info("[ICON-DEBUG] descriptor set is NEW, proceeding with \(filteredDescriptors.count, privacy: .public) descriptors")
 
         for d in filteredDescriptors {
             Self.logger.info("[MIRROR-DEBUG]   descriptor: \(d.engineID, privacy: .public) host:\(d.directTCPHost, privacy: .public) port:\(d.directTCPPort, privacy: .public) originChain:\(d.originChain.joined(separator: ","), privacy: .public)")
@@ -402,6 +439,7 @@ public final class RuntimeEngineManager: Loggable {
         for id in currentIDs.subtracting(newIDs) {
             if let engine = mirroredEngines.removeValue(forKey: id) {
                 Task { await engine.stop() }
+                engineIconCache.removeValue(forKey: id)
             }
         }
 
@@ -424,13 +462,19 @@ public final class RuntimeEngineManager: Loggable {
                 ),
                 hostInfo: HostInfo(
                     hostID: descriptor.originChain.first ?? "",
-                    hostName: descriptor.hostName
+                    hostName: descriptor.hostName,
+                    metadata: descriptor.metadata
                 ),
                 originChain: descriptor.originChain
             )
 
             mirroredEngines[descriptor.engineID] = mirroredEngine
             observeRuntimeEngineState(mirroredEngine)
+
+            // Cache app icon from descriptor if available
+            if let iconData = descriptor.iconData, let image = NSImage(data: iconData) {
+                engineIconCache[mirroredEngine.engineID] = image
+            }
 
             Task {
                 do {
@@ -471,6 +515,8 @@ public final class RuntimeEngineManager: Loggable {
             }
         }
 
+        let sectionSummary = sections.map { "\($0.hostName)(\($0.engines.count))" }.joined(separator: ", ")
+        Self.logger.info("[ICON-DEBUG] rebuildSections: \(sections.count, privacy: .public) sections — \(sectionSummary, privacy: .public)")
         runtimeEngineSections = sections
     }
 }

@@ -207,40 +207,38 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     }
 
     private func observeIncomingMessages() {
-        Task {
-            do {
-                guard let stream = messageChannel.receivedMessages() else { return }
-                for try await data in stream {
-                    do {
-                        let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+        messageChannel.onMessageReceived = { [weak self] data in
+            guard let self else { return }
+            Task { await self.handleReceivedMessage(data) }
+        }
+    }
 
-                        // Check if this is a response to a pending request
-                        if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
-                            continue
-                        }
+    private func handleReceivedMessage(_ data: Data) async {
+        do {
+            let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
 
-                        guard let handler = messageChannel.handler(for: requestData.identifier) else {
-                            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
-                            continue
-                        }
+            // Check if this is a response to a pending request
+            if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
+                return
+            }
 
-                        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
-                        let responseData = try await handler.closure(requestData.data)
+            guard let handler = messageChannel.handler(for: requestData.identifier) else {
+                #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
+                return
+            }
 
-                        if handler.responseType != RuntimeMessageNull.self {
-                            let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData)
-                            try await send(requestData: response)
-                        }
-                    } catch {
-                        #log(.error, "Handler error: \(error, privacy: .public)")
-                        let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
-                        if let errorData = try? JSONEncoder().encode(errorResponse) {
-                            try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
-                        }
-                    }
-                }
-            } catch {
-                #log(.error, "Message observation error: \(error, privacy: .public)")
+            #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
+            let responseData = try await handler.closure(requestData.data)
+
+            if handler.responseType != RuntimeMessageNull.self {
+                let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData)
+                try await send(requestData: response)
+            }
+        } catch {
+            #log(.error, "Handler error: \(error, privacy: .public)")
+            let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
+            if let errorData = try? JSONEncoder().encode(errorResponse) {
+                try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
             }
         }
     }

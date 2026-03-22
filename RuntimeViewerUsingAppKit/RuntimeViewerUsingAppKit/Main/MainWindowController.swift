@@ -3,6 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
+import RuntimeViewerCatalystExtensions
 import UniformTypeIdentifiers
 
 final class MainWindow: NSWindow {
@@ -152,8 +153,24 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 sectionTitle: { $0.hostName },
                 items: { $0.engines },
                 itemTitle: { $0.source.description },
-                itemImage: { $0.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID ? $0.source.icon : .symbol(systemName: .network) },
-                itemRepresentedObject: { AnyHashable($0.engineID) }
+                itemImage: { engine in
+                    switch engine.source {
+                    case .local:
+                        return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                    case .remote(_, let identifier, _) where identifier == .macCatalyst:
+                        return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                    default:
+                        if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
+                            return RuntimeEngineManager.shared.cachedIcon(for: engine) ?? .symbol(name: RuntimeViewerSymbols.appFill)
+                        } else {
+                            return RuntimeEngineManager.shared.cachedIcon(for: engine) ?? NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                        }
+                    }
+                },
+                itemRepresentedObject: { AnyHashable($0.engineID) },
+                configureMenuItem: { menuItem, _ in
+                    menuItem.image?.size = NSSize(width: 24, height: 24)
+                }
             )
         ).disposed(by: rx.disposeBag)
 
