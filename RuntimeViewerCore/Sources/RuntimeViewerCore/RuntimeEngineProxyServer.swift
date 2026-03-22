@@ -50,8 +50,19 @@ public actor RuntimeEngineProxyServer {
             host = info.host
             port = info.port
         }
-        setupRequestHandlers()
-        setupPushRelay()
+        // Register handlers after a client actually connects,
+        // because underlyingConnection is nil until then.
+        connection?.statePublisher
+            .sink { [weak self] state in
+                guard let self else { return }
+                if state == .connected {
+                    Task {
+                        await self.setupRequestHandlers()
+                        await self.setupPushRelay()
+                    }
+                }
+            }
+            .store(in: &subscriptions)
     }
 
     /// Stops the proxy server and releases all resources.
