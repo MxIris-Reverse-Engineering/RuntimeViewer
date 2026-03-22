@@ -257,12 +257,15 @@ public final class RuntimeEngineManager: Loggable {
         var descriptors: [RemoteEngineDescriptor] = []
         for engine in runtimeEngines {
             guard engine !== bonjourServerEngine else { continue }
-            guard let proxy = proxyServers[engine.source.identifier] else { continue }
+            let localID = engine.source.identifier
+            guard let proxy = proxyServers[localID] else { continue }
+            // Make engineID globally unique by prefixing with host instance ID
+            let globalID = "\(engine.hostInfo.hostID)/\(localID)"
             let descriptor = RemoteEngineDescriptor(
-                engineID: engine.source.identifier,
+                engineID: globalID,
                 source: engine.source,
                 hostName: engine.hostInfo.hostName,
-                originChain: engine.originChain + [RuntimeNetworkBonjour.localInstanceID],
+                originChain: engine.originChain,
                 directTCPHost: await proxy.host,
                 directTCPPort: await proxy.port
             )
@@ -349,9 +352,9 @@ public final class RuntimeEngineManager: Loggable {
                 continue
             }
 
-            // Dedup check: skip if an engine with the same identifier already exists locally
-            if runtimeEngines.contains(where: { $0.source.identifier == descriptor.engineID }) {
-                Self.logger.info("Skipping mirrored engine \(descriptor.engineID, privacy: .public): already exists")
+            // Dedup check: skip if already mirrored
+            if mirroredEngines[descriptor.engineID] != nil {
+                Self.logger.info("Skipping mirrored engine \(descriptor.engineID, privacy: .public): already mirrored")
                 continue
             }
 
