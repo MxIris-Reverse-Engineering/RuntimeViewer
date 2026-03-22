@@ -2,6 +2,7 @@ import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import RuntimeViewerCommunication
 import UniformTypeIdentifiers
 
 final class MainWindow: NSWindow {
@@ -153,8 +154,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 sectionTitle: { $0.hostName },
                 items: { $0.engines },
                 itemTitle: { $0.source.description },
-                itemImage: { $0.source.icon },
-                itemRepresentedObject: { AnyHashable($0.source.identifier) }
+                itemImage: { engine in
+                    engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID
+                        ? engine.source.icon
+                        : NSImage(systemSymbolName: "arrow.2.squarepath", accessibilityDescription: nil)
+                },
+                itemRepresentedObject: { AnyHashable($0.engineID) }
             )
         ).disposed(by: rx.disposeBag)
 

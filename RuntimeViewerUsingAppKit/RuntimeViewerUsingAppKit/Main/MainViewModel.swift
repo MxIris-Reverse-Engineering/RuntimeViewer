@@ -65,7 +65,7 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     let isContentStackDepthGreaterThanOne = BehaviorRelay<Bool>(value: false)
 
-    let selectedEngineIdentifier = BehaviorRelay<String>(value: RuntimeSource.local.identifier)
+    let selectedEngineIdentifier = BehaviorRelay<String>(value: RuntimeEngine.local.engineID)
 
     @Observed
     var selectedRuntimeObject: RuntimeObject?
@@ -160,7 +160,7 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         input.switchSource.compactMap { $0 }.emit(with: self) { owner, identifier in
             guard let engine = owner.runtimeEngineManager.runtimeEngines.first(where: {
-                $0.source.identifier == identifier
+                $0.engineID == identifier
             }) else { return }
             owner.router.trigger(.main(engine))
             owner.selectedEngineIdentifier.accept(identifier)

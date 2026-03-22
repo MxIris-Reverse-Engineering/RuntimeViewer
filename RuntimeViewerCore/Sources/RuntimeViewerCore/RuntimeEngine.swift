@@ -83,6 +83,9 @@ public actor RuntimeEngine {
     /// Callback for handling engine list change notifications. Set by RuntimeEngineManager.
     public static var engineListChangedHandler: (([RemoteEngineDescriptor], RuntimeEngine) async -> Void)?
 
+    /// Globally unique identifier for this engine instance.
+    public nonisolated let engineID: String
+
     public nonisolated let source: RuntimeSource
 
     public nonisolated let hostInfo: HostInfo
@@ -145,12 +148,14 @@ public actor RuntimeEngine {
 
     public init(
         source: RuntimeSource,
+        engineID: String = UUID().uuidString,
         hostInfo: HostInfo = HostInfo(
             hostID: RuntimeNetworkBonjour.localInstanceID,
             hostName: RuntimeNetworkBonjour.localHostName
         ),
         originChain: [String] = [RuntimeNetworkBonjour.localInstanceID]
     ) {
+        self.engineID = engineID
         self.source = source
         self.hostInfo = hostInfo
         self.originChain = originChain
