@@ -222,7 +222,7 @@ actor RuntimeSwiftSection {
             printStrippedSymbolicItem: options.printStrippedSymbolicItem,
             printFieldOffset: options.emitOffsetComments,
             printMemberAddress: options.printMemberAddress,
-            printVTableOffset: options.printVTableOffset,
+//            printVTableOffset: options.printVTableOffset,
             printTypeLayout: options.printTypeLayout,
             printEnumLayout: options.printEnumLayout,
             fieldOffsetTransformer: fieldOffsetTransformer,
