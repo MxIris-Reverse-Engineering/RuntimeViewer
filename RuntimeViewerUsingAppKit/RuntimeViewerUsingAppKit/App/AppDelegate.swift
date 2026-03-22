@@ -1,5 +1,6 @@
 import AppKit
 import FoundationToolbox
+import OSLog
 import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerSettings
@@ -42,7 +43,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func exportLogs() {
-        RuntimeEngineManager.shared.exportLogs()
+        do {
+            let store = try OSLogStore(scope: .currentProcessIdentifier)
+            let position = store.position(timeIntervalSinceEnd: -3600)
+            let entries = try store.getEntries(at: position)
+
+            var content = ""
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm:ss.SSS"
+
+            for entry in entries {
+                guard let logEntry = entry as? OSLogEntryLog else { continue }
+                content.append("[\(formatter.string(from: logEntry.date))] [\(logEntry.subsystem)/\(logEntry.category)] \(logEntry.composedMessage)\n")
+            }
+
+            let logDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Logs/RuntimeViewer")
+            try FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+            let logFile = logDir.appendingPathComponent("mirror-debug.log")
+            try content.write(to: logFile, atomically: true, encoding: .utf8)
+            NSWorkspace.shared.selectFile(logFile.path, inFileViewerRootedAtPath: logDir.path)
+        } catch {
+            #log(.error, "Failed to export logs: \(error, privacy: .public)")
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
