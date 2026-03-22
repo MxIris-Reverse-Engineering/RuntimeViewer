@@ -1,5 +1,6 @@
 import Foundation
 import FoundationToolbox
+import OrderedCollections
 import ServiceManagement
 import SystemConfiguration
 import RuntimeViewerCore
@@ -34,7 +35,7 @@ public final class RuntimeEngineManager: Loggable {
     private var proxyServers: [String: RuntimeEngineProxyServer] = [:]
 
     @Published
-    public private(set) var mirroredEngines: [String: RuntimeEngine] = [:]
+    public private(set) var mirroredEngines: OrderedDictionary<String, RuntimeEngine> = [:]
 
     @Published
     public private(set) var runtimeEngineSections: [RuntimeEngineSection] = []
@@ -163,7 +164,7 @@ public final class RuntimeEngineManager: Loggable {
     }
 
     public var runtimeEngines: [RuntimeEngine] {
-        systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + mirroredEngines.values.sorted { $0.source.description < $1.source.description }
+        systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + mirroredEngines.values.elements
     }
 
     public func launchSystemRuntimeEngines() async throws {
@@ -483,7 +484,7 @@ extension Reactive where Base == RuntimeEngineManager {
             base.$attachedRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []),
             base.$bonjourRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []),
             base.$mirroredEngines.asObservable().asDriver(onErrorJustReturn: [:]),
-            resultSelector: { $0 + $1 + $2 + Array($3.values) }
+            resultSelector: { $0 + $1 + $2 + $3.values.elements }
         )
     }
 
