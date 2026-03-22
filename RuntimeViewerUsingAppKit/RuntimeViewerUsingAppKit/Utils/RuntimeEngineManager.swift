@@ -163,7 +163,7 @@ public final class RuntimeEngineManager: Loggable {
     }
 
     public var runtimeEngines: [RuntimeEngine] {
-        systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + Array(mirroredEngines.values)
+        systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + mirroredEngines.values.sorted { $0.source.description < $1.source.description }
     }
 
     public func launchSystemRuntimeEngines() async throws {

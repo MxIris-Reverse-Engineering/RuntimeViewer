@@ -53,14 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             formatter.dateFormat = "HH:mm:ss.SSS"
 
             for entry in entries {
-                guard let logEntry = entry as? OSLogEntryLog else { continue }
+                guard let logEntry = entry as? OSLogEntryLog, logEntry.subsystem.contains("RuntimeViewer") else { continue }
                 content.append("[\(formatter.string(from: logEntry.date))] [\(logEntry.subsystem)/\(logEntry.category)] \(logEntry.composedMessage)\n")
             }
 
             let logDir = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/Logs/RuntimeViewer")
             try FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
-            let logFile = logDir.appendingPathComponent("mirror-debug.log")
+            let logFile = logDir.appendingPathComponent("RuntimeViewer.log")
             try content.write(to: logFile, atomically: true, encoding: .utf8)
             NSWorkspace.shared.selectFile(logFile.path, inFileViewerRootedAtPath: logDir.path)
         } catch {
