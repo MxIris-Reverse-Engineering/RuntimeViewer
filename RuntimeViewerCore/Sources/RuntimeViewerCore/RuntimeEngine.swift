@@ -251,7 +251,10 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
         setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
         setMessageHandlerBinding(forName: .engineList) { _ -> [RemoteEngineDescriptor] in
-            await RuntimeEngine.engineListProvider?() ?? []
+            #log(.info, "[MIRROR-DEBUG] engineList handler called, provider set: \(RuntimeEngine.engineListProvider != nil, privacy: .public)")
+            let result = await RuntimeEngine.engineListProvider?() ?? []
+            #log(.info, "[MIRROR-DEBUG] engineList handler returning \(result.count, privacy: .public) descriptors")
+            return result
         }
         #log(.debug, "Server message handlers setup complete")
     }
@@ -262,6 +265,7 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
         setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
         setMessageHandlerBinding(forName: .engineListChanged) { (engine: RuntimeEngine, descriptors: [RemoteEngineDescriptor]) in
+            #log(.info, "[MIRROR-DEBUG] engineListChanged received: \(descriptors.count, privacy: .public) descriptors, handler set: \(RuntimeEngine.engineListChangedHandler != nil, privacy: .public)")
             await RuntimeEngine.engineListChangedHandler?(descriptors, engine)
         }
         #log(.debug, "Client message handlers setup complete")
@@ -537,8 +541,13 @@ extension RuntimeEngine {
     }
 
     public func pushEngineListChanged(_ descriptors: [RemoteEngineDescriptor]) async throws {
-        guard let connection, source.remoteRole?.isServer == true else { return }
+        guard let connection, source.remoteRole?.isServer == true else {
+            #log(.info, "[MIRROR-DEBUG] pushEngineListChanged skipped: connection=\(connection != nil, privacy: .public), isServer=\(source.remoteRole?.isServer == true, privacy: .public)")
+            return
+        }
+        #log(.info, "[MIRROR-DEBUG] pushEngineListChanged sending \(descriptors.count, privacy: .public) descriptors")
         try await connection.sendMessage(name: .engineListChanged, request: descriptors)
+        #log(.info, "[MIRROR-DEBUG] pushEngineListChanged sent successfully")
     }
 }
 
