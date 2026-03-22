@@ -175,13 +175,14 @@ public actor RuntimeEngine {
                 await observeRuntime()
                 stateSubject.send(.connected)
             case .client:
-                #log(.info, "Starting as client")
+                #log(.info, "Starting as client for source: \(String(describing: self.source), privacy: .public)")
                 connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint) { connection in
+                    #log(.info, "[MIRROR-DEBUG] client connection modifier called for \(String(describing: self.source), privacy: .public), connection state: \(String(describing: connection.state), privacy: .public)")
                     self.connection = connection
                     self.setupMessageHandlerForClient()
                     self.observeConnectionState(connection)
                 }
-                #log(.info, "Client connected successfully")
+                #log(.info, "Client connected successfully to \(String(describing: self.source), privacy: .public)")
                 stateSubject.send(.connected)
             }
         } else {
@@ -260,7 +261,7 @@ public actor RuntimeEngine {
     }
 
     private func setupMessageHandlerForClient() {
-        #log(.debug, "Setting up client message handlers")
+        #log(.debug, "Setting up client message handlers for source: \(String(describing: self.source), privacy: .public)")
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
         setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }

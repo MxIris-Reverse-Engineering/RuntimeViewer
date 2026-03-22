@@ -4,20 +4,8 @@ import Foundation
 import Combine
 import RuntimeViewerCommunication
 
-/// Wraps a ``RuntimeEngine`` and exposes it over a direct-TCP server connection.
-///
-/// ``RuntimeEngineProxyServer`` starts a TCP listener (auto-assigned port) and
-/// registers request handlers that forward each command to the underlying engine.
-/// It also subscribes to the engine's Combine publishers to relay push data
-/// (image nodes, image list, reload notifications) to the connected client.
-///
-/// ## Usage
-///
-/// ```swift
-/// let proxy = RuntimeEngineProxyServer(engine: engine, identifier: "MyProxy")
-/// try await proxy.start()
-/// print("Proxy available at \(proxy.host):\(proxy.port)")
-/// ```
+private func proxyLog(_ msg: String) { NSLog("[PROXY] %@", msg) }
+
 public actor RuntimeEngineProxyServer {
     public let engine: RuntimeEngine
 
@@ -34,10 +22,6 @@ public actor RuntimeEngineProxyServer {
         self.identifier = identifier
     }
 
-    /// Starts the proxy server on an auto-assigned TCP port.
-    ///
-    /// After this method returns, ``host`` and ``port`` are populated with the
-    /// actual listening address.
     public func start() async throws {
         let source = RuntimeSource.directTCP(
             name: identifier,
@@ -45,47 +29,72 @@ public actor RuntimeEngineProxyServer {
             port: 0,
             role: .server
         )
+        proxyLog("[PROXY \(self.identifier)] starting...")
         connection = try await communicator.connect(to: source, waitForConnection: false)
         if let info = connection?.connectionInfo {
             host = info.host
             port = info.port
         }
-        // Register handlers after a client actually connects,
-        // because underlyingConnection is nil until then.
+        proxyLog("[PROXY \(self.identifier)] listening on \(self.host):\(self.port)")
+
+        let id = identifier
         connection?.statePublisher
             .sink { [weak self] state in
                 guard let self else { return }
+                proxyLog("[PROXY \(id)] connection state: \(String(describing: state))")
                 if state == .connected {
                     Task {
+                        proxyLog("[PROXY \(id)] client connected, setting up handlers...")
                         await self.setupRequestHandlers()
+                        proxyLog("[PROXY \(id)] request handlers registered")
                         await self.setupPushRelay()
+                        proxyLog("[PROXY \(id)] push relay set up, sending initial data...")
                         await self.sendInitialData()
+                        proxyLog("[PROXY \(id)] initial data sent")
                     }
                 }
             }
             .store(in: &subscriptions)
     }
 
-    /// Sends current engine data to the newly connected client.
     private func sendInitialData() async {
-        guard let connection else { return }
+        guard let connection else {
+            proxyLog("[PROXY \(self.identifier)] sendInitialData: connection is nil!")
+            return
+        }
         let imageList = await engine.imageList
         let imageNodes = await engine.imageNodes
-        try? await connection.sendMessage(
-            name: RuntimeEngine.CommandNames.imageList.commandName,
-            request: imageList
-        )
-        try? await connection.sendMessage(
-            name: RuntimeEngine.CommandNames.imageNodes.commandName,
-            request: imageNodes
-        )
-        try? await connection.sendMessage(
-            name: RuntimeEngine.CommandNames.reloadData.commandName
-        )
+        proxyLog("[PROXY \(self.identifier)] sendInitialData: imageList=\(imageList.count), imageNodes=\(imageNodes.count)")
+        do {
+            try await connection.sendMessage(
+                name: RuntimeEngine.CommandNames.imageList.commandName,
+                request: imageList
+            )
+            proxyLog("[PROXY \(self.identifier)] sent imageList OK")
+        } catch {
+            proxyLog("[PROXY \(self.identifier)] failed to send imageList: \(error)")
+        }
+        do {
+            try await connection.sendMessage(
+                name: RuntimeEngine.CommandNames.imageNodes.commandName,
+                request: imageNodes
+            )
+            proxyLog("[PROXY \(self.identifier)] sent imageNodes OK")
+        } catch {
+            proxyLog("[PROXY \(self.identifier)] failed to send imageNodes: \(error)")
+        }
+        do {
+            try await connection.sendMessage(
+                name: RuntimeEngine.CommandNames.reloadData.commandName
+            )
+            proxyLog("[PROXY \(self.identifier)] sent reloadData OK")
+        } catch {
+            proxyLog("[PROXY \(self.identifier)] failed to send reloadData: \(error)")
+        }
     }
 
-    /// Stops the proxy server and releases all resources.
     public func stop() {
+        proxyLog("[PROXY \(self.identifier)] stopping")
         connection?.stop()
         subscriptions.removeAll()
     }
@@ -93,7 +102,10 @@ public actor RuntimeEngineProxyServer {
     // MARK: - Request Handlers
 
     private func setupRequestHandlers() {
-        guard let connection else { return }
+        guard let connection else {
+            proxyLog("[PROXY \(self.identifier)] setupRequestHandlers: connection is nil!")
+            return
+        }
 
         connection.setMessageHandler(name: RuntimeEngine.CommandNames.isImageLoaded.commandName) {
             [engine] (path: String) -> Bool in
@@ -129,16 +141,22 @@ public actor RuntimeEngineProxyServer {
             [engine] (request: RuntimeEngine.MemberAddressesRequest) -> [RuntimeMemberAddress] in
             try await engine.memberAddresses(for: request.object, memberName: request.memberName)
         }
+        proxyLog("[PROXY \(self.identifier)] all handlers registered")
     }
 
     // MARK: - Push Relay
 
     private func setupPushRelay() {
-        guard let connection else { return }
+        guard let connection else {
+            proxyLog("[PROXY \(self.identifier)] setupPushRelay: connection is nil!")
+            return
+        }
 
+        let id = identifier
         engine.imageNodesPublisher
             .dropFirst()
             .sink { imageNodes in
+                proxyLog("[PROXY \(id)] relaying imageNodes (\(imageNodes.count) nodes)")
                 Task {
                     try? await connection.sendMessage(
                         name: RuntimeEngine.CommandNames.imageNodes.commandName,
@@ -151,6 +169,7 @@ public actor RuntimeEngineProxyServer {
         engine.reloadDataPublisher
             .sink { [weak self] in
                 guard let self else { return }
+                proxyLog("[PROXY \(id)] relaying reloadData")
                 Task {
                     let imageList = await self.engine.imageList
                     try? await connection.sendMessage(
