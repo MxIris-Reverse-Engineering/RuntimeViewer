@@ -256,8 +256,8 @@ public final class RuntimeEngineManager: Loggable {
     // MARK: - Engine Sharing (Server-Side)
 
     func buildEngineDescriptors() async -> [RemoteEngineDescriptor] {
-        Self.logger.info("[MIRROR-DEBUG] buildEngineDescriptors called, runtimeEngines count: \(runtimeEngines.count, privacy: .public), proxyServers count: \(proxyServers.count, privacy: .public)")
-        Self.logger.info("[MIRROR-DEBUG] proxyServer keys: \(Array(proxyServers.keys).joined(separator: ", "), privacy: .public)")
+        Self.logger.info("[MIRROR-DEBUG] buildEngineDescriptors called, runtimeEngines count: \(self.runtimeEngines.count, privacy: .public), proxyServers count: \(self.proxyServers.count, privacy: .public)")
+        Self.logger.info("[MIRROR-DEBUG] proxyServer keys: \(Array(self.proxyServers.keys).joined(separator: ", "), privacy: .public)")
         var descriptors: [RemoteEngineDescriptor] = []
         for engine in runtimeEngines {
             let isBonjourServer = engine === bonjourServerEngine
@@ -275,7 +275,9 @@ public final class RuntimeEngineManager: Loggable {
                 directTCPHost: await proxy.host,
                 directTCPPort: await proxy.port
             )
-            Self.logger.info("[MIRROR-DEBUG] built descriptor: \(globalID, privacy: .public) at \(await proxy.host, privacy: .public):\(await proxy.port, privacy: .public)")
+            let proxyHost = await proxy.host
+            let proxyPort = await proxy.port
+            Self.logger.info("[MIRROR-DEBUG] built descriptor: \(globalID, privacy: .public) at \(proxyHost, privacy: .public):\(proxyPort, privacy: .public)")
             descriptors.append(descriptor)
         }
         Self.logger.info("[MIRROR-DEBUG] buildEngineDescriptors returning \(descriptors.count, privacy: .public) descriptors")
@@ -347,13 +349,15 @@ public final class RuntimeEngineManager: Loggable {
                 let proxy = RuntimeEngineProxyServer(engine: engine, identifier: id)
                 try await proxy.start()
                 proxyServers[id] = proxy
-                Self.logger.info("[MIRROR-DEBUG] proxy server started for: \(id, privacy: .public), host: \(await proxy.host, privacy: .public), port: \(await proxy.port, privacy: .public)")
+                let proxyHost = await proxy.host
+                let proxyPort = await proxy.port
+                Self.logger.info("[MIRROR-DEBUG] proxy server started for: \(id, privacy: .public), host: \(proxyHost, privacy: .public), port: \(proxyPort, privacy: .public)")
             } catch {
                 Self.logger.error("[MIRROR-DEBUG] Failed to start proxy server for \(id, privacy: .public): \(error, privacy: .public)")
             }
         }
 
-        Self.logger.info("[MIRROR-DEBUG] updateProxyServers done, total proxies: \(proxyServers.count, privacy: .public)")
+        Self.logger.info("[MIRROR-DEBUG] updateProxyServers done, total proxies: \(self.proxyServers.count, privacy: .public)")
 
         // Notify connected Bonjour clients about the updated engine list
         if let bonjourServerEngine {

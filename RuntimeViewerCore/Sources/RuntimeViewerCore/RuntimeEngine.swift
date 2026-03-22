@@ -541,8 +541,10 @@ extension RuntimeEngine {
     }
 
     public func pushEngineListChanged(_ descriptors: [RemoteEngineDescriptor]) async throws {
-        guard let connection, source.remoteRole?.isServer == true else {
-            #log(.info, "[MIRROR-DEBUG] pushEngineListChanged skipped: connection=\(connection != nil, privacy: .public), isServer=\(source.remoteRole?.isServer == true, privacy: .public)")
+        let hasConnection = self.connection != nil
+        let isServer = self.source.remoteRole?.isServer == true
+        guard let connection, isServer else {
+            #log(.info, "[MIRROR-DEBUG] pushEngineListChanged skipped: connection=\(hasConnection, privacy: .public), isServer=\(isServer, privacy: .public)")
             return
         }
         #log(.info, "[MIRROR-DEBUG] pushEngineListChanged sending \(descriptors.count, privacy: .public) descriptors")
