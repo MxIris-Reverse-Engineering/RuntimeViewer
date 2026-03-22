@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import FoundationToolbox
+import OSLog
 import ServiceManagement
 import SystemConfiguration
 import RuntimeViewerCore
@@ -469,6 +471,41 @@ public final class RuntimeEngineManager: Loggable {
         }
 
         runtimeEngineSections = sections
+    }
+}
+
+// MARK: - Log Export
+
+extension RuntimeEngineManager {
+    /// Exports OSLog entries from the current process to a file using `OSLogStore`.
+    /// Output: ~/Library/Logs/RuntimeViewer/mirror-debug.log
+    public func exportLogs() {
+        do {
+            let store = try OSLogStore(scope: .currentProcessIdentifier)
+            let position = store.position(timeIntervalSinceEnd: -3600)
+            let entries = try store.getEntries(at: position)
+
+            var content = ""
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm:ss.SSS"
+
+            for entry in entries {
+                guard let logEntry = entry as? OSLogEntryLog else { continue }
+                let line = "[\(formatter.string(from: logEntry.date))] [\(logEntry.subsystem)/\(logEntry.category)] \(logEntry.composedMessage)\n"
+                content.append(line)
+            }
+
+            let logDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Logs/RuntimeViewer")
+            try FileManager.default.createDirectory(at: logDir, withIntermediateDirectories: true)
+            let logFile = logDir.appendingPathComponent("mirror-debug.log")
+            try content.write(to: logFile, atomically: true, encoding: .utf8)
+            Self.logger.info("Exported \(content.count, privacy: .public) bytes of logs to \(logFile.path, privacy: .public)")
+
+            NSWorkspace.shared.selectFile(logFile.path, inFileViewerRootedAtPath: logDir.path)
+        } catch {
+            Self.logger.error("Failed to export logs: \(error, privacy: .public)")
+        }
     }
 }
 

@@ -2,10 +2,10 @@
 
 import Foundation
 import Combine
+public import FoundationToolbox
 import RuntimeViewerCommunication
 
-private func proxyLog(_ msg: String) { NSLog("[PROXY] %@", msg) }
-
+@Loggable(.private)
 public actor RuntimeEngineProxyServer {
     public let engine: RuntimeEngine
 
@@ -29,28 +29,30 @@ public actor RuntimeEngineProxyServer {
             port: 0,
             role: .server
         )
-        proxyLog("[PROXY \(self.identifier)] starting...")
+        #log(.info, "[PROXY \(self.identifier, privacy: .public)] starting...")
         connection = try await communicator.connect(to: source, waitForConnection: false)
         if let info = connection?.connectionInfo {
             host = info.host
             port = info.port
         }
-        proxyLog("[PROXY \(self.identifier)] listening on \(self.host):\(self.port)")
+        let proxyHost = self.host
+        let proxyPort = self.port
+        #log(.info, "[PROXY \(self.identifier, privacy: .public)] listening on \(proxyHost, privacy: .public):\(proxyPort, privacy: .public)")
 
-        let id = identifier
+        let id = self.identifier
         connection?.statePublisher
             .sink { [weak self] state in
                 guard let self else { return }
-                proxyLog("[PROXY \(id)] connection state: \(String(describing: state))")
+                #log(.info, "[PROXY \(id, privacy: .public)] connection state: \(String(describing: state), privacy: .public)")
                 if state == .connected {
                     Task {
-                        proxyLog("[PROXY \(id)] client connected, setting up handlers...")
+                        #log(.info, "[PROXY \(id, privacy: .public)] client connected, setting up handlers...")
                         await self.setupRequestHandlers()
-                        proxyLog("[PROXY \(id)] request handlers registered")
+                        #log(.info, "[PROXY \(id, privacy: .public)] request handlers registered")
                         await self.setupPushRelay()
-                        proxyLog("[PROXY \(id)] push relay set up, sending initial data...")
+                        #log(.info, "[PROXY \(id, privacy: .public)] push relay set up, sending initial data...")
                         await self.sendInitialData()
-                        proxyLog("[PROXY \(id)] initial data sent")
+                        #log(.info, "[PROXY \(id, privacy: .public)] initial data sent")
                     }
                 }
             }
@@ -59,42 +61,42 @@ public actor RuntimeEngineProxyServer {
 
     private func sendInitialData() async {
         guard let connection else {
-            proxyLog("[PROXY \(self.identifier)] sendInitialData: connection is nil!")
+            #log(.error, "[PROXY \(self.identifier, privacy: .public)] sendInitialData: connection is nil!")
             return
         }
         let imageList = await engine.imageList
         let imageNodes = await engine.imageNodes
-        proxyLog("[PROXY \(self.identifier)] sendInitialData: imageList=\(imageList.count), imageNodes=\(imageNodes.count)")
+        #log(.info, "[PROXY \(self.identifier, privacy: .public)] sendInitialData: imageList=\(imageList.count, privacy: .public), imageNodes=\(imageNodes.count, privacy: .public)")
         do {
             try await connection.sendMessage(
                 name: RuntimeEngine.CommandNames.imageList.commandName,
                 request: imageList
             )
-            proxyLog("[PROXY \(self.identifier)] sent imageList OK")
+            #log(.info, "[PROXY \(self.identifier, privacy: .public)] sent imageList OK")
         } catch {
-            proxyLog("[PROXY \(self.identifier)] failed to send imageList: \(error)")
+            #log(.error, "[PROXY \(self.identifier, privacy: .public)] failed to send imageList: \(error, privacy: .public)")
         }
         do {
             try await connection.sendMessage(
                 name: RuntimeEngine.CommandNames.imageNodes.commandName,
                 request: imageNodes
             )
-            proxyLog("[PROXY \(self.identifier)] sent imageNodes OK")
+            #log(.info, "[PROXY \(self.identifier, privacy: .public)] sent imageNodes OK")
         } catch {
-            proxyLog("[PROXY \(self.identifier)] failed to send imageNodes: \(error)")
+            #log(.error, "[PROXY \(self.identifier, privacy: .public)] failed to send imageNodes: \(error, privacy: .public)")
         }
         do {
             try await connection.sendMessage(
                 name: RuntimeEngine.CommandNames.reloadData.commandName
             )
-            proxyLog("[PROXY \(self.identifier)] sent reloadData OK")
+            #log(.info, "[PROXY \(self.identifier, privacy: .public)] sent reloadData OK")
         } catch {
-            proxyLog("[PROXY \(self.identifier)] failed to send reloadData: \(error)")
+            #log(.error, "[PROXY \(self.identifier, privacy: .public)] failed to send reloadData: \(error, privacy: .public)")
         }
     }
 
     public func stop() {
-        proxyLog("[PROXY \(self.identifier)] stopping")
+        #log(.info, "[PROXY \(self.identifier, privacy: .public)] stopping")
         connection?.stop()
         subscriptions.removeAll()
     }
@@ -103,7 +105,7 @@ public actor RuntimeEngineProxyServer {
 
     private func setupRequestHandlers() {
         guard let connection else {
-            proxyLog("[PROXY \(self.identifier)] setupRequestHandlers: connection is nil!")
+            #log(.error, "[PROXY \(self.identifier, privacy: .public)] setupRequestHandlers: connection is nil!")
             return
         }
 
@@ -141,22 +143,22 @@ public actor RuntimeEngineProxyServer {
             [engine] (request: RuntimeEngine.MemberAddressesRequest) -> [RuntimeMemberAddress] in
             try await engine.memberAddresses(for: request.object, memberName: request.memberName)
         }
-        proxyLog("[PROXY \(self.identifier)] all handlers registered")
+        #log(.info, "[PROXY \(self.identifier, privacy: .public)] all handlers registered")
     }
 
     // MARK: - Push Relay
 
     private func setupPushRelay() {
         guard let connection else {
-            proxyLog("[PROXY \(self.identifier)] setupPushRelay: connection is nil!")
+            #log(.error, "[PROXY \(self.identifier, privacy: .public)] setupPushRelay: connection is nil!")
             return
         }
 
-        let id = identifier
+        let id = self.identifier
         engine.imageNodesPublisher
             .dropFirst()
             .sink { imageNodes in
-                proxyLog("[PROXY \(id)] relaying imageNodes (\(imageNodes.count) nodes)")
+                #log(.info, "[PROXY \(id, privacy: .public)] relaying imageNodes (\(imageNodes.count, privacy: .public) nodes)")
                 Task {
                     try? await connection.sendMessage(
                         name: RuntimeEngine.CommandNames.imageNodes.commandName,
@@ -169,7 +171,7 @@ public actor RuntimeEngineProxyServer {
         engine.reloadDataPublisher
             .sink { [weak self] in
                 guard let self else { return }
-                proxyLog("[PROXY \(id)] relaying reloadData")
+                #log(.info, "[PROXY \(id, privacy: .public)] relaying reloadData")
                 Task {
                     let imageList = await self.engine.imageList
                     try? await connection.sendMessage(
