@@ -265,8 +265,6 @@ public final class RuntimeEngineManager: Loggable {
             let hasProxy = proxyServers[localID] != nil
             Self.logger.info("[MIRROR-DEBUG] engine: \(localID, privacy: .public), isBonjourServer: \(isBonjourServer, privacy: .public), hasProxy: \(hasProxy, privacy: .public)")
             guard !isBonjourServer else { continue }
-            // Skip .local engine — the Bonjour connection already provides access to local runtime
-            guard engine.source != .local else { continue }
             guard let proxy = proxyServers[localID] else { continue }
             let globalID = "\(engine.hostInfo.hostID)/\(localID)"
             let descriptor = RemoteEngineDescriptor(
@@ -436,6 +434,8 @@ public final class RuntimeEngineManager: Loggable {
         var hostIDToIndex: [String: Int] = [:]
 
         for engine in runtimeEngines {
+            // Hide Bonjour client engines from UI — they serve as management connections only
+            if bonjourRuntimeEngines.contains(where: { $0 === engine }) { continue }
             let hostID = engine.hostInfo.hostID
             if let index = hostIDToIndex[hostID] {
                 let section = sections[index]
