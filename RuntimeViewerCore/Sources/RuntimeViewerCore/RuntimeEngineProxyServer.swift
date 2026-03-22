@@ -45,7 +45,7 @@ public actor RuntimeEngineProxyServer {
             port: 0,
             role: .server
         )
-        connection = try await communicator.connect(to: source)
+        connection = try await communicator.connect(to: source, waitForConnection: false)
         if let info = connection?.connectionInfo {
             host = info.host
             port = info.port

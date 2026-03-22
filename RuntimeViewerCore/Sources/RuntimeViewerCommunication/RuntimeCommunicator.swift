@@ -54,7 +54,7 @@ public final class RuntimeCommunicator {
     ///   - modifier: Optional closure to configure the connection before use.
     /// - Returns: A configured `RuntimeConnection` ready for communication.
     /// - Throws: An error if the connection cannot be established.
-    public func connect(to source: RuntimeSource, bonjourEndpoint: RuntimeNetworkEndpoint? = nil, modifier: ((RuntimeConnection) async throws -> Void)? = nil) async throws -> RuntimeConnection {
+    public func connect(to source: RuntimeSource, bonjourEndpoint: RuntimeNetworkEndpoint? = nil, waitForConnection: Bool = true, modifier: ((RuntimeConnection) async throws -> Void)? = nil) async throws -> RuntimeConnection {
         #log(.info, "Connecting to source: \(String(describing: source), privacy: .public)")
         switch source {
         case .local:
@@ -149,7 +149,7 @@ public final class RuntimeCommunicator {
                 return runtimeConnection
             } else {
                 #log(.debug, "Creating direct TCP server connection on port: \(port, privacy: .public)")
-                let runtimeConnection = try await RuntimeDirectTCPServerConnection(port: port)
+                let runtimeConnection = try await RuntimeDirectTCPServerConnection(port: port, waitForConnection: waitForConnection)
                 try await modifier?(runtimeConnection)
                 #log(.info, "Direct TCP server connection established")
                 return runtimeConnection

@@ -446,8 +446,11 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
 
     /// Creates a server that listens on the specified port.
     ///
-    /// - Parameter port: The port to listen on (0 for auto-assign).
-    init(port: UInt16 = 0) async throws {
+    /// - Parameters:
+    ///   - port: The port to listen on (0 for auto-assign).
+    ///   - waitForConnection: If `true` (default), waits until a client connects before returning.
+    ///     If `false`, returns as soon as the listener is ready (port assigned), accepting connections asynchronously.
+    init(port: UInt16 = 0, waitForConnection: Bool = true) async throws {
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
@@ -483,6 +486,17 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                         self.port = port.rawValue
                         self.host = Self.getLocalIPAddress() ?? "127.0.0.1"
                         #log(.info, "Server listening on \(self.host, privacy: .public):\(self.port, privacy: .public)")
+                    }
+                    if !waitForConnection {
+                        let shouldResume = didResume.withLock { val -> Bool in
+                            guard !val else { return false }
+                            val = true
+                            return true
+                        }
+                        if shouldResume {
+                            #log(.info, "Server ready (not waiting for connection)")
+                            continuation.resume()
+                        }
                     }
                 case .failed(let error):
                     let shouldResume = didResume.withLock { val -> Bool in
