@@ -265,6 +265,8 @@ public final class RuntimeEngineManager: Loggable {
             let hasProxy = proxyServers[localID] != nil
             Self.logger.info("[MIRROR-DEBUG] engine: \(localID, privacy: .public), isBonjourServer: \(isBonjourServer, privacy: .public), hasProxy: \(hasProxy, privacy: .public)")
             guard !isBonjourServer else { continue }
+            // Skip .local engine — the Bonjour connection already provides access to local runtime
+            guard engine.source != .local else { continue }
             guard let proxy = proxyServers[localID] else { continue }
             let globalID = "\(engine.hostInfo.hostID)/\(localID)"
             let descriptor = RemoteEngineDescriptor(
@@ -400,7 +402,7 @@ public final class RuntimeEngineManager: Loggable {
 
             let mirroredEngine = RuntimeEngine(
                 source: .directTCP(
-                    name: descriptor.hostName + "/" + descriptor.source.description,
+                    name: descriptor.source.description,
                     host: descriptor.directTCPHost,
                     port: descriptor.directTCPPort,
                     role: .client
