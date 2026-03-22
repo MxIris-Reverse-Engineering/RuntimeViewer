@@ -295,6 +295,22 @@ public final class RuntimeEngineManager: Loggable {
                 }
             }
             .disposed(by: rx.disposeBag)
+
+        // When a Bonjour client connects to our server, push the current engine list
+        if let bonjourServerEngine {
+            bonjourServerEngine.statePublisher.asObservable()
+                .subscribeOnNext { [weak self] state in
+                    guard let self else { return }
+                    if case .connected = state {
+                        Self.logger.info("Bonjour server client connected, pushing engine list")
+                        Task {
+                            let descriptors = await self.buildEngineDescriptors()
+                            try? await bonjourServerEngine.pushEngineListChanged(descriptors)
+                        }
+                    }
+                }
+                .disposed(by: rx.disposeBag)
+        }
     }
 
     private func updateProxyServers(for engines: [RuntimeEngine]) async {
