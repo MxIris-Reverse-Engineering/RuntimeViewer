@@ -27,6 +27,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         MCPService.shared.start(for: AppMCPBridgeDocumentProvider())
+        installDebugMenu()
+    }
+
+    private func installDebugMenu() {
+        let debugMenu = NSMenu(title: "Debug")
+        let exportLogsItem = NSMenuItem(title: "Export Logs…", action: #selector(exportLogs), keyEquivalent: "")
+        exportLogsItem.target = self
+        debugMenu.addItem(exportLogsItem)
+
+        let debugMenuItem = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
+        debugMenuItem.submenu = debugMenu
+        NSApp.mainMenu?.addItem(debugMenuItem)
+    }
+
+    @objc private func exportLogs() {
+        RuntimeEngineManager.shared.exportLogs()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
