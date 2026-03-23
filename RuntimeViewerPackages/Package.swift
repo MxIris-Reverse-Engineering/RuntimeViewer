@@ -247,7 +247,7 @@ let package = Package(
             .package(
                 path: "../../RxAppKit",
                 isRelative: true,
-                isEnabled: false
+                isEnabled: true,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
