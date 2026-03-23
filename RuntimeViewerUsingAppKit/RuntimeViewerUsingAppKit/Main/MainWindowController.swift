@@ -163,13 +163,14 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                         if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
                             return RuntimeEngineManager.shared.cachedIcon(for: engine) ?? .symbol(name: RuntimeViewerSymbols.appFill)
                         } else {
-                            return RuntimeEngineManager.shared.cachedIcon(for: engine) ?? NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                            let fallback = engine.hostInfo.metadata.isSimulator ? NSWorkspace.shared.box.deviceSymbolIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier) : NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                            return RuntimeEngineManager.shared.cachedIcon(for: engine) ?? fallback
                         }
                     }
                 },
                 itemRepresentedObject: { AnyHashable($0.engineID) },
                 configureMenuItem: { menuItem, _ in
-                    menuItem.image?.size = NSSize(width: 24, height: 24)
+                    menuItem.image?.size = NSSize(width: 20, height: 20)
                 }
             )
         ).disposed(by: rx.disposeBag)

@@ -3,15 +3,18 @@ import Foundation
 public struct DeviceMetadata: Codable, Hashable, Sendable {
     public let modelIdentifier: String
     public let osVersion: String
+    public let isSimulator: Bool
     public var additionalInfo: [String: String]
 
     public init(
         modelIdentifier: String,
         osVersion: String,
+        isSimulator: Bool = false,
         additionalInfo: [String: String] = [:]
     ) {
         self.modelIdentifier = modelIdentifier
         self.osVersion = osVersion
+        self.isSimulator = isSimulator
         self.additionalInfo = additionalInfo
     }
 }
@@ -20,11 +23,26 @@ extension DeviceMetadata {
     public static let current: DeviceMetadata = {
         let modelIdentifier = _readModelIdentifier()
         let osVersion = _formatOSVersion()
+        let isSimulator: Bool
+        #if targetEnvironment(simulator)
+        isSimulator = true
+        #else
+        isSimulator = false
+        #endif
         return DeviceMetadata(
             modelIdentifier: modelIdentifier,
-            osVersion: osVersion
+            osVersion: osVersion,
+            isSimulator: isSimulator
         )
     }()
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        modelIdentifier = try container.decode(String.self, forKey: .modelIdentifier)
+        osVersion = try container.decode(String.self, forKey: .osVersion)
+        isSimulator = try container.decodeIfPresent(Bool.self, forKey: .isSimulator) ?? false
+        additionalInfo = try container.decodeIfPresent([String: String].self, forKey: .additionalInfo) ?? [:]
+    }
 
     private static func _readModelIdentifier() -> String {
         #if targetEnvironment(simulator)

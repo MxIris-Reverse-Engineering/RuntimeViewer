@@ -44,6 +44,7 @@ public enum RuntimeNetworkBonjour {
     public static let hostNameKey = "rv-host-name"
     public static let modelIDKey = "rv-model-id"
     public static let osVersionKey = "rv-os-ver"
+    public static let isSimulatorKey = "rv-sim"
 
     /// Persistent unique identifier for this app installation, used for self-discovery filtering
     /// and cycle detection in engine mirroring. Persisted in UserDefaults so it survives app restarts.
@@ -75,6 +76,9 @@ public enum RuntimeNetworkBonjour {
         txtRecord[hostNameKey] = localHostName
         txtRecord[modelIDKey] = DeviceMetadata.current.modelIdentifier
         txtRecord[osVersionKey] = DeviceMetadata.current.osVersion
+        if DeviceMetadata.current.isSimulator {
+            txtRecord[isSimulatorKey] = "1"
+        }
         return NWListener.Service(name: name, type: type, txtRecord: txtRecord)
     }
 
@@ -92,7 +96,8 @@ public enum RuntimeNetworkBonjour {
         guard case .bonjour(let record) = metadata else { return nil }
         guard let modelID = record[modelIDKey],
               let osVersion = record[osVersionKey] else { return nil }
-        return DeviceMetadata(modelIdentifier: modelID, osVersion: osVersion)
+        let isSimulator = record[isSimulatorKey] == "1"
+        return DeviceMetadata(modelIdentifier: modelID, osVersion: osVersion, isSimulator: isSimulator)
     }
 }
 
