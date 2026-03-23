@@ -71,7 +71,16 @@ public enum RuntimeNetworkBonjour {
         #if os(macOS)
         return (SCDynamicStoreCopyComputerName(nil, nil) as? String)
             ?? ProcessInfo.processInfo.hostName
+        #elseif targetEnvironment(simulator)
+        // Simulators can return full device names (e.g. "iPhone 17 Pro")
+        #if os(watchOS)
+        return WKInterfaceDevice.current().name
         #else
+        return UIDevice.current.name
+        #endif
+        #else
+        // Real devices on iOS 16+ return generic "iPhone" from UIDevice.current.name,
+        // so use the Bonjour hostname (e.g. "jhs-iphone-pro") as a more identifiable name.
         let hostName = ProcessInfo.processInfo.hostName
             .replacingOccurrences(of: ".local", with: "")
         if !hostName.isEmpty && hostName != "localhost" {
