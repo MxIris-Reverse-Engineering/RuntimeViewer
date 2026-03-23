@@ -59,11 +59,7 @@ private enum RuntimeViewerServer {
 
                 #else
 
-                #if os(watchOS)
-                let name = WKInterfaceDevice.current().name
-                #else
-                let name = await UIDevice.current.name
-                #endif
+                let name = RuntimeNetworkBonjour.localHostName
                 let deviceID = DeviceIdentifier.uniqueDeviceID
 
                 runtimeEngine = RuntimeEngine(source: .bonjour(name: name, identifier: .init(rawValue: deviceID), role: .server))

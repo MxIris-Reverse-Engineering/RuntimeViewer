@@ -18,7 +18,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             logger.info("Local runtime engine initialized")
         }
         Task {
-            let deviceName = UIDevice.current.name
+            let deviceName = RuntimeNetworkBonjour.localHostName
             let deviceID = DeviceIdentifier.uniqueDeviceID
             logger.info("Creating Bonjour server runtime engine with name: \(deviceName, privacy: .public), identifier: \(deviceID, privacy: .private)")
             remoteRuntimeEngine = RuntimeEngine(source: .bonjour(name: deviceName, identifier: .init(rawValue: deviceID), role: .server))

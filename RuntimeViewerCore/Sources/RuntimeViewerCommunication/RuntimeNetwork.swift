@@ -3,7 +3,11 @@ public import FoundationToolbox
 import Network
 #if canImport(UIKit)
 import UIKit
-#elseif canImport(SystemConfiguration)
+#endif
+#if canImport(WatchKit)
+import WatchKit
+#endif
+#if os(macOS)
 import SystemConfiguration
 #endif
 
@@ -59,14 +63,27 @@ public enum RuntimeNetworkBonjour {
     }()
 
     /// The human-readable host name for this device, used in Bonjour TXT records.
+    ///
+    /// On iOS 16+, `UIDevice.current.name` returns a generic model name (e.g. "iPhone")
+    /// without the `user-assigned-device-name` entitlement. We use the Bonjour hostname
+    /// (e.g. "JHs-iPhone") as a more identifiable fallback.
     public static let localHostName: String = {
-        #if canImport(UIKit)
-        return UIDevice.current.name
-        #elseif canImport(SystemConfiguration)
+        #if os(macOS)
         return (SCDynamicStoreCopyComputerName(nil, nil) as? String)
             ?? ProcessInfo.processInfo.hostName
         #else
+        let hostName = ProcessInfo.processInfo.hostName
+            .replacingOccurrences(of: ".local", with: "")
+        if !hostName.isEmpty && hostName != "localhost" {
+            return hostName
+        }
+        #if os(watchOS)
+        return WKInterfaceDevice.current().name
+        #elseif canImport(UIKit)
+        return UIDevice.current.name
+        #else
         return ProcessInfo.processInfo.hostName
+        #endif
         #endif
     }()
 
