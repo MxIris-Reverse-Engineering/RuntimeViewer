@@ -43,6 +43,11 @@ public final class RuntimeEngineManager: Loggable {
     /// Cache for engine icons keyed by engine ID.
     private var engineIconCache: [String: NSImage] = [:]
 
+    /// Bonjour client engines whose remotes don't support engine sharing
+    /// (returned 0 descriptors). These are shown directly in the Toolbar
+    /// instead of being hidden as management-only connections.
+    private var directBonjourEngines: Set<ObjectIdentifier> = []
+
     @Dependency(\.helperServiceManager)
     private var helperServiceManager
 
@@ -122,7 +127,8 @@ public final class RuntimeEngineManager: Loggable {
         do {
             let remoteHostInfo = HostInfo(
                 hostID: endpoint.instanceID ?? endpoint.name,
-                hostName: endpoint.hostName ?? endpoint.name
+                hostName: endpoint.hostName ?? endpoint.name,
+                metadata: endpoint.deviceMetadata ?? .current
             )
             let runtimeEngine = RuntimeEngine(
                 source: .bonjour(name: endpoint.name, identifier: .init(rawValue: endpoint.name), role: .client),
@@ -139,7 +145,15 @@ public final class RuntimeEngineManager: Loggable {
                     Self.logger.info("[MIRROR-DEBUG] requesting engine list from \(endpoint.name, privacy: .public)...")
                     let descriptors = try await runtimeEngine.requestEngineList()
                     Self.logger.info("[MIRROR-DEBUG] received \(descriptors.count, privacy: .public) descriptors from \(endpoint.name, privacy: .public)")
-                    self.handleEngineListChanged(descriptors, from: runtimeEngine)
+                    if descriptors.isEmpty {
+                        // Remote doesn't support engine sharing (e.g. iOS, injected app).
+                        // Show the Bonjour engine directly in the Toolbar.
+                        Self.logger.info("[MIRROR-DEBUG] remote \(endpoint.name, privacy: .public) returned 0 descriptors, marking as direct engine")
+                        self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
+                        self.rebuildSections()
+                    } else {
+                        self.handleEngineListChanged(descriptors, from: runtimeEngine)
+                    }
                 } catch {
                     Self.logger.error("[MIRROR-DEBUG] Failed to request engine list: \(error, privacy: .public)")
                 }
@@ -257,6 +271,9 @@ public final class RuntimeEngineManager: Loggable {
         }
         systemRuntimeEngines.removeAll { $0.source == source }
         attachedRuntimeEngines.removeAll { $0.source == source }
+        for engine in bonjourRuntimeEngines where engine.source == source {
+            directBonjourEngines.remove(ObjectIdentifier(engine))
+        }
         bonjourRuntimeEngines.removeAll { $0.source == source }
         rebuildSections()
     }
@@ -495,8 +512,10 @@ public final class RuntimeEngineManager: Loggable {
         var hostIDToIndex: [String: Int] = [:]
 
         for engine in runtimeEngines {
-            // Hide Bonjour client engines from UI — they serve as management connections only
-            if bonjourRuntimeEngines.contains(where: { $0 === engine }) { continue }
+            // Hide Bonjour client engines that serve as management connections only.
+            // Direct Bonjour engines (remotes without engine sharing) are shown in the UI.
+            if bonjourRuntimeEngines.contains(where: { $0 === engine }),
+               !directBonjourEngines.contains(ObjectIdentifier(engine)) { continue }
             let hostID = engine.hostInfo.hostID
             if let index = hostIDToIndex[hostID] {
                 let section = sections[index]

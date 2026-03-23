@@ -42,6 +42,8 @@ public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
     public static let instanceIDKey = "rv-instance-id"
     public static let hostNameKey = "rv-host-name"
+    public static let modelIDKey = "rv-model-id"
+    public static let osVersionKey = "rv-os-ver"
 
     /// Persistent unique identifier for this app installation, used for self-discovery filtering
     /// and cycle detection in engine mirroring. Persisted in UserDefaults so it survives app restarts.
@@ -71,6 +73,8 @@ public enum RuntimeNetworkBonjour {
         var txtRecord = NWTXTRecord()
         txtRecord[instanceIDKey] = localInstanceID
         txtRecord[hostNameKey] = localHostName
+        txtRecord[modelIDKey] = DeviceMetadata.current.modelIdentifier
+        txtRecord[osVersionKey] = DeviceMetadata.current.osVersion
         return NWListener.Service(name: name, type: type, txtRecord: txtRecord)
     }
 
@@ -83,19 +87,28 @@ public enum RuntimeNetworkBonjour {
         guard case .bonjour(let record) = metadata else { return nil }
         return record[hostNameKey]
     }
+
+    static func deviceMetadata(from metadata: NWBrowser.Result.Metadata) -> DeviceMetadata? {
+        guard case .bonjour(let record) = metadata else { return nil }
+        guard let modelID = record[modelIDKey],
+              let osVersion = record[osVersionKey] else { return nil }
+        return DeviceMetadata(modelIdentifier: modelID, osVersion: osVersion)
+    }
 }
 
 public struct RuntimeNetworkEndpoint: Sendable, Hashable {
     public let name: String
     public let instanceID: String?
     public let hostName: String?
+    public let deviceMetadata: DeviceMetadata?
 
     let endpoint: NWEndpoint
 
-    init(name: String, instanceID: String? = nil, hostName: String? = nil, endpoint: NWEndpoint) {
+    init(name: String, instanceID: String? = nil, hostName: String? = nil, deviceMetadata: DeviceMetadata? = nil, endpoint: NWEndpoint) {
         self.name = name
         self.instanceID = instanceID
         self.hostName = hostName
+        self.deviceMetadata = deviceMetadata
         self.endpoint = endpoint
     }
 
@@ -137,15 +150,17 @@ public class RuntimeNetworkBrowser {
                     if case .service(let name, _, _, _) = result.endpoint {
                         let instanceID = RuntimeNetworkBonjour.instanceID(from: result.metadata)
                         let hostName = RuntimeNetworkBonjour.hostName(from: result.metadata)
+                        let deviceMetadata = RuntimeNetworkBonjour.deviceMetadata(from: result.metadata)
                         #log(.info, "Discovered new endpoint: \(name, privacy: .public), instanceID: \(instanceID ?? "nil", privacy: .public), hostName: \(hostName ?? "nil", privacy: .public)")
-                        onAdded(.init(name: name, instanceID: instanceID, hostName: hostName, endpoint: result.endpoint))
+                        onAdded(.init(name: name, instanceID: instanceID, hostName: hostName, deviceMetadata: deviceMetadata, endpoint: result.endpoint))
                     }
                 case .removed(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
                         let instanceID = RuntimeNetworkBonjour.instanceID(from: result.metadata)
                         let hostName = RuntimeNetworkBonjour.hostName(from: result.metadata)
+                        let deviceMetadata = RuntimeNetworkBonjour.deviceMetadata(from: result.metadata)
                         #log(.info, "Endpoint removed: \(name, privacy: .public)")
-                        onRemoved(.init(name: name, instanceID: instanceID, hostName: hostName, endpoint: result.endpoint))
+                        onRemoved(.init(name: name, instanceID: instanceID, hostName: hostName, deviceMetadata: deviceMetadata, endpoint: result.endpoint))
                     }
                 default:
                     break
