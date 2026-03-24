@@ -355,6 +355,9 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         ownStateSubject.value
     }
 
+    private static let maxListenerRetries = 3
+    private static let listenerRetryDelay: UInt64 = 2_000_000_000 // 2 seconds
+
     init(name: String) async throws {
         self.serviceName = name
 
@@ -371,13 +374,40 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
 
         #log(.info, "Creating Bonjour server with name: \(name, privacy: .public), service type: \(RuntimeNetworkBonjour.type, privacy: .public)")
 
-        let listener = try NWListener(using: parameters)
-        listener.service = RuntimeNetworkBonjour.makeService(name: name)
-        self.listener = listener
+        try await startListeningWithRetry()
+    }
 
-        #log(.info, "Waiting for incoming Bonjour connection...")
-        try await waitForConnection(listener: listener)
-        #log(.info, "Bonjour server connection established for name: \(name, privacy: .public)")
+    /// Attempts to start listening with automatic retries when the NWListener
+    /// remains in `.waiting` state (e.g. during the local network permission prompt).
+    /// After the user grants permission, a retried listener should enter `.ready` immediately.
+    private func startListeningWithRetry() async throws {
+        var lastError: Error = RuntimeConnectionError.listenerWaiting
+        for attempt in 0..<Self.maxListenerRetries {
+            let newListener = try NWListener(using: listenerParameters)
+            newListener.service = RuntimeNetworkBonjour.makeService(name: serviceName)
+            self.listener = newListener
+
+            if attempt > 0 {
+                #log(.info, "Retrying Bonjour listener (attempt \(attempt + 1)/\(Self.maxListenerRetries, privacy: .public))...")
+            } else {
+                #log(.info, "Waiting for incoming Bonjour connection...")
+            }
+
+            do {
+                try await waitForConnection(listener: newListener)
+                #log(.info, "Bonjour server connection established for name: \(self.serviceName, privacy: .public)")
+                return
+            } catch let error as RuntimeConnectionError where error == .listenerWaiting {
+                #log(.info, "Bonjour listener timed out in waiting state, will retry...")
+                newListener.cancel()
+                self.listener = nil
+                lastError = error
+                if attempt < Self.maxListenerRetries - 1 {
+                    try await Task.sleep(nanoseconds: Self.listenerRetryDelay)
+                }
+            }
+        }
+        throw lastError
     }
 
     private func waitForConnection(listener: NWListener) async throws {
@@ -388,9 +418,36 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
             // (IPv6 link-local, IPv4, AWDL) — only the first one should be accepted.
             let hasAccepted = Mutex<Bool>(false)
 
+            // Track whether a .waiting timeout has been scheduled to avoid duplicates.
+            let waitingTimeoutScheduled = Mutex<Bool>(false)
+
             listener.stateUpdateHandler = { state in
                 #log(.info, "Bonjour listener state: \(String(describing: state), privacy: .public)")
                 switch state {
+                case .waiting(let error):
+                    // On iOS, .waiting occurs when the local network permission prompt is shown.
+                    // After the user grants permission, the listener should transition to .ready.
+                    // If it doesn't recover within the timeout, we cancel and retry with a new listener.
+                    #log(.info, "Bonjour listener waiting (may require local network permission): \(error, privacy: .public)")
+                    let shouldSchedule = waitingTimeoutScheduled.withLock { scheduled -> Bool in
+                        guard !scheduled else { return false }
+                        scheduled = true
+                        return true
+                    }
+                    if shouldSchedule {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
+                            let shouldResume = didResume.withLock { val -> Bool in
+                                guard !val else { return false }
+                                val = true
+                                return true
+                            }
+                            if shouldResume {
+                                #log(.error, "Bonjour listener waiting timeout exceeded, cancelling for retry")
+                                listener.cancel()
+                                continuation.resume(throwing: RuntimeConnectionError.listenerWaiting)
+                            }
+                        }
+                    }
                 case .failed(let error):
                     let shouldResume = didResume.withLock { val -> Bool in
                         guard !val else { return false }
@@ -400,6 +457,17 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                     if shouldResume {
                         #log(.error, "Bonjour listener failed: \(error, privacy: .public)")
                         continuation.resume(throwing: RuntimeConnectionError.networkError("Listener failed: \(error.localizedDescription)"))
+                    }
+                case .cancelled:
+                    // Prevent hung continuation if the listener is cancelled externally
+                    let shouldResume = didResume.withLock { val -> Bool in
+                        guard !val else { return false }
+                        val = true
+                        return true
+                    }
+                    if shouldResume {
+                        #log(.error, "Bonjour listener cancelled unexpectedly")
+                        continuation.resume(throwing: RuntimeConnectionError.networkError("Listener cancelled"))
                     }
                 default:
                     break
