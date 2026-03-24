@@ -156,6 +156,9 @@ public final class RuntimeEngineManager: Loggable {
                     }
                 } catch {
                     Self.logger.error("[MIRROR-DEBUG] Failed to request engine list: \(error, privacy: .public)")
+                    // Treat as direct engine so it still appears in the UI
+                    self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
+                    self.rebuildSections()
                 }
             }
         } catch {

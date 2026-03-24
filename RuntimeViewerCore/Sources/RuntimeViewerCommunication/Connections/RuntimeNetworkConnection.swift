@@ -384,6 +384,9 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
 
             let didResume = Mutex<Bool>(false)
+            // Guard against multiple NWConnections from different network paths
+            // (IPv6 link-local, IPv4, AWDL) — only the first one should be accepted.
+            let hasAccepted = Mutex<Bool>(false)
 
             listener.stateUpdateHandler = { state in
                 #log(.info, "Bonjour listener state: \(String(describing: state), privacy: .public)")
@@ -404,8 +407,21 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
             }
 
             listener.newConnectionHandler = { [weak self] newConnection in
-                let canProceed = didResume.withLock { !$0 }
-                guard let self, canProceed else { return }
+                let isFirstAccept = hasAccepted.withLock { accepted -> Bool in
+                    guard !accepted else { return false }
+                    accepted = true
+                    return true
+                }
+                guard isFirstAccept else {
+                    #log(.info, "Rejecting duplicate Bonjour connection from another network path: \(newConnection.debugDescription, privacy: .public)")
+                    newConnection.cancel()
+                    return
+                }
+                guard let self else { return }
+
+                // Stop accepting new connections immediately
+                listener.newConnectionHandler = nil
+                listener.cancel()
 
                 #log(.info, "Accepted new Bonjour connection: \(newConnection.debugDescription, privacy: .public)")
 
@@ -468,9 +484,6 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                         continuation.resume(throwing: error)
                     }
                 }
-
-                listener.newConnectionHandler = nil
-                listener.cancel()
             }
 
             listener.start(queue: .main)
@@ -493,8 +506,24 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
             }
         }
 
+        let hasAccepted = Mutex<Bool>(false)
+
         newListener.newConnectionHandler = { [weak self] newConnection in
+            let isFirstAccept = hasAccepted.withLock { accepted -> Bool in
+                guard !accepted else { return false }
+                accepted = true
+                return true
+            }
+            guard isFirstAccept else {
+                #log(.info, "Rejecting duplicate Bonjour connection from another network path after restart: \(newConnection.debugDescription, privacy: .public)")
+                newConnection.cancel()
+                return
+            }
             guard let self else { return }
+
+            // Stop accepting new connections immediately
+            newListener.newConnectionHandler = nil
+            newListener.cancel()
 
             #log(.info, "Accepted new Bonjour connection after restart: \(newConnection.debugDescription, privacy: .public)")
 
@@ -522,9 +551,6 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
             } catch {
                 #log(.error, "Failed to create Bonjour connection on restart: \(error, privacy: .public)")
             }
-
-            newListener.newConnectionHandler = nil
-            newListener.cancel()
         }
 
         newListener.start(queue: .main)
