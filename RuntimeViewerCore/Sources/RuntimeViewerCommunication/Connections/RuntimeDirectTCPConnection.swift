@@ -94,6 +94,8 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
+        tcpOptions.keepaliveInterval = 2
+        tcpOptions.keepaliveCount = 3
         tcpOptions.noDelay = true
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
@@ -454,6 +456,8 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
+        tcpOptions.keepaliveInterval = 2
+        tcpOptions.keepaliveCount = 3
         tcpOptions.noDelay = true
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
