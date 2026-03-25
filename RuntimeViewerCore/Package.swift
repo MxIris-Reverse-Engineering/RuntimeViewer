@@ -130,6 +130,10 @@ let package = Package(
             url: "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate",
             from: "0.1.0"
         ),
+        .package(
+            url: "https://github.com/CheekyGhost-Labs/OSLogClient",
+            from: "2.0.0"
+        ),
     ],
     targets: [
         .target(

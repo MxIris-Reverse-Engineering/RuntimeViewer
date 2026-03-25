@@ -1,11 +1,12 @@
 #if os(macOS)
 
 import AppKit
+import FoundationToolbox
 import SwiftyXPC
 import MachInjector
 import RuntimeViewerCommunication
-import OSLog
 
+@Loggable
 public final class RuntimeViewerService {
     private let listener: SwiftyXPC.XPCListener
 
@@ -77,8 +78,6 @@ public final class RuntimeViewerService {
         return .empty
     }
 
-    private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerService", category: "RuntimeViewerService")
-    
     public static func main() throws {
         try autoreleasepool {
             let service = try RuntimeViewerService()
@@ -100,7 +99,7 @@ public final class RuntimeViewerService {
                             }
                         }
                     } catch {
-                        logger.error("\(error, privacy: .public)")
+                        #log(.error,"\(error, privacy: .public)")
                     }
                 }
             }

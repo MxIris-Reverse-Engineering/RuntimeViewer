@@ -14,7 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.settings)
     private var settings
 
+    static let launchDate = Date()
+    
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        _ = Self.launchDate
+        
         observe { [weak self] in
             guard let self else { return }
             switch settings.general.appearance {
@@ -54,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task.detached {
             do {
                 let store = try OSLogStore(scope: .currentProcessIdentifier)
-                let position = store.position(timeIntervalSinceEnd: -3600)
+                let position = store.position(date: Self.launchDate)
                 let entries = try store.getEntries(at: position)
 
                 var content = ""

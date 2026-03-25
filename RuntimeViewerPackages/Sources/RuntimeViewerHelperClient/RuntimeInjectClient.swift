@@ -1,20 +1,19 @@
 #if os(macOS)
 
 import Foundation
+import FoundationToolbox
 import SwiftyXPC
 import RuntimeViewerCommunication
-import OSLog
 import Synchronization
 import Dependencies
 import ServiceManagement
 
 /// Client for injecting code into running applications via the helper service.
+@Loggable
 public final class RuntimeInjectClient: @unchecked Sendable {
     public static let shared = RuntimeInjectClient()
 
-    private let connectionLock = Mutex<XPCConnection?>(nil)
-
-    private static let logger = Logger(subsystem: "com.mxiris.runtimeviewer", category: "RuntimeInjectClient")
+    private let connectionLock = Synchronization.Mutex<XPCConnection?>(nil)
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
 
@@ -44,9 +43,9 @@ public final class RuntimeInjectClient: @unchecked Sendable {
         invalidateConnection()
         do {
             _ = try connectionIfNeeded()
-            Self.logger.info("Successfully reconnected to helper service")
+            #log(.info,"Successfully reconnected to helper service")
         } catch {
-            Self.logger.error("Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
+            #log(.error,"Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -76,7 +75,7 @@ public final class RuntimeInjectClient: @unchecked Sendable {
 
             let newConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
             newConnection.errorHandler = { [weak self] _, error in
-                Self.logger.error("XPC connection error: \(error.localizedDescription, privacy: .public)")
+                #log(.error,"XPC connection error: \(error.localizedDescription, privacy: .public)")
                 self?.connectionLock.withLock { conn in
                     conn = nil
                 }

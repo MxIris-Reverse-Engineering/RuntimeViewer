@@ -1,7 +1,7 @@
 #if os(macOS)
 
 import Foundation
-import OSLog
+import FoundationToolbox
 import SwiftyXPC
 import ServiceManagement
 import RuntimeViewerServiceHelper
@@ -10,6 +10,7 @@ import Synchronization
 import Dependencies
 
 /// Manages the helper service lifecycle including registration, unregistration, and XPC connections.
+@Loggable
 @Observable
 @MainActor
 public final class HelperServiceManager {
@@ -52,10 +53,7 @@ public final class HelperServiceManager {
     // MARK: - XPC Connection
 
     @ObservationIgnored
-    private let connectionLock = Mutex<XPCConnection?>(nil)
-
-    @ObservationIgnored
-    private static let logger = Logger(subsystem: "com.mxiris.runtimeviewer", category: "HelperServiceManager")
+    private let connectionLock = Synchronization.Mutex<XPCConnection?>(nil)
 
     private init() {}
 
@@ -64,9 +62,9 @@ public final class HelperServiceManager {
         invalidateConnection()
         do {
             _ = try connectionIfNeeded()
-            Self.logger.info("Successfully reconnected to helper service")
+            #log(.info,"Successfully reconnected to helper service")
         } catch {
-            Self.logger.error("Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
+            #log(.error,"Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -86,7 +84,7 @@ public final class HelperServiceManager {
 
             let newConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
             newConnection.errorHandler = { [weak self] _, error in
-                Self.logger.error("XPC connection error: \(error.localizedDescription, privacy: .public)")
+                #log(.error,"XPC connection error: \(error.localizedDescription, privacy: .public)")
                 self?.connectionLock.withLock { conn in
                     conn = nil
                 }
@@ -211,7 +209,7 @@ public final class HelperServiceManager {
     private func logStatusChangeIfNeeded(previousStatus: SMAppService.Status) {
         let currentStatus = Self.helperServiceDaemon.status
         if currentStatus == .enabled && previousStatus != .enabled {
-            Self.logger.info("Helper service became enabled")
+            #log(.info,"Helper service became enabled")
         }
     }
 
