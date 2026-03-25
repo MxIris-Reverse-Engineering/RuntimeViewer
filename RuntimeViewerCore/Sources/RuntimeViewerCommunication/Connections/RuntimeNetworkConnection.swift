@@ -459,6 +459,14 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                         continuation.resume(throwing: RuntimeConnectionError.networkError("Listener failed: \(error.localizedDescription)"))
                     }
                 case .cancelled:
+                    // If we already accepted a connection, this cancellation was self-initiated
+                    // (we call listener.cancel() in newConnectionHandler). In that case, let the
+                    // connection state monitoring handle the continuation — do NOT resume with error.
+                    let alreadyAccepted = hasAccepted.withLock { $0 }
+                    guard !alreadyAccepted else {
+                        #log(.info, "Bonjour listener cancelled after accepting connection (expected)")
+                        break
+                    }
                     // Prevent hung continuation if the listener is cancelled externally
                     let shouldResume = didResume.withLock { val -> Bool in
                         guard !val else { return false }
