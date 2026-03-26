@@ -110,6 +110,29 @@ public final class RuntimeInjectClient: @unchecked Sendable {
         }
         try await connectionIfNeeded().sendMessage(request: FileOperationRequest(operation: .copy(from: serverFrameworkSourceURL, to: serverFrameworkDestinationURL)))
     }
+
+    // MARK: - Injected Endpoint Registry
+
+    /// Registers an injected app's XPC endpoint with the Mach Service daemon.
+    public func registerInjectedEndpoint(pid: pid_t, appName: String, bundleIdentifier: String, endpoint: SwiftyXPC.XPCEndpoint) async throws {
+        try await connectionIfNeeded().sendMessage(request: RegisterInjectedEndpointRequest(
+            pid: pid,
+            appName: appName,
+            bundleIdentifier: bundleIdentifier,
+            endpoint: endpoint
+        ))
+    }
+
+    /// Fetches all registered injected app endpoints from the Mach Service daemon.
+    public func fetchAllInjectedEndpoints() async throws -> [InjectedEndpointInfo] {
+        let response: FetchAllInjectedEndpointsRequest.Response = try await connectionIfNeeded().sendMessage(request: FetchAllInjectedEndpointsRequest())
+        return response.endpoints
+    }
+
+    /// Removes an injected app's endpoint from the Mach Service daemon.
+    public func removeInjectedEndpoint(pid: pid_t) async throws {
+        try await connectionIfNeeded().sendMessage(request: RemoveInjectedEndpointRequest(pid: pid))
+    }
 }
 
 // MARK: - Dependencies
