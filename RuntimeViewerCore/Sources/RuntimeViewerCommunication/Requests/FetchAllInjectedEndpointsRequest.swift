@@ -1,6 +1,6 @@
 #if os(macOS)
 
-public import Foundation
+import Foundation
 
 /// Fetches all currently registered injected app endpoints from the Mach Service daemon.
 ///

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		51357F3610FA0353D06415C7 /* RuntimeEngineSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB314E4573B51DB41B47D56 /* RuntimeEngineSection.swift */; };
 		E90329732F5C6A450080B9CC /* dev.mxiris.runtimeviewer.service.plist in Embed LaunchDaemon */ = {isa = PBXBuildFile; fileRef = E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */; };
 		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
 		E92124642F447AE1007481E4 /* ExportingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124632F447AE1007481E4 /* ExportingState.swift */; };
@@ -51,7 +52,6 @@
 		E9935B952F448900006DB4EC /* ExportingCompletionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */; };
 		E9935B972F448910006DB4EC /* ExportingCompletionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */; };
 		E995B8942ED97D140083D9D7 /* RuntimeEngineManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */; };
-		51357F3610FA0353D06415C7 /* RuntimeEngineSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB314E4573B51DB41B47D56 /* RuntimeEngineSection.swift */; };
 		E995B8972F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E995B8962F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift */; };
 		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
@@ -215,6 +215,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		5EB314E4573B51DB41B47D56 /* RuntimeEngineSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineSection.swift; sourceTree = "<group>"; };
 		E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = dev.mxiris.runtimeviewer.service.plist; sourceTree = "<group>"; };
 		E91CD9962C2127AD00C989CC /* EventMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
 		E92124632F447AE1007481E4 /* ExportingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingState.swift; sourceTree = "<group>"; };
@@ -264,7 +265,6 @@
 		E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewModel.swift; sourceTree = "<group>"; };
 		E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewController.swift; sourceTree = "<group>"; };
 		E995B8932ED97C130083D9D7 /* RuntimeEngineManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineManager.swift; sourceTree = "<group>"; };
-		5EB314E4573B51DB41B47D56 /* RuntimeEngineSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeEngineSection.swift; sourceTree = "<group>"; };
 		E995B8962F1CA0000083D9D7 /* RuntimeConnectionNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeConnectionNotificationService.swift; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
@@ -1082,6 +1082,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COMPILATION_CACHE_ENABLE_CACHING = YES;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
@@ -1110,6 +1111,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -1147,6 +1149,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COMPILATION_CACHE_ENABLE_CACHING = YES;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
@@ -1168,6 +1171,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
 			};
 			name = Release;
 		};
@@ -1563,6 +1567,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COMPILATION_CACHE_ENABLE_CACHING = YES;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
@@ -1591,6 +1596,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = "Debug-arm64e";

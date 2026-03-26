@@ -8,18 +8,19 @@
 //
 
 import UIKit
-import FoundationToolbox
+import OSLog
 
-@Loggable
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+
+    private static let logger = Logger(subsystem: "com.RuntimeViewer.RuntimeViewerCatalystHelper", category: "AppDelegate")
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         do {
             let plugin = try AppKitBridge.shared.loadPlugins()
             plugin.launch()
         } catch {
-            #log(.error,"\(error, privacy: .public)")
+            Self.logger.error("\(error, privacy: .public)")
         }
         return true
     }
