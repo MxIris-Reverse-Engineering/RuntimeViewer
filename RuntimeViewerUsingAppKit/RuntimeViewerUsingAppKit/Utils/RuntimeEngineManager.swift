@@ -58,6 +58,9 @@ public final class RuntimeEngineManager {
     @Dependency(\.runtimeHelperClient)
     private var runtimeHelperClient
 
+    @Dependency(\.runtimeInjectClient)
+    private var runtimeInjectClient
+
     private init() {
         #log(.info,"RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public)")
 
@@ -206,6 +209,7 @@ public final class RuntimeEngineManager {
         observeRuntimeEngineState(macCatalystClientEngine)
         rebuildSections()
         #endif
+        await reconnectInjectedEngines()
     }
 
     public func launchAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) async throws {
@@ -223,6 +227,43 @@ public final class RuntimeEngineManager {
         observeRuntimeEngineState(runtimeEngine)
         cacheLocalAppIcon(for: runtimeEngine, processIdentifier: identifier)
         rebuildSections()
+    }
+
+    /// Reconnects to already-injected non-sandboxed apps by fetching their
+    /// registered XPC endpoints from the Mach Service daemon.
+    private func reconnectInjectedEngines() async {
+        do {
+            let injectedEndpoints = try await runtimeInjectClient.fetchAllInjectedEndpoints()
+            guard !injectedEndpoints.isEmpty else {
+                #log(.info, "No injected endpoints to reconnect")
+                return
+            }
+            #log(.info, "Found \(injectedEndpoints.count) injected endpoint(s) to reconnect")
+
+            for injectedEndpointInfo in injectedEndpoints {
+                do {
+                    let runtimeEngine = RuntimeEngine(
+                        source: .remote(
+                            name: injectedEndpointInfo.appName,
+                            identifier: .init(rawValue: "\(injectedEndpointInfo.pid)"),
+                            role: .client
+                        )
+                    )
+                    try await runtimeEngine.connect(xpcServerEndpoint: injectedEndpointInfo.endpoint)
+                    #log(.info, "Reconnected to injected app: \(injectedEndpointInfo.appName, privacy: .public) (PID: \(injectedEndpointInfo.pid))")
+                    attachedRuntimeEngines.append(runtimeEngine)
+                    observeRuntimeEngineState(runtimeEngine)
+                    cacheLocalAppIcon(for: runtimeEngine, processIdentifier: "\(injectedEndpointInfo.pid)")
+                } catch {
+                    #log(.error, "Failed to reconnect to injected app \(injectedEndpointInfo.appName, privacy: .public) (PID: \(injectedEndpointInfo.pid)): \(error, privacy: .public)")
+                    // Clean up stale endpoint
+                    try? await runtimeInjectClient.removeInjectedEndpoint(pid: injectedEndpointInfo.pid)
+                }
+            }
+            rebuildSections()
+        } catch {
+            #log(.error, "Failed to fetch injected endpoints: \(error, privacy: .public)")
+        }
     }
 
     private func cacheLocalAppIcon(for engine: RuntimeEngine, processIdentifier pidString: String) {
