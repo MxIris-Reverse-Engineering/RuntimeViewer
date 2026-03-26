@@ -96,6 +96,7 @@ private enum RuntimeViewerServer {
         do {
             let connection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
             connection.activate()
+            defer { connection.cancel() }
             try await connection.sendMessage(request: RegisterInjectedEndpointRequest(
                 pid: ProcessInfo.processInfo.processIdentifier,
                 appName: processName,

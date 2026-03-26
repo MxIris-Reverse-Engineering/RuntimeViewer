@@ -177,7 +177,7 @@ public actor RuntimeEngine {
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
-    public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: Any? = nil) async throws {
+    public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: (any Sendable)? = nil) async throws {
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
 

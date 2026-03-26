@@ -1,6 +1,6 @@
 #if os(macOS)
 
-import Foundation
+public import Foundation
 
 /// Removes an injected app's endpoint from the Mach Service daemon.
 ///

@@ -368,6 +368,7 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
                 handleClientOrServerConnectionError(connection: $0, error: $1)
             }
             _ = try await newConnection.sendMessage(request: PingRequest())
+            self.connection?.cancel()
             self.connection = newConnection
             self.stateSubject.send(.connected)
             #log(.info, "XPC server reconnected to new client successfully (ping OK)")
