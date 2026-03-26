@@ -150,6 +150,13 @@ public actor RuntimeEngine {
     /// The connection to the sender or receiver
     private var connection: RuntimeConnection?
 
+    /// The XPC listener endpoint of this engine's connection, if applicable.
+    /// Set after `connect()` succeeds for XPC-based connections (macOS only).
+    /// Used by injected apps to register their endpoint with the Mach Service
+    /// for Host reconnection. Stored as `any Sendable` to avoid platform-specific
+    /// types in the actor interface; cast to `SwiftyXPC.XPCEndpoint` on macOS.
+    public private(set) var xpcListenerEndpoint: (any Sendable)?
+
     public init(
         source: RuntimeSource,
         engineID: String = UUID().uuidString,
@@ -170,7 +177,7 @@ public actor RuntimeEngine {
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
-    public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil) async throws {
+    public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: Any? = nil) async throws {
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
 
@@ -183,13 +190,16 @@ public actor RuntimeEngine {
                     self.observeConnectionState(connection)
                 }
                 #log(.info, "Server connection established")
+                if let xpcEndpointProvider = connection as? XPCListenerEndpointProviding {
+                    xpcListenerEndpoint = xpcEndpointProvider.xpcListenerEndpoint
+                }
                 if pushesRuntimeData {
                     await observeRuntime()
                 }
                 stateSubject.send(.connected)
             case .client:
                 #log(.info, "Starting as client for source: \(String(describing: self.source), privacy: .public)")
-                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint) { connection in
+                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint, xpcServerEndpoint: xpcServerEndpoint) { connection in
                     #log(.info, "[MIRROR-DEBUG] client connection modifier called for \(String(describing: self.source), privacy: .public), connection state: \(String(describing: connection.state), privacy: .public)")
                     self.connection = connection
                     self.setupMessageHandlerForClient()

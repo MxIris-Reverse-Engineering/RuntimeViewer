@@ -1,6 +1,10 @@
 public import Foundation
 public import FoundationToolbox
 
+#if os(macOS)
+@preconcurrency import SwiftyXPC
+#endif
+
 public enum RuntimeCommunicatorError: Error, LocalizedError, Sendable {
     case localConnectionNotSupported
     case remoteConnectionNotSupportedOnThisPlatform
@@ -54,7 +58,7 @@ public final class RuntimeCommunicator {
     ///   - modifier: Optional closure to configure the connection before use.
     /// - Returns: A configured `RuntimeConnection` ready for communication.
     /// - Throws: An error if the connection cannot be established.
-    public func connect(to source: RuntimeSource, bonjourEndpoint: RuntimeNetworkEndpoint? = nil, waitForConnection: Bool = true, modifier: ((RuntimeConnection) async throws -> Void)? = nil) async throws -> RuntimeConnection {
+    public func connect(to source: RuntimeSource, bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: Any? = nil, waitForConnection: Bool = true, modifier: ((RuntimeConnection) async throws -> Void)? = nil) async throws -> RuntimeConnection {
         #log(.info, "Connecting to source: \(String(describing: source), privacy: .public)")
         switch source {
         case .local:
@@ -69,10 +73,17 @@ public final class RuntimeCommunicator {
                 #log(.info, "XPC server connection established")
                 return connection
             } else {
-                #log(.debug, "Creating XPC client connection with identifier: \(String(describing: identifier), privacy: .public)")
-                let connection = try await RuntimeXPCClientConnection(identifier: identifier, modifier: modifier)
-                #log(.info, "XPC client connection established")
-                return connection
+                if let xpcServerEndpoint = xpcServerEndpoint as? SwiftyXPC.XPCEndpoint {
+                    #log(.debug, "Creating XPC client connection (direct reconnect) with identifier: \(String(describing: identifier), privacy: .public)")
+                    let connection = try await RuntimeXPCClientConnection(identifier: identifier, serverEndpoint: xpcServerEndpoint, modifier: modifier)
+                    #log(.info, "XPC client direct reconnection established")
+                    return connection
+                } else {
+                    #log(.debug, "Creating XPC client connection with identifier: \(String(describing: identifier), privacy: .public)")
+                    let connection = try await RuntimeXPCClientConnection(identifier: identifier, modifier: modifier)
+                    #log(.info, "XPC client connection established")
+                    return connection
+                }
             }
             #else
             #log(.error, "Remote connection is not supported on this platform")
