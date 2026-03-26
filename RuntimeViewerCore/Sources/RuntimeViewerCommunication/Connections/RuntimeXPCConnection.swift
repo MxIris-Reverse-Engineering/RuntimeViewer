@@ -5,6 +5,16 @@ import FoundationToolbox
 import Combine
 @preconcurrency public import SwiftyXPC
 
+// MARK: - XPCListenerEndpointProviding
+
+/// Protocol for connections that expose their XPC listener endpoint.
+///
+/// Used by `RuntimeEngine` to retrieve the server's listener endpoint
+/// for registration with the Mach Service injected endpoint registry.
+public protocol XPCListenerEndpointProviding: AnyObject {
+    var xpcListenerEndpoint: SwiftyXPC.XPCEndpoint { get }
+}
+
 // MARK: - RuntimeXPCConnection
 
 /// XPC-based connection for cross-process communication on macOS.
@@ -15,26 +25,38 @@ import Combine
 ///
 /// ## Architecture
 ///
+/// ### Initial Connection (Handshake via Mach Service Broker)
+///
 /// ```
 /// ┌─────────────────────┐                    ┌─────────────────────┐
 /// │  Client App         │                    │  XPC Mach Service   │
-/// │                     │                    │  (Privileged Helper)│
-/// │                     │   1. connect       │                     │
-/// │  XPCClientConnection├───────────────────>│                     │
-/// │                     │                    │                     │
-/// │                     │   2. register      │  Endpoint Registry  │
-/// │                     │      endpoint      │                     │
-/// │                     │<───────────────────┤                     │
+/// │                     │   1. register      │  (Privileged Helper)│
+/// │  XPCClientConnection│──────endpoint─────>│                     │
+/// │                     │                    │  Endpoint Registry  │
 /// └─────────────────────┘                    └─────────────────────┘
 ///                                                      │
-///                                                      │ 3. broker
-///                                                      │    connection
+///                                                      │ 2. broker
 ///                                                      ▼
 /// ┌─────────────────────┐                    ┌─────────────────────┐
-/// │  Server Process     │                    │                     │
-/// │  (e.g., Catalyst)   │   4. direct XPC    │                     │
-/// │                     │<───────────────────┤                     │
-/// │  XPCServerConnection│                    │                     │
+/// │  Server Process     │  3. fetch endpoint │                     │
+/// │  (e.g., Injected)   │<───────────────────┤                     │
+/// │  XPCServerConnection│  4. direct XPC     │                     │
+/// │                     │──────────────────->│  Client App         │
+/// └─────────────────────┘  5. serverLaunched └─────────────────────┘
+/// ```
+///
+/// ### Reconnection (Direct Endpoint via Injected Endpoint Registry)
+///
+/// ```
+/// ┌─────────────────────┐                    ┌─────────────────────┐
+/// │  Client App (new)   │                    │  Server Process     │
+/// │                     │  1. connect to     │  (already running)  │
+/// │  XPCClientConnection│─────server EP─────>│  XPCServerConnection│
+/// │  (serverEndpoint:)  │                    │  (reused listener)  │
+/// │                     │  2. ClientRecon-   │                     │
+/// │                     │─────nected(EP)────>│  3. update          │
+/// │                     │                    │     self.connection  │
+/// │                     │<═══bidirectional═══│                     │
 /// └─────────────────────┘                    └─────────────────────┘
 /// ```
 ///
@@ -49,10 +71,11 @@ import Combine
 /// - Communication between main app and Mac Catalyst helper
 /// - Privileged operations requiring elevated permissions
 /// - Secure IPC with code signing validation
+/// - Reconnection to already-injected apps after Host restart
 ///
 /// - Note: For code injection into sandboxed apps, use `RuntimeLocalSocketConnection`
 ///   instead, as XPC requires the target process to explicitly participate.
-@Loggable
+@Loggable(.fileprivate)
 class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
     fileprivate let identifier: RuntimeSource.Identifier
 
@@ -199,10 +222,16 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
     }
 }
 
+extension RuntimeXPCConnection: XPCListenerEndpointProviding {
+    public var xpcListenerEndpoint: SwiftyXPC.XPCEndpoint { listener.endpoint }
+}
+
 private enum CommandIdentifiers {
     static let serverLaunched = command("ServerLaunched")
 
     static let clientConnected = command("ClientConnected")
+
+    static let clientReconnected = command("ClientReconnected")
 
     static func command(_ command: String) -> String { "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeXPCConnection.\(command)" }
 }
@@ -256,14 +285,41 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
             #log(.info, "XPC client connected to server successfully (ping OK)")
         }
     }
+
+    /// Creates a client connection by directly connecting to a known server endpoint.
+    ///
+    /// Used for reconnecting to an already-injected app whose endpoint was retrieved
+    /// from the Mach Service injected endpoint registry. Bypasses the normal handshake
+    /// (no `RegisterEndpointRequest` / `serverLaunched` exchange).
+    ///
+    /// - Parameters:
+    ///   - identifier: The runtime source identifier (typically the injected app's PID string).
+    ///   - serverEndpoint: The server's XPC listener endpoint from the injected endpoint registry.
+    ///   - modifier: Optional closure to configure the connection before activation.
+    init(identifier: RuntimeSource.Identifier, serverEndpoint: SwiftyXPC.XPCEndpoint, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
+        try await super.init(identifier: identifier, modifier: modifier)
+        #log(.info, "XPC client direct-connecting to server endpoint for identifier: \(identifier.rawValue, privacy: .public)")
+        let serverConnection = try XPCConnection(type: .remoteServiceFromEndpoint(serverEndpoint))
+        serverConnection.activate()
+        serverConnection.errorHandler = { [weak self] in
+            guard let self else { return }
+            handleClientOrServerConnectionError(connection: $0, error: $1)
+        }
+        _ = try await serverConnection.sendMessage(request: PingRequest())
+        #log(.info, "XPC client sending ClientReconnected to server with own listener endpoint...")
+        try await serverConnection.sendMessage(name: CommandIdentifiers.clientReconnected, request: listener.endpoint)
+        self.connection = serverConnection
+        stateSubject.send(.connected)
+        #log(.info, "XPC client direct-connected to server successfully")
+    }
 }
 
 // MARK: - RuntimeXPCServerConnection
 
 /// XPC server connection for the service provider side.
 ///
-/// Use this in a separate process (such as Mac Catalyst helper) that provides
-/// runtime inspection services to the main application.
+/// Use this in a separate process (such as injected code in a target app or
+/// Mac Catalyst helper) that provides runtime inspection services to the main application.
 ///
 /// ## Initialization Flow
 ///
@@ -273,19 +329,13 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
 /// 4. Registers its own endpoint for bidirectional communication
 /// 5. Notifies the client via `serverLaunched` message
 ///
-/// ## Usage
+/// ## Reconnection Support
 ///
-/// ```swift
-/// let server = try await RuntimeXPCServerConnection(
-///     identifier: .macCatalyst,
-///     modifier: { connection in
-///         // Register message handlers
-///         connection.setMessageHandler(requestType: GetRuntimeInfoRequest.self) { request in
-///             return GetRuntimeInfoResponse(info: ...)
-///         }
-///     }
-/// )
-/// ```
+/// After the initial connection, a `ClientReconnected` handler is registered on the
+/// listener. When the Host app restarts and reconnects (via direct endpoint), it sends
+/// `ClientReconnected` with its new listener endpoint. The server replaces its peer
+/// connection and transitions back to `.connected` state, enabling the engine to
+/// re-push runtime data to the new client.
 final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendable {
     override init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         try await super.init(identifier: identifier, modifier: modifier)
@@ -305,6 +355,23 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
         self.connection = connection
         stateSubject.send(.connected)
         #log(.info, "XPC server connected to client successfully")
+
+        // Register reconnection handler for when the Host app restarts and reconnects
+        // via the injected endpoint registry (bypassing the normal handshake).
+        listener.setMessageHandler(name: CommandIdentifiers.clientReconnected) { [weak self] (_: XPCConnection, clientEndpoint: SwiftyXPC.XPCEndpoint) in
+            guard let self else { return }
+            #log(.info, "XPC server received ClientReconnected, establishing new connection to client...")
+            let newConnection = try XPCConnection(type: .remoteServiceFromEndpoint(clientEndpoint))
+            newConnection.activate()
+            newConnection.errorHandler = { [weak self] in
+                guard let self else { return }
+                handleClientOrServerConnectionError(connection: $0, error: $1)
+            }
+            _ = try await newConnection.sendMessage(request: PingRequest())
+            self.connection = newConnection
+            self.stateSubject.send(.connected)
+            #log(.info, "XPC server reconnected to new client successfully (ping OK)")
+        }
     }
 }
 
