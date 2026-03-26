@@ -6,6 +6,15 @@ import SwiftyXPC
 import MachInjector
 import RuntimeViewerCommunication
 
+/// Privileged helper daemon running as a Mach service.
+///
+/// Handles:
+/// - XPC endpoint brokering between Host app and Mac Catalyst helper
+/// - Code injection via `MachInjector`
+/// - Privileged file operations (installing `RuntimeViewerServer.framework`)
+/// - Injected endpoint registry for Host app reconnection after restart
+///   (stores endpoints keyed by PID, monitors PIDs via DispatchSource for auto-cleanup)
+/// - Process lifecycle tracking (terminates child apps when caller exits)
 @Loggable
 public final class RuntimeViewerService {
     private let listener: SwiftyXPC.XPCListener
@@ -13,6 +22,13 @@ public final class RuntimeViewerService {
     private var launchedApplicationsByCallerPID: [Int32: [NSRunningApplication]] = [:]
 
     private var endpointByIdentifier: [String: SwiftyXPC.XPCEndpoint] = [:]
+
+    /// Registered endpoints from injected (non-sandboxed) apps, keyed by PID.
+    /// Separate from `endpointByIdentifier` which handles 1-to-1 XPC brokering.
+    private var injectedEndpointsByPID: [pid_t: InjectedEndpointInfo] = [:]
+
+    /// Dispatch sources monitoring injected process PIDs for auto-cleanup on exit.
+    private var processMonitorSources: [pid_t: any DispatchSourceProcess] = [:]
 
     private init() throws {
         self.listener = try .init(type: .machService(name: RuntimeViewerMachServiceName), codeSigningRequirement: nil)
@@ -22,6 +38,9 @@ public final class RuntimeViewerService {
         listener.setMessageHandler(handler: ping)
         listener.setMessageHandler(handler: injectApplication)
         listener.setMessageHandler(handler: fileOperation)
+        listener.setMessageHandler(handler: registerInjectedEndpoint)
+        listener.setMessageHandler(handler: fetchAllInjectedEndpoints)
+        listener.setMessageHandler(handler: removeInjectedEndpoint)
         listener.activate()
     }
 
@@ -76,6 +95,52 @@ public final class RuntimeViewerService {
             try MachInjector.inject(pid: request.pid, dylibPath: request.dylibURL.path)
         }
         return .empty
+    }
+
+    // MARK: - Injected Endpoint Registry
+
+    private func registerInjectedEndpoint(_ connection: XPCConnection, request: RegisterInjectedEndpointRequest) async throws -> RegisterInjectedEndpointRequest.Response {
+        let injectedEndpointInfo = InjectedEndpointInfo(
+            pid: request.pid,
+            appName: request.appName,
+            bundleIdentifier: request.bundleIdentifier,
+            endpoint: request.endpoint
+        )
+        injectedEndpointsByPID[request.pid] = injectedEndpointInfo
+        startMonitoringProcess(pid: request.pid)
+        #log(.info, "Registered injected endpoint for PID \(request.pid) (\(request.appName, privacy: .public))")
+        return .empty
+    }
+
+    private func fetchAllInjectedEndpoints(_ connection: XPCConnection, request: FetchAllInjectedEndpointsRequest) async throws -> FetchAllInjectedEndpointsRequest.Response {
+        let endpoints = Array(injectedEndpointsByPID.values)
+        #log(.info, "Fetching all injected endpoints, count: \(endpoints.count)")
+        return .init(endpoints: endpoints)
+    }
+
+    private func removeInjectedEndpoint(_ connection: XPCConnection, request: RemoveInjectedEndpointRequest) async throws -> RemoveInjectedEndpointRequest.Response {
+        removeInjectedEndpointEntry(pid: request.pid)
+        return .empty
+    }
+
+    private func startMonitoringProcess(pid: pid_t) {
+        processMonitorSources[pid]?.cancel()
+
+        let source = DispatchSource.makeProcessSource(identifier: pid, eventMask: .exit, queue: .main)
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            #log(.info, "Monitored process \(pid) exited, removing injected endpoint")
+            removeInjectedEndpointEntry(pid: pid)
+        }
+        processMonitorSources[pid] = source
+        source.resume()
+    }
+
+    private func removeInjectedEndpointEntry(pid: pid_t) {
+        injectedEndpointsByPID.removeValue(forKey: pid)
+        processMonitorSources[pid]?.cancel()
+        processMonitorSources.removeValue(forKey: pid)
+        #log(.info, "Removed injected endpoint for PID \(pid)")
     }
 
     public static func main() throws {
