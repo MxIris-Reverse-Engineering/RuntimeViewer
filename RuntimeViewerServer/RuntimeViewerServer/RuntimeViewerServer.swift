@@ -6,13 +6,19 @@ import RuntimeViewerUtilities
 
 #if os(macOS) || targetEnvironment(macCatalyst)
 import LaunchServicesPrivate
-#elseif canImport(UIKit)
+#endif
+
+#if os(macOS)
+import SwiftyXPC
+#endif
+
+#if canImport(UIKit)
 #if os(watchOS)
 import WatchKit.WKInterfaceDevice
 #else
 import UIKit.UIDevice
 #endif
-#else
+#elseif !os(macOS) && !targetEnvironment(macCatalyst)
 #error("Unsupported Platform")
 #endif
 
@@ -55,6 +61,12 @@ private enum RuntimeViewerServer {
                 } else {
                     runtimeEngine = RuntimeEngine(source: .remote(name: processName, identifier: .init(rawValue: identifier), role: .server))
                     try await runtimeEngine?.connect()
+
+                    // Register the XPC listener endpoint with the Mach Service
+                    // so the Host can reconnect after restart.
+                    #if os(macOS)
+                    await registerInjectedEndpoint()
+                    #endif
                 }
 
                 #else
@@ -73,4 +85,27 @@ private enum RuntimeViewerServer {
             }
         }
     }
+
+    #if os(macOS)
+    private static func registerInjectedEndpoint() async {
+        guard let endpoint = await runtimeEngine?.xpcListenerEndpoint as? SwiftyXPC.XPCEndpoint else {
+            #log(.error, "Failed to get XPC listener endpoint for registration")
+            return
+        }
+
+        do {
+            let connection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
+            connection.activate()
+            try await connection.sendMessage(request: RegisterInjectedEndpointRequest(
+                pid: ProcessInfo.processInfo.processIdentifier,
+                appName: processName,
+                bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
+                endpoint: endpoint
+            ))
+            #log(.info, "Registered injected endpoint with Mach Service (PID: \(ProcessInfo.processInfo.processIdentifier))")
+        } catch {
+            #log(.error, "Failed to register injected endpoint: \(error, privacy: .public)")
+        }
+    }
+    #endif
 }
