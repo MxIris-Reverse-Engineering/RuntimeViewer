@@ -29,11 +29,11 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
     // MARK: - RuntimeConnection State Properties
 
     var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
-        underlyingConnection?.statePublisher ?? Just(.disconnected(error: nil)).eraseToAnyPublisher()
+        underlyingConnection?.statePublisher ?? Just(.connecting).eraseToAnyPublisher()
     }
 
     var state: RuntimeConnectionState {
-        underlyingConnection?.state ?? .disconnected(error: nil)
+        underlyingConnection?.state ?? .connecting
     }
 
     var connectionInfo: RuntimeConnectionInfo? { nil }

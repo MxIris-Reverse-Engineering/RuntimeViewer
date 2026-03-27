@@ -557,7 +557,7 @@ actor RuntimeObjCSection {
         }
 
         func formatAddress(_ imp: UInt64) -> String {
-            "0x" + machO.addressString(forOffset: .init(imp.uint - machO.ptr.bitPattern.uint))
+            machO.formattedAddressString(forRawValue: imp)
         }
 
         func collectMethods(_ methods: [ObjCMethodInfo], typeName: String) -> [RuntimeMemberAddress] {
