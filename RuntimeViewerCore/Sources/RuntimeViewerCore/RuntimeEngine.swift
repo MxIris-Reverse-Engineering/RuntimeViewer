@@ -190,9 +190,11 @@ public actor RuntimeEngine {
                     self.observeConnectionState(connection)
                 }
                 #log(.info, "Server connection established")
+                #if os(macOS)
                 if let xpcEndpointProvider = connection as? XPCListenerEndpointProviding {
                     xpcListenerEndpoint = xpcEndpointProvider.xpcListenerEndpoint
                 }
+                #endif
                 if pushesRuntimeData {
                     await observeRuntime()
                 }
@@ -648,47 +650,61 @@ extension RuntimeEngine {
 
         reporter.send(.phaseStarted(.writing))
 
-        let objcItems = results.filter { !$0.isSwift }
-        let swiftItems = results.filter { $0.isSwift }
+        var writeFailed = 0
 
-        if !objcItems.isEmpty {
-            switch configuration.objcFormat {
-            case .singleFile:
-                try RuntimeInterfaceExportWriter.writeSingleFile(
-                    items: objcItems,
-                    to: configuration.directory,
-                    imageName: configuration.imageName
-                )
-            case .directory:
-                try RuntimeInterfaceExportWriter.writeDirectory(
-                    items: objcItems,
-                    to: configuration.directory
-                )
+        do {
+            let objcItems = results.filter { !$0.isSwift }
+            let swiftItems = results.filter { $0.isSwift }
+
+            if !objcItems.isEmpty {
+                switch configuration.objcFormat {
+                case .singleFile:
+                    try RuntimeInterfaceExportWriter.writeSingleFile(
+                        items: objcItems,
+                        to: configuration.directory,
+                        imageName: configuration.imageName
+                    )
+                case .directory:
+                    let writeResult = try RuntimeInterfaceExportWriter.writeDirectory(
+                        items: objcItems,
+                        to: configuration.directory
+                    )
+                    for (failedItem, writeError) in writeResult.failedItems {
+                        reporter.send(.objectFailed(failedItem.object, writeError))
+                    }
+                    writeFailed += writeResult.failedItems.count
+                }
             }
-        }
 
-        if !swiftItems.isEmpty {
-            switch configuration.swiftFormat {
-            case .singleFile:
-                try RuntimeInterfaceExportWriter.writeSingleFile(
-                    items: swiftItems,
-                    to: configuration.directory,
-                    imageName: configuration.imageName
-                )
-            case .directory:
-                try RuntimeInterfaceExportWriter.writeDirectory(
-                    items: swiftItems,
-                    to: configuration.directory
-                )
+            if !swiftItems.isEmpty {
+                switch configuration.swiftFormat {
+                case .singleFile:
+                    try RuntimeInterfaceExportWriter.writeSingleFile(
+                        items: swiftItems,
+                        to: configuration.directory,
+                        imageName: configuration.imageName
+                    )
+                case .directory:
+                    let writeResult = try RuntimeInterfaceExportWriter.writeDirectory(
+                        items: swiftItems,
+                        to: configuration.directory
+                    )
+                    for (failedItem, writeError) in writeResult.failedItems {
+                        reporter.send(.objectFailed(failedItem.object, writeError))
+                    }
+                    writeFailed += writeResult.failedItems.count
+                }
             }
-        }
 
-        reporter.send(.phaseCompleted(.writing))
+            reporter.send(.phaseCompleted(.writing))
+        } catch {
+            reporter.send(.phaseFailed(.writing, error))
+        }
 
         let duration = CFAbsoluteTimeGetCurrent() - startTime
         let result = RuntimeInterfaceExportResult(
             succeeded: succeeded,
-            failed: failed,
+            failed: failed + writeFailed,
             totalDuration: duration,
             objcCount: objcCount,
             swiftCount: swiftCount
