@@ -83,6 +83,11 @@ public final class RuntimeViewerService {
             if fileManager.fileExists(atPath: to.path) {
                 try fileManager.removeItem(at: to)
             }
+            let directory = to.deletingLastPathComponent()
+            if !fileManager.fileExists(atPath: directory.path) {
+                try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+            }
+            
             try fileManager.copyItem(at: from, to: to)
         case let .write(url: url, data: data):
             try data.write(to: url)
