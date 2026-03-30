@@ -84,6 +84,7 @@ public final class RuntimeEngineManager {
             onRemoved: { [weak self] endpoint in
                 guard let self else { return }
                 #log(.info,"Bonjour endpoint removed: \(endpoint.name, privacy: .public)")
+                _ = self
                 // Do NOT clear knownBonjourEndpointNames here. The Bonjour service
                 // is de-registered whenever the NWListener is cancelled (e.g., after
                 // accepting a connection), causing the endpoint to flap. Clearing

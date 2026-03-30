@@ -64,6 +64,10 @@ extension Transformer {
     public struct SwiftConfiguration: Sendable, Equatable, Hashable {
         @Default(ifMissing: Transformer.SwiftFieldOffset())
         public var swiftFieldOffset: Transformer.SwiftFieldOffset
+        @Default(ifMissing: Transformer.SwiftVTableOffset())
+        public var swiftVTableOffset: Transformer.SwiftVTableOffset
+        @Default(ifMissing: Transformer.SwiftMemberAddress())
+        public var swiftMemberAddress: Transformer.SwiftMemberAddress
         @Default(ifMissing: Transformer.SwiftTypeLayout())
         public var swiftTypeLayout: Transformer.SwiftTypeLayout
         @Default(ifMissing: Transformer.SwiftEnumLayout())
@@ -71,10 +75,14 @@ extension Transformer {
 
         public init(
             swiftFieldOffset: SwiftFieldOffset = .init(),
+            swiftVTableOffset: SwiftVTableOffset = .init(),
+            swiftMemberAddress: SwiftMemberAddress = .init(),
             swiftTypeLayout: SwiftTypeLayout = .init(),
             swiftEnumLayout: SwiftEnumLayout = .init()
         ) {
             self.swiftFieldOffset = swiftFieldOffset
+            self.swiftVTableOffset = swiftVTableOffset
+            self.swiftMemberAddress = swiftMemberAddress
             self.swiftTypeLayout = swiftTypeLayout
             self.swiftEnumLayout = swiftEnumLayout
         }
@@ -97,7 +105,7 @@ extension Transformer {
         
         /// Whether any module is enabled.
         public var hasEnabledModules: Bool {
-            objc.cType.isEnabled || swift.swiftFieldOffset.isEnabled || swift.swiftTypeLayout.isEnabled || swift.swiftEnumLayout.isEnabled
+            objc.cType.isEnabled || swift.swiftFieldOffset.isEnabled || swift.swiftVTableOffset.isEnabled || swift.swiftMemberAddress.isEnabled || swift.swiftTypeLayout.isEnabled || swift.swiftEnumLayout.isEnabled
         }
     }
 }

@@ -107,11 +107,33 @@ actor RuntimeSwiftSection {
         lastTransformerConfiguration = transformer
 
         var fieldOffsetTransformer: FieldOffsetTransformer? = oldPrintConfiguration.fieldOffsetTransformer
+        var vtableOffsetTransformer: VTableOffsetTransformer? = oldPrintConfiguration.vtableOffsetTransformer
+        var memberAddressTransformer: MemberAddressTransformer? = oldPrintConfiguration.memberAddressTransformer
         var typeLayoutTransformer: TypeLayoutTransformer? = oldPrintConfiguration.typeLayoutTransformer
         var enumLayoutTransformer: EnumLayoutTransformer? = oldPrintConfiguration.enumLayoutTransformer
         var enumLayoutCaseTransformer: EnumLayoutCaseTransformer? = oldPrintConfiguration.enumLayoutCaseTransformer
 
         if transformerChanged {
+            if transformer.swiftVTableOffset.isEnabled {
+                let module = transformer.swiftVTableOffset
+                vtableOffsetTransformer = VTableOffsetTransformer { input in
+                    let result = module.transform(.init(slotOffset: input.slotOffset, label: input.label))
+                    return Comment(result).asSemanticString()
+                }
+            } else {
+                vtableOffsetTransformer = nil
+            }
+
+            if transformer.swiftMemberAddress.isEnabled {
+                let module = transformer.swiftMemberAddress
+                memberAddressTransformer = MemberAddressTransformer { offset in
+                    let result = module.transform(.init(offset: offset))
+                    return Comment(result).asSemanticString()
+                }
+            } else {
+                memberAddressTransformer = nil
+            }
+
             if transformer.swiftFieldOffset.isEnabled {
                 let module = transformer.swiftFieldOffset
                 fieldOffsetTransformer = FieldOffsetTransformer { input in
@@ -225,6 +247,8 @@ actor RuntimeSwiftSection {
             printVTableOffset: options.printVTableOffset,
             printTypeLayout: options.printTypeLayout,
             printEnumLayout: options.printEnumLayout,
+            memberAddressTransformer: memberAddressTransformer,
+            vtableOffsetTransformer: vtableOffsetTransformer,
             fieldOffsetTransformer: fieldOffsetTransformer,
             typeLayoutTransformer: typeLayoutTransformer,
             enumLayoutTransformer: enumLayoutTransformer,
