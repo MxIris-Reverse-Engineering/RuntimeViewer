@@ -550,6 +550,30 @@ enum RuntimeLocalSocketPortDiscovery {
 ///   to compute the deterministic port number.
 final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable {
     private let identifier: String
+    private let port: UInt16
+
+    /// Stable state subject that bridges state across reconnections.
+    private let ownStateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
+
+    /// Pending message handlers to apply to new connections.
+    private var pendingHandlers: [@Sendable (RuntimeLocalSocketConnection) -> Void] = []
+
+    /// Subscription for observing connection state changes.
+    private var connectionStateCancellable: AnyCancellable?
+
+    /// Whether this connection has been explicitly stopped.
+    private var isStopped = false
+
+    /// Retry interval for reconnection attempts (in nanoseconds).
+    private static let reconnectInterval: UInt64 = 500_000_000 // 500ms
+
+    override var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
+        ownStateSubject.eraseToAnyPublisher()
+    }
+
+    override var state: RuntimeConnectionState {
+        ownStateSubject.value
+    }
 
     /// Creates a client connection using deterministic port calculation.
     ///
@@ -559,10 +583,8 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     /// - Throws: `RuntimeLocalSocketError` if connection cannot be established.
     init(identifier: String, timeout: TimeInterval = 10) async throws {
         self.identifier = identifier
+        self.port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
         super.init()
-
-        // Compute port deterministically (same algorithm as server)
-        let port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
 
         // Retry connection until server is ready or timeout
         let startTime = Date()
@@ -572,11 +594,13 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
             do {
                 let connection = try RuntimeLocalSocketConnection(port: port)
                 self.underlyingConnection = connection
+                applyPendingHandlers(to: connection)
+                observeUnderlyingConnectionState(connection)
                 try connection.start()
+                ownStateSubject.send(.connected)
                 return
             } catch {
                 lastError = error
-                // Wait before retry
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
             }
         }
@@ -591,11 +615,146 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     /// - Throws: `RuntimeLocalSocketError` if connection cannot be established.
     init(port: UInt16) throws {
         self.identifier = ""
+        self.port = port
         super.init()
 
         let connection = try RuntimeLocalSocketConnection(port: port)
         self.underlyingConnection = connection
+        observeUnderlyingConnectionState(connection)
         try connection.start()
+        ownStateSubject.send(.connected)
+    }
+
+    // MARK: - Message Handler Overrides
+
+    override func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+                try await handler()
+                return NullPayload.null
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    override func setMessageHandler<Request>(name: String, handler: @escaping @Sendable (Request) async throws -> Void) where Request: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (request: Request) in
+                try await handler(request)
+                return NullPayload.null
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    override func setMessageHandler<Response>(name: String, handler: @escaping @Sendable () async throws -> Response) where Response: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+                return try await handler()
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    override func setMessageHandler<Request>(requestType: Request.Type, handler: @escaping @Sendable (Request) async throws -> Request.Response) where Request: RuntimeRequest {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler { @Sendable (request: Request) in
+                return try await handler(request)
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    override func setMessageHandler<Request, Response>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) where Request: Codable, Response: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (request: Request) in
+                return try await handler(request)
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    // MARK: - Connection Lifecycle
+
+    /// Applies all pending handlers to a connection.
+    private func applyPendingHandlers(to connection: RuntimeLocalSocketConnection) {
+        for handler in pendingHandlers {
+            handler(connection)
+        }
+    }
+
+    /// Observes the underlying connection state and triggers reconnection on disconnect.
+    private func observeUnderlyingConnectionState(_ connection: RuntimeLocalSocketConnection) {
+        connectionStateCancellable = connection.statePublisher
+            .sink { [weak self] state in
+                guard let self, !isStopped else { return }
+                if state.isDisconnected {
+                    ownStateSubject.send(state)
+                    startReconnecting()
+                }
+            }
+    }
+
+    /// Starts the reconnection loop in the background.
+    private func startReconnecting() {
+        guard !isStopped else { return }
+        ownStateSubject.send(.connecting)
+        Task { [weak self] in
+            await self?.reconnectionLoop()
+        }
+    }
+
+    /// Periodically attempts to reconnect to the same port until successful or stopped.
+    private func reconnectionLoop() async {
+        while !isStopped {
+            do {
+                try await Task.sleep(nanoseconds: Self.reconnectInterval)
+            } catch {
+                return // Task cancelled
+            }
+
+            guard !isStopped else { return }
+
+            do {
+                let newConnection = try RuntimeLocalSocketConnection(port: port)
+                self.underlyingConnection = newConnection
+                applyPendingHandlers(to: newConnection)
+                observeUnderlyingConnectionState(newConnection)
+                try newConnection.start()
+                ownStateSubject.send(.connected)
+                return // Reconnected successfully
+            } catch {
+                // Retry on next iteration
+                continue
+            }
+        }
+    }
+
+    override func stop() {
+        isStopped = true
+        connectionStateCancellable?.cancel()
+        connectionStateCancellable = nil
+        underlyingConnection?.stop()
+        ownStateSubject.send(.disconnected(error: nil))
+    }
+
+    deinit {
+        stop()
     }
 }
 
