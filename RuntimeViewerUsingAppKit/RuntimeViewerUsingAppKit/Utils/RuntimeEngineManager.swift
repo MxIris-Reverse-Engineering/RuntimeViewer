@@ -61,6 +61,45 @@ public final class RuntimeEngineManager {
     @Dependency(\.runtimeInjectClient)
     private var runtimeInjectClient
 
+    // MARK: - Socket Injection Persistence
+
+    private struct InjectedSocketEndpointRecord: Codable {
+        let pid: pid_t
+        let appName: String
+    }
+
+    private static var injectedSocketEndpointsFileURL: URL {
+        let applicationSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let runtimeViewerDirectory = applicationSupportURL.appendingPathComponent("RuntimeViewer")
+        try? FileManager.default.createDirectory(at: runtimeViewerDirectory, withIntermediateDirectories: true)
+        return runtimeViewerDirectory.appendingPathComponent("injected-socket-endpoints.json")
+    }
+
+    private func loadInjectedSocketEndpointRecords() -> [InjectedSocketEndpointRecord] {
+        let fileURL = Self.injectedSocketEndpointsFileURL
+        guard let data = try? Data(contentsOf: fileURL) else { return [] }
+        return (try? JSONDecoder().decode([InjectedSocketEndpointRecord].self, from: data)) ?? []
+    }
+
+    private func saveInjectedSocketEndpointRecords(_ records: [InjectedSocketEndpointRecord]) {
+        let fileURL = Self.injectedSocketEndpointsFileURL
+        guard let data = try? JSONEncoder().encode(records) else { return }
+        try? data.write(to: fileURL, options: [.atomic])
+    }
+
+    private func addInjectedSocketEndpointRecord(pid: pid_t, appName: String) {
+        var records = loadInjectedSocketEndpointRecords()
+        records.removeAll { $0.pid == pid }
+        records.append(InjectedSocketEndpointRecord(pid: pid, appName: appName))
+        saveInjectedSocketEndpointRecords(records)
+    }
+
+    private func removeInjectedSocketEndpointRecord(pid: pid_t) {
+        var records = loadInjectedSocketEndpointRecords()
+        records.removeAll { $0.pid == pid }
+        saveInjectedSocketEndpointRecords(records)
+    }
+
     private init() {
         #log(.info,"RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public)")
 
@@ -211,6 +250,7 @@ public final class RuntimeEngineManager {
         rebuildSections()
         #endif
         await reconnectInjectedEngines()
+        await reconnectInjectedSocketEngines()
     }
 
     public func launchAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) async throws {
@@ -227,6 +267,10 @@ public final class RuntimeEngineManager {
         attachedRuntimeEngines.append(runtimeEngine)
         observeRuntimeEngineState(runtimeEngine)
         cacheLocalAppIcon(for: runtimeEngine, processIdentifier: identifier)
+
+        if isSandbox, let pid = Int32(identifier) {
+            addInjectedSocketEndpointRecord(pid: pid, appName: name)
+        }
         rebuildSections()
     }
 
@@ -277,6 +321,48 @@ public final class RuntimeEngineManager {
         }
     }
 
+    /// Reconnects to already-injected sandboxed apps by reading persisted
+    /// socket endpoint records and recreating socket servers.
+    @concurrent
+    private func reconnectInjectedSocketEngines() async {
+        let records = loadInjectedSocketEndpointRecords()
+        guard !records.isEmpty else {
+            Self.logger.info("No injected socket endpoints to reconnect")
+            return
+        }
+        Self.logger.info("Found \(records.count) injected socket endpoint(s) to reconnect")
+
+        var aliveRecords: [InjectedSocketEndpointRecord] = []
+
+        for record in records {
+            // Check if the process is still alive
+            guard kill(record.pid, 0) == 0 else {
+                Self.logger.info("Injected socket endpoint PID \(record.pid) is no longer alive, removing record")
+                continue
+            }
+
+            do {
+                let runtimeEngine = RuntimeEngine(
+                    source: .localSocket(
+                        name: record.appName,
+                        identifier: .init(rawValue: "\(record.pid)"),
+                        role: .client
+                    )
+                )
+                try await runtimeEngine.connect()
+                Self.logger.info("Reconnected to injected sandboxed app: \(record.appName, privacy: .public) (PID: \(record.pid))")
+                attachedRuntimeEngines.append(runtimeEngine)
+                observeRuntimeEngineState(runtimeEngine)
+                aliveRecords.append(record)
+            } catch {
+                Self.logger.error("Failed to reconnect to injected sandboxed app \(record.appName, privacy: .public) (PID: \(record.pid)): \(error, privacy: .public)")
+            }
+        }
+
+        // Update the persisted records to only contain alive entries
+        saveInjectedSocketEndpointRecords(aliveRecords)
+    }
+
     private func observeRuntimeEngineState(_ runtimeEngine: RuntimeEngine) {
         runtimeEngine.statePublisher.asObservable()
             .subscribeOnNext { [weak self, weak runtimeEngine] state in
@@ -317,6 +403,9 @@ public final class RuntimeEngineManager {
         #log(.info,"Terminating runtime engine: \(source.description, privacy: .public)")
         if case .bonjour(let name, _, let role) = source, role.isClient {
             knownBonjourEndpointNames.remove(name)
+        }
+        if case .localSocket(_, let socketIdentifier, .client) = source, let pid = Int32(socketIdentifier.rawValue) {
+            removeInjectedSocketEndpointRecord(pid: pid)
         }
         systemRuntimeEngines.removeAll { $0.source == source }
         attachedRuntimeEngines.removeAll { $0.source == source }
