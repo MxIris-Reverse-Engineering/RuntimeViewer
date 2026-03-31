@@ -661,6 +661,17 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
     /// The port the server is listening on (available after `start()` is called).
     private(set) var port: UInt16 = 0
 
+    /// Stable state subject that bridges state from underlying connections across reconnections.
+    private let ownStateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
+
+    override var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
+        ownStateSubject.eraseToAnyPublisher()
+    }
+
+    override var state: RuntimeConnectionState {
+        ownStateSubject.value
+    }
+
     /// Creates a server connection with deterministic port calculation.
     ///
     /// - Parameter identifier: Unique identifier used to compute the port.
@@ -801,6 +812,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Starts accepting connections asynchronously in background.
     private func startAcceptingConnections() {
+        ownStateSubject.send(.connecting)
         #log(.info, "Waiting for local socket client connection on port \(self.port, privacy: .public)...")
         DispatchQueue.global().async { [weak self] in
             self?.acceptConnectionLoop()
@@ -846,10 +858,14 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         // Observe connection state to restart accepting when disconnected
         connectionStateCancellable = socketConnection.statePublisher
             .sink { [weak self] state in
+                guard let self else { return }
                 #log(.info, "Local socket connection state: \(String(describing: state), privacy: .public)")
-                if state.isDisconnected {
+                if state.isConnected {
+                    ownStateSubject.send(.connected)
+                } else if state.isDisconnected {
                     #log(.info, "Local socket client disconnected, waiting for new connection...")
-                    self?.startAcceptingConnections()
+                    ownStateSubject.send(state)
+                    startAcceptingConnections()
                 }
             }
 
@@ -873,6 +889,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
             close(serverSocketFD)
             serverSocketFD = -1
         }
+        ownStateSubject.send(.disconnected(error: nil))
     }
 
     deinit {
