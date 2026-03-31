@@ -336,7 +336,7 @@ public final class RuntimeEngineManager {
 
         for record in records {
             // Check if the process is still alive
-            guard kill(record.pid, 0) == 0 else {
+            guard kill(record.pid, 0) == 0 || errno == EPERM else {
                 Self.logger.info("Injected socket endpoint PID \(record.pid) is no longer alive, removing record")
                 continue
             }
