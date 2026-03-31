@@ -14,6 +14,8 @@ import RuntimeViewerCatalystExtensions
 public final class RuntimeEngineManager {
     public static let shared = RuntimeEngineManager()
 
+    // MARK: - Published State
+
     @Published
     public private(set) var systemRuntimeEngines: [RuntimeEngine] = []
 
@@ -23,23 +25,25 @@ public final class RuntimeEngineManager {
     @Published
     public private(set) var bonjourRuntimeEngines: [RuntimeEngine] = []
 
-    private let browser = RuntimeNetworkBrowser()
-
-    private var knownBonjourEndpointNames: Set<String> = []
-    
-    private static let maxRetryAttempts = 3
-    
-    private static let retryBaseDelay: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
-
-    private var bonjourServerEngine: RuntimeEngine?
-
-    private var proxyServers: [String: RuntimeEngineProxyServer] = [:]
-
     @Published
     public private(set) var mirroredEngines: OrderedDictionary<String, RuntimeEngine> = [:]
 
     @Published
     public private(set) var runtimeEngineSections: [RuntimeEngineSection] = []
+
+    // MARK: - Private State
+
+    private let browser = RuntimeNetworkBrowser()
+
+    private var knownBonjourEndpointNames: Set<String> = []
+
+    private static let maxRetryAttempts = 3
+
+    private static let retryBaseDelay: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
+
+    private var bonjourServerEngine: RuntimeEngine?
+
+    private var proxyServers: [String: RuntimeEngineProxyServer] = [:]
 
     /// Cache for engine icons keyed by engine ID.
     private var engineIconCache: [String: NSImage] = [:]
@@ -48,6 +52,8 @@ public final class RuntimeEngineManager {
     /// (returned 0 descriptors). These are shown directly in the Toolbar
     /// instead of being hidden as management-only connections.
     private var directBonjourEngines: Set<ObjectIdentifier> = []
+
+    // MARK: - Dependencies
 
     @Dependency(\.helperServiceManager)
     private var helperServiceManager
@@ -100,6 +106,8 @@ public final class RuntimeEngineManager {
         saveInjectedSocketEndpointRecords(records)
     }
 
+    // MARK: - Initialization
+
     private init() {
         #log(.info,"RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public)")
 
@@ -123,7 +131,6 @@ public final class RuntimeEngineManager {
             onRemoved: { [weak self] endpoint in
                 guard let self else { return }
                 #log(.info,"Bonjour endpoint removed: \(endpoint.name, privacy: .public)")
-                _ = self
                 // Do NOT clear knownBonjourEndpointNames here. The Bonjour service
                 // is de-registered whenever the NWListener is cancelled (e.g., after
                 // accepting a connection), causing the endpoint to flap. Clearing
@@ -163,6 +170,8 @@ public final class RuntimeEngineManager {
             }
         }
     }
+
+    // MARK: - Bonjour Connection
 
     private func connectToBonjourEndpoint(_ endpoint: RuntimeNetworkEndpoint, attempt: Int = 0) async {
         guard !knownBonjourEndpointNames.contains(endpoint.name) else {
@@ -230,6 +239,8 @@ public final class RuntimeEngineManager {
         rebuildSections()
     }
 
+    // MARK: - Engine Lifecycle
+
     public var runtimeEngines: [RuntimeEngine] {
         systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + mirroredEngines.values.elements
     }
@@ -249,7 +260,7 @@ public final class RuntimeEngineManager {
         observeRuntimeEngineState(macCatalystClientEngine)
         rebuildSections()
         #endif
-        await reconnectInjectedEngines()
+        await reconnectInjectedXPCEngines()
         await reconnectInjectedSocketEngines()
     }
 
@@ -274,9 +285,40 @@ public final class RuntimeEngineManager {
         rebuildSections()
     }
 
+    public func terminateRuntimeEngine(for source: RuntimeSource) {
+        #log(.info,"Terminating runtime engine: \(source.description, privacy: .public)")
+        if case .bonjour(let name, _, let role) = source, role.isClient {
+            knownBonjourEndpointNames.remove(name)
+        }
+        if case .localSocket(_, let socketIdentifier, .client) = source, let pid = Int32(socketIdentifier.rawValue) {
+            removeInjectedSocketEndpointRecord(pid: pid)
+        }
+        let removedEngines = runtimeEngines.filter { $0.source == source }
+        for engine in removedEngines {
+            engineIconCache.removeValue(forKey: engine.engineID)
+        }
+        systemRuntimeEngines.removeAll { $0.source == source }
+        attachedRuntimeEngines.removeAll { $0.source == source }
+        for engine in bonjourRuntimeEngines where engine.source == source {
+            directBonjourEngines.remove(ObjectIdentifier(engine))
+        }
+        bonjourRuntimeEngines.removeAll { $0.source == source }
+        rebuildSections()
+    }
+
+    public func terminateAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) {
+        if isSandbox {
+            terminateRuntimeEngine(for: .localSocket(name: name, identifier: .init(rawValue: identifier), role: .client))
+        } else {
+            terminateRuntimeEngine(for: .remote(name: name, identifier: .init(rawValue: identifier), role: .client))
+        }
+    }
+
+    // MARK: - Injected Endpoint Reconnection
+
     /// Reconnects to already-injected non-sandboxed apps by fetching their
     /// registered XPC endpoints from the Mach Service daemon.
-    private func reconnectInjectedEngines() async {
+    private func reconnectInjectedXPCEngines() async {
         do {
             let injectedEndpoints = try await runtimeInjectClient.fetchAllInjectedEndpoints()
             guard !injectedEndpoints.isEmpty else {
@@ -308,16 +350,6 @@ public final class RuntimeEngineManager {
             rebuildSections()
         } catch {
             #log(.error, "Failed to fetch injected endpoints: \(error, privacy: .public)")
-        }
-    }
-
-    private func cacheLocalAppIcon(for engine: RuntimeEngine, processIdentifier pidString: String) {
-        guard let pid = Int32(pidString) else { return }
-        let app = NSRunningApplication(processIdentifier: pid)
-        if let icon = app?.icon {
-            engineIconCache[engine.engineID] = icon
-        } else if let bundleURL = app?.bundleURL {
-            engineIconCache[engine.engineID] = NSWorkspace.shared.icon(forFile: bundleURL.path)
         }
     }
 
@@ -353,6 +385,7 @@ public final class RuntimeEngineManager {
                 Self.logger.info("Reconnected to injected sandboxed app: \(record.appName, privacy: .public) (PID: \(record.pid))")
                 attachedRuntimeEngines.append(runtimeEngine)
                 observeRuntimeEngineState(runtimeEngine)
+                cacheLocalAppIcon(for: runtimeEngine, processIdentifier: "\(record.pid)")
                 aliveRecords.append(record)
             } catch {
                 Self.logger.error("Failed to reconnect to injected sandboxed app \(record.appName, privacy: .public) (PID: \(record.pid)): \(error, privacy: .public)")
@@ -361,7 +394,10 @@ public final class RuntimeEngineManager {
 
         // Update the persisted records to only contain alive entries
         saveInjectedSocketEndpointRecords(aliveRecords)
+        rebuildSections()
     }
+
+    // MARK: - State Observation
 
     private func observeRuntimeEngineState(_ runtimeEngine: RuntimeEngine) {
         runtimeEngine.statePublisher.asObservable()
@@ -399,32 +435,17 @@ public final class RuntimeEngineManager {
             .disposed(by: rx.disposeBag)
     }
 
-    public func terminateRuntimeEngine(for source: RuntimeSource) {
-        #log(.info,"Terminating runtime engine: \(source.description, privacy: .public)")
-        if case .bonjour(let name, _, let role) = source, role.isClient {
-            knownBonjourEndpointNames.remove(name)
-        }
-        if case .localSocket(_, let socketIdentifier, .client) = source, let pid = Int32(socketIdentifier.rawValue) {
-            removeInjectedSocketEndpointRecord(pid: pid)
-        }
-        systemRuntimeEngines.removeAll { $0.source == source }
-        attachedRuntimeEngines.removeAll { $0.source == source }
-        for engine in bonjourRuntimeEngines where engine.source == source {
-            directBonjourEngines.remove(ObjectIdentifier(engine))
-        }
-        bonjourRuntimeEngines.removeAll { $0.source == source }
-        rebuildSections()
-    }
-
-    public func terminateAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) {
-        if isSandbox {
-            terminateRuntimeEngine(for: .localSocket(name: name, identifier: .init(rawValue: identifier), role: .client))
-        } else {
-            terminateRuntimeEngine(for: .remote(name: name, identifier: .init(rawValue: identifier), role: .client))
-        }
-    }
-
     // MARK: - Icon Management
+
+    private func cacheLocalAppIcon(for engine: RuntimeEngine, processIdentifier pidString: String) {
+        guard let pid = Int32(pidString) else { return }
+        let app = NSRunningApplication(processIdentifier: pid)
+        if let icon = app?.icon {
+            engineIconCache[engine.engineID] = icon
+        } else if let bundleURL = app?.bundleURL {
+            engineIconCache[engine.engineID] = NSWorkspace.shared.icon(forFile: bundleURL.path)
+        }
+    }
 
     /// Returns the cached icon for a given engine, or nil if not yet available.
     public func cachedIcon(for engine: RuntimeEngine) -> NSImage? {
@@ -448,18 +469,18 @@ public final class RuntimeEngineManager {
             // Append our own instanceID to the origin chain so downstream peers
             // can detect cycles when the descriptor bounces back through us.
             let chainWithSelf = engine.originChain + [RuntimeNetworkBonjour.localInstanceID]
+            let proxyHost = await proxy.host
+            let proxyPort = await proxy.port
             let descriptor = RemoteEngineDescriptor(
                 engineID: globalID,
                 source: engine.source,
                 hostName: engine.hostInfo.hostName,
                 originChain: chainWithSelf,
-                directTCPHost: await proxy.host,
-                directTCPPort: await proxy.port,
+                directTCPHost: proxyHost,
+                directTCPPort: proxyPort,
                 metadata: engine.hostInfo.metadata,
                 iconData: await proxy.iconData()
             )
-            let proxyHost = await proxy.host
-            let proxyPort = await proxy.port
             #log(.info,"[MIRROR-DEBUG] built descriptor: \(globalID, privacy: .public) at \(proxyHost, privacy: .public):\(proxyPort, privacy: .public)")
             descriptors.append(descriptor)
         }
@@ -605,12 +626,6 @@ public final class RuntimeEngineManager {
         for descriptor in filteredDescriptors {
             guard !currentIDs.contains(descriptor.engineID) else { continue }
 
-            // Dedup check: skip if already mirrored
-            if mirroredEngines[descriptor.engineID] != nil {
-                #log(.info,"Skipping mirrored engine \(descriptor.engineID, privacy: .public): already mirrored")
-                continue
-            }
-
             let mirroredEngine = RuntimeEngine(
                 source: .directTCP(
                     name: descriptor.source.description,
@@ -680,7 +695,6 @@ public final class RuntimeEngineManager {
         runtimeEngineSections = sections
     }
 }
-
 
 extension RuntimeEngineManager: ReactiveCompatible {}
 
