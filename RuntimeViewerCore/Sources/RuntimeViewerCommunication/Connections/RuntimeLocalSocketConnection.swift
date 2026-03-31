@@ -548,6 +548,7 @@ enum RuntimeLocalSocketPortDiscovery {
 /// - Note: The identifier must match what the main app used when creating
 ///   `RuntimeLocalSocketServerConnection`. Both sides use the same identifier
 ///   to compute the deterministic port number.
+@Loggable
 final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable {
     private let identifier: String
     private let port: UInt16
@@ -563,6 +564,9 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Whether this connection has been explicitly stopped.
     private var isStopped = false
+
+    /// Whether a reconnection loop is already running.
+    private var isReconnecting = false
 
     /// Retry interval for reconnection attempts (in nanoseconds).
     private static let reconnectInterval: UInt64 = 500_000_000 // 500ms
@@ -620,6 +624,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
         let connection = try RuntimeLocalSocketConnection(port: port)
         self.underlyingConnection = connection
+        applyPendingHandlers(to: connection)
         observeUnderlyingConnectionState(connection)
         try connection.start()
         ownStateSubject.send(.connected)
@@ -700,10 +705,12 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Observes the underlying connection state and triggers reconnection on disconnect.
     private func observeUnderlyingConnectionState(_ connection: RuntimeLocalSocketConnection) {
+        connectionStateCancellable?.cancel()
         connectionStateCancellable = connection.statePublisher
             .sink { [weak self] state in
                 guard let self, !isStopped else { return }
                 if state.isDisconnected {
+                    #log(.info, "Underlying connection disconnected on port \(self.port, privacy: .public), triggering reconnection")
                     ownStateSubject.send(state)
                     startReconnecting()
                 }
@@ -712,7 +719,9 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Starts the reconnection loop in the background.
     private func startReconnecting() {
-        guard !isStopped else { return }
+        guard !isStopped, !isReconnecting else { return }
+        isReconnecting = true
+        #log(.info, "Starting reconnection loop for port \(self.port, privacy: .public)")
         ownStateSubject.send(.connecting)
         Task { [weak self] in
             await self?.reconnectionLoop()
@@ -721,6 +730,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Periodically attempts to reconnect to the same port until successful or stopped.
     private func reconnectionLoop() async {
+        defer { isReconnecting = false }
         while !isStopped {
             do {
                 try await Task.sleep(nanoseconds: Self.reconnectInterval)
@@ -732,13 +742,16 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
             do {
                 let newConnection = try RuntimeLocalSocketConnection(port: port)
+                self.underlyingConnection?.stop()
                 self.underlyingConnection = newConnection
                 applyPendingHandlers(to: newConnection)
                 observeUnderlyingConnectionState(newConnection)
                 try newConnection.start()
+                #log(.info, "Reconnected successfully to port \(self.port, privacy: .public)")
                 ownStateSubject.send(.connected)
                 return // Reconnected successfully
             } catch {
+                #log(.debug, "Reconnection attempt failed for port \(self.port, privacy: .public): \(error, privacy: .public)")
                 // Retry on next iteration
                 continue
             }
@@ -746,6 +759,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     }
 
     override func stop() {
+        #log(.info, "Stopping local socket client connection on port \(self.port, privacy: .public)")
         isStopped = true
         connectionStateCancellable?.cancel()
         connectionStateCancellable = nil
