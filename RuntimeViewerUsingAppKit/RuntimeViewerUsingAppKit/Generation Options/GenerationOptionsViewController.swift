@@ -29,7 +29,8 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
         ]),
         Section(title: "Swift", items: [
             OptionItem(title: "Print Stripped Symbol Description", keyPath: \.swiftInterfaceOptions.printStrippedSymbolicItem),
-            OptionItem(title: "Print Offset Comments", keyPath: \.swiftInterfaceOptions.emitOffsetComments),
+            OptionItem(title: "Print Field Offset", keyPath: \.swiftInterfaceOptions.emitOffsetComments),
+            OptionItem(title: "Print Expanded Field Offsets", keyPath: \.swiftInterfaceOptions.printExpandedFieldOffsets),
             OptionItem(title: "Print Member Address", keyPath: \.swiftInterfaceOptions.printMemberAddress),
             OptionItem(title: "Print VTable Offset", keyPath: \.swiftInterfaceOptions.printVTableOffset),
             OptionItem(title: "Print Type Layout", keyPath: \.swiftInterfaceOptions.printTypeLayout),

@@ -1,9 +1,20 @@
+import MetaCodable
 import MemberwiseInit
 public import SwiftStdlibToolbox
 
+@Codable
 @Equatable
 @MemberwiseInit(.public)
-public struct RuntimeObject: Codable, Hashable, Identifiable, Sendable {
+public struct RuntimeObject: Hashable, Identifiable, Sendable {
+    
+    public struct Properties: OptionSet, Codable, Hashable, Sendable {
+        public let rawValue: Int
+        
+        public init(rawValue: Int) { self.rawValue = rawValue }
+        
+        public static let isGeneric = Self(rawValue: 1 << 0)
+    }
+    
     public let name: String
 
     public let displayName: String
@@ -15,6 +26,10 @@ public struct RuntimeObject: Codable, Hashable, Identifiable, Sendable {
     public let imagePath: String
 
     public let children: [RuntimeObject]
+    
+    @Default([])
+    @Init(default: [])
+    public let properties: Properties
     
     public var id: RuntimeObject { self }
 

@@ -9,6 +9,8 @@ final class SidebarRuntimeObjectCellView: TableCellView {
 
     private let secondaryIconImageView = ImageView()
 
+    private let tertiaryIconImageView = ImageView()
+    
     private let nameLabel = Label()
 
     private let forOpenQuickly: Bool
@@ -18,6 +20,9 @@ final class SidebarRuntimeObjectCellView: TableCellView {
             .contentHugging(h: .required)
             .contentCompressionResistance(h: .required)
         secondaryIconImageView
+            .contentHugging(h: .required)
+            .contentCompressionResistance(h: .required)
+        tertiaryIconImageView
             .contentHugging(h: .required)
             .contentCompressionResistance(h: .required)
         nameLabel
@@ -54,7 +59,7 @@ final class SidebarRuntimeObjectCellView: TableCellView {
             $0.contentTintColor = .controlAccentColor
         }
 
-        secondaryIconImageView.do {
+        [secondaryIconImageView, tertiaryIconImageView].forEach {
             $0.contentTintColor = .controlAccentColor
             $0.isHidden = true
         }
@@ -71,6 +76,8 @@ final class SidebarRuntimeObjectCellView: TableCellView {
         viewModel.$primaryIcon.asDriver().drive(primaryIconImageView.rx.image).disposed(by: rx.disposeBag)
         viewModel.$secondaryIcon.asDriver().drive(secondaryIconImageView.rx.image).disposed(by: rx.disposeBag)
         viewModel.$secondaryIcon.asDriver().map { $0 == nil }.drive(secondaryIconImageView.rx.isHidden).disposed(by: rx.disposeBag)
+        viewModel.$tertiaryIcon.asDriver().drive(tertiaryIconImageView.rx.image).disposed(by: rx.disposeBag)
+        viewModel.$tertiaryIcon.asDriver().map { $0 == nil }.drive(tertiaryIconImageView.rx.isHidden).disposed(by: rx.disposeBag)
         viewModel.$name.asDriver().drive(nameLabel.rx.attributedStringValue).disposed(by: rx.disposeBag)
     }
 }

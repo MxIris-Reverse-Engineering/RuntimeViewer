@@ -8,15 +8,14 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-extension RuntimeObjectKind {
-
+enum RuntimeObjectIcon {
     #if os(macOS)
-    public static let defaultIconSize: CGFloat = 18
+    static let defaultIconSize: CGFloat = 18
     #else
-    public static let defaultIconSize: CGFloat = 24
+    static let defaultIconSize: CGFloat = 24
     #endif
 
-    public static let defaultIconStyle: IDEIconStyle = .simple
+    static let defaultIconStyle: IDEIconStyle = .simple
 
     private struct IconCacheKey: Hashable {
         let text: String
@@ -27,69 +26,72 @@ extension RuntimeObjectKind {
 
     private static var iconCache: [IconCacheKey: NSUIImage] = [:]
 
-    private var iconSpec: (text: String, color: IDEIconColor) {
-        switch self {
+    private static func iconInfo(for kind: RuntimeObjectKind) -> (text: String, color: IDEIconColor) {
+        switch kind {
         case .c(let kind):
             switch kind {
             case .struct: return ("S", .green)
-            case .union:  return ("U", .green)
+            case .union: return ("U", .green)
             }
-        
+
         case .objc(.type(let kind)):
             switch kind {
-            case .class:    return ("C", .yellow)
+            case .class: return ("C", .yellow)
             case .protocol: return ("Pr", .purple)
             }
-            
+
         case .objc(.category(.class)):
             return ("Ex", .yellow)
-            
+
         case .swift(.type(let kind)):
             switch kind {
-            case .enum:      return ("E", .blue)
-            case .struct:    return ("S", .blue)
-            case .class:     return ("C", .blue)
-            case .protocol:  return ("Pr", .blue)
+            case .enum: return ("E", .blue)
+            case .struct: return ("S", .blue)
+            case .class: return ("C", .blue)
+            case .protocol: return ("Pr", .blue)
             case .typeAlias: return ("T", .blue)
             }
-            
+
         case .swift(.extension(_)),
              .swift(.conformance(_)):
             return ("Ex", .blue)
-            
+
         default:
             return ("?", .gray)
         }
     }
 
-    public func icon(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
-        let spec = self.iconSpec
-        
+    static func icon(text: String, color: IDEIconColor, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         let key = IconCacheKey(
-            text: spec.text,
-            color: spec.color,
+            text: text,
+            color: color,
             style: style,
             size: size
         )
-        
+
         if let cachedImage = Self.iconCache[key] {
             return cachedImage
         }
-        
+
         let image = IDEIcon(
-            spec.text,
-            color: spec.color,
+            text,
+            color: color,
             style: style,
             size: size
         ).image
-        
+
         Self.iconCache[key] = image
-        
+
         return image
     }
 
-    public var icon: NSUIImage {
-        return icon()
+    static func iconForGeneric(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+        return icon(text: "G", color: .teal)
+    }
+
+    static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+        let (text, color) = iconInfo(for: kind)
+        return icon(text: text, color: color, size: size, style: style)
     }
 }
 
@@ -98,10 +100,21 @@ extension RuntimeImageLoadState: @retroactive CaseAccessible {}
 #if canImport(UIKit)
 
 extension UIColor {
-    static var labelColor: UIColor { .label }
-    static var secondaryLabelColor: UIColor { .secondaryLabel }
-    static var tertiaryLabelColor: UIColor { .tertiaryLabel }
-    static var quaternaryLabelColor: UIColor { .quaternaryLabel }
+    static var labelColor: UIColor {
+        .label
+    }
+
+    static var secondaryLabelColor: UIColor {
+        .secondaryLabel
+    }
+
+    static var tertiaryLabelColor: UIColor {
+        .tertiaryLabel
+    }
+
+    static var quaternaryLabelColor: UIColor {
+        .quaternaryLabel
+    }
 }
 
 #endif

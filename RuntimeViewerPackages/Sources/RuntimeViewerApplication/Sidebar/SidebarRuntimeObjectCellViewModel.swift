@@ -95,6 +95,9 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
     @Observed
     public private(set) var secondaryIcon: NSUIImage?
+    
+    @Observed
+    public private(set) var tertiaryIcon: NSUIImage?
 
     @Observed
     public private(set) var name: NSAttributedString = .init()
@@ -112,11 +115,17 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         self.forOpenQuickly = forOpenQuickly
         super.init()
         if forOpenQuickly {
-            self.primaryIcon = runtimeObject.kind.icon(size: 24)
-            self.secondaryIcon = runtimeObject.secondaryKind?.icon(size: 24)
+            self.primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind, size: 24)
+            self.secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: 24) }
+            if runtimeObject.properties.contains(.isGeneric) {
+                self.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: 24)
+            }
         } else {
-            self.primaryIcon = runtimeObject.kind.icon
-            self.secondaryIcon = runtimeObject.secondaryKind?.icon
+            self.primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind)
+            self.secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0) }
+            if runtimeObject.properties.contains(.isGeneric) {
+                self.tertiaryIcon = RuntimeObjectIcon.iconForGeneric()
+            }
         }
         self.name = defaultAttributedName()
     }

@@ -28,6 +28,8 @@ public struct SwiftGenerationOptions: Sendable, Equatable {
     public var printEnumLayout: Bool
     @Default(false)
     public var synthesizeOpaqueType: Bool
+    @Default(false)
+    public var printExpandedFieldOffsets: Bool
     
     public static let `default` = Self()
 }
@@ -243,6 +245,7 @@ actor RuntimeSwiftSection {
         let newPrintConfiguration = SwiftInterfacePrintConfiguration(
             printStrippedSymbolicItem: options.printStrippedSymbolicItem,
             printFieldOffset: options.emitOffsetComments,
+            printExpandedFieldOffsets: options.printExpandedFieldOffsets,
             printMemberAddress: options.printMemberAddress,
             printVTableOffset: options.printVTableOffset,
             printTypeLayout: options.printTypeLayout,
@@ -313,11 +316,15 @@ actor RuntimeSwiftSection {
         let protocolChildren = try typeDefinition.protocolChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
         let mangledName = try mangleAsString(typeDefinition.typeName.node)
         let runtimeObjectName: RuntimeObject
+        var properties: RuntimeObject.Properties = []
+        if typeDefinition.type.contextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
+            properties.insert(.isGeneric)
+        }
         if isChild {
-            runtimeObjectName = RuntimeObject(name: mangledName, displayName: typeDefinition.typeName.currentName, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren)
+            runtimeObjectName = RuntimeObject(name: mangledName, displayName: typeDefinition.typeName.currentName, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren, properties: properties)
             nameToInterfaceDefinitionName[runtimeObjectName] = .childType(typeDefinition.typeName)
         } else {
-            runtimeObjectName = RuntimeObject(name: mangledName, displayName: typeDefinition.typeName.name, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren)
+            runtimeObjectName = RuntimeObject(name: mangledName, displayName: typeDefinition.typeName.name, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren, properties: properties)
             nameToInterfaceDefinitionName[runtimeObjectName] = .rootType(typeDefinition.typeName)
         }
         return runtimeObjectName
