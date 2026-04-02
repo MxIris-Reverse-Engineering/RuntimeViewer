@@ -1,27 +1,22 @@
 #if os(macOS)
 
 import SwiftUI
-import SettingsKit
 import Dependencies
 import RuntimeViewerSettings
 
-struct GeneralSettingsView: SettingsContent {
+struct GeneralSettingsView: View {
     @AppSettings(\.general)
     var settings
 
-    var body: some SettingsContent {
-        SettingsGroup("General", .navigation) {
-            SettingsForm {
-                Section {
-                    LabeledContent {
-                        AppearancePicker(selection: $settings.appearance)
-                    } label: {
-                        Text("Appearance")
-                    }
+    var body: some View {
+        SettingsForm {
+            Section {
+                LabeledContent {
+                    AppearancePicker(selection: $settings.appearance)
+                } label: {
+                    Text("Appearance")
                 }
             }
-        } icon: {
-            SettingsIcon(symbol: "gearshape", color: .clear)
         }
     }
 }

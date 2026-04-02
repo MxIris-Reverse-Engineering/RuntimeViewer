@@ -1,5 +1,4 @@
 import SwiftUI
-import SettingsKit
 import Dependencies
 import SwiftUIIntrospect
 
@@ -8,20 +7,68 @@ struct SettingsRootView: View {
     private var settings
 
     var body: some View {
-        SettingsView()
+        SettingsNavigationView()
             .environment(settings)
             .frame(minWidth: 715, maxWidth: 715)
             .frame(minHeight: 400)
-            .settingsStyle(RuntimeViewerSettingsStyle())
     }
 }
 
-private struct SettingsView: SettingsContainer {
-    var settingsBody: some SettingsContent {
-        GeneralSettingsView()
-        NotificationSettingsView()
-        TransformerSettingsView()
-        MCPSettingsView()
-        HelperServiceSettingsView()
+// MARK: - Settings Page
+
+private enum SettingsPage: String, CaseIterable, Identifiable {
+    case general = "General"
+    case notifications = "Notifications"
+    case transformer = "Transformer"
+    case mcp = "MCP"
+    case helper = "Helper"
+
+    var id: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .general: "gearshape"
+        case .notifications: "bell.badge"
+        case .transformer: "arrow.triangle.2.circlepath"
+        case .mcp: "network"
+        case .helper: "wrench.and.screwdriver"
+        }
+    }
+
+    @ViewBuilder
+    var contentView: some View {
+        switch self {
+        case .general: GeneralSettingsView()
+        case .notifications: NotificationSettingsView()
+        case .transformer: TransformerSettingsView()
+        case .mcp: MCPSettingsView()
+        case .helper: HelperServiceSettingsView()
+        }
+    }
+}
+
+// MARK: - Settings Navigation View
+
+private struct SettingsNavigationView: View {
+    @State private var selectedPage: SettingsPage? = .general
+
+    var body: some View {
+        NavigationSplitView {
+            List(SettingsPage.allCases, selection: $selectedPage) { page in
+                Label {
+                    Text(page.rawValue)
+                } icon: {
+                    SettingsIcon(symbol: page.systemImage, color: .clear)
+                }
+                .tag(page)
+            }
+            .navigationSplitViewColumnWidth(185)
+        } detail: {
+            if let selectedPage {
+                selectedPage.contentView
+                    .navigationTitle(selectedPage.rawValue)
+            }
+        }
+        .hideSidebarToggle()
     }
 }

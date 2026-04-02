@@ -1,7 +1,6 @@
 #if os(macOS)
 
 import SwiftUI
-import SettingsKit
 import ServiceManagement
 import RuntimeViewerHelperClient
 import Dependencies
@@ -38,46 +37,42 @@ extension SMAppService.Status {
 
 // MARK: - Settings View
 
-struct HelperServiceSettingsView: SettingsContent {
+struct HelperServiceSettingsView: View {
     @Dependency(\.helperServiceManager) private var manager
 
-    var body: some SettingsContent {
-        SettingsGroup("Helper", .navigation) {
-            SettingsForm {
-                if manager.isLegacyServiceInstalled {
-                    Section {
-                        LegacyServiceStatusRow()
-                    } header: {
-                        Text("Legacy Helper Service")
-                    } footer: {
-                        Text("The legacy helper service uses deprecated APIs. Please uninstall it and install the new version for better stability and security.")
-                    }
-                }
-
+    var body: some View {
+        SettingsForm {
+            if manager.isLegacyServiceInstalled {
                 Section {
-                    HelperServiceStatusRow()
+                    LegacyServiceStatusRow()
                 } header: {
-                    Text("Helper Service")
+                    Text("Legacy Helper Service")
                 } footer: {
-                    Text("The helper service enables advanced features such as code injection and accessing system-protected processes.")
-                }
-
-                Section {
-                    QuickActionsRow()
-                } header: {
-                    Text("Quick Actions")
+                    Text("The legacy helper service uses deprecated APIs. Please uninstall it and install the new version for better stability and security.")
                 }
             }
-            .task {
+
+            Section {
+                HelperServiceStatusRow()
+            } header: {
+                Text("Helper Service")
+            } footer: {
+                Text("The helper service enables advanced features such as code injection and accessing system-protected processes.")
+            }
+
+            Section {
+                QuickActionsRow()
+            } header: {
+                Text("Quick Actions")
+            }
+        }
+        .task {
+            await manager.refreshAllStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { @MainActor in
                 await manager.refreshAllStatus()
             }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-                Task { @MainActor in
-                    await manager.refreshAllStatus()
-                }
-            }
-        } icon: {
-            SettingsIcon(symbol: "wrench.and.screwdriver", color: .clear)
         }
     }
 }

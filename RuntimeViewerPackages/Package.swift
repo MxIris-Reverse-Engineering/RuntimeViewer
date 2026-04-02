@@ -373,10 +373,6 @@ let package = Package(
             )
         ),
         .package(
-            url: "https://github.com/Aeastr/SettingsKit",
-            from: "2.0.1"
-        ),
-        .package(
             url: "https://github.com/pointfreeco/swift-navigation",
             from: "2.7.0"
         ),
@@ -446,7 +442,6 @@ let package = Package(
                 "RuntimeViewerUI",
                 "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "SettingsKit", package: "SettingsKit"),
                 .product(name: "SwiftUIIntrospect", package: "swiftui-introspect"),
             ],
             resources: [

@@ -2,120 +2,115 @@
 
 import AppKit
 import SwiftUI
-import SettingsKit
 import Dependencies
 import RuntimeViewerSettings
 import RuntimeViewerCore
 
-struct TransformerSettingsView: SettingsContent {
+struct TransformerSettingsView: View {
     @AppSettings(\.transformer)
     var config
 
-    var body: some SettingsContent {
-        SettingsGroup("Transformer", .navigation) {
-            SettingsForm {
-                // MARK: - C Type Module
+    var body: some View {
+        SettingsForm {
+            // MARK: - C Type Module
 
+            Section {
+                Toggle("Transform C Types", isOn: $config.objc.cType.isEnabled)
+            } footer: {
+                Text("Transform C primitive types to custom types in ObjC interfaces.")
+            }
+
+            if config.objc.cType.isEnabled {
                 Section {
-                    Toggle("Transform C Types", isOn: $config.objc.cType.isEnabled)
-                } footer: {
-                    Text("Transform C primitive types to custom types in ObjC interfaces.")
-                }
-
-                if config.objc.cType.isEnabled {
-                    Section {
-                        CTypeEditor(module: $config.objc.cType)
-                    } header: {
-                        HStack {
-                            Text("Type Replacements")
-                            Spacer()
-                            CTypePresets(module: $config.objc.cType)
-                        }
-                    }
-                }
-
-                // MARK: - Swift Field Offset Module
-
-                Section {
-                    Toggle("Transform Swift Field Offset Comment", isOn: $config.swift.swiftFieldOffset.isEnabled)
-                } footer: {
-                    Text("Transform Swift field offset comment format in Swift interfaces.")
-                }
-
-                if config.swift.swiftFieldOffset.isEnabled {
-                    Section {
-                        SwiftFieldOffsetEditor(module: $config.swift.swiftFieldOffset)
-                    } header: {
-                        Text("Output Format")
-                    }
-                }
-
-                // MARK: - Swift VTable Offset Module
-
-                Section {
-                    Toggle("Transform Swift VTable Offset Comment", isOn: $config.swift.swiftVTableOffset.isEnabled)
-                } footer: {
-                    Text("Transform Swift vtable offset comment format in Swift interfaces.")
-                }
-
-                if config.swift.swiftVTableOffset.isEnabled {
-                    Section {
-                        SwiftVTableOffsetEditor(module: $config.swift.swiftVTableOffset)
-                    } header: {
-                        Text("Output Format")
-                    }
-                }
-
-                // MARK: - Swift Member Address Module
-
-                Section {
-                    Toggle("Transform Swift Member Address Comment", isOn: $config.swift.swiftMemberAddress.isEnabled)
-                } footer: {
-                    Text("Transform Swift member address comment format in Swift interfaces.")
-                }
-
-                if config.swift.swiftMemberAddress.isEnabled {
-                    Section {
-                        SwiftMemberAddressEditor(module: $config.swift.swiftMemberAddress)
-                    } header: {
-                        Text("Output Format")
-                    }
-                }
-
-                // MARK: - Swift Type Layout Module
-
-                Section {
-                    Toggle("Transform Swift Type Layout Comment", isOn: $config.swift.swiftTypeLayout.isEnabled)
-                } footer: {
-                    Text("Transform Swift type layout comment format in Swift interfaces.")
-                }
-
-                if config.swift.swiftTypeLayout.isEnabled {
-                    Section {
-                        SwiftTypeLayoutEditor(module: $config.swift.swiftTypeLayout)
-                    } header: {
-                        Text("Output Format")
-                    }
-                }
-
-                // MARK: - Swift Enum Layout Module
-
-                Section {
-                    Toggle("Transform Swift Enum Layout Comment", isOn: $config.swift.swiftEnumLayout.isEnabled)
-                } footer: {
-                    Text("Transform Swift enum layout comment format in Swift interfaces.")
-                }
-
-                if config.swift.swiftEnumLayout.isEnabled {
-                    Section {
-                        SwiftEnumLayoutEditor(module: $config.swift.swiftEnumLayout)
-                    } header: {
-                        Text("Output Format")
+                    CTypeEditor(module: $config.objc.cType)
+                } header: {
+                    HStack {
+                        Text("Type Replacements")
+                        Spacer()
+                        CTypePresets(module: $config.objc.cType)
                     }
                 }
             }
-        } icon: {
-            SettingsIcon(symbol: "arrow.triangle.2.circlepath", color: .clear)
+
+            // MARK: - Swift Field Offset Module
+
+            Section {
+                Toggle("Transform Swift Field Offset Comment", isOn: $config.swift.swiftFieldOffset.isEnabled)
+            } footer: {
+                Text("Transform Swift field offset comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftFieldOffset.isEnabled {
+                Section {
+                    SwiftFieldOffsetEditor(module: $config.swift.swiftFieldOffset)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
+            // MARK: - Swift VTable Offset Module
+
+            Section {
+                Toggle("Transform Swift VTable Offset Comment", isOn: $config.swift.swiftVTableOffset.isEnabled)
+            } footer: {
+                Text("Transform Swift vtable offset comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftVTableOffset.isEnabled {
+                Section {
+                    SwiftVTableOffsetEditor(module: $config.swift.swiftVTableOffset)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
+            // MARK: - Swift Member Address Module
+
+            Section {
+                Toggle("Transform Swift Member Address Comment", isOn: $config.swift.swiftMemberAddress.isEnabled)
+            } footer: {
+                Text("Transform Swift member address comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftMemberAddress.isEnabled {
+                Section {
+                    SwiftMemberAddressEditor(module: $config.swift.swiftMemberAddress)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
+            // MARK: - Swift Type Layout Module
+
+            Section {
+                Toggle("Transform Swift Type Layout Comment", isOn: $config.swift.swiftTypeLayout.isEnabled)
+            } footer: {
+                Text("Transform Swift type layout comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftTypeLayout.isEnabled {
+                Section {
+                    SwiftTypeLayoutEditor(module: $config.swift.swiftTypeLayout)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
+            // MARK: - Swift Enum Layout Module
+
+            Section {
+                Toggle("Transform Swift Enum Layout Comment", isOn: $config.swift.swiftEnumLayout.isEnabled)
+            } footer: {
+                Text("Transform Swift enum layout comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftEnumLayout.isEnabled {
+                Section {
+                    SwiftEnumLayoutEditor(module: $config.swift.swiftEnumLayout)
+                } header: {
+                    Text("Output Format")
+                }
+            }
         }
     }
 }

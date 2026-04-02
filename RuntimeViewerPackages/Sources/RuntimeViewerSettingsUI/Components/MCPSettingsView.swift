@@ -1,61 +1,56 @@
 #if os(macOS)
 
 import SwiftUI
-import SettingsKit
 import Dependencies
 import RuntimeViewerSettings
 import AppKit
 
-struct MCPSettingsView: SettingsContent {
+struct MCPSettingsView: View {
     @AppSettings(\.mcp)
     var settings
 
     @State private var copied = false
 
-    var body: some SettingsContent {
-        SettingsGroup("MCP", .navigation) {
-            SettingsForm {
-                Section {
-                    Toggle("Enable MCP Server", isOn: $settings.isEnabled)
-                } footer: {
-                    Text("When enabled, the MCP (Model Context Protocol) server allows LLM clients to inspect runtime information.")
-                }
+    var body: some View {
+        SettingsForm {
+            Section {
+                Toggle("Enable MCP Server", isOn: $settings.isEnabled)
+            } footer: {
+                Text("When enabled, the MCP (Model Context Protocol) server allows LLM clients to inspect runtime information.")
+            }
 
-                Section {
-                    Toggle("Use Fixed Port", isOn: $settings.useFixedPort)
-                        .disabled(!settings.isEnabled)
+            Section {
+                Toggle("Use Fixed Port", isOn: $settings.useFixedPort)
+                    .disabled(!settings.isEnabled)
 
-                    if settings.useFixedPort {
-                        LabeledContent {
-                            TextField("", value: $settings.fixedPort, format: .number)
-                                .frame(width: 80)
-                                .multilineTextAlignment(.trailing)
-                                .disabled(!settings.isEnabled)
-                            
-                        } label: {
-                            Text("Port")
-                        }
-                    }
-                } header: {
-                    Text("Port Configuration")
-                } footer: {
-                    if settings.useFixedPort {
-                        Text("The MCP server will listen on port \(settings.fixedPort). Changes take effect after restart.")
-                    } else {
-                        Text("The MCP server will automatically assign an available port.")
+                if settings.useFixedPort {
+                    LabeledContent {
+                        TextField("", value: $settings.fixedPort, format: .number)
+                            .frame(width: 80)
+                            .multilineTextAlignment(.trailing)
+                            .disabled(!settings.isEnabled)
+
+                    } label: {
+                        Text("Port")
                     }
                 }
-
-                Section {
-                    CopyMCPConfigButton(copied: $copied, settings: settings)
-                } header: {
-                    Text("Client Configuration")
-                } footer: {
-                    Text("Copy the JSON configuration for use in MCP-compatible LLM clients (e.g., Claude).")
+            } header: {
+                Text("Port Configuration")
+            } footer: {
+                if settings.useFixedPort {
+                    Text("The MCP server will listen on port \(settings.fixedPort). Changes take effect after restart.")
+                } else {
+                    Text("The MCP server will automatically assign an available port.")
                 }
             }
-        } icon: {
-            SettingsIcon(symbol: "network", color: .clear)
+
+            Section {
+                CopyMCPConfigButton(copied: $copied, settings: settings)
+            } header: {
+                Text("Client Configuration")
+            } footer: {
+                Text("Copy the JSON configuration for use in MCP-compatible LLM clients (e.g., Claude).")
+            }
         }
     }
 }
