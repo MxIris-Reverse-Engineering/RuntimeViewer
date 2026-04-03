@@ -142,6 +142,8 @@ public actor RuntimeEngine {
 
     private nonisolated let reloadDataSubject = PassthroughSubject<Void, Never>()
 
+    private nonisolated let objectsLoadingProgressSubject = PassthroughSubject<RuntimeObjectsLoadingProgress, Never>()
+
     private let objcSectionFactory: RuntimeObjCSectionFactory
 
     private let swiftSectionFactory: RuntimeSwiftSectionFactory
@@ -275,7 +277,10 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .loadImage, of: self) { $0.loadImage(at:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofObjectName:) }
 
-        setMessageHandlerBinding(forName: .runtimeObjectsInImage, of: self) { $0.objects(in:) }
+        connection?.setMessageHandler(name: CommandNames.runtimeObjectsInImage.commandName) { [weak self] (imagePath: String) -> [RuntimeObject] in
+            guard let self else { throw RequestError.senderConnectionIsLose }
+            return try await self._serverObjectsWithProgress(in: imagePath)
+        }
         setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
         setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
@@ -293,6 +298,7 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
         setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
+        setMessageHandlerBinding(forName: .objectsLoadingProgress) { $0.objectsLoadingProgressSubject.send($1) }
         setMessageHandlerBinding(forName: .engineListChanged) { (engine: RuntimeEngine, descriptors: [RemoteEngineDescriptor]) in
             #log(.info, "[MIRROR-DEBUG] engineListChanged received: \(descriptors.count, privacy: .public) descriptors, handler set: \(RuntimeEngine.engineListChangedHandler != nil, privacy: .public)")
             await RuntimeEngine.engineListChangedHandler?(descriptors, engine)
@@ -561,11 +567,28 @@ extension RuntimeEngine {
         return objcObjects + swiftObjects
     }
 
+    private func _serverObjectsWithProgress(in image: String) async throws -> [RuntimeObject] {
+        var result: [RuntimeObject] = []
+        for try await event in objectsWithProgress(in: image) {
+            switch event {
+            case .progress(let progress):
+                try? await connection?.sendMessage(name: .objectsLoadingProgress, request: progress)
+            case .completed(let objects):
+                result = objects
+            }
+        }
+        return result
+    }
+
     private func _remoteObjectsWithProgress(
         in image: String,
         continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
     ) async throws -> [RuntimeObject] {
         guard let connection else { throw RequestError.senderConnectionIsLose }
+        let cancellable = objectsLoadingProgressSubject.sink { progress in
+            continuation.yield(RuntimeObjectsLoadingEvent.progress(progress))
+        }
+        defer { cancellable.cancel() }
         return try await connection.sendMessage(name: .runtimeObjectsInImage, request: image)
     }
 
