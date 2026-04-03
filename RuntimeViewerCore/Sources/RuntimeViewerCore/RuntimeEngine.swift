@@ -63,6 +63,7 @@ public actor RuntimeEngine {
         case memberAddresses
         case engineList
         case engineListChanged
+        case objectsLoadingProgress
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
@@ -518,6 +519,54 @@ extension RuntimeEngine {
         } remote: {
             return try await $0.sendMessage(name: .runtimeObjectsInImage, request: image)
         }
+    }
+
+    public func objectsWithProgress(in image: String) -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error> {
+        AsyncThrowingStream { continuation in
+            Task { [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
+                do {
+                    let objects: [RuntimeObject]
+                    if let remoteRole = self.source.remoteRole, remoteRole.isClient {
+                        objects = try await self._remoteObjectsWithProgress(in: image, continuation: continuation)
+                    } else {
+                        objects = try await self._localObjectsWithProgress(in: image, continuation: continuation)
+                    }
+                    continuation.yield(.completed(objects))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func _localObjectsWithProgress(
+        in image: String,
+        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
+    ) async throws -> [RuntimeObject] {
+        #log(.debug, "Getting objects with progress in image: \(image, privacy: .public)")
+        let image = DyldUtilities.patchImagePathForDyld(image)
+        let (isObjCSectionExisted, objcSection) = try await objcSectionFactory.section(for: image, progressContinuation: continuation)
+        let objcObjects = try await objcSection.allObjects()
+        let (isSwiftSectionExisted, swiftSection) = try await swiftSectionFactory.section(for: image, progressContinuation: continuation)
+        let swiftObjects = try await swiftSection.allObjects()
+        if !isObjCSectionExisted || !isSwiftSectionExisted {
+            loadedImagePaths.insert(image)
+        }
+        #log(.debug, "Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects with progress")
+        return objcObjects + swiftObjects
+    }
+
+    private func _remoteObjectsWithProgress(
+        in image: String,
+        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
+    ) async throws -> [RuntimeObject] {
+        guard let connection else { throw RequestError.senderConnectionIsLose }
+        return try await connection.sendMessage(name: .runtimeObjectsInImage, request: image)
     }
 
     public func hierarchy(for object: RuntimeObject) async throws -> [String] {
