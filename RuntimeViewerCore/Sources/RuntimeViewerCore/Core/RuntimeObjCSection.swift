@@ -9,6 +9,8 @@ import Semantic
 import Utilities
 import MetaCodable
 
+typealias LoadingEventContinuation = AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
+
 @Codable
 @MemberInit
 public struct ObjCGenerationOptions: Sendable, Equatable {
@@ -106,7 +108,7 @@ actor RuntimeObjCSection {
         }
     }
 
-    init(imagePath: String, factory: RuntimeObjCSectionFactory) async throws {
+    init(imagePath: String, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
         guard let machO = MachOImage(name: imageName) else {
@@ -116,18 +118,18 @@ actor RuntimeObjCSection {
         self.machO = machO
         self.imagePath = imagePath
         self.factory = factory
-        try await prepare()
+        try await prepare(progressContinuation: progressContinuation)
     }
 
-    init(machO: MachOImage, factory: RuntimeObjCSectionFactory) async throws {
+    init(machO: MachOImage, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section from MachO: \(machO.imagePath, privacy: .public)")
         self.machO = machO
         self.imagePath = machO.imagePath
         self.factory = factory
-        try await prepare()
+        try await prepare(progressContinuation: progressContinuation)
     }
 
-    private func prepare() async throws {
+    private func prepare(progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.debug, "Preparing ObjC section data")
         var classByName: [String: ObjCClassGroup] = [:]
         var protocolByName: [String: ObjCProtocolGroup] = [:]
@@ -196,6 +198,12 @@ actor RuntimeObjCSection {
             let objcClassGroup: ObjCClassGroup = (objcClass, infoWithSuperclasses(class: objcClass, in: machO))
             guard let objcClassInfo = objcClassGroup.info.first else { continue }
             classByName[objcClassInfo.name] = objcClassGroup
+            progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
+                phase: .loadingObjCClasses,
+                itemDescription: objcClassInfo.name,
+                currentCount: classByName.count,
+                totalCount: objcClasses.count
+            )))
 
             let objcName = ObjCName.class(objcClassInfo.name)
 
@@ -214,6 +222,12 @@ actor RuntimeObjCSection {
         for objcProtocol in objcProtocols {
             guard let objcProtocolInfo = objcProtocol.info(in: machO) else { continue }
             protocolByName[objcProtocolInfo.name] = (objcProtocol, objcProtocolInfo)
+            progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
+                phase: .loadingObjCProtocols,
+                itemDescription: objcProtocolInfo.name,
+                currentCount: protocolByName.count,
+                totalCount: objcProtocols.count
+            )))
             let objcName = ObjCName.protocol(objcProtocolInfo.name)
             setObjCTypeFromProperties(objcProtocolInfo.properties + objcProtocolInfo.classProperties, forName: objcName)
             setObjCTypeFromMethods(objcProtocolInfo.methods + objcProtocolInfo.classMethods, forName: objcName)
@@ -231,6 +245,12 @@ actor RuntimeObjCSection {
         for objcCategory in objcCategories {
             guard let objcCategoryInfo = objcCategory.info(in: machO) else { continue }
             categoryByName[objcCategoryInfo.uniqueName] = (objcCategory, objcCategoryInfo)
+            progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
+                phase: .loadingObjCCategories,
+                itemDescription: objcCategoryInfo.uniqueName,
+                currentCount: categoryByName.count,
+                totalCount: objcCategories.count
+            )))
             let objcName = ObjCName.category(objcCategoryInfo.uniqueName)
             setObjCTypeFromProperties(objcCategoryInfo.properties + objcCategoryInfo.classProperties, forName: objcName)
             setObjCTypeFromMethods(objcCategoryInfo.methods + objcCategoryInfo.classMethods, forName: objcName)
@@ -681,13 +701,13 @@ actor RuntimeObjCSectionFactory {
         sections[imagePath]
     }
 
-    func section(for imagePath: String) async throws -> (isExisted: Bool, section: RuntimeObjCSection) {
+    func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeObjCSection) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
             return (true, section)
         }
         #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
-        let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self)
+        let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
         sections[imagePath] = section
         #log(.debug, "ObjC section created and cached")
         return (false, section)
