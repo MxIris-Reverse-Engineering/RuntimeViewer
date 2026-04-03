@@ -79,7 +79,88 @@ actor RuntimeSwiftSection {
         }
     }
 
-    init(imagePath: String, factory: RuntimeSwiftSectionFactory) async throws {
+    private final class ProgressEventHandler: SwiftInterfaceEvents.Handler, @unchecked Sendable {
+        let continuation: LoadingEventContinuation
+
+        private let lock = NSLock()
+        private var phaseStates: [RuntimeObjectsLoadingProgress.Phase: (currentCount: Int, totalCount: Int)] = [:]
+
+        init(continuation: LoadingEventContinuation) {
+            self.continuation = continuation
+        }
+
+        func handle(event: SwiftInterfaceEvents.Payload) {
+            switch event {
+            case .extractionStarted(let section):
+                if let phase = extractionPhase(for: section) {
+                    yieldProgress(phase: phase, itemDescription: "", currentCount: 0, totalCount: 0)
+                }
+
+            case .typeIndexingStarted(let totalTypes):
+                lock.withLock { phaseStates[.indexingSwiftTypes] = (0, totalTypes) }
+            case .typeProcessed(let context):
+                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: context.typeName)
+            case .typeProcessingFailed:
+                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: "")
+            case .typeProcessingSkippedCImported:
+                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: "")
+
+            case .protocolIndexingStarted(let totalProtocols):
+                lock.withLock { phaseStates[.indexingSwiftProtocols] = (0, totalProtocols) }
+            case .protocolProcessed(let context):
+                incrementAndYield(phase: .indexingSwiftProtocols, itemDescription: context.protocolName)
+            case .protocolProcessingFailed:
+                incrementAndYield(phase: .indexingSwiftProtocols, itemDescription: "")
+
+            case .conformanceIndexingStarted(let input):
+                lock.withLock { phaseStates[.indexingSwiftConformances] = (0, input.totalConformances) }
+            case .conformanceFound(let context):
+                incrementAndYield(phase: .indexingSwiftConformances, itemDescription: "\(context.typeName): \(context.protocolName)")
+            case .conformanceProcessingFailed:
+                incrementAndYield(phase: .indexingSwiftConformances, itemDescription: "")
+
+            case .extensionIndexingStarted:
+                lock.withLock { phaseStates[.indexingSwiftExtensions] = (0, 0) }
+            case .extensionCreated(let context):
+                incrementAndYield(phase: .indexingSwiftExtensions, itemDescription: context.targetName)
+            case .extensionCreationFailed:
+                incrementAndYield(phase: .indexingSwiftExtensions, itemDescription: "")
+
+            default:
+                break
+            }
+        }
+
+        private func extractionPhase(for section: SwiftInterfaceEvents.Section) -> RuntimeObjectsLoadingProgress.Phase? {
+            switch section {
+            case .swiftTypes: return .extractingSwiftTypes
+            case .swiftProtocols: return .extractingSwiftProtocols
+            case .protocolConformances: return .extractingSwiftConformances
+            case .associatedTypes: return .extractingSwiftAssociatedTypes
+            }
+        }
+
+        private func incrementAndYield(phase: RuntimeObjectsLoadingProgress.Phase, itemDescription: String) {
+            let state: (currentCount: Int, totalCount: Int) = lock.withLock {
+                var current = phaseStates[phase] ?? (0, 0)
+                current.currentCount += 1
+                phaseStates[phase] = current
+                return current
+            }
+            yieldProgress(phase: phase, itemDescription: itemDescription, currentCount: state.currentCount, totalCount: state.totalCount)
+        }
+
+        private func yieldProgress(phase: RuntimeObjectsLoadingProgress.Phase, itemDescription: String, currentCount: Int, totalCount: Int) {
+            continuation.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
+                phase: phase,
+                itemDescription: itemDescription,
+                currentCount: currentCount,
+                totalCount: totalCount
+            )))
+        }
+    }
+
+    init(imagePath: String, factory: RuntimeSwiftSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing Swift section for image: \(imagePath, privacy: .public)")
         let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
         guard let machO = MachOImage(name: imageName) else {
@@ -90,7 +171,8 @@ actor RuntimeSwiftSection {
         self.imagePath = imagePath
         self.machO = machO
         #log(.debug, "Creating Swift Interface Components")
-        self.indexer = .init(configuration: .init(showCImportedTypes: false), eventHandlers: [], in: machO)
+        let eventHandlers: [SwiftInterfaceEvents.Handler] = progressContinuation.map { [ProgressEventHandler(continuation: $0)] } ?? []
+        self.indexer = .init(configuration: .init(showCImportedTypes: false), eventHandlers: eventHandlers, in: machO)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
         try await indexer.prepare()
         #log(.info, "Swift section initialized successfully")
@@ -667,13 +749,13 @@ actor RuntimeSwiftSectionFactory {
         sections[imagePath]
     }
 
-    func section(for imagePath: String) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
+    func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached Swift section for: \(imagePath, privacy: .public)")
             return (true, section)
         }
         #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
-        let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self)
+        let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
         sections[imagePath] = section
         #log(.debug, "Swift section created and cached")
         return (false, section)
