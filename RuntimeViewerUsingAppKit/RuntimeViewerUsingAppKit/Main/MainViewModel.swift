@@ -22,6 +22,19 @@ struct SharingData {
     let iconType: RuntimeObjectKind
 }
 
+struct SwitchSourceState: Equatable {
+    let title: String
+    let image: NSImage?
+    let isDisconnected: Bool
+    let selectedEngineIdentifier: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.title == rhs.title
+            && lhs.isDisconnected == rhs.isDisconnected
+            && lhs.selectedEngineIdentifier == rhs.selectedEngineIdentifier
+            && lhs.image === rhs.image
+    }
+}
 
 final class MainViewModel: ViewModel<MainRoute> {
     struct Input {
@@ -46,7 +59,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         let isSidebarBackHidden: Driver<Bool>
         let isContentBackHidden: Driver<Bool>
         let runtimeEngineSections: Driver<[RuntimeEngineSection]>
-        let selectedEngineIdentifier: Driver<String>
+        let switchSourceState: Driver<SwitchSourceState>
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
         let requestRestartConfirmation: Signal<Void>
@@ -66,6 +79,28 @@ final class MainViewModel: ViewModel<MainRoute> {
     let isContentStackDepthGreaterThanOne = BehaviorRelay<Bool>(value: false)
 
     let selectedEngineIdentifier = BehaviorRelay<String>(value: RuntimeEngine.local.engineID)
+
+    private var cachedSelectedEngineName: String = RuntimeEngine.local.source.description
+
+    private var cachedSelectedEngineImage: NSImage?
+
+    private func resolveEngineIcon(for engine: RuntimeEngine) -> NSImage? {
+        switch engine.source {
+        case .local:
+            return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+        case .remote(_, let identifier, _) where identifier == .macCatalyst:
+            return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+        default:
+            if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
+                return runtimeEngineManager.cachedIcon(for: engine) ?? .symbol(name: RuntimeViewerSymbols.appFill)
+            } else {
+                let fallback = engine.hostInfo.metadata.isSimulator
+                    ? NSWorkspace.shared.box.deviceSymbolIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                    : NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                return runtimeEngineManager.cachedIcon(for: engine) ?? fallback
+            }
+        }
+    }
 
     @Observed
     var selectedRuntimeObject: RuntimeObject?
@@ -162,6 +197,8 @@ final class MainViewModel: ViewModel<MainRoute> {
             guard let engine = owner.runtimeEngineManager.runtimeEngines.first(where: {
                 $0.engineID == identifier
             }) else { return }
+            owner.cachedSelectedEngineName = engine.source.description
+            owner.cachedSelectedEngineImage = owner.resolveEngineIcon(for: engine)
             owner.router.trigger(.main(engine))
             owner.selectedEngineIdentifier.accept(identifier)
         }.disposed(by: rx.disposeBag)
@@ -191,6 +228,35 @@ final class MainViewModel: ViewModel<MainRoute> {
             return [SharingData(provider: item, title: runtimeObjectType.displayName, iconType: runtimeObjectType.kind)]
         }
 
+        let switchSourceState = Driver.combineLatest(
+            runtimeEngineManager.rx.runtimeEngineSections,
+            selectedEngineIdentifier.asDriver()
+        ).map { [weak self] sections, selectedIdentifier -> SwitchSourceState in
+            guard let self else {
+                return SwitchSourceState(title: "RuntimeViewer", image: nil, isDisconnected: true, selectedEngineIdentifier: selectedIdentifier)
+            }
+            let allEngines = sections.flatMap(\.engines)
+            if let engine = allEngines.first(where: { $0.engineID == selectedIdentifier }) {
+                let name = engine.source.description
+                let image = resolveEngineIcon(for: engine)
+                cachedSelectedEngineName = name
+                cachedSelectedEngineImage = image
+                return SwitchSourceState(
+                    title: name,
+                    image: image,
+                    isDisconnected: false,
+                    selectedEngineIdentifier: selectedIdentifier
+                )
+            } else {
+                return SwitchSourceState(
+                    title: cachedSelectedEngineName + " (Disconnected)",
+                    image: cachedSelectedEngineImage,
+                    isDisconnected: true,
+                    selectedEngineIdentifier: selectedIdentifier
+                )
+            }
+        }
+
         return Output(
             sharingServiceData: sharingServiceData ?? .empty(),
             isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
@@ -205,7 +271,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                 !$0
             }.asDriver(onErrorJustReturn: true),
             runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
-            selectedEngineIdentifier: selectedEngineIdentifier.asDriver(),
+            switchSourceState: switchSourceState,
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal()
