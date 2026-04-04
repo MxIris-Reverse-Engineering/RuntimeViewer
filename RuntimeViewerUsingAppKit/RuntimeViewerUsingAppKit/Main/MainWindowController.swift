@@ -49,11 +49,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     override func windowDidLoad() {
         super.windowDidLoad()
+        
         contentWindow.title = documentState.runtimeEngine.source.description
         contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
-        contentWindow.box.positionCenter()
+        contentWindow.box.centerInScreen()
         contentWindow.identifier = .makeIdentifier(of: Self.self)
         contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
         contentWindow.animationBehavior = .documentWindow
@@ -99,7 +100,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
-            switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemRepresentedObject(String.self).asSignal(),
+            switchSource: toolbarController.switchSourceItem.rx.menuItemClick(String.self).asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
             fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
             fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
@@ -148,8 +149,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         output.isContentBackHidden.drive(toolbarController.contentBackItem.rx.isHidden).disposed(by: rx.disposeBag)
 
-        output.runtimeEngineSections.drive(
-            toolbarController.switchSourceItem.popUpButton.rx.sectionItems(
+        // Bind menu content — rebuild menu from sections with selected engine marked
+        Driver.combineLatest(
+            output.runtimeEngineSections,
+            output.switchSourceState.map(\.selectedEngineIdentifier).distinctUntilChanged().map { AnyHashable($0) as AnyHashable? }
+        ).drive(
+            toolbarController.switchSourceItem.rx.sectionItems(
                 sectionTitle: { $0.hostName },
                 items: { $0.engines },
                 itemTitle: { $0.source.description },
@@ -174,6 +179,14 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 }
             )
         ).disposed(by: rx.disposeBag)
+
+        // Bind toolbar item display — title and image from switchSourceState
+        output.switchSourceState.driveOnNext { [weak self] state in
+            guard let self else { return }
+            toolbarController.switchSourceItem.displayTitle = state.title
+            toolbarController.switchSourceItem.displayImage = state.image
+            toolbarController.switchSourceItem.displayImage?.size = NSSize(width: 20, height: 20)
+        }.disposed(by: rx.disposeBag)
 
         viewModel.errorRelay
             .asSignal()
