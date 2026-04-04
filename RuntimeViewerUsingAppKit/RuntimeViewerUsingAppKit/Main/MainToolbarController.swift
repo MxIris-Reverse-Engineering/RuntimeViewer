@@ -122,22 +122,14 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         }
     }
 
-    class SwitchSourceToolbarItem: NSMenuToolbarItem {
+    class SwitchSourceToolbarItem: NSToolbarItem {
+        let popUpButton = NSPopUpButton()
+
         init() {
             super.init(itemIdentifier: .Main.switchSource)
-            showsIndicator = true
-            isBordered = true
-            menu = NSMenu()
-        }
-
-        var displayTitle: String {
-            get { title }
-            set { title = newValue }
-        }
-
-        var displayImage: NSImage? {
-            get { image }
-            set { image = newValue }
+            view = popUpButton
+            popUpButton.controlSize = .large
+            popUpButton.bezelStyle = .toolbar
         }
     }
 

@@ -100,7 +100,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
-            switchSource: toolbarController.switchSourceItem.rx.menuItemClick(String.self).asSignal(),
+            switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemRepresentedObject(String.self).asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
             fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
             fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
@@ -149,44 +149,63 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         output.isContentBackHidden.drive(toolbarController.contentBackItem.rx.isHidden).disposed(by: rx.disposeBag)
 
-        // Bind menu content — rebuild menu from sections with selected engine marked
-        Driver.combineLatest(
-            output.runtimeEngineSections,
-            output.switchSourceState.map(\.selectedEngineIdentifier).distinctUntilChanged().map { AnyHashable($0) as AnyHashable? }
-        ).drive(
-            toolbarController.switchSourceItem.rx.sectionItems(
-                sectionTitle: { $0.hostName },
-                items: { $0.engines },
-                itemTitle: { $0.source.description },
-                itemImage: { engine in
-                    switch engine.source {
-                    case .local:
-                        return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                    case .remote(_, let identifier, _) where identifier == .macCatalyst:
-                        return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                    default:
-                        if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
-                            return RuntimeEngineManager.shared.cachedIcon(for: engine) ?? .symbol(name: RuntimeViewerSymbols.appFill)
-                        } else {
-                            let fallback = engine.hostInfo.metadata.isSimulator ? NSWorkspace.shared.box.deviceSymbolIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier) : NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                            return RuntimeEngineManager.shared.cachedIcon(for: engine) ?? fallback
-                        }
-                    }
-                },
-                itemRepresentedObject: { AnyHashable($0.engineID) },
-                configureMenuItem: { menuItem, _ in
-                    menuItem.image?.size = NSSize(width: 20, height: 20)
-                }
-            )
-        ).disposed(by: rx.disposeBag)
+        // Bind menu content + selection from sections and switchSourceState
+        Driver.combineLatest(output.runtimeEngineSections, output.switchSourceState)
+            .driveOnNext { [weak self] sections, state in
+                guard let self else { return }
+                let popUpButton = toolbarController.switchSourceItem.popUpButton
 
-        // Bind toolbar item display — title and image from switchSourceState
-        output.switchSourceState.driveOnNext { [weak self] state in
-            guard let self else { return }
-            toolbarController.switchSourceItem.displayTitle = state.title
-            toolbarController.switchSourceItem.displayImage = state.image
-            toolbarController.switchSourceItem.displayImage?.size = NSSize(width: 20, height: 20)
-        }.disposed(by: rx.disposeBag)
+                popUpButton.menu?.removeAllItems()
+
+                // Build menu from sections
+                for (sectionIndex, section) in sections.enumerated() {
+                    if sectionIndex > 0 {
+                        popUpButton.menu?.addItem(.separator())
+                    }
+                    let header = NSMenuItem.sectionHeader(title: section.hostName)
+                    popUpButton.menu?.addItem(header)
+
+                    for engine in section.engines {
+                        let menuItem = NSMenuItem(title: engine.source.description, action: nil, keyEquivalent: "")
+                        switch engine.source {
+                        case .local:
+                            menuItem.image = NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                        case .remote(_, let identifier, _) where identifier == .macCatalyst:
+                            menuItem.image = NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                        default:
+                            if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
+                                menuItem.image = RuntimeEngineManager.shared.cachedIcon(for: engine) ?? .symbol(name: RuntimeViewerSymbols.appFill)
+                            } else {
+                                let fallback = engine.hostInfo.metadata.isSimulator ? NSWorkspace.shared.box.deviceSymbolIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier) : NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                                menuItem.image = RuntimeEngineManager.shared.cachedIcon(for: engine) ?? fallback
+                            }
+                        }
+                        menuItem.image?.size = NSSize(width: 20, height: 20)
+                        menuItem.representedObject = AnyHashable(engine.engineID)
+                        popUpButton.menu?.addItem(menuItem)
+                    }
+                }
+
+                // Update selection based on connection state
+                if state.isDisconnected {
+                    // Insert a disabled placeholder for the disconnected engine
+                    let placeholder = NSMenuItem(title: state.title, action: nil, keyEquivalent: "")
+                    placeholder.image = state.image
+                    placeholder.image?.size = NSSize(width: 20, height: 20)
+                    placeholder.isEnabled = false
+                    popUpButton.menu?.insertItem(placeholder, at: 0)
+                    popUpButton.menu?.insertItem(.separator(), at: 1)
+                    popUpButton.select(placeholder)
+                } else {
+                    // Select the matching engine
+                    let matchingIndex = popUpButton.menu?.items.firstIndex {
+                        ($0.representedObject as? AnyHashable) == AnyHashable(state.selectedEngineIdentifier)
+                    }
+                    if let matchingIndex {
+                        popUpButton.selectItem(at: matchingIndex)
+                    }
+                }
+            }.disposed(by: rx.disposeBag)
 
         viewModel.errorRelay
             .asSignal()
