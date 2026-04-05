@@ -68,32 +68,41 @@ struct SwiftGenerationOptionsTests {
     func defaultOptions() {
         let options = SwiftGenerationOptions.default
         #expect(options.printStrippedSymbolicItem == true)
-        #expect(options.emitOffsetComments == false)
-        #expect(options.printMemberAddress == false)
+        #expect(options.printFieldOffset == false)
+        #expect(options.printExpandedFieldOffset == false)
         #expect(options.printVTableOffset == false)
+        #expect(options.printPWTOffset == false)
+        #expect(options.printMemberAddress == false)
         #expect(options.printTypeLayout == false)
         #expect(options.printEnumLayout == false)
         #expect(options.synthesizeOpaqueType == false)
+        #expect(options.memberSortOrder == .byCategory)
     }
 
     @Test("custom initialization")
     func customInit() {
         let options = SwiftGenerationOptions(
             printStrippedSymbolicItem: false,
-            emitOffsetComments: true,
-            printMemberAddress: true,
+            printFieldOffset: true,
+            printExpandedFieldOffset: true,
             printVTableOffset: true,
+            printPWTOffset: true,
+            printMemberAddress: true,
             printTypeLayout: true,
             printEnumLayout: true,
-            synthesizeOpaqueType: true
+            synthesizeOpaqueType: true,
+            memberSortOrder: .byOffset
         )
         #expect(options.printStrippedSymbolicItem == false)
-        #expect(options.emitOffsetComments == true)
-        #expect(options.printMemberAddress == true)
+        #expect(options.printFieldOffset == true)
+        #expect(options.printExpandedFieldOffset == true)
         #expect(options.printVTableOffset == true)
+        #expect(options.printPWTOffset == true)
+        #expect(options.printMemberAddress == true)
         #expect(options.printTypeLayout == true)
         #expect(options.printEnumLayout == true)
         #expect(options.synthesizeOpaqueType == true)
+        #expect(options.memberSortOrder == .byOffset)
     }
 
     @Test("Equatable conformance")
@@ -102,7 +111,7 @@ struct SwiftGenerationOptionsTests {
         let b = SwiftGenerationOptions.default
         #expect(a == b)
 
-        let c = SwiftGenerationOptions(emitOffsetComments: true)
+        let c = SwiftGenerationOptions(printFieldOffset: true)
         #expect(a != c)
     }
 
@@ -110,8 +119,9 @@ struct SwiftGenerationOptionsTests {
     func codable() throws {
         let original = SwiftGenerationOptions(
             printStrippedSymbolicItem: false,
-            emitOffsetComments: true,
-            printMemberAddress: true
+            printFieldOffset: true,
+            printMemberAddress: true,
+            memberSortOrder: .byOffset
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(SwiftGenerationOptions.self, from: data)
@@ -141,9 +151,11 @@ struct GenerationOptionsTests {
 
         // All Swift detail options enabled
         #expect(mcp.swiftInterfaceOptions.printStrippedSymbolicItem == true)
-        #expect(mcp.swiftInterfaceOptions.emitOffsetComments == true)
-        #expect(mcp.swiftInterfaceOptions.printMemberAddress == true)
+        #expect(mcp.swiftInterfaceOptions.printFieldOffset == true)
+        #expect(mcp.swiftInterfaceOptions.printExpandedFieldOffset == true)
         #expect(mcp.swiftInterfaceOptions.printVTableOffset == true)
+        #expect(mcp.swiftInterfaceOptions.printPWTOffset == true)
+        #expect(mcp.swiftInterfaceOptions.printMemberAddress == true)
         #expect(mcp.swiftInterfaceOptions.printTypeLayout == true)
         #expect(mcp.swiftInterfaceOptions.printEnumLayout == true)
         #expect(mcp.swiftInterfaceOptions.synthesizeOpaqueType == true)

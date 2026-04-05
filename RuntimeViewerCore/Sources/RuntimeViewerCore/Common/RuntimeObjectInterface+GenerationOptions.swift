@@ -31,9 +31,11 @@ extension RuntimeObjectInterface {
             ),
             swiftInterfaceOptions: SwiftGenerationOptions(
                 printStrippedSymbolicItem: true,
-                emitOffsetComments: true,
-                printMemberAddress: true,
+                printFieldOffset: true,
+                printExpandedFieldOffset: true,
                 printVTableOffset: true,
+                printPWTOffset: true,
+                printMemberAddress: true,
                 printTypeLayout: true,
                 printEnumLayout: true,
                 synthesizeOpaqueType: true

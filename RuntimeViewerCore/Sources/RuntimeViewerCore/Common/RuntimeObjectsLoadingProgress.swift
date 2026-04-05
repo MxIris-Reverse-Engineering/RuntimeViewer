@@ -10,6 +10,7 @@ public struct RuntimeObjectsLoadingProgress: Sendable, Codable {
         case extractingSwiftProtocols
         case extractingSwiftConformances
         case extractingSwiftAssociatedTypes
+        case preparingSymbolIndex
         case indexingSwiftTypes
         case indexingSwiftProtocols
         case indexingSwiftConformances
@@ -48,6 +49,7 @@ extension RuntimeObjectsLoadingProgress.Phase {
         case .extractingSwiftProtocols: return "Extracting Swift protocols..."
         case .extractingSwiftConformances: return "Extracting Swift conformances..."
         case .extractingSwiftAssociatedTypes: return "Extracting Swift associated types..."
+        case .preparingSymbolIndex: return "Preparing symbol index..."
         case .indexingSwiftTypes: return "Indexing Swift types..."
         case .indexingSwiftProtocols: return "Indexing Swift protocols..."
         case .indexingSwiftConformances: return "Indexing Swift conformances..."
@@ -65,11 +67,12 @@ extension RuntimeObjectsLoadingProgress.Phase {
         case .extractingSwiftTypes:          return (0.45, 0.48)
         case .extractingSwiftProtocols:      return (0.48, 0.50)
         case .extractingSwiftConformances:   return (0.50, 0.52)
-        case .extractingSwiftAssociatedTypes: return (0.52, 0.55)
-        case .indexingSwiftTypes:            return (0.55, 0.72)
-        case .indexingSwiftProtocols:        return (0.72, 0.80)
-        case .indexingSwiftConformances:     return (0.80, 0.87)
-        case .indexingSwiftExtensions:       return (0.87, 0.90)
+        case .extractingSwiftAssociatedTypes: return (0.52, 0.54)
+        case .preparingSymbolIndex:          return (0.54, 0.65)
+        case .indexingSwiftTypes:            return (0.65, 0.78)
+        case .indexingSwiftProtocols:        return (0.78, 0.83)
+        case .indexingSwiftConformances:     return (0.83, 0.88)
+        case .indexingSwiftExtensions:       return (0.88, 0.90)
         case .buildingObjects:              return (0.90, 1.00)
         }
     }

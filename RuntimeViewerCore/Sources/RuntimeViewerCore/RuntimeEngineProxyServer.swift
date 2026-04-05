@@ -6,6 +6,11 @@ public import FoundationToolbox
 import RuntimeViewerCommunication
 #if canImport(AppKit)
 import AppKit
+
+/// Wraps an NSImage to cross isolation boundaries on macOS < 14 where NSImage lacks Sendable conformance.
+private struct SendableImage: @unchecked Sendable {
+    let image: NSImage?
+}
 #endif
 
 @Loggable(.private)
@@ -154,9 +159,10 @@ public actor RuntimeEngineProxyServer {
         let engineSource = engine.source
         connection.setMessageHandler(name: Self.iconRequestCommand) {
             () -> Data? in
-            await MainActor.run {
-                Self.appIconData(for: engineSource)
+            let wrapper = await MainActor.run {
+                SendableImage(image: Self.fetchAppIcon(for: engineSource))
             }
+            return Self.encodeIconToPNG(wrapper.image)
         }
         #endif
 
@@ -168,17 +174,19 @@ public actor RuntimeEngineProxyServer {
     /// Returns the app icon PNG data for this engine's attached process, or nil.
     public func iconData() async -> Data? {
         #if canImport(AppKit)
-        return await MainActor.run {
-            Self.appIconData(for: engine.source)
+        let wrapper = await MainActor.run {
+            SendableImage(image: Self.fetchAppIcon(for: engine.source))
         }
+        return Self.encodeIconToPNG(wrapper.image)
         #else
         return nil
         #endif
     }
 
     #if canImport(AppKit)
+    /// Fetches the app icon image for the given source. Must be called on the main thread.
     @MainActor
-    private static func appIconData(for source: RuntimeSource) -> Data? {
+    private static func fetchAppIcon(for source: RuntimeSource) -> NSImage? {
         let pidString: String?
         switch source {
         case .remote(_, let identifier, _):
@@ -190,8 +198,11 @@ public actor RuntimeEngineProxyServer {
         }
         guard let pidString, let pid = Int32(pidString) else { return nil }
         guard let app = NSRunningApplication(processIdentifier: pid) else { return nil }
+        return app.icon ?? app.bundleURL.flatMap { NSWorkspace.shared.icon(forFile: $0.path) }
+    }
 
-        let icon = app.icon ?? app.bundleURL.flatMap { NSWorkspace.shared.icon(forFile: $0.path) }
+    /// Encodes an NSImage to PNG data. Safe to call from any thread.
+    private static func encodeIconToPNG(_ icon: NSImage?) -> Data? {
         guard let icon else { return nil }
         return icon.tiffRepresentation.flatMap {
             NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:])

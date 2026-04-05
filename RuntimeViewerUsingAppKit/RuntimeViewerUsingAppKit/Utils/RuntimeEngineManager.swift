@@ -137,6 +137,7 @@ public final class RuntimeEngineManager {
                 // the name here would allow a duplicate connection when the endpoint
                 // reappears. Instead, rely on terminateRuntimeEngine (called on
                 // actual disconnect) to clear the name and allow reconnection.
+                _ = self
             }
         )
 
