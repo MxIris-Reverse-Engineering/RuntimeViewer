@@ -116,6 +116,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     private var receivedDataStream: SharedAsyncSequence<AsyncThrowingStream<Data, Error>>?
 
     /// Continuation for yielding received messages.
+    @Mutex
     private var receivedDataContinuation: AsyncThrowingStream<Data, Error>.Continuation?
 
     /// Semaphore for serializing send operations.
@@ -224,10 +225,10 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         }
 
         if extractedMessages.isEmpty {
-            #log(.info, "[MSG-DEBUG] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
+            #log(.debug, "[MessageChannel] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
         }
         for messageData in extractedMessages {
-            #log(.info, "[MSG-DEBUG] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
+            #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
             receivedDataContinuation?.yield(messageData)
             onMessageReceived?(messageData)
         }
@@ -237,12 +238,17 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     func finishReceiving(throwing error: (any Error)? = nil) {
         if let error {
             #log(.default, "finishReceiving: with error: \(String(describing: error), privacy: .public)")
-            receivedDataContinuation?.finish(throwing: error)
         } else {
             #log(.info, "finishReceiving: stream closed normally")
-            receivedDataContinuation?.finish()
         }
-        receivedDataContinuation = nil
+        _receivedDataContinuation.withLock { continuation in
+            if let error {
+                continuation?.finish(throwing: error)
+            } else {
+                continuation?.finish()
+            }
+            continuation = nil
+        }
     }
 
     /// Returns the current size of the receiving buffer.

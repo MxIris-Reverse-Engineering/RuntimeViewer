@@ -7,6 +7,7 @@ import RuntimeViewerSettings
 import RuntimeViewerSettingsUI
 import RuntimeViewerArchitectures
 import RuntimeViewerMCPBridge
+import RuntimeViewerHelperClient
 
 @Loggable(.private)
 @main
@@ -33,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         MCPService.shared.start(for: AppMCPBridgeDocumentProvider())
         installDebugMenu()
+        checkHelperServiceVersion()
     }
 
     private func installDebugMenu() {
@@ -76,6 +78,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } catch {
                 #log(.error, "Failed to export logs: \(error, privacy: .public)")
+            }
+        }
+    }
+
+    private func checkHelperServiceVersion() {
+        Task { @MainActor in
+            let result = await HelperServiceManager.shared.checkServiceVersionAndReinstallIfNeeded()
+            switch result {
+            case .reinstalled:
+                let alert = NSAlert()
+                alert.messageText = "Helper Service Updated"
+                alert.informativeText = "The helper service has been reinstalled due to a version mismatch. Please restart the application for the changes to take effect."
+                alert.alertStyle = .warning
+                alert.addButton(withTitle: "Restart Now")
+                alert.addButton(withTitle: "Later")
+                let response = alert.runModal()
+                if response == .alertFirstButtonReturn {
+                    relaunchApplication()
+                }
+            case .upToDate, .mismatchButNotEnabled:
+                break
+            }
+        }
+    }
+
+    private func relaunchApplication() {
+        let executableURL = Bundle.main.bundleURL
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: executableURL, configuration: configuration) { _, _ in
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
             }
         }
     }

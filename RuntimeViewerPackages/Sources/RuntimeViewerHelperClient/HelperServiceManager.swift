@@ -241,6 +241,77 @@ public final class HelperServiceManager {
         }
     }
 
+    // MARK: - Version Check
+
+    /// Result of checking the running service's version against the app's expected version.
+    public enum ServiceVersionCheckResult {
+        /// Versions match, no action needed.
+        case upToDate
+        /// Version mismatch detected and service was reinstalled. App should restart.
+        case reinstalled
+        /// Version mismatch detected but service is not enabled, cannot reinstall automatically.
+        case mismatchButNotEnabled
+    }
+
+    /// Checks whether the running helper service version matches the app's expected version.
+    ///
+    /// If the versions differ and the service is currently enabled, this method automatically
+    /// uninstalls and reinstalls the service. The caller should prompt the user to restart.
+    ///
+    /// When the version query itself fails (e.g. the running service predates the version
+    /// check mechanism and doesn't handle `FetchServiceVersionRequest`), the service is
+    /// also treated as outdated and reinstalled if currently enabled.
+    public func checkServiceVersionAndReinstallIfNeeded() async -> ServiceVersionCheckResult {
+        let serviceVersion: String?
+        do {
+            let connection = try connectionIfNeeded()
+            let response: FetchServiceVersionRequest.Response = try await connection.sendMessage(request: FetchServiceVersionRequest())
+            serviceVersion = response.version
+        } catch {
+            #log(.error, "Failed to fetch service version: \(error.localizedDescription, privacy: .public)")
+            // Old service binaries don't have the version handler, treat as outdated.
+            serviceVersion = nil
+        }
+
+        if let serviceVersion {
+            let expectedVersion = RuntimeViewerServiceVersion
+            guard serviceVersion != expectedVersion else {
+                #log(.info, "Service version matches: \(serviceVersion, privacy: .public)")
+                return .upToDate
+            }
+            #log(.info, "Service version mismatch — running: \(serviceVersion, privacy: .public), expected: \(expectedVersion, privacy: .public)")
+        } else {
+            #log(.info, "Service does not support version query, treating as outdated")
+        }
+
+        let daemon = Self.helperServiceDaemon
+        guard daemon.status == .enabled else {
+            #log(.info, "Service is not enabled (status: \(String(describing: daemon.status), privacy: .public)), cannot reinstall automatically")
+            return .mismatchButNotEnabled
+        }
+
+        // Uninstall the outdated service
+        do {
+            invalidateConnection()
+            try await daemon.unregister()
+            #log(.info, "Successfully unregistered outdated service")
+        } catch {
+            #log(.error, "Failed to unregister service: \(error.localizedDescription, privacy: .public)")
+        }
+
+        // Reinstall the service
+        do {
+            try daemon.register()
+            #log(.info, "Successfully re-registered service")
+        } catch {
+            #log(.error, "Failed to re-register service: \(error.localizedDescription, privacy: .public)")
+        }
+
+        status = daemon.status
+        updateStatusMessages(occurredError: nil)
+        return .reinstalled
+    }
+
     // MARK: - XPC Operations
 
     /// Sends a file operation request to the helper service.

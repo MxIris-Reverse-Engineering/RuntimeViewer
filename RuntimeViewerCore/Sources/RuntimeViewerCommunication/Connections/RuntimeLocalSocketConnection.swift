@@ -563,10 +563,12 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     private var connectionStateCancellable: AnyCancellable?
 
     /// Whether this connection has been explicitly stopped.
-    private var isStopped = false
+    @Mutex
+    private var isStopped: Bool = false
 
     /// Whether a reconnection loop is already running.
-    private var isReconnecting = false
+    @Mutex
+    private var isReconnecting: Bool = false
 
     /// Retry interval for reconnection attempts (in nanoseconds).
     private static let reconnectInterval: UInt64 = 500_000_000 // 500ms
@@ -719,8 +721,12 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Starts the reconnection loop in the background.
     private func startReconnecting() {
-        guard !isStopped, !isReconnecting else { return }
-        isReconnecting = true
+        let shouldStart = _isReconnecting.withLock { isReconnecting in
+            guard !isReconnecting else { return false }
+            isReconnecting = true
+            return true
+        }
+        guard shouldStart, !isStopped else { return }
         #log(.info, "Starting reconnection loop for port \(self.port, privacy: .public)")
         ownStateSubject.send(.connecting)
         Task { [weak self] in

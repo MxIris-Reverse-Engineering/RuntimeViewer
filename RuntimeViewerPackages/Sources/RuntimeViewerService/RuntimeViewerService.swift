@@ -41,11 +41,16 @@ public final class RuntimeViewerService {
         listener.setMessageHandler(handler: registerInjectedEndpoint)
         listener.setMessageHandler(handler: fetchAllInjectedEndpoints)
         listener.setMessageHandler(handler: removeInjectedEndpoint)
+        listener.setMessageHandler(handler: fetchServiceVersion)
         listener.activate()
     }
 
     private func ping(_ connection: XPCConnection, request: PingRequest) async throws -> PingRequest.Response {
         return .empty
+    }
+
+    private func fetchServiceVersion(_ connection: XPCConnection, request: FetchServiceVersionRequest) async throws -> FetchServiceVersionRequest.Response {
+        return .init(version: RuntimeViewerServiceVersion)
     }
 
     private func fetchEndpoint(_ connection: XPCConnection, request: FetchEndpointRequest) async throws -> FetchEndpointRequest.Response {

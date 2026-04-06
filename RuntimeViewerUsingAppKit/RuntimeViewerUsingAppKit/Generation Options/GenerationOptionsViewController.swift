@@ -18,7 +18,13 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
                 title: title,
                 labels: labels,
                 selectedIndex: { Array(EnumType.allCases).firstIndex(of: $0[keyPath: keyPath]) ?? 0 },
-                mutation: { index in { $0[keyPath: keyPath] = Array(EnumType.allCases)[index] } }
+                mutation: { index in
+                    { options in
+                        let allCases = Array(EnumType.allCases)
+                        guard allCases.indices.contains(index) else { return }
+                        options[keyPath: keyPath] = allCases[index]
+                    }
+                }
             )
         }
     }

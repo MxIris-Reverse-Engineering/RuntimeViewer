@@ -36,7 +36,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
 
-
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowGenerator: .init())
@@ -49,7 +48,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     override func windowDidLoad() {
         super.windowDidLoad()
-        
+
         contentWindow.title = documentState.runtimeEngine.source.description
         contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
@@ -167,19 +166,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
                     for engine in section.engines {
                         let menuItem = NSMenuItem(title: engine.source.description, action: nil, keyEquivalent: "")
-                        switch engine.source {
-                        case .local:
-                            menuItem.image = NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                        case .remote(_, let identifier, _) where identifier == .macCatalyst:
-                            menuItem.image = NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                        default:
-                            if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
-                                menuItem.image = RuntimeEngineManager.shared.cachedIcon(for: engine) ?? .symbol(name: RuntimeViewerSymbols.appFill)
-                            } else {
-                                let fallback = engine.hostInfo.metadata.isSimulator ? NSWorkspace.shared.box.deviceSymbolIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier) : NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                                menuItem.image = RuntimeEngineManager.shared.cachedIcon(for: engine) ?? fallback
-                            }
-                        }
+                        menuItem.image = self.viewModel?.resolveEngineIcon(for: engine)
                         menuItem.image?.size = NSSize(width: 20, height: 20)
                         menuItem.representedObject = AnyHashable(engine.engineID)
                         popUpButton.menu?.addItem(menuItem)

@@ -78,13 +78,13 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     let isContentStackDepthGreaterThanOne = BehaviorRelay<Bool>(value: false)
 
-    let selectedEngineIdentifier = BehaviorRelay<String>(value: RuntimeEngine.local.engineID)
+    @Observed private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
 
     private var cachedSelectedEngineName: String = RuntimeEngine.local.source.description
 
     private var cachedSelectedEngineImage: NSImage?
 
-    private func resolveEngineIcon(for engine: RuntimeEngine) -> NSImage? {
+    func resolveEngineIcon(for engine: RuntimeEngine) -> NSImage? {
         switch engine.source {
         case .local:
             return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
@@ -200,7 +200,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             owner.cachedSelectedEngineName = engine.source.description
             owner.cachedSelectedEngineImage = owner.resolveEngineIcon(for: engine)
             owner.router.trigger(.main(engine))
-            owner.selectedEngineIdentifier.accept(identifier)
+            owner.selectedEngineIdentifier = identifier
         }.disposed(by: rx.disposeBag)
 
         let sharingServiceData = completeTransition?.map { [weak self] router -> [SharingData] in
@@ -230,7 +230,7 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         let switchSourceState = Driver.combineLatest(
             runtimeEngineManager.rx.runtimeEngineSections,
-            selectedEngineIdentifier.asDriver()
+            $selectedEngineIdentifier.asDriver()
         ).map { [weak self] sections, selectedIdentifier -> SwitchSourceState in
             guard let self else {
                 return SwitchSourceState(title: "RuntimeViewer", image: nil, isDisconnected: true, selectedEngineIdentifier: selectedIdentifier)

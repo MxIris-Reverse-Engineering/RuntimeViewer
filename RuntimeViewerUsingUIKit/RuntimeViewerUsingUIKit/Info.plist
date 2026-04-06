@@ -6,6 +6,8 @@
 	<array>
 		<string>_runtimeviewer._tcp</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>RuntimeViewer uses the local network to discover and connect to runtime inspection services on nearby devices.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
