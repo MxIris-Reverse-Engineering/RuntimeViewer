@@ -249,6 +249,182 @@ struct RuntimeLocalSocketPortDiscoveryTests {
     }
 }
 
+// MARK: - RuntimeLocalSocket State & Lifecycle Tests
+
+@Suite("RuntimeLocalSocket State & Lifecycle Tests", .serialized)
+struct RuntimeLocalSocketStateTests {
+
+    @Test("Server reports connected state after client connects")
+    func testServerConnectedState() async throws {
+        let identifier = "test-state-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+
+        let serverTask = Task {
+            try await server.start()
+        }
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        server.setMessageHandler(requestType: EchoRequest.self) { request in
+            return EchoResponse(message: request.message)
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        // Send a message to ensure the connection is established
+        let response = try await client.sendMessage(request: EchoRequest(message: "ping"))
+        #expect(response.message == "ping")
+
+        #expect(server.state == .connected)
+
+        serverTask.cancel()
+        server.stop()
+    }
+
+    @Test("Server stop is idempotent")
+    func testServerStopIdempotent() async throws {
+        let identifier = "test-idempotent-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+
+        let serverTask = Task {
+            try await server.start()
+        }
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        serverTask.cancel()
+
+        // Calling stop multiple times should not crash
+        server.stop()
+        server.stop()
+        server.stop()
+    }
+
+    @Test("Server transitions to disconnected after stop")
+    func testServerDisconnectedAfterStop() async throws {
+        let identifier = "test-disconnected-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+
+        let serverTask = Task {
+            try await server.start()
+        }
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        serverTask.cancel()
+        server.stop()
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        #expect(server.state.isDisconnected)
+    }
+}
+
+// MARK: - RuntimeLocalSocket Fire-and-Forget Tests
+
+@Suite("RuntimeLocalSocket Fire-and-Forget Tests", .serialized)
+struct RuntimeLocalSocketFireAndForgetTests {
+
+    @Test("Fire-and-forget message with no response")
+    func testFireAndForget() async throws {
+        let identifier = "test-fandf-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+
+        let serverTask = Task {
+            try await server.start()
+        }
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        var receivedMessage: String?
+
+        server.setMessageHandler(name: "notify") { (message: String) in
+            receivedMessage = message
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        try await client.sendMessage(name: "notify", request: "Hello Socket")
+
+        // Give handler time to execute
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        #expect(receivedMessage == "Hello Socket")
+
+        serverTask.cancel()
+        server.stop()
+    }
+
+    @Test("Multiple handlers by different names")
+    func testMultipleNamedHandlers() async throws {
+        let identifier = "test-multihandler-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+
+        let serverTask = Task {
+            try await server.start()
+        }
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        server.setMessageHandler(name: "double") { (value: Int) -> Int in
+            return value * 2
+        }
+
+        server.setMessageHandler(name: "negate") { (value: Int) -> Int in
+            return -value
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        let doubleResult: Int = try await client.sendMessage(name: "double", request: 21)
+        #expect(doubleResult == 42)
+
+        let negateResult: Int = try await client.sendMessage(name: "negate", request: 5)
+        #expect(negateResult == -5)
+
+        serverTask.cancel()
+        server.stop()
+    }
+}
+
+// MARK: - RuntimeLocalSocket Rapid Request Tests
+
+@Suite("RuntimeLocalSocket Rapid Request Tests", .serialized)
+struct RuntimeLocalSocketRapidTests {
+
+    @Test("Rapid sequential requests over socket")
+    func testRapidRequests() async throws {
+        let identifier = "test-rapid-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+
+        let serverTask = Task {
+            try await server.start()
+        }
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        server.setMessageHandler(requestType: AddRequest.self) { request in
+            return AddResponse(result: request.a + request.b)
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        for requestIndex in 0 ..< 20 {
+            let response = try await client.sendMessage(request: AddRequest(a: requestIndex, b: 100))
+            #expect(response.result == requestIndex + 100)
+        }
+
+        serverTask.cancel()
+        server.stop()
+    }
+}
+
 // MARK: - RuntimeLocalSocketError Tests
 
 @Suite("RuntimeLocalSocketError Tests", .serialized)
@@ -279,6 +455,38 @@ struct RuntimeLocalSocketErrorTests {
             let description = error.description
             #expect(!description.isEmpty)
             #expect(description.contains("RuntimeLocalSocketError"))
+        }
+    }
+
+    @Test("Error description contains errno details")
+    func testErrorDescriptionDetails() {
+        let error = RuntimeLocalSocketError.connectFailed(errno: ECONNREFUSED, port: 9999)
+        let description = error.description
+        #expect(description.contains("9999"))
+        #expect(description.contains("connect"))
+    }
+
+    @Test("portFileNotFound and invalidPortFile error descriptions")
+    func testPortFileErrors() {
+        let portFileNotFound = RuntimeLocalSocketError.portFileNotFound(path: "/tmp/test.port", timeout: 5.0)
+        #expect(!portFileNotFound.description.isEmpty)
+        #expect(portFileNotFound.description.contains("/tmp/test.port"))
+
+        let invalidPortFile = RuntimeLocalSocketError.invalidPortFile(path: "/tmp/test.port", content: "abc")
+        #expect(!invalidPortFile.description.isEmpty)
+        #expect(invalidPortFile.description.contains("abc"))
+    }
+
+    @Test("All error cases are LocalizedError")
+    func testLocalizedError() {
+        let errors: [any Error] = [
+            RuntimeLocalSocketError.notConnected,
+            RuntimeLocalSocketError.receiveFailed,
+            RuntimeLocalSocketError.socketCreationFailed(errno: EMFILE),
+        ]
+
+        for error in errors {
+            #expect(error.localizedDescription.isEmpty == false)
         }
     }
 }

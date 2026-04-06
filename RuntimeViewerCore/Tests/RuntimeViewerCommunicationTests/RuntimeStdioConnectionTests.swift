@@ -211,13 +211,124 @@ struct RuntimeStdioConnectionTests {
     }
 }
 
-// MARK: - RuntimeStdioError Tests
+// MARK: - RuntimeStdio State & Lifecycle Tests
 
-@Suite("RuntimeStdioError Tests", .serialized)
-struct RuntimeStdioErrorTests {
+@Suite("RuntimeStdio State & Lifecycle Tests", .serialized)
+struct RuntimeStdioStateTests {
 
-    @Test("Error when underlying connection is stopped")
-    func testErrorAfterConnectionStop() async throws {
+    @Test("Connection starts in connected state")
+    func testInitialState() async throws {
+        let clientToServer = Pipe()
+        let serverToClient = Pipe()
+
+        let server = try RuntimeStdioServerConnection(
+            inputHandle: clientToServer.fileHandleForReading,
+            outputHandle: serverToClient.fileHandleForWriting
+        )
+
+        #expect(server.state == .connected)
+
+        server.stop()
+    }
+
+    @Test("Stop transitions to disconnected state")
+    func testDisconnectedStateAfterStop() async throws {
+        let clientToServer = Pipe()
+        let serverToClient = Pipe()
+
+        let server = try RuntimeStdioServerConnection(
+            inputHandle: clientToServer.fileHandleForReading,
+            outputHandle: serverToClient.fileHandleForWriting
+        )
+
+        #expect(server.state == .connected)
+
+        server.stop()
+
+        // Allow read queue to settle
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(server.state.isDisconnected)
+    }
+
+    @Test("Stop is idempotent — calling multiple times does not crash")
+    func testStopIdempotent() async throws {
+        let clientToServer = Pipe()
+        let serverToClient = Pipe()
+
+        let server = try RuntimeStdioServerConnection(
+            inputHandle: clientToServer.fileHandleForReading,
+            outputHandle: serverToClient.fileHandleForWriting
+        )
+
+        server.stop()
+        server.stop()
+        server.stop()
+
+        #expect(server.state.isDisconnected)
+    }
+
+    @Test("Closing write end triggers peer-closed detection")
+    func testPeerClosedDetection() async throws {
+        let clientToServer = Pipe()
+        let serverToClient = Pipe()
+
+        let server = try RuntimeStdioServerConnection(
+            inputHandle: clientToServer.fileHandleForReading,
+            outputHandle: serverToClient.fileHandleForWriting
+        )
+
+        defer { server.stop() }
+
+        // Close the write end to signal EOF to the server's read loop
+        try clientToServer.fileHandleForWriting.close()
+
+        // Give the read loop time to detect EOF
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        #expect(server.state.isDisconnected)
+    }
+
+    @Test("State publisher emits connected then disconnected")
+    func testStatePublisher() async throws {
+        let clientToServer = Pipe()
+        let serverToClient = Pipe()
+
+        var observedStates: [RuntimeConnectionState] = []
+
+        let server = try RuntimeStdioServerConnection(
+            inputHandle: clientToServer.fileHandleForReading,
+            outputHandle: serverToClient.fileHandleForWriting
+        )
+
+        let cancellable = server.statePublisher
+            .sink { state in
+                observedStates.append(state)
+            }
+
+        // Allow subscription to settle
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        server.stop()
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        // Should have received connected and disconnected
+        #expect(observedStates.contains(.connected))
+        let hasDisconnected = observedStates.contains { $0.isDisconnected }
+        #expect(hasDisconnected)
+
+        _ = cancellable
+    }
+}
+
+// MARK: - RuntimeStdio Fire-and-Forget Tests
+
+@Suite("RuntimeStdio Fire-and-Forget Tests", .serialized)
+struct RuntimeStdioFireAndForgetTests {
+
+    @Test("Fire-and-forget message with no response")
+    func testFireAndForgetMessage() async throws {
         let clientToServer = Pipe()
         let serverToClient = Pipe()
 
@@ -236,13 +347,97 @@ struct RuntimeStdioErrorTests {
             client.stop()
         }
 
-        // Close the pipes to simulate connection failure
-        try clientToServer.fileHandleForWriting.close()
-        try serverToClient.fileHandleForReading.close()
+        var receivedMessage: String?
 
-        // Sending should fail after closing the connection
-        // Note: The behavior depends on implementation details
-        _ = server
-        _ = client
+        server.setMessageHandler(name: "notify") { (message: String) in
+            receivedMessage = message
+        }
+
+        // Send fire-and-forget (no response expected)
+        try await client.sendMessage(name: "notify", request: "Hello")
+
+        // Give handler time to execute
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        #expect(receivedMessage == "Hello")
+    }
+
+    @Test("Multiple handlers registered by different names")
+    func testMultipleHandlers() async throws {
+        let clientToServer = Pipe()
+        let serverToClient = Pipe()
+
+        let server = try RuntimeStdioServerConnection(
+            inputHandle: clientToServer.fileHandleForReading,
+            outputHandle: serverToClient.fileHandleForWriting
+        )
+
+        let client = try RuntimeStdioClientConnection(
+            inputHandle: serverToClient.fileHandleForReading,
+            outputHandle: clientToServer.fileHandleForWriting
+        )
+
+        defer {
+            server.stop()
+            client.stop()
+        }
+
+        server.setMessageHandler(name: "upper") { (input: String) -> String in
+            return input.uppercased()
+        }
+
+        server.setMessageHandler(name: "lower") { (input: String) -> String in
+            return input.lowercased()
+        }
+
+        server.setMessageHandler(name: "reverse") { (input: String) -> String in
+            return String(input.reversed())
+        }
+
+        let upperResult: String = try await client.sendMessage(name: "upper", request: "hello")
+        #expect(upperResult == "HELLO")
+
+        let lowerResult: String = try await client.sendMessage(name: "lower", request: "WORLD")
+        #expect(lowerResult == "world")
+
+        let reverseResult: String = try await client.sendMessage(name: "reverse", request: "abc")
+        #expect(reverseResult == "cba")
+    }
+}
+
+// MARK: - RuntimeStdio Concurrent Request Tests
+
+@Suite("RuntimeStdio Concurrent Request Tests", .serialized)
+struct RuntimeStdioConcurrentTests {
+
+    @Test("Multiple rapid sequential requests")
+    func testRapidSequentialRequests() async throws {
+        let clientToServer = Pipe()
+        let serverToClient = Pipe()
+
+        let server = try RuntimeStdioServerConnection(
+            inputHandle: clientToServer.fileHandleForReading,
+            outputHandle: serverToClient.fileHandleForWriting
+        )
+
+        let client = try RuntimeStdioClientConnection(
+            inputHandle: serverToClient.fileHandleForReading,
+            outputHandle: clientToServer.fileHandleForWriting
+        )
+
+        defer {
+            server.stop()
+            client.stop()
+        }
+
+        server.setMessageHandler(requestType: AddRequest.self) { request in
+            return AddResponse(result: request.a + request.b)
+        }
+
+        // Send 20 requests rapidly
+        for requestIndex in 0 ..< 20 {
+            let response = try await client.sendMessage(request: AddRequest(a: requestIndex, b: requestIndex))
+            #expect(response.result == requestIndex * 2)
+        }
     }
 }

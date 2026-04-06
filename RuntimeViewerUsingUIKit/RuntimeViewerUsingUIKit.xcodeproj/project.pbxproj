@@ -59,6 +59,23 @@
 		E9AA36242C318A7300A9B2E4 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */; platformFilter = ios; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		E97BF5C32F82C386006943C2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = E978F9192F1BBB38004C09B4;
+			remoteInfo = RuntimeViewerServer;
+		};
+		E97BF5C52F82C386006943C2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = E994E2962F323A51009DD28A;
+			remoteInfo = RuntimeViewerMobileServer;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		E9038F982C31A81F0051B6AC /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9038FA22C31A8200051B6AC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -87,6 +104,7 @@
 		E95441BB2C26E99400DFFD40 /* MainSplitViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSplitViewController.swift; sourceTree = "<group>"; };
 		E96CF52C2EC7848700CBC159 /* XiblessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XiblessView.swift; sourceTree = "<group>"; };
 		E96CF52F2EC784C000CBC159 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
+		E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = ../RuntimeViewerServer/RuntimeViewerServer.xcodeproj; sourceTree = "<group>"; };
 		E9AA36232C318A7300A9B2E4 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -127,6 +145,7 @@
 		E9432FB92C0D612000362862 = {
 			isa = PBXGroup;
 			children = (
+				E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */,
 				E927C22F2E94450700084A7B /* AppIcon.icon */,
 				E9432FC42C0D612000362862 /* RuntimeViewerUsingUIKit */,
 				E9038F992C31A81F0051B6AC /* RuntimeViewerUsingVision */,
@@ -237,6 +256,15 @@
 			path = Utils;
 			sourceTree = "<group>";
 		};
+		E97BF5BF2F82C385006943C2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E97BF5C42F82C386006943C2 /* RuntimeViewerServer.framework */,
+				E97BF5C62F82C386006943C2 /* RuntimeViewerServer.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -316,6 +344,12 @@
 			);
 			productRefGroup = E9432FC32C0D612000362862 /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = E97BF5BF2F82C385006943C2 /* Products */;
+					ProjectRef = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				E9432FC12C0D612000362862 /* RuntimeViewerUsingUIKit */,
@@ -323,6 +357,23 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXReferenceProxy section */
+		E97BF5C42F82C386006943C2 /* RuntimeViewerServer.framework */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.framework;
+			path = RuntimeViewerServer.framework;
+			remoteRef = E97BF5C32F82C386006943C2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		E97BF5C62F82C386006943C2 /* RuntimeViewerServer.framework */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.framework;
+			path = RuntimeViewerServer.framework;
+			remoteRef = E97BF5C52F82C386006943C2 /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+/* End PBXReferenceProxy section */
 
 /* Begin PBXResourcesBuildPhase section */
 		E9038F962C31A81F0051B6AC /* Resources */ = {

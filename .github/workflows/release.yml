@@ -37,7 +37,7 @@ jobs:
       contents: write
 
     env:
-      WORKSPACE: RuntimeViewer-arm64e.xcworkspace
+      WORKSPACE: RuntimeViewer-Distribution.xcworkspace
       BUILD_PATH: ./Products/Archives
 
     steps:
