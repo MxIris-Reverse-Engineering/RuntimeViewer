@@ -299,6 +299,8 @@ public final class HelperServiceManager {
             #log(.error, "Failed to unregister service: \(error.localizedDescription, privacy: .public)")
         }
 
+        try? await Task.sleep(for: .seconds(1))
+        
         // Reinstall the service
         do {
             try daemon.register()
