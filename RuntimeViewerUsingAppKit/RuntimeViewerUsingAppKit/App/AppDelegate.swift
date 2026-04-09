@@ -1,6 +1,7 @@
 import AppKit
 import FoundationToolbox
 import OSLog
+import ServiceManagement
 import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerSettings
@@ -97,6 +98,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if response == .alertFirstButtonReturn {
                     relaunchApplication()
                 }
+            case .reinstallFailed(let error):
+                let alert = NSAlert()
+                alert.messageText = "Helper Service Reinstall Failed"
+                alert.informativeText = "The helper service needs to be reinstalled due to a version mismatch, but the reinstall failed: \(error.localizedDescription)\n\nYou can try again from Settings > Helper Service."
+                alert.alertStyle = .critical
+                alert.addButton(withTitle: "Open Settings")
+                alert.addButton(withTitle: "Dismiss")
+                let response = alert.runModal()
+                if response == .alertFirstButtonReturn {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+            case .versionQueryFailed(let error):
+                // Transient XPC error — do NOT unregister/reinstall. Just log and move on;
+                // the next launch (or a user-initiated reinstall from Settings) can retry.
+                #log(.info, "Helper service version query failed transiently, skipping automatic reinstall: \(error.localizedDescription, privacy: .public)")
             case .upToDate, .mismatchButNotEnabled:
                 break
             }

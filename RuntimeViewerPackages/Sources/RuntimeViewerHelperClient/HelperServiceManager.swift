@@ -251,6 +251,12 @@ public final class HelperServiceManager {
         case reinstalled
         /// Version mismatch detected but service is not enabled, cannot reinstall automatically.
         case mismatchButNotEnabled
+        /// Version query failed with a transient error (e.g. XPC hiccup, connection refused).
+        /// No action was taken; the daemon is left alone and the caller should retry on the next launch.
+        case versionQueryFailed(any Error)
+        /// Version mismatch was detected and unregister succeeded, but `daemon.register()` threw.
+        /// The daemon may now be in an inconsistent state; the caller should surface the error to the user.
+        case reinstallFailed(any Error)
     }
 
     /// Checks whether the running helper service version matches the app's expected version.
@@ -258,9 +264,12 @@ public final class HelperServiceManager {
     /// If the versions differ and the service is currently enabled, this method automatically
     /// uninstalls and reinstalls the service. The caller should prompt the user to restart.
     ///
-    /// When the version query itself fails (e.g. the running service predates the version
-    /// check mechanism and doesn't handle `FetchServiceVersionRequest`), the service is
-    /// also treated as outdated and reinstalled if currently enabled.
+    /// Error handling is narrow on purpose: only an explicit `unexpectedMessage` from the XPC
+    /// peer (meaning the running helper binary does not recognize `FetchServiceVersionRequest`
+    /// and therefore predates the version check feature) is treated as "outdated". Every other
+    /// error — connection refused, connection interrupted, connection invalid, transient XPC
+    /// hiccups on cold start — returns `.versionQueryFailed` and leaves the daemon untouched,
+    /// so a transient glitch at launch no longer triggers an unwanted unregister/reinstall cycle.
     public func checkServiceVersionAndReinstallIfNeeded() async -> ServiceVersionCheckResult {
         let serviceVersion: String?
         do {
@@ -268,9 +277,13 @@ public final class HelperServiceManager {
             let response: FetchServiceVersionRequest.Response = try await connection.sendMessage(request: FetchServiceVersionRequest())
             serviceVersion = response.version
         } catch {
-            #log(.error, "Failed to fetch service version: \(error.localizedDescription, privacy: .public)")
-            // Old service binaries don't have the version handler, treat as outdated.
-            serviceVersion = nil
+            if Self.errorIndicatesOutdatedBinary(error) {
+                #log(.info, "Fetch version failed with 'unhandled message' error — treating as outdated binary: \(error.localizedDescription, privacy: .public)")
+                serviceVersion = nil
+            } else {
+                #log(.error, "Failed to fetch service version (treating as transient, no action): \(error.localizedDescription, privacy: .public)")
+                return .versionQueryFailed(error)
+            }
         }
 
         if let serviceVersion {
@@ -297,21 +310,39 @@ public final class HelperServiceManager {
             #log(.info, "Successfully unregistered outdated service")
         } catch {
             #log(.error, "Failed to unregister service: \(error.localizedDescription, privacy: .public)")
+            // Proceed anyway; register() below may still succeed from a .notRegistered state.
         }
 
+        // SMAppService bookkeeping on disk can lag behind the unregister await —
+        // without this short pause, the immediately-following register() call
+        // occasionally fails with a "already registered" error. See FB-radar TBD.
         try? await Task.sleep(for: .seconds(1))
-        
+
         // Reinstall the service
         do {
             try daemon.register()
             #log(.info, "Successfully re-registered service")
         } catch {
             #log(.error, "Failed to re-register service: \(error.localizedDescription, privacy: .public)")
+            status = daemon.status
+            updateStatusMessages(occurredError: error as NSError)
+            return .reinstallFailed(error)
         }
 
         status = daemon.status
         updateStatusMessages(occurredError: nil)
         return .reinstalled
+    }
+
+    /// Returns `true` only when the thrown error tells us the running helper binary does not
+    /// recognize the version query message (i.e. predates the version check feature). Every other
+    /// error — connection refused, interrupted, invalid, generic XPC failure — is treated as
+    /// transient and must NOT trigger an automatic reinstall.
+    private static func errorIndicatesOutdatedBinary(_ error: any Error) -> Bool {
+        if let connectionError = error as? XPCConnection.Error, case .unexpectedMessage = connectionError {
+            return true
+        }
+        return false
     }
 
     // MARK: - XPC Operations
