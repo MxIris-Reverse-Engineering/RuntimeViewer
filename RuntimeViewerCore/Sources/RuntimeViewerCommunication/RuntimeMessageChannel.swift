@@ -234,7 +234,12 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         }
     }
 
-    /// Finishes the received data stream.
+    /// Finishes the received data stream and resumes any in-flight pending requests with an error.
+    ///
+    /// When the underlying transport closes or errors out, we must not only terminate the
+    /// received-data stream but also unblock every caller currently awaiting a response via
+    /// `sendRequest`. Otherwise the `withCheckedThrowingContinuation` registered in `pendingRequests`
+    /// is never resumed and the calling task hangs indefinitely.
     func finishReceiving(throwing error: (any Error)? = nil) {
         if let error {
             #log(.default, "finishReceiving: with error: \(String(describing: error), privacy: .public)")
@@ -248,6 +253,21 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                 continuation?.finish()
             }
             continuation = nil
+        }
+
+        // Drain any pending requests that were waiting for a response on the now-dead channel
+        // and resume each with an error so the `await` in `sendRequest` unblocks.
+        let drainedContinuations: [CheckedContinuation<Data, Error>] = pendingRequests.withLock { pending in
+            let values = Array(pending.values)
+            pending.removeAll()
+            return values
+        }
+        if !drainedContinuations.isEmpty {
+            #log(.info, "finishReceiving: draining \(drainedContinuations.count, privacy: .public) pending request(s)")
+        }
+        let resumeError: any Error = error ?? RuntimeMessageChannelError.notConnected
+        for continuation in drainedContinuations {
+            continuation.resume(throwing: resumeError)
         }
     }
 
