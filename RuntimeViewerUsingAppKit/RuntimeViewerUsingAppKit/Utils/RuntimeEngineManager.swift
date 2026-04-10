@@ -37,6 +37,14 @@ public final class RuntimeEngineManager {
 
     private var knownBonjourEndpointNames: Set<String> = []
 
+    /// Endpoints that were rediscovered while a stale engine with the same name
+    /// was still being torn down. After `terminateRuntimeEngine` clears the name,
+    /// we re-issue `connectToBonjourEndpoint` for any pending entry so the user
+    /// gets auto-reconnected (e.g. when the iOS server resumes from background
+    /// suspension and re-advertises Bonjour before the old NWConnection has
+    /// timed out on this side).
+    private var pendingReconnectEndpoints: [String: RuntimeNetworkEndpoint] = [:]
+
     private static let maxRetryAttempts = 3
 
     private static let retryBaseDelay: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
@@ -176,9 +184,15 @@ public final class RuntimeEngineManager {
 
     private func connectToBonjourEndpoint(_ endpoint: RuntimeNetworkEndpoint, attempt: Int = 0) async {
         guard !knownBonjourEndpointNames.contains(endpoint.name) else {
-            #log(.info,"Skipping duplicate Bonjour endpoint: \(endpoint.name, privacy: .public)")
+            // The endpoint was rediscovered before the previous engine for this
+            // name finished tearing down. Stash it so `terminateRuntimeEngine`
+            // can pick it up and reconnect once the old engine is fully gone.
+            #log(.info,"Skipping duplicate Bonjour endpoint: \(endpoint.name, privacy: .public), queueing for reconnect after current engine terminates")
+            pendingReconnectEndpoints[endpoint.name] = endpoint
             return
         }
+        // A fresh connection attempt for this name supersedes any pending one.
+        pendingReconnectEndpoints.removeValue(forKey: endpoint.name)
         knownBonjourEndpointNames.insert(endpoint.name)
 
         do {
@@ -288,8 +302,13 @@ public final class RuntimeEngineManager {
 
     public func terminateRuntimeEngine(for source: RuntimeSource) {
         #log(.info,"Terminating runtime engine: \(source.description, privacy: .public)")
+        var pendingBonjourReconnect: RuntimeNetworkEndpoint?
         if case .bonjour(let name, _, let role) = source, role.isClient {
             knownBonjourEndpointNames.remove(name)
+            // If the same endpoint was rediscovered while we were still tearing
+            // down this engine (typical when the iOS server resumes from
+            // background suspension), reconnect to it now.
+            pendingBonjourReconnect = pendingReconnectEndpoints.removeValue(forKey: name)
         }
         if case .localSocket(_, let socketIdentifier, .client) = source, let pid = Int32(socketIdentifier.rawValue) {
             removeInjectedSocketEndpointRecord(pid: pid)
@@ -305,6 +324,13 @@ public final class RuntimeEngineManager {
         }
         bonjourRuntimeEngines.removeAll { $0.source == source }
         rebuildSections()
+
+        if let pendingBonjourReconnect {
+            #log(.info,"Reconnecting to pending Bonjour endpoint after termination: \(pendingBonjourReconnect.name, privacy: .public)")
+            Task {
+                await self.connectToBonjourEndpoint(pendingBonjourReconnect)
+            }
+        }
     }
 
     public func terminateAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) {
