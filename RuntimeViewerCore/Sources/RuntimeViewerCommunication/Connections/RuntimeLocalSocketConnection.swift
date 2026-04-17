@@ -181,6 +181,9 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         isStarted = false
 
         if socketFD >= 0 {
+            // shutdown() before close() to reliably unblock recv() on readQueue.
+            // close() alone has undefined behavior for blocked syscalls on another thread (BSD).
+            shutdown(socketFD, SHUT_RDWR)
             close(socketFD)
             socketFD = -1
         }
@@ -195,6 +198,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         isStarted = false
 
         if socketFD >= 0 {
+            shutdown(socketFD, SHUT_RDWR)
             close(socketFD)
             socketFD = -1
         }
@@ -636,9 +640,9 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
     override func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
                 try await handler()
-                return NullPayload.null
+                return RuntimeMessageNull.null
             }
         }
         pendingHandlers.append(setupHandler)
@@ -651,7 +655,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
             connection.setMessageHandler(name: name) { @Sendable (request: Request) in
                 try await handler(request)
-                return NullPayload.null
+                return RuntimeMessageNull.null
             }
         }
         pendingHandlers.append(setupHandler)
@@ -662,7 +666,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
 
     override func setMessageHandler<Response>(name: String, handler: @escaping @Sendable () async throws -> Response) where Response: Codable {
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
                 return try await handler()
             }
         }
@@ -873,9 +877,9 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     override func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
                 try await handler()
-                return NullPayload.null
+                return RuntimeMessageNull.null
             }
         }
         pendingHandlers.append(setupHandler)
@@ -888,7 +892,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
             connection.setMessageHandler(name: name) { @Sendable (request: Request) in
                 try await handler(request)
-                return NullPayload.null
+                return RuntimeMessageNull.null
             }
         }
         pendingHandlers.append(setupHandler)
@@ -899,7 +903,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     override func setMessageHandler<Response>(name: String, handler: @escaping @Sendable () async throws -> Response) where Response: Codable {
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
                 return try await handler()
             }
         }
@@ -1065,6 +1069,8 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         connectionStateCancellable = nil
         underlyingConnection?.stop()
         if serverSocketFD >= 0 {
+            // shutdown() before close() to unblock accept() on the background accept loop.
+            shutdown(serverSocketFD, SHUT_RDWR)
             close(serverSocketFD)
             serverSocketFD = -1
         }

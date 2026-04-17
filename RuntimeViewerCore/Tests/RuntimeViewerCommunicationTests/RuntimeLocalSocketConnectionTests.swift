@@ -321,6 +321,45 @@ struct RuntimeLocalSocketStateTests {
 
         #expect(server.state.isDisconnected)
     }
+
+    /// Regression test for the recv() hang bug: when the server closes the connection,
+    /// the injected client's blocking recv() must be unblocked so the state leaves
+    /// `.connected`. Without `shutdown()` before `close()` the recv() can stay blocked
+    /// indefinitely on BSD/macOS and the client never notices the server is gone.
+    @Test("Server stop unblocks idle client recv loop")
+    func testServerStopUnblocksIdleClient() async throws {
+        let identifier = "test-stop-unblock-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+
+        let serverTask = Task {
+            try await server.start()
+        }
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        // Let the client's receiver thread block on recv() (no data flowing).
+        try await Task.sleep(nanoseconds: 200_000_000)
+        #expect(client.state == .connected)
+
+        // Closing the server's accepted fd must unblock the client's recv() so its
+        // state transitions away from `.connected`. The client may then flip to
+        // `.connecting` via auto-reconnect — either is fine; what's NOT fine is
+        // staying at `.connected` (meaning recv() is still blocked).
+        server.stop()
+
+        let deadline = Date().addingTimeInterval(1.0)
+        while client.state == .connected, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        #expect(client.state != .connected, "client stayed .connected within 1s — recv() likely still blocked")
+
+        serverTask.cancel()
+        client.stop()
+    }
 }
 
 // MARK: - RuntimeLocalSocket Fire-and-Forget Tests
@@ -421,6 +460,189 @@ struct RuntimeLocalSocketRapidTests {
         }
 
         serverTask.cancel()
+        server.stop()
+    }
+}
+
+// MARK: - RuntimeLocalSocket No-Response Handler Regression Tests
+
+/// Regression tests for the `NullPayload` / `RuntimeMessageNull` sentinel mismatch
+/// that caused the receive dispatch loop to echo bogus responses back to the
+/// peer after handling any fire-and-forget message.
+///
+/// Before the fix, `RuntimeConnectionBase` (and `RuntimeLocalSocketServerConnection`
+/// overrides) wrapped no-response handlers so they returned `NullPayload.null`,
+/// while `observeIncomingMessages` used `RuntimeMessageNull.self` as its "don't
+/// reply" sentinel. The two types were never equal, so every fire-and-forget
+/// message triggered a `send(requestData:)` reply. In the
+/// `runtimeObjectsInImage` → `objectsLoadingProgress` push scenario this
+/// reply contended for the same `sendSemaphore` the in-flight `sendRequest`
+/// was holding, permanently wedging the dispatch loop and the originating
+/// request.
+@Suite("RuntimeLocalSocket No-Response Handler Regression Tests", .serialized)
+struct RuntimeLocalSocketNoResponseHandlerTests {
+
+    /// Simple counter helper usable across tasks without pulling extra deps.
+    private actor Counter {
+        private(set) var value: Int = 0
+        func increment() { value += 1 }
+    }
+
+    /// Core regression for the deadlock: the server pushes many fire-and-forget
+    /// messages to the client while the client is still awaiting a response
+    /// to its own request. With the sentinel bug, the bogus reply issued by
+    /// the client's dispatch loop blocks on the semaphore held by the
+    /// originating `sendRequest` and nothing makes progress.
+    @Test("Fire-and-forget push during in-flight client request does not deadlock")
+    func testNoDeadlockOnPushDuringInFlightRequest() async throws {
+        let identifier = "test-push-inflight-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        let pushCount = 50
+
+        // Server "compute" handler pushes N fire-and-forget "progress" messages
+        // back to the client *before* returning the real response, mirroring
+        // `_serverObjectsWithProgress`.
+        server.setMessageHandler(name: "compute") { [weak server] (_: String) -> String in
+            guard let server else { return "cancelled" }
+            for progressIndex in 0 ..< pushCount {
+                try await server.sendMessage(name: "progress", request: progressIndex)
+            }
+            return "done"
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        let receivedProgress = Counter()
+        client.setMessageHandler(name: "progress") { (_: Int) in
+            await receivedProgress.increment()
+        }
+
+        // If the sentinel mismatch comes back, this await never returns.
+        let response: String = try await client.sendMessage(name: "compute", request: "")
+        #expect(response == "done")
+
+        // Give any trailing push handlers a beat to finish; they are dispatched
+        // sequentially through the same observe loop that also delivers
+        // responses, so by the time the response returns they should all be in.
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let delivered = await receivedProgress.value
+        #expect(delivered == pushCount, "expected \(pushCount) progress pushes, got \(delivered)")
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
+
+    /// A no-response handler on the receiving side must NOT bounce a response
+    /// back. If it did, the sender would see an unknown request identifier
+    /// for which there is no pending request and no registered handler. We
+    /// detect that by installing a dummy response handler under the same
+    /// identifier on the sender side and asserting it never fires.
+    @Test("No-response handler on receiver does not echo a response back")
+    func testNoResponseHandlerDoesNotEchoResponseBack() async throws {
+        let identifier = "test-noecho-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        // If the client erroneously echoes a response for "notify", the
+        // message would arrive back at the server, get decoded as a
+        // `RuntimeRequestData(identifier: "notify", ...)`, find no pending
+        // request, then land in this server-side handler. If the fix is in
+        // place, this handler must never run.
+        let echoedBackCount = Counter()
+        server.setMessageHandler(name: "notify") { (_: String) in
+            await echoedBackCount.increment()
+        }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        let receivedOnClient = Counter()
+        client.setMessageHandler(name: "notify") { (_: String) in
+            await receivedOnClient.increment()
+        }
+
+        // Wait for the server to finish accepting and wire its
+        // `underlyingConnection` — the client's `connect()` can return before
+        // the server-side accept loop finishes setting that up.
+        let readyDeadline = Date().addingTimeInterval(2.0)
+        while server.state != .connected, Date() < readyDeadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(server.state == .connected)
+
+        // Push several fire-and-forget notifications from server → client.
+        for notificationIndex in 0 ..< 10 {
+            try await server.sendMessage(name: "notify", request: "msg-\(notificationIndex)")
+        }
+
+        // Allow pushes to propagate and (buggy) echoes to come back.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let delivered = await receivedOnClient.value
+        #expect(delivered == 10, "client should receive all 10 notifications")
+
+        let echoed = await echoedBackCount.value
+        #expect(echoed == 0, "server must not receive any echoed-back response (got \(echoed))")
+
+        serverTask.cancel()
+        client.stop()
+        server.stop()
+    }
+
+    /// Bidirectional push pressure: both ends continuously send fire-and-forget
+    /// messages while the client runs a real request/response through the same
+    /// dispatch loops. The assertion is that the real request completes — with
+    /// the sentinel bug, it never would because the incoming pushes wedge the
+    /// receive side waiting on `sendSemaphore`.
+    @Test("Real request/response survives concurrent bidirectional push storm")
+    func testRealRequestSurvivesBidirectionalPushStorm() async throws {
+        let identifier = "test-bidir-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        server.setMessageHandler(requestType: AddRequest.self) { request in
+            return AddResponse(result: request.a + request.b)
+        }
+        server.setMessageHandler(name: "client-progress") { (_: Int) in }
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+        client.setMessageHandler(name: "server-progress") { (_: Int) in }
+
+        // Kick off pushes from both sides in the background.
+        let serverPushTask = Task { [weak server] in
+            guard let server else { return }
+            for progressIndex in 0 ..< 20 {
+                try? await server.sendMessage(name: "server-progress", request: progressIndex)
+            }
+        }
+        let clientPushTask = Task { [weak client] in
+            guard let client else { return }
+            for progressIndex in 0 ..< 20 {
+                try? await client.sendMessage(name: "client-progress", request: progressIndex)
+            }
+        }
+
+        // Real request under push pressure — with the bug, this hangs forever.
+        let response = try await client.sendMessage(request: AddRequest(a: 7, b: 35))
+        #expect(response.result == 42)
+
+        _ = await serverPushTask.value
+        _ = await clientPushTask.value
+
+        // A second request after the storm proves both dispatch loops recovered.
+        let response2 = try await client.sendMessage(request: AddRequest(a: 100, b: 200))
+        #expect(response2.result == 300)
+
+        serverTask.cancel()
+        client.stop()
         server.stop()
     }
 }

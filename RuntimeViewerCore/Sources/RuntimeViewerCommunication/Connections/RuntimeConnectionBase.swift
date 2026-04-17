@@ -46,7 +46,7 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
         guard let connection = underlyingConnection else {
             throw RuntimeConnectionError.notConnected
         }
-        try await connection.send(requestData: RuntimeRequestData(identifier: name, value: NullPayload.null))
+        try await connection.send(requestData: RuntimeRequestData(identifier: name, value: RuntimeMessageNull.null))
     }
 
     func sendMessage(name: String, request: some Codable) async throws {
@@ -60,7 +60,7 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
         guard let connection = underlyingConnection else {
             throw RuntimeConnectionError.notConnected
         }
-        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: NullPayload.null))
+        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: RuntimeMessageNull.null))
     }
 
     func sendMessage<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
@@ -78,21 +78,21 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
     }
 
     func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
-        underlyingConnection?.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+        underlyingConnection?.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
             try await handler()
-            return NullPayload.null
+            return RuntimeMessageNull.null
         }
     }
 
     func setMessageHandler<Request: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Void) {
         underlyingConnection?.setMessageHandler(name: name) { @Sendable (request: Request) in
             try await handler(request)
-            return NullPayload.null
+            return RuntimeMessageNull.null
         }
     }
 
     func setMessageHandler<Response: Codable>(name: String, handler: @escaping @Sendable () async throws -> Response) {
-        underlyingConnection?.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+        underlyingConnection?.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
             return try await handler()
         }
     }
@@ -138,13 +138,4 @@ protocol RuntimeUnderlyingConnection: Sendable {
     func setMessageHandler<Request: RuntimeRequest>(_ handler: @escaping @Sendable (Request) async throws -> Request.Response)
 }
 
-// MARK: - NullPayload
-
-/// A null payload type used when no payload is needed.
-///
-/// This is used internally by `RuntimeConnectionBase` for messages
-/// that don't require a request or response payload.
-struct NullPayload: Codable, Sendable {
-    static let null = NullPayload()
-}
 
