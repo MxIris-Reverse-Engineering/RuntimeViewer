@@ -65,18 +65,18 @@ let package = Package(
             local: .package(
                 path: "../../MachOKit",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
-                from: "0.46.100"
+                from: "0.49.100"
             )
         ),
         .package(
             local: .package(
                 path: "../../MachOObjCSection",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
@@ -87,7 +87,7 @@ let package = Package(
             local: .package(
                 path: "../../MachOSwiftSection",
                 isRelative: true,
-                isEnabled: true
+                isEnabled: false
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
