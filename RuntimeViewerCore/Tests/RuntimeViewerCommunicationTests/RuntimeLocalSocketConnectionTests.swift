@@ -712,3 +712,97 @@ struct RuntimeLocalSocketErrorTests {
         }
     }
 }
+
+// MARK: - RuntimeLocalSocketClient Concurrent Access Tests
+
+/// Regression tests for the data race in `RuntimeLocalSocketClientConnection`:
+/// `pendingHandlers` and `connectionStateCancellable` are mutated from multiple
+/// execution contexts (caller threads invoking `setMessageHandler`, the
+/// reconnection `Task`, Combine sinks, and `stop()`) without synchronization,
+/// despite the class being marked `@unchecked Sendable`.
+///
+/// These tests are intended to be run under Thread Sanitizer
+/// (`swift test --sanitize=thread`) — TSan will flag the race directly.
+/// Without TSan the tests still exercise the hot path and can occasionally
+/// crash, hang, or drop handlers, but passes are not conclusive.
+@Suite("RuntimeLocalSocketClient Concurrent Access Tests", .serialized)
+struct RuntimeLocalSocketClientConcurrentTests {
+
+    /// Spams `setMessageHandler` from many concurrent tasks while the client's
+    /// reconnection loop is actively running in the background — the precise
+    /// window in which the unsynchronized `pendingHandlers` append collides
+    /// with `applyPendingHandlers` iteration.
+    @Test("Concurrent setMessageHandler calls during reconnect do not race")
+    func testConcurrentSetMessageHandlerDuringReconnect() async throws {
+        let identifier = "test-race-pending-\(UUID().uuidString)"
+
+        // Start the server and establish the initial client connection.
+        let server1 = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask1 = Task { try await server1.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        // Tear the server down so the client drops into the reconnection loop.
+        serverTask1.cancel()
+        server1.stop()
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // While reconnection is spinning, pound pendingHandlers from many tasks.
+        await withTaskGroup(of: Void.self) { group in
+            for handlerIndex in 0 ..< 200 {
+                group.addTask {
+                    client.setMessageHandler(name: "handler-\(handlerIndex)") { (value: Int) -> Int in
+                        return value
+                    }
+                }
+            }
+        }
+
+        // Bring the server back so the reconnect loop can complete and iterate
+        // pendingHandlers one more time via applyPendingHandlers.
+        let server2 = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask2 = Task { try await server2.start() }
+
+        let reconnectDeadline = Date().addingTimeInterval(3.0)
+        while client.state != .connected, Date() < reconnectDeadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        #expect(client.state == .connected, "Client should reconnect within 3s after server restart")
+
+        client.stop()
+        serverTask2.cancel()
+        server2.stop()
+    }
+
+    /// Calls `stop()` from one task while the reconnection loop is mutating
+    /// `connectionStateCancellable` from another, targeting the second
+    /// unsynchronized field flagged in the review.
+    @Test("Concurrent stop during reconnect does not race on connectionStateCancellable")
+    func testConcurrentStopDuringReconnect() async throws {
+        let identifier = "test-race-cancellable-\(UUID().uuidString)"
+
+        let server = RuntimeLocalSocketServerConnection(identifier: identifier)
+        let serverTask = Task { try await server.start() }
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        let client = try await RuntimeLocalSocketClientConnection(identifier: identifier, timeout: 5)
+
+        // Drop the server so the client starts reconnecting.
+        serverTask.cancel()
+        server.stop()
+
+        // Race stop() against the still-running reconnection loop.
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        async let stopFromBackground: Void = Task.detached { client.stop() }.value
+        async let stopFromForeground: Void = Task { client.stop() }.value
+        _ = await (stopFromBackground, stopFromForeground)
+
+        // A second stop after the dust settles must still be safe.
+        client.stop()
+
+        #expect(client.state.isDisconnected)
+    }
+}

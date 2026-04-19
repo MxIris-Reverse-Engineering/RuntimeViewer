@@ -561,9 +561,20 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     private let ownStateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
     /// Pending message handlers to apply to new connections.
+    ///
+    /// Accessed concurrently from public `setMessageHandler` overloads (caller
+    /// contexts) and from the reconnection `Task` via `applyPendingHandlers`.
+    /// `@Mutex` serializes `append` via the generated `_modify` accessor and
+    /// lets iterators take a snapshot via `_pendingHandlers.withLock { $0 }`.
+    @Mutex
     private var pendingHandlers: [@Sendable (RuntimeLocalSocketConnection) -> Void] = []
 
     /// Subscription for observing connection state changes.
+    ///
+    /// `observeUnderlyingConnectionState` reassigns this from the reconnection
+    /// `Task`, while `stop()` may nil it from an unrelated caller context, so
+    /// cancel-and-replace must happen atomically under the lock.
+    @Mutex
     private var connectionStateCancellable: AnyCancellable?
 
     /// Whether this connection has been explicitly stopped.
@@ -703,16 +714,19 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     // MARK: - Connection Lifecycle
 
     /// Applies all pending handlers to a connection.
+    ///
+    /// Snapshots the array inside the lock so user-supplied handler closures
+    /// are invoked outside the critical section.
     private func applyPendingHandlers(to connection: RuntimeLocalSocketConnection) {
-        for handler in pendingHandlers {
+        let snapshot = _pendingHandlers.withLock { $0 }
+        for handler in snapshot {
             handler(connection)
         }
     }
 
     /// Observes the underlying connection state and triggers reconnection on disconnect.
     private func observeUnderlyingConnectionState(_ connection: RuntimeLocalSocketConnection) {
-        connectionStateCancellable?.cancel()
-        connectionStateCancellable = connection.statePublisher
+        let newCancellable = connection.statePublisher
             .sink { [weak self] state in
                 guard let self, !isStopped else { return }
                 if state.isDisconnected {
@@ -721,6 +735,10 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
                     startReconnecting()
                 }
             }
+        _connectionStateCancellable.withLock { current in
+            current?.cancel()
+            current = newCancellable
+        }
     }
 
     /// Starts the reconnection loop in the background.
@@ -771,8 +789,10 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     override func stop() {
         #log(.info, "Stopping local socket client connection on port \(self.port, privacy: .public)")
         isStopped = true
-        connectionStateCancellable?.cancel()
-        connectionStateCancellable = nil
+        _connectionStateCancellable.withLock { current in
+            current?.cancel()
+            current = nil
+        }
         underlyingConnection?.stop()
         ownStateSubject.send(.disconnected(error: nil))
     }
