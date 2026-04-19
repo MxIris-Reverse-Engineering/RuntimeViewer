@@ -23,3 +23,7 @@ when picking up follow-up work.
   `feature/socket-injected-endpoint-reconnection` (9 slices, ~11.5k LOC).
   Three Blockers were fixed before this file was written; the rest of the
   Majors and Minors are tracked here.
+- [2026-04-17-ultrareview-findings.md](2026-04-17-ultrareview-findings.md) —
+  follow-up `/ultrareview` pass on the same branch @ `c88cb2b`. Six issues
+  (3 Normal, 3 Nit); notably, UR.3 reactivates FP.4 because the new
+  reconnection Task invalidates the original false-positive premise.
