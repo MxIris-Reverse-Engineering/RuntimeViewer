@@ -155,18 +155,66 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
         readQueue.async { [weak self] in
             guard let self else { return }
 
+            let fileDescriptor = self.inputHandle.fileDescriptor
+            guard fileDescriptor >= 0 else { return }
+
+            // Use poll() with a short timeout to avoid blocking indefinitely.
+            // This lets stop() interrupt the read loop by setting isStarted = false.
+            var pollFD = pollfd(fd: fileDescriptor, events: Int16(POLLIN), revents: 0)
+            let readBufferSize = 65536
+            let readBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: readBufferSize)
+            defer { readBuffer.deallocate() }
+
             while self.isStarted {
-                let data = self.inputHandle.availableData
-                if data.isEmpty {
-                    #log(.info, "Input stream closed")
-                    self.messageChannel.finishReceiving()
-                    DispatchQueue.main.async {
-                        self.stop(with: .peerClosed)
+                pollFD.revents = 0
+                let pollResult = poll(&pollFD, 1, 100)  // 100ms timeout
+
+                if pollResult < 0 {
+                    // poll() error — EINTR is transient, others are fatal
+                    if errno == EINTR { continue }
+                    if self.isStarted {
+                        #log(.info, "poll() error: errno=\(errno, privacy: .public)")
+                        self.messageChannel.finishReceiving()
+                        DispatchQueue.main.async { self.stop(with: .peerClosed) }
                     }
                     break
-                } else {
+                }
+
+                if pollResult == 0 {
+                    // Timeout — no data available, loop back to check isStarted
+                    continue
+                }
+
+                // Check for error/hangup conditions on the fd
+                if pollFD.revents & Int16(POLLHUP | POLLERR | POLLNVAL) != 0, pollFD.revents & Int16(POLLIN) == 0 {
+                    #log(.info, "Input stream closed (poll revents=\(pollFD.revents, privacy: .public))")
+                    self.messageChannel.finishReceiving()
+                    DispatchQueue.main.async { self.stop(with: .peerClosed) }
+                    break
+                }
+
+                // Data available — read it
+                let bytesRead = Darwin.read(fileDescriptor, readBuffer, readBufferSize)
+
+                if bytesRead > 0 {
+                    let data = Data(bytes: readBuffer, count: bytesRead)
                     #log(.debug, "Received \(data.count, privacy: .public) bytes")
                     self.messageChannel.appendReceivedData(data)
+                } else if bytesRead == 0 {
+                    // EOF
+                    #log(.info, "Input stream closed")
+                    self.messageChannel.finishReceiving()
+                    DispatchQueue.main.async { self.stop(with: .peerClosed) }
+                    break
+                } else {
+                    // Read error
+                    if errno == EINTR { continue }
+                    if self.isStarted {
+                        #log(.info, "read() error: errno=\(errno, privacy: .public)")
+                        self.messageChannel.finishReceiving()
+                        DispatchQueue.main.async { self.stop(with: .peerClosed) }
+                    }
+                    break
                 }
             }
         }

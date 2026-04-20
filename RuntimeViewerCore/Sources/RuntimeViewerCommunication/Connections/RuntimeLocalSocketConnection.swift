@@ -181,6 +181,9 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         isStarted = false
 
         if socketFD >= 0 {
+            // shutdown() before close() to reliably unblock recv() on readQueue.
+            // close() alone has undefined behavior for blocked syscalls on another thread (BSD).
+            shutdown(socketFD, SHUT_RDWR)
             close(socketFD)
             socketFD = -1
         }
@@ -195,6 +198,7 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
         isStarted = false
 
         if socketFD >= 0 {
+            shutdown(socketFD, SHUT_RDWR)
             close(socketFD)
             socketFD = -1
         }
@@ -548,8 +552,49 @@ enum RuntimeLocalSocketPortDiscovery {
 /// - Note: The identifier must match what the main app used when creating
 ///   `RuntimeLocalSocketServerConnection`. Both sides use the same identifier
 ///   to compute the deterministic port number.
+@Loggable
 final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLocalSocketConnection>, @unchecked Sendable {
     private let identifier: String
+    private let port: UInt16
+
+    /// Stable state subject that bridges state across reconnections.
+    private let ownStateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
+
+    /// Pending message handlers to apply to new connections.
+    ///
+    /// Accessed concurrently from public `setMessageHandler` overloads (caller
+    /// contexts) and from the reconnection `Task` via `applyPendingHandlers`.
+    /// `@Mutex` serializes `append` via the generated `_modify` accessor and
+    /// lets iterators take a snapshot via `_pendingHandlers.withLock { $0 }`.
+    @Mutex
+    private var pendingHandlers: [@Sendable (RuntimeLocalSocketConnection) -> Void] = []
+
+    /// Subscription for observing connection state changes.
+    ///
+    /// `observeUnderlyingConnectionState` reassigns this from the reconnection
+    /// `Task`, while `stop()` may nil it from an unrelated caller context, so
+    /// cancel-and-replace must happen atomically under the lock.
+    @Mutex
+    private var connectionStateCancellable: AnyCancellable?
+
+    /// Whether this connection has been explicitly stopped.
+    @Mutex
+    private var isStopped: Bool = false
+
+    /// Whether a reconnection loop is already running.
+    @Mutex
+    private var isReconnecting: Bool = false
+
+    /// Retry interval for reconnection attempts (in nanoseconds).
+    private static let reconnectInterval: UInt64 = 500_000_000 // 500ms
+
+    override var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
+        ownStateSubject.eraseToAnyPublisher()
+    }
+
+    override var state: RuntimeConnectionState {
+        ownStateSubject.value
+    }
 
     /// Creates a client connection using deterministic port calculation.
     ///
@@ -559,10 +604,8 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     /// - Throws: `RuntimeLocalSocketError` if connection cannot be established.
     init(identifier: String, timeout: TimeInterval = 10) async throws {
         self.identifier = identifier
+        self.port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
         super.init()
-
-        // Compute port deterministically (same algorithm as server)
-        let port = RuntimeLocalSocketPortDiscovery.computePort(for: identifier)
 
         // Retry connection until server is ready or timeout
         let startTime = Date()
@@ -572,11 +615,13 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
             do {
                 let connection = try RuntimeLocalSocketConnection(port: port)
                 self.underlyingConnection = connection
+                applyPendingHandlers(to: connection)
+                observeUnderlyingConnectionState(connection)
                 try connection.start()
+                ownStateSubject.send(.connected)
                 return
             } catch {
                 lastError = error
-                // Wait before retry
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
             }
         }
@@ -591,11 +636,169 @@ final class RuntimeLocalSocketClientConnection: RuntimeConnectionBase<RuntimeLoc
     /// - Throws: `RuntimeLocalSocketError` if connection cannot be established.
     init(port: UInt16) throws {
         self.identifier = ""
+        self.port = port
         super.init()
 
         let connection = try RuntimeLocalSocketConnection(port: port)
         self.underlyingConnection = connection
+        applyPendingHandlers(to: connection)
+        observeUnderlyingConnectionState(connection)
         try connection.start()
+        ownStateSubject.send(.connected)
+    }
+
+    // MARK: - Message Handler Overrides
+
+    override func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
+                try await handler()
+                return RuntimeMessageNull.null
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    override func setMessageHandler<Request>(name: String, handler: @escaping @Sendable (Request) async throws -> Void) where Request: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (request: Request) in
+                try await handler(request)
+                return RuntimeMessageNull.null
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    override func setMessageHandler<Response>(name: String, handler: @escaping @Sendable () async throws -> Response) where Response: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
+                return try await handler()
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    override func setMessageHandler<Request>(requestType: Request.Type, handler: @escaping @Sendable (Request) async throws -> Request.Response) where Request: RuntimeRequest {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler { @Sendable (request: Request) in
+                return try await handler(request)
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    override func setMessageHandler<Request, Response>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) where Request: Codable, Response: Codable {
+        let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
+            connection.setMessageHandler(name: name) { @Sendable (request: Request) in
+                return try await handler(request)
+            }
+        }
+        pendingHandlers.append(setupHandler)
+        if let connection = underlyingConnection {
+            setupHandler(connection)
+        }
+    }
+
+    // MARK: - Connection Lifecycle
+
+    /// Applies all pending handlers to a connection.
+    ///
+    /// Snapshots the array inside the lock so user-supplied handler closures
+    /// are invoked outside the critical section.
+    private func applyPendingHandlers(to connection: RuntimeLocalSocketConnection) {
+        let snapshot = _pendingHandlers.withLock { $0 }
+        for handler in snapshot {
+            handler(connection)
+        }
+    }
+
+    /// Observes the underlying connection state and triggers reconnection on disconnect.
+    private func observeUnderlyingConnectionState(_ connection: RuntimeLocalSocketConnection) {
+        let newCancellable = connection.statePublisher
+            .sink { [weak self] state in
+                guard let self, !isStopped else { return }
+                if state.isDisconnected {
+                    #log(.info, "Underlying connection disconnected on port \(self.port, privacy: .public), triggering reconnection")
+                    ownStateSubject.send(state)
+                    startReconnecting()
+                }
+            }
+        _connectionStateCancellable.withLock { current in
+            current?.cancel()
+            current = newCancellable
+        }
+    }
+
+    /// Starts the reconnection loop in the background.
+    private func startReconnecting() {
+        let shouldStart = _isReconnecting.withLock { isReconnecting in
+            guard !isReconnecting else { return false }
+            isReconnecting = true
+            return true
+        }
+        guard shouldStart, !isStopped else { return }
+        #log(.info, "Starting reconnection loop for port \(self.port, privacy: .public)")
+        ownStateSubject.send(.connecting)
+        Task { [weak self] in
+            await self?.reconnectionLoop()
+        }
+    }
+
+    /// Periodically attempts to reconnect to the same port until successful or stopped.
+    private func reconnectionLoop() async {
+        defer { isReconnecting = false }
+        while !isStopped {
+            do {
+                try await Task.sleep(nanoseconds: Self.reconnectInterval)
+            } catch {
+                return // Task cancelled
+            }
+
+            guard !isStopped else { return }
+
+            do {
+                let newConnection = try RuntimeLocalSocketConnection(port: port)
+                self.underlyingConnection?.stop()
+                self.underlyingConnection = newConnection
+                applyPendingHandlers(to: newConnection)
+                observeUnderlyingConnectionState(newConnection)
+                try newConnection.start()
+                #log(.info, "Reconnected successfully to port \(self.port, privacy: .public)")
+                ownStateSubject.send(.connected)
+                return // Reconnected successfully
+            } catch {
+                #log(.debug, "Reconnection attempt failed for port \(self.port, privacy: .public): \(error, privacy: .public)")
+                // Retry on next iteration
+                continue
+            }
+        }
+    }
+
+    override func stop() {
+        #log(.info, "Stopping local socket client connection on port \(self.port, privacy: .public)")
+        isStopped = true
+        _connectionStateCancellable.withLock { current in
+            current?.cancel()
+            current = nil
+        }
+        underlyingConnection?.stop()
+        ownStateSubject.send(.disconnected(error: nil))
+    }
+
+    deinit {
+        stop()
     }
 }
 
@@ -661,6 +864,17 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
     /// The port the server is listening on (available after `start()` is called).
     private(set) var port: UInt16 = 0
 
+    /// Stable state subject that bridges state from underlying connections across reconnections.
+    private let ownStateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
+
+    override var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
+        ownStateSubject.eraseToAnyPublisher()
+    }
+
+    override var state: RuntimeConnectionState {
+        ownStateSubject.value
+    }
+
     /// Creates a server connection with deterministic port calculation.
     ///
     /// - Parameter identifier: Unique identifier used to compute the port.
@@ -683,9 +897,9 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     override func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
                 try await handler()
-                return NullPayload.null
+                return RuntimeMessageNull.null
             }
         }
         pendingHandlers.append(setupHandler)
@@ -698,7 +912,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
             connection.setMessageHandler(name: name) { @Sendable (request: Request) in
                 try await handler(request)
-                return NullPayload.null
+                return RuntimeMessageNull.null
             }
         }
         pendingHandlers.append(setupHandler)
@@ -709,7 +923,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     override func setMessageHandler<Response>(name: String, handler: @escaping @Sendable () async throws -> Response) where Response: Codable {
         let setupHandler: @Sendable (RuntimeLocalSocketConnection) -> Void = { connection in
-            connection.setMessageHandler(name: name) { @Sendable (_: NullPayload) in
+            connection.setMessageHandler(name: name) { @Sendable (_: RuntimeMessageNull) in
                 return try await handler()
             }
         }
@@ -801,6 +1015,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
 
     /// Starts accepting connections asynchronously in background.
     private func startAcceptingConnections() {
+        ownStateSubject.send(.connecting)
         #log(.info, "Waiting for local socket client connection on port \(self.port, privacy: .public)...")
         DispatchQueue.global().async { [weak self] in
             self?.acceptConnectionLoop()
@@ -846,10 +1061,14 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         // Observe connection state to restart accepting when disconnected
         connectionStateCancellable = socketConnection.statePublisher
             .sink { [weak self] state in
+                guard let self else { return }
                 #log(.info, "Local socket connection state: \(String(describing: state), privacy: .public)")
-                if state.isDisconnected {
+                if state.isConnected {
+                    ownStateSubject.send(.connected)
+                } else if state.isDisconnected {
                     #log(.info, "Local socket client disconnected, waiting for new connection...")
-                    self?.startAcceptingConnections()
+                    ownStateSubject.send(state)
+                    startAcceptingConnections()
                 }
             }
 
@@ -870,9 +1089,12 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         connectionStateCancellable = nil
         underlyingConnection?.stop()
         if serverSocketFD >= 0 {
+            // shutdown() before close() to unblock accept() on the background accept loop.
+            shutdown(serverSocketFD, SHUT_RDWR)
             close(serverSocketFD)
             serverSocketFD = -1
         }
+        ownStateSubject.send(.disconnected(error: nil))
     }
 
     deinit {

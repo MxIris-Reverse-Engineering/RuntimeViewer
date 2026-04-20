@@ -1,0 +1,11 @@
+schemaVersion: 1
+enabledWorkflows:
+  - macos
+  - project-discovery
+  - swift-package
+debug: false
+sentryDisabled: true
+sessionDefaults:
+  workspacePath: RuntimeViewer.xcworkspace
+  scheme: RuntimeViewer macOS
+  platform: macOS

@@ -4,7 +4,9 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingConfigurationViewController: AppKitViewController<ExportingConfigurationViewModel>, ExportingStepViewController {
+final class ExportingConfigurationViewController: UXKitViewController<ExportingConfigurationViewModel>, ExportingStepViewController {
+
+    override var shouldDisplayCommonLoading: Bool { true }
 
     private let summaryLabel = Label()
 
@@ -100,7 +102,7 @@ final class ExportingConfigurationViewController: AppKitViewController<Exporting
             $0.font = .systemFont(ofSize: 13)
         }
 
-        hierarchy {
+        contentView.hierarchy {
             contentStack
         }
 

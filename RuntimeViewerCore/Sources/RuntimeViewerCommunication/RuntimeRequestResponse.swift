@@ -7,6 +7,10 @@ public let RuntimeViewerMachServiceName = "dev.mxiris.runtimeviewer.service"
 public let RuntimeViewerMachServiceName = "com.mxiris.runtimeviewer.service"
 #endif
 
+/// Protocol version shared between the app and the helper service daemon.
+/// Bump this whenever the service binary changes in a way that requires reinstallation.
+public let RuntimeViewerServiceVersion: String = "1.0.0"
+
 public protocol RuntimeRequest: Codable {
     associatedtype Response: RuntimeResponse
 

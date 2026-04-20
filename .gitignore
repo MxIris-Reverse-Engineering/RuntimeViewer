@@ -16,3 +16,4 @@ buildServer.json
 Products
 RuntimeViewerMCP/.build
 DerivedData
+.derived-data-log-*

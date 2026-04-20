@@ -1,6 +1,15 @@
 import Foundation
 public import FoundationToolbox
 import Network
+#if canImport(UIKit)
+import UIKit
+#endif
+#if canImport(WatchKit)
+import WatchKit
+#endif
+#if os(macOS)
+import SystemConfiguration
+#endif
 
 public enum RuntimeNetworkError: Error {
     case notConnected
@@ -36,13 +45,61 @@ struct RuntimeRequestData: Codable {
 public enum RuntimeNetworkBonjour {
     public static let type = "_runtimeviewer._tcp"
     public static let instanceIDKey = "rv-instance-id"
+    public static let hostNameKey = "rv-host-name"
+    public static let modelIDKey = "rv-model-id"
+    public static let osVersionKey = "rv-os-ver"
+    public static let isSimulatorKey = "rv-sim"
 
-    /// Unique identifier for this app process, used to filter out self-discovery in Bonjour browsing.
-    public static let localInstanceID = UUID().uuidString
+    /// Persistent unique identifier for this app installation, used for self-discovery filtering
+    /// and cycle detection in engine mirroring. Persisted in UserDefaults so it survives app restarts.
+    public static let localInstanceID: String = {
+        let key = "RuntimeViewer.localInstanceID"
+        if let existing = UserDefaults.standard.string(forKey: key) {
+            return existing
+        }
+        let newID = UUID().uuidString
+        UserDefaults.standard.set(newID, forKey: key)
+        return newID
+    }()
+
+    /// The human-readable host name for this device, used in Bonjour TXT records.
+    ///
+    /// On iOS 16+, `UIDevice.current.name` returns a generic model name (e.g. "iPhone")
+    /// without the `user-assigned-device-name` entitlement. We use the Bonjour hostname
+    /// (e.g. "JHs-iPhone") as a more identifiable fallback.
+    public static let localHostName: String = {
+        #if os(macOS)
+        return (SCDynamicStoreCopyComputerName(nil, nil) as? String)
+            ?? ProcessInfo.processInfo.hostName
+        #else
+        // On real devices (iOS 16+), UIDevice.current.name returns generic "iPhone"
+        // without entitlement, so prefer the Bonjour hostname (e.g. "jhs-iphone-pro").
+        #if !targetEnvironment(simulator)
+        let hostName = ProcessInfo.processInfo.hostName
+            .replacingOccurrences(of: ".local", with: "")
+        if !hostName.isEmpty && hostName != "localhost" {
+            return hostName
+        }
+        #endif
+        #if os(watchOS)
+        return WKInterfaceDevice.current().name
+        #elseif canImport(UIKit)
+        return UIDevice.current.name
+        #else
+        return ProcessInfo.processInfo.hostName
+        #endif
+        #endif
+    }()
 
     static func makeService(name: String) -> NWListener.Service {
         var txtRecord = NWTXTRecord()
         txtRecord[instanceIDKey] = localInstanceID
+        txtRecord[hostNameKey] = localHostName
+        txtRecord[modelIDKey] = DeviceMetadata.current.modelIdentifier
+        txtRecord[osVersionKey] = DeviceMetadata.current.osVersion
+        if DeviceMetadata.current.isSimulator {
+            txtRecord[isSimulatorKey] = "1"
+        }
         return NWListener.Service(name: name, type: type, txtRecord: txtRecord)
     }
 
@@ -50,21 +107,38 @@ public enum RuntimeNetworkBonjour {
         guard case .bonjour(let txtRecord) = metadata else { return nil }
         return txtRecord[instanceIDKey]
     }
+
+    static func hostName(from metadata: NWBrowser.Result.Metadata) -> String? {
+        guard case .bonjour(let record) = metadata else { return nil }
+        return record[hostNameKey]
+    }
+
+    static func deviceMetadata(from metadata: NWBrowser.Result.Metadata) -> DeviceMetadata? {
+        guard case .bonjour(let record) = metadata else { return nil }
+        guard let modelID = record[modelIDKey],
+              let osVersion = record[osVersionKey] else { return nil }
+        let isSimulator = record[isSimulatorKey] == "1"
+        return DeviceMetadata(modelIdentifier: modelID, osVersion: osVersion, isSimulator: isSimulator)
+    }
 }
 
 public struct RuntimeNetworkEndpoint: Sendable, Hashable {
     public let name: String
     public let instanceID: String?
+    public let hostName: String?
+    public let deviceMetadata: DeviceMetadata?
 
     let endpoint: NWEndpoint
 
-    init(name: String, instanceID: String? = nil, endpoint: NWEndpoint) {
+    init(name: String, instanceID: String? = nil, hostName: String? = nil, deviceMetadata: DeviceMetadata? = nil, endpoint: NWEndpoint) {
         self.name = name
         self.instanceID = instanceID
+        self.hostName = hostName
+        self.deviceMetadata = deviceMetadata
         self.endpoint = endpoint
     }
 
-    // Exclude instanceID from equality — it is metadata, not identity.
+    // Exclude instanceID and hostName from equality — they are metadata, not identity.
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.name == rhs.name && lhs.endpoint == rhs.endpoint
     }
@@ -101,14 +175,18 @@ public class RuntimeNetworkBrowser {
                 case .added(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
                         let instanceID = RuntimeNetworkBonjour.instanceID(from: result.metadata)
-                        #log(.info, "Discovered new endpoint: \(name, privacy: .public), instanceID: \(instanceID ?? "nil", privacy: .public)")
-                        onAdded(.init(name: name, instanceID: instanceID, endpoint: result.endpoint))
+                        let hostName = RuntimeNetworkBonjour.hostName(from: result.metadata)
+                        let deviceMetadata = RuntimeNetworkBonjour.deviceMetadata(from: result.metadata)
+                        #log(.info, "Discovered new endpoint: \(name, privacy: .public), instanceID: \(instanceID ?? "nil", privacy: .public), hostName: \(hostName ?? "nil", privacy: .public)")
+                        onAdded(.init(name: name, instanceID: instanceID, hostName: hostName, deviceMetadata: deviceMetadata, endpoint: result.endpoint))
                     }
                 case .removed(let result):
                     if case .service(let name, _, _, _) = result.endpoint {
                         let instanceID = RuntimeNetworkBonjour.instanceID(from: result.metadata)
+                        let hostName = RuntimeNetworkBonjour.hostName(from: result.metadata)
+                        let deviceMetadata = RuntimeNetworkBonjour.deviceMetadata(from: result.metadata)
                         #log(.info, "Endpoint removed: \(name, privacy: .public)")
-                        onRemoved(.init(name: name, instanceID: instanceID, endpoint: result.endpoint))
+                        onRemoved(.init(name: name, instanceID: instanceID, hostName: hostName, deviceMetadata: deviceMetadata, endpoint: result.endpoint))
                     }
                 default:
                     break

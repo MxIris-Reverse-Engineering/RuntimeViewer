@@ -116,6 +116,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     private var receivedDataStream: SharedAsyncSequence<AsyncThrowingStream<Data, Error>>?
 
     /// Continuation for yielding received messages.
+    @Mutex
     private var receivedDataContinuation: AsyncThrowingStream<Data, Error>.Continuation?
 
     /// Semaphore for serializing send operations.
@@ -200,6 +201,10 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     /// Processes the receiving buffer and extracts complete messages.
     private func processReceivedData() {
+        let hasContinuation = receivedDataContinuation != nil
+        var extractedMessages: [Data] = []
+        var remainingBufferSize = 0
+
         receivingData.withLock { buffer in
             while true {
                 guard let endRange = buffer.range(of: Self.endMarkerData) else {
@@ -207,8 +212,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                 }
 
                 let messageData = buffer.subdata(in: 0 ..< endRange.lowerBound)
-                receivedDataContinuation?.yield(messageData)
-                onMessageReceived?(messageData)
+                extractedMessages.append(messageData)
 
                 if endRange.upperBound < buffer.count {
                     buffer = buffer.subdata(in: endRange.upperBound ..< buffer.count)
@@ -217,17 +221,53 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                     break
                 }
             }
+            remainingBufferSize = buffer.count
+        }
+
+        if extractedMessages.isEmpty {
+            #log(.debug, "[MessageChannel] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
+        }
+        for messageData in extractedMessages {
+            #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
+            receivedDataContinuation?.yield(messageData)
+            onMessageReceived?(messageData)
         }
     }
 
-    /// Finishes the received data stream.
+    /// Finishes the received data stream and resumes any in-flight pending requests with an error.
+    ///
+    /// When the underlying transport closes or errors out, we must not only terminate the
+    /// received-data stream but also unblock every caller currently awaiting a response via
+    /// `sendRequest`. Otherwise the `withCheckedThrowingContinuation` registered in `pendingRequests`
+    /// is never resumed and the calling task hangs indefinitely.
     func finishReceiving(throwing error: (any Error)? = nil) {
         if let error {
-            #log(.default, "Finishing receiving with error: \(String(describing: error), privacy: .public)")
-            receivedDataContinuation?.finish(throwing: error)
+            #log(.default, "finishReceiving: with error: \(String(describing: error), privacy: .public)")
         } else {
-            #log(.debug, "Finishing receiving stream normally")
-            receivedDataContinuation?.finish()
+            #log(.info, "finishReceiving: stream closed normally")
+        }
+        _receivedDataContinuation.withLock { continuation in
+            if let error {
+                continuation?.finish(throwing: error)
+            } else {
+                continuation?.finish()
+            }
+            continuation = nil
+        }
+
+        // Drain any pending requests that were waiting for a response on the now-dead channel
+        // and resume each with an error so the `await` in `sendRequest` unblocks.
+        let drainedContinuations: [CheckedContinuation<Data, Error>] = pendingRequests.withLock { pending in
+            let values = Array(pending.values)
+            pending.removeAll()
+            return values
+        }
+        if !drainedContinuations.isEmpty {
+            #log(.info, "finishReceiving: draining \(drainedContinuations.count, privacy: .public) pending request(s)")
+        }
+        let resumeError: any Error = error ?? RuntimeMessageChannelError.notConnected
+        for continuation in drainedContinuations {
+            continuation.resume(throwing: resumeError)
         }
     }
 

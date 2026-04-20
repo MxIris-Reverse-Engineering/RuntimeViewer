@@ -2,88 +2,115 @@
 
 import AppKit
 import SwiftUI
-import SettingsKit
 import Dependencies
 import RuntimeViewerSettings
 import RuntimeViewerCore
 
-struct TransformerSettingsView: SettingsContent {
+struct TransformerSettingsView: View {
     @AppSettings(\.transformer)
     var config
 
-    var body: some SettingsContent {
-        SettingsGroup("Transformer", .navigation) {
-            SettingsForm {
-                // MARK: - C Type Module
+    var body: some View {
+        SettingsForm {
+            // MARK: - C Type Module
 
+            Section {
+                Toggle("Transform C Types", isOn: $config.objc.cType.isEnabled)
+            } footer: {
+                Text("Transform C primitive types to custom types in ObjC interfaces.")
+            }
+
+            if config.objc.cType.isEnabled {
                 Section {
-                    Toggle("Transform C Types", isOn: $config.objc.cType.isEnabled)
-                } footer: {
-                    Text("Transform C primitive types to custom types in ObjC interfaces.")
-                }
-
-                if config.objc.cType.isEnabled {
-                    Section {
-                        CTypeEditor(module: $config.objc.cType)
-                    } header: {
-                        HStack {
-                            Text("Type Replacements")
-                            Spacer()
-                            CTypePresets(module: $config.objc.cType)
-                        }
-                    }
-                }
-
-                // MARK: - Swift Field Offset Module
-
-                Section {
-                    Toggle("Transform Swift Field Offset Comment", isOn: $config.swift.swiftFieldOffset.isEnabled)
-                } footer: {
-                    Text("Transform Swift field offset comment format in Swift interfaces.")
-                }
-
-                if config.swift.swiftFieldOffset.isEnabled {
-                    Section {
-                        SwiftFieldOffsetEditor(module: $config.swift.swiftFieldOffset)
-                    } header: {
-                        Text("Output Format")
-                    }
-                }
-
-                // MARK: - Swift Type Layout Module
-
-                Section {
-                    Toggle("Transform Swift Type Layout Comment", isOn: $config.swift.swiftTypeLayout.isEnabled)
-                } footer: {
-                    Text("Transform Swift type layout comment format in Swift interfaces.")
-                }
-
-                if config.swift.swiftTypeLayout.isEnabled {
-                    Section {
-                        SwiftTypeLayoutEditor(module: $config.swift.swiftTypeLayout)
-                    } header: {
-                        Text("Output Format")
-                    }
-                }
-
-                // MARK: - Swift Enum Layout Module
-
-                Section {
-                    Toggle("Transform Swift Enum Layout Comment", isOn: $config.swift.swiftEnumLayout.isEnabled)
-                } footer: {
-                    Text("Transform Swift enum layout comment format in Swift interfaces.")
-                }
-
-                if config.swift.swiftEnumLayout.isEnabled {
-                    Section {
-                        SwiftEnumLayoutEditor(module: $config.swift.swiftEnumLayout)
-                    } header: {
-                        Text("Output Format")
+                    CTypeEditor(module: $config.objc.cType)
+                } header: {
+                    HStack {
+                        Text("Type Replacements")
+                        Spacer()
+                        CTypePresets(module: $config.objc.cType)
                     }
                 }
             }
-        } icon: {
-            SettingsIcon(symbol: "arrow.triangle.2.circlepath", color: .clear)
+
+            // MARK: - Swift Field Offset Module
+
+            Section {
+                Toggle("Transform Swift Field Offset Comment", isOn: $config.swift.swiftFieldOffset.isEnabled)
+            } footer: {
+                Text("Transform Swift field offset comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftFieldOffset.isEnabled {
+                Section {
+                    SwiftFieldOffsetEditor(module: $config.swift.swiftFieldOffset)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
+            // MARK: - Swift VTable Offset Module
+
+            Section {
+                Toggle("Transform Swift VTable Offset Comment", isOn: $config.swift.swiftVTableOffset.isEnabled)
+            } footer: {
+                Text("Transform Swift vtable offset comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftVTableOffset.isEnabled {
+                Section {
+                    SwiftVTableOffsetEditor(module: $config.swift.swiftVTableOffset)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
+            // MARK: - Swift Member Address Module
+
+            Section {
+                Toggle("Transform Swift Member Address Comment", isOn: $config.swift.swiftMemberAddress.isEnabled)
+            } footer: {
+                Text("Transform Swift member address comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftMemberAddress.isEnabled {
+                Section {
+                    SwiftMemberAddressEditor(module: $config.swift.swiftMemberAddress)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
+            // MARK: - Swift Type Layout Module
+
+            Section {
+                Toggle("Transform Swift Type Layout Comment", isOn: $config.swift.swiftTypeLayout.isEnabled)
+            } footer: {
+                Text("Transform Swift type layout comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftTypeLayout.isEnabled {
+                Section {
+                    SwiftTypeLayoutEditor(module: $config.swift.swiftTypeLayout)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
+            // MARK: - Swift Enum Layout Module
+
+            Section {
+                Toggle("Transform Swift Enum Layout Comment", isOn: $config.swift.swiftEnumLayout.isEnabled)
+            } footer: {
+                Text("Transform Swift enum layout comment format in Swift interfaces.")
+            }
+
+            if config.swift.swiftEnumLayout.isEnabled {
+                Section {
+                    SwiftEnumLayoutEditor(module: $config.swift.swiftEnumLayout)
+                } header: {
+                    Text("Output Format")
+                }
+            }
         }
     }
 }
@@ -513,6 +540,165 @@ private struct SwiftFieldOffsetEditor: View {
 
                 FlowLayout(spacing: 6) {
                     ForEach(Transformer.SwiftFieldOffset.Templates.all, id: \.name) { preset in
+                        Button(preset.name) {
+                            module.template = preset.template
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Swift VTable Offset Editor
+
+private struct SwiftVTableOffsetEditor: View {
+    @Binding var module: Transformer.SwiftVTableOffset
+    @State private var templateFieldHeight: CGFloat = 24
+    @State private var labeledTemplateFieldHeight: CGFloat = 24
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+            // Template editor (no label)
+            GridRow {
+                Text("Template")
+                    .foregroundStyle(.secondary)
+                    .gridColumnAlignment(.trailing)
+
+                TokenTemplateTextField(text: $module.template, height: $templateFieldHeight)
+                    .frame(height: max(24, templateFieldHeight))
+            }
+
+            // Preset buttons for template
+            GridRow {
+                Text("Presets")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftVTableOffset.Templates.all, id: \.name) { preset in
+                        Button(preset.name) {
+                            module.template = preset.template
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+
+            Divider()
+                .gridCellColumns(2)
+
+            // Labeled template editor
+            GridRow {
+                Text("Labeled\nTemplate")
+                    .foregroundStyle(.secondary)
+                    .gridColumnAlignment(.trailing)
+
+                TokenTemplateTextField(text: $module.labeledTemplate, height: $labeledTemplateFieldHeight)
+                    .frame(height: max(24, labeledTemplateFieldHeight))
+            }
+
+            // Preset buttons for labeled template
+            GridRow {
+                Text("Presets")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftVTableOffset.Templates.allLabeled, id: \.name) { preset in
+                        Button(preset.name) {
+                            module.labeledTemplate = preset.template
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+
+            Divider()
+                .gridCellColumns(2)
+
+            // Radix picker
+            GridRow {
+                Text("Radix")
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $module.useHexadecimal) {
+                    Text("Decimal").tag(false)
+                    Text("Hexadecimal").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+
+            // Copyable token chips
+            GridRow {
+                Text("Tokens")
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    ForEach(Transformer.SwiftVTableOffset.Token.allCases, id: \.self) { token in
+                        CopyableTokenChip(token: token, placeholder: token.placeholder)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Swift Member Address Editor
+
+private struct SwiftMemberAddressEditor: View {
+    @Binding var module: Transformer.SwiftMemberAddress
+    @State private var textFieldHeight: CGFloat = 24
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+            // Token-styled template editor
+            GridRow {
+                Text("Template")
+                    .foregroundStyle(.secondary)
+                    .gridColumnAlignment(.trailing)
+
+                TokenTemplateTextField(text: $module.template, height: $textFieldHeight)
+                    .frame(height: max(24, textFieldHeight))
+            }
+
+            // Radix picker
+            GridRow {
+                Text("Radix")
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $module.useHexadecimal) {
+                    Text("Decimal").tag(false)
+                    Text("Hexadecimal").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+
+            // Copyable token chips
+            GridRow {
+                Text("Tokens")
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    ForEach(Transformer.SwiftMemberAddress.Token.allCases, id: \.self) { token in
+                        CopyableTokenChip(token: token, placeholder: token.placeholder)
+                    }
+                }
+            }
+
+            // Preset buttons
+            GridRow {
+                Text("Presets")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.SwiftMemberAddress.Templates.all, id: \.name) { preset in
                         Button(preset.name) {
                             module.template = preset.template
                         }

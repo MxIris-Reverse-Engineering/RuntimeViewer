@@ -11,14 +11,19 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     public let imageName: String
     public let runtimeEngine: RuntimeEngine
 
-    var isSorted: Bool { false }
-    
+    var isSorted: Bool {
+        false
+    }
+
     @Observed public private(set) var loadState: RuntimeImageLoadState = .unknown
     @Observed public private(set) var searchString: String = ""
     @Observed public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var filteredNodes: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var isFiltering: Bool = false
     @Observed public private(set) var isSearchCaseInsensitive: Bool = false
+    @Observed public private(set) var loadingProgress: Double = 0
+    @Observed public private(set) var loadingDescription: String = ""
+    @Observed public private(set) var loadingItemCount: String = ""
 
     public init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         let imagePath = imageNode.path
@@ -28,17 +33,17 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         self.imageName = imageNode.name
         super.init(documentState: documentState, router: router)
 
-        Task {
-            await runtimeEngine.reloadDataPublisher
-                .asObservable()
-                .subscribeOnNext { [weak self] in
-                    guard let self else { return }
-                    Task {
-                        try await self.reloadData()
-                    }
+        runtimeEngine.reloadDataPublisher
+            .asObservable()
+            .subscribeOnNext { [weak self] in
+                guard let self else { return }
+                Task {
+                    try await self.reloadData()
                 }
-                .disposed(by: rx.disposeBag)
-            
+            }
+            .disposed(by: rx.disposeBag)
+
+        Task {
             do {
                 try await reloadData()
             } catch {
@@ -63,6 +68,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let errorText: Driver<String>
         public let emptyText: Driver<String>
         public let isEmpty: Driver<Bool>
+        public let loadingProgress: Driver<Double>
+        public let loadingDescription: Driver<String>
+        public let loadingItemCount: Driver<String>
         public let windowInitialTitles: Driver<(title: String, subtitle: String)>
         public let windowSubtitle: Signal<String>
         public let didBeginFiltering: Signal<Void>
@@ -82,8 +90,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
                 self.searchString = searchString
                 self.isSearchCaseInsensitive = isSearchCaseInsensitive
-                
-                
+
                 if searchString.isEmpty {
                     if isFiltering {
                         isFiltering = false
@@ -143,6 +150,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             errorText: errorText,
             emptyText: .just("\(imageName) is loaded however does not appear to contain any classes or protocols"),
             isEmpty: $nodes.asDriver().map { $0.isEmpty },
+            loadingProgress: $loadingProgress.asDriver(),
+            loadingDescription: $loadingDescription.asDriver(),
+            loadingItemCount: $loadingItemCount.asDriver(),
             windowInitialTitles: .just((runtimeImageName, "")),
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" },
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
@@ -152,9 +162,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     }
 
     func reloadData() async throws {
-        let loadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
+        let imageLoadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
 
-        if case .notLoaded = loadState {
+        if case .notLoaded = imageLoadState {
             await MainActor.run {
                 self.loadState = .notLoaded
             }
@@ -163,12 +173,38 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
         await MainActor.run {
             self.loadState = .loading
+            self.loadingProgress = 0
+            self.loadingDescription = "Preparing..."
+            self.loadingItemCount = ""
         }
 
-        let runtimeObjects = try await buildRuntimeObjects()
+        var runtimeObjects: [RuntimeObject] = []
+        for try await event in buildRuntimeObjectsStream() {
+            switch event {
+            case .progress(let progress):
+                await MainActor.run {
+                    self.loadingProgress = progress.overallFraction
+                    self.loadingDescription = progress.phase.displayDescription
+                    if progress.totalCount > 0 {
+                        self.loadingItemCount = "\(progress.currentCount)/\(progress.totalCount)"
+                    } else {
+                        self.loadingItemCount = ""
+                    }
+                }
+            case .completed(let result):
+                runtimeObjects = result
+            }
+        }
+
+        await MainActor.run {
+            self.loadingProgress = 0.95
+            self.loadingDescription = "Building list..."
+            self.loadingItemCount = "\(runtimeObjects.count) objects"
+        }
 
         await MainActor.run {
             self.loadState = .loaded
+            self.loadingProgress = 1.0
             self.searchString = ""
             if isSorted {
                 self.nodes = runtimeObjects.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
@@ -179,7 +215,27 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         }
     }
 
-    func buildRuntimeObjects() async throws -> [RuntimeObject] { [] }
+    func buildRuntimeObjects() async throws -> [RuntimeObject] {
+        []
+    }
+
+    func buildRuntimeObjectsStream() -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task { [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
+                do {
+                    let objects = try await self.buildRuntimeObjects()
+                    continuation.yield(.completed(objects))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
 
     private func tryLoadImage() {
         Task { @MainActor in

@@ -6,6 +6,8 @@
 	<string>com.mxiris.runtimeviewer.service</string>
 	<key>BundleProgram</key>
 	<string>Contents/Library/LaunchServices/com.mxiris.runtimeviewer.service</string>
+	<key>KeepAlive</key>
+	<true/>
 	<key>MachServices</key>
 	<dict>
 		<key>com.mxiris.runtimeviewer.service</key>

@@ -2,6 +2,8 @@ import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import RuntimeViewerCommunication
+import RuntimeViewerCatalystExtensions
 import UniformTypeIdentifiers
 
 final class MainWindow: NSWindow {
@@ -34,7 +36,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
 
-
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowGenerator: .init())
@@ -47,11 +48,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     override func windowDidLoad() {
         super.windowDidLoad()
+
         contentWindow.title = documentState.runtimeEngine.source.description
         contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
-        contentWindow.box.positionCenter()
+        contentWindow.box.centerInScreen()
         contentWindow.identifier = .makeIdentifier(of: Self.self)
         contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
         contentWindow.animationBehavior = .documentWindow
@@ -97,7 +99,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
-            switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemIndex().asSignal(),
+            switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemRepresentedObject(String.self).asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
             fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
             fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
@@ -146,9 +148,51 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         output.isContentBackHidden.drive(toolbarController.contentBackItem.rx.isHidden).disposed(by: rx.disposeBag)
 
-        output.selectedRuntimeSourceIndex.drive(toolbarController.switchSourceItem.popUpButton.rx.selectedIndex()).disposed(by: rx.disposeBag)
+        // Bind menu content + selection from sections and switchSourceState
+        Driver.combineLatest(output.runtimeEngineSections, output.switchSourceState)
+            .driveOnNext { [weak self] sections, state in
+                guard let self else { return }
+                let popUpButton = toolbarController.switchSourceItem.popUpButton
 
-        output.runtimeSources.drive(toolbarController.switchSourceItem.popUpButton.rx.items()).disposed(by: rx.disposeBag)
+                popUpButton.menu?.removeAllItems()
+
+                // Build menu from sections
+                for (sectionIndex, section) in sections.enumerated() {
+                    if sectionIndex > 0 {
+                        popUpButton.menu?.addItem(.separator())
+                    }
+                    let header = NSMenuItem.sectionHeader(title: section.hostName)
+                    popUpButton.menu?.addItem(header)
+
+                    for engine in section.engines {
+                        let menuItem = NSMenuItem(title: engine.source.description, action: nil, keyEquivalent: "")
+                        menuItem.image = self.viewModel?.resolveEngineIcon(for: engine)
+                        menuItem.image?.size = NSSize(width: 20, height: 20)
+                        menuItem.representedObject = AnyHashable(engine.engineID)
+                        popUpButton.menu?.addItem(menuItem)
+                    }
+                }
+
+                // Update selection based on connection state
+                if state.isDisconnected {
+                    // Insert a disabled placeholder for the disconnected engine
+                    let placeholder = NSMenuItem(title: state.title, action: nil, keyEquivalent: "")
+                    placeholder.image = state.image
+                    placeholder.image?.size = NSSize(width: 20, height: 20)
+                    placeholder.isEnabled = false
+                    popUpButton.menu?.insertItem(placeholder, at: 0)
+                    popUpButton.menu?.insertItem(.separator(), at: 1)
+                    popUpButton.select(placeholder)
+                } else {
+                    // Select the matching engine
+                    let matchingIndex = popUpButton.menu?.items.firstIndex {
+                        ($0.representedObject as? AnyHashable) == AnyHashable(state.selectedEngineIdentifier)
+                    }
+                    if let matchingIndex {
+                        popUpButton.selectItem(at: matchingIndex)
+                    }
+                }
+            }.disposed(by: rx.disposeBag)
 
         viewModel.errorRelay
             .asSignal()

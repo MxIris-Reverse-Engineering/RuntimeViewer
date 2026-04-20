@@ -23,6 +23,10 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
 
     @Observed private(set) var isLoading: Bool = true
 
+    override var delayedLoading: Driver<Bool> {
+        $isLoading.asDriver()
+    }
+
     init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)

@@ -37,7 +37,7 @@ echo '///-----------'
 
 xcodebuild \
 archive \
--workspace ${project_path}/${project_name}-arm64e.xcworkspace \
+-workspace ${project_path}/${project_name}-Distribution.xcworkspace \
 -scheme 'RuntimeViewerCatalystHelper' \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS,variant=Mac Catalyst' \
@@ -71,7 +71,7 @@ echo '///-----------'
 
 xcodebuild \
 archive \
--workspace ${project_path}/${project_name}-arm64e.xcworkspace \
+-workspace ${project_path}/${project_name}-Distribution.xcworkspace \
 -scheme "${scheme_name}" \
 -configuration ${development_mode} \
 -destination 'generic/platform=macOS' \

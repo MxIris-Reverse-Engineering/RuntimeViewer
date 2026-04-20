@@ -11,6 +11,12 @@
       location = "container:../MachOSwiftSection">
    </FileRef>
    <FileRef
+      location = "container:../swift-demangling">
+   </FileRef>
+   <FileRef
+      location = "container:../swift-semantic-string">
+   </FileRef>
+   <FileRef
       location = "group:RuntimeViewerCore">
    </FileRef>
    <FileRef

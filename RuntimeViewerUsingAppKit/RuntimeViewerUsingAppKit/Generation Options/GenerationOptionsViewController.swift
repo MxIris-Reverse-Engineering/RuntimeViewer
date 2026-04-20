@@ -2,11 +2,31 @@ import AppKit
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import RuntimeViewerCore
 
 final class GenerationOptionsViewController: AppKitViewController<GenerationOptionsViewModel<MainRoute>> {
-    private struct OptionItem {
-        let title: String
-        let keyPath: OptionKeyPath
+    private enum OptionItem {
+        case checkbox(title: String, keyPath: OptionKeyPath)
+        case segmentedControl(title: String, labels: [String], selectedIndex: (RuntimeObjectInterface.GenerationOptions) -> Int, mutation: (Int) -> OptionsMutation)
+
+        static func enumOption<EnumType: CaseIterable & Equatable>(
+            title: String,
+            labels: [String],
+            keyPath: WritableKeyPath<RuntimeObjectInterface.GenerationOptions, EnumType>
+        ) -> OptionItem {
+            .segmentedControl(
+                title: title,
+                labels: labels,
+                selectedIndex: { Array(EnumType.allCases).firstIndex(of: $0[keyPath: keyPath]) ?? 0 },
+                mutation: { index in
+                    { options in
+                        let allCases = Array(EnumType.allCases)
+                        guard allCases.indices.contains(index) else { return }
+                        options[keyPath: keyPath] = allCases[index]
+                    }
+                }
+            )
+        }
     }
 
     private struct Section {
@@ -16,25 +36,28 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
 
     private lazy var sections: [Section] = [
         Section(title: "ObjC", items: [
-            OptionItem(title: "Strip Protocol Conformance", keyPath: \.objcHeaderOptions.stripProtocolConformance),
-            OptionItem(title: "Strip Overrides", keyPath: \.objcHeaderOptions.stripOverrides),
-            OptionItem(title: "Strip Synthesized Ivars", keyPath: \.objcHeaderOptions.stripSynthesizedIvars),
-            OptionItem(title: "Strip Synthesized Methods", keyPath: \.objcHeaderOptions.stripSynthesizedMethods),
-            OptionItem(title: "Strip Ctor Method", keyPath: \.objcHeaderOptions.stripCtorMethod),
-            OptionItem(title: "Strip Dtor Method", keyPath: \.objcHeaderOptions.stripDtorMethod),
-            OptionItem(title: "Add Ivar Offset Comments", keyPath: \.objcHeaderOptions.addIvarOffsetComments),
-            OptionItem(title: "Add Property Attributes Comments", keyPath: \.objcHeaderOptions.addPropertyAttributesComments),
-            OptionItem(title: "Add Property Accessor Address Comments", keyPath: \.objcHeaderOptions.addPropertyAccessorAddressComments),
-            OptionItem(title: "Add Method IMP Address Comments", keyPath: \.objcHeaderOptions.addMethodIMPAddressComments),
+            .checkbox(title: "Strip Protocol Conformance", keyPath: \.objcHeaderOptions.stripProtocolConformance),
+            .checkbox(title: "Strip Overrides", keyPath: \.objcHeaderOptions.stripOverrides),
+            .checkbox(title: "Strip Synthesized Ivars", keyPath: \.objcHeaderOptions.stripSynthesizedIvars),
+            .checkbox(title: "Strip Synthesized Methods", keyPath: \.objcHeaderOptions.stripSynthesizedMethods),
+            .checkbox(title: "Strip Ctor Method", keyPath: \.objcHeaderOptions.stripCtorMethod),
+            .checkbox(title: "Strip Dtor Method", keyPath: \.objcHeaderOptions.stripDtorMethod),
+            .checkbox(title: "Add Ivar Offset Comments", keyPath: \.objcHeaderOptions.addIvarOffsetComments),
+            .checkbox(title: "Add Property Attributes Comments", keyPath: \.objcHeaderOptions.addPropertyAttributesComments),
+            .checkbox(title: "Add Property Accessor Address Comments", keyPath: \.objcHeaderOptions.addPropertyAccessorAddressComments),
+            .checkbox(title: "Add Method IMP Address Comments", keyPath: \.objcHeaderOptions.addMethodIMPAddressComments),
         ]),
         Section(title: "Swift", items: [
-            OptionItem(title: "Print Stripped Symbol Description", keyPath: \.swiftInterfaceOptions.printStrippedSymbolicItem),
-            OptionItem(title: "Print Offset Comments", keyPath: \.swiftInterfaceOptions.emitOffsetComments),
-            OptionItem(title: "Print Member Address", keyPath: \.swiftInterfaceOptions.printMemberAddress),
-            OptionItem(title: "Print VTable Offset", keyPath: \.swiftInterfaceOptions.printVTableOffset),
-            OptionItem(title: "Print Type Layout", keyPath: \.swiftInterfaceOptions.printTypeLayout),
-            OptionItem(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
-            OptionItem(title: "Synthesize Opaque Type (WIP)", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
+            .checkbox(title: "Print Stripped Symbol Description", keyPath: \.swiftInterfaceOptions.printStrippedSymbolicItem),
+            .checkbox(title: "Print Field Offset", keyPath: \.swiftInterfaceOptions.printFieldOffset),
+            .checkbox(title: "Print Expanded Field Offset", keyPath: \.swiftInterfaceOptions.printExpandedFieldOffset),
+            .checkbox(title: "Print VTable Offset", keyPath: \.swiftInterfaceOptions.printVTableOffset),
+            .checkbox(title: "Print PWT Offset", keyPath: \.swiftInterfaceOptions.printPWTOffset),
+            .checkbox(title: "Print Member Address", keyPath: \.swiftInterfaceOptions.printMemberAddress),
+            .checkbox(title: "Print Type Layout", keyPath: \.swiftInterfaceOptions.printTypeLayout),
+            .checkbox(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
+            .checkbox(title: "Synthesize Opaque Type (WIP)", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
+            .enumOption(title: "Member Sort Order", labels: ["By Category", "By Offset"], keyPath: \.swiftInterfaceOptions.memberSortOrder),
         ]),
     ]
 
@@ -46,7 +69,9 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
 
     private var checkboxMap: [OptionKeyPath: CheckboxButton] = [:]
 
-    private let updateRelay = PublishRelay<(OptionKeyPath, Bool)>()
+    private var segmentedControlBindings: [(control: NSSegmentedControl, selectedIndex: (RuntimeObjectInterface.GenerationOptions) -> Int, mutation: (Int) -> OptionsMutation)] = []
+
+    private let updateRelay = PublishRelay<OptionsMutation>()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -68,14 +93,40 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
             }
 
             for item in section.items {
-                let checkbox = CheckboxButton(title: item.title)
-                stackView.addArrangedSubview(checkbox)
+                switch item {
+                case .checkbox(let title, let keyPath):
+                    let checkbox = CheckboxButton(title: title)
+                    stackView.addArrangedSubview(checkbox)
+                    checkboxMap[keyPath] = checkbox
 
-                checkboxMap[item.keyPath] = checkbox
+                case .segmentedControl(let title, let labels, let selectedIndex, let mutation):
+                    let titleLabel = Label(title)
+                    let segmentedControl = NSSegmentedControl().then {
+                        $0.segmentCount = labels.count
+                        for (index, label) in labels.enumerated() {
+                            $0.setLabel(label, forSegment: index)
+                        }
+                        $0.segmentStyle = .rounded
+                        $0.selectedSegment = 0
+                        $0.target = self
+                        $0.action = #selector(segmentedControlChanged(_:))
+                    }
+                    let itemStack = HStackView(spacing: 8) {
+                        titleLabel
+                        segmentedControl
+                    }
+                    stackView.addArrangedSubview(itemStack)
+                    segmentedControlBindings.append((control: segmentedControl, selectedIndex: selectedIndex, mutation: mutation))
+                }
             }
         }
 
         preferredContentSize = stackView.fittingSize.inset(15)
+    }
+
+    @objc private func segmentedControlChanged(_ sender: NSSegmentedControl) {
+        guard let binding = segmentedControlBindings.first(where: { $0.control === sender }) else { return }
+        updateRelay.accept(binding.mutation(sender.selectedSegment))
     }
 
     override func setupBindings(for viewModel: GenerationOptionsViewModel<MainRoute>) {
@@ -83,8 +134,10 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
 
         for (keyPath, checkbox) in checkboxMap {
             checkbox.rx.state.asSignal()
-                .map { $0 == .on }
-                .map { (keyPath, $0) }
+                .map { state -> OptionsMutation in
+                    let isOn = state == .on
+                    return { $0[keyPath: keyPath] = isOn }
+                }
                 .emit(to: updateRelay)
                 .disposed(by: rx.disposeBag)
         }
@@ -99,8 +152,10 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
             .driveOnNext { [weak self] options in
                 guard let self else { return }
                 for (keyPath, checkbox) in checkboxMap {
-                    let isChecked = options[keyPath: keyPath]
-                    checkbox.state = isChecked ? .on : .off
+                    checkbox.state = options[keyPath: keyPath] ? .on : .off
+                }
+                for binding in segmentedControlBindings {
+                    binding.control.selectedSegment = binding.selectedIndex(options)
                 }
             }
             .disposed(by: rx.disposeBag)

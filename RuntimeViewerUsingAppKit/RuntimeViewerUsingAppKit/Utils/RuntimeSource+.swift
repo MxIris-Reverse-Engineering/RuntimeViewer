@@ -58,3 +58,4 @@ extension Reactive where Base: NSPopUpButton {
         }
     }
 }
+

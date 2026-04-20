@@ -224,6 +224,12 @@ struct RuntimeObjectTests {
         let object = RuntimeObject(name: "NS/Obj:ect", displayName: "NS/Obj:ect", kind: .objc(.type(.class)), secondaryKind: nil, imagePath: "/p", children: [])
         #expect(object.exportFileName == "NS_Obj_ect.h")
     }
+
+    @Test("exportFileName sanitizes C++ template angle brackets")
+    func exportFileNameCppTemplateSanitization() {
+        let object = RuntimeObject(name: "std::vector<std::pair<int, float>>", displayName: "std::vector<std::pair<int, float>>", kind: .c(.struct), secondaryKind: nil, imagePath: "/p", children: [])
+        #expect(object.exportFileName == "std__vector_std__pair_int, float__.h")
+    }
 }
 
 // MARK: - RuntimeObjectKind Tests

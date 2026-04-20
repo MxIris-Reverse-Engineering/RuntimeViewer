@@ -1,14 +1,15 @@
 #if os(macOS)
 
 import Foundation
+import FoundationToolbox
 import SwiftyXPC
 import RuntimeViewerCommunication
-import OSLog
 import Synchronization
 import Dependencies
 import ServiceManagement
 
 /// Client for communicating with the RuntimeViewer helper service.
+@Loggable
 public final class RuntimeHelperClient: @unchecked Sendable {
     public enum Error: LocalizedError {
         case message(String)
@@ -23,9 +24,7 @@ public final class RuntimeHelperClient: @unchecked Sendable {
 
     public static let shared = RuntimeHelperClient()
 
-    private let connectionLock = Mutex<XPCConnection?>(nil)
-
-    private static let logger = Logger(subsystem: "com.mxiris.runtimeviewer", category: "RuntimeHelperClient")
+    private let connectionLock = Synchronization.Mutex<XPCConnection?>(nil)
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
 
@@ -55,9 +54,9 @@ public final class RuntimeHelperClient: @unchecked Sendable {
         invalidateConnection()
         do {
             _ = try connectionIfNeeded()
-            Self.logger.info("Successfully reconnected to helper service")
+            #log(.info,"Successfully reconnected to helper service")
         } catch {
-            Self.logger.error("Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
+            #log(.error,"Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -77,7 +76,7 @@ public final class RuntimeHelperClient: @unchecked Sendable {
 
             let newConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
             newConnection.errorHandler = { [weak self] _, error in
-                Self.logger.error("XPC connection error: \(error.localizedDescription, privacy: .public)")
+                #log(.error,"XPC connection error: \(error.localizedDescription, privacy: .public)")
                 self?.connectionLock.withLock { conn in
                     conn = nil
                 }

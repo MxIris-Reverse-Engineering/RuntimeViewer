@@ -242,12 +242,12 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RxAppKit"),
                 isRelative: true,
-                isEnabled: false
+                isEnabled: true
             ),
             .package(
                 path: "../../RxAppKit",
                 isRelative: true,
-                isEnabled: false
+                isEnabled: true,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
@@ -309,7 +309,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
                 isRelative: true,
-                isEnabled: false
+                isEnabled: true
             ),
             .package(
                 path: "../../RunningApplicationKit",
@@ -371,10 +371,6 @@ let package = Package(
                 url: "https://github.com/Mx-Iris/SystemHUD",
                 from: "0.1.0"
             )
-        ),
-        .package(
-            url: "https://github.com/Aeastr/SettingsKit",
-            from: "2.0.1"
         ),
         .package(
             url: "https://github.com/pointfreeco/swift-navigation",
@@ -446,7 +442,6 @@ let package = Package(
                 "RuntimeViewerUI",
                 "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "SettingsKit", package: "SettingsKit"),
                 .product(name: "SwiftUIIntrospect", package: "swiftui-introspect"),
             ],
             resources: [

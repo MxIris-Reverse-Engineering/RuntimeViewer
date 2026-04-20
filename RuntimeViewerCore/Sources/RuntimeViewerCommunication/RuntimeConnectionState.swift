@@ -57,6 +57,10 @@ public enum RuntimeConnectionError: Error, Sendable, Equatable, LocalizedError {
     /// The remote peer closed the connection.
     case peerClosed
 
+    /// The NWListener remained in `.waiting` state (e.g. during the local network permission prompt)
+    /// and did not recover within the timeout. A retry with a new listener may succeed.
+    case listenerWaiting
+
     /// An unknown or unexpected error occurred.
     case unknown(String)
 
@@ -78,6 +82,8 @@ public enum RuntimeConnectionError: Error, Sendable, Equatable, LocalizedError {
             return "Unknown error: \(message)"
         case .notConnected:
             return "Not connected"
+        case .listenerWaiting:
+            return "Listener waiting (local network permission may be required)"
         }
     }
 }

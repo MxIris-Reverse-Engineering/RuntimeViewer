@@ -13,6 +13,7 @@ open class StatefulOutlineView: OutlineView {
     }
 
     private var filteringState: FilteringState = .idle
+    private var isReloadingData = false
 
     open func beginFiltering() {
         guard filteringState == .idle else { return }
@@ -46,12 +47,12 @@ open class StatefulOutlineView: OutlineView {
     private func saveExpansionState() {
         savedExpandedItems.removeAll()
 
-        let numberOfRows = numberOfRows
+        let totalRows = numberOfRows
 
-        guard numberOfRows > 0 else { return }
+        guard totalRows > 0 else { return }
 
-        for i in 0 ..< numberOfRows {
-            guard let item = item(atRow: i) else { continue }
+        for rowIndex in 0 ..< totalRows {
+            guard let item = item(atRow: rowIndex) else { continue }
 
             if isItemExpanded(item), let hashableItem = item as? AnyHashable {
                 savedExpandedItems.insert(hashableItem)
@@ -115,6 +116,10 @@ open class StatefulOutlineView: OutlineView {
     // MARK: - Reload
 
     open override func reloadData() {
+        guard !isReloadingData else { return }
+        isReloadingData = true
+        defer { isReloadingData = false }
+
         super.reloadData()
 
         switch filteringState {
@@ -123,9 +128,9 @@ open class StatefulOutlineView: OutlineView {
         case .filtering:
             expandItem(nil, expandChildren: true)
         case .pendingRestore:
-            filteringState = .idle
             restoreExpansionState()
             restoreSelectedItem()
+            filteringState = .idle
         }
     }
 }

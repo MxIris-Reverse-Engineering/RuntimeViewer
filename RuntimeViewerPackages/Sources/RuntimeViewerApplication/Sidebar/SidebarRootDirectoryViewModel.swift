@@ -4,19 +4,16 @@ import RuntimeViewerArchitectures
 import MemberwiseInit
 
 public final class SidebarRootDirectoryViewModel: SidebarRootViewModel {
-    
     public let nodesSubject = BehaviorSubject<[RuntimeImageNode]>(value: [])
-    
+
     public init(documentState: DocumentState, router: any Router<SidebarRootRoute>) {
         super.init(documentState: documentState, router: router, nodesSource: nodesSubject.asObservable())
-        
-        Task {
-            await documentState.runtimeEngine
-                .$imageNodes
-                .asObservable()
-                .bind(to: nodesSubject)
-                .disposed(by: rx.disposeBag)
-        }
+
+        documentState.runtimeEngine
+            .imageNodesPublisher
+            .asObservable()
+            .bind(to: nodesSubject)
+            .disposed(by: rx.disposeBag)
     }
 
     @MemberwiseInit(.public)

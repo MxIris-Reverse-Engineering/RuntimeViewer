@@ -34,8 +34,8 @@ public final class SettingsWindowController: XiblessWindowController<SettingsWin
     public override func windowDidLoad() {
         super.windowDidLoad()
         contentWindow.title = "Settings"
-        contentWindow.titlebarAppearsTransparent = true
         contentWindow.collectionBehavior.insert(.fullScreenNone)
+
         contentWindow.center()
         contentWindow.setFrameAutosaveName(.init(describing: SettingsWindowController.self))
         settingsViewController.view.frame = .init(origin: .zero, size: contentWindow.frame.size)
@@ -63,11 +63,11 @@ extension NSSplitViewItem {
     }
 
     static func swizzle() {
-        let origSelector = #selector(getter: NSSplitViewItem.canCollapse)
-        let swizzledSelector = #selector(getter: canCollapseSwizzled)
-        let originalMethodSet = class_getInstanceMethod(self as AnyClass, origSelector)
-        let swizzledMethodSet = class_getInstanceMethod(self as AnyClass, swizzledSelector)
-
-        method_exchangeImplementations(originalMethodSet!, swizzledMethodSet!)
+        let collapseOriginal = #selector(getter: NSSplitViewItem.canCollapse)
+        let collapseSwizzled = #selector(getter: canCollapseSwizzled)
+        method_exchangeImplementations(
+            class_getInstanceMethod(self as AnyClass, collapseOriginal)!,
+            class_getInstanceMethod(self as AnyClass, collapseSwizzled)!
+        )
     }
 }

@@ -81,6 +81,8 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
+        tcpOptions.keepaliveInterval = 2
+        tcpOptions.keepaliveCount = 3
         tcpOptions.noDelay = true
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
@@ -207,40 +209,38 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     }
 
     private func observeIncomingMessages() {
-        Task {
-            do {
-                guard let stream = messageChannel.receivedMessages() else { return }
-                for try await data in stream {
-                    do {
-                        let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+        messageChannel.onMessageReceived = { [weak self] data in
+            guard let self else { return }
+            Task { await self.handleReceivedMessage(data) }
+        }
+    }
 
-                        // Check if this is a response to a pending request
-                        if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
-                            continue
-                        }
+    private func handleReceivedMessage(_ data: Data) async {
+        do {
+            let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
 
-                        guard let handler = messageChannel.handler(for: requestData.identifier) else {
-                            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
-                            continue
-                        }
+            // Check if this is a response to a pending request
+            if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
+                return
+            }
 
-                        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
-                        let responseData = try await handler.closure(requestData.data)
+            guard let handler = messageChannel.handler(for: requestData.identifier) else {
+                #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
+                return
+            }
 
-                        if handler.responseType != RuntimeMessageNull.self {
-                            let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData)
-                            try await send(requestData: response)
-                        }
-                    } catch {
-                        #log(.error, "Handler error: \(error, privacy: .public)")
-                        let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
-                        if let errorData = try? JSONEncoder().encode(errorResponse) {
-                            try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
-                        }
-                    }
-                }
-            } catch {
-                #log(.error, "Message observation error: \(error, privacy: .public)")
+            #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
+            let responseData = try await handler.closure(requestData.data)
+
+            if handler.responseType != RuntimeMessageNull.self {
+                let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData)
+                try await send(requestData: response)
+            }
+        } catch {
+            #log(.error, "Handler error: \(error, privacy: .public)")
+            let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
+            if let errorData = try? JSONEncoder().encode(errorResponse) {
+                try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
             }
         }
     }
@@ -357,12 +357,17 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         ownStateSubject.value
     }
 
+    private static let maxListenerRetries = 3
+    private static let listenerRetryDelay: UInt64 = 2_000_000_000 // 2 seconds
+
     init(name: String) async throws {
         self.serviceName = name
 
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
+        tcpOptions.keepaliveInterval = 2
+        tcpOptions.keepaliveCount = 3
         tcpOptions.noDelay = true
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
@@ -373,23 +378,80 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
 
         #log(.info, "Creating Bonjour server with name: \(name, privacy: .public), service type: \(RuntimeNetworkBonjour.type, privacy: .public)")
 
-        let listener = try NWListener(using: parameters)
-        listener.service = RuntimeNetworkBonjour.makeService(name: name)
-        self.listener = listener
+        try await startListeningWithRetry()
+    }
 
-        #log(.info, "Waiting for incoming Bonjour connection...")
-        try await waitForConnection(listener: listener)
-        #log(.info, "Bonjour server connection established for name: \(name, privacy: .public)")
+    /// Attempts to start listening with automatic retries when the NWListener
+    /// remains in `.waiting` state (e.g. during the local network permission prompt).
+    /// After the user grants permission, a retried listener should enter `.ready` immediately.
+    private func startListeningWithRetry() async throws {
+        var lastError: Error = RuntimeConnectionError.listenerWaiting
+        for attempt in 0..<Self.maxListenerRetries {
+            let newListener = try NWListener(using: listenerParameters)
+            newListener.service = RuntimeNetworkBonjour.makeService(name: serviceName)
+            self.listener = newListener
+
+            if attempt > 0 {
+                #log(.info, "Retrying Bonjour listener (attempt \(attempt + 1)/\(Self.maxListenerRetries, privacy: .public))...")
+            } else {
+                #log(.info, "Waiting for incoming Bonjour connection...")
+            }
+
+            do {
+                try await waitForConnection(listener: newListener)
+                #log(.info, "Bonjour server connection established for name: \(self.serviceName, privacy: .public)")
+                return
+            } catch let error as RuntimeConnectionError where error == .listenerWaiting {
+                #log(.info, "Bonjour listener timed out in waiting state, will retry...")
+                newListener.cancel()
+                self.listener = nil
+                lastError = error
+                if attempt < Self.maxListenerRetries - 1 {
+                    try await Task.sleep(nanoseconds: Self.listenerRetryDelay)
+                }
+            }
+        }
+        throw lastError
     }
 
     private func waitForConnection(listener: NWListener) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
 
             let didResume = Mutex<Bool>(false)
+            // Guard against multiple NWConnections from different network paths
+            // (IPv6 link-local, IPv4, AWDL) — only the first one should be accepted.
+            let hasAccepted = Mutex<Bool>(false)
+
+            // Track whether a .waiting timeout has been scheduled to avoid duplicates.
+            let waitingTimeoutScheduled = Mutex<Bool>(false)
 
             listener.stateUpdateHandler = { state in
                 #log(.info, "Bonjour listener state: \(String(describing: state), privacy: .public)")
                 switch state {
+                case .waiting(let error):
+                    // On iOS, .waiting occurs when the local network permission prompt is shown.
+                    // After the user grants permission, the listener should transition to .ready.
+                    // If it doesn't recover within the timeout, we cancel and retry with a new listener.
+                    #log(.info, "Bonjour listener waiting (may require local network permission): \(error, privacy: .public)")
+                    let shouldSchedule = waitingTimeoutScheduled.withLock { scheduled -> Bool in
+                        guard !scheduled else { return false }
+                        scheduled = true
+                        return true
+                    }
+                    if shouldSchedule {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
+                            let shouldResume = didResume.withLock { val -> Bool in
+                                guard !val else { return false }
+                                val = true
+                                return true
+                            }
+                            if shouldResume {
+                                #log(.error, "Bonjour listener waiting timeout exceeded, cancelling for retry")
+                                listener.cancel()
+                                continuation.resume(throwing: RuntimeConnectionError.listenerWaiting)
+                            }
+                        }
+                    }
                 case .failed(let error):
                     let shouldResume = didResume.withLock { val -> Bool in
                         guard !val else { return false }
@@ -400,14 +462,46 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                         #log(.error, "Bonjour listener failed: \(error, privacy: .public)")
                         continuation.resume(throwing: RuntimeConnectionError.networkError("Listener failed: \(error.localizedDescription)"))
                     }
+                case .cancelled:
+                    // If we already accepted a connection, this cancellation was self-initiated
+                    // (we call listener.cancel() in newConnectionHandler). In that case, let the
+                    // connection state monitoring handle the continuation — do NOT resume with error.
+                    let alreadyAccepted = hasAccepted.withLock { $0 }
+                    guard !alreadyAccepted else {
+                        #log(.info, "Bonjour listener cancelled after accepting connection (expected)")
+                        break
+                    }
+                    // Prevent hung continuation if the listener is cancelled externally
+                    let shouldResume = didResume.withLock { val -> Bool in
+                        guard !val else { return false }
+                        val = true
+                        return true
+                    }
+                    if shouldResume {
+                        #log(.error, "Bonjour listener cancelled unexpectedly")
+                        continuation.resume(throwing: RuntimeConnectionError.networkError("Listener cancelled"))
+                    }
                 default:
                     break
                 }
             }
 
             listener.newConnectionHandler = { [weak self] newConnection in
-                let canProceed = didResume.withLock { !$0 }
-                guard let self, canProceed else { return }
+                let isFirstAccept = hasAccepted.withLock { accepted -> Bool in
+                    guard !accepted else { return false }
+                    accepted = true
+                    return true
+                }
+                guard isFirstAccept else {
+                    #log(.info, "Rejecting duplicate Bonjour connection from another network path: \(newConnection.debugDescription, privacy: .public)")
+                    newConnection.cancel()
+                    return
+                }
+                guard let self else { return }
+
+                // Stop accepting new connections immediately
+                listener.newConnectionHandler = nil
+                listener.cancel()
 
                 #log(.info, "Accepted new Bonjour connection: \(newConnection.debugDescription, privacy: .public)")
 
@@ -470,9 +564,6 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
                         continuation.resume(throwing: error)
                     }
                 }
-
-                listener.newConnectionHandler = nil
-                listener.cancel()
             }
 
             listener.start(queue: .main)
@@ -495,8 +586,24 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
             }
         }
 
+        let hasAccepted = Mutex<Bool>(false)
+
         newListener.newConnectionHandler = { [weak self] newConnection in
+            let isFirstAccept = hasAccepted.withLock { accepted -> Bool in
+                guard !accepted else { return false }
+                accepted = true
+                return true
+            }
+            guard isFirstAccept else {
+                #log(.info, "Rejecting duplicate Bonjour connection from another network path after restart: \(newConnection.debugDescription, privacy: .public)")
+                newConnection.cancel()
+                return
+            }
             guard let self else { return }
+
+            // Stop accepting new connections immediately
+            newListener.newConnectionHandler = nil
+            newListener.cancel()
 
             #log(.info, "Accepted new Bonjour connection after restart: \(newConnection.debugDescription, privacy: .public)")
 
@@ -524,9 +631,6 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
             } catch {
                 #log(.error, "Failed to create Bonjour connection on restart: \(error, privacy: .public)")
             }
-
-            newListener.newConnectionHandler = nil
-            newListener.cancel()
         }
 
         newListener.start(queue: .main)

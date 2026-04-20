@@ -2,9 +2,10 @@ import Foundation
 
 extension RuntimeObject {
     public var exportFileName: String {
+        let invalidCharacters = CharacterSet(charactersIn: "/:<>\"\\|?*")
         let sanitized = displayName
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
+            .components(separatedBy: invalidCharacters)
+            .joined(separator: "_")
         switch kind {
         case .swift(.type(_)):
             return "\(sanitized).swiftinterface"

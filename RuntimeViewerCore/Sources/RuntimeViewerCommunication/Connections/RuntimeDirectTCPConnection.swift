@@ -94,6 +94,8 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
+        tcpOptions.keepaliveInterval = 2
+        tcpOptions.keepaliveCount = 3
         tcpOptions.noDelay = true
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
@@ -440,13 +442,22 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
     /// The port the server is listening on (available after initialization).
     private(set) var port: UInt16 = 0
 
+    override var connectionInfo: RuntimeConnectionInfo? {
+        RuntimeConnectionInfo(host: host, port: port)
+    }
+
     /// Creates a server that listens on the specified port.
     ///
-    /// - Parameter port: The port to listen on (0 for auto-assign).
-    init(port: UInt16 = 0) async throws {
+    /// - Parameters:
+    ///   - port: The port to listen on (0 for auto-assign).
+    ///   - waitForConnection: If `true` (default), waits until a client connects before returning.
+    ///     If `false`, returns as soon as the listener is ready (port assigned), accepting connections asynchronously.
+    init(port: UInt16 = 0, waitForConnection: Bool = true) async throws {
         let tcpOptions = NWProtocolTCP.Options()
         tcpOptions.enableKeepalive = true
         tcpOptions.keepaliveIdle = 2
+        tcpOptions.keepaliveInterval = 2
+        tcpOptions.keepaliveCount = 3
         tcpOptions.noDelay = true
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
@@ -480,6 +491,17 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                         self.host = Self.getLocalIPAddress() ?? "127.0.0.1"
                         #log(.info, "Server listening on \(self.host, privacy: .public):\(self.port, privacy: .public)")
                     }
+                    if !waitForConnection {
+                        let shouldResume = didResume.withLock { val -> Bool in
+                            guard !val else { return false }
+                            val = true
+                            return true
+                        }
+                        if shouldResume {
+                            #log(.info, "Server ready (not waiting for connection)")
+                            continuation.resume()
+                        }
+                    }
                 case .failed(let error):
                     let shouldResume = didResume.withLock { val -> Bool in
                         guard !val else { return false }
@@ -507,6 +529,8 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                     .sink { [weak self] state in
                         #log(.info, "Direct TCP connection state: \(String(describing: state), privacy: .public)")
                         if state.isConnected {
+                            #log(.info, "Direct TCP client connected")
+                            self?.ownStateSubject.send(.connected)
                             let shouldResume = didResume.withLock { val -> Bool in
                                 guard !val else { return false }
                                 val = true
@@ -514,7 +538,6 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
                             }
                             if shouldResume {
                                 #log(.info, "Initial direct TCP connection ready")
-                                self?.ownStateSubject.send(.connected)
                                 continuation.resume()
                             }
                         } else if state.isDisconnected {

@@ -4,9 +4,6 @@ import Dependencies
 import SwiftNavigation
 import RuntimeViewerSettings
 import SwiftMCP
-import OSLog
-
-private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: "Service")
 
 public enum MCPServerState: Equatable, Sendable {
     case disabled
@@ -24,6 +21,7 @@ public enum MCPServerState: Equatable, Sendable {
     }
 }
 
+@Loggable
 @MainActor
 public final class MCPService {
     public static let shared = MCPService()
@@ -66,7 +64,7 @@ public final class MCPService {
         do {
             try FileManager.default.createDirectory(at: runtimeViewerDir, withIntermediateDirectories: true)
         } catch {
-            logger.error("Failed to create app support directory: \(error)")
+            #log(.error,"Failed to create app support directory: \(error)")
         }
         self.portFilePath = runtimeViewerDir.appendingPathComponent(Settings.MCP.portFileName).path
     }
@@ -102,7 +100,7 @@ public final class MCPService {
                     do {
                         try await transport.run()
                     } catch {
-                        logger.error("MCP transport run failed: \(error)")
+                        #log(.error,"MCP transport run failed: \(error)")
                     }
                 }
 
@@ -110,10 +108,10 @@ public final class MCPService {
                 try await Task.sleep(for: .milliseconds(500))
                 let boundPort = UInt16(transport.port)
                 writePortFile(port: boundPort)
-                logger.info("MCP HTTP+SSE server listening on port \(boundPort)")
+                #log(.info,"MCP HTTP+SSE server listening on port \(boundPort)")
                 self.serverState = .running(port: boundPort)
             } catch {
-                logger.error("Failed to start MCP server: \(error)")
+                #log(.error,"Failed to start MCP server: \(error)")
                 self.serverState = .stopped
             }
             observe()
@@ -187,9 +185,9 @@ public final class MCPService {
     private func writePortFile(port: UInt16) {
         do {
             try "\(port)".write(toFile: portFilePath, atomically: true, encoding: .utf8)
-            logger.info("Wrote MCP HTTP+SSE port \(port) to \(self.portFilePath)")
+            #log(.info,"Wrote MCP HTTP+SSE port \(port) to \(self.portFilePath)")
         } catch {
-            logger.error("Failed to write port file: \(error)")
+            #log(.error,"Failed to write port file: \(error)")
         }
     }
 
@@ -199,7 +197,7 @@ public final class MCPService {
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
             // File already removed, ignore
         } catch {
-            logger.error("Failed to remove port file: \(error)")
+            #log(.error,"Failed to remove port file: \(error)")
         }
     }
 }

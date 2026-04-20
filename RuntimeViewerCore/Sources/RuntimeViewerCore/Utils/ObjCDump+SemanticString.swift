@@ -323,11 +323,11 @@ extension ObjCPropertyInfo {
             let setterName = customSetter ?? "set\(name.uppercasedFirst):"
 
             Joined(separator: " ", prefix: " ") {
-                if let getterIMP = imps[getterName], getterIMP != 0 {
-                    Comment("getter IMP: 0x\(context.machO.addressString(forOffset: .init(getterIMP.uint - context.machO.ptr.bitPattern.uint)))")
+                if let getterIMP = imps[getterName] {
+                    context.machO.impAddressComment(label: "getter IMP", rawValue: getterIMP)
                 }
-                if let setterIMP = imps[setterName], setterIMP != 0 {
-                    Comment("setter IMP: 0x\(context.machO.addressString(forOffset: .init(setterIMP.uint - context.machO.ptr.bitPattern.uint)))")
+                if let setterIMP = imps[setterName] {
+                    context.machO.impAddressComment(label: "setter IMP", rawValue: setterIMP)
                 }
             }
         }
@@ -383,7 +383,7 @@ extension ObjCMethodInfo {
         
         if context.options.addMethodIMPAddressComments {
             Space()
-            Comment("IMP: 0x\(context.machO.addressString(forOffset: .init(imp.uint - context.machO.ptr.bitPattern.uint)))")
+            context.machO.impAddressComment(label: "IMP", rawValue: imp)
         }
     }
 }

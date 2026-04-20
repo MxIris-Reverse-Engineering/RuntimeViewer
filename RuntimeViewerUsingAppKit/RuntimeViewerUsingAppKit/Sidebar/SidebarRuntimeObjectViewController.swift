@@ -175,6 +175,18 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
         .disposed(by: rx.disposeBag)
 
+        output.loadingProgress.driveOnNextMainActor { [weak self] progress in
+            guard let self else { return }
+            imageLoadingView.progressIndicator.doubleValue = progress
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.loadingDescription.drive(imageLoadingView.descriptionLabel.rx.stringValue)
+            .disposed(by: rx.disposeBag)
+
+        output.loadingItemCount.drive(imageLoadingView.countLabel.rx.stringValue)
+            .disposed(by: rx.disposeBag)
+
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
         outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
     }
@@ -219,26 +231,50 @@ extension SidebarRuntimeObjectViewController {
     }
 
     final class ImageLoadingView: XiblessView {
-        let loadingIndicator: MaterialLoadingIndicator = .init(radius: 25, color: .controlAccentColor)
-        
-        var contentIndicator: NSView {
-            loadingIndicator
-        }
-        
+        let progressIndicator = NSProgressIndicator()
+        let descriptionLabel = Label()
+        let countLabel = Label()
+
         override init(frame frameRect: CGRect) {
             super.init(frame: frameRect)
 
+            let contentStack = VStackView(alignment: .vStackCenter, spacing: 8) {
+                progressIndicator
+                descriptionLabel
+                countLabel
+            }
+
             hierarchy {
-                contentIndicator
+                contentStack
             }
 
-            contentIndicator.snp.makeConstraints { make in
+            contentStack.snp.makeConstraints { make in
                 make.center.equalToSuperview()
-                make.size.equalTo(50)
             }
 
-            loadingIndicator.startAnimating()
-            loadingIndicator.lineWidth = 5
+            progressIndicator.snp.makeConstraints { make in
+                make.width.equalTo(260)
+            }
+
+            progressIndicator.do {
+                $0.style = .bar
+                $0.isIndeterminate = false
+                $0.minValue = 0
+                $0.maxValue = 1
+                $0.doubleValue = 0
+            }
+
+            descriptionLabel.do {
+                $0.textColor = .secondaryLabelColor
+                $0.font = .systemFont(ofSize: 12)
+                $0.alignment = .center
+            }
+
+            countLabel.do {
+                $0.textColor = .tertiaryLabelColor
+                $0.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+                $0.alignment = .center
+            }
         }
     }
 

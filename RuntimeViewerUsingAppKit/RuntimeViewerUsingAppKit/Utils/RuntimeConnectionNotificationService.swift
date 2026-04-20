@@ -7,7 +7,8 @@ import RuntimeViewerCommunication
 import Dependencies
 
 /// Service responsible for sending local notifications for runtime connection events.
-public final class RuntimeConnectionNotificationService: NSObject, Loggable {
+@Loggable
+public final class RuntimeConnectionNotificationService: NSObject {
     public static let shared = RuntimeConnectionNotificationService()
 
     private let notificationCenter = UNUserNotificationCenter.current()
@@ -23,11 +24,11 @@ public final class RuntimeConnectionNotificationService: NSObject, Loggable {
     private func requestAuthorization() {
         notificationCenter.requestAuthorization(options: [.alert]) { granted, error in
             if let error {
-                Self.logger.error("Notification authorization failed: \(error.localizedDescription, privacy: .public)")
+                #log(.error,"Notification authorization failed: \(error.localizedDescription, privacy: .public)")
             } else if granted {
-                Self.logger.info("Notification authorization granted")
+                #log(.info,"Notification authorization granted")
             } else {
-                Self.logger.info("Notification authorization denied")
+                #log(.info,"Notification authorization denied")
             }
         }
     }
@@ -78,7 +79,7 @@ public final class RuntimeConnectionNotificationService: NSObject, Loggable {
 
         notificationCenter.add(request) { error in
             if let error {
-                Self.logger.error("Failed to send notification: \(error.localizedDescription, privacy: .public)")
+                #log(.error,"Failed to send notification: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -122,22 +123,6 @@ extension RuntimeSource {
         }
     }
 
-    fileprivate var identifier: String {
-        switch self {
-        case .local:
-            return "local"
-        case .macCatalystClient:
-            return "macCatalyst"
-        case .remote(_, let id, _):
-            return id.rawValue
-        case .bonjour(let name, let id, let role):
-            return role.isClient ? "bonjour.\(name)" : "bonjourServer.\(id.rawValue)"
-        case .localSocket(_, let id, let role):
-            return role.isClient ? id.rawValue : "localSocketServer.\(id.rawValue)"
-        case .directTCP(let name, let host, let port, let role):
-            return role.isClient ? "tcp.\(name).\(host ?? "").\(port)" : "tcpServer.\(name).\(port)"
-        }
-    }
 }
 
 // MARK: - Dependencies

@@ -31,6 +31,26 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
         try await runtimeEngine.objects(in: imagePath)
     }
 
+    override func buildRuntimeObjectsStream() -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Error> {
+        AsyncThrowingStream { continuation in
+            Task { [weak self] in
+                guard let self else {
+                    continuation.finish()
+                    return
+                }
+                do {
+                    let stream = await runtimeEngine.objectsWithProgress(in: imagePath)
+                    for try await event in stream {
+                        continuation.yield(event)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
     override func reloadData() async throws {
         try await super.reloadData()
 

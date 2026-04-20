@@ -22,11 +22,11 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
 
     package let _commonLoading = ActivityIndicator()
 
-    public var commonLoading: Driver<Bool> {
+    open var commonLoading: Driver<Bool> {
         _commonLoading.asDriver()
     }
 
-    public var delayedLoading: Driver<Bool> {
+    open var delayedLoading: Driver<Bool> {
         _commonLoading
             .distinctUntilChanged()
             .flatMapLatest { isLoading -> Driver<Bool> in

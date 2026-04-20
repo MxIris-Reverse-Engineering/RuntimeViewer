@@ -22,13 +22,26 @@ struct SharingData {
     let iconType: RuntimeObjectKind
 }
 
+struct SwitchSourceState: Equatable {
+    let title: String
+    let image: NSImage?
+    let isDisconnected: Bool
+    let selectedEngineIdentifier: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.title == rhs.title
+            && lhs.isDisconnected == rhs.isDisconnected
+            && lhs.selectedEngineIdentifier == rhs.selectedEngineIdentifier
+            && lhs.image === rhs.image
+    }
+}
 
 final class MainViewModel: ViewModel<MainRoute> {
     struct Input {
         let sidebarBackClick: Signal<Void>
         let contentBackClick: Signal<Void>
         let saveClick: Signal<Void>
-        let switchSource: Signal<Int>
+        let switchSource: Signal<String?>
         let generationOptionsClick: Signal<NSView>
         let fontSizeSmallerClick: Signal<Void>
         let fontSizeLargerClick: Signal<Void>
@@ -45,8 +58,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         let isSavable: Driver<Bool>
         let isSidebarBackHidden: Driver<Bool>
         let isContentBackHidden: Driver<Bool>
-        let runtimeSources: Driver<[RuntimeSource]>
-        let selectedRuntimeSourceIndex: Driver<Int>
+        let runtimeEngineSections: Driver<[RuntimeEngineSection]>
+        let switchSourceState: Driver<SwitchSourceState>
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
         let requestRestartConfirmation: Signal<Void>
@@ -65,7 +78,29 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     let isContentStackDepthGreaterThanOne = BehaviorRelay<Bool>(value: false)
 
-    let selectedRuntimeSourceIndex = BehaviorRelay(value: 0)
+    @Observed private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
+
+    private var cachedSelectedEngineName: String = RuntimeEngine.local.source.description
+
+    private var cachedSelectedEngineImage: NSImage?
+
+    func resolveEngineIcon(for engine: RuntimeEngine) -> NSImage? {
+        switch engine.source {
+        case .local:
+            return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+        case .remote(_, let identifier, _) where identifier == .macCatalyst:
+            return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+        default:
+            if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
+                return runtimeEngineManager.cachedIcon(for: engine) ?? .symbol(name: RuntimeViewerSymbols.appFill)
+            } else {
+                let fallback = engine.hostInfo.metadata.isSimulator
+                    ? NSWorkspace.shared.box.deviceSymbolIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                    : NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+                return runtimeEngineManager.cachedIcon(for: engine) ?? fallback
+            }
+        }
+    }
 
     @Observed
     var selectedRuntimeObject: RuntimeObject?
@@ -158,9 +193,14 @@ final class MainViewModel: ViewModel<MainRoute> {
                 }
             }.disposed(by: rx.disposeBag)
 
-        input.switchSource.emit(with: self) {
-            $0.router.trigger(.main($0.runtimeEngineManager.runtimeEngines[$1]))
-            $0.selectedRuntimeSourceIndex.accept($1)
+        input.switchSource.compactMap { $0 }.emit(with: self) { owner, identifier in
+            guard let engine = owner.runtimeEngineManager.runtimeEngines.first(where: {
+                $0.engineID == identifier
+            }) else { return }
+            owner.cachedSelectedEngineName = engine.source.description
+            owner.cachedSelectedEngineImage = owner.resolveEngineIcon(for: engine)
+            owner.router.trigger(.main(engine))
+            owner.selectedEngineIdentifier = identifier
         }.disposed(by: rx.disposeBag)
 
         let sharingServiceData = completeTransition?.map { [weak self] router -> [SharingData] in
@@ -188,6 +228,35 @@ final class MainViewModel: ViewModel<MainRoute> {
             return [SharingData(provider: item, title: runtimeObjectType.displayName, iconType: runtimeObjectType.kind)]
         }
 
+        let switchSourceState = Driver.combineLatest(
+            runtimeEngineManager.rx.runtimeEngineSections,
+            $selectedEngineIdentifier.asDriver()
+        ).map { [weak self] sections, selectedIdentifier -> SwitchSourceState in
+            guard let self else {
+                return SwitchSourceState(title: "RuntimeViewer", image: nil, isDisconnected: true, selectedEngineIdentifier: selectedIdentifier)
+            }
+            let allEngines = sections.flatMap(\.engines)
+            if let engine = allEngines.first(where: { $0.engineID == selectedIdentifier }) {
+                let name = engine.source.description
+                let image = resolveEngineIcon(for: engine)
+                cachedSelectedEngineName = name
+                cachedSelectedEngineImage = image
+                return SwitchSourceState(
+                    title: name,
+                    image: image,
+                    isDisconnected: false,
+                    selectedEngineIdentifier: selectedIdentifier
+                )
+            } else {
+                return SwitchSourceState(
+                    title: cachedSelectedEngineName + " (Disconnected)",
+                    image: cachedSelectedEngineImage,
+                    isDisconnected: true,
+                    selectedEngineIdentifier: selectedIdentifier
+                )
+            }
+        }
+
         return Output(
             sharingServiceData: sharingServiceData ?? .empty(),
             isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
@@ -201,8 +270,8 @@ final class MainViewModel: ViewModel<MainRoute> {
             isContentBackHidden: isContentStackDepthGreaterThanOne.map {
                 !$0
             }.asDriver(onErrorJustReturn: true),
-            runtimeSources: runtimeEngineManager.rx.runtimeEngines.map { $0.map { $0.source } },
-            selectedRuntimeSourceIndex: selectedRuntimeSourceIndex.asDriver(),
+            runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
+            switchSourceState: switchSourceState,
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal()

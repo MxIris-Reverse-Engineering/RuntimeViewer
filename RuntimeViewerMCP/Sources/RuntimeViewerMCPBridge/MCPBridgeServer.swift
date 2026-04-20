@@ -1,12 +1,10 @@
 import Foundation
+import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerSettings
 import Dependencies
 import SwiftMCP
-import OSLog
-
-private let logger = Logger(subsystem: "com.RuntimeViewer.MCPBridge", category: "Server")
 
 // MARK: - Error
 
@@ -57,6 +55,7 @@ private enum ObjectLoadResult<T> {
 
 // MARK: - MCP Bridge Server
 
+@Loggable
 @MCPServer(name: "RuntimeViewer", toolNaming: .pascalCase)
 public actor MCPBridgeServer {
     private let documentProvider: MCPBridgeDocumentProvider
@@ -169,7 +168,7 @@ public actor MCPBridgeServer {
         do {
             interface = try await engine.interface(for: runtimeObject, options: options)
         } catch {
-            logger.error("Failed to generate interface for selected type '\(runtimeObject.displayName)': \(error)")
+            #log(.error,"Failed to generate interface for selected type '\(runtimeObject.displayName)': \(error)")
             throw MCPBridgeError.interfaceGenerationFailed(typeName: runtimeObject.displayName, reason: error.localizedDescription)
         }
 
@@ -223,7 +222,7 @@ public actor MCPBridgeServer {
             } catch let error as MCPBridgeError {
                 throw error
             } catch {
-                logger.warning("Failed to load objects from image \(path): \(error)")
+                #log(.default,"Failed to load objects from image \(path): \(error)")
                 objectLoadErrors.append((path: path, error: error.localizedDescription))
                 continue
             }
@@ -259,7 +258,7 @@ public actor MCPBridgeServer {
                         let objects = try await engine.objects(in: path)
                         return .success(self.flattenObjects(objects).map { MCPRuntimeTypeInfo(from: $0) })
                     } catch {
-                        logger.warning("Failed to load objects from image \(path): \(error)")
+                        #log(.default,"Failed to load objects from image \(path): \(error)")
                         return .failure(path: path, error: error.localizedDescription)
                     }
                 }
@@ -317,7 +316,7 @@ public actor MCPBridgeServer {
                             return MCPRuntimeTypeInfo(from: obj)
                         })
                     } catch {
-                        logger.warning("Failed to load objects from image \(path): \(error)")
+                        #log(.default,"Failed to load objects from image \(path): \(error)")
                         return .failure(path: path, error: error.localizedDescription)
                     }
                 }
@@ -407,7 +406,7 @@ public actor MCPBridgeServer {
                     return MCPMemberAddressesResponse(typeName: runtimeObject.displayName, members: members.map { MCPMemberAddressInfo(from: $0) }, error: nil)
                 }
             } catch {
-                logger.warning("Failed to load objects from image \(path): \(error)")
+                #log(.default,"Failed to load objects from image \(path): \(error)")
                 objectLoadErrors.append((path: path, error: error.localizedDescription))
                 continue
             }
@@ -440,7 +439,7 @@ public actor MCPBridgeServer {
             do {
                 try await engine.loadImage(at: imagePath)
             } catch {
-                logger.error("Failed to load image at \(imagePath): \(error)")
+                #log(.error,"Failed to load image at \(imagePath): \(error)")
                 throw MCPBridgeError.operationFailed("Failed to load image: \(error.localizedDescription)")
             }
         }
@@ -451,7 +450,7 @@ public actor MCPBridgeServer {
                 objectsLoadedPaths.insert(imagePath)
                 didLoadObjects = true
             } catch {
-                logger.error("Failed to load objects from \(imagePath): \(error)")
+                #log(.error,"Failed to load objects from \(imagePath): \(error)")
                 throw MCPBridgeError.operationFailed("Image loaded but failed to load objects: \(error.localizedDescription)")
             }
         }
@@ -488,7 +487,7 @@ public actor MCPBridgeServer {
             objectsLoadedPaths.insert(imagePath)
             return MCPLoadObjectsResponse(imagePath: imagePath, alreadyLoaded: false, objectCount: objects.count, error: nil)
         } catch {
-            logger.error("Failed to load objects from \(imagePath): \(error)")
+            #log(.error,"Failed to load objects from \(imagePath): \(error)")
             throw MCPBridgeError.operationFailed("Failed to load objects: \(error.localizedDescription)")
         }
     }
@@ -520,7 +519,7 @@ public actor MCPBridgeServer {
             if !isLoaded {
                 do {
                     try await engine.loadImage(at: imagePath)
-                    logger.info("Auto-loaded image at path: \(imagePath)")
+                    #log(.info,"Auto-loaded image at path: \(imagePath)")
                 } catch {
                     throw MCPBridgeError.imageLoadFailed(path: imagePath, reason: error.localizedDescription)
                 }
@@ -545,7 +544,7 @@ public actor MCPBridgeServer {
                 if !isLoaded {
                     do {
                         try await engine.loadImage(at: fullPath)
-                        logger.info("Auto-loaded image at path: \(fullPath)")
+                        #log(.info,"Auto-loaded image at path: \(fullPath)")
                     } catch {
                         throw MCPBridgeError.imageLoadFailed(path: fullPath, reason: error.localizedDescription)
                     }
@@ -555,9 +554,9 @@ public actor MCPBridgeServer {
             // Not found in image list — last resort: try loading by name as a direct path
             do {
                 try await engine.loadImage(at: imageName)
-                logger.info("Auto-loaded image at path: \(imageName)")
+                #log(.info,"Auto-loaded image at path: \(imageName)")
             } catch {
-                logger.info("Could not load '\(imageName)' as a direct path: \(error)")
+                #log(.info,"Could not load '\(imageName)' as a direct path: \(error)")
             }
             let retryPaths = await resolveImageName(imageName, engine: engine)
             if retryPaths.isEmpty {

@@ -6,23 +6,23 @@ import Dependencies
 import RuntimeViewerCore
 
 typealias OptionKeyPath = WritableKeyPath<RuntimeObjectInterface.GenerationOptions, Bool>
+typealias OptionsMutation = (inout RuntimeObjectInterface.GenerationOptions) -> Void
 
 final class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
     struct Input {
-        let updateOption: Signal<(OptionKeyPath, Bool)>
+        let updateOption: Signal<OptionsMutation>
     }
 
     struct Output {
         let options: Driver<RuntimeObjectInterface.GenerationOptions>
     }
 
-
     func transform(_ input: Input) -> Output {
         input.updateOption
-            .emitOnNext { [weak self] (keyPath, value) in
+            .emitOnNext { [weak self] mutation in
                 guard let self else { return }
                 var currentOptions = appDefaults.options
-                currentOptions[keyPath: keyPath] = value
+                mutation(&currentOptions)
                 appDefaults.options = currentOptions
             }
             .disposed(by: rx.disposeBag)

@@ -45,6 +45,28 @@ public import Combine
 ///     return "Echo: \(input)"
 /// }
 /// ```
+
+// MARK: - RuntimeConnectionInfo
+
+/// Metadata about a connection's local endpoint.
+///
+/// Used to expose transport-specific details (e.g., TCP host/port) through
+/// the generic `RuntimeConnection` interface without requiring downcasts.
+public struct RuntimeConnectionInfo: Sendable {
+    /// The local host address (e.g., IP address the server is listening on).
+    public let host: String
+
+    /// The local port number.
+    public let port: UInt16
+
+    public init(host: String, port: UInt16) {
+        self.host = host
+        self.port = port
+    }
+}
+
+// MARK: - RuntimeConnection
+
 public protocol RuntimeConnection: Sendable {
     /// Publisher that emits connection state changes.
     ///
@@ -116,4 +138,14 @@ public protocol RuntimeConnection: Sendable {
     ///   - name: The message identifier to handle.
     ///   - handler: The async closure receiving the request and returning the response.
     func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Response)
+
+    /// Optional metadata about the connection's local endpoint.
+    ///
+    /// Returns non-nil for transport types that expose local address info
+    /// (e.g., `RuntimeDirectTCPServerConnection`). Default is `nil`.
+    var connectionInfo: RuntimeConnectionInfo? { get }
+}
+
+extension RuntimeConnection {
+    public var connectionInfo: RuntimeConnectionInfo? { nil }
 }
