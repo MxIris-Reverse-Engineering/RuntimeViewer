@@ -19,6 +19,7 @@
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
+		E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E910124C38FF8B6334251802 /* Sparkle */; };
 		E942ACBF2C28865100A2F3D3 /* MainRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = E942ACBE2C28865100A2F3D3 /* MainRoute.swift */; };
 		E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9432FE52C0D614900362862 /* AppDelegate.swift */; };
 		E9432FE82C0D614A00362862 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9432FE72C0D614A00362862 /* Assets.xcassets */; };
@@ -328,6 +329,7 @@
 				E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */,
 				E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */,
 				E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */,
+				E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */,
 			);
 		};
 		E947C3642C2A4D0400296B2E /* Frameworks */ = {
@@ -670,6 +672,7 @@
 				E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */,
 				E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */,
 				E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */,
+				E910124C38FF8B6334251802 /* Sparkle */,
 			);
 			productName = RuntimeViewerUsingAppKit;
 			productReference = E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */;
@@ -804,6 +807,7 @@
 			);
 			mainGroup = E9432FD92C0D614900362862;
 			packageReferences = (
+				E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 90;
 			productRefGroup = E9432FE32C0D614900362862 /* Products */;
@@ -1595,7 +1599,23 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.9.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		E910124C38FF8B6334251802 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerApplication;
