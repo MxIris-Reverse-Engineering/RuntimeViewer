@@ -51,6 +51,15 @@ The MCP bridge starts automatically on app launch; check the toolbar status indi
 
 Runtime Viewer discovers other instances on the local network via Bonjour. On iOS, allow the local-network permission when prompted. Remote engines appear in the toolbar source switcher grouped by host.
 
+### Updates
+
+Runtime Viewer uses [Sparkle](https://sparkle-project.org/) for automatic updates.
+
+- The app checks for updates once a day by default. You can adjust the interval or disable automatic checks in **Settings → Updates**.
+- To try pre-release builds, enable **Settings → Updates → Include pre-release versions (Beta)**. RC and beta builds are delivered through the same feed on an opt-in channel.
+- You can always run a manual check from **Runtime Viewer → Check for Updates…**.
+- Release feed: `https://mxiris-reverse-engineering.github.io/RuntimeViewer/appcast.xml`.
+
 ### Troubleshooting
 
 If Catalyst or code-injected applications don't appear in the directory list, try restarting the application.
