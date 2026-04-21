@@ -5,38 +5,62 @@
 <h1 align="center">Runtime Viewer</h1>
 
 <p align="center">
-  A modern alternative to RuntimeBrowser with enhanced UI and extended functionality
+  A modern alternative to RuntimeBrowser for inspecting Objective-C and Swift runtime interfaces
 </p>
 
 ## Powered By
 
-| Language | Library |
-|----------|---------|
-| Objective-C | [MachOObjCSection](https://github.com/p-x9/MachOObjCSection) |
-| Swift | [MachOSwiftSection](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection) |
+| Language    | Library                                                                              | Upstream                                                        |
+| ----------- | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Objective-C | [MachOObjCSection](https://github.com/MxIris-Reverse-Engineering/MachOObjCSection)   | fork of [p-x9/MachOObjCSection](https://github.com/p-x9/MachOObjCSection) |
+| Swift       | [MachOSwiftSection](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection) | —                                                               |
+| Mach-O      | [MachOKit](https://github.com/MxIris-Reverse-Engineering/MachOKit)                   | fork of [p-x9/MachOKit](https://github.com/p-x9/MachOKit)       |
+| Injection   | [MachInjector](https://github.com/MxIris-Reverse-Engineering/MachInjector)           | —                                                               |
 
 ## Highlights
 
-- **Swift Interface Support** – View Swift interfaces alongside Objective-C headers
-- **Xcode-Style Syntax Highlighting** – Full AppKit/UIKit text view with type-defined jumps and highlighting identical to Xcode
-- **Framework Support** – Browse `macOS` frameworks and `iOSSupport` frameworks
-- **Easy Export** – Export header or interface files with one click
-- **Custom Framework Loading** – Load and inspect custom macOS frameworks
-- **Code Injection** – Inject code into running processes (WIP: arm64e support, requires SIP disabled)
-- **Multi-Device Support** *(WIP)* – Connect to iOS, watchOS, tvOS, and visionOS devices via Bonjour (requires RuntimeViewerMobileServer)
-
-> [!NOTE]
-> Some features marked as *WIP* are only available in beta versions. If you need these features, please download from [Pre-release](../../releases).
+- **Swift & Objective-C Interfaces** – Generate Swift type interfaces (with type/enum layouts and VTable offsets) alongside Objective-C headers directly from Mach-O binaries
+- **Xcode-Style Syntax Highlighting** – Full AppKit text view with type-defined jumps and rendering identical to Xcode
+- **MCP Integration** *(macOS 15+)* – Let LLM clients (e.g., Claude) inspect runtime information via the Model Context Protocol, with an in-process bridge and a toolbar status indicator
+- **Bonjour Multi-Device Mirroring** – Discover and connect to iOS/macOS devices on the local network; remote engines appear in the toolbar's source switcher grouped by host
+- **Export Interface Wizard** – Xcode-style multi-step wizard for exporting ObjC/Swift interfaces to single or multiple files
+- **Runtime Interface Transformers** – Customizable transformer modules for C type replacement, Swift type/enum layouts, VTable offsets, and member addresses, with reorderable token template presets
+- **Code Injection** – Inject into x86_64 and arm64e processes (system apps supported via helper service; requires SIP disabled). Injected processes automatically reconnect across app restarts
+- **Framework Support** – Browse `macOS` frameworks, `iOSSupport` frameworks, and load custom Mach-O binaries or frameworks
+- **Determinate Loading Progress** – Phase-based progress feedback while indexing Swift and Objective-C sections
+- **Filter Engine** – Fuzzy search across runtime classes, protocols, and members
+- **Bookmarks** – Reorderable, persisted bookmarks for runtime objects
 
 ## Getting Started
 
-### XPC Helper Installation
+### Helper Service Installation
 
-On first launch, you need to install the XPC helper for inter-process communication. Click the tool icon in the toolbar to install it.
+On first launch, register the `SMAppService` helper for inter-process communication and code injection. Open **Settings → Helper Service** and click **Install**. After major updates, Runtime Viewer detects version mismatches and prompts for reinstallation automatically.
+
+### MCP Client Configuration
+
+To expose runtime information to an LLM client:
+
+1. Open **Settings → MCP**
+2. Copy the server configuration via the **Copy Config** button
+3. Paste it into your LLM client's MCP configuration
+
+The MCP bridge starts automatically on app launch; check the toolbar status indicator to confirm.
+
+### Connecting to Other Devices
+
+Runtime Viewer discovers other instances on the local network via Bonjour. On iOS, allow the local-network permission when prompted. Remote engines appear in the toolbar source switcher grouped by host.
 
 ### Troubleshooting
 
 If Catalyst or code-injected applications don't appear in the directory list, try restarting the application.
+
+## Requirements
+
+- **Main application**: macOS 15+
+- **RuntimeViewerCore** (inspection engine): macOS 10.15+, iOS 13+, Mac Catalyst 13+, watchOS 6+, tvOS 13+, visionOS 1+
+- **MCP integration**: macOS 15+
+- **Swift**: 5 language mode, Xcode 15+
 
 ## Screenshots
 
