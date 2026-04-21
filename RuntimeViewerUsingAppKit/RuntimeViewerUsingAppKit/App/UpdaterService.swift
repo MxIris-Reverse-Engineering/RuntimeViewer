@@ -2,6 +2,7 @@ import AppKit
 import Sparkle
 import FoundationToolbox
 import RuntimeViewerSettings
+import RuntimeViewerSettingsUI
 import Dependencies
 import OSLog
 
@@ -32,12 +33,17 @@ final class UpdaterService: NSObject {
             #log(.info, "UpdaterService.start() — Debug build detected; initial automatic check suppressed")
             controller.updater.automaticallyChecksForUpdates = false
         }
+        installSettingsUIProviders()
     }
 
     func stop() {
         settingsObservationTask?.cancel()
         settingsObservationTask = nil
         updaterController = nil
+        UpdateStatusReader.currentVersionDisplayProvider = { "—" }
+        UpdateStatusReader.lastCheckDateProvider = { nil }
+        UpdateStatusReader.isSessionInProgressProvider = { false }
+        UpdateStatusReader.triggerCheckAction = {}
     }
 
     func checkForUpdates() {
@@ -87,6 +93,21 @@ final class UpdaterService: NSObject {
         updater.automaticallyChecksForUpdates = update.automaticallyChecks
         updater.automaticallyDownloadsUpdates = update.automaticallyDownloads
         updater.updateCheckInterval = update.checkInterval.timeInterval
+    }
+
+    private func installSettingsUIProviders() {
+        UpdateStatusReader.currentVersionDisplayProvider = { [weak self] in
+            self?.currentVersionDisplay ?? "—"
+        }
+        UpdateStatusReader.lastCheckDateProvider = { [weak self] in
+            self?.lastUpdateCheckDate
+        }
+        UpdateStatusReader.isSessionInProgressProvider = { [weak self] in
+            self?.isSessionInProgress ?? false
+        }
+        UpdateStatusReader.triggerCheckAction = { [weak self] in
+            self?.checkForUpdates()
+        }
     }
 
     private func startSettingsObservation(for updater: SPUUpdater) {
