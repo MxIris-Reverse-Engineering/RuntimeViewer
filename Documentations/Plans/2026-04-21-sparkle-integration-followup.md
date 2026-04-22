@@ -44,8 +44,10 @@ to the private key — either via the login Keychain (default) or via the
   ```
 
   Expected: new `<item>` in `docs/appcast.xml` with
-  `<sparkle:channel>beta</sparkle:channel>` and matching EdDSA signature
-  verifiable by `/tmp/Sparkle-unpacked/bin/sign_update RuntimeViewer-macOS.zip`.
+  `<sparkle:channel>beta</sparkle:channel>` and matching EdDSA signature.
+  Verify the signature with `sign_update RuntimeViewer-macOS.zip` from a
+  locally unpacked Sparkle tarball (see `Documentations/SparkleRelease.md`
+  for how the tools are obtained).
   Then `git restore docs/appcast.xml && rm -f RuntimeViewer-macOS.zip &&
   rm -rf Products/Archives` to leave the tree clean.
 

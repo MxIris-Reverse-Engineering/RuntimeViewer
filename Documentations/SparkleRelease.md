@@ -24,9 +24,12 @@ Release notes live at `Changelogs/<tag>.md` and are picked up automatically by
 
 ## Local release (manual)
 
+Substitute the version tag in the example below for whichever release you are
+cutting (e.g. `v2.0.0-RC.4`, `v2.0.0`, `v2.1.0`).
+
 ```bash
-./ReleaseScript.sh --version-tag v2.1.0 \
-                   --release-notes Changelogs/v2.1.0.md \
+./ReleaseScript.sh --version-tag v2.0.0 \
+                   --release-notes Changelogs/v2.0.0.md \
                    --update-appcast --upload-to-github --commit-push
 ```
 
@@ -48,9 +51,9 @@ Run `./ReleaseScript.sh --help` for the full list.
 Push an annotated `v*` tag, or dispatch the workflow manually:
 
 ```bash
-gh workflow run release.yml -f tag=v2.1.0           # stable, channel inferred
-gh workflow run release.yml -f tag=v2.1.0 -f channel=beta
-gh workflow run release.yml -f tag=v2.1.0 -f create_release=false   # build only
+gh workflow run release.yml -f tag=v2.0.0                           # stable, channel inferred
+gh workflow run release.yml -f tag=v2.0.0-RC.4 -f channel=beta
+gh workflow run release.yml -f tag=v2.0.0 -f create_release=false   # build only
 ```
 
 CI watches `.github/workflows/release.yml`; it decodes the
