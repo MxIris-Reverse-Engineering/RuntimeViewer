@@ -1,8 +1,8 @@
 import AppKit
 import Sparkle
+import Synchronization
 import FoundationToolbox
 import RuntimeViewerSettings
-import RuntimeViewerSettingsUI
 import Dependencies
 import OSLog
 
@@ -12,11 +12,17 @@ final class UpdaterService: NSObject {
     static let shared = UpdaterService()
 
     @Dependency(\.settings) private var settings
+    @Dependency(\.updaterClient) private var updaterClient
 
     private var updaterController: SPUStandardUpdaterController?
-    private var settingsObservationTask: Task<Void, Never>?
+    private var checkForUpdatesMenuItem: NSMenuItem?
 
-    private override init() { super.init() }
+    /// Sparkle can invoke SPUUpdaterDelegate callbacks off the main queue, so a
+    /// nonisolated read path must avoid MainActor-isolated storage. The
+    /// observation loop refreshes this cache on every settings change.
+    private let allowedChannelsStorage = Synchronization.Mutex<Set<String>>([])
+
+    override private init() { super.init() }
 
     func start() {
         guard updaterController == nil else { return }
@@ -26,54 +32,32 @@ final class UpdaterService: NSObject {
             userDriverDelegate: nil
         )
         updaterController = controller
+
         installCheckForUpdatesMenuItem(target: controller)
-        applyInitialBindings(to: controller.updater)
-        startSettingsObservation(for: controller.updater)
-        if isDebugBuild {
-            #log(.info, "UpdaterService.start() — Debug build detected; initial automatic check suppressed")
-            controller.updater.automaticallyChecksForUpdates = false
-        }
-        installSettingsUIProviders()
+        bindClient(to: controller)
+        applySettings(to: controller.updater)
+        observeSettings(for: controller.updater)
     }
 
     func stop() {
-        settingsObservationTask?.cancel()
-        settingsObservationTask = nil
+        if let item = checkForUpdatesMenuItem {
+            item.menu?.removeItem(item)
+            checkForUpdatesMenuItem = nil
+        }
+        updaterClient.checkForUpdates = {}
         updaterController = nil
-        UpdateStatusReader.currentVersionDisplayProvider = { "—" }
-        UpdateStatusReader.lastCheckDateProvider = { nil }
-        UpdateStatusReader.isSessionInProgressProvider = { false }
-        UpdateStatusReader.triggerCheckAction = {}
     }
 
-    func checkForUpdates() {
-        updaterController?.checkForUpdates(nil)
-    }
-
-    var lastUpdateCheckDate: Date? {
-        updaterController?.updater.lastUpdateCheckDate
-    }
-
-    var isSessionInProgress: Bool {
-        updaterController?.updater.sessionInProgress ?? false
-    }
-
-    var currentVersionDisplay: String {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "\(short) (\(build))"
-    }
-
-    // MARK: - Private
-
-    private var isDebugBuild: Bool {
-        (Bundle.main.infoDictionary?["CFBundleName"] as? String)?.contains("Debug") == true
-    }
+    // MARK: - Menu
 
     private func installCheckForUpdatesMenuItem(target: SPUStandardUpdaterController) {
-        guard let appMenu = NSApp.mainMenu?.item(at: 0)?.submenu else { return }
-        if appMenu.items.contains(where: { $0.action == #selector(SPUStandardUpdaterController.checkForUpdates(_:)) }) {
+        guard let appMenu = NSApp.mainMenu?.item(at: 0)?.submenu else {
+            #log(.error, "UpdaterService: application menu missing; 'Check for Updates…' not installed")
+            return
+        }
+        if appMenu.items.contains(where: {
+            $0.action == #selector(SPUStandardUpdaterController.checkForUpdates(_:))
+        }) {
             return
         }
         let aboutIndex = appMenu.items.firstIndex {
@@ -86,59 +70,85 @@ final class UpdaterService: NSObject {
         )
         item.target = target
         appMenu.insertItem(item, at: aboutIndex + 1)
+        checkForUpdatesMenuItem = item
     }
 
-    private func applyInitialBindings(to updater: SPUUpdater) {
+    // MARK: - Client bridge
+
+    private func bindClient(to controller: SPUStandardUpdaterController) {
+        let updater = controller.updater
+        updaterClient.setCurrentVersionDisplay(UpdaterClient.defaultVersionDisplay())
+        updaterClient.setLastCheckDate(updater.lastUpdateCheckDate)
+        updaterClient.setIsSessionInProgress(updater.sessionInProgress)
+        updaterClient.setLastCheckError(nil)
+        updaterClient.checkForUpdates = { [weak controller] in
+            controller?.checkForUpdates(nil)
+        }
+    }
+
+    // MARK: - Settings → Sparkle
+
+    private func applySettings(to updater: SPUUpdater) {
         let update = settings.update
+        // Keep the nonisolated allowedChannels cache in sync on every write.
+        allowedChannelsStorage.withLock { $0 = update.allowedChannels }
+        #if DEBUG
+        // Debug builds never check automatically regardless of the stored user
+        // setting, to avoid surprise background downloads during development.
+        updater.automaticallyChecksForUpdates = false
+        updater.automaticallyDownloadsUpdates = false
+        #else
         updater.automaticallyChecksForUpdates = update.automaticallyChecks
         updater.automaticallyDownloadsUpdates = update.automaticallyDownloads
+        #endif
         updater.updateCheckInterval = update.checkInterval.timeInterval
     }
 
-    private func installSettingsUIProviders() {
-        UpdateStatusReader.currentVersionDisplayProvider = { [weak self] in
-            self?.currentVersionDisplay ?? "—"
-        }
-        UpdateStatusReader.lastCheckDateProvider = { [weak self] in
-            self?.lastUpdateCheckDate
-        }
-        UpdateStatusReader.isSessionInProgressProvider = { [weak self] in
-            self?.isSessionInProgress ?? false
-        }
-        UpdateStatusReader.triggerCheckAction = { [weak self] in
-            self?.checkForUpdates()
-        }
-    }
-
-    private func startSettingsObservation(for updater: SPUUpdater) {
-        // Re-apply Settings.update.* to updater whenever the observable
-        // settings snapshot changes.
-        settingsObservationTask = Task { [weak self] in
-            while !Task.isCancelled {
-                await withCheckedContinuation { continuation in
-                    _ = withObservationTracking {
-                        _ = self?.settings.update
-                    } onChange: {
-                        continuation.resume()
-                    }
-                }
-                guard let self else { return }
-                self.applyInitialBindings(to: updater)
+    /// Recursive `withObservationTracking`: re-apply on each change, then
+    /// re-register for the next round. `stop()` nils `updaterController`,
+    /// which makes subsequent `onChange` fires a no-op and terminates the
+    /// recursion.
+    private func observeSettings(for updater: SPUUpdater) {
+        guard updaterController != nil else { return }
+        withObservationTracking {
+            _ = settings.update
+        } onChange: { [weak self, weak updater] in
+            Task { @MainActor [weak self, weak updater] in
+                guard let self, let updater,
+                      self.updaterController != nil else { return }
+                self.applySettings(to: updater)
+                self.observeSettings(for: updater)
             }
         }
     }
 }
 
+// MARK: - SPUUpdaterDelegate
+
 extension UpdaterService: SPUUpdaterDelegate {
     nonisolated func allowedChannels(for updater: SPUUpdater) -> Set<String> {
-        MainActor.assumeIsolated {
-            settings.update.allowedChannels
-        }
+        allowedChannelsStorage.withLock { $0 }
     }
 
     nonisolated func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
-        MainActor.assumeIsolated {
-            #log(.error, "Sparkle updater aborted: \(error.localizedDescription, privacy: .public)")
+        let message = error.localizedDescription
+        #log(.error, "Sparkle updater aborted: \(message, privacy: .public)")
+        Task { @MainActor [weak self] in
+            self?.updaterClient.setLastCheckError(error)
+            self?.updaterClient.setIsSessionInProgress(false)
+        }
+    }
+
+    nonisolated func updater(
+        _ updater: SPUUpdater,
+        didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+        error: Error?
+    ) {
+        Task { @MainActor [weak self, weak updater] in
+            guard let self, let updater else { return }
+            self.updaterClient.setLastCheckDate(updater.lastUpdateCheckDate)
+            self.updaterClient.setIsSessionInProgress(updater.sessionInProgress)
+            self.updaterClient.setLastCheckError(error)
         }
     }
 }

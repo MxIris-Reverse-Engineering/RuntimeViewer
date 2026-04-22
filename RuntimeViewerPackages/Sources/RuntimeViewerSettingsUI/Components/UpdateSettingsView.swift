@@ -6,6 +6,8 @@ import RuntimeViewerSettings
 import RuntimeViewerUI
 
 struct UpdateSettingsView: View {
+    @Dependency(\.updaterClient) private var updaterClient
+
     @AppSettings(\.update.automaticallyChecks)    private var automaticallyChecks
     @AppSettings(\.update.automaticallyDownloads) private var automaticallyDownloads
     @AppSettings(\.update.checkInterval)          private var checkInterval
@@ -17,16 +19,23 @@ struct UpdateSettingsView: View {
     var body: some View {
         SettingsForm {
             Section {
-                LabeledContent("Current Version",
-                               value: UpdateStatusReader.currentVersionDisplay())
+                LabeledContent("Current Version", value: updaterClient.currentVersionDisplay)
                 LabeledContent("Last Check",
-                               value: UpdateStatusReader.lastCheckDisplay(now: now))
+                               value: Self.lastCheckDisplay(updaterClient.lastCheckDate, now: now))
+                if let error = updaterClient.lastCheckError {
+                    LabeledContent("Last Check Error") {
+                        Text(error.localizedDescription)
+                            .foregroundStyle(.red)
+                            .textSelection(.enabled)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
                 HStack {
                     Spacer()
                     Button("Check Now") {
-                        UpdateStatusReader.triggerCheck()
+                        updaterClient.checkForUpdates()
                     }
-                    .disabled(UpdateStatusReader.isSessionInProgress())
+                    .disabled(updaterClient.isSessionInProgress)
                 }
             } header: {
                 Text("Status")
@@ -63,36 +72,13 @@ struct UpdateSettingsView: View {
         }
         .onReceive(ticker) { now = $0 }
     }
-}
 
-/// Module boundary: this type is overridden at the app layer to talk to
-/// `UpdaterService`. In the settings package, it provides safe defaults so
-/// the view compiles and previews.
-public enum UpdateStatusReader {
-    public static var currentVersionDisplayProvider: () -> String = {
-        let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
-        let build = info?["CFBundleVersion"] as? String ?? "—"
-        return "\(short) (\(build))"
-    }
-
-    public static var lastCheckDateProvider: () -> Date? = { nil }
-
-    public static var isSessionInProgressProvider: () -> Bool = { false }
-
-    public static var triggerCheckAction: () -> Void = {}
-
-    static func currentVersionDisplay() -> String { currentVersionDisplayProvider() }
-
-    static func lastCheckDisplay(now: Date) -> String {
-        guard let date = lastCheckDateProvider() else { return "Never" }
+    private static func lastCheckDisplay(_ date: Date?, now: Date) -> String {
+        guard let date else { return "Never" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter.localizedString(for: date, relativeTo: now)
     }
-
-    static func isSessionInProgress() -> Bool { isSessionInProgressProvider() }
-    static func triggerCheck() { triggerCheckAction() }
 }
 
 #endif
