@@ -49,24 +49,32 @@ to the private key — either via the login Keychain (default) or via the
   Then `git restore docs/appcast.xml && rm -f RuntimeViewer-macOS.zip &&
   rm -rf Products/Archives` to leave the tree clean.
 
-- **Task 16 (post-merge RC):**
+- **Task 16 (post-merge RC for v2.0.0):**
+
+  The next RC after merge is `v2.0.0-RC.4` — the first build to include
+  Sparkle. Users on `v2.0.0-RC.3` or earlier **cannot auto-update** to it
+  (those builds ship without Sparkle) and must install it manually once;
+  every subsequent release then flows through Sparkle.
 
   ```bash
   git checkout main && git pull
-  git tag -a v2.0.1-RC.1 -m "v2.0.1 Release Candidate 1: auto-update via Sparkle"
-  git push origin v2.0.1-RC.1
+  git tag -a v2.0.0-RC.4 -m "v2.0.0 Release Candidate 4: auto-update via Sparkle"
+  git push origin v2.0.0-RC.4
   gh run watch
   ```
 
   Verify:
   - CI succeeds and uploads the GitHub Release (flagged pre-release).
-  - `docs/appcast.xml` gains one beta `<item>`.
+  - `docs/appcast.xml` gains one beta `<item>` with the new signature.
   - `curl` the Pages feed shows the new entry.
-  - Install `v2.0.0`, opt into beta in Settings → Updates → Check Now,
-    accept the offered upgrade, and confirm the new version launches.
+  - Install `v2.0.0-RC.4` manually on a clean machine; confirm Sparkle
+    initializes and **Check for Updates…** works.
+  - After cutting the next tag (`v2.0.0` stable, or another RC), the
+    installed RC.4 should offer the upgrade via Settings → Updates →
+    Check Now and install it cleanly end-to-end.
 
-Promote to stable by tagging `v2.0.1` only after the RC has run for
-≥3 days with no regressions.
+Promote to stable by tagging `v2.0.0` only after RC.4 has run for ≥3 days
+with no regressions.
 
 ## Manual smoke test (anytime the feature branch builds)
 
