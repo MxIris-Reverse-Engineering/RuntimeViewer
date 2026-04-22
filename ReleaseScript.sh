@@ -46,7 +46,34 @@ RELEASE_NOTES_URL_PREFIX="https://github.com/MxIris-Reverse-Engineering/RuntimeV
 
 fail() { echo "error: $*" >&2; exit 1; }
 log()  { echo "[ReleaseScript] $*"; }
-run()  { if $DRY_RUN; then echo "+ $*"; else eval "$@"; fi; }
+
+# Pipe xcodebuild output through xcbeautify when it is installed; otherwise
+# fall back to cat so that neither CI nor local runs depend on the tool.
+pretty() {
+    if command -v xcbeautify >/dev/null 2>&1; then
+        xcbeautify
+    else
+        cat
+    fi
+}
+
+run() {
+    if $DRY_RUN; then
+        printf '+ '; printf '%q ' "$@"; echo
+    else
+        "$@"
+    fi
+}
+
+# Run a command with its stdout+stderr piped through pretty(). `set -o pipefail`
+# ensures a failure in the leading command still propagates.
+run_piped() {
+    if $DRY_RUN; then
+        printf '+ '; printf '%q ' "$@"; printf '| pretty\n'
+    else
+        "$@" 2>&1 | pretty
+    fi
+}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -108,15 +135,14 @@ MAIN_ARCHIVE="$BUILD_PATH/RuntimeViewer.xcarchive"
 mkdir -p "$BUILD_PATH"
 
 log "Archiving Catalyst helper"
-run xcodebuild archive \
+run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
     -scheme "$CATALYST_SCHEME" \
     -configuration "$CONFIGURATION" \
     -destination 'generic/platform=macOS,variant=Mac Catalyst' \
     -archivePath "$CATALYST_HELPER_ARCHIVE" \
     -skipPackagePluginValidation -skipMacroValidation \
-    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
-    "| xcbeautify"
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
 run rm -rf "$CATALYST_EXPORT_PATH/RuntimeViewerCatalystHelper.app"
 run xcodebuild -exportArchive \
@@ -130,15 +156,14 @@ run rm -f "$CATALYST_EXPORT_PATH/Packaging.log" \
         "$CATALYST_EXPORT_PATH/ExportOptions.plist"
 
 log "Archiving main app"
-run xcodebuild archive \
+run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
     -destination 'generic/platform=macOS' \
     -archivePath "$MAIN_ARCHIVE" \
     -skipPackagePluginValidation -skipMacroValidation \
-    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" \
-    "| xcbeautify"
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
 run rm -rf "$EXPORT_PATH"
 run xcodebuild -exportArchive \
@@ -171,7 +196,7 @@ IOS_SIM_ZIP=""
 if $INCLUDE_IOS_SIMULATOR; then
     log "Building iOS Simulator app"
     DERIVED="$PROJECT_DIR/DerivedData"
-    run xcodebuild build \
+    run_piped xcodebuild build \
         -workspace "$WORKSPACE" \
         -scheme "RuntimeViewer iOS" \
         -configuration "$CONFIGURATION" \

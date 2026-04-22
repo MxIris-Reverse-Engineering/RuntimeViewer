@@ -63,8 +63,10 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer_id.p12"
+          chmod 600 "$RUNNER_TEMP/developer_id.p12"
           security import "$RUNNER_TEMP/developer_id.p12" -P "$DEVELOPER_ID_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           echo "$MAC_DEVELOPMENT_P12" | base64 --decode > "$RUNNER_TEMP/mac_development.p12"
+          chmod 600 "$RUNNER_TEMP/mac_development.p12"
           security import "$RUNNER_TEMP/mac_development.p12" -P "$MAC_DEVELOPMENT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           for cert_url in https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer; do
             cert_file="$RUNNER_TEMP/$(basename "$cert_url")"
@@ -81,6 +83,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/notary_keys/private_keys"
           echo "$NOTARY_AUTH_KEY" | base64 --decode > "$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8"
           echo "NOTARY_KEY_FILE=$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8" >> $GITHUB_ENV
 
       - name: Decode Sparkle EdDSA private key
@@ -88,6 +91,7 @@ jobs:
           SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
         run: |
           echo "$SPARKLE_EDDSA_PRIVATE_KEY" | base64 --decode > "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
+          chmod 600 "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
           echo "SPARKLE_ED_KEY_FILE=$RUNNER_TEMP/sparkle_ed25519_priv.pem" >> $GITHUB_ENV
 
       - name: Configure git author for docs push
@@ -96,10 +100,15 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Install xcbeautify
+        run: brew install xcbeautify
+
       - name: Install Sparkle tools
         run: |
+          # Keep the CLI tool version aligned with the Sparkle SPM dependency
+          # pinned in RuntimeViewerUsingAppKit.xcodeproj (currently 2.9.1).
           curl -L -o /tmp/Sparkle.tar.xz \
-            "https://github.com/sparkle-project/Sparkle/releases/latest/download/Sparkle-2.6.0.tar.xz"
+            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.1/Sparkle-2.9.1.tar.xz"
           mkdir -p "$RUNNER_TEMP/Sparkle"
           tar -xf /tmp/Sparkle.tar.xz -C "$RUNNER_TEMP/Sparkle"
           echo "$RUNNER_TEMP/Sparkle/bin" >> $GITHUB_PATH
@@ -142,9 +151,16 @@ jobs:
             RuntimeViewer-macOS.zip
             RuntimeViewer-iOS-Simulator.zip
 
-      - name: Clean up keychain
+      - name: Clean up secrets
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/app-signing.keychain-db" ]; then
             security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db"
           fi
+          # Wipe decoded secret material that other processes on the same runner
+          # could otherwise read. Matters most on self-hosted runners — ephemeral
+          # GitHub-hosted runners destroy $RUNNER_TEMP automatically.
+          rm -f "$RUNNER_TEMP/developer_id.p12" \
+                "$RUNNER_TEMP/mac_development.p12" \
+                "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
+          rm -rf "$RUNNER_TEMP/notary_keys"
