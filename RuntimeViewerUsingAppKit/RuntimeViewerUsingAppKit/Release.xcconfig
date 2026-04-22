@@ -4,7 +4,5 @@ SMPrivilegedExecutable = anchor apple generic and identifier "com.JH.RuntimeView
 
 // Sparkle feed URL is hardcoded in Info.plist (SUFeedURL) because xcconfig's `//`
 // comment rule makes URL values awkward to express here.
-// TODO: Replace with the base64 EdDSA public key produced by Task 1 (generate_keys)
-// before cutting any release. Without a real key, Release builds ship an app that
-// refuses every update.
-SPARKLE_PUBLIC_ED_KEY = REPLACE_WITH_PUBLIC_ED_KEY_FROM_TASK_1
+// Matching EdDSA private key lives in the login Keychain; see Documentations/SparkleRelease.md.
+SPARKLE_PUBLIC_ED_KEY = jlL11Arlrn0YtrQn66hxwUZeBI6dFxP2Wluq6eEYzss=

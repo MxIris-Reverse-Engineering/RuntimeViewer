@@ -1,46 +1,18 @@
 # Sparkle Integration — Outstanding Follow-up
 
-The `feature/sparkle-integration` branch implements Tasks 2–14 of
-`2026-04-21-sparkle-integration-plan.md`. Three items still require human
-action and are listed here so they are not forgotten.
+The `feature/sparkle-integration` branch implements Tasks 1–14 of
+`2026-04-21-sparkle-integration-plan.md`, including the EdDSA key pair and
+the release runbook (`Documentations/SparkleRelease.md`). The items below
+still require human action and are listed here so they are not forgotten.
 
-## 1. Task 1 — Generate the EdDSA key pair (local machine)
-
-Requires your macOS login Keychain and password manager; cannot be
-scripted from this repo.
-
-Follow the plan's Task 1 steps:
-
-```bash
-cd /tmp
-curl -L -o Sparkle.tar.xz \
-  "https://github.com/sparkle-project/Sparkle/releases/latest/download/Sparkle-2.9.1.tar.xz"
-mkdir -p Sparkle-unpacked && tar -xf Sparkle.tar.xz -C Sparkle-unpacked
-
-/tmp/Sparkle-unpacked/bin/generate_keys             # Step 2: public key in stdout
-/tmp/Sparkle-unpacked/bin/generate_keys -x sparkle_ed25519_priv.pem   # Step 3
-base64 -i sparkle_ed25519_priv.pem | pbcopy         # Step 4: for CI secret
-gpg --symmetric --cipher-algo AES256 sparkle_ed25519_priv.pem         # Step 5
-shred -u sparkle_ed25519_priv.pem
-```
-
-Then:
-
-- Replace `REPLACE_WITH_PUBLIC_ED_KEY_FROM_TASK_1` in
-  `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Debug.xcconfig` and
-  `Release.xcconfig` with the base64 public key printed by Step 2.
-- Write the full runbook described in plan Task 1 Step 6 to
-  `Documentations/SparkleRelease.md` and commit it.
-- Keep the Step 4 base64 (private key PEM) in clipboard / password-manager
-  secure notes; it is the value for Task 15 Step 1.
-
-## 2. Task 15 — GitHub configuration (after PR merges to `main`)
+## 1. Task 15 — GitHub configuration (after PR merges to `main`)
 
 Done entirely in the GitHub web UI; no commits.
 
 - **Settings → Secrets and variables → Actions → New repository secret**
   - Name: `SPARKLE_EDDSA_PRIVATE_KEY`
-  - Value: base64 PEM from Task 1 Step 4.
+  - Value: the base64-encoded private-key PEM stored during key generation
+    (see `Documentations/SparkleRelease.md` → EdDSA key management).
 - **Settings → Pages**
   - Source: **Deploy from a branch**
   - Branch: `main`, folder `/docs`
@@ -56,7 +28,7 @@ the feed URL:
 curl -sI https://mxiris-reverse-engineering.github.io/RuntimeViewer/appcast.xml
 ```
 
-## 3. Tasks 11 & 16 — Validation (requires the EdDSA private key)
+## 2. Tasks 11 & 16 — Validation (requires the EdDSA private key)
 
 Task 11 (local dry-run against signed artifacts) and Task 16 (end-to-end
 beta release after merge) both require `generate_appcast` to have access
@@ -104,8 +76,5 @@ Plan Task 6 Step 4 needs a manual eyeball:
 2. Confirm the **RuntimeViewer-Debug** application menu has a new
    **Check for Updates…** item directly below **About**.
 3. Click it. The Sparkle standard dialog should open. Feed fetch will
-   fail until `docs/appcast.xml` is published (that is expected pre-merge).
-
-No need to wait for the key before running this — the updater controller
-initializes even with the placeholder `SPARKLE_PUBLIC_ED_KEY`; only actual
-signature verification is blocked.
+   404 until GitHub Pages starts serving `docs/appcast.xml` after merge
+   (expected pre-merge).
