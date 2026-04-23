@@ -3,3 +3,7 @@
 SMPrivilegedExecutable = identifier "com.JH.RuntimeViewerService" and anchor apple generic and certificate leaf[subject.CN] = "Apple Development: JieHui Lai (4ZZALU97YZ)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */
 
 
+// Sparkle feed URL is hardcoded in Info.plist (SUFeedURL) because xcconfig's `//`
+// comment rule makes URL values awkward to express here.
+// Matching EdDSA private key lives in the login Keychain; see Documentations/SparkleRelease.md.
+SPARKLE_PUBLIC_ED_KEY = jlL11Arlrn0YtrQn66hxwUZeBI6dFxP2Wluq6eEYzss=

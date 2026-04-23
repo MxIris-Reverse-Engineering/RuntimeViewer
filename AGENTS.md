@@ -15,8 +15,9 @@ Runtime Viewer is a macOS/iOS application for inspecting Objective-C and Swift r
 # Or directly via xcodebuild
 xcodebuild build -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS'
 
-# Release archive (builds Catalyst helper first, then main app)
-./ArchiveScript.sh
+# Release build (archives + notarizes; add --update-appcast --upload-to-github --commit-push
+# --version-tag vX.Y.Z to cut a full release with Sparkle appcast update).
+./ReleaseScript.sh
 ```
 
 ## Architecture

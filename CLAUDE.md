@@ -17,9 +17,12 @@ Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspec
 # Or directly via xcodebuild (debug scheme)
 xcodebuild build -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS'
 
-# Release archive (builds Catalyst helper first, then main app, with notarization)
-# Uses scheme "RuntimeViewer macOS"
-./ArchiveScript.sh
+# Release build (archives Catalyst helper + main app, notarizes, and optionally
+# generates appcast + uploads GitHub Release). Uses scheme "RuntimeViewer macOS".
+# Omit the distribution flags for a local signed zip only.
+./ReleaseScript.sh
+# Cut a full release (appcast + GitHub Release + commit docs/appcast.xml):
+./ReleaseScript.sh --update-appcast --upload-to-github --commit-push --version-tag vX.Y.Z
 
 # Build RuntimeViewerServer XCFramework (all platforms)
 ./BuildRuntimeViewerServerXCFramework.sh

@@ -6,29 +6,23 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g. v2.0.0-RC.3)'
+        description: 'Tag to release (e.g. v2.1.0 or v2.1.0-RC.1)'
         required: true
         type: string
+      channel:
+        description: 'Release channel (leave empty to infer from tag)'
+        type: choice
+        default: ''
+        options: ['', stable, beta]
       runner:
         description: 'Runner to use'
         type: choice
         default: 'macos-latest'
-        options:
-          - macos-latest
-          - self-hosted
+        options: [macos-latest, self-hosted]
       create_release:
-        description: 'Create GitHub Release'
+        description: 'Create GitHub Release and update appcast'
         type: boolean
         default: true
-
-# Required GitHub Secrets:
-#   DEVELOPER_ID_P12          - Base64-encoded Developer ID Application certificate (.p12)
-#   DEVELOPER_ID_PASSWORD     - Password for the Developer ID .p12
-#   MAC_DEVELOPMENT_P12       - Base64-encoded Mac Development certificate (.p12)
-#   MAC_DEVELOPMENT_PASSWORD  - Password for the Mac Development .p12
-#   NOTARY_KEY_ID         - App Store Connect API Key ID
-#   NOTARY_ISSUER_ID      - App Store Connect API Issuer ID
-#   NOTARY_AUTH_KEY       - Base64-encoded App Store Connect API Key (.p8)
 
 jobs:
   release:
@@ -36,15 +30,12 @@ jobs:
     permissions:
       contents: write
 
-    env:
-      WORKSPACE: RuntimeViewer-Distribution.xcworkspace
-      BUILD_PATH: ./Products/Archives
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Clone sibling dependencies
         run: |
@@ -53,10 +44,6 @@ jobs:
             rm -rf "$repo"
             git clone --depth 1 "https://github.com/MxIris-Reverse-Engineering/${repo}.git"
           done
-
-      # TODO: The sibling repos use branch: "main" in Package.swift remote
-      # fallbacks. They should be pinned to specific revisions or tags for
-      # reproducible CI builds.
 
       - name: Select Xcode 26.2
         uses: maxim-lobanov/setup-xcode@v1
@@ -72,169 +59,89 @@ jobs:
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
           echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer_id.p12"
-          security import "$RUNNER_TEMP/developer_id.p12" \
-            -P "$DEVELOPER_ID_PASSWORD" \
-            -A -t cert -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-
+          chmod 600 "$RUNNER_TEMP/developer_id.p12"
+          security import "$RUNNER_TEMP/developer_id.p12" -P "$DEVELOPER_ID_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           echo "$MAC_DEVELOPMENT_P12" | base64 --decode > "$RUNNER_TEMP/mac_development.p12"
-          security import "$RUNNER_TEMP/mac_development.p12" \
-            -P "$MAC_DEVELOPMENT_PASSWORD" \
-            -A -t cert -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-
-          # Import Apple intermediate certificates (required on self-hosted runners)
-          # Use || true because these may already exist on GitHub-hosted runners
-          for cert_url in \
-            https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer \
-            https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer; do
+          chmod 600 "$RUNNER_TEMP/mac_development.p12"
+          security import "$RUNNER_TEMP/mac_development.p12" -P "$MAC_DEVELOPMENT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          for cert_url in https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer; do
             cert_file="$RUNNER_TEMP/$(basename "$cert_url")"
             curl -sL "$cert_url" -o "$cert_file"
             security import "$cert_file" -k "$KEYCHAIN_PATH" -T /usr/bin/codesign || true
           done
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychain -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          security list-keychain -d user -s \
-            "$KEYCHAIN_PATH" \
-            $(security list-keychain -d user | tr -d '"')
-          security set-key-partition-list -S apple-tool:,apple: \
-            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-      - name: Resolve package dependencies
-        run: |
-          xcodebuild -resolvePackageDependencies \
-            -workspace $WORKSPACE \
-            -scheme "RuntimeViewer macOS" \
-            -skipPackagePluginValidation \
-            -skipMacroValidation
-
-      # ── macOS: Archive & Export Catalyst Helper ──
-
-      - name: Archive Catalyst helper
-        run: |
-          xcodebuild archive \
-            -workspace $WORKSPACE \
-            -scheme RuntimeViewerCatalystHelper \
-            -configuration Release \
-            -destination 'generic/platform=macOS,variant=Mac Catalyst' \
-            -archivePath $BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive \
-            -skipPackagePluginValidation \
-            -skipMacroValidation \
-            CURRENT_PROJECT_VERSION=$(date +"%Y%m%d.%H.%M")
-
-      - name: Export Catalyst helper
-        run: |
-          EXPORT_PATH=RuntimeViewerUsingAppKit
-
-          rm -rf "$EXPORT_PATH/RuntimeViewerCatalystHelper.app"
-
-          xcodebuild -exportArchive \
-            -archivePath $BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive \
-            -configuration Release \
-            -exportPath "$EXPORT_PATH" \
-            -exportOptionsPlist ArchiveExportConfig-Catalyst.plist \
-            -quiet
-
-          rm -f "$EXPORT_PATH/Packaging.log"
-          rm -f "$EXPORT_PATH/DistributionSummary.plist"
-          rm -f "$EXPORT_PATH/ExportOptions.plist"
-
-      # ── macOS: Archive & Export Main App ──
-
-      - name: Archive macOS app
-        run: |
-          xcodebuild archive \
-            -workspace $WORKSPACE \
-            -scheme "RuntimeViewer macOS" \
-            -configuration Release \
-            -destination 'generic/platform=macOS' \
-            -archivePath $BUILD_PATH/RuntimeViewer.xcarchive \
-            -skipPackagePluginValidation \
-            -skipMacroValidation \
-            CURRENT_PROJECT_VERSION=$(date +"%Y%m%d.%H.%M")
-
-      - name: Export macOS app
-        run: |
-          EXPORT_PATH=$BUILD_PATH/Products/Export
-          rm -rf "$EXPORT_PATH"
-
-          xcodebuild -exportArchive \
-            -archivePath $BUILD_PATH/RuntimeViewer.xcarchive \
-            -configuration Release \
-            -exportPath "$EXPORT_PATH" \
-            -exportOptionsPlist ArchiveExportConfig.plist \
-            -quiet
-
-          if [ ! -d "$EXPORT_PATH/RuntimeViewer.app" ]; then
-            echo "Error: App not found at $EXPORT_PATH/RuntimeViewer.app"
-            exit 1
-          fi
-
-      # ── macOS: Notarization ──
-
-      - name: Notarize macOS app
+      - name: Decode notary API key
         env:
-          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
-          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
           NOTARY_AUTH_KEY: ${{ secrets.NOTARY_AUTH_KEY }}
+          NOTARY_KEY_ID:   ${{ secrets.NOTARY_KEY_ID }}
         run: |
-          if [ -z "$NOTARY_KEY_ID" ]; then
-            echo "Notarization secrets not configured, skipping."
-            exit 0
+          mkdir -p "$RUNNER_TEMP/notary_keys/private_keys"
+          echo "$NOTARY_AUTH_KEY" | base64 --decode > "$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8"
+          echo "NOTARY_KEY_FILE=$RUNNER_TEMP/notary_keys/private_keys/AuthKey_${NOTARY_KEY_ID}.p8" >> $GITHUB_ENV
+
+      - name: Decode Sparkle EdDSA private key
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          echo "$SPARKLE_EDDSA_PRIVATE_KEY" | base64 --decode > "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
+          chmod 600 "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
+          echo "SPARKLE_ED_KEY_FILE=$RUNNER_TEMP/sparkle_ed25519_priv.pem" >> $GITHUB_ENV
+
+      - name: Configure git author for docs push
+        if: ${{ inputs.create_release == true || github.event_name == 'push' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install xcbeautify
+        run: brew install xcbeautify
+
+      - name: Install Sparkle tools
+        run: |
+          # Keep the CLI tool version aligned with the Sparkle SPM dependency
+          # pinned in RuntimeViewerUsingAppKit.xcodeproj (currently 2.9.1).
+          curl -L -o /tmp/Sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/2.9.1/Sparkle-2.9.1.tar.xz"
+          mkdir -p "$RUNNER_TEMP/Sparkle"
+          tar -xf /tmp/Sparkle.tar.xz -C "$RUNNER_TEMP/Sparkle"
+          echo "$RUNNER_TEMP/Sparkle/bin" >> $GITHUB_PATH
+
+      - name: Run ReleaseScript
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          CHANNEL="${{ inputs.channel }}"
+          CHANGELOG_FILE="Changelogs/${TAG}.md"
+          RELEASE_NOTES_ARG=()
+          [[ -f "$CHANGELOG_FILE" ]] && RELEASE_NOTES_ARG=(--release-notes "$CHANGELOG_FILE")
+
+          CHANNEL_ARG=()
+          [[ -n "$CHANNEL" ]] && CHANNEL_ARG=(--channel "$CHANNEL")
+
+          CREATE_FLAGS=()
+          if [[ "${{ inputs.create_release }}" == "true" || "${{ github.event_name }}" == "push" ]]; then
+            CREATE_FLAGS=(--update-appcast --upload-to-github --commit-push)
           fi
 
-          EXPORT_PATH=$BUILD_PATH/Products/Export
-          APP_PATH="$EXPORT_PATH/RuntimeViewer.app"
-          ZIP_PATH="$EXPORT_PATH/RuntimeViewer-notarize.zip"
-
-          API_KEY_DIR="$RUNNER_TEMP/notary_keys/private_keys"
-          mkdir -p "$API_KEY_DIR"
-          echo "$NOTARY_AUTH_KEY" | base64 --decode > "$API_KEY_DIR/AuthKey_${NOTARY_KEY_ID}.p8"
-
-          echo "Zipping app for notarization..."
-          /usr/bin/ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
-
-          echo "Submitting to Apple Notary Service..."
-          xcrun notarytool submit "$ZIP_PATH" \
-            --key "$API_KEY_DIR/AuthKey_${NOTARY_KEY_ID}.p8" \
-            --key-id "$NOTARY_KEY_ID" \
-            --issuer "$NOTARY_ISSUER_ID" \
-            --wait
-
-          echo "Stapling notarization ticket..."
-          xcrun stapler staple "$APP_PATH"
-
-      # ── iOS Simulator ──
-
-      - name: Build iOS Simulator app
-        run: |
-          xcodebuild build \
-            -workspace $WORKSPACE \
-            -scheme "RuntimeViewer iOS" \
-            -configuration Release \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ./DerivedData \
-            -skipPackagePluginValidation \
-            -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO
-
-      # ── Package ──
-
-      - name: Package artifacts
-        run: |
-          EXPORT_PATH=$BUILD_PATH/Products/Export
-
-          /usr/bin/ditto -c -k --keepParent "$EXPORT_PATH/RuntimeViewer.app" \
-            RuntimeViewer-macOS.zip
-
-          cd ./DerivedData/Build/Products/Release-iphonesimulator
-          /usr/bin/ditto -c -k --keepParent RuntimeViewer.app \
-            "$GITHUB_WORKSPACE/RuntimeViewer-iOS-Simulator.zip"
+          ./ReleaseScript.sh \
+            --notary-api-key "$NOTARY_KEY_FILE" \
+            --notary-key-id "${{ secrets.NOTARY_KEY_ID }}" \
+            --notary-issuer-id "${{ secrets.NOTARY_ISSUER_ID }}" \
+            --version-tag "$TAG" \
+            --ed-key-file "$SPARKLE_ED_KEY_FILE" \
+            --include-ios-simulator \
+            --skip-open-finder \
+            "${CHANNEL_ARG[@]}" \
+            "${CREATE_FLAGS[@]}" \
+            "${RELEASE_NOTES_ARG[@]}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -244,34 +151,16 @@ jobs:
             RuntimeViewer-macOS.zip
             RuntimeViewer-iOS-Simulator.zip
 
-      # ── Release (manual only) ──
-
-      - name: Create Release
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.create_release }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ inputs.tag }}"
-          CHANGELOG_FILE="Changelogs/${TAG}.md"
-
-          NOTES_ARGS=()
-          if [ -f "$CHANGELOG_FILE" ]; then
-            echo "Using changelog from $CHANGELOG_FILE"
-            NOTES_ARGS=(--notes-file "$CHANGELOG_FILE")
-          else
-            echo "No changelog found for $TAG, using auto-generated notes"
-            NOTES_ARGS=(--generate-notes)
-          fi
-
-          gh release create "$TAG" \
-            --title "RuntimeViewer $TAG" \
-            "${NOTES_ARGS[@]}" \
-            RuntimeViewer-macOS.zip \
-            RuntimeViewer-iOS-Simulator.zip
-
-      - name: Clean up keychain
+      - name: Clean up secrets
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/app-signing.keychain-db" ]; then
             security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db"
           fi
+          # Wipe decoded secret material that other processes on the same runner
+          # could otherwise read. Matters most on self-hosted runners — ephemeral
+          # GitHub-hosted runners destroy $RUNNER_TEMP automatically.
+          rm -f "$RUNNER_TEMP/developer_id.p12" \
+                "$RUNNER_TEMP/mac_development.p12" \
+                "$RUNNER_TEMP/sparkle_ed25519_priv.pem"
+          rm -rf "$RUNNER_TEMP/notary_keys"

@@ -21,6 +21,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     case notifications = "Notifications"
     case transformer = "Transformer"
     case mcp = "MCP"
+    case updates = "Updates"
     case helper = "Helper"
 
     var id: String { rawValue }
@@ -31,6 +32,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
         case .notifications: "bell.badge"
         case .transformer: "arrow.triangle.2.circlepath"
         case .mcp: "network"
+        case .updates: "arrow.down.circle"
         case .helper: "wrench.and.screwdriver"
         }
     }
@@ -42,6 +44,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
         case .notifications: NotificationSettingsView()
         case .transformer: TransformerSettingsView()
         case .mcp: MCPSettingsView()
+        case .updates: UpdateSettingsView()
         case .helper: HelperServiceSettingsView()
         }
     }

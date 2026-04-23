@@ -28,6 +28,14 @@
 		<key>com.JH.RuntimeViewerService</key>
 		<string>$(SMPrivilegedExecutable)</string>
 	</dict>
+	<key>SUFeedURL</key>
+	<string>https://mxiris-reverse-engineering.github.io/RuntimeViewer/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAllowsAutomaticUpdates</key>
+	<true/>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>

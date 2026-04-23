@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         MCPService.shared.start(for: AppMCPBridgeDocumentProvider())
+        UpdaterService.shared.start()
         installDebugMenu()
         checkHelperServiceVersion()
     }
@@ -131,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        UpdaterService.shared.stop()
         MCPService.shared.stop()
     }
 

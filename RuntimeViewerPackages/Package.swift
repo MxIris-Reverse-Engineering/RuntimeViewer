@@ -492,6 +492,11 @@ let package = Package(
             ]
         ),
 
+        .testTarget(
+            name: "RuntimeViewerSettingsTests",
+            dependencies: ["RuntimeViewerSettings"]
+        ),
+
     ],
     swiftLanguageModes: [.v5]
 )
