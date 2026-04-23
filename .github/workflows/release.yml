@@ -37,14 +37,6 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Clone sibling dependencies
-        run: |
-          cd ..
-          for repo in MachOKit MachOObjCSection MachOSwiftSection; do
-            rm -rf "$repo"
-            git clone --depth 1 "https://github.com/MxIris-Reverse-Engineering/${repo}.git"
-          done
-
       - name: Select Xcode
         uses: OpenSwiftUIProject/setup-xcode@v2
         with:

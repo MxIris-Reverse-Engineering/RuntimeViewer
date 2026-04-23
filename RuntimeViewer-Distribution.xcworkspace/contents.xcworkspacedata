@@ -2,15 +2,6 @@
 <Workspace
    version = "1.0">
    <FileRef
-      location = "container:../MachOKit">
-   </FileRef>
-   <FileRef
-      location = "container:../MachOObjCSection">
-   </FileRef>
-   <FileRef
-      location = "container:../MachOSwiftSection">
-   </FileRef>
-   <FileRef
       location = "group:RuntimeViewerCore">
    </FileRef>
    <FileRef
