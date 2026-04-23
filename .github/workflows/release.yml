@@ -48,7 +48,7 @@ jobs:
       - name: Select Xcode
         uses: OpenSwiftUIProject/setup-xcode@v2
         with:
-          xcode-version: '26.4'
+          xcode-version: '26.2'
 
       - name: Import code signing certificates
         env:
