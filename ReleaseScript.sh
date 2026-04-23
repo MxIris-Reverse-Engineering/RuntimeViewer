@@ -65,14 +65,22 @@ run() {
     fi
 }
 
-# Run a command with its stdout+stderr piped through pretty(). `set -o pipefail`
-# ensures a failure in the leading command still propagates.
+# Run a command with its stdout+stderr piped through pretty(). The raw
+# (un-pretty-printed) output is also tee'd to $LOG_DIR so CI/devs can
+# recover the full xcodebuild log when xcbeautify drops error lines.
+# `set -o pipefail` ensures a failure in the leading command still propagates.
 run_piped() {
     if $DRY_RUN; then
-        printf '+ '; printf '%q ' "$@"; printf '| pretty\n'
-    else
-        "$@" 2>&1 | pretty
+        printf '+ '; printf '%q ' "$@"; printf '| tee <log> | pretty\n'
+        return 0
     fi
+    mkdir -p "$LOG_DIR"
+    XCODEBUILD_LOG_INDEX=$((XCODEBUILD_LOG_INDEX + 1))
+    local slug="${XCODEBUILD_LOG_NAME:-step}"
+    local log_path
+    log_path="$LOG_DIR/$(printf '%02d' "$XCODEBUILD_LOG_INDEX")-${slug}.log"
+    log "Raw xcodebuild log: $log_path"
+    "$@" 2>&1 | tee "$log_path" | pretty
 }
 
 while [[ $# -gt 0 ]]; do
@@ -131,11 +139,32 @@ EXPORT_PATH="$BUILD_PATH/Products/Export"
 CATALYST_EXPORT_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit"
 CATALYST_HELPER_ARCHIVE="$BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive"
 MAIN_ARCHIVE="$BUILD_PATH/RuntimeViewer.xcarchive"
+LOG_DIR="${LOG_DIR:-$PROJECT_DIR/Products/Logs}"
+XCODEBUILD_LOG_INDEX=0
 
-mkdir -p "$BUILD_PATH"
+mkdir -p "$BUILD_PATH" "$LOG_DIR"
+
+# Snapshot any xcdistributionlogs bundles (from exportArchive) into $LOG_DIR
+# on exit so CI can upload them as artifacts when a run fails.
+collect_xcdistributionlogs() {
+    local tmp="${TMPDIR:-/tmp}"
+    local dest="$LOG_DIR/xcdistributionlogs"
+    local any=0
+    while IFS= read -r -d '' bundle; do
+        any=1
+        mkdir -p "$dest"
+        cp -R "$bundle" "$dest/" 2>/dev/null || true
+    done < <(find "$tmp" -maxdepth 2 -type d -name '*.xcdistributionlogs' -print0 2>/dev/null)
+    if [[ $any -eq 1 ]]; then
+        log "Collected xcdistributionlogs into $dest"
+    fi
+}
+trap collect_xcdistributionlogs EXIT
+
+log "xcodebuild logs: $LOG_DIR"
 
 log "Archiving Catalyst helper"
-run_piped xcodebuild archive \
+XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
     -scheme "$CATALYST_SCHEME" \
     -configuration "$CONFIGURATION" \
@@ -145,18 +174,17 @@ run_piped xcodebuild archive \
     "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
 run rm -rf "$CATALYST_EXPORT_PATH/RuntimeViewerCatalystHelper.app"
-run xcodebuild -exportArchive \
+XCODEBUILD_LOG_NAME="export-catalyst-helper" run_piped xcodebuild -exportArchive \
     -archivePath "$CATALYST_HELPER_ARCHIVE" \
     -configuration "$CONFIGURATION" \
     -exportPath "$CATALYST_EXPORT_PATH" \
-    -exportOptionsPlist "$PROJECT_DIR/ArchiveExportConfig-Catalyst.plist" \
-    -quiet
+    -exportOptionsPlist "$PROJECT_DIR/ArchiveExportConfig-Catalyst.plist"
 run rm -f "$CATALYST_EXPORT_PATH/Packaging.log" \
         "$CATALYST_EXPORT_PATH/DistributionSummary.plist" \
         "$CATALYST_EXPORT_PATH/ExportOptions.plist"
 
 log "Archiving main app"
-run_piped xcodebuild archive \
+XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
@@ -166,12 +194,11 @@ run_piped xcodebuild archive \
     "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
 run rm -rf "$EXPORT_PATH"
-run xcodebuild -exportArchive \
+XCODEBUILD_LOG_NAME="export-main" run_piped xcodebuild -exportArchive \
     -archivePath "$MAIN_ARCHIVE" \
     -configuration "$CONFIGURATION" \
     -exportPath "$EXPORT_PATH" \
-    -exportOptionsPlist "$PROJECT_DIR/ArchiveExportConfig.plist" \
-    -quiet
+    -exportOptionsPlist "$PROJECT_DIR/ArchiveExportConfig.plist"
 
 APP_PATH=$(find "$EXPORT_PATH" -maxdepth 1 -type d -name '*.app' | head -1)
 [[ -n "$APP_PATH" && -d "$APP_PATH" ]] || fail "expected exported *.app under $EXPORT_PATH"
@@ -196,7 +223,7 @@ IOS_SIM_ZIP=""
 if $INCLUDE_IOS_SIMULATOR; then
     log "Building iOS Simulator app"
     DERIVED="$PROJECT_DIR/DerivedData"
-    run_piped xcodebuild build \
+    XCODEBUILD_LOG_NAME="build-ios-simulator" run_piped xcodebuild build \
         -workspace "$WORKSPACE" \
         -scheme "RuntimeViewer iOS" \
         -configuration "$CONFIGURATION" \
