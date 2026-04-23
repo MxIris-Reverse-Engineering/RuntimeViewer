@@ -45,10 +45,10 @@ jobs:
             git clone --depth 1 "https://github.com/MxIris-Reverse-Engineering/${repo}.git"
           done
 
-      - name: Select Xcode 26.2
-        uses: maxim-lobanov/setup-xcode@v1
+      - name: Select Xcode
+        uses: OpenSwiftUIProject/setup-xcode@v2
         with:
-          xcode-version: '26.2'
+          xcode-version: '26.4'
 
       - name: Import code signing certificates
         env:
