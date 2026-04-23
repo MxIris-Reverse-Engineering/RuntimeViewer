@@ -289,5 +289,9 @@ fi
 
 log "Done. Outputs:"
 log "  macOS zip:           $MAC_ZIP"
-[[ -n "$IOS_SIM_ZIP" ]] && log "  iOS Simulator zip:   $IOS_SIM_ZIP"
-$UPDATE_APPCAST && log "  appcast:             $PROJECT_DIR/docs/appcast.xml"
+if [[ -n "$IOS_SIM_ZIP" ]]; then
+    log "  iOS Simulator zip:   $IOS_SIM_ZIP"
+fi
+if $UPDATE_APPCAST; then
+    log "  appcast:             $PROJECT_DIR/docs/appcast.xml"
+fi
