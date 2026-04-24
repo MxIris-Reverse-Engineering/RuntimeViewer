@@ -25,7 +25,8 @@
 - **Bonjour Multi-Device Mirroring** – Discover and connect to iOS/macOS devices on the local network; remote engines appear in the toolbar's source switcher grouped by host
 - **Export Interface Wizard** – Xcode-style multi-step wizard for exporting ObjC/Swift interfaces to single or multiple files
 - **Runtime Interface Transformers** – Customizable transformer modules for C type replacement, Swift type/enum layouts, VTable offsets, and member addresses, with reorderable token template presets
-- **Code Injection** – Inject into x86_64 and arm64e processes (system apps supported via helper service; requires SIP disabled). Injected processes automatically reconnect across app restarts
+- **Code Injection** – Inject into x86_64 and arm64e processes (system apps supported via helper service; requires SIP disabled). Injected processes automatically reconnect across app restarts; sandboxed apps are supported over local TCP sockets
+- **Auto-Update** – Sparkle-powered updates with daily checks, manual **Check for Updates…**, EdDSA-signed archives, and an opt-in beta channel for RC / beta builds
 - **Framework Support** – Browse `macOS` frameworks, `iOSSupport` frameworks, and load custom Mach-O binaries or frameworks
 - **Determinate Loading Progress** – Phase-based progress feedback while indexing Swift and Objective-C sections
 - **Filter Engine** – Fuzzy search across runtime classes, protocols, and members
