@@ -300,12 +300,36 @@ fi
 
 if $COMMIT_PUSH; then
     log "Committing docs/appcast.xml"
-    if ! $DRY_RUN && git diff --quiet docs/appcast.xml; then
-        log "docs/appcast.xml unchanged; nothing to commit"
-    else
+    if $DRY_RUN; then
         run git add docs/appcast.xml
         run git commit -m "chore: update appcast for $VERSION_TAG"
         run git push origin HEAD
+    elif git diff --quiet docs/appcast.xml; then
+        log "docs/appcast.xml unchanged; nothing to commit"
+    elif git symbolic-ref -q HEAD >/dev/null 2>&1; then
+        # On a real branch (local dev, or CI checked out a branch ref).
+        run git add docs/appcast.xml
+        run git commit -m "chore: update appcast for $VERSION_TAG"
+        run git push origin HEAD
+    else
+        # Detached HEAD (tag-triggered CI). Apply the freshly generated
+        # appcast.xml as a standalone commit on top of origin/main, so we
+        # don't try to push a nameless HEAD and don't sweep unrelated
+        # feature-branch commits along for the ride.
+        log "Detached HEAD; applying appcast update on top of origin/main"
+        tmp_appcast=$(mktemp)
+        cp docs/appcast.xml "$tmp_appcast"
+        run git fetch origin main
+        run git checkout -B "appcast-for-$VERSION_TAG" origin/main
+        cp "$tmp_appcast" docs/appcast.xml
+        rm -f "$tmp_appcast"
+        if git diff --quiet docs/appcast.xml; then
+            log "docs/appcast.xml on main already matches; nothing to push"
+        else
+            run git add docs/appcast.xml
+            run git commit -m "chore: update appcast for $VERSION_TAG"
+            run git push origin "HEAD:refs/heads/main"
+        fi
     fi
 fi
 
