@@ -256,7 +256,6 @@ if $UPDATE_APPCAST; then
 
     GENERATE_APPCAST_ARGS=(
         "$STAGING"
-        --appcast-file "$APPCAST_PATH"
         -o "$APPCAST_PATH"
         --download-url-prefix "$DOWNLOAD_URL_PREFIX"
         --release-notes-url-prefix "$RELEASE_NOTES_URL_PREFIX"
