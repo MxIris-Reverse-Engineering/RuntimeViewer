@@ -17,8 +17,8 @@ on:
       runner:
         description: 'Runner to use'
         type: choice
-        default: 'macos-latest'
-        options: [macos-latest, self-hosted]
+        default: 'macos-26'
+        options: [macos-26, macos-latest, self-hosted]
       create_release:
         description: 'Create GitHub Release and update appcast'
         type: boolean
@@ -26,7 +26,7 @@ on:
 
 jobs:
   release:
-    runs-on: ${{ inputs.runner || 'macos-latest' }}
+    runs-on: ${{ inputs.runner || 'macos-26' }}
     permissions:
       contents: write
 
@@ -38,9 +38,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Select Xcode
-        uses: OpenSwiftUIProject/setup-xcode@v2
+        uses: maxim-lobanov/setup-xcode@v1.7.0
         with:
-          xcode-version: '26.2'
+          xcode-version: '26.4'
 
       - name: Import code signing certificates
         env:
