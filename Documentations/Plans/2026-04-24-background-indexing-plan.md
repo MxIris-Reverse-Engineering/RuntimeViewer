@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the opt-in background indexing feature per [2026-04-24-background-indexing-design.md](2026-04-24-background-indexing-design.md) — a per-`RuntimeEngine` Swift-Concurrency `RuntimeBackgroundIndexingManager` actor, Settings controls, and a Toolbar popover.
+**Goal:** Build the opt-in background indexing feature per [0002-background-indexing.md](../Evolution/0002-background-indexing.md) — a per-`RuntimeEngine` Swift-Concurrency `RuntimeBackgroundIndexingManager` actor, Settings controls, and a Toolbar popover.
 
 **Architecture:** All core logic in `RuntimeViewerCore` (with `Runtime` prefix); coordinator in `RuntimeViewerApplication` (with `Runtime` prefix); UI in `RuntimeViewerUsingAppKit`, Settings UI in `RuntimeViewerSettingsUI` (neither prefixed). Swift Concurrency for all task scheduling; RxSwift only for UI binding in the coordinator.
 
@@ -23,9 +23,45 @@
 
 ---
 
+## Phase 0 — Package wiring
+
+### Task 0: Declare Semaphore as an explicit dependency of `RuntimeViewerCore`
+
+**Files:**
+- Modify: `RuntimeViewerCore/Package.swift`
+
+**Why:** The `groue/Semaphore` package is already resolved for the `RuntimeViewerCommunication` target (see `Package.swift:163`), but `RuntimeViewerCore`'s own target does not declare it. `RuntimeBackgroundIndexingManager.swift` (Task 6) will `import Semaphore`; relying on transitive visibility is brittle (breaks the moment `.memberImportVisibility` is enabled, which is already defined at `Package.swift:200`). Make the dependency explicit before any code uses it.
+
+- [ ] **Step 1: Edit the `RuntimeViewerCore` target's `dependencies` array**
+
+In `RuntimeViewerCore/Package.swift`, inside `.target(name: "RuntimeViewerCore", dependencies: [...])` (currently lines 142-157), append:
+
+```swift
+.product(name: "Semaphore", package: "Semaphore"),
+```
+
+after the existing `MetaCodable` product.
+
+- [ ] **Step 2: Resolve & build**
+
+```bash
+cd RuntimeViewerCore && swift package update && swift build 2>&1 | xcsift
+```
+
+Expected: clean build (no code changes yet).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add RuntimeViewerCore/Package.swift
+git commit -m "chore(core): add Semaphore as explicit RuntimeViewerCore dependency"
+```
+
+---
+
 ## Phase 1 — Foundation value types
 
-### Task 1: Create Sendable value types for indexing events and batches
+### Task 1: Create Sendable + Hashable value types for indexing events and batches
 
 **Files:**
 - Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingBatchID.swift`
@@ -34,7 +70,10 @@
 - Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingTaskItem.swift`
 - Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingBatch.swift`
 - Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingEvent.swift`
+- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/ResolvedDependency.swift`
 - Test: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeIndexingValueTypesTests.swift`
+
+**Why Hashable everywhere:** `BackgroundIndexingNode` (Task 18) is declared `Hashable` so it can key `NSOutlineView` / `NSDiffableDataSource` updates. Its associated values transitively need `Hashable`. Declaring it up front is cheaper than backfilling later.
 
 - [ ] **Step 1: Write failing tests for value type invariants**
 
@@ -116,7 +155,7 @@ public struct RuntimeIndexingBatchID: Hashable, Sendable {
 File `RuntimeIndexingBatchReason.swift`:
 
 ```swift
-public enum RuntimeIndexingBatchReason: Sendable, Equatable {
+public enum RuntimeIndexingBatchReason: Sendable, Hashable {
     case appLaunch
     case imageLoaded(path: String)
     case settingsEnabled
@@ -127,7 +166,7 @@ public enum RuntimeIndexingBatchReason: Sendable, Equatable {
 File `RuntimeIndexingTaskState.swift`:
 
 ```swift
-public enum RuntimeIndexingTaskState: Sendable, Equatable {
+public enum RuntimeIndexingTaskState: Sendable, Hashable {
     case pending
     case running
     case completed
@@ -146,7 +185,7 @@ public enum RuntimeIndexingTaskState: Sendable, Equatable {
 File `RuntimeIndexingTaskItem.swift`:
 
 ```swift
-public struct RuntimeIndexingTaskItem: Sendable, Identifiable, Equatable {
+public struct RuntimeIndexingTaskItem: Sendable, Identifiable, Hashable {
     public let id: String
     public let resolvedPath: String?
     public var state: RuntimeIndexingTaskState
@@ -163,10 +202,24 @@ public struct RuntimeIndexingTaskItem: Sendable, Identifiable, Equatable {
 }
 ```
 
+File `ResolvedDependency.swift`:
+
+```swift
+public struct ResolvedDependency: Sendable, Hashable {
+    public let installName: String
+    public let resolvedPath: String?
+
+    public init(installName: String, resolvedPath: String?) {
+        self.installName = installName
+        self.resolvedPath = resolvedPath
+    }
+}
+```
+
 File `RuntimeIndexingBatch.swift`:
 
 ```swift
-public struct RuntimeIndexingBatch: Sendable, Identifiable, Equatable {
+public struct RuntimeIndexingBatch: Sendable, Identifiable, Hashable {
     public let id: RuntimeIndexingBatchID
     public let rootImagePath: String
     public let depth: Int
@@ -237,7 +290,7 @@ git commit -m "feat(core): add Sendable value types for background indexing"
 - [ ] **Step 1: Explore `LC_RPATH` / executable path API on `MachOImage`**
 
 ```bash
-rg -n "rpaths|LC_RPATH|executablePath|loaderPath" /Volumes/Code/OpenSource/MachOKit/Sources/MachOKit/ --type swift | head
+rg -n "rpaths|LC_RPATH|executablePath|loaderPath" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/MachOKit/Sources/MachOKit/ --type swift | head
 ```
 
 Note which `MachOImage` property exposes `LC_RPATH` entries (expect `rpaths: [String]`) and whether there is a helper for the main-executable path (expect `_dyld_get_image_name(0)`). Record what you find in your scratch notes — the resolver design below assumes `image.rpaths: [String]`.
@@ -419,18 +472,21 @@ git commit -m "feat(core): add DylibPathResolver for @rpath / @executable_path /
 
 ## Phase 2 — Engine extensions
 
-### Task 3: Expose `hasCachedSection` on both section factories; add `isImageIndexed` to engine
+### Task 3: Expose `hasCachedSection` on both section factories; add `isImageIndexed` to engine with `request/remote` dispatch
 
 **Files:**
 - Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeObjCSection.swift` (factory area)
 - Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeSwiftSection.swift` (factory area)
+- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift` (bump factories to `internal`; add `.isImageIndexed` to `CommandNames`; register handler)
 - Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`
 - Test: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeEngineIndexStateTests.swift`
+
+**Why `request/remote`:** When the document targets a remote source (XPC / directTCP), the local engine's factory caches are empty — only the server process has the truth. Every existing public engine method uses the `request<T>(local:remote:)` primitive (`RuntimeEngine.swift:468`); skipping it here would return wrong data for remote sources.
 
 - [ ] **Step 1: Read the factory classes for their caching layout**
 
 ```bash
-rg -n "class RuntimeObjCSectionFactory|class RuntimeSwiftSectionFactory|private var sections|func section\(for" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/Core/
+rg -n "class RuntimeObjCSectionFactory|class RuntimeSwiftSectionFactory|private var sections|func section\(for" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/Core/
 ```
 
 Record: cache storage variable name (expect `sections: [String: RuntimeObjCSection]` / similar), and whether factories already cache nil results. If not caching nil, the `hasCachedSection` predicate introduced below reflects "successfully parsed" — OK for MVP since a `.failed` task item captures the failure case.
@@ -444,9 +500,9 @@ import XCTest
 @testable import RuntimeViewerCore
 
 final class RuntimeEngineIndexStateTests: XCTestCase {
-    func test_isImageIndexed_falseForUnvisitedPath() async {
+    func test_isImageIndexed_falseForUnvisitedPath() async throws {
         let engine = await RuntimeEngine(source: .local)
-        let indexed = await engine.isImageIndexed(path: "/never/seen")
+        let indexed = try await engine.isImageIndexed(path: "/never/seen")
         XCTAssertFalse(indexed)
     }
 
@@ -454,7 +510,7 @@ final class RuntimeEngineIndexStateTests: XCTestCase {
         let engine = await RuntimeEngine(source: .local)
         let foundation = "/System/Library/Frameworks/Foundation.framework/Foundation"
         try await engine.loadImage(at: foundation)
-        let indexed = await engine.isImageIndexed(path: foundation)
+        let indexed = try await engine.isImageIndexed(path: foundation)
         XCTAssertTrue(indexed)
     }
 }
@@ -480,7 +536,34 @@ func hasCachedSection(for path: String) -> Bool {
 
 Match the exact storage name observed in Step 1. If a factory uses `cache` or `_sections`, substitute.
 
-- [ ] **Step 4: Create the engine extension**
+- [ ] **Step 4: Widen factory access level (must-do)**
+
+`RuntimeEngine.swift:147-149` currently declares both factories as `private`:
+
+```swift
+private let objcSectionFactory: RuntimeObjCSectionFactory
+private let swiftSectionFactory: RuntimeSwiftSectionFactory
+```
+
+Change both to `internal` (drop the `private` keyword; default is `internal`). This is required for the `+BackgroundIndexing.swift` extension below. Verified against current code — the factories are definitely `private` today.
+
+- [ ] **Step 5: Add `.isImageIndexed` to `CommandNames` and register the server handler**
+
+In `RuntimeEngine.swift`, find the `CommandNames` enum (around line 62). Add:
+
+```swift
+case isImageIndexed
+```
+
+In the `setMessageHandlerBinding(...)` block near line 276, add:
+
+```swift
+setMessageHandlerBinding(forName: .isImageIndexed, of: self) { $0.isImageIndexed(path:) }
+```
+
+This slots in next to the existing `.isImageLoaded` binding.
+
+- [ ] **Step 6: Create the engine extension using `request/remote` dispatch**
 
 File `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`:
 
@@ -489,16 +572,21 @@ import Foundation
 import MachOKit
 
 extension RuntimeEngine {
-    public func isImageIndexed(path: String) -> Bool {
-        objcSectionFactory.hasCachedSection(for: path)
-            && swiftSectionFactory.hasCachedSection(for: path)
+    public func isImageIndexed(path: String) async throws -> Bool {
+        try await request {
+            objcSectionFactory.hasCachedSection(for: path)
+                && swiftSectionFactory.hasCachedSection(for: path)
+        } remote: { senderConnection in
+            try await senderConnection.sendMessage(
+                name: .isImageIndexed, request: path)
+        }
     }
 }
 ```
 
-Verify `objcSectionFactory` / `swiftSectionFactory` are `internal` (not `private`) on `RuntimeEngine`. If they are `private`, widen to `internal` as part of this task.
+Note: the test in Step 2 has been updated above to `try await engine.isImageIndexed(path:)` since the method now throws.
 
-- [ ] **Step 5: Run tests — expect pass**
+- [ ] **Step 7: Run tests — expect pass**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeEngineIndexStateTests 2>&1 | xcsift
@@ -506,26 +594,29 @@ cd RuntimeViewerCore && swift test --filter RuntimeEngineIndexStateTests 2>&1 | 
 
 Expected: 2 tests passed. The second test relies on a real Foundation image; if CI lacks that exact path, comment out the second test and leave a TODO — but in this project (local macOS dev) it will pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add RuntimeViewerCore
-git commit -m "feat(core): add isImageIndexed and factory hasCachedSection predicate"
+git commit -m "feat(core): add isImageIndexed with request/remote dispatch + factory predicate"
 ```
 
 ---
 
-### Task 4: Add `mainExecutablePath` and `loadImageForBackgroundIndexing` to engine
+### Task 4: Add `mainExecutablePath` and `loadImageForBackgroundIndexing` to engine (with `request/remote` dispatch)
 
 **Files:**
 - Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`
+- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift` (add two `CommandNames` cases + handlers)
 - Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DyldUtilities.swift` (only if helper missing)
 - Test: append to `RuntimeEngineIndexStateTests.swift`
+
+**Why `request/remote`:** Same rationale as Task 3. `mainExecutablePath` must reflect the target process, not the local process; for a remote source the correct answer is only known on the server side. `loadImageForBackgroundIndexing` must also execute inside the target process.
 
 - [ ] **Step 1: Explore `DyldUtilities` and `MachOImage` for main-executable lookup**
 
 ```bash
-rg -n "_dyld_get_image_name|_dyld_get_image_header|mainExecutable|static func images|MachOImage\.current" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/ /Volumes/Code/OpenSource/MachOKit/Sources/MachOKit/ --type swift | head
+rg -n "_dyld_get_image_name|_dyld_get_image_header|mainExecutable|static func images|MachOImage\.current" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/ /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/MachOKit/Sources/MachOKit/ --type swift | head
 ```
 
 Note the canonical call sequence. On macOS the main executable is dyld image at index 0; the pattern is `String(cString: _dyld_get_image_name(0))`.
@@ -535,57 +626,79 @@ Note the canonical call sequence. On macOS the main executable is dyld image at 
 In `RuntimeEngineIndexStateTests.swift`, append:
 
 ```swift
-    func test_mainExecutablePath_returnsNonEmptyPath() async {
+    func test_mainExecutablePath_returnsNonEmptyPath() async throws {
+        // In the XCTest context this returns the test runner's executable path,
+        // which validates the "return dyld image 0" contract without requiring
+        // RuntimeViewer.app to be running.
         let engine = await RuntimeEngine(source: .local)
-        let path = await engine.mainExecutablePath()
+        let path = try await engine.mainExecutablePath()
         XCTAssertFalse(path.isEmpty)
         XCTAssertTrue(FileManager.default.fileExists(atPath: path))
     }
 
     func test_loadImageForBackgroundIndexing_doesNotTriggerReloadData() async throws {
         let engine = await RuntimeEngine(source: .local)
-        let before = await engine.imageListSnapshot().count   // helper below
         let path = "/System/Library/Frameworks/CoreText.framework/CoreText"
         try await engine.loadImageForBackgroundIndexing(at: path)
-        let indexed = await engine.isImageIndexed(path: path)
+        let indexed = try await engine.isImageIndexed(path: path)
         XCTAssertTrue(indexed)
-        // imageList is recomputed only by reloadData; since we did not call it,
-        // the count must not change spuriously.
-        let after = await engine.imageListSnapshot().count
-        XCTAssertEqual(before, after)
     }
 ```
 
-If `RuntimeEngine` does not already expose a `imageListSnapshot()` or equivalent read-only snapshot, skip that assertion and keep only the `isImageIndexed` assertion.
+- [ ] **Step 3: Add `CommandNames` cases + server handlers**
 
-- [ ] **Step 3: Implement the new engine methods**
+In `RuntimeEngine.swift` `CommandNames` enum:
+
+```swift
+case mainExecutablePath
+case loadImageForBackgroundIndexing
+```
+
+In the `setMessageHandlerBinding(...)` block:
+
+```swift
+setMessageHandlerBinding(forName: .mainExecutablePath,
+                         of: self) { $0.mainExecutablePath }
+setMessageHandlerBinding(forName: .loadImageForBackgroundIndexing,
+                         of: self) { $0.loadImageForBackgroundIndexing(at:) }
+```
+
+- [ ] **Step 4: Implement the new engine methods with `request/remote` dispatch**
 
 Append to `RuntimeEngine+BackgroundIndexing.swift`:
 
 ```swift
 extension RuntimeEngine {
     /// Path of the target process's main executable (dyld image at index 0).
-    public func mainExecutablePath() -> String {
-        // If a helper already exists on DyldUtilities, prefer it.
-        if let first = DyldUtilities.imageNames().first { return first }
-        return ""
+    public func mainExecutablePath() async throws -> String {
+        try await request {
+            // dyld guarantees image index 0 is the main executable.
+            DyldUtilities.imageNames().first ?? ""
+        } remote: { senderConnection in
+            try await senderConnection.sendMessage(name: .mainExecutablePath)
+        }
     }
 
     /// Like `loadImage(at:)` but does **not** call `reloadData()`.
     /// Used by the background indexing manager to avoid UI refresh storms.
-    internal func loadImageForBackgroundIndexing(at path: String) async throws {
-        // Ensure the image is dlopen'd in the target process (idempotent).
-        try DyldUtilities.loadImage(at: path)
-        _ = objcSectionFactory.section(for: path)
-        _ = swiftSectionFactory.section(for: path)
-        loadedImagePaths.insert(path)
+    public func loadImageForBackgroundIndexing(at path: String) async throws {
+        try await request {
+            // Mirror loadImage(at:) body sans reloadData — see RuntimeEngine.swift:485-495.
+            try DyldUtilities.loadImage(at: path)
+            _ = try await objcSectionFactory.section(for: path)
+            _ = try await swiftSectionFactory.section(for: path)
+            loadedImagePaths.insert(path)
+        } remote: { senderConnection in
+            try await senderConnection.sendMessage(
+                name: .loadImageForBackgroundIndexing, request: path)
+        }
     }
 }
 ```
 
-Check the existing `DyldUtilities.loadImage` signature — if it does not throw, drop `try`. If `DyldUtilities.imageNames()` returns path 0 last rather than first, use `DyldUtilities.imageNames().first(where: { $0.hasSuffix("RuntimeViewer") })` — but the dyld contract guarantees index 0 is the main executable.
+Note the `try await` on both factory calls — matches the verified signature `section(for:progressContinuation:) async throws -> (isExisted: Bool, section: ...)` at `RuntimeObjCSection.swift:704` / `RuntimeSwiftSection.swift:802`.
 
-- [ ] **Step 4: Run tests — expect pass**
+- [ ] **Step 5: Run tests — expect pass**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeEngineIndexStateTests 2>&1 | xcsift
@@ -593,11 +706,101 @@ cd RuntimeViewerCore && swift test --filter RuntimeEngineIndexStateTests 2>&1 | 
 
 Expected: all tests in that file pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add RuntimeViewerCore
-git commit -m "feat(core): add mainExecutablePath and loadImageForBackgroundIndexing on RuntimeEngine"
+git commit -m "feat(core): mainExecutablePath + loadImageForBackgroundIndexing with request/remote"
+```
+
+---
+
+### Task 4.5: Add `imageDidLoadPublisher` on `RuntimeEngine`
+
+**Files:**
+- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`
+- Test: append to `RuntimeEngineIndexStateTests.swift`
+
+**Why:** The coordinator (Task 16) needs a signal that carries the path of the newly-loaded image. `RuntimeEngine` today only exposes `reloadDataPublisher` (no payload) and `imageNodesPublisher` (full list); there is no per-image signal. Task 16 will subscribe to this new publisher. The local branch emits after `loadImage(at:)` succeeds; the remote branch's `setMessageHandlerBinding(forName: .imageDidLoad)` handler emits on the client side when the server forwards the event.
+
+- [ ] **Step 1: Inspect the existing `reloadDataPublisher` wiring for pattern parity**
+
+```bash
+rg -n "reloadDataPublisher|reloadDataSubject|PassthroughSubject" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift | head
+```
+
+Expected finding: `private nonisolated let reloadDataSubject = PassthroughSubject<Void, Never>()` with a `nonisolated` public property exposing it, and a `setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }` on the server handler table.
+
+- [ ] **Step 2: Add the subject + publisher**
+
+In `RuntimeEngine.swift` next to the existing `reloadDataSubject`:
+
+```swift
+private nonisolated let imageDidLoadSubject = PassthroughSubject<String, Never>()
+
+public nonisolated var imageDidLoadPublisher: some Publisher<String, Never> {
+    imageDidLoadSubject.eraseToAnyPublisher()
+}
+```
+
+- [ ] **Step 3: Add `.imageDidLoad` to `CommandNames` and wire both sides**
+
+In `CommandNames`:
+
+```swift
+case imageDidLoad
+```
+
+In the handler table, mirror the `reloadData` pattern so remote clients also receive the event:
+
+```swift
+setMessageHandlerBinding(forName: .imageDidLoad) { (engine: RuntimeEngine, path: String) in
+    engine.imageDidLoadSubject.send(path)
+}
+```
+
+In `loadImage(at:)` (currently `RuntimeEngine.swift:485-495`), after the existing `reloadData(isReloadImageNodes: false)` call, emit:
+
+```swift
+imageDidLoadSubject.send(path)
+sendRemoteDataIfNeeded(name: .imageDidLoad, payload: path)
+// or inline the remote push similar to sendRemoteDataIfNeeded(isReloadImageNodes:)
+```
+
+Verify the existing `sendRemoteDataIfNeeded(...)` signature — if it doesn't accept an arbitrary command name, add a small `sendRemoteImageDidLoad(_ path: String)` helper beside it.
+
+- [ ] **Step 4: Append a test**
+
+```swift
+    func test_imageDidLoadPublisher_firesAfterLoadImage() async throws {
+        let engine = await RuntimeEngine(source: .local)
+        let foundation = "/System/Library/Frameworks/Foundation.framework/Foundation"
+        let expectation = expectation(description: "imageDidLoad")
+        var received: String?
+        let cancellable = await engine.imageDidLoadPublisher.sink { path in
+            received = path
+            expectation.fulfill()
+        }
+        try await engine.loadImage(at: foundation)
+        await fulfillment(of: [expectation], timeout: 5)
+        cancellable.cancel()
+        XCTAssertEqual(received, foundation)
+    }
+```
+
+Add `import Combine` at the top of the test file if not present.
+
+- [ ] **Step 5: Run tests**
+
+```bash
+cd RuntimeViewerCore && swift test --filter RuntimeEngineIndexStateTests 2>&1 | xcsift
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add RuntimeViewerCore
+git commit -m "feat(core): imageDidLoadPublisher for per-path load notifications"
 ```
 
 ---
@@ -680,7 +883,11 @@ import Foundation
 import MachOKit
 @testable import RuntimeViewerCore
 
-final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting {
+// `@unchecked Sendable` is required because the protocol is `Sendable` and this
+// class stores mutable state protected by `NSLock` rather than an actor.
+final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting,
+                                          @unchecked Sendable
+{
     struct ProgrammedPath: Sendable {
         var isIndexed: Bool = false
         var shouldFailLoad: Error? = nil
@@ -1156,7 +1363,9 @@ Append:
         func exit() { lock.lock(); current -= 1; lock.unlock() }
     }
 
-    private final class InstrumentedEngine: BackgroundIndexingEngineRepresenting {
+    private final class InstrumentedEngine: BackgroundIndexingEngineRepresenting,
+                                             @unchecked Sendable
+    {
         let base: any BackgroundIndexingEngineRepresenting
         let counter: ConcurrencyCounter
         init(base: any BackgroundIndexingEngineRepresenting, counter: ConcurrencyCounter) {
@@ -1413,57 +1622,37 @@ git commit -m "feat(core): cancelBatch and cancelAllBatches on indexing manager"
 Append:
 
 ```swift
-    func test_prioritize_movesPendingItemAhead() async {
+    func test_prioritize_emitsTaskPrioritizedEvent() async {
+        // Time-independent assertion: verify the manager emits
+        // `.taskPrioritized` for a pending path and does NOT emit it for
+        // running / absent paths. Load order would depend on sleep timing
+        // and is flaky on CI — event emission is the real contract.
         let engine = MockBackgroundIndexingEngine()
-        let deps = (0..<8).map { (installName: "/D\($0)", resolvedPath: "/D\($0)") }
-        engine.program(path: "/App", .init(dependencies: deps))
-        for dep in deps { engine.program(path: dep.installName, .init()) }
+        let deps = ["/D0", "/D1", "/D2"]
+        engine.program(path: "/App", .init(
+            dependencies: deps.map { ($0, $0) }
+        ))
+        for dep in deps { engine.program(path: dep, .init()) }
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
-        // Slow engine to keep concurrency 1 and make ordering observable.
-        final class Slow: BackgroundIndexingEngineRepresenting {
-            let base: MockBackgroundIndexingEngine
-            init(_ base: MockBackgroundIndexingEngine) { self.base = base }
-            func isImageIndexed(path: String) async -> Bool {
-                await base.isImageIndexed(path: path)
-            }
-            func loadImageForBackgroundIndexing(at path: String) async throws {
-                try await Task.sleep(nanoseconds: 30_000_000)
-                try await base.loadImageForBackgroundIndexing(at: path)
-            }
-            func mainExecutablePath() async -> String { await base.mainExecutablePath() }
-            func machOImage(for path: String) async -> MachOImage? { nil }
-            func rpaths(for path: String) async -> [String] { [] }
-            func dependencies(for path: String) async
-                -> [(installName: String, resolvedPath: String?)]
-            {
-                await base.dependencies(for: path)
-            }
-        }
-        let slow = Slow(engine)
-        let manager = RuntimeBackgroundIndexingManager(engine: slow)
-        let id = await manager.startBatch(rootImagePath: "/App", depth: 1,
-                                          maxConcurrency: 1, reason: .manual)
-
-        // After a brief delay the root is indexing; prioritize /D5 so it runs
-        // immediately after the current task, ahead of D0..D4.
-        try? await Task.sleep(nanoseconds: 15_000_000)
-        await manager.prioritize(imagePath: "/D5")
-        _ = id
-
-        // Wait for completion and check the early portion of the load order.
         let events = manager.events
         let consumer = Task { () -> [String] in
+            var boosted: [String] = []
             for await event in events {
-                if case .batchFinished = event { return engine.loadedOrder() }
-                if case .batchCancelled = event { return engine.loadedOrder() }
+                if case .taskPrioritized(_, let path) = event {
+                    boosted.append(path)
+                }
+                if case .batchFinished = event { return boosted }
+                if case .batchCancelled = event { return boosted }
             }
-            return engine.loadedOrder()
+            return boosted
         }
-        let order = await consumer.value
-        // /D5 must come before the other deps (D0..D4 or D6..D7 after it).
-        let d5Index = order.firstIndex(of: "/D5") ?? Int.max
-        let d4Index = order.firstIndex(of: "/D4") ?? Int.max
-        XCTAssertLessThan(d5Index, d4Index)
+        _ = await manager.startBatch(rootImagePath: "/App", depth: 1,
+                                     maxConcurrency: 1, reason: .manual)
+        await manager.prioritize(imagePath: "/D2")
+
+        let boosted = await consumer.value
+        XCTAssertEqual(boosted, ["/D2"])
     }
 
     func test_prioritize_isNoOpForUnknownPath() async {
@@ -1473,7 +1662,7 @@ Append:
         _ = await manager.startBatch(rootImagePath: "/App", depth: 0,
                                      maxConcurrency: 1, reason: .manual)
         await manager.prioritize(imagePath: "/does/not/exist")
-        // No crash; batch still completes.
+        // No crash; batch still completes. No .taskPrioritized emitted.
     }
 ```
 
@@ -1521,25 +1710,24 @@ git commit -m "feat(core): prioritize pending item to head of queue"
 - [ ] **Step 1: Inspect RuntimeEngine init**
 
 ```bash
-rg -n "init\(source|actor RuntimeEngine" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift | head
+rg -n "init\(source|actor RuntimeEngine" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift | head
 ```
 
 Note the initializer signature so we can inject the manager without breaking callers.
 
-- [ ] **Step 2: Add the property and wire it up**
+- [ ] **Step 2: Add an explicit stored property and initialize it at the end of `init`**
 
-In `RuntimeEngine.swift`, add inside the actor:
-
-```swift
-public private(set) lazy var backgroundIndexingManager: RuntimeBackgroundIndexingManager =
-    RuntimeBackgroundIndexingManager(engine: self)
-```
-
-`lazy` is supported inside actors in Swift 5.9+. If the compiler complains, replace with an explicit stored property initialized after `self` is available — move the assignment to the end of `init`:
+`lazy var` on an actor forces every first access through actor-isolation, which makes the initialization point non-obvious and interacts awkwardly with `nonisolated` accessors. Use an explicit implicitly-unwrapped stored property set as the last line of `init`:
 
 ```swift
+// Near the other stored properties:
+public private(set) var backgroundIndexingManager: RuntimeBackgroundIndexingManager!
+
+// Last line of init(source:...):
 self.backgroundIndexingManager = RuntimeBackgroundIndexingManager(engine: self)
 ```
+
+Rationale for IUO: the actor cannot hand `self` to the manager before `init` finishes registering the other stored properties, and the manager is read-only after init — no reassignment paths, no nil access paths outside the one-line bootstrap.
 
 - [ ] **Step 3: Build**
 
@@ -1568,7 +1756,7 @@ git commit -m "feat(core): expose backgroundIndexingManager on RuntimeEngine"
 - [ ] **Step 1: Read the existing MCP struct to match its style**
 
 ```bash
-rg -n "public struct MCP|public struct Notifications|public var mcp" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+Types.swift
+rg -n "public struct MCP|public struct Notifications|public var mcp" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+Types.swift
 ```
 
 - [ ] **Step 2: Append the new struct and root property**
@@ -1616,7 +1804,7 @@ git commit -m "feat(settings): add BackgroundIndexing settings struct"
 - [ ] **Step 1: Read the existing Settings root view**
 
 ```bash
-rg -n "case general|case mcp|SettingsPage|contentView" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/SettingsRootView.swift | head -20
+rg -n "case general|case mcp|SettingsPage|contentView" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/SettingsRootView.swift | head -20
 ```
 
 - [ ] **Step 2: Add the enum case and content switch arm**
@@ -1717,7 +1905,7 @@ git commit -m "feat(settings-ui): Background Indexing settings page"
 - [ ] **Step 1: Read DocumentState to understand the environment the coordinator will live in**
 
 ```bash
-rg -n "final class DocumentState|runtimeEngine|public var" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift | head -30
+rg -n "final class DocumentState|runtimeEngine|public var" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift | head -30
 ```
 
 Note the name of the engine property (`runtimeEngine` is likely) and whether `DocumentState` already exposes an observable for `loadImage` completion (e.g. a Rx subject) — this determines the subscription wire-up in Task 15.
@@ -1834,6 +2022,12 @@ public final class RuntimeBackgroundIndexingCoordinator {
         refreshAggregate(batches: batches)
     }
 
+    private func mutating<T>(_ value: T, _ mutate: (inout T) -> Void) -> T {
+        var copy = value
+        mutate(&copy)
+        return copy
+    }
+
     @MainActor
     private func refreshAggregate(batches: [RuntimeIndexingBatch]) {
         let hasActive = !batches.isEmpty
@@ -1852,13 +2046,9 @@ public final class RuntimeBackgroundIndexingCoordinator {
                   progress: progress))
     }
 }
-
-private func mutating<T>(_ value: T, _ mutate: (inout T) -> Void) -> T {
-    var copy = value
-    mutate(&copy)
-    return copy
-}
 ```
+
+The `mutating(_:_:)` helper is now a private method on the coordinator (see earlier insertion). It is not a global function — `private` file-scope would still pollute any future file in the same module, and a private method keeps the utility scoped to the coordinator that needs it.
 
 - [ ] **Step 3: Build**
 
@@ -1945,7 +2135,7 @@ git commit -m "feat(application): documentDidOpen / documentWillClose hooks for 
 - [ ] **Step 1: Inspect the engine's image-loaded signal**
 
 ```bash
-rg -n "didLoadImage|imageLoaded|imageDidLoad|PublishSubject.*String" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/ | head
+rg -n "didLoadImage|imageLoaded|imageDidLoad|PublishSubject.*String" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/ | head
 ```
 
 Record the exact Rx observable or async sequence name. Adapt the subscription below to match.
@@ -2005,112 +2195,102 @@ git commit -m "feat(application): subscribe to engine image-loaded events to spa
 
 ---
 
-### Task 17: Expose `prioritize` entry point for sidebar selection
+### Task 17: React to Settings changes via `withObservationTracking`
 
 **Files:**
 - Modify: `RuntimeBackgroundIndexingCoordinator.swift`
 
-This API already exists from Task 14 (`public func prioritize(imagePath:)`). This task wires it up from the sidebar side in Task 26's UI work; no coordinator changes are required here. Skip — the placeholder is intentional so we don't forget to check off the design requirement.
+**Why `withObservationTracking` (not Combine):** `Settings` at `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift:6` is declared `@Observable`. It has no Combine publisher, and the `scheduleAutoSave` path only fires through `didSet`. Adding a parallel `PassthroughSubject<Settings, Never>` would duplicate the source of truth. `withObservationTracking` is the native fit — the coordinator reads the tracked properties inside the `apply` closure, and Swift Observation registers a one-shot observer. We re-register inside `onChange` to keep observing across each mutation.
 
-- [ ] **Step 1: Confirm the public API is present**
+- [ ] **Step 1: Add observation imports and state**
 
-```bash
-rg -n "public func prioritize" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift
-```
-
-Expected: one match.
-
-- [ ] **Step 2: No commit. This is a checklist item, not a code change.**
-
----
-
-### Task 18: React to Settings changes
-
-**Files:**
-- Modify: `RuntimeBackgroundIndexingCoordinator.swift`
-
-- [ ] **Step 1: Find the Settings change notification hook**
-
-```bash
-rg -n "SettingsStorage|NotificationCenter.*settings|scheduleAutoSave|public static var shared|SettingsPublisher" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerSettings/ | head -20
-```
-
-Decide which hook to use:
-- If there is a Combine `Publisher<Settings, Never>` exposed on `Settings`, subscribe to it and convert to an Rx `Observable`.
-- Else if there is a `NotificationCenter` post, subscribe to that notification name.
-- Else add a minimal `PublishRelay<Settings>` on `Settings` that `scheduleAutoSave` emits on, and subscribe.
-
-Whichever you choose, document the decision in the commit message.
-
-- [ ] **Step 2: Implement the subscription**
-
-Example with an assumed Combine publisher `Settings.shared.publisher`:
+At the top of `RuntimeBackgroundIndexingCoordinator.swift`:
 
 ```swift
+import Observation
+import RuntimeViewerSettings
+```
+
+Add private state on the coordinator class:
+
+```swift
+@MainActor private var lastKnownIsEnabled: Bool = false
+```
+
+- [ ] **Step 2: Implement the observation loop**
+
+```swift
+@MainActor
 private func subscribeToSettings() {
-    Settings.shared.publisher
-        .map(\.backgroundIndexing)
-        .removeDuplicates()
-        .sink { [weak self] settings in
+    withObservationTracking {
+        let snapshot = Settings.shared.backgroundIndexing
+        _ = snapshot.isEnabled
+        _ = snapshot.depth
+        _ = snapshot.maxConcurrency
+    } onChange: { [weak self] in
+        // onChange fires off the main actor synchronously after any mutation.
+        // Hop back to MainActor to (a) handle the change and (b) re-register.
+        Task { @MainActor [weak self] in
             guard let self else { return }
-            Task { await self.handleSettings(settings) }
+            self.handleSettingsChange()
+            self.subscribeToSettings()
         }
-        .store(in: &combineBag)
-}
-
-private var lastKnownIsEnabled: Bool = false
-private var combineBag: Set<AnyCancellable> = []
-
-private func handleSettings(_ settings: BackgroundIndexing) async {
-    let wasEnabled = await MainActor.run { self.lastKnownIsEnabled }
-    await MainActor.run { self.lastKnownIsEnabled = settings.isEnabled }
-    if !wasEnabled && settings.isEnabled {
-        documentDidOpen()     // restart for the main executable
-    } else if wasEnabled && !settings.isEnabled {
-        await engine.backgroundIndexingManager.cancelAllBatches()
     }
 }
+
+@MainActor
+private func handleSettingsChange() {
+    let latest = Settings.shared.backgroundIndexing
+    let wasEnabled = lastKnownIsEnabled
+    lastKnownIsEnabled = latest.isEnabled
+    if !wasEnabled && latest.isEnabled {
+        documentDidOpen()                               // Scenario E on→off→on
+    } else if wasEnabled && !latest.isEnabled {
+        Task { [engine] in
+            await engine.backgroundIndexingManager.cancelAllBatches()
+        }
+    }
+    // depth / maxConcurrency changes: intentional no-op; next startBatch picks
+    // up the new values.
+}
 ```
 
-Add `import Combine` at the top and call `subscribeToSettings()` from `init`.
+- [ ] **Step 3: Seed initial state and register from init**
 
-If the codebase does not have a Combine publisher on Settings, add one:
-
-In `RuntimeViewerSettings/Settings.swift`, next to the storage:
+At the end of `init`:
 
 ```swift
-public let publisher: PassthroughSubject<Settings, Never> = .init()
+Task { @MainActor [weak self] in
+    guard let self else { return }
+    self.lastKnownIsEnabled = Settings.shared.backgroundIndexing.isEnabled
+    self.subscribeToSettings()
+}
 ```
 
-And in `scheduleAutoSave()`:
-
-```swift
-publisher.send(self)
-```
-
-- [ ] **Step 3: Build**
+- [ ] **Step 4: Build**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift
-git commit -m "feat(application): react to background indexing settings changes"
+git add RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift
+git commit -m "feat(application): observe Settings.backgroundIndexing via withObservationTracking"
 ```
 
 ---
 
 ## Phase 7 — Toolbar popover UI
 
-### Task 19: Create `BackgroundIndexingNode` and popover ViewModel
+### Task 18: Create `BackgroundIndexingNode` and popover ViewModel (on `MainRoute`)
 
 **Files:**
 - Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingNode.swift`
-- Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverRoute.swift`
 - Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewModel.swift`
+
+**Why no separate Route:** `MainCoordinator` is declared `final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>` (`MainCoordinator.swift:11`). Its `Route` is already bound to `MainRoute`; a second conditional `Router` conformance for a `BackgroundIndexingPopoverRoute` would not compile. Instead, add a case to `MainRoute` (Task 21) and let the ViewModel be `ViewModel<MainRoute>`.
 
 - [ ] **Step 1: Create `BackgroundIndexingNode`**
 
@@ -2123,32 +2303,19 @@ enum BackgroundIndexingNode: Hashable {
 }
 ```
 
-- [ ] **Step 2: Create the route enum**
-
-```swift
-import CocoaCoordinator
-
-@AssociatedValue(.public)
-@CaseCheckable(.public)
-public enum BackgroundIndexingPopoverRoute: Routable {
-    case openSettings
-    case dismiss
-}
-```
-
-- [ ] **Step 3: Create the ViewModel**
+- [ ] **Step 2: Create the ViewModel on `MainRoute`**
 
 ```swift
 import Foundation
+import Observation
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
+import RuntimeViewerSettings
 import RxCocoa
 import RxSwift
 
-final class BackgroundIndexingPopoverViewModel:
-    ViewModel<BackgroundIndexingPopoverRoute>
-{
+final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     @Observed private(set) var nodes: [BackgroundIndexingNode] = []
     @Observed private(set) var isEnabled: Bool = false
     @Observed private(set) var hasAnyBatch: Bool = false
@@ -2157,7 +2324,7 @@ final class BackgroundIndexingPopoverViewModel:
     private let coordinator: RuntimeBackgroundIndexingCoordinator
 
     init(documentState: DocumentState,
-         router: any Router<BackgroundIndexingPopoverRoute>,
+         router: any Router<MainRoute>,
          coordinator: RuntimeBackgroundIndexingCoordinator)
     {
         self.coordinator = coordinator
@@ -2167,6 +2334,7 @@ final class BackgroundIndexingPopoverViewModel:
     struct Input {
         let cancelBatch: Signal<RuntimeIndexingBatchID>
         let cancelAll: Signal<Void>
+        let clearFailed: Signal<Void>
         let openSettings: Signal<Void>
     }
     struct Output {
@@ -2196,9 +2364,10 @@ final class BackgroundIndexingPopoverViewModel:
             }
             .disposed(by: rx.disposeBag)
 
-        // Settings isEnabled observation — reuse the same stream;
-        // alternatively project it from appDefaults.
-        isEnabled = Settings.shared.backgroundIndexing.isEnabled
+        // isEnabled must stay reactive — the popover's empty states
+        // depend on it. Use withObservationTracking like the coordinator
+        // so toggling Settings while the popover is open updates the view.
+        subscribeToIsEnabled()
 
         input.cancelBatch.emitOnNext { [weak self] id in
             guard let self else { return }
@@ -2208,6 +2377,11 @@ final class BackgroundIndexingPopoverViewModel:
         input.cancelAll.emitOnNext { [weak self] in
             guard let self else { return }
             coordinator.cancelAllBatches()
+        }.disposed(by: rx.disposeBag)
+
+        input.clearFailed.emitOnNext { [weak self] in
+            guard let self else { return }
+            coordinator.clearFailedBatches()
         }.disposed(by: rx.disposeBag)
 
         input.openSettings.emitOnNext { [weak self] in
@@ -2221,6 +2395,21 @@ final class BackgroundIndexingPopoverViewModel:
             hasAnyBatch: $hasAnyBatch.asDriver(),
             subtitle: $subtitle.asDriver()
         )
+    }
+
+    @MainActor
+    private func subscribeToIsEnabled() {
+        withObservationTracking {
+            _ = Settings.shared.backgroundIndexing.isEnabled
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isEnabled = Settings.shared.backgroundIndexing.isEnabled
+                self.subscribeToIsEnabled()  // re-register
+            }
+        }
+        // Seed the current value synchronously on initial subscribe.
+        isEnabled = Settings.shared.backgroundIndexing.isEnabled
     }
 
     private static func renderNodes(from batches: [RuntimeIndexingBatch])
@@ -2248,19 +2437,20 @@ final class BackgroundIndexingPopoverViewModel:
 }
 ```
 
-- [ ] **Step 4: Add the new files to the Xcode project**
+Note: `coordinator.clearFailedBatches()` is added in Task 24 together with the "retain failed batches until dismissed" reducer change. If you reach Task 18 before Task 24, leave the `clearFailed` binding as a TODO pass-through and circle back.
 
-Using xcodeproj MCP, add the three files:
+- [ ] **Step 3: Add the two new files to the Xcode project**
+
+Using xcodeproj MCP, add:
 
 ```
 RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingNode.swift
-RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverRoute.swift
 RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewModel.swift
 ```
 
-Each to the `RuntimeViewerUsingAppKit` target.
+Each to the `RuntimeViewerUsingAppKit` target. There is **no** `BackgroundIndexingPopoverRoute.swift` — routing is via `MainRoute`.
 
-- [ ] **Step 5: Build the app target**
+- [ ] **Step 4: Build the app target**
 
 ```bash
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
@@ -2268,16 +2458,16 @@ xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcod
 
 Expected: clean build.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add RuntimeViewerUsingAppKit
-git commit -m "feat(ui): popover ViewModel and node enum for background indexing"
+git commit -m "feat(ui): popover ViewModel on MainRoute + BackgroundIndexingNode"
 ```
 
 ---
 
-### Task 20: Build the popover ViewController
+### Task 19: Build the popover ViewController
 
 **Files:**
 - Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewController.swift`
@@ -2475,9 +2665,8 @@ extension BackgroundIndexingPopoverViewController: NSOutlineViewDataSource, NSOu
             return BackgroundIndexingNode.batch(batches[index])
         }
         guard let node = item as? BackgroundIndexingNode, case .batch(let batch) = node
-        else { return BackgroundIndexingNode.batch(.init(
-            id: .init(), rootImagePath: "", depth: 0, reason: .manual,
-            items: [], isCancelled: false, isFinished: false))
+        else {
+            preconditionFailure("unexpected outline item type: \(type(of: item))")
         }
         return BackgroundIndexingNode.item(batchID: batch.id,
                                            item: batch.items[index])
@@ -2555,7 +2744,7 @@ git commit -m "feat(ui): popover view controller for background indexing"
 
 ---
 
-### Task 21: Build the Toolbar item view with `NSProgressIndicator` overlay
+### Task 20: Build the Toolbar item view with `NSProgressIndicator` overlay
 
 **Files:**
 - Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingToolbarItemView.swift`
@@ -2706,27 +2895,39 @@ git commit -m "feat(ui): toolbar item view and item class for background indexin
 
 ---
 
-### Task 22: Register the toolbar item and the popover route
+### Task 21: Register the toolbar item and add the `MainRoute.backgroundIndexing` case
 
 **Files:**
+- Modify: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainRoute.swift`
 - Modify: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainToolbarController.swift`
 - Modify: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
+
+**Why it's one route case, not a separate `Router` conformance:** `MainCoordinator` is already `SceneCoordinator<MainRoute, MainTransition>`. A conditional `extension MainCoordinator: Router where Route == BackgroundIndexingPopoverRoute` cannot compile — `Route` is pinned to `MainRoute`. The plan therefore extends `MainRoute` directly with one case and routes the popover's `.openSettings` through the existing `MainRoute.openSettings` case.
 
 - [ ] **Step 1: Inspect the existing MCPStatus wiring**
 
 ```bash
-rg -n "mcpStatus|MCPStatusToolbarItem|toolbarDefaultItemIdentifiers|itemForItemIdentifier" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainToolbarController.swift | head -30
+rg -n "mcpStatus|MCPStatusToolbarItem|toolbarDefaultItemIdentifiers|itemForItemIdentifier" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainToolbarController.swift | head -30
 ```
 
-- [ ] **Step 2: Register the new item**
+Also check `MainRoute.swift:18` — the existing case is literally `case mcpStatus(sender: NSView)`, not `mcpStatusPopover`. Match that naming style.
 
-In `MainToolbarController.swift`:
+- [ ] **Step 2: Add the route case on `MainRoute`**
+
+In `MainRoute.swift`, next to `case mcpStatus(sender: NSView)`, add:
+
+```swift
+case backgroundIndexing(sender: NSView)
+```
+
+(No `Popover` suffix — matches the sibling `mcpStatus` precedent.)
+
+- [ ] **Step 3: Register the toolbar item in `MainToolbarController`**
 
 ```swift
 override func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar)
     -> [NSToolbarItem.Identifier]
 {
-    // append to the existing list
     var ids = super.toolbarDefaultItemIdentifiers(toolbar)
     ids.append(BackgroundIndexingToolbarItem.identifier)
     return ids
@@ -2768,7 +2969,7 @@ private func wireBackgroundIndexing(item: BackgroundIndexingToolbarItem) {
     item.tapRelay
         .emitOnNext { [weak self] sender in
             guard let self else { return }
-            mainCoordinator.trigger(.backgroundIndexingPopover(sender: sender))
+            mainCoordinator.trigger(.backgroundIndexing(sender: sender))
         }
         .disposed(by: rx.disposeBag)
 }
@@ -2776,28 +2977,14 @@ private func wireBackgroundIndexing(item: BackgroundIndexingToolbarItem) {
 
 The exact field names (`documentState`, `mainCoordinator`) must match `MainToolbarController`'s existing fields — adjust if the property is spelled differently.
 
-- [ ] **Step 3: Add the route case on `MainRoute` and handle it**
-
-Find `MainRoute`:
-
-```bash
-rg -n "enum MainRoute|case mcpStatusPopover" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/ | head
-```
-
-Add a new case next to `mcpStatusPopover`:
+- [ ] **Step 4: Handle the new case in `MainCoordinator.prepareTransition`**
 
 ```swift
-case backgroundIndexingPopover(sender: NSView)
-```
-
-In `MainCoordinator.prepareTransition`, add:
-
-```swift
-case .backgroundIndexingPopover(let sender):
+case .backgroundIndexing(let sender):
     let viewController = BackgroundIndexingPopoverViewController()
     let viewModel = BackgroundIndexingPopoverViewModel(
         documentState: documentState,
-        router: self,
+        router: self,            // already Router<MainRoute>
         coordinator: documentState.backgroundIndexingCoordinator)
     viewController.setupBindings(for: viewModel)
     return .presentOnRoot(
@@ -2808,58 +2995,47 @@ case .backgroundIndexingPopover(let sender):
                          behavior: .transient))
 ```
 
-Since `MainCoordinator` doesn't yet implement `BackgroundIndexingPopoverRoute`, you also need to handle the child route at the main coordinator level. Either:
+No `extension MainCoordinator: Router where Route == ...` wrapper is needed — `self` is already `Router<MainRoute>`, and the popover's `openSettings` button triggers `router.trigger(.openSettings)` directly (the case already exists on `MainRoute`).
 
-(a) Add `MainCoordinator` as a conformer / router of `BackgroundIndexingPopoverRoute` and translate `.openSettings` into `MainRoute.openSettings`; or
-
-(b) Pass `self` of `MainCoordinator` bridged through a small adapter that forwards `BackgroundIndexingPopoverRoute` cases. Simplest is (a).
-
-```swift
-extension MainCoordinator: Router where Route == BackgroundIndexingPopoverRoute {
-    public func contextTrigger(_ route: BackgroundIndexingPopoverRoute,
-                               with options: TransitionOptions,
-                               completion: PresentationHandler?)
-    {
-        switch route {
-        case .openSettings: trigger(.openSettings, with: options,
-                                    completion: completion)
-        case .dismiss: trigger(.dismiss, with: options, completion: completion)
-        }
-    }
-}
-```
-
-If `MainCoordinator` already has a generic `Router` conformance and cannot add a second one, wrap it with a thin adapter class `BackgroundIndexingPopoverRouterAdapter` that forwards.
-
-- [ ] **Step 4: Build**
+- [ ] **Step 5: Build**
 
 ```bash
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add RuntimeViewerUsingAppKit
-git commit -m "feat(ui): register background indexing toolbar item and popover route"
+git commit -m "feat(ui): toolbar item + MainRoute.backgroundIndexing popover route"
 ```
 
 ---
 
 ## Phase 8 — Integration and QA
 
-### Task 23: Hold a coordinator on `DocumentState` and invoke lifecycle hooks
+### Task 22: Hold a coordinator on `DocumentState` and invoke lifecycle hooks
 
 **Files:**
 - Modify: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift`
 - Modify: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift`
 
-- [ ] **Step 1: Add the coordinator property to `DocumentState`**
+- [ ] **Step 1: Add the coordinator property to `DocumentState` and reinforce the `runtimeEngine` invariant**
 
 ```swift
+/// Immutable for the lifetime of the Document. The property is declared
+/// `@Observed` for historical UI reasons, but callers MUST NOT reassign it.
+/// The background indexing coordinator (and any future per-engine actor)
+/// captures this reference at init time; reassignment would silently route
+/// work to a stale engine.
+@Observed
+public var runtimeEngine: RuntimeEngine = .local
+
 public private(set) lazy var backgroundIndexingCoordinator =
     RuntimeBackgroundIndexingCoordinator(documentState: self)
 ```
+
+Edit the existing declaration of `runtimeEngine` at `DocumentState.swift:10-11` to include the doc comment above; leave the type and initial value unchanged.
 
 - [ ] **Step 2: Invoke lifecycle hooks from `Document`**
 
@@ -2883,7 +3059,7 @@ Check the current `makeWindowControllers` / `close` implementation before editin
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
-cd /Volumes/Code/Personal/RuntimeViewer
+cd /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
@@ -2896,7 +3072,7 @@ git commit -m "feat(app): wire background indexing coordinator into Document lif
 
 ---
 
-### Task 24: Wire sidebar selection → `prioritize`
+### Task 23: Wire sidebar selection → `prioritize`
 
 **Files:**
 - Modify: the coordinator or VC that observes sidebar selection (likely `MainCoordinator` or `SidebarCoordinator`)
@@ -2904,7 +3080,7 @@ git commit -m "feat(app): wire background indexing coordinator into Document lif
 - [ ] **Step 1: Find the sidebar image selection signal**
 
 ```bash
-rg -n "imageSelected|didSelectImage|sidebar.*Selected" /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/ /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerApplication/Sidebar/ | head -20
+rg -n "imageSelected|didSelectImage|sidebar.*Selected" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/ /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerApplication/Sidebar/ | head -20
 ```
 
 Record the exact signal name and where it's published.
@@ -2937,40 +3113,76 @@ git commit -m "feat(app): prioritize indexing when user selects an image in side
 
 ---
 
-### Task 25: Trigger a single `reloadData` per batch finish
+### Task 24: Retain failed batches; refresh image list once per batch finish
 
 **Files:**
 - Modify: `RuntimeBackgroundIndexingCoordinator.swift`
 
-- [ ] **Step 1: After `apply(event:)` handles `.batchFinished` / `.batchCancelled`, invoke `engine.reloadData` once**
+**Why retain failed batches:** The toolbar state `.hasFailures(...)` is derived from the coordinator's `aggregateState`. If `.batchFinished` immediately removes the batch — even one containing `.failed` items — the toolbar never surfaces the failure. This task changes the `.batchFinished` / `.batchCancelled` reducer: clean finishes and cancels drop out; finishes with any `.failed` item stay in `batchesRelay` until the user calls `clearFailedBatches()` from the popover.
 
-Change the existing `apply(event:)` branch:
+- [ ] **Step 1: Update the `apply(event:)` reducer for `.batchFinished` / `.batchCancelled`**
 
 ```swift
-case .batchFinished(let finished), .batchCancelled(let finished):
-    batches.removeAll { $0.id == finished.id }
-    documentBatchIDs.remove(finished.id)
+case .batchFinished(let finished):
+    if finished.items.contains(where: { if case .failed = $0.state { true } else { false } }) {
+        // Keep the failed batch in the list until the user dismisses it.
+        if let idx = batches.firstIndex(where: { $0.id == finished.id }) {
+            batches[idx] = finished
+        }
+    } else {
+        batches.removeAll { $0.id == finished.id }
+        documentBatchIDs.remove(finished.id)
+    }
+    Task { [engine] in
+        await engine.reloadData(isReloadImageNodes: false)
+    }
+
+case .batchCancelled(let cancelled):
+    // Cancellation always removes — user already acknowledged the outcome.
+    batches.removeAll { $0.id == cancelled.id }
+    documentBatchIDs.remove(cancelled.id)
     Task { [engine] in
         await engine.reloadData(isReloadImageNodes: false)
     }
 ```
 
-- [ ] **Step 2: Build**
+- [ ] **Step 2: Add `clearFailedBatches()` to the coordinator's public surface**
+
+```swift
+public func clearFailedBatches() {
+    Task { @MainActor [weak self] in
+        guard let self else { return }
+        let remaining = batchesRelay.value.filter { batch in
+            !batch.items.contains { if case .failed = $0.state { true } else { false } }
+        }
+        batchesRelay.accept(remaining)
+        refreshAggregate(batches: remaining)
+    }
+}
+```
+
+This is the method the Task 18 popover ViewModel calls from its `Clear Failed` button input.
+
+- [ ] **Step 3: Update `refreshAggregate` so `hasAnyFailure` considers retained batches**
+
+The existing `hasAnyFailure` computation already scans `batches` for `.failed` items, so no change is required — the retained failed batches stay visible in the aggregate state.
+
+- [ ] **Step 4: Build**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift
-git commit -m "feat(application): refresh engine image list once per finished batch"
+git commit -m "feat(application): retain failed batches + single reloadData per batch finish"
 ```
 
 ---
 
-### Task 26: Full build, run tests, manual QA
+### Task 25: Full build, run tests, manual QA
 
 - [ ] **Step 1: Run the full Core test suite**
 
@@ -2983,13 +3195,13 @@ Expected: all tests pass.
 - [ ] **Step 2: Run the full Packages build**
 
 ```bash
-cd /Volumes/Code/Personal/RuntimeViewer/RuntimeViewerPackages && swift package update && swift build 2>&1 | xcsift
+cd /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages && swift package update && swift build 2>&1 | xcsift
 ```
 
 - [ ] **Step 3: Build the app**
 
 ```bash
-cd /Volumes/Code/Personal/RuntimeViewer && xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
+cd /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer && xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
 - [ ] **Step 4: Manual QA checklist**
@@ -3013,7 +3225,7 @@ If all boxes tick, no code change is required. Otherwise, fix the failing item i
 
 ---
 
-### Task 27: Open a pull request
+### Task 26: Open a pull request
 
 - [ ] **Step 1: Push the branch**
 
@@ -3033,10 +3245,10 @@ gh pr create --title "feat: background indexing" --body "$(cat <<'EOF'
 ## Test plan
 - [ ] `swift test` passes in `RuntimeViewerCore` (unit tests for value types, `DylibPathResolver`, manager behavior).
 - [ ] App builds cleanly for macOS.
-- [ ] Manual QA checklist in `Documentations/Plans/2026-04-24-background-indexing-plan.md` (Task 26) executed end-to-end.
+- [ ] Manual QA checklist in `Documentations/Plans/2026-04-24-background-indexing-plan.md` (Task 25) executed end-to-end.
 
 ## Design
-See [2026-04-24-background-indexing-design.md](Documentations/Plans/2026-04-24-background-indexing-design.md).
+See [0002-background-indexing.md](../Evolution/0002-background-indexing.md).
 EOF
 )"
 ```
@@ -3045,17 +3257,20 @@ EOF
 
 ## Self-Review Summary
 
-- **Spec coverage:** every section of the design doc has at least one task.
-  - `Loaded vs Indexed` → Task 3 (`isImageIndexed`, `hasCachedSection`).
-  - Value types → Task 1.
+- **Spec coverage:** every section of the evolution proposal has at least one task.
+  - Package wiring (Semaphore dependency) → Task 0.
+  - Value types (all `Hashable`) + `ResolvedDependency` → Task 1.
   - `DylibPathResolver` → Task 2.
-  - Engine new APIs → Task 4.
-  - Manager (protocol, skeleton, BFS, concurrency, cancel, prioritize) → Tasks 5-10.
-  - Engine integration → Task 11.
+  - `Loaded vs Indexed` + `request/remote` dispatch for `isImageIndexed` → Task 3.
+  - Engine new APIs (`mainExecutablePath`, `loadImageForBackgroundIndexing`) with `request/remote` → Task 4; `imageDidLoadPublisher` → Task 4.5.
+  - Manager (protocol + mock, skeleton, BFS, concurrency, cancel, prioritize) → Tasks 5-10.
+  - Engine integration (non-`lazy` stored manager) → Task 11.
   - Settings → Tasks 12-13.
-  - Coordinator (lifecycle, image loaded, Sidebar prioritize binding, reload refresh, Settings reaction) → Tasks 14-18, 24, 25.
-  - UI (Node, ViewModel, VC, toolbar view + item, registration, route) → Tasks 19-22.
-  - Integration (Document wiring) → Task 23.
-  - Manual QA → Task 26.
-- **Placeholder scan:** no `TODO` / `TBD` patterns in step content. Step 1 of several tasks asks the engineer to confirm an API name — these are verification steps, not placeholders. The one "intentional checklist task" (Task 17) is called out as such and has no work to do.
-- **Type consistency:** `RuntimeIndexingBatchID`, `RuntimeIndexingBatch`, `RuntimeIndexingTaskState`, `RuntimeIndexingEvent`, `BackgroundIndexingToolbarState`, `BackgroundIndexing`, `BackgroundIndexingNode`, `BackgroundIndexingPopoverViewModel`, `BackgroundIndexingPopoverViewController`, `BackgroundIndexingToolbarItem`, `BackgroundIndexingToolbarItemView`, `RuntimeBackgroundIndexingManager`, `RuntimeBackgroundIndexingCoordinator`, `DylibPathResolver`, `BackgroundIndexingEngineRepresenting` — all cross-referenced names match between their definition task and the tasks that consume them.
+  - Coordinator (lifecycle, image-loaded, Settings via `withObservationTracking`) → Tasks 14-17.
+  - UI (Node + ViewModel on `MainRoute`, VC with `preconditionFailure` data source, toolbar view + item, `MainRoute.backgroundIndexing` registration) → Tasks 18-21.
+  - Integration (Document wiring + `runtimeEngine` immutability doc comment) → Task 22.
+  - Sidebar → prioritize → Task 23.
+  - Retain failed batches + refresh image list → Task 24.
+  - Manual QA → Task 25.
+- **Review decisions embedded:** all three header decisions from the 2026-04-24 review — Settings via `withObservationTracking` (Task 17), `BackgroundIndexingPopoverRoute` merged into `MainRoute` (Task 18/21), and `request/remote` dispatch for engine methods (Tasks 3/4) — have dedicated tasks and explicit rationale paragraphs.
+- **Type consistency:** `RuntimeIndexingBatchID`, `RuntimeIndexingBatch`, `RuntimeIndexingTaskState`, `RuntimeIndexingEvent`, `RuntimeIndexingBatchReason`, `RuntimeIndexingTaskItem`, `ResolvedDependency`, `BackgroundIndexingToolbarState`, `BackgroundIndexing`, `BackgroundIndexingNode`, `BackgroundIndexingPopoverViewModel`, `BackgroundIndexingPopoverViewController`, `BackgroundIndexingToolbarItem`, `BackgroundIndexingToolbarItemView`, `RuntimeBackgroundIndexingManager`, `RuntimeBackgroundIndexingCoordinator`, `DylibPathResolver`, `BackgroundIndexingEngineRepresenting` — all cross-referenced names match between their definition task and the tasks that consume them. No `BackgroundIndexingPopoverRoute` type is introduced anywhere.
