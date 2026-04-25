@@ -63,6 +63,7 @@ public actor RuntimeEngine {
         case runtimeObjectsOfKindInImage
         case runtimeObjectsInImage
         case reloadData
+        case imageDidLoad
         case memberAddresses
         case engineList
         case engineListChanged
@@ -144,6 +145,21 @@ public actor RuntimeEngine {
     }
 
     private nonisolated let reloadDataSubject = PassthroughSubject<Void, Never>()
+
+    /// Publisher that emits the image path each time `loadImage(at:)` succeeds.
+    ///
+    /// Fires on the local arm immediately after the image has been loaded and
+    /// its ObjC/Swift sections cached. On a client engine, it fires when the
+    /// server forwards an `.imageDidLoad` event (handled by
+    /// `setupMessageHandlerForClient`).
+    ///
+    /// Marked `nonisolated` so subscribers (including Combine sinks in tests
+    /// and downstream coordinators) can attach without an actor hop.
+    public nonisolated var imageDidLoadPublisher: some Publisher<String, Never> {
+        imageDidLoadSubject.eraseToAnyPublisher()
+    }
+
+    private nonisolated let imageDidLoadSubject = PassthroughSubject<String, Never>()
 
     private nonisolated let objectsLoadingProgressSubject = PassthroughSubject<RuntimeObjectsLoadingProgress, Never>()
 
@@ -306,6 +322,9 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
         setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
+        setMessageHandlerBinding(forName: .imageDidLoad) { (engine: RuntimeEngine, path: String) in
+            engine.imageDidLoadSubject.send(path)
+        }
         setMessageHandlerBinding(forName: .objectsLoadingProgress) { $0.objectsLoadingProgressSubject.send($1) }
         setMessageHandlerBinding(forName: .engineListChanged) { (engine: RuntimeEngine, descriptors: [RemoteEngineDescriptor]) in
             #log(.debug, "[EngineMirroring] engineListChanged received: \(descriptors.count, privacy: .public) descriptors, handler set: \(RuntimeEngine.engineListChangedHandler != nil, privacy: .public)")
@@ -419,6 +438,17 @@ public actor RuntimeEngine {
         }
     }
 
+    /// Forwards an `imageDidLoad` event to the connected client when this
+    /// engine is acting as a server. On a local-only engine the local subject
+    /// has already been signaled by the caller, so this is a no-op.
+    private func sendRemoteImageDidLoadIfNeeded(path: String) {
+        guard let role = source.remoteRole, role.isServer, let connection else { return }
+        Task {
+            try await connection.sendMessage(name: .imageDidLoad, request: path)
+            #log(.debug, "Remote imageDidLoad sent for path: \(path, privacy: .public)")
+        }
+    }
+
     private func _objects(in image: String) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects in image: \(image, privacy: .public)")
         let image = DyldUtilities.patchImagePathForDyld(image)
@@ -497,6 +527,8 @@ extension RuntimeEngine {
             _ = try await swiftSectionFactory.section(for: path)
             reloadData(isReloadImageNodes: false)
             loadedImagePaths.insert(path)
+            imageDidLoadSubject.send(path)
+            sendRemoteImageDidLoadIfNeeded(path: path)
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
         }

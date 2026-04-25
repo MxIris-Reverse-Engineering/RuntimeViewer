@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import RuntimeViewerCore
 
 final class RuntimeEngineIndexStateTests: XCTestCase {
@@ -66,5 +67,23 @@ final class RuntimeEngineIndexStateTests: XCTestCase {
         try await engine.loadImageForBackgroundIndexing(at: path)
         let indexed = try await engine.isImageIndexed(path: path)
         XCTAssertTrue(indexed)
+    }
+
+    func test_imageDidLoadPublisher_firesAfterLoadImage() async throws {
+        let foundation = "/System/Library/Frameworks/Foundation.framework/Foundation"
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: foundation),
+                          "Requires macOS with Foundation.framework present")
+        let engine = RuntimeEngine(source: .local)
+        let expectation = expectation(description: "imageDidLoad")
+        var received: String?
+        // imageDidLoadPublisher is `nonisolated` — no await needed.
+        let cancellable = engine.imageDidLoadPublisher.sink { path in
+            received = path
+            expectation.fulfill()
+        }
+        try await engine.loadImage(at: foundation)
+        await fulfillment(of: [expectation], timeout: 5)
+        cancellable.cancel()
+        XCTAssertEqual(received, foundation)
     }
 }
