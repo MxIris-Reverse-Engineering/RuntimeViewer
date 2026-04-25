@@ -51,6 +51,7 @@ public actor RuntimeEngine {
         case imageNodes
         case loadImage
         case isImageLoaded
+        case isImageIndexed
         case patchImagePathForDyld
         case runtimeObjectHierarchy
         case runtimeObjectInfo
@@ -144,9 +145,9 @@ public actor RuntimeEngine {
 
     private nonisolated let objectsLoadingProgressSubject = PassthroughSubject<RuntimeObjectsLoadingProgress, Never>()
 
-    private let objcSectionFactory: RuntimeObjCSectionFactory
+    let objcSectionFactory: RuntimeObjCSectionFactory
 
-    private let swiftSectionFactory: RuntimeSwiftSectionFactory
+    let swiftSectionFactory: RuntimeSwiftSectionFactory
 
     private let communicator = RuntimeCommunicator()
 
@@ -274,6 +275,7 @@ public actor RuntimeEngine {
     private func setupMessageHandlerForServer() {
         #log(.debug, "Setting up server message handlers")
         setMessageHandlerBinding(forName: .isImageLoaded, of: self) { $0.isImageLoaded(path:) }
+        setMessageHandlerBinding(forName: .isImageIndexed, of: self) { $0.isImageIndexed(path:) }
         setMessageHandlerBinding(forName: .loadImage, of: self) { $0.loadImage(at:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofObjectName:) }
 
@@ -465,7 +467,7 @@ extension RuntimeEngine {
         case senderConnectionIsLose
     }
 
-    private func request<T>(local: () async throws -> T, remote: (_ senderConnection: RuntimeConnection) async throws -> T) async throws -> T {
+    func request<T>(local: () async throws -> T, remote: (_ senderConnection: RuntimeConnection) async throws -> T) async throws -> T {
         if let remoteRole = source.remoteRole, remoteRole.isClient {
             guard let connection else { throw RequestError.senderConnectionIsLose }
             return try await remote(connection)

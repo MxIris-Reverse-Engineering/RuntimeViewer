@@ -701,6 +701,10 @@ actor RuntimeObjCSectionFactory {
         sections[imagePath]
     }
 
+    func hasCachedSection(for path: String) -> Bool {
+        sections[path] != nil
+    }
+
     func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeObjCSection) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
