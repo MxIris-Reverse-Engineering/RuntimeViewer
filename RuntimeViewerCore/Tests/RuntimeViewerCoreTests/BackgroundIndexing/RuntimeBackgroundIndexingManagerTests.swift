@@ -150,7 +150,10 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
                                       root: "/App", depth: 1, maxConcurrency: 1)
         let broken = batch.items.first { $0.id == "/Broken" }
         XCTAssertNotNil(broken)
-        if case .failed = broken?.state {} else { XCTFail("expected .failed") }
+        guard case .failed(let message) = broken?.state else {
+            XCTFail("expected .failed"); return
+        }
+        XCTAssertFalse(message.isEmpty)
     }
 
     // MARK: - Test helpers
