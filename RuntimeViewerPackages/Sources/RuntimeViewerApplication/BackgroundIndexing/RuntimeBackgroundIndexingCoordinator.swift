@@ -82,6 +82,18 @@ public final class RuntimeBackgroundIndexingCoordinator {
         }
     }
 
+    public func clearFailedBatches() {
+        // Class is `@MainActor`; we're already on the main thread when called
+        // from the popover's button. No hop required.
+        let remaining = batchesRelay.value.filter { batch in
+            !batch.items.contains { item in
+                if case .failed = item.state { return true } else { return false }
+            }
+        }
+        batchesRelay.accept(remaining)
+        refreshAggregate(batches: remaining)
+    }
+
     // MARK: - Event pump (AsyncStream → Relay)
 
     private func startEventPump() {
@@ -120,9 +132,29 @@ public final class RuntimeBackgroundIndexingCoordinator {
                 else { return }
                 batch.items[itemIndex].hasPriorityBoost = true
             }}
-        case .batchFinished(let finished), .batchCancelled(let finished):
-            batches.removeAll { $0.id == finished.id }
-            documentBatchIDs.remove(finished.id)
+        case .batchFinished(let finished):
+            if finished.items.contains(where: {
+                if case .failed = $0.state { return true } else { return false }
+            }) {
+                // Keep the failed batch in the list until the user dismisses it.
+                if let batchIndex = batches.firstIndex(where: { $0.id == finished.id }) {
+                    batches[batchIndex] = finished
+                }
+            } else {
+                batches.removeAll { $0.id == finished.id }
+                documentBatchIDs.remove(finished.id)
+            }
+            Task { [engine] in
+                await engine.reloadData(isReloadImageNodes: false)
+            }
+
+        case .batchCancelled(let cancelled):
+            // Cancellation always removes — user already acknowledged the outcome.
+            batches.removeAll { $0.id == cancelled.id }
+            documentBatchIDs.remove(cancelled.id)
+            Task { [engine] in
+                await engine.reloadData(isReloadImageNodes: false)
+            }
         }
         batchesRelay.accept(batches)
         refreshAggregate(batches: batches)
