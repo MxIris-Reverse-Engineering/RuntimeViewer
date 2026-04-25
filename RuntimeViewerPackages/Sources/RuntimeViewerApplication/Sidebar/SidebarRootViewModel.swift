@@ -98,6 +98,20 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        // Selecting a leaf node (i.e. an image, not a path-segment folder)
+        // hints the background indexer to prioritize that image's pending
+        // tasks. Non-leaf rows correspond to filesystem path segments and
+        // have no associated image path, so they are filtered out.
+        // Note: `node.path` strips the synthetic root component (e.g.
+        // "Dyld Shared Cache") that prefixes `absolutePath`, yielding the
+        // real dyld image path expected by the indexing manager.
+        input.selectedNode.emitOnNextMainActor { [weak self] viewModel in
+            guard let self else { return }
+            guard viewModel.node.isLeaf else { return }
+            documentState.backgroundIndexingCoordinator.prioritize(imagePath: viewModel.node.path)
+        }
+        .disposed(by: rx.disposeBag)
+
         input.searchString
             .debounce(.milliseconds(500))
             .emitOnNextMainActor { [weak self] filter in
