@@ -179,6 +179,12 @@ public actor RuntimeEngine {
     /// types in the actor interface; cast to `SwiftyXPC.XPCEndpoint` on macOS.
     public private(set) var xpcListenerEndpoint: (any Sendable)?
 
+    /// Coordinator for background indexing batches that load and index images
+    /// without blocking the main runtime data flow. Created at the end of
+    /// `init` so it can capture `self` after all other stored properties are
+    /// initialized.
+    public private(set) var backgroundIndexingManager: RuntimeBackgroundIndexingManager!
+
     public init(
         source: RuntimeSource,
         engineID: String = UUID().uuidString,
@@ -197,6 +203,7 @@ public actor RuntimeEngine {
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
+        self.backgroundIndexingManager = RuntimeBackgroundIndexingManager(engine: self)
     }
 
     public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: (any Sendable)? = nil) async throws {
