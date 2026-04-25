@@ -165,6 +165,7 @@ let package = Package(
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
                 .product(name: "MetaCodable", package: "MetaCodable"),
+                .product(name: "Semaphore", package: "Semaphore"),
             ],
             swiftSettings: [
                 .internalImportsByDefault,
