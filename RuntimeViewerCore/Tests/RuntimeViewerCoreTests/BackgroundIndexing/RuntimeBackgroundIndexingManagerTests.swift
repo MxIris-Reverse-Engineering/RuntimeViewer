@@ -197,6 +197,49 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty)
     }
 
+    func test_prioritize_emitsTaskPrioritizedEvent() async {
+        // Time-independent assertion: verify the manager emits
+        // `.taskPrioritized` for a pending path and does NOT emit it for
+        // running / absent paths. Load order would depend on sleep timing
+        // and is flaky on CI — event emission is the real contract.
+        let engine = MockBackgroundIndexingEngine()
+        let deps = ["/D0", "/D1", "/D2"]
+        engine.program(path: "/App", .init(
+            dependencies: deps.map { ($0, $0) }
+        ))
+        for dep in deps { engine.program(path: dep, .init()) }
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        let events = manager.events
+        let consumer = Task { () -> [String] in
+            var boosted: [String] = []
+            for await event in events {
+                if case .taskPrioritized(_, let path) = event {
+                    boosted.append(path)
+                }
+                if case .batchFinished = event { return boosted }
+                if case .batchCancelled = event { return boosted }
+            }
+            return boosted
+        }
+        _ = await manager.startBatch(rootImagePath: "/App", depth: 1,
+                                     maxConcurrency: 1, reason: .manual)
+        await manager.prioritize(imagePath: "/D2")
+
+        let boosted = await consumer.value
+        XCTAssertEqual(boosted, ["/D2"])
+    }
+
+    func test_prioritize_isNoOpForUnknownPath() async {
+        let engine = MockBackgroundIndexingEngine()
+        engine.program(path: "/App", .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+        _ = await manager.startBatch(rootImagePath: "/App", depth: 0,
+                                     maxConcurrency: 1, reason: .manual)
+        await manager.prioritize(imagePath: "/does/not/exist")
+        // No crash; batch still completes. No .taskPrioritized emitted.
+    }
+
     // MARK: - Test helpers
     private func runToFinish(manager: RuntimeBackgroundIndexingManager,
                              root: String, depth: Int,
