@@ -4,6 +4,8 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
 import RuntimeViewerCatalystExtensions
+import RxCocoa
+import RxSwift
 import UniformTypeIdentifiers
 
 final class MainWindow: NSWindow {
@@ -106,6 +108,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
             attachToProcessClick: toolbarController.attachItem.button.rx.click.asSignal(),
             mcpStatusClick: toolbarController.mcpStatusItem.button.rx.clickWithSelf.asSignal().map { $0 },
+            backgroundIndexingClick: toolbarController.backgroundIndexingItem.tapRelay.asSignal(),
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal()
         )
@@ -147,6 +150,25 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         output.isSidebarBackHidden.drive(toolbarController.sidebarBackItem.rx.isHidden).disposed(by: rx.disposeBag)
 
         output.isContentBackHidden.drive(toolbarController.contentBackItem.rx.isHidden).disposed(by: rx.disposeBag)
+
+        // Bind background indexing toolbar item state to the per-Document
+        // coordinator's aggregate observable. The popover route case
+        // (`MainRoute.backgroundIndexing`) reuses the same coordinator.
+        // Drive directly into the item view via `rx.disposeBag` (which is
+        // recreated each `setupBindings` call) so a source switch does not
+        // accumulate stale subscriptions on the toolbar item itself.
+        documentState.backgroundIndexingCoordinator
+            .aggregateStateObservable
+            .map { state -> BackgroundIndexingToolbarState in
+                if !state.hasActiveBatch { return .idle }
+                return state.hasAnyFailure ? .hasFailures : .indexing
+            }
+            .asDriver(onErrorJustReturn: .idle)
+            .driveOnNext { [weak self] state in
+                guard let self else { return }
+                toolbarController.backgroundIndexingItem.itemView.state = state
+            }
+            .disposed(by: rx.disposeBag)
 
         // Bind menu content + selection from sections and switchSourceState
         Driver.combineLatest(output.runtimeEngineSections, output.switchSourceState)
