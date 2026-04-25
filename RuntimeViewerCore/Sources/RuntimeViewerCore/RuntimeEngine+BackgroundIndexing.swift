@@ -1,4 +1,5 @@
 import Foundation
+import FoundationToolbox
 import MachOKit
 
 extension RuntimeEngine {
@@ -36,5 +37,51 @@ extension RuntimeEngine {
             try await senderConnection.sendMessage(
                 name: .loadImageForBackgroundIndexing, request: path)
         }
+    }
+}
+
+// MARK: - BackgroundIndexingEngineRepresenting
+
+extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
+    /// `MachOImage(name:)` matches the basename of a loaded image (without the
+    /// dylib / framework extension). Mirrors the conversion done in
+    /// `RuntimeObjCSection` / `RuntimeSwiftSection` so the protocol callers can
+    /// pass a full filesystem path.
+    private static func machOImageName(forPath path: String) -> String {
+        path.lastPathComponent.deletingPathExtension.deletingPathExtension
+    }
+
+    func canOpenImage(at path: String) -> Bool {
+        MachOImage(name: Self.machOImageName(forPath: path)) != nil
+    }
+
+    func rpaths(for path: String) -> [String] {
+        guard let image = MachOImage(name: Self.machOImageName(forPath: path)) else {
+            return []
+        }
+        return image.rpaths
+    }
+
+    func dependencies(for path: String) async throws
+        -> [(installName: String, resolvedPath: String?)]
+    {
+        guard let image = MachOImage(name: Self.machOImageName(forPath: path)) else {
+            return []
+        }
+        let resolver = DylibPathResolver()
+        let main = try await mainExecutablePath()
+        let rpathList = image.rpaths
+        return image.dependencies
+            .filter { $0.type != .lazyLoad }
+            .map { dependency in
+                let installName = dependency.dylib.name
+                let resolvedPath = resolver.resolve(
+                    installName: installName,
+                    imagePath: path,
+                    rpaths: rpathList,
+                    mainExecutablePath: main
+                )
+                return (installName, resolvedPath)
+            }
     }
 }
