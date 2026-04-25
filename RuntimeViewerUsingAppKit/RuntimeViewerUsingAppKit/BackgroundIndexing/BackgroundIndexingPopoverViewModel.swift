@@ -84,11 +84,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 
         input.clearFailed.emitOnNext { [weak self] in
             guard let self else { return }
-            // Task 24 will add `coordinator.clearFailedBatches()`; for now
-            // this is a TODO no-op. Reading `self` keeps the closure
-            // well-formed and silences a "weak self captured but not used"
-            // warning.
-            _ = self
+            coordinator.clearFailedBatches()
         }
         .disposed(by: rx.disposeBag)
 
