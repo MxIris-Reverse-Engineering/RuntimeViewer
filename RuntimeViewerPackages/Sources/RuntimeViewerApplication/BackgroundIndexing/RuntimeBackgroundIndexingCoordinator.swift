@@ -2,6 +2,11 @@ import Foundation
 import RuntimeViewerCore
 import RxSwift
 import RxRelay
+import Dependencies
+
+#if canImport(RuntimeViewerSettings)
+import RuntimeViewerSettings
+#endif
 
 @MainActor
 public final class RuntimeBackgroundIndexingCoordinator {
@@ -137,3 +142,43 @@ public final class RuntimeBackgroundIndexingCoordinator {
                   progress: progress))
     }
 }
+
+#if canImport(RuntimeViewerSettings)
+extension RuntimeBackgroundIndexingCoordinator {
+    public func documentDidOpen() {
+        // The class is `@MainActor`, so this Task inherits main-actor isolation
+        // and can mutate `documentBatchIDs` synchronously after the awaits.
+        Task { [weak self] in
+            guard let self else { return }
+            let settings = self.currentBackgroundIndexingSettings()
+            guard settings.isEnabled else { return }
+            // mainExecutablePath is `async throws` because remote (XPC / TCP)
+            // sources may fail; on launch we silently skip the batch in that
+            // case rather than surface the error to the user.
+            guard let root = try? await engine.mainExecutablePath(),
+                  !root.isEmpty else { return }
+            let id = await engine.backgroundIndexingManager.startBatch(
+                rootImagePath: root,
+                depth: settings.depth,
+                maxConcurrency: settings.maxConcurrency,
+                reason: .appLaunch)
+            self.documentBatchIDs.insert(id)
+        }
+    }
+
+    public func documentWillClose() {
+        let ids = documentBatchIDs
+        documentBatchIDs.removeAll()
+        Task { [engine] in
+            for id in ids {
+                await engine.backgroundIndexingManager.cancelBatch(id)
+            }
+        }
+    }
+
+    private func currentBackgroundIndexingSettings() -> Settings.BackgroundIndexing {
+        @Dependency(\.settings) var settings
+        return settings.backgroundIndexing
+    }
+}
+#endif
