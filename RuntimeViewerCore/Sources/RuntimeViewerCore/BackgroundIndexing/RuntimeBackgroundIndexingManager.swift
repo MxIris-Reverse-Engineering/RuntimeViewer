@@ -47,13 +47,58 @@ public actor RuntimeBackgroundIndexingManager {
         return id
     }
 
-    // Placeholder — Task 7 replaces with real BFS.
     func expandDependencyGraph(rootPath: String, depth: Int)
         async -> [RuntimeIndexingTaskItem]
     {
-        if (try? await engine.isImageIndexed(path: rootPath)) == true { return [] }
-        return [.init(id: rootPath, resolvedPath: rootPath,
-                      state: .pending, hasPriorityBoost: false)]
+        var visited: Set<String> = []
+        var items: [RuntimeIndexingTaskItem] = []
+        var frontier: [(path: String, level: Int)] = [(rootPath, 0)]
+
+        while !frontier.isEmpty {
+            let (path, level) = frontier.removeFirst()
+            guard visited.insert(path).inserted else { continue }
+
+            // `try?` — if the engine errors out (e.g. remote XPC drops mid-batch),
+            // treat the image as unindexed; loadImageForBackgroundIndexing will
+            // surface a real failure later. This matches Evolution 0002 Alt D:
+            // failure ≠ indexed.
+            if (try? await engine.isImageIndexed(path: path)) == true { continue }
+
+            // Non-root paths that can't be opened as MachO go straight to
+            // `.failed` and don't recurse — saves a wasted dlopen attempt later.
+            // Root is always represented so that the batch has at least one item.
+            if path != rootPath {
+                let canOpen = await engine.canOpenImage(at: path)
+                if !canOpen {
+                    items.append(.init(id: path, resolvedPath: path,
+                                       state: .failed(message: "cannot open MachOImage"),
+                                       hasPriorityBoost: false))
+                    continue
+                }
+            }
+
+            items.append(.init(id: path, resolvedPath: path,
+                               state: .pending, hasPriorityBoost: false))
+            guard level < depth else { continue }
+
+            // `try?` — if dependency lookup fails, treat as no deps; the path
+            // itself is still pending and will be retried on next batch.
+            let deps = (try? await engine.dependencies(for: path)) ?? []
+            for dep in deps {
+                if let resolved = dep.resolvedPath {
+                    if !visited.contains(resolved) {
+                        frontier.append((resolved, level + 1))
+                    }
+                } else {
+                    if visited.insert(dep.installName).inserted {
+                        items.append(.init(id: dep.installName, resolvedPath: nil,
+                                           state: .failed(message: "path unresolved"),
+                                           hasPriorityBoost: false))
+                    }
+                }
+            }
+        }
+        return items
     }
 
     private func runBatch(id: RuntimeIndexingBatchID) async {
