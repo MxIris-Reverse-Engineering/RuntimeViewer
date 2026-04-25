@@ -49,6 +49,7 @@ final class MainViewModel: ViewModel<MainRoute> {
 //        let installHelperClick: Signal<Void>
         let attachToProcessClick: Signal<Void>
         let mcpStatusClick: Signal<NSView>
+        let backgroundIndexingClick: Signal<NSView>
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
     }
@@ -170,7 +171,9 @@ final class MainViewModel: ViewModel<MainRoute> {
         input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
 
         input.mcpStatusClick.emit(with: self) { $0.router.trigger(.mcpStatus(sender: $1)) }.disposed(by: rx.disposeBag)
-        
+
+        input.backgroundIndexingClick.emit(with: self) { $0.router.trigger(.backgroundIndexing(sender: $1)) }.disposed(by: rx.disposeBag)
+
         let requestSaveLocation = input.saveClick
             .withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete())
             .filterNil()
