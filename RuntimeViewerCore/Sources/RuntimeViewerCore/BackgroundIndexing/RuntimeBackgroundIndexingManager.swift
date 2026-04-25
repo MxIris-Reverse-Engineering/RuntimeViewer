@@ -143,9 +143,9 @@ public actor RuntimeBackgroundIndexingManager {
         batchID: RuntimeIndexingBatchID, pending: inout [String]
     ) -> String {
         if let state = activeBatches[batchID],
-           let boostedIdx = pending.firstIndex(where: { state.priorityBoostPaths.contains($0) })
+           let boostedPendingIndex = pending.firstIndex(where: { state.priorityBoostPaths.contains($0) })
         {
-            return pending.remove(at: boostedIdx)
+            return pending.remove(at: boostedPendingIndex)
         }
         return pending.removeFirst()
     }
@@ -175,8 +175,8 @@ public actor RuntimeBackgroundIndexingManager {
                                  state: RuntimeIndexingTaskState)
     {
         guard var batchState = activeBatches[batchID] else { return }
-        if let idx = batchState.batch.items.firstIndex(where: { $0.id == path }) {
-            batchState.batch.items[idx].state = state
+        if let itemIndex = batchState.batch.items.firstIndex(where: { $0.id == path }) {
+            batchState.batch.items[itemIndex].state = state
             activeBatches[batchID] = batchState
         }
     }
