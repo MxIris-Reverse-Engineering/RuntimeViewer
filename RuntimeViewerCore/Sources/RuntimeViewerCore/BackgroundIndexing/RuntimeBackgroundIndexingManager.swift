@@ -23,6 +23,18 @@ public actor RuntimeBackgroundIndexingManager {
         activeBatches.values.map(\.batch)
     }
 
+    public func cancelBatch(_ id: RuntimeIndexingBatchID) {
+        guard let state = activeBatches[id] else { return }
+        activeBatches[id]?.batch.isCancelled = true
+        state.drivingTask?.cancel()
+        // The driving task's finalize() will emit .batchCancelled.
+    }
+
+    public func cancelAllBatches() {
+        let ids = Array(activeBatches.keys)
+        for id in ids { cancelBatch(id) }
+    }
+
     public func startBatch(
         rootImagePath: String,
         depth: Int,
@@ -183,10 +195,20 @@ public actor RuntimeBackgroundIndexingManager {
 
     private func finalize(id: RuntimeIndexingBatchID, cancelled: Bool) {
         guard var state = activeBatches[id] else { return }
+        let effectiveCancel = cancelled || state.batch.isCancelled
         state.batch.isFinished = true
-        state.batch.isCancelled = cancelled
+        state.batch.isCancelled = effectiveCancel
+        // Mark any still-pending or running items as cancelled so the UI reflects state.
+        if effectiveCancel {
+            for itemIndex in state.batch.items.indices
+            where state.batch.items[itemIndex].state == .pending
+                || state.batch.items[itemIndex].state == .running
+            {
+                state.batch.items[itemIndex].state = .cancelled
+            }
+        }
         activeBatches[id] = state
-        if cancelled {
+        if effectiveCancel {
             continuation.yield(.batchCancelled(state.batch))
         } else {
             continuation.yield(.batchFinished(state.batch))
