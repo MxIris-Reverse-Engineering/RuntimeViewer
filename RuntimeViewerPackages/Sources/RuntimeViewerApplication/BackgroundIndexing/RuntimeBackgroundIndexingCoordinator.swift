@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import RuntimeViewerCore
 import RxSwift
 import RxRelay
@@ -34,6 +35,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
     private var documentBatchIDs: Set<RuntimeIndexingBatchID> = []
     private var eventPumpTask: Task<Void, Never>?
     private var imageLoadedPumpTask: Task<Void, Never>?
+    private var lastKnownIsEnabled: Bool = false
 
     public init(documentState: DocumentState) {
         self.documentState = documentState
@@ -41,6 +43,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
         startEventPump()
         #if canImport(RuntimeViewerSettings)
         startImageLoadedPump()
+        bootstrapSettingsObservation()
         #endif
     }
 
@@ -215,6 +218,43 @@ extension RuntimeBackgroundIndexingCoordinator {
     private func currentBackgroundIndexingSettings() -> Settings.BackgroundIndexing {
         @Dependency(\.settings) var settings
         return settings.backgroundIndexing
+    }
+
+    private func bootstrapSettingsObservation() {
+        self.lastKnownIsEnabled = currentBackgroundIndexingSettings().isEnabled
+        self.subscribeToSettings()
+    }
+
+    private func subscribeToSettings() {
+        withObservationTracking {
+            let snapshot = currentBackgroundIndexingSettings()
+            _ = snapshot.isEnabled
+            _ = snapshot.depth
+            _ = snapshot.maxConcurrency
+        } onChange: { [weak self] in
+            // onChange fires off the main actor synchronously after any mutation.
+            // Hop back to MainActor to (a) handle the change and (b) re-register.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.handleSettingsChange()
+                self.subscribeToSettings()
+            }
+        }
+    }
+
+    private func handleSettingsChange() {
+        let latest = currentBackgroundIndexingSettings()
+        let wasEnabled = lastKnownIsEnabled
+        lastKnownIsEnabled = latest.isEnabled
+        if !wasEnabled && latest.isEnabled {
+            documentDidOpen()                               // Scenario E: off→on
+        } else if wasEnabled && !latest.isEnabled {
+            Task { [engine] in
+                await engine.backgroundIndexingManager.cancelAllBatches()
+            }
+        }
+        // depth / maxConcurrency changes: intentional no-op; next startBatch picks
+        // up the new values.
     }
 }
 #endif
