@@ -102,18 +102,83 @@ public actor RuntimeBackgroundIndexingManager {
     }
 
     private func runBatch(id: RuntimeIndexingBatchID) async {
-        guard var state = activeBatches[id] else { return }
-        // Empty batch finishes immediately.
-        if state.batch.items.isEmpty {
+        guard let startState = activeBatches[id] else { return }
+        let maxConcurrency = startState.maxConcurrency
+
+        // Pending paths in FIFO order, skipping already-terminal items.
+        var pending = startState.batch.items
+            .filter { !$0.state.isTerminal }
+            .map(\.id)
+
+        if pending.isEmpty {
             finalize(id: id, cancelled: false)
             return
         }
-        // Task 8 implements real execution. For now mark all items completed.
-        for index in state.batch.items.indices {
-            state.batch.items[index].state = .completed
+
+        let semaphore = AsyncSemaphore(value: maxConcurrency)
+        var wasCancelled = false
+
+        await withTaskGroup(of: Void.self) { group in
+            while !pending.isEmpty {
+                let path = popNextPrioritizedPath(batchID: id, pending: &pending)
+                do {
+                    try await semaphore.waitUnlessCancelled()
+                } catch {
+                    wasCancelled = true
+                    break
+                }
+                if Task.isCancelled { wasCancelled = true; break }
+                group.addTask { [weak self] in
+                    defer { semaphore.signal() }
+                    await self?.runSingleIndex(batchID: id, path: path)
+                }
+            }
+            await group.waitForAll()
         }
-        activeBatches[id] = state
-        finalize(id: id, cancelled: false)
+        finalize(id: id, cancelled: wasCancelled || Task.isCancelled)
+    }
+
+    /// Selects the next path to dispatch. Priority-boosted paths jump to the head.
+    private func popNextPrioritizedPath(
+        batchID: RuntimeIndexingBatchID, pending: inout [String]
+    ) -> String {
+        if let state = activeBatches[batchID],
+           let boostedIdx = pending.firstIndex(where: { state.priorityBoostPaths.contains($0) })
+        {
+            return pending.remove(at: boostedIdx)
+        }
+        return pending.removeFirst()
+    }
+
+    private func runSingleIndex(batchID: RuntimeIndexingBatchID, path: String) async {
+        updateItemState(batchID: batchID, path: path, state: .running)
+        continuation.yield(.taskStarted(batchID: batchID, path: path))
+        do {
+            try Task.checkCancellation()
+            try await engine.loadImageForBackgroundIndexing(at: path)
+            updateItemState(batchID: batchID, path: path, state: .completed)
+            continuation.yield(.taskFinished(batchID: batchID, path: path,
+                                             result: .completed))
+        } catch is CancellationError {
+            updateItemState(batchID: batchID, path: path, state: .cancelled)
+        } catch {
+            let state: RuntimeIndexingTaskState =
+                .failed(message: error.localizedDescription)
+            updateItemState(batchID: batchID, path: path, state: state)
+            continuation.yield(.taskFinished(batchID: batchID, path: path,
+                                             result: state))
+        }
+    }
+
+    private func updateItemState(batchID: RuntimeIndexingBatchID,
+                                 path: String,
+                                 state: RuntimeIndexingTaskState)
+    {
+        guard var batchState = activeBatches[batchID] else { return }
+        if let idx = batchState.batch.items.firstIndex(where: { $0.id == path }) {
+            batchState.batch.items[idx].state = state
+            activeBatches[batchID] = batchState
+        }
     }
 
     private func finalize(id: RuntimeIndexingBatchID, cancelled: Bool) {
