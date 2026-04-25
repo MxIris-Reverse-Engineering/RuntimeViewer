@@ -47,6 +47,13 @@ extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
     /// dylib / framework extension). Mirrors the conversion done in
     /// `RuntimeObjCSection` / `RuntimeSwiftSection` so the protocol callers can
     /// pass a full filesystem path.
+    ///
+    /// Examples:
+    /// - `Foundation.framework/Foundation` → `Foundation` (single extension)
+    /// - `libobjc.A.dylib` → `libobjc.A` → `libobjc` (versioned dylib needs both strips)
+    ///
+    /// TODO: Consolidate with the identical conversion in `RuntimeObjCSection`
+    /// and `RuntimeSwiftSection` once we have a stable home in `DyldUtilities`.
     private static func machOImageName(forPath path: String) -> String {
         path.lastPathComponent.deletingPathExtension.deletingPathExtension
     }
