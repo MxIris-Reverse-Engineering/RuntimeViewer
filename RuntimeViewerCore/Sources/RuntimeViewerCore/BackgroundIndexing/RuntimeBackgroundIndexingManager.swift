@@ -35,6 +35,19 @@ public actor RuntimeBackgroundIndexingManager {
         for id in ids { cancelBatch(id) }
     }
 
+    public func prioritize(imagePath: String) {
+        for (id, var state) in activeBatches {
+            if let itemIndex = state.batch.items.firstIndex(where: {
+                $0.id == imagePath && $0.state == .pending
+            }) {
+                state.batch.items[itemIndex].hasPriorityBoost = true
+                state.priorityBoostPaths.insert(imagePath)
+                activeBatches[id] = state
+                continuation.yield(.taskPrioritized(batchID: id, path: imagePath))
+            }
+        }
+    }
+
     public func startBatch(
         rootImagePath: String,
         depth: Int,
