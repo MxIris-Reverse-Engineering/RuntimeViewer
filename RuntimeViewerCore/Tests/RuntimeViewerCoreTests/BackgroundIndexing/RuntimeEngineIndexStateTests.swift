@@ -46,4 +46,25 @@ final class RuntimeEngineIndexStateTests: XCTestCase {
         XCTAssertTrue(indexedRaw, "isImageIndexed must return true for the unpatched path")
         XCTAssertTrue(indexedPatched, "isImageIndexed must return true for the patched path too")
     }
+
+    func test_mainExecutablePath_returnsNonEmptyPath() async throws {
+        // In the XCTest context this returns the test runner's executable path,
+        // which validates the "return dyld image 0" contract without requiring
+        // RuntimeViewer.app to be running.
+        let engine = RuntimeEngine(source: .local)
+        let path = try await engine.mainExecutablePath()
+        XCTAssertFalse(path.isEmpty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+    }
+
+    func test_loadImageForBackgroundIndexing_doesNotTriggerReloadData() async throws {
+        // CoreText is reliable across macOS versions; if it's absent, skip.
+        let path = "/System/Library/Frameworks/CoreText.framework/CoreText"
+        try XCTSkipUnless(FileManager.default.fileExists(atPath: path),
+                          "Requires macOS with CoreText.framework present")
+        let engine = RuntimeEngine(source: .local)
+        try await engine.loadImageForBackgroundIndexing(at: path)
+        let indexed = try await engine.isImageIndexed(path: path)
+        XCTAssertTrue(indexed)
+    }
 }

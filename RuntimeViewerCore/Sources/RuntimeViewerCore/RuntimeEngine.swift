@@ -52,6 +52,8 @@ public actor RuntimeEngine {
         case loadImage
         case isImageLoaded
         case isImageIndexed
+        case mainExecutablePath
+        case loadImageForBackgroundIndexing
         case patchImagePathForDyld
         case runtimeObjectHierarchy
         case runtimeObjectInfo
@@ -123,7 +125,7 @@ public actor RuntimeEngine {
 
     public private(set) var imageList: [String] = []
 
-    public private(set) var loadedImagePaths: Set<String> = []
+    public internal(set) var loadedImagePaths: Set<String> = []
 
     private nonisolated let imageNodesSubject = CurrentValueSubject<[RuntimeImageNode], Never>([])
 
@@ -276,7 +278,11 @@ public actor RuntimeEngine {
         #log(.debug, "Setting up server message handlers")
         setMessageHandlerBinding(forName: .isImageLoaded, of: self) { $0.isImageLoaded(path:) }
         setMessageHandlerBinding(forName: .isImageIndexed, of: self) { $0.isImageIndexed(path:) }
+        setMessageHandlerBinding(forName: .mainExecutablePath) { engine -> String in
+            try await engine.mainExecutablePath()
+        }
         setMessageHandlerBinding(forName: .loadImage, of: self) { $0.loadImage(at:) }
+        setMessageHandlerBinding(forName: .loadImageForBackgroundIndexing, of: self) { $0.loadImageForBackgroundIndexing(at:) }
         setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofObjectName:) }
 
         connection?.setMessageHandler(name: CommandNames.runtimeObjectsInImage.commandName) { [weak self] (imagePath: String) -> [RuntimeObject] in
