@@ -33,14 +33,21 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
     private var documentBatchIDs: Set<RuntimeIndexingBatchID> = []
     private var eventPumpTask: Task<Void, Never>?
+    private var imageLoadedPumpTask: Task<Void, Never>?
 
     public init(documentState: DocumentState) {
         self.documentState = documentState
         self.engine = documentState.runtimeEngine
         startEventPump()
+        #if canImport(RuntimeViewerSettings)
+        startImageLoadedPump()
+        #endif
     }
 
-    deinit { eventPumpTask?.cancel() }
+    deinit {
+        eventPumpTask?.cancel()
+        imageLoadedPumpTask?.cancel()
+    }
 
     // MARK: - Public observables for UI
 
@@ -174,6 +181,35 @@ extension RuntimeBackgroundIndexingCoordinator {
                 await engine.backgroundIndexingManager.cancelBatch(id)
             }
         }
+    }
+
+    private func startImageLoadedPump() {
+        // Class is `@MainActor`; this Task and `for await` loop run on the main
+        // actor. `handleImageLoaded` doesn't need a `MainActor.run` hop.
+        imageLoadedPumpTask = Task { [weak self] in
+            guard let self else { return }
+            // Combine.Publisher.values bridges to AsyncSequence on macOS 12+ /
+            // iOS 15+; the project's deployment targets satisfy this. Errors are
+            // Never on this publisher, so no try is needed.
+            for await path in self.engine.imageDidLoadPublisher.values {
+                await self.handleImageLoaded(path: path)
+            }
+        }
+    }
+
+    private func handleImageLoaded(path: String) async {
+        let settings = currentBackgroundIndexingSettings()
+        guard settings.isEnabled else { return }
+        // Avoid double-starting if the path is the main executable being opened
+        // at app launch — documentDidOpen already dispatched that batch. Manager
+        // dedups batches that share rootImagePath + reason discriminant, so a
+        // second call here is a no-op rather than a wasted batch.
+        let id = await engine.backgroundIndexingManager.startBatch(
+            rootImagePath: path,
+            depth: settings.depth,
+            maxConcurrency: settings.maxConcurrency,
+            reason: .imageLoaded(path: path))
+        self.documentBatchIDs.insert(id)
     }
 
     private func currentBackgroundIndexingSettings() -> Settings.BackgroundIndexing {
