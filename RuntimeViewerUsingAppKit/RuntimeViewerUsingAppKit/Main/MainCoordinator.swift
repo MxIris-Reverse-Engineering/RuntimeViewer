@@ -66,6 +66,15 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             let viewModel = MCPStatusPopoverViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
+        case .backgroundIndexing(let sender):
+            let viewController = BackgroundIndexingPopoverViewController()
+            let viewModel = BackgroundIndexingPopoverViewModel(
+                documentState: documentState,
+                router: self,
+                coordinator: documentState.backgroundIndexingCoordinator
+            )
+            viewController.setupBindings(for: viewModel)
+            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         case .loadFramework:
             return .none()
         case .attachToProcess:
