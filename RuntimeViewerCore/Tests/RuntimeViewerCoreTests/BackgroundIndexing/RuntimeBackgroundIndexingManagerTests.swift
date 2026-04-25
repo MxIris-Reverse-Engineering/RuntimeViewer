@@ -156,6 +156,47 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         XCTAssertFalse(message.isEmpty)
     }
 
+    func test_cancelBatch_stopsPendingItemsAndEmitsCancelledEvent() async {
+        let engine = MockBackgroundIndexingEngine()
+        let deps = (0..<5).map { (installName: "/D\($0)", resolvedPath: "/D\($0)") }
+        engine.program(path: "/App", .init(dependencies: deps))
+        for dep in deps { engine.program(path: dep.installName, .init()) }
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        let events = manager.events
+        let consumer = Task { () -> RuntimeIndexingBatch in
+            for await event in events {
+                if case .batchCancelled(let b) = event { return b }
+                if case .batchFinished(let b) = event { return b }
+            }
+            fatalError()
+        }
+        let id = await manager.startBatch(rootImagePath: "/App", depth: 1,
+                                          maxConcurrency: 1, reason: .manual)
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        await manager.cancelBatch(id)
+        let batch = await consumer.value
+        XCTAssertTrue(batch.isCancelled)
+    }
+
+    func test_cancelAll_cancelsEveryBatch() async {
+        let engine = MockBackgroundIndexingEngine()
+        engine.program(path: "/A", .init(dependencies: [("/A1", "/A1")]))
+        engine.program(path: "/A1", .init())
+        engine.program(path: "/B", .init(dependencies: [("/B1", "/B1")]))
+        engine.program(path: "/B1", .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+        let idA = await manager.startBatch(rootImagePath: "/A", depth: 1,
+                                           maxConcurrency: 1, reason: .manual)
+        let idB = await manager.startBatch(rootImagePath: "/B", depth: 1,
+                                           maxConcurrency: 1, reason: .manual)
+        XCTAssertNotEqual(idA, idB)
+        await manager.cancelAllBatches()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        let remaining = await manager.currentBatches()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
     // MARK: - Test helpers
     private func runToFinish(manager: RuntimeBackgroundIndexingManager,
                              root: String, depth: Int,
