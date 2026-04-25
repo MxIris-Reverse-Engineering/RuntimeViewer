@@ -1,56 +1,54 @@
-# Background Indexing Implementation Plan
+# 后台索引实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the opt-in background indexing feature per [0002-background-indexing.md](../Evolution/0002-background-indexing.md) — a per-`RuntimeEngine` Swift-Concurrency `RuntimeBackgroundIndexingManager` actor, Settings controls, and a Toolbar popover.
+**目标:** 按 [0002-background-indexing.md](../Evolution/0002-background-indexing.md) 构建可选的后台索引功能 —— 一个每 `RuntimeEngine` 一份的 Swift Concurrency `RuntimeBackgroundIndexingManager` actor、Settings 控件以及一个 Toolbar 弹出框。
 
-**Architecture:** All core logic in `RuntimeViewerCore` (with `Runtime` prefix); coordinator in `RuntimeViewerApplication` (with `Runtime` prefix); UI in `RuntimeViewerUsingAppKit`, Settings UI in `RuntimeViewerSettingsUI` (neither prefixed). Swift Concurrency for all task scheduling; RxSwift only for UI binding in the coordinator.
+**架构:** 所有核心逻辑置于 `RuntimeViewerCore`（带 `Runtime` 前缀）；coordinator 置于 `RuntimeViewerApplication`（带 `Runtime` 前缀）；UI 置于 `RuntimeViewerUsingAppKit`；Settings UI 置于 `RuntimeViewerSettingsUI`（后两者均不带前缀）。所有任务调度采用 Swift Concurrency；RxSwift 仅用于 coordinator 中的 UI 绑定。
 
-**Tech Stack:** Swift 5 (language mode v5), Swift Concurrency (actor / AsyncStream / TaskGroup), AsyncSemaphore (groue/Semaphore, already resolved), MachOKit (MachOImage.dependencies), RxSwift/RxCocoa, SnapKit, AppKit, SwiftUI (Settings only), MetaCodable `@Codable`, swift-memberwise-init-macro `@MemberInit`.
-
----
-
-## Conventions used throughout this plan
-
-- **Build / test commands**: all `swift build` / `swift test` invocations are preceded by `swift package update` and piped through `xcsift` per the project's CLAUDE.md. Run from the package directory (`RuntimeViewerCore/` or `RuntimeViewerPackages/`).
-- **Commit style**: Conventional Commits (`feat:`, `test:`, `refactor:`, `docs:`) matching recent project history.
-- **Every new file under `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/`** must be added to `RuntimeViewer.xcodeproj` — use the xcodeproj MCP (`add_file`) as shown in the integration tasks. Other packages (`RuntimeViewerCore`, `RuntimeViewerPackages`) are SPM and pick up new sources automatically.
-- **Naming**: types created inside `RuntimeViewerCore` and `RuntimeViewerApplication` carry the `Runtime` prefix. Types created inside `RuntimeViewerUsingAppKit`, `RuntimeViewerSettingsUI`, and `RuntimeViewerSettings` do **not** (sticking with `MCP` / `MCPSettingsView` precedent).
-- **Access control**: `private` by default; widen only when needed by callers. Observable state on ViewModels: `@Observed private(set) var`.
-- **Weak-self idiom**: `guard let self else { return }` — never `strongSelf`, never `if let self`.
-- **RxSwift subscription style**: trailing closure variants only (`.driveOnNext { }`, `.emitOnNext { }`, `.subscribeOnNext { }`).
-- **Branch**: all work happens on `feature/runtime-background-indexing` (already created from `origin/main`).
+**技术栈:** Swift 5（语言模式 v5）、Swift Concurrency（actor / AsyncStream / TaskGroup）、AsyncSemaphore（groue/Semaphore，已解析）、MachOKit（MachOImage.dependencies）、RxSwift/RxCocoa、SnapKit、AppKit、SwiftUI（仅 Settings）、MetaCodable `@Codable`、swift-memberwise-init-macro `@MemberInit`。
 
 ---
 
-## Phase 0 — Package wiring
+## 全文通用约定
 
-### Task 0: Declare Semaphore as an explicit dependency of `RuntimeViewerCore`
+- **构建 / 测试命令**: 所有 `swift build` / `swift test` 调用都先运行 `swift package update`，并按项目 CLAUDE.md 通过 `xcsift` 管道。在 package 目录（`RuntimeViewerCore/` 或 `RuntimeViewerPackages/`）下运行。
+- **提交风格**: 使用 Conventional Commits（`feat:`、`test:`、`refactor:`、`docs:`），匹配近期项目历史。
+- **`RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/` 下每个新文件**都必须加入 `RuntimeViewer.xcodeproj` —— 按集成任务中所示使用 xcodeproj MCP（`add_file`）。其他 packages（`RuntimeViewerCore`、`RuntimeViewerPackages`）是 SPM，新源文件会被自动识别。
+- **命名**: 在 `RuntimeViewerCore` 与 `RuntimeViewerApplication` 中创建的类型带 `Runtime` 前缀。在 `RuntimeViewerUsingAppKit`、`RuntimeViewerSettingsUI`、`RuntimeViewerSettings` 中创建的类型**不带**前缀（与 `MCP` / `MCPSettingsView` 先例保持一致）。
+- **访问控制**: 默认 `private`；仅在调用方需要时放宽。ViewModel 上的可观察状态：`@Observed private(set) var`。
+- **weak self 习惯**: `guard let self else { return }` —— 不用 `strongSelf`，不用 `if let self`。
+- **RxSwift 订阅风格**: 仅使用尾随闭包变体（`.driveOnNext { }`、`.emitOnNext { }`、`.subscribeOnNext { }`）。
+- **分支**: 所有工作发生在 `feature/runtime-background-indexing`（已从 `origin/main` 创建）。
 
-**Files:**
-- Modify: `RuntimeViewerCore/Package.swift`
+---
 
-**Why:** The `groue/Semaphore` package is already resolved for the `RuntimeViewerCommunication` target (see `Package.swift:163`), but `RuntimeViewerCore`'s own target does not declare it. `RuntimeBackgroundIndexingManager.swift` (Task 6) will `import Semaphore`; relying on transitive visibility is brittle (breaks the moment `.memberImportVisibility` is enabled, which is already defined at `Package.swift:200`). Make the dependency explicit before any code uses it.
+## Phase 0 —— Package 接线
 
-- [ ] **Step 1: Edit the `RuntimeViewerCore` target's `dependencies` array**
+### 任务 0: 将 Semaphore 声明为 `RuntimeViewerCore` 的显式依赖
 
-In `RuntimeViewerCore/Package.swift`, inside `.target(name: "RuntimeViewerCore", dependencies: [...])` (currently lines 142-157), append:
+**文件:**
+- 修改: `RuntimeViewerCore/Package.swift`
+
+**为什么:** `groue/Semaphore` 包已经为 `RuntimeViewerCommunication` target 解析（参见 `Package.swift:163`），但 `RuntimeViewerCore` 自身的 target 并未声明。`RuntimeBackgroundIndexingManager.swift`（任务 6）会 `import Semaphore`；依赖传递可见性是脆弱的（一旦启用 `.memberImportVisibility` 就会失效，而该选项已经在 `Package.swift:200` 定义）。在任何代码使用之前先把依赖显式化。
+
+- [ ] **Step 1: 编辑 `RuntimeViewerCore` target 的 `dependencies` 数组**
+
+在 `RuntimeViewerCore/Package.swift` 的 `.target(name: "RuntimeViewerCore", dependencies: [...])`（当前行 142-157）内，在已有的 `MetaCodable` 产品之后追加：
 
 ```swift
 .product(name: "Semaphore", package: "Semaphore"),
 ```
 
-after the existing `MetaCodable` product.
-
-- [ ] **Step 2: Resolve & build**
+- [ ] **Step 2: 解析并构建**
 
 ```bash
 cd RuntimeViewerCore && swift package update && swift build 2>&1 | xcsift
 ```
 
-Expected: clean build (no code changes yet).
+预期：构建无报错（尚未变更代码）。
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: 提交**
 
 ```bash
 git add RuntimeViewerCore/Package.swift
@@ -59,25 +57,25 @@ git commit -m "chore(core): add Semaphore as explicit RuntimeViewerCore dependen
 
 ---
 
-## Phase 1 — Foundation value types
+## Phase 1 —— 基础值类型
 
-### Task 1: Create Sendable + Hashable value types for indexing events and batches
+### 任务 1: 为索引事件与批次创建 Sendable + Hashable 值类型
 
-**Files:**
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingBatchID.swift`
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingBatchReason.swift`
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingTaskState.swift`
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingTaskItem.swift`
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingBatch.swift`
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingEvent.swift`
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/ResolvedDependency.swift`
-- Test: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeIndexingValueTypesTests.swift`
+**文件:**
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingBatchID.swift`
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingBatchReason.swift`
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingTaskState.swift`
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingTaskItem.swift`
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingBatch.swift`
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeIndexingEvent.swift`
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/ResolvedDependency.swift`
+- 测试: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeIndexingValueTypesTests.swift`
 
-**Why Hashable everywhere:** `BackgroundIndexingNode` (Task 18) is declared `Hashable` so it can key `NSOutlineView` / `NSDiffableDataSource` updates. Its associated values transitively need `Hashable`. Declaring it up front is cheaper than backfilling later.
+**为什么处处都是 Hashable:** `BackgroundIndexingNode`（任务 18）声明为 `Hashable`，以便用作 `NSOutlineView` / `NSDiffableDataSource` 的更新键。它的关联值需要传递性的 `Hashable`。提前声明比后续补回更便宜。
 
-- [ ] **Step 1: Write failing tests for value type invariants**
+- [ ] **Step 1: 写出针对值类型不变量的失败测试**
 
-File `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeIndexingValueTypesTests.swift`:
+文件 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeIndexingValueTypesTests.swift`:
 
 ```swift
 import XCTest
@@ -125,23 +123,23 @@ final class RuntimeIndexingValueTypesTests: XCTestCase {
             isCancelled: false,
             isFinished: false
         )
-        XCTAssertEqual(batch.completedCount, 3)   // completed + failed count as "done"
+        XCTAssertEqual(batch.completedCount, 3)   // completed + failed 都计入"完成"
         XCTAssertEqual(batch.totalCount, 4)
     }
 }
 ```
 
-- [ ] **Step 2: Run tests — expect compile failure**
+- [ ] **Step 2: 运行测试 —— 预期编译失败**
 
 ```bash
 cd RuntimeViewerCore && swift package update && swift test --filter RuntimeIndexingValueTypesTests 2>&1 | xcsift
 ```
 
-Expected: compilation errors for all types referenced.
+预期：所有引用类型出现编译错误。
 
-- [ ] **Step 3: Create the value type files**
+- [ ] **Step 3: 创建值类型文件**
 
-File `RuntimeIndexingBatchID.swift`:
+文件 `RuntimeIndexingBatchID.swift`:
 
 ```swift
 import Foundation
@@ -152,7 +150,7 @@ public struct RuntimeIndexingBatchID: Hashable, Sendable {
 }
 ```
 
-File `RuntimeIndexingBatchReason.swift`:
+文件 `RuntimeIndexingBatchReason.swift`:
 
 ```swift
 public enum RuntimeIndexingBatchReason: Sendable, Hashable {
@@ -163,7 +161,7 @@ public enum RuntimeIndexingBatchReason: Sendable, Hashable {
 }
 ```
 
-File `RuntimeIndexingTaskState.swift`:
+文件 `RuntimeIndexingTaskState.swift`:
 
 ```swift
 public enum RuntimeIndexingTaskState: Sendable, Hashable {
@@ -182,7 +180,7 @@ public enum RuntimeIndexingTaskState: Sendable, Hashable {
 }
 ```
 
-File `RuntimeIndexingTaskItem.swift`:
+文件 `RuntimeIndexingTaskItem.swift`:
 
 ```swift
 public struct RuntimeIndexingTaskItem: Sendable, Identifiable, Hashable {
@@ -202,7 +200,7 @@ public struct RuntimeIndexingTaskItem: Sendable, Identifiable, Hashable {
 }
 ```
 
-File `ResolvedDependency.swift`:
+文件 `ResolvedDependency.swift`:
 
 ```swift
 public struct ResolvedDependency: Sendable, Hashable {
@@ -216,7 +214,7 @@ public struct ResolvedDependency: Sendable, Hashable {
 }
 ```
 
-File `RuntimeIndexingBatch.swift`:
+文件 `RuntimeIndexingBatch.swift`:
 
 ```swift
 public struct RuntimeIndexingBatch: Sendable, Identifiable, Hashable {
@@ -250,7 +248,7 @@ public struct RuntimeIndexingBatch: Sendable, Identifiable, Hashable {
 }
 ```
 
-File `RuntimeIndexingEvent.swift`:
+文件 `RuntimeIndexingEvent.swift`:
 
 ```swift
 public enum RuntimeIndexingEvent: Sendable {
@@ -264,15 +262,15 @@ public enum RuntimeIndexingEvent: Sendable {
 }
 ```
 
-- [ ] **Step 4: Run tests — expect pass**
+- [ ] **Step 4: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeIndexingValueTypesTests 2>&1 | xcsift
 ```
 
-Expected: 6 tests passed.
+预期：6 个测试通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing
@@ -281,25 +279,25 @@ git commit -m "feat(core): add Sendable value types for background indexing"
 
 ---
 
-### Task 2: Implement `DylibPathResolver`
+### 任务 2: 实现 `DylibPathResolver`
 
-**Files:**
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DylibPathResolver.swift`
-- Test: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/DylibPathResolverTests.swift`
+**文件:**
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DylibPathResolver.swift`
+- 测试: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/DylibPathResolverTests.swift`
 
-- [ ] **Step 1: Explore `LC_RPATH` / executable path API on `MachOImage`**
+- [ ] **Step 1: 探索 `MachOImage` 上的 `LC_RPATH` / 可执行路径 API**
 
 ```bash
 rg -n "rpaths|LC_RPATH|executablePath|loaderPath" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/MachOKit/Sources/MachOKit/ --type swift | head
 ```
 
-Note which `MachOImage` property exposes `LC_RPATH` entries (expect `rpaths: [String]`) and whether there is a helper for the main-executable path (expect `_dyld_get_image_name(0)`). Record what you find in your scratch notes — the resolver design below assumes `image.rpaths: [String]`.
+记录哪个 `MachOImage` 属性暴露了 `LC_RPATH` 条目（预期 `rpaths: [String]`），以及是否有获取主可执行文件路径的辅助函数（预期 `_dyld_get_image_name(0)`）。在你的草稿笔记中记下发现 —— 下面的 resolver 设计假设 `image.rpaths: [String]`。
 
-If the API is named differently (e.g. `rpathCommands` returning `RpathCommand` items whose `.path` gives the raw string), adjust the resolver code in Step 3 to match.
+如果 API 名称不同（例如 `rpathCommands` 返回 `RpathCommand` 项，其 `.path` 给出原始字符串），按需在 Step 3 中调整 resolver 代码。
 
-- [ ] **Step 2: Write failing tests**
+- [ ] **Step 2: 写出失败测试**
 
-File `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/DylibPathResolverTests.swift`:
+文件 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/DylibPathResolverTests.swift`:
 
 ```swift
 import XCTest
@@ -388,9 +386,9 @@ final class DylibPathResolverTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 3: Implement the resolver**
+- [ ] **Step 3: 实现 resolver**
 
-File `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DylibPathResolver.swift`:
+文件 `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DylibPathResolver.swift`:
 
 ```swift
 import Foundation
@@ -453,15 +451,15 @@ struct DylibPathResolver {
 }
 ```
 
-- [ ] **Step 4: Run tests — expect pass**
+- [ ] **Step 4: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter DylibPathResolverTests 2>&1 | xcsift
 ```
 
-Expected: 6 tests passed.
+预期：6 个测试通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DylibPathResolver.swift RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/DylibPathResolverTests.swift
@@ -470,30 +468,30 @@ git commit -m "feat(core): add DylibPathResolver for @rpath / @executable_path /
 
 ---
 
-## Phase 2 — Engine extensions
+## Phase 2 —— Engine 扩展
 
-### Task 3: Expose `hasCachedSection` on both section factories; add `isImageIndexed` to engine with `request/remote` dispatch
+### 任务 3: 在两个 section factory 上暴露 `hasCachedSection`；在 engine 上加 `isImageIndexed`，使用 `request/remote` 分发
 
-**Files:**
-- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeObjCSection.swift` (factory area)
-- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeSwiftSection.swift` (factory area)
-- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift` (bump factories to `internal`; add `.isImageIndexed` to `CommandNames`; register handler)
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`
-- Test: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeEngineIndexStateTests.swift`
+**文件:**
+- 修改: `RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeObjCSection.swift`（factory 区域）
+- 修改: `RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeSwiftSection.swift`（factory 区域）
+- 修改: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`（factory 提升至 `internal`；`CommandNames` 加 `.isImageIndexed`；注册处理器）
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`
+- 测试: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeEngineIndexStateTests.swift`
 
-**Why `request/remote`:** When the document targets a remote source (XPC / directTCP), the local engine's factory caches are empty — only the server process has the truth. Every existing public engine method uses the `request<T>(local:remote:)` primitive (`RuntimeEngine.swift:468`); skipping it here would return wrong data for remote sources.
+**为什么要 `request/remote`:** 当文档目标是远程源（XPC / directTCP）时，本地 engine 的 factory 缓存为空 —— 只有服务进程拥有真相。每一个已有的 engine 公共方法都使用 `request<T>(local:remote:)` 原语（`RuntimeEngine.swift:468`）；这里跳过会让远程源返回错误数据。
 
-- [ ] **Step 1: Read the factory classes for their caching layout**
+- [ ] **Step 1: 阅读 factory 类以了解缓存结构**
 
 ```bash
 rg -n "class RuntimeObjCSectionFactory|class RuntimeSwiftSectionFactory|private var sections|func section\(for" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/Core/
 ```
 
-Record: cache storage variable name (expect `sections: [String: RuntimeObjCSection]` / similar), and whether factories already cache nil results. If not caching nil, the `hasCachedSection` predicate introduced below reflects "successfully parsed" — OK for MVP since a `.failed` task item captures the failure case.
+记录：缓存存储变量名（预期 `sections: [String: RuntimeObjCSection]` / 类似），以及 factory 是否已经缓存 nil 结果。如果不缓存 nil，下面引入的 `hasCachedSection` 谓词体现"成功解析" —— 对 MVP 而言可以接受，因为 `.failed` 任务项会捕获失败情况。
 
-- [ ] **Step 2: Write failing test for `isImageIndexed`**
+- [ ] **Step 2: 写出 `isImageIndexed` 的失败测试**
 
-File `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeEngineIndexStateTests.swift`:
+文件 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeEngineIndexStateTests.swift`:
 
 ```swift
 import XCTest
@@ -516,17 +514,9 @@ final class RuntimeEngineIndexStateTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 3: Add `hasCachedSection(for:)` to each factory**
+- [ ] **Step 3: 在每个 factory 上添加 `hasCachedSection(for:)`**
 
-In `RuntimeObjCSection.swift`, inside `RuntimeObjCSectionFactory`:
-
-```swift
-func hasCachedSection(for path: String) -> Bool {
-    sections[path] != nil
-}
-```
-
-In `RuntimeSwiftSection.swift`, same pattern:
+在 `RuntimeObjCSection.swift` 的 `RuntimeObjCSectionFactory` 内：
 
 ```swift
 func hasCachedSection(for path: String) -> Bool {
@@ -534,38 +524,46 @@ func hasCachedSection(for path: String) -> Bool {
 }
 ```
 
-Match the exact storage name observed in Step 1. If a factory uses `cache` or `_sections`, substitute.
+在 `RuntimeSwiftSection.swift`，相同模式：
 
-- [ ] **Step 4: Widen factory access level (must-do)**
+```swift
+func hasCachedSection(for path: String) -> Bool {
+    sections[path] != nil
+}
+```
 
-`RuntimeEngine.swift:147-149` currently declares both factories as `private`:
+匹配 Step 1 中观察到的精确存储名。如果 factory 使用 `cache` 或 `_sections`，请相应替换。
+
+- [ ] **Step 4: 放宽 factory 的访问级别（必做）**
+
+`RuntimeEngine.swift:147-149` 当前将两个 factory 都声明为 `private`：
 
 ```swift
 private let objcSectionFactory: RuntimeObjCSectionFactory
 private let swiftSectionFactory: RuntimeSwiftSectionFactory
 ```
 
-Change both to `internal` (drop the `private` keyword; default is `internal`). This is required for the `+BackgroundIndexing.swift` extension below. Verified against current code — the factories are definitely `private` today.
+将两者都改为 `internal`（去掉 `private` 关键字；默认即 `internal`）。下面的 `+BackgroundIndexing.swift` 扩展需要这一改动。已经核验过当前代码 —— 这两个 factory 现在确为 `private`。
 
-- [ ] **Step 5: Add `.isImageIndexed` to `CommandNames` and register the server handler**
+- [ ] **Step 5: 在 `CommandNames` 中加 `.isImageIndexed` 并注册服务端处理器**
 
-In `RuntimeEngine.swift`, find the `CommandNames` enum (around line 62). Add:
+在 `RuntimeEngine.swift` 中找到 `CommandNames` 枚举（约第 62 行）。添加：
 
 ```swift
 case isImageIndexed
 ```
 
-In the `setMessageHandlerBinding(...)` block near line 276, add:
+在第 276 行附近的 `setMessageHandlerBinding(...)` 块中添加：
 
 ```swift
 setMessageHandlerBinding(forName: .isImageIndexed, of: self) { $0.isImageIndexed(path:) }
 ```
 
-This slots in next to the existing `.isImageLoaded` binding.
+正好和已有的 `.isImageLoaded` 绑定相邻。
 
-- [ ] **Step 6: Create the engine extension using `request/remote` dispatch**
+- [ ] **Step 6: 创建使用 `request/remote` 分发的 engine 扩展**
 
-File `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`:
+文件 `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`:
 
 ```swift
 import Foundation
@@ -584,17 +582,17 @@ extension RuntimeEngine {
 }
 ```
 
-Note: the test in Step 2 has been updated above to `try await engine.isImageIndexed(path:)` since the method now throws.
+注意：上面 Step 2 中的测试已更新为 `try await engine.isImageIndexed(path:)`，因为该方法现在 throws。
 
-- [ ] **Step 7: Run tests — expect pass**
+- [ ] **Step 7: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeEngineIndexStateTests 2>&1 | xcsift
 ```
 
-Expected: 2 tests passed. The second test relies on a real Foundation image; if CI lacks that exact path, comment out the second test and leave a TODO — but in this project (local macOS dev) it will pass.
+预期：2 个测试通过。第二个测试依赖真实的 Foundation 镜像；如果 CI 中没有此精确路径，注释掉第二个测试并留 TODO —— 但本项目（macOS 本地开发）下会通过。
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -603,27 +601,27 @@ git commit -m "feat(core): add isImageIndexed with request/remote dispatch + fac
 
 ---
 
-### Task 4: Add `mainExecutablePath` and `loadImageForBackgroundIndexing` to engine (with `request/remote` dispatch)
+### 任务 4: 在 engine 上加 `mainExecutablePath` 与 `loadImageForBackgroundIndexing`（带 `request/remote` 分发）
 
-**Files:**
-- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`
-- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift` (add two `CommandNames` cases + handlers)
-- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DyldUtilities.swift` (only if helper missing)
-- Test: append to `RuntimeEngineIndexStateTests.swift`
+**文件:**
+- 修改: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift`
+- 修改: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`（增加两个 `CommandNames` case + 处理器）
+- 修改: `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DyldUtilities.swift`（仅当辅助缺失时）
+- 测试: 追加到 `RuntimeEngineIndexStateTests.swift`
 
-**Why `request/remote`:** Same rationale as Task 3. `mainExecutablePath` must reflect the target process, not the local process; for a remote source the correct answer is only known on the server side. `loadImageForBackgroundIndexing` must also execute inside the target process.
+**为什么要 `request/remote`:** 与任务 3 相同的理由。`mainExecutablePath` 必须反映目标进程，而非本地进程；对于远程源，正确答案只能在服务端获得。`loadImageForBackgroundIndexing` 也必须在目标进程内执行。
 
-- [ ] **Step 1: Explore `DyldUtilities` and `MachOImage` for main-executable lookup**
+- [ ] **Step 1: 探索 `DyldUtilities` 与 `MachOImage` 中查询主可执行文件的 API**
 
 ```bash
 rg -n "_dyld_get_image_name|_dyld_get_image_header|mainExecutable|static func images|MachOImage\.current" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/ /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/MachOKit/Sources/MachOKit/ --type swift | head
 ```
 
-Note the canonical call sequence. On macOS the main executable is dyld image at index 0; the pattern is `String(cString: _dyld_get_image_name(0))`.
+记录规范的调用序列。在 macOS 上主可执行文件是 dyld 索引 0 的镜像；常见模式是 `String(cString: _dyld_get_image_name(0))`。
 
-- [ ] **Step 2: Append failing tests**
+- [ ] **Step 2: 追加失败测试**
 
-In `RuntimeEngineIndexStateTests.swift`, append:
+在 `RuntimeEngineIndexStateTests.swift` 中追加：
 
 ```swift
     func test_mainExecutablePath_returnsNonEmptyPath() async throws {
@@ -645,16 +643,16 @@ In `RuntimeEngineIndexStateTests.swift`, append:
     }
 ```
 
-- [ ] **Step 3: Add `CommandNames` cases + server handlers**
+- [ ] **Step 3: 增加 `CommandNames` case + 服务端处理器**
 
-In `RuntimeEngine.swift` `CommandNames` enum:
+在 `RuntimeEngine.swift` 的 `CommandNames` 枚举：
 
 ```swift
 case mainExecutablePath
 case loadImageForBackgroundIndexing
 ```
 
-In the `setMessageHandlerBinding(...)` block:
+在 `setMessageHandlerBinding(...)` 块中：
 
 ```swift
 setMessageHandlerBinding(forName: .mainExecutablePath,
@@ -663,9 +661,9 @@ setMessageHandlerBinding(forName: .loadImageForBackgroundIndexing,
                          of: self) { $0.loadImageForBackgroundIndexing(at:) }
 ```
 
-- [ ] **Step 4: Implement the new engine methods with `request/remote` dispatch**
+- [ ] **Step 4: 用 `request/remote` 分发实现新的 engine 方法**
 
-Append to `RuntimeEngine+BackgroundIndexing.swift`:
+追加到 `RuntimeEngine+BackgroundIndexing.swift`:
 
 ```swift
 extension RuntimeEngine {
@@ -696,17 +694,17 @@ extension RuntimeEngine {
 }
 ```
 
-Note the `try await` on both factory calls — matches the verified signature `section(for:progressContinuation:) async throws -> (isExisted: Bool, section: ...)` at `RuntimeObjCSection.swift:704` / `RuntimeSwiftSection.swift:802`.
+注意两次 factory 调用的 `try await` —— 与已核验的签名 `section(for:progressContinuation:) async throws -> (isExisted: Bool, section: ...)` 一致（`RuntimeObjCSection.swift:704` / `RuntimeSwiftSection.swift:802`）。
 
-- [ ] **Step 5: Run tests — expect pass**
+- [ ] **Step 5: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeEngineIndexStateTests 2>&1 | xcsift
 ```
 
-Expected: all tests in that file pass.
+预期：该文件中的所有测试通过。
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -715,25 +713,25 @@ git commit -m "feat(core): mainExecutablePath + loadImageForBackgroundIndexing w
 
 ---
 
-### Task 4.5: Add `imageDidLoadPublisher` on `RuntimeEngine`
+### 任务 4.5: 在 `RuntimeEngine` 上添加 `imageDidLoadPublisher`
 
-**Files:**
-- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`
-- Test: append to `RuntimeEngineIndexStateTests.swift`
+**文件:**
+- 修改: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`
+- 测试: 追加到 `RuntimeEngineIndexStateTests.swift`
 
-**Why:** The coordinator (Task 16) needs a signal that carries the path of the newly-loaded image. `RuntimeEngine` today only exposes `reloadDataPublisher` (no payload) and `imageNodesPublisher` (full list); there is no per-image signal. Task 16 will subscribe to this new publisher. The local branch emits after `loadImage(at:)` succeeds; the remote branch's `setMessageHandlerBinding(forName: .imageDidLoad)` handler emits on the client side when the server forwards the event.
+**为什么:** Coordinator（任务 16）需要一个携带新加载镜像路径的信号。当今 `RuntimeEngine` 只暴露 `reloadDataPublisher`（无负载）和 `imageNodesPublisher`（完整列表）；没有按镜像的信号。任务 16 会订阅这一新 publisher。本地分支在 `loadImage(at:)` 成功后发出；远程分支的 `setMessageHandlerBinding(forName: .imageDidLoad)` 处理器在服务器转发事件时由客户端发出。
 
-- [ ] **Step 1: Inspect the existing `reloadDataPublisher` wiring for pattern parity**
+- [ ] **Step 1: 检查现有的 `reloadDataPublisher` 接线，作为模式参照**
 
 ```bash
 rg -n "reloadDataPublisher|reloadDataSubject|PassthroughSubject" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift | head
 ```
 
-Expected finding: `private nonisolated let reloadDataSubject = PassthroughSubject<Void, Never>()` with a `nonisolated` public property exposing it, and a `setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }` on the server handler table.
+预期发现：`private nonisolated let reloadDataSubject = PassthroughSubject<Void, Never>()`、暴露它的 `nonisolated` 公共属性，以及在服务端处理器表上的 `setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }`。
 
-- [ ] **Step 2: Add the subject + publisher**
+- [ ] **Step 2: 添加 subject + publisher**
 
-In `RuntimeEngine.swift` next to the existing `reloadDataSubject`:
+在 `RuntimeEngine.swift` 中已有的 `reloadDataSubject` 旁：
 
 ```swift
 private nonisolated let imageDidLoadSubject = PassthroughSubject<String, Never>()
@@ -743,15 +741,15 @@ public nonisolated var imageDidLoadPublisher: some Publisher<String, Never> {
 }
 ```
 
-- [ ] **Step 3: Add `.imageDidLoad` to `CommandNames` and wire both sides**
+- [ ] **Step 3: 在 `CommandNames` 加 `.imageDidLoad` 并双向接线**
 
-In `CommandNames`:
+在 `CommandNames`:
 
 ```swift
 case imageDidLoad
 ```
 
-In the handler table, mirror the `reloadData` pattern so remote clients also receive the event:
+在处理器表中，与 `reloadData` 模式镜像，让远程客户端也接收事件：
 
 ```swift
 setMessageHandlerBinding(forName: .imageDidLoad) { (engine: RuntimeEngine, path: String) in
@@ -759,7 +757,7 @@ setMessageHandlerBinding(forName: .imageDidLoad) { (engine: RuntimeEngine, path:
 }
 ```
 
-In `loadImage(at:)` (currently `RuntimeEngine.swift:485-495`), after the existing `reloadData(isReloadImageNodes: false)` call, emit:
+在 `loadImage(at:)`（当前位于 `RuntimeEngine.swift:485-495`）中，在已有的 `reloadData(isReloadImageNodes: false)` 调用之后发出：
 
 ```swift
 imageDidLoadSubject.send(path)
@@ -767,9 +765,9 @@ sendRemoteDataIfNeeded(name: .imageDidLoad, payload: path)
 // or inline the remote push similar to sendRemoteDataIfNeeded(isReloadImageNodes:)
 ```
 
-Verify the existing `sendRemoteDataIfNeeded(...)` signature — if it doesn't accept an arbitrary command name, add a small `sendRemoteImageDidLoad(_ path: String)` helper beside it.
+核验现有 `sendRemoteDataIfNeeded(...)` 签名 —— 如果它不接受任意命令名，在它旁边新增一个小辅助 `sendRemoteImageDidLoad(_ path: String)`。
 
-- [ ] **Step 4: Append a test**
+- [ ] **Step 4: 追加测试**
 
 ```swift
     func test_imageDidLoadPublisher_firesAfterLoadImage() async throws {
@@ -788,15 +786,15 @@ Verify the existing `sendRemoteDataIfNeeded(...)` signature — if it doesn't ac
     }
 ```
 
-Add `import Combine` at the top of the test file if not present.
+如果测试文件顶部尚无 `import Combine`，请添加。
 
-- [ ] **Step 5: Run tests**
+- [ ] **Step 5: 运行测试**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeEngineIndexStateTests 2>&1 | xcsift
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -805,17 +803,17 @@ git commit -m "feat(core): imageDidLoadPublisher for per-path load notifications
 
 ---
 
-## Phase 3 — The indexing manager
+## Phase 3 —— 索引管理器
 
-### Task 5: Declare the engine-representing protocol and mock
+### 任务 5: 声明 engine 表示协议与 mock
 
-**Files:**
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/BackgroundIndexingEngineRepresenting.swift`
-- Create: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/MockBackgroundIndexingEngine.swift`
+**文件:**
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/BackgroundIndexingEngineRepresenting.swift`
+- 创建: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/MockBackgroundIndexingEngine.swift`
 
-- [ ] **Step 1: Create the protocol**
+- [ ] **Step 1: 创建协议**
 
-File `BackgroundIndexingEngineRepresenting.swift`:
+文件 `BackgroundIndexingEngineRepresenting.swift`:
 
 ```swift
 import MachOKit
@@ -839,9 +837,9 @@ protocol BackgroundIndexingEngineRepresenting: AnyObject, Sendable {
 }
 ```
 
-- [ ] **Step 2: Conform `RuntimeEngine` to the protocol**
+- [ ] **Step 2: 让 `RuntimeEngine` 遵循该协议**
 
-Append to `RuntimeEngine+BackgroundIndexing.swift`:
+追加到 `RuntimeEngine+BackgroundIndexing.swift`:
 
 ```swift
 extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
@@ -872,11 +870,11 @@ extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
 }
 ```
 
-If the actual MachOImage API returns `rpaths` as e.g. `[RpathCommand]` with `.path` strings, replace `image.rpaths` with the correct accessor (e.g. `image.rpaths.map { $0.path }`). Do the exploration at the top of this task and stick to the verified API.
+如果实际的 MachOImage API 将 `rpaths` 返回为如 `[RpathCommand]`、其 `.path` 为字符串，请把 `image.rpaths` 替换为正确的访问器（如 `image.rpaths.map { $0.path }`）。本任务开头先做探索，并坚持使用已核验的 API。
 
-- [ ] **Step 3: Create the mock**
+- [ ] **Step 3: 创建 mock**
 
-File `MockBackgroundIndexingEngine.swift`:
+文件 `MockBackgroundIndexingEngine.swift`:
 
 ```swift
 import Foundation
@@ -937,15 +935,15 @@ final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting,
 }
 ```
 
-- [ ] **Step 4: Compile check**
+- [ ] **Step 4: 编译检查**
 
 ```bash
 cd RuntimeViewerCore && swift build 2>&1 | xcsift
 ```
 
-Expected: build succeeds.
+预期：构建成功。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -954,15 +952,15 @@ git commit -m "feat(core): protocol and mock engine for background indexing"
 
 ---
 
-### Task 6: Create the manager actor skeleton with AsyncStream
+### 任务 6: 创建带 AsyncStream 的 manager actor 骨架
 
-**Files:**
-- Create: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeBackgroundIndexingManager.swift`
-- Test: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeBackgroundIndexingManagerTests.swift`
+**文件:**
+- 创建: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeBackgroundIndexingManager.swift`
+- 测试: `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/RuntimeBackgroundIndexingManagerTests.swift`
 
-- [ ] **Step 1: Write failing test for empty manager state**
+- [ ] **Step 1: 写出针对空 manager 状态的失败测试**
 
-File `RuntimeBackgroundIndexingManagerTests.swift`:
+文件 `RuntimeBackgroundIndexingManagerTests.swift`:
 
 ```swift
 import XCTest
@@ -1007,17 +1005,17 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Run test — expect compile failure**
+- [ ] **Step 2: 运行测试 —— 预期编译失败**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeBackgroundIndexingManagerTests 2>&1 | xcsift
 ```
 
-Expected: `RuntimeBackgroundIndexingManager` undefined.
+预期：`RuntimeBackgroundIndexingManager` 未定义。
 
-- [ ] **Step 3: Implement the skeleton**
+- [ ] **Step 3: 实现骨架**
 
-File `RuntimeBackgroundIndexingManager.swift`:
+文件 `RuntimeBackgroundIndexingManager.swift`:
 
 ```swift
 import Foundation
@@ -1114,15 +1112,15 @@ public actor RuntimeBackgroundIndexingManager {
 }
 ```
 
-- [ ] **Step 4: Run test — expect pass**
+- [ ] **Step 4: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeBackgroundIndexingManagerTests 2>&1 | xcsift
 ```
 
-Expected: both tests pass.
+预期：两个测试通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -1131,15 +1129,15 @@ git commit -m "feat(core): manager actor skeleton with AsyncStream plumbing"
 
 ---
 
-### Task 7: Implement `expandDependencyGraph` — BFS with depth limit and short-circuit
+### 任务 7: 实现 `expandDependencyGraph` —— 带深度限制与短路的 BFS
 
-**Files:**
-- Modify: `RuntimeBackgroundIndexingManager.swift`
-- Test: append to `RuntimeBackgroundIndexingManagerTests.swift`
+**文件:**
+- 修改: `RuntimeBackgroundIndexingManager.swift`
+- 测试: 追加到 `RuntimeBackgroundIndexingManagerTests.swift`
 
-- [ ] **Step 1: Write failing tests**
+- [ ] **Step 1: 写出失败测试**
 
-Append to `RuntimeBackgroundIndexingManagerTests.swift`:
+追加到 `RuntimeBackgroundIndexingManagerTests.swift`:
 
 ```swift
     func test_expand_emptyWhenRootAlreadyIndexed() async {
@@ -1210,9 +1208,9 @@ Append to `RuntimeBackgroundIndexingManagerTests.swift`:
     }
 ```
 
-- [ ] **Step 2: Replace the placeholder `expandDependencyGraph` implementation**
+- [ ] **Step 2: 替换占位 `expandDependencyGraph` 实现**
 
-In `RuntimeBackgroundIndexingManager.swift` replace the existing stub with:
+在 `RuntimeBackgroundIndexingManager.swift` 中将已有的 stub 替换为：
 
 ```swift
 func expandDependencyGraph(rootPath: String, depth: Int)
@@ -1257,15 +1255,15 @@ func expandDependencyGraph(rootPath: String, depth: Int)
 }
 ```
 
-- [ ] **Step 3: Run tests — expect pass**
+- [ ] **Step 3: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeBackgroundIndexingManagerTests 2>&1 | xcsift
 ```
 
-Expected: all tests in the file pass, including the new ones.
+预期：该文件中所有测试，包括新增的，均通过。
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -1274,15 +1272,15 @@ git commit -m "feat(core): implement dependency graph BFS for background indexin
 
 ---
 
-### Task 8: Implement concurrent batch execution with AsyncSemaphore
+### 任务 8: 用 AsyncSemaphore 实现并发批次执行
 
-**Files:**
-- Modify: `RuntimeBackgroundIndexingManager.swift`
-- Test: append to `RuntimeBackgroundIndexingManagerTests.swift`
+**文件:**
+- 修改: `RuntimeBackgroundIndexingManager.swift`
+- 测试: 追加到 `RuntimeBackgroundIndexingManagerTests.swift`
 
-- [ ] **Step 1: Write failing tests**
+- [ ] **Step 1: 写出失败测试**
 
-Append:
+追加：
 
 ```swift
     func test_batch_indexesAllPendingItems() async {
@@ -1393,11 +1391,11 @@ Append:
     }
 ```
 
-Add `import MachOKit` at the top of the test file if not already present.
+如果测试文件顶部尚未添加 `import MachOKit`，请添加。
 
-- [ ] **Step 2: Replace the `runBatch` stub with real execution**
+- [ ] **Step 2: 用真正的执行替换 `runBatch` 桩**
 
-In `RuntimeBackgroundIndexingManager.swift` replace `runBatch` and introduce a helper `runSingleIndex`:
+在 `RuntimeBackgroundIndexingManager.swift` 中替换 `runBatch` 并引入辅助 `runSingleIndex`:
 
 ```swift
 private func runBatch(id: RuntimeIndexingBatchID) async {
@@ -1481,15 +1479,15 @@ private func updateItemState(batchID: RuntimeIndexingBatchID,
 }
 ```
 
-- [ ] **Step 3: Run tests — expect pass**
+- [ ] **Step 3: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeBackgroundIndexingManagerTests 2>&1 | xcsift
 ```
 
-Expected: all previous tests plus the 3 new ones pass.
+预期：之前的所有测试加上 3 个新增测试通过。
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -1498,15 +1496,15 @@ git commit -m "feat(core): concurrent batch execution with AsyncSemaphore"
 
 ---
 
-### Task 9: Implement `cancelBatch` and `cancelAllBatches`
+### 任务 9: 实现 `cancelBatch` 与 `cancelAllBatches`
 
-**Files:**
-- Modify: `RuntimeBackgroundIndexingManager.swift`
-- Test: append to `RuntimeBackgroundIndexingManagerTests.swift`
+**文件:**
+- 修改: `RuntimeBackgroundIndexingManager.swift`
+- 测试: 追加到 `RuntimeBackgroundIndexingManagerTests.swift`
 
-- [ ] **Step 1: Write failing tests**
+- [ ] **Step 1: 写出失败测试**
 
-Append:
+追加：
 
 ```swift
     func test_cancelBatch_stopsPendingItemsAndEmitsCancelledEvent() async {
@@ -1551,9 +1549,9 @@ Append:
     }
 ```
 
-- [ ] **Step 2: Implement cancellation**
+- [ ] **Step 2: 实现取消**
 
-Add these methods to `RuntimeBackgroundIndexingManager`:
+在 `RuntimeBackgroundIndexingManager` 中加入：
 
 ```swift
 public func cancelBatch(_ id: RuntimeIndexingBatchID) {
@@ -1569,7 +1567,7 @@ public func cancelAllBatches() {
 }
 ```
 
-Update `finalize` to propagate the already-set `isCancelled` flag:
+更新 `finalize` 以传播已经设置的 `isCancelled` 标志：
 
 ```swift
 private func finalize(id: RuntimeIndexingBatchID, cancelled: Bool) {
@@ -1596,13 +1594,13 @@ private func finalize(id: RuntimeIndexingBatchID, cancelled: Bool) {
 }
 ```
 
-- [ ] **Step 3: Run tests — expect pass**
+- [ ] **Step 3: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeBackgroundIndexingManagerTests 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -1611,15 +1609,15 @@ git commit -m "feat(core): cancelBatch and cancelAllBatches on indexing manager"
 
 ---
 
-### Task 10: Implement `prioritize(imagePath:)`
+### 任务 10: 实现 `prioritize(imagePath:)`
 
-**Files:**
-- Modify: `RuntimeBackgroundIndexingManager.swift`
-- Test: append to `RuntimeBackgroundIndexingManagerTests.swift`
+**文件:**
+- 修改: `RuntimeBackgroundIndexingManager.swift`
+- 测试: 追加到 `RuntimeBackgroundIndexingManagerTests.swift`
 
-- [ ] **Step 1: Write failing tests**
+- [ ] **Step 1: 写出失败测试**
 
-Append:
+追加：
 
 ```swift
     func test_prioritize_emitsTaskPrioritizedEvent() async {
@@ -1666,9 +1664,9 @@ Append:
     }
 ```
 
-- [ ] **Step 2: Implement prioritize**
+- [ ] **Step 2: 实现 prioritize**
 
-Add to `RuntimeBackgroundIndexingManager`:
+在 `RuntimeBackgroundIndexingManager` 中加入：
 
 ```swift
 public func prioritize(imagePath: String) {
@@ -1685,13 +1683,13 @@ public func prioritize(imagePath: String) {
 }
 ```
 
-- [ ] **Step 3: Run tests — expect pass**
+- [ ] **Step 3: 运行测试 —— 预期通过**
 
 ```bash
 cd RuntimeViewerCore && swift test --filter RuntimeBackgroundIndexingManagerTests 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerCore
@@ -1700,24 +1698,24 @@ git commit -m "feat(core): prioritize pending item to head of queue"
 
 ---
 
-## Phase 4 — Engine integration
+## Phase 4 —— Engine 集成
 
-### Task 11: Hold `RuntimeBackgroundIndexingManager` on `RuntimeEngine`
+### 任务 11: 在 `RuntimeEngine` 上持有 `RuntimeBackgroundIndexingManager`
 
-**Files:**
-- Modify: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift` (init area and new stored property)
+**文件:**
+- 修改: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`（init 区域和新增存储属性）
 
-- [ ] **Step 1: Inspect RuntimeEngine init**
+- [ ] **Step 1: 检查 RuntimeEngine init**
 
 ```bash
 rg -n "init\(source|actor RuntimeEngine" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift | head
 ```
 
-Note the initializer signature so we can inject the manager without breaking callers.
+记录初始化器签名，以便在不破坏调用方的前提下注入 manager。
 
-- [ ] **Step 2: Add an explicit stored property and initialize it at the end of `init`**
+- [ ] **Step 2: 增加显式存储属性，并在 `init` 末尾初始化**
 
-`lazy var` on an actor forces every first access through actor-isolation, which makes the initialization point non-obvious and interacts awkwardly with `nonisolated` accessors. Use an explicit implicitly-unwrapped stored property set as the last line of `init`:
+actor 上的 `lazy var` 强制每次首次访问都通过 actor 隔离，使初始化点不直观，且与 `nonisolated` 访问器交互不顺畅。改用一个显式的隐式可解包存储属性，作为 `init` 的最后一行赋值：
 
 ```swift
 // Near the other stored properties:
@@ -1727,17 +1725,17 @@ public private(set) var backgroundIndexingManager: RuntimeBackgroundIndexingMana
 self.backgroundIndexingManager = RuntimeBackgroundIndexingManager(engine: self)
 ```
 
-Rationale for IUO: the actor cannot hand `self` to the manager before `init` finishes registering the other stored properties, and the manager is read-only after init — no reassignment paths, no nil access paths outside the one-line bootstrap.
+IUO 的理由：actor 不能在 `init` 完成对其他存储属性的注册前把 `self` 交给 manager；而 manager 在 init 之后是只读的 —— 不存在重新赋值的路径，也不存在一行 bootstrap 之外的 nil 访问路径。
 
-- [ ] **Step 3: Build**
+- [ ] **Step 3: 构建**
 
 ```bash
 cd RuntimeViewerCore && swift build 2>&1 | xcsift
 ```
 
-Expected: clean build.
+预期：构建无报错。
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift
@@ -1746,22 +1744,22 @@ git commit -m "feat(core): expose backgroundIndexingManager on RuntimeEngine"
 
 ---
 
-## Phase 5 — Settings
+## Phase 5 —— Settings
 
-### Task 12: Add `BackgroundIndexing` struct to `Settings+Types.swift`
+### 任务 12: 在 `Settings+Types.swift` 中加入 `BackgroundIndexing` 结构体
 
-**Files:**
-- Modify: `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+Types.swift`
+**文件:**
+- 修改: `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+Types.swift`
 
-- [ ] **Step 1: Read the existing MCP struct to match its style**
+- [ ] **Step 1: 阅读已有的 MCP 结构体以匹配风格**
 
 ```bash
 rg -n "public struct MCP|public struct Notifications|public var mcp" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+Types.swift
 ```
 
-- [ ] **Step 2: Append the new struct and root property**
+- [ ] **Step 2: 追加新结构体与根属性**
 
-In `Settings+Types.swift`, next to the other nested settings structs, add:
+在 `Settings+Types.swift` 中、其他嵌套设置结构体旁，加入：
 
 ```swift
 @Codable @MemberInit public struct BackgroundIndexing {
@@ -1772,21 +1770,21 @@ In `Settings+Types.swift`, next to the other nested settings structs, add:
 }
 ```
 
-In the root `Settings` struct, add a new stored property next to `mcp`:
+在根 `Settings` 结构体中、紧挨 `mcp` 加入新存储属性：
 
 ```swift
 @Default(BackgroundIndexing.default) public var backgroundIndexing: BackgroundIndexing
 ```
 
-- [ ] **Step 3: Build the packages**
+- [ ] **Step 3: 构建 packages**
 
 ```bash
 cd RuntimeViewerPackages && swift package update && swift build 2>&1 | xcsift
 ```
 
-Expected: clean build.
+预期：构建无报错。
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+Types.swift
@@ -1795,23 +1793,23 @@ git commit -m "feat(settings): add BackgroundIndexing settings struct"
 
 ---
 
-### Task 13: Add the Settings UI page
+### 任务 13: 添加 Settings UI 页面
 
-**Files:**
-- Modify: `RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/SettingsRootView.swift`
-- Create: `RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/Components/BackgroundIndexingSettingsView.swift`
+**文件:**
+- 修改: `RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/SettingsRootView.swift`
+- 创建: `RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/Components/BackgroundIndexingSettingsView.swift`
 
-- [ ] **Step 1: Read the existing Settings root view**
+- [ ] **Step 1: 阅读已有 Settings 根视图**
 
 ```bash
 rg -n "case general|case mcp|SettingsPage|contentView" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/SettingsRootView.swift | head -20
 ```
 
-- [ ] **Step 2: Add the enum case and content switch arm**
+- [ ] **Step 2: 增加枚举 case 和 content switch 分支**
 
-In `SettingsRootView.swift`, add `case backgroundIndexing` to the `SettingsPage` enum. Match the formatting of existing cases.
+在 `SettingsRootView.swift` 中给 `SettingsPage` 枚举添加 `case backgroundIndexing`，匹配现有 case 的格式。
 
-Provide the title and icon:
+提供标题与图标：
 
 ```swift
 var title: String {
@@ -1831,15 +1829,15 @@ var iconName: String {
 }
 ```
 
-In the `contentView` switch, add:
+在 `contentView` switch 中加入：
 
 ```swift
 case .backgroundIndexing: BackgroundIndexingSettingsView()
 ```
 
-- [ ] **Step 3: Create the SwiftUI page**
+- [ ] **Step 3: 创建 SwiftUI 页面**
 
-File `BackgroundIndexingSettingsView.swift`:
+文件 `BackgroundIndexingSettingsView.swift`:
 
 ```swift
 import SwiftUI
@@ -1880,13 +1878,13 @@ public struct BackgroundIndexingSettingsView: View {
 }
 ```
 
-- [ ] **Step 4: Build**
+- [ ] **Step 4: 构建**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI
@@ -1895,24 +1893,24 @@ git commit -m "feat(settings-ui): Background Indexing settings page"
 
 ---
 
-## Phase 6 — Coordinator (RuntimeViewerApplication)
+## Phase 6 —— Coordinator (RuntimeViewerApplication)
 
-### Task 14: Create `RuntimeBackgroundIndexingCoordinator` skeleton
+### 任务 14: 创建 `RuntimeBackgroundIndexingCoordinator` 骨架
 
-**Files:**
-- Create: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift`
+**文件:**
+- 创建: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift`
 
-- [ ] **Step 1: Read DocumentState to understand the environment the coordinator will live in**
+- [ ] **Step 1: 阅读 DocumentState 以了解 coordinator 将存活的环境**
 
 ```bash
 rg -n "final class DocumentState|runtimeEngine|public var" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift | head -30
 ```
 
-Note the name of the engine property (`runtimeEngine` is likely) and whether `DocumentState` already exposes an observable for `loadImage` completion (e.g. a Rx subject) — this determines the subscription wire-up in Task 15.
+记录引擎属性的名称（很可能是 `runtimeEngine`），以及 `DocumentState` 是否已经为 `loadImage` 完成暴露了一个可观察对象（如 Rx subject） —— 这决定了任务 15 中的订阅接线方式。
 
-- [ ] **Step 2: Create the coordinator skeleton**
+- [ ] **Step 2: 创建 coordinator 骨架**
 
-File `RuntimeBackgroundIndexingCoordinator.swift`:
+文件 `RuntimeBackgroundIndexingCoordinator.swift`:
 
 ```swift
 import Foundation
@@ -2048,15 +2046,15 @@ public final class RuntimeBackgroundIndexingCoordinator {
 }
 ```
 
-The `mutating(_:_:)` helper is now a private method on the coordinator (see earlier insertion). It is not a global function — `private` file-scope would still pollute any future file in the same module, and a private method keeps the utility scoped to the coordinator that needs it.
+`mutating(_:_:)` 辅助函数现在是 coordinator 上的私有方法（参见上面插入位置）。它不是全局函数 —— 文件作用域的 `private` 仍会污染同模块未来文件，而私有方法把工具范围限定在需要它的 coordinator 内。
 
-- [ ] **Step 3: Build**
+- [ ] **Step 3: 构建**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing
@@ -2065,14 +2063,14 @@ git commit -m "feat(application): coordinator skeleton for background indexing"
 
 ---
 
-### Task 15: Hook coordinator into document lifecycle — start `.appLaunch` batch
+### 任务 15: 把 coordinator 接入 document 生命周期 —— 启动 `.appLaunch` 批次
 
-**Files:**
-- Modify: `RuntimeBackgroundIndexingCoordinator.swift`
+**文件:**
+- 修改: `RuntimeBackgroundIndexingCoordinator.swift`
 
-- [ ] **Step 1: Add settings access and startup entry point**
+- [ ] **Step 1: 增加 settings 访问与启动入口**
 
-Append to `RuntimeBackgroundIndexingCoordinator.swift`:
+追加到 `RuntimeBackgroundIndexingCoordinator.swift`:
 
 ```swift
 extension RuntimeBackgroundIndexingCoordinator {
@@ -2110,15 +2108,15 @@ extension RuntimeBackgroundIndexingCoordinator {
 }
 ```
 
-Check the Settings singleton access pattern; `Settings.shared.backgroundIndexing` is the placeholder — substitute whatever the codebase actually uses (e.g. `@Dependency(\.settings)`).
+检查 Settings 单例的访问模式；`Settings.shared.backgroundIndexing` 只是占位 —— 用代码库实际使用的方式替换（如 `@Dependency(\.settings)`）。
 
-- [ ] **Step 2: Build**
+- [ ] **Step 2: 构建**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: 提交**
 
 ```bash
 git add RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift
@@ -2127,20 +2125,20 @@ git commit -m "feat(application): documentDidOpen / documentWillClose hooks for 
 
 ---
 
-### Task 16: Subscribe to image-loaded events — start per-image dependency batches
+### 任务 16: 订阅镜像加载事件 —— 启动按镜像的依赖批次
 
-**Files:**
-- Modify: `RuntimeBackgroundIndexingCoordinator.swift`
+**文件:**
+- 修改: `RuntimeBackgroundIndexingCoordinator.swift`
 
-- [ ] **Step 1: Inspect the engine's image-loaded signal**
+- [ ] **Step 1: 检查 engine 的镜像加载信号**
 
 ```bash
 rg -n "didLoadImage|imageLoaded|imageDidLoad|PublishSubject.*String" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/ | head
 ```
 
-Record the exact Rx observable or async sequence name. Adapt the subscription below to match.
+记录精确的 Rx observable 或 async sequence 名称，调整下面的订阅以匹配。
 
-- [ ] **Step 2: Add the subscription in the coordinator init, after `startEventPump()`**
+- [ ] **Step 2: 在 coordinator init 的 `startEventPump()` 之后增加订阅**
 
 ```swift
 private func subscribeToImageLoadedEvents() {
@@ -2167,9 +2165,9 @@ private func handleImageLoaded(path: String) async {
 }
 ```
 
-Call `subscribeToImageLoadedEvents()` at the end of `init`.
+在 `init` 末尾调用 `subscribeToImageLoadedEvents()`。
 
-If the engine exposes only an `AsyncSequence` (not Rx), replace the subscription with:
+如果 engine 仅暴露 `AsyncSequence`（不是 Rx），把订阅替换为：
 
 ```swift
 imageEventPumpTask = Task { [weak self] in
@@ -2180,13 +2178,13 @@ imageEventPumpTask = Task { [weak self] in
 }
 ```
 
-- [ ] **Step 3: Build**
+- [ ] **Step 3: 构建**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift
@@ -2195,29 +2193,29 @@ git commit -m "feat(application): subscribe to engine image-loaded events to spa
 
 ---
 
-### Task 17: React to Settings changes via `withObservationTracking`
+### 任务 17: 通过 `withObservationTracking` 响应 Settings 变更
 
-**Files:**
-- Modify: `RuntimeBackgroundIndexingCoordinator.swift`
+**文件:**
+- 修改: `RuntimeBackgroundIndexingCoordinator.swift`
 
-**Why `withObservationTracking` (not Combine):** `Settings` at `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift:6` is declared `@Observable`. It has no Combine publisher, and the `scheduleAutoSave` path only fires through `didSet`. Adding a parallel `PassthroughSubject<Settings, Never>` would duplicate the source of truth. `withObservationTracking` is the native fit — the coordinator reads the tracked properties inside the `apply` closure, and Swift Observation registers a one-shot observer. We re-register inside `onChange` to keep observing across each mutation.
+**为什么用 `withObservationTracking`（不用 Combine）:** `RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift:6` 的 `Settings` 声明为 `@Observable`。它没有 Combine publisher，`scheduleAutoSave` 路径只通过 `didSet` 触发。增加平行的 `PassthroughSubject<Settings, Never>` 会复制事实来源。`withObservationTracking` 是原生匹配 —— coordinator 在 `apply` 闭包内读取被跟踪的属性，Swift Observation 注册一次性观察者。我们在 `onChange` 内重新注册以在每次变更后保持观察。
 
-- [ ] **Step 1: Add observation imports and state**
+- [ ] **Step 1: 添加 observation 导入与状态**
 
-At the top of `RuntimeBackgroundIndexingCoordinator.swift`:
+在 `RuntimeBackgroundIndexingCoordinator.swift` 顶部：
 
 ```swift
 import Observation
 import RuntimeViewerSettings
 ```
 
-Add private state on the coordinator class:
+在 coordinator 类上加私有状态：
 
 ```swift
 @MainActor private var lastKnownIsEnabled: Bool = false
 ```
 
-- [ ] **Step 2: Implement the observation loop**
+- [ ] **Step 2: 实现 observation 循环**
 
 ```swift
 @MainActor
@@ -2255,9 +2253,9 @@ private func handleSettingsChange() {
 }
 ```
 
-- [ ] **Step 3: Seed initial state and register from init**
+- [ ] **Step 3: 在 init 中播种初始状态并注册**
 
-At the end of `init`:
+在 `init` 末尾：
 
 ```swift
 Task { @MainActor [weak self] in
@@ -2267,13 +2265,13 @@ Task { @MainActor [weak self] in
 }
 ```
 
-- [ ] **Step 4: Build**
+- [ ] **Step 4: 构建**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift
@@ -2282,17 +2280,17 @@ git commit -m "feat(application): observe Settings.backgroundIndexing via withOb
 
 ---
 
-## Phase 7 — Toolbar popover UI
+## Phase 7 —— Toolbar 弹出框 UI
 
-### Task 18: Create `BackgroundIndexingNode` and popover ViewModel (on `MainRoute`)
+### 任务 18: 创建 `BackgroundIndexingNode` 与弹出框 ViewModel（在 `MainRoute` 上）
 
-**Files:**
-- Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingNode.swift`
-- Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewModel.swift`
+**文件:**
+- 创建: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingNode.swift`
+- 创建: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewModel.swift`
 
-**Why no separate Route:** `MainCoordinator` is declared `final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>` (`MainCoordinator.swift:11`). Its `Route` is already bound to `MainRoute`; a second conditional `Router` conformance for a `BackgroundIndexingPopoverRoute` would not compile. Instead, add a case to `MainRoute` (Task 21) and let the ViewModel be `ViewModel<MainRoute>`.
+**为什么没有单独的 Route:** `MainCoordinator` 声明为 `final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>`（`MainCoordinator.swift:11`）。它的 `Route` 已经绑定到 `MainRoute`；为 `BackgroundIndexingPopoverRoute` 增加第二个、有条件的 `Router` conformance 无法编译。改为给 `MainRoute` 加一个 case（任务 21），让 ViewModel 是 `ViewModel<MainRoute>`。
 
-- [ ] **Step 1: Create `BackgroundIndexingNode`**
+- [ ] **Step 1: 创建 `BackgroundIndexingNode`**
 
 ```swift
 import RuntimeViewerCore
@@ -2303,7 +2301,7 @@ enum BackgroundIndexingNode: Hashable {
 }
 ```
 
-- [ ] **Step 2: Create the ViewModel on `MainRoute`**
+- [ ] **Step 2: 在 `MainRoute` 上创建 ViewModel**
 
 ```swift
 import Foundation
@@ -2437,28 +2435,28 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 }
 ```
 
-Note: `coordinator.clearFailedBatches()` is added in Task 24 together with the "retain failed batches until dismissed" reducer change. If you reach Task 18 before Task 24, leave the `clearFailed` binding as a TODO pass-through and circle back.
+注意：`coordinator.clearFailedBatches()` 在任务 24 与"保留失败批次直至被清除"的 reducer 变更一起加入。如果你在任务 24 之前到达任务 18，把 `clearFailed` 绑定保留为 TODO 直通，回头再补。
 
-- [ ] **Step 3: Add the two new files to the Xcode project**
+- [ ] **Step 3: 把两个新文件加入 Xcode 项目**
 
-Using xcodeproj MCP, add:
+使用 xcodeproj MCP，加入：
 
 ```
 RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingNode.swift
 RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewModel.swift
 ```
 
-Each to the `RuntimeViewerUsingAppKit` target. There is **no** `BackgroundIndexingPopoverRoute.swift` — routing is via `MainRoute`.
+均加入 `RuntimeViewerUsingAppKit` target。**不存在** `BackgroundIndexingPopoverRoute.swift` —— 路由通过 `MainRoute`。
 
-- [ ] **Step 4: Build the app target**
+- [ ] **Step 4: 构建 app target**
 
 ```bash
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
-Expected: clean build.
+预期：构建无报错。
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerUsingAppKit
@@ -2467,12 +2465,12 @@ git commit -m "feat(ui): popover ViewModel on MainRoute + BackgroundIndexingNode
 
 ---
 
-### Task 19: Build the popover ViewController
+### 任务 19: 构建弹出框 ViewController
 
-**Files:**
-- Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewController.swift`
+**文件:**
+- 创建: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewController.swift`
 
-- [ ] **Step 1: Create the ViewController**
+- [ ] **Step 1: 创建 ViewController**
 
 ```swift
 import AppKit
@@ -2725,17 +2723,17 @@ extension BackgroundIndexingPopoverViewController: NSOutlineViewDataSource, NSOu
 }
 ```
 
-- [ ] **Step 2: Add to Xcode project**
+- [ ] **Step 2: 加入 Xcode 项目**
 
-xcodeproj MCP `add_file`: `BackgroundIndexingPopoverViewController.swift` to the `RuntimeViewerUsingAppKit` target.
+xcodeproj MCP `add_file`：将 `BackgroundIndexingPopoverViewController.swift` 加入 `RuntimeViewerUsingAppKit` target。
 
-- [ ] **Step 3: Build**
+- [ ] **Step 3: 构建**
 
 ```bash
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerUsingAppKit
@@ -2744,13 +2742,13 @@ git commit -m "feat(ui): popover view controller for background indexing"
 
 ---
 
-### Task 20: Build the Toolbar item view with `NSProgressIndicator` overlay
+### 任务 20: 构建带 `NSProgressIndicator` 叠加的 Toolbar item view
 
-**Files:**
-- Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingToolbarItemView.swift`
-- Create: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingToolbarItem.swift`
+**文件:**
+- 创建: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingToolbarItemView.swift`
+- 创建: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingToolbarItem.swift`
 
-- [ ] **Step 1: Create the custom view**
+- [ ] **Step 1: 创建自定义 view**
 
 ```swift
 import AppKit
@@ -2838,7 +2836,7 @@ final class BackgroundIndexingToolbarItemView: NSView {
 }
 ```
 
-- [ ] **Step 2: Create the `NSToolbarItem` subclass**
+- [ ] **Step 2: 创建 `NSToolbarItem` 子类**
 
 ```swift
 import AppKit
@@ -2876,17 +2874,17 @@ final class BackgroundIndexingToolbarItem: NSToolbarItem {
 }
 ```
 
-- [ ] **Step 3: Add both files to Xcode**
+- [ ] **Step 3: 把两个文件都加入 Xcode**
 
-xcodeproj MCP `add_file` twice to the `RuntimeViewerUsingAppKit` target.
+xcodeproj MCP `add_file` 两次，均加入 `RuntimeViewerUsingAppKit` target。
 
-- [ ] **Step 4: Build**
+- [ ] **Step 4: 构建**
 
 ```bash
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerUsingAppKit
@@ -2895,34 +2893,34 @@ git commit -m "feat(ui): toolbar item view and item class for background indexin
 
 ---
 
-### Task 21: Register the toolbar item and add the `MainRoute.backgroundIndexing` case
+### 任务 21: 注册 toolbar item 并增加 `MainRoute.backgroundIndexing` case
 
-**Files:**
-- Modify: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainRoute.swift`
-- Modify: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainToolbarController.swift`
-- Modify: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
+**文件:**
+- 修改: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainRoute.swift`
+- 修改: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainToolbarController.swift`
+- 修改: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
 
-**Why it's one route case, not a separate `Router` conformance:** `MainCoordinator` is already `SceneCoordinator<MainRoute, MainTransition>`. A conditional `extension MainCoordinator: Router where Route == BackgroundIndexingPopoverRoute` cannot compile — `Route` is pinned to `MainRoute`. The plan therefore extends `MainRoute` directly with one case and routes the popover's `.openSettings` through the existing `MainRoute.openSettings` case.
+**为什么是一个 route case 而不是单独的 `Router` conformance:** `MainCoordinator` 已是 `SceneCoordinator<MainRoute, MainTransition>`。一个有条件的 `extension MainCoordinator: Router where Route == BackgroundIndexingPopoverRoute` 无法编译 —— `Route` 已固定到 `MainRoute`。因此本计划直接在 `MainRoute` 上扩展一个 case，并把弹出框的 `.openSettings` 通过已有的 `MainRoute.openSettings` case 路由。
 
-- [ ] **Step 1: Inspect the existing MCPStatus wiring**
+- [ ] **Step 1: 检查现有的 MCPStatus 接线**
 
 ```bash
 rg -n "mcpStatus|MCPStatusToolbarItem|toolbarDefaultItemIdentifiers|itemForItemIdentifier" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainToolbarController.swift | head -30
 ```
 
-Also check `MainRoute.swift:18` — the existing case is literally `case mcpStatus(sender: NSView)`, not `mcpStatusPopover`. Match that naming style.
+也查看 `MainRoute.swift:18` —— 已有 case 字面量是 `case mcpStatus(sender: NSView)`，而非 `mcpStatusPopover`。匹配该命名风格。
 
-- [ ] **Step 2: Add the route case on `MainRoute`**
+- [ ] **Step 2: 在 `MainRoute` 上添加 route case**
 
-In `MainRoute.swift`, next to `case mcpStatus(sender: NSView)`, add:
+在 `MainRoute.swift` 中、紧挨 `case mcpStatus(sender: NSView)` 加入：
 
 ```swift
 case backgroundIndexing(sender: NSView)
 ```
 
-(No `Popover` suffix — matches the sibling `mcpStatus` precedent.)
+（无 `Popover` 后缀 —— 与同级 `mcpStatus` 先例一致。）
 
-- [ ] **Step 3: Register the toolbar item in `MainToolbarController`**
+- [ ] **Step 3: 在 `MainToolbarController` 中注册 toolbar item**
 
 ```swift
 override func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar)
@@ -2975,9 +2973,9 @@ private func wireBackgroundIndexing(item: BackgroundIndexingToolbarItem) {
 }
 ```
 
-The exact field names (`documentState`, `mainCoordinator`) must match `MainToolbarController`'s existing fields — adjust if the property is spelled differently.
+精确字段名（`documentState`、`mainCoordinator`）必须匹配 `MainToolbarController` 已有字段 —— 如果属性拼写不同请相应调整。
 
-- [ ] **Step 4: Handle the new case in `MainCoordinator.prepareTransition`**
+- [ ] **Step 4: 在 `MainCoordinator.prepareTransition` 处理新 case**
 
 ```swift
 case .backgroundIndexing(let sender):
@@ -2995,15 +2993,15 @@ case .backgroundIndexing(let sender):
                          behavior: .transient))
 ```
 
-No `extension MainCoordinator: Router where Route == ...` wrapper is needed — `self` is already `Router<MainRoute>`, and the popover's `openSettings` button triggers `router.trigger(.openSettings)` directly (the case already exists on `MainRoute`).
+不需要 `extension MainCoordinator: Router where Route == ...` 包装 —— `self` 已经是 `Router<MainRoute>`，弹出框的 `openSettings` 按钮直接触发 `router.trigger(.openSettings)`（`MainRoute` 上已有该 case）。
 
-- [ ] **Step 5: Build**
+- [ ] **Step 5: 构建**
 
 ```bash
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: 提交**
 
 ```bash
 git add RuntimeViewerUsingAppKit
@@ -3012,15 +3010,15 @@ git commit -m "feat(ui): toolbar item + MainRoute.backgroundIndexing popover rou
 
 ---
 
-## Phase 8 — Integration and QA
+## Phase 8 —— 集成与 QA
 
-### Task 22: Hold a coordinator on `DocumentState` and invoke lifecycle hooks
+### 任务 22: 在 `DocumentState` 上持有 coordinator，并调用生命周期钩子
 
-**Files:**
-- Modify: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift`
-- Modify: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift`
+**文件:**
+- 修改: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift`
+- 修改: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift`
 
-- [ ] **Step 1: Add the coordinator property to `DocumentState` and reinforce the `runtimeEngine` invariant**
+- [ ] **Step 1: 给 `DocumentState` 添加 coordinator 属性并强化 `runtimeEngine` 不变量**
 
 ```swift
 /// Immutable for the lifetime of the Document. The property is declared
@@ -3035,11 +3033,11 @@ public private(set) lazy var backgroundIndexingCoordinator =
     RuntimeBackgroundIndexingCoordinator(documentState: self)
 ```
 
-Edit the existing declaration of `runtimeEngine` at `DocumentState.swift:10-11` to include the doc comment above; leave the type and initial value unchanged.
+编辑 `DocumentState.swift:10-11` 处 `runtimeEngine` 的现有声明，加入上面的 doc comment；保留类型与初值不变。
 
-- [ ] **Step 2: Invoke lifecycle hooks from `Document`**
+- [ ] **Step 2: 在 `Document` 中调用生命周期钩子**
 
-In `Document.swift`:
+在 `Document.swift`:
 
 ```swift
 override func makeWindowControllers() {
@@ -3053,9 +3051,9 @@ override func close() {
 }
 ```
 
-Check the current `makeWindowControllers` / `close` implementation before editing; splice the lines in without removing existing logic.
+编辑前先检查现有的 `makeWindowControllers` / `close` 实现；插入这些行而不删除现有逻辑。
 
-- [ ] **Step 3: Build (package + app)**
+- [ ] **Step 3: 构建（package + app）**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
@@ -3063,7 +3061,7 @@ cd /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add RuntimeViewerPackages RuntimeViewerUsingAppKit
@@ -3072,20 +3070,20 @@ git commit -m "feat(app): wire background indexing coordinator into Document lif
 
 ---
 
-### Task 23: Wire sidebar selection → `prioritize`
+### 任务 23: 把 sidebar 选中接到 `prioritize`
 
-**Files:**
-- Modify: the coordinator or VC that observes sidebar selection (likely `MainCoordinator` or `SidebarCoordinator`)
+**文件:**
+- 修改: 观察 sidebar 选中的 coordinator 或 VC（很可能是 `MainCoordinator` 或 `SidebarCoordinator`）
 
-- [ ] **Step 1: Find the sidebar image selection signal**
+- [ ] **Step 1: 找到 sidebar 镜像选中信号**
 
 ```bash
 rg -n "imageSelected|didSelectImage|sidebar.*Selected" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/ /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages/Sources/RuntimeViewerApplication/Sidebar/ | head -20
 ```
 
-Record the exact signal name and where it's published.
+记录精确的信号名称及其发布位置。
 
-- [ ] **Step 2: In the sidebar coordinator init (or wherever selection is handled), add:**
+- [ ] **Step 2: 在 sidebar coordinator init（或处理选中的位置）中加入：**
 
 ```swift
 sidebarViewModel.$selectedImagePath
@@ -3096,15 +3094,15 @@ sidebarViewModel.$selectedImagePath
     .disposed(by: rx.disposeBag)
 ```
 
-Use whichever observable already tracks sidebar image selection. If there isn't one, promote the existing relay to `public` and use it.
+使用任何已经跟踪 sidebar 镜像选中的 observable。如果没有，把已有 relay 提升为 `public` 并使用。
 
-- [ ] **Step 3: Build**
+- [ ] **Step 3: 构建**
 
 ```bash
 xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: 提交**
 
 ```bash
 git add .
@@ -3113,14 +3111,14 @@ git commit -m "feat(app): prioritize indexing when user selects an image in side
 
 ---
 
-### Task 24: Retain failed batches; refresh image list once per batch finish
+### 任务 24: 保留失败批次；每个批次结束时刷新一次镜像列表
 
-**Files:**
-- Modify: `RuntimeBackgroundIndexingCoordinator.swift`
+**文件:**
+- 修改: `RuntimeBackgroundIndexingCoordinator.swift`
 
-**Why retain failed batches:** The toolbar state `.hasFailures(...)` is derived from the coordinator's `aggregateState`. If `.batchFinished` immediately removes the batch — even one containing `.failed` items — the toolbar never surfaces the failure. This task changes the `.batchFinished` / `.batchCancelled` reducer: clean finishes and cancels drop out; finishes with any `.failed` item stay in `batchesRelay` until the user calls `clearFailedBatches()` from the popover.
+**为什么保留失败批次:** Toolbar 状态 `.hasFailures(...)` 由 coordinator 的 `aggregateState` 派生。如果 `.batchFinished` 立即移除批次 —— 即便包含 `.failed` 项 —— toolbar 永远不会浮现失败。本任务修改 `.batchFinished` / `.batchCancelled` reducer：干净完成与取消会移除；含任意 `.failed` 项的完成保留在 `batchesRelay` 中，直到用户从弹出框调用 `clearFailedBatches()`。
 
-- [ ] **Step 1: Update the `apply(event:)` reducer for `.batchFinished` / `.batchCancelled`**
+- [ ] **Step 1: 更新 `apply(event:)` reducer 中的 `.batchFinished` / `.batchCancelled`**
 
 ```swift
 case .batchFinished(let finished):
@@ -3146,7 +3144,7 @@ case .batchCancelled(let cancelled):
     }
 ```
 
-- [ ] **Step 2: Add `clearFailedBatches()` to the coordinator's public surface**
+- [ ] **Step 2: 在 coordinator 公共表面加入 `clearFailedBatches()`**
 
 ```swift
 public func clearFailedBatches() {
@@ -3161,19 +3159,19 @@ public func clearFailedBatches() {
 }
 ```
 
-This is the method the Task 18 popover ViewModel calls from its `Clear Failed` button input.
+这是任务 18 中弹出框 ViewModel 从 `Clear Failed` 按钮输入调用的方法。
 
-- [ ] **Step 3: Update `refreshAggregate` so `hasAnyFailure` considers retained batches**
+- [ ] **Step 3: 更新 `refreshAggregate`，使 `hasAnyFailure` 考虑保留的批次**
 
-The existing `hasAnyFailure` computation already scans `batches` for `.failed` items, so no change is required — the retained failed batches stay visible in the aggregate state.
+已有的 `hasAnyFailure` 计算已经扫描 `batches` 中的 `.failed` 项，无需更改 —— 保留的失败批次会留在聚合状态中。
 
-- [ ] **Step 4: Build**
+- [ ] **Step 4: 构建**
 
 ```bash
 cd RuntimeViewerPackages && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: 提交**
 
 ```bash
 git add RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift
@@ -3182,58 +3180,58 @@ git commit -m "feat(application): retain failed batches + single reloadData per 
 
 ---
 
-### Task 25: Full build, run tests, manual QA
+### 任务 25: 完整构建、跑测试、手动 QA
 
-- [ ] **Step 1: Run the full Core test suite**
+- [ ] **Step 1: 跑完整 Core 测试套件**
 
 ```bash
 cd RuntimeViewerCore && swift test 2>&1 | xcsift
 ```
 
-Expected: all tests pass.
+预期：所有测试通过。
 
-- [ ] **Step 2: Run the full Packages build**
+- [ ] **Step 2: 完整构建 Packages**
 
 ```bash
 cd /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerPackages && swift package update && swift build 2>&1 | xcsift
 ```
 
-- [ ] **Step 3: Build the app**
+- [ ] **Step 3: 构建 app**
 
 ```bash
 cd /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer && xcodebuild build -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS' 2>&1 | xcsift
 ```
 
-- [ ] **Step 4: Manual QA checklist**
+- [ ] **Step 4: 手动 QA 清单**
 
-Launch the debug app and verify, ticking each box:
+启动 debug app 并逐项验证：
 
-- [ ] With Background Indexing disabled in Settings, the toolbar item shows the faded idle icon and the popover shows the "disabled" empty state.
-- [ ] Enabling the toggle in Settings triggers a new batch for the app's main executable; the toolbar icon starts spinning; the popover shows the batch with items progressing.
-- [ ] Reducing depth / maxConcurrency while a batch is running does not affect that batch.
-- [ ] A new batch after changing settings uses the new values (verify by inspecting `items.count` for a deep-tree image).
-- [ ] Loading a new image (File → Open) spawns a second batch named after the new image; both batches progress concurrently.
-- [ ] Clicking the batch's cancel button (⊘) stops the batch; its unfinished items become grey; the toolbar icon returns to idle when no batches remain.
-- [ ] The "Cancel All" button in the popover cancels every batch.
-- [ ] Selecting an image in the sidebar that is currently pending in a batch shows a `(priority)` tag on its popover row and it runs next.
-- [ ] An image with an unresolvable `@rpath` dependency renders a red ✗ row with the install name and the error message.
-- [ ] Closing the Document cancels its batches; the toolbar icon for that window resets to idle.
+- [ ] Settings 中禁用 Background Indexing 时，toolbar 项显示淡化的 idle 图标，弹出框显示"已禁用"空状态。
+- [ ] 在 Settings 启用开关会为 app 主可执行触发新批次；toolbar 图标开始旋转；弹出框显示批次及其项进展。
+- [ ] 批次运行中减小 depth / maxConcurrency 不会影响该批次。
+- [ ] 设置变更后启动的新批次使用新值（通过查看深度依赖树镜像的 `items.count` 验证）。
+- [ ] 加载新镜像（File → Open）会启动以新镜像命名的第二个批次；两个批次并行进行。
+- [ ] 点击批次的取消按钮（⊘）停止该批次；其未完成项变灰；当无批次时 toolbar 图标返回 idle。
+- [ ] 弹出框中的 "Cancel All" 按钮取消所有批次。
+- [ ] 在 sidebar 选中目前在批次中 pending 的镜像会让其弹出框行显示 `(priority)` 标签，并下一个运行。
+- [ ] 包含无法解析 `@rpath` 依赖的镜像渲染为红色 ✗ 行，并显示 install name 与错误信息。
+- [ ] 关闭 Document 取消其批次；该窗口的 toolbar 图标重置为 idle。
 
-- [ ] **Step 5: Commit the manual verification checklist outcome (optional)**
+- [ ] **Step 5: 提交手动验证清单结果（可选）**
 
-If all boxes tick, no code change is required. Otherwise, fix the failing item in a new task, then re-run Step 4.
+如果所有项都打勾，无需代码改动。否则在新任务中修复失败项，然后重新执行 Step 4。
 
 ---
 
-### Task 26: Open a pull request
+### 任务 26: 提交 pull request
 
-- [ ] **Step 1: Push the branch**
+- [ ] **Step 1: 推送分支**
 
 ```bash
 git push -u origin feature/runtime-background-indexing
 ```
 
-- [ ] **Step 2: Create the PR**
+- [ ] **Step 2: 创建 PR**
 
 ```bash
 gh pr create --title "feat: background indexing" --body "$(cat <<'EOF'
@@ -3255,22 +3253,22 @@ EOF
 
 ---
 
-## Self-Review Summary
+## 自审小结
 
-- **Spec coverage:** every section of the evolution proposal has at least one task.
-  - Package wiring (Semaphore dependency) → Task 0.
-  - Value types (all `Hashable`) + `ResolvedDependency` → Task 1.
-  - `DylibPathResolver` → Task 2.
-  - `Loaded vs Indexed` + `request/remote` dispatch for `isImageIndexed` → Task 3.
-  - Engine new APIs (`mainExecutablePath`, `loadImageForBackgroundIndexing`) with `request/remote` → Task 4; `imageDidLoadPublisher` → Task 4.5.
-  - Manager (protocol + mock, skeleton, BFS, concurrency, cancel, prioritize) → Tasks 5-10.
-  - Engine integration (non-`lazy` stored manager) → Task 11.
-  - Settings → Tasks 12-13.
-  - Coordinator (lifecycle, image-loaded, Settings via `withObservationTracking`) → Tasks 14-17.
-  - UI (Node + ViewModel on `MainRoute`, VC with `preconditionFailure` data source, toolbar view + item, `MainRoute.backgroundIndexing` registration) → Tasks 18-21.
-  - Integration (Document wiring + `runtimeEngine` immutability doc comment) → Task 22.
-  - Sidebar → prioritize → Task 23.
-  - Retain failed batches + refresh image list → Task 24.
-  - Manual QA → Task 25.
-- **Review decisions embedded:** all three header decisions from the 2026-04-24 review — Settings via `withObservationTracking` (Task 17), `BackgroundIndexingPopoverRoute` merged into `MainRoute` (Task 18/21), and `request/remote` dispatch for engine methods (Tasks 3/4) — have dedicated tasks and explicit rationale paragraphs.
-- **Type consistency:** `RuntimeIndexingBatchID`, `RuntimeIndexingBatch`, `RuntimeIndexingTaskState`, `RuntimeIndexingEvent`, `RuntimeIndexingBatchReason`, `RuntimeIndexingTaskItem`, `ResolvedDependency`, `BackgroundIndexingToolbarState`, `BackgroundIndexing`, `BackgroundIndexingNode`, `BackgroundIndexingPopoverViewModel`, `BackgroundIndexingPopoverViewController`, `BackgroundIndexingToolbarItem`, `BackgroundIndexingToolbarItemView`, `RuntimeBackgroundIndexingManager`, `RuntimeBackgroundIndexingCoordinator`, `DylibPathResolver`, `BackgroundIndexingEngineRepresenting` — all cross-referenced names match between their definition task and the tasks that consume them. No `BackgroundIndexingPopoverRoute` type is introduced anywhere.
+- **规范覆盖:** evolution 提案的每一节都至少对应一个任务。
+  - Package 接线（Semaphore 依赖）→ 任务 0。
+  - 值类型（全部 `Hashable`）+ `ResolvedDependency` → 任务 1。
+  - `DylibPathResolver` → 任务 2。
+  - `Loaded vs Indexed` + `request/remote` 分发的 `isImageIndexed` → 任务 3。
+  - Engine 新 API（`mainExecutablePath`、`loadImageForBackgroundIndexing`）带 `request/remote` → 任务 4；`imageDidLoadPublisher` → 任务 4.5。
+  - Manager（协议 + mock、骨架、BFS、并发、取消、prioritize）→ 任务 5-10。
+  - Engine 集成（非 `lazy` 存储 manager）→ 任务 11。
+  - Settings → 任务 12-13。
+  - Coordinator（生命周期、镜像加载、通过 `withObservationTracking` 观察 Settings）→ 任务 14-17。
+  - UI（`MainRoute` 上的 Node + ViewModel、带 `preconditionFailure` 数据源的 VC、toolbar view + item、`MainRoute.backgroundIndexing` 注册）→ 任务 18-21。
+  - 集成（Document 接线 + `runtimeEngine` 不变量 doc 注释）→ 任务 22。
+  - Sidebar → prioritize → 任务 23。
+  - 保留失败批次 + 刷新镜像列表 → 任务 24。
+  - 手动 QA → 任务 25。
+- **review 决策已落实:** 2026-04-24 review 中三条头部决策 —— 通过 `withObservationTracking` 处理 Settings（任务 17）、`BackgroundIndexingPopoverRoute` 合入 `MainRoute`（任务 18/21）、engine 方法的 `request/remote` 分发（任务 3/4）—— 均有专属任务与显式理由段落。
+- **类型一致性:** `RuntimeIndexingBatchID`、`RuntimeIndexingBatch`、`RuntimeIndexingTaskState`、`RuntimeIndexingEvent`、`RuntimeIndexingBatchReason`、`RuntimeIndexingTaskItem`、`ResolvedDependency`、`BackgroundIndexingToolbarState`、`BackgroundIndexing`、`BackgroundIndexingNode`、`BackgroundIndexingPopoverViewModel`、`BackgroundIndexingPopoverViewController`、`BackgroundIndexingToolbarItem`、`BackgroundIndexingToolbarItemView`、`RuntimeBackgroundIndexingManager`、`RuntimeBackgroundIndexingCoordinator`、`DylibPathResolver`、`BackgroundIndexingEngineRepresenting` —— 所有交叉引用名称在定义任务与消费任务之间一致。任何位置都没有引入 `BackgroundIndexingPopoverRoute` 类型。
