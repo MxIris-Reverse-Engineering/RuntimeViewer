@@ -1,98 +1,98 @@
-# 0002 - Background Indexing
+# 0002 - 后台索引
 
-- **Status**: Accepted
-- **Author**: JH
-- **Date**: 2026-04-24
-- **Last Updated**: 2026-04-24
+- **状态**: Accepted
+- **作者**: JH
+- **日期**: 2026-04-24
+- **最后更新**: 2026-04-24
 
-## Summary
+## 摘要
 
-Add an opt-in **Background Indexing** feature that eagerly parses ObjC and Swift metadata for the dependency closure of images already loaded in the target process. Work is driven by a per-`RuntimeEngine` Swift-Concurrency actor (`RuntimeBackgroundIndexingManager`), configured from Settings, surfaced in a Toolbar popover with live progress, and cancellable on demand.
+新增一个可选的 **后台索引（Background Indexing）** 功能，针对目标进程已加载镜像的依赖闭包，主动解析其 ObjC 与 Swift 元数据。工作由每个 `RuntimeEngine` 持有的 Swift Concurrency actor（`RuntimeBackgroundIndexingManager`）驱动，可在 Settings 中配置，通过 Toolbar 弹出框实时显示进度，并支持随时取消。
 
-## Motivation
+## 动机
 
-Runtime Viewer currently indexes an image (parses ObjC/Swift metadata) only when the user explicitly opens it. For images that the target process has already loaded via dyld — e.g. UIKit, Foundation, and their transitive dependency closure — the first lookup pays a visible parsing cost because the work was never amortized.
+Runtime Viewer 当前仅在用户显式打开某个镜像时才对其进行索引（解析 ObjC/Swift 元数据）。对于目标进程已经通过 dyld 加载的镜像 —— 例如 UIKit、Foundation 及其传递依赖闭包 —— 首次查询会因从未摊销的解析成本而出现可见延迟。
 
-Goals:
+目标:
 
-- Reduce user-perceived latency for common lookups by pre-parsing likely-to-be-used images.
-- Preserve the existing on-demand `loadImage(at:)` path and its semantics.
-- Let the user trade CPU for responsiveness via Settings (depth, concurrency).
-- Give the user real-time visibility and a one-click cancel for running work.
+- 通过预解析常用镜像，降低用户在常见查询路径上感知到的延迟。
+- 保留现有按需 `loadImage(at:)` 路径及其语义。
+- 让用户通过 Settings 在 CPU 占用与响应速度之间权衡（depth、并发数）。
+- 为运行中的工作提供实时可见性以及一键取消能力。
 
-### Non-goals
+### 非目标
 
-- No persistence of indexing history across app restarts (each session starts clean).
-- No per-image (sub-batch) cancellation — batch-level cancellation only.
-- No pause/resume. Only start / cancel.
-- No automatic retry of failed items.
-- No QoS tier beyond a single manual `prioritize(path:)` hook.
-- No idle / low-power heuristics. Indexing runs regardless of system load.
-- No exposure of indexing progress to MCP tools (MCP consumes results, not process state).
-- No cross-Document / cross-Engine cache sharing beyond what already happens at the dyld level.
-- No backwards-compatibility shims for callers assuming the old "loadImage == indexed" conflation.
+- 不在应用重启之间持久化索引历史（每次会话从干净状态开始）。
+- 不支持单镜像（子批次）级取消 —— 仅支持批次级取消。
+- 不支持暂停/恢复，仅支持启动 / 取消。
+- 不自动重试失败项。
+- 除单一手动 `prioritize(path:)` 钩子外，不引入额外 QoS 等级。
+- 不引入空闲 / 低功耗启发式策略。无论系统负载如何，索引都会运行。
+- 不向 MCP 工具暴露索引进度（MCP 消费的是结果，而不是进程状态）。
+- 不在跨 Document / 跨 Engine 之间共享缓存（保留 dyld 层面已有的复用）。
+- 不为旧调用方"loadImage == indexed"的混淆假设提供向后兼容垫片。
 
-## Proposed Solution
+## 提议方案
 
-### Background Context
+### 背景上下文
 
-Source of truth captured during brainstorming and code verification:
+来自头脑风暴和代码核验的事实来源:
 
-- `RuntimeEngine` (actor) already tracks `imageList: [String]` (all dyld-known images) and `loadedImagePaths: Set<String>` (images we have processed via `loadImage(at:)`).
-- Indexing for a single image currently happens inside `loadImage(at:)`: it calls `objcSectionFactory.section(for:)` and `swiftSectionFactory.section(for:)` and then triggers `reloadData()`.
-- `MachOImage.dependencies: [DependedDylib]` gives the dependency list. MachOKit collapses `LC_LOAD_WEAK_DYLIB` into `DependType.load`, so only `.load`, `.reexport`, `.upwardLoad`, `.lazyLoad` are ever observed.
-- The `Semaphore` package (`groue/Semaphore`) is already resolved for `RuntimeViewerCommunication`. It must be re-declared as an explicit product dependency of the `RuntimeViewerCore` target before the manager can import it.
-- `MCPStatusPopoverViewController` + `MCPStatusToolbarItem` are the template for a Toolbar-anchored, RxSwift-driven popover.
-- `RuntimeEngine` exposes a `request<T>(local:remote:)` dispatch primitive (`RuntimeEngine.swift:468`) used by every public method whose result depends on the target process (local vs. XPC/TCP). All new public engine methods introduced here use the same primitive.
+- `RuntimeEngine`（actor）已经维护 `imageList: [String]`（所有 dyld 已知镜像）和 `loadedImagePaths: Set<String>`（我们通过 `loadImage(at:)` 处理过的镜像）。
+- 单个镜像的索引目前发生在 `loadImage(at:)` 中：调用 `objcSectionFactory.section(for:)` 与 `swiftSectionFactory.section(for:)`，然后触发 `reloadData()`。
+- `MachOImage.dependencies: [DependedDylib]` 提供依赖列表。MachOKit 将 `LC_LOAD_WEAK_DYLIB` 折叠为 `DependType.load`，因此实际上只会观察到 `.load`、`.reexport`、`.upwardLoad`、`.lazyLoad`。
+- `Semaphore` 包（`groue/Semaphore`）已经为 `RuntimeViewerCommunication` 解析。在管理器可以 import 它之前，需要在 `RuntimeViewerCore` target 中显式声明为产品依赖。
+- `MCPStatusPopoverViewController` + `MCPStatusToolbarItem` 是基于 Toolbar 锚定、RxSwift 驱动的弹出框模板。
+- `RuntimeEngine` 暴露了 `request<T>(local:remote:)` 分发原语（`RuntimeEngine.swift:468`），用于每一个其结果依赖于目标进程的公共方法（local 与 XPC/TCP 之分）。本提案新增的所有引擎公共方法都使用同一原语。
 
-### Terminology: Loaded vs. Indexed
+### 术语：Loaded vs. Indexed
 
-This distinction is load-bearing.
+这一区分至关重要。
 
-- **Loaded** — the image is registered with dyld in the target process (appears in `DyldUtilities.imageNames()`). Being loaded says nothing about whether Runtime Viewer has parsed its ObjC / Swift metadata.
-- **Indexed** — both `RuntimeObjCSectionFactory` and `RuntimeSwiftSectionFactory` have a **successfully-parsed** cached section for the image's path. Failure to parse does **not** count as indexed, which means failed paths will be retried on the next batch (see alternative D for why this is intentional).
+- **Loaded** —— 镜像已在目标进程中向 dyld 注册（出现在 `DyldUtilities.imageNames()` 中）。Loaded 并不能说明 Runtime Viewer 是否解析过其 ObjC / Swift 元数据。
+- **Indexed** —— `RuntimeObjCSectionFactory` 和 `RuntimeSwiftSectionFactory` 都拥有针对该镜像路径的**成功解析后**缓存 section。解析失败**不**算作 indexed，这意味着失败路径会在下一批次中被重试（参见替代方案 D 解释为什么这是有意为之）。
 
-A new API — `RuntimeEngine.isImageIndexed(path:)` — answers the indexed question. The existing `isImageLoaded(path:)` continues to answer the loaded question. Background indexing deduplication always uses `isImageIndexed`.
+新增 API —— `RuntimeEngine.isImageIndexed(path:)` —— 回答 indexed 这一问题。已有的 `isImageLoaded(path:)` 继续回答 loaded 这一问题。后台索引的去重始终使用 `isImageIndexed`。
 
-### Architecture
+### 架构
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│  RuntimeViewerUsingAppKit (App target — no Runtime prefix)        │
+│  RuntimeViewerUsingAppKit (App target — 不带 Runtime 前缀)         │
 │                                                                   │
-│   Toolbar:    BackgroundIndexingToolbarItem (NSToolbarItem subclass)
+│   Toolbar:    BackgroundIndexingToolbarItem (NSToolbarItem 子类)
 │                + BackgroundIndexingToolbarItemView (NSProgressIndicator
-│                  overlaid on SFSymbol icon)                       │
+│                  覆盖在 SFSymbol 图标上)                          │
 │                                                                   │
 │   Popover:   BackgroundIndexingPopoverViewController              │
 │                + BackgroundIndexingPopoverViewModel (ViewModel<MainRoute>)
-│                + BackgroundIndexingNode enum (batch / item)       │
+│                + BackgroundIndexingNode 枚举 (batch / item)       │
 └───────────────────────────────────────────────────────────────────┘
-                                ↕ RxSwift (UI binding layer only)
+                                ↕ RxSwift（仅用于 UI 绑定层）
 ┌───────────────────────────────────────────────────────────────────┐
-│  RuntimeViewerApplication (new types carry Runtime prefix)        │
+│  RuntimeViewerApplication（新类型带 Runtime 前缀）                │
 │                                                                   │
 │   RuntimeBackgroundIndexingCoordinator (class)                    │
-│     ·  Subscribes to Document lifecycle and engine image-load events
-│     ·  Observes Settings.backgroundIndexing via withObservationTracking
-│     ·  Calls engine.backgroundIndexingManager.startBatch(...)     │
-│     ·  Bridges the manager's AsyncStream<Event> into an RxSwift   │
-│        Observable<[RuntimeIndexingBatch]> consumed by the popover │
-│     ·  Exposes aggregate state (Driver<IndexingToolbarState>)     │
+│     ·  订阅 Document 生命周期与引擎镜像加载事件                   │
+│     ·  通过 withObservationTracking 观察 Settings.backgroundIndexing
+│     ·  调用 engine.backgroundIndexingManager.startBatch(...)      │
+│     ·  将管理器的 AsyncStream<Event> 桥接为弹出框消费的           │
+│        Observable<[RuntimeIndexingBatch]>（RxSwift）              │
+│     ·  暴露聚合状态 (Driver<IndexingToolbarState>)                │
 └───────────────────────────────────────────────────────────────────┘
                                 ↕ async / await
 ┌───────────────────────────────────────────────────────────────────┐
-│  RuntimeViewerCore (new types carry Runtime prefix)               │
+│  RuntimeViewerCore（新类型带 Runtime 前缀）                       │
 │                                                                   │
-│   RuntimeEngine (actor, existing)                                 │
+│   RuntimeEngine (actor，已有)                                     │
 │     + var backgroundIndexingManager: RuntimeBackgroundIndexingManager
 │     + func isImageIndexed(path:) async throws -> Bool   (request/remote)
 │     + func mainExecutablePath() async throws -> String  (request/remote)
 │     + func loadImageForBackgroundIndexing(at:) async throws (request/remote)
 │     + nonisolated var imageDidLoadPublisher: some Publisher<String, Never>
 │                                                                   │
-│   RuntimeBackgroundIndexingManager (actor, new — core)            │
-│     public API:                                                   │
+│   RuntimeBackgroundIndexingManager (actor，新增 —— 核心)          │
+│     公共 API:                                                     │
 │       · events: AsyncStream<RuntimeIndexingEvent>                 │
 │       · batches: [RuntimeIndexingBatch]                           │
 │       · startBatch(rootImagePath:depth:maxConcurrency:reason:)    │
@@ -100,26 +100,26 @@ A new API — `RuntimeEngine.isImageIndexed(path:)` — answers the indexed ques
 │       · cancelBatch(_:)                                           │
 │       · cancelAllBatches()                                        │
 │       · prioritize(imagePath:)                                    │
-│     internals:                                                    │
+│     内部:                                                         │
 │       · activeBatches: [RuntimeIndexingBatchID: BatchState]       │
-│       · AsyncSemaphore per batch for concurrency control          │
-│       · per-batch driving Task hosting a TaskGroup                │
+│       · 每批次一个 AsyncSemaphore 控制并发                        │
+│       · 每批次一个驱动 Task，托管一个 TaskGroup                   │
 │                                                                   │
-│   Sendable value types (all Hashable):                            │
+│   Sendable 值类型（全部 Hashable）:                               │
 │     RuntimeIndexingBatch, RuntimeIndexingBatchID,                 │
 │     RuntimeIndexingTaskItem, RuntimeIndexingTaskState,            │
 │     RuntimeIndexingEvent, RuntimeIndexingBatchReason,             │
 │     ResolvedDependency                                            │
 │                                                                   │
-│   Utility:                                                        │
-│     DylibPathResolver — resolves @rpath / @executable_path /      │
-│     @loader_path install names against rpaths + image path        │
+│   工具:                                                           │
+│     DylibPathResolver —— 基于 rpaths 与镜像路径解析               │
+│     @rpath / @executable_path / @loader_path 形式的 install name  │
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-### Remote Dispatch Model
+### 远程分发模型
 
-All new `RuntimeEngine` public methods — `isImageIndexed`, `mainExecutablePath`, `loadImageForBackgroundIndexing` — are wrapped in the existing `request<T>(local:remote:)` primitive:
+新增的所有 `RuntimeEngine` 公共方法 —— `isImageIndexed`、`mainExecutablePath`、`loadImageForBackgroundIndexing` —— 都包裹在已有的 `request<T>(local:remote:)` 原语之内：
 
 ```swift
 public func isImageIndexed(path: String) async throws -> Bool {
@@ -133,7 +133,7 @@ public func isImageIndexed(path: String) async throws -> Bool {
 }
 ```
 
-Three new `CommandNames` cases — `.isImageIndexed`, `.mainExecutablePath`, `.loadImageForBackgroundIndexing` — are added, and the server-side handler table (`RuntimeEngine.swift:276-302`) gains:
+新增三个 `CommandNames` 枚举值 —— `.isImageIndexed`、`.mainExecutablePath`、`.loadImageForBackgroundIndexing` —— 同时服务端处理表（`RuntimeEngine.swift:276-302`）增加：
 
 ```swift
 setMessageHandlerBinding(forName: .isImageIndexed,            of: self) { $0.isImageIndexed(path:) }
@@ -141,13 +141,13 @@ setMessageHandlerBinding(forName: .mainExecutablePath,        of: self) { $0.mai
 setMessageHandlerBinding(forName: .loadImageForBackgroundIndexing, of: self) { $0.loadImageForBackgroundIndexing(at:) }
 ```
 
-`RuntimeBackgroundIndexingManager` itself runs **server-side only**. The manager's events, batches, and cancellation APIs are not mirrored over XPC in this proposal; the UI consumes manager state from the hosting process via the coordinator. Mirroring is left to a follow-up if needed.
+`RuntimeBackgroundIndexingManager` 本身**仅运行在服务端**。本提案中管理器的事件、批次以及取消 API 不通过 XPC 镜像；UI 通过 coordinator 在宿主进程中消费管理器状态。如有需要，镜像化留作后续工作。
 
-### Components
+### 组件
 
-#### `RuntimeBackgroundIndexingManager` (actor)
+#### `RuntimeBackgroundIndexingManager`（actor）
 
-Owns every running batch and every event stream. Created by `RuntimeEngine` at init, holds an unowned reference back to the engine.
+持有所有运行中的批次以及所有事件流。在 `RuntimeEngine` init 时创建，对引擎持有 unowned 反向引用。
 
 ```swift
 public actor RuntimeBackgroundIndexingManager {
@@ -167,7 +167,7 @@ public actor RuntimeBackgroundIndexingManager {
 }
 ```
 
-#### Sendable value types
+#### Sendable 值类型
 
 ```swift
 public struct RuntimeIndexingBatchID: Hashable, Sendable { public let raw: UUID }
@@ -188,7 +188,7 @@ public enum RuntimeIndexingTaskState: Sendable, Hashable {
 }
 
 public struct RuntimeIndexingTaskItem: Sendable, Identifiable, Hashable {
-    public let id: String          // image path (install name if unresolved)
+    public let id: String          // 镜像路径（未解析时为 install name）
     public let resolvedPath: String?
     public var state: RuntimeIndexingTaskState
     public var hasPriorityBoost: Bool
@@ -220,76 +220,76 @@ public enum RuntimeIndexingEvent: Sendable {
 }
 ```
 
-All value types are `Hashable` so they compose into `BackgroundIndexingNode: Hashable` without extra conformance work.
+所有值类型都是 `Hashable`，因此可以无需额外 conformance 工作就组合成 `BackgroundIndexingNode: Hashable`。
 
 #### `RuntimeBackgroundIndexingCoordinator`
 
-Created once per Document (held by `DocumentState`). Responsibilities:
+每个 Document 创建一份（由 `DocumentState` 持有）。职责:
 
-1. Observe `Settings.backgroundIndexing` via `withObservationTracking` (see Settings section) → enable / disable / restart.
-2. Listen for the engine's `imageDidLoadPublisher` → start a dependency batch for that image.
-3. Listen for Sidebar's image-selection signal → call `manager.prioritize(path:)`.
-4. Bridge `manager.events` (AsyncStream) → `eventRelay: PublishRelay<RuntimeIndexingEvent>` (RxSwift).
-5. Maintain `batchesRelay: BehaviorRelay<[RuntimeIndexingBatch]>` reduced from events. **Finished batches that contain any failed item are retained** in `batchesRelay` until the user explicitly dismisses them via "Clear Failed" in the popover; clean finishes and cancels drop out immediately.
-6. Expose `aggregateStateDriver: Driver<IndexingToolbarState>`. `hasFailures` is derived from the retained failed batches.
-7. Own per-Document batch tracking: `[Document.ID: Set<RuntimeIndexingBatchID>]`.
+1. 通过 `withObservationTracking` 观察 `Settings.backgroundIndexing`（参见 Settings 章节）→ 启用 / 禁用 / 重启。
+2. 监听引擎的 `imageDidLoadPublisher` → 为该镜像启动一次依赖批次。
+3. 监听 Sidebar 的镜像选中信号 → 调用 `manager.prioritize(path:)`。
+4. 将 `manager.events`（AsyncStream）桥接到 `eventRelay: PublishRelay<RuntimeIndexingEvent>`（RxSwift）。
+5. 维护从事件归约而来的 `batchesRelay: BehaviorRelay<[RuntimeIndexingBatch]>`。**包含任意失败项的已完成批次会被保留**在 `batchesRelay` 中，直到用户在弹出框中通过"Clear Failed"显式清除；干净完成与取消会立即移除。
+6. 暴露 `aggregateStateDriver: Driver<IndexingToolbarState>`。`hasFailures` 由保留下来的失败批次推导。
+7. 持有按 Document 维度的批次跟踪：`[Document.ID: Set<RuntimeIndexingBatchID>]`。
 
-### Data Flow Scenarios
+### 数据流场景
 
-#### Scenario A — App launch / Document opened with indexing enabled
+#### 场景 A —— 启用了索引时的应用启动 / Document 打开
 
 ```
-Document opens
-  → DocumentState ready, RuntimeEngine available
+Document 打开
+  → DocumentState ready，RuntimeEngine 可用
   → Coordinator.documentDidOpen(documentState)
-      reads Settings.backgroundIndexing
-      if !isEnabled → return
+      读取 Settings.backgroundIndexing
+      若 !isEnabled → return
       rootPath = try await engine.mainExecutablePath()
       batchID = await engine.backgroundIndexingManager.startBatch(
           rootImagePath: rootPath,
           depth: settings.depth,
           maxConcurrency: settings.maxConcurrency,
           reason: .appLaunch)
-      Toolbar item transitions idle → indexing
+      Toolbar 项从 idle 切换到 indexing
 ```
 
-#### Scenario B — User loads a new image at runtime
+#### 场景 B —— 用户在运行时加载新镜像
 
 ```
-User action → documentState.loadImage(at: path)
-  → RuntimeEngine.loadImage(at:) (existing path completes)
-  → Engine emits imageDidLoadPublisher(path)
-  → Coordinator (if isEnabled):
+用户操作 → documentState.loadImage(at: path)
+  → RuntimeEngine.loadImage(at:)（已有路径完成）
+  → Engine 发出 imageDidLoadPublisher(path)
+  → Coordinator（若 isEnabled）:
       batchID = manager.startBatch(
           rootImagePath: path,
           depth: settings.depth,
           maxConcurrency: settings.maxConcurrency,
           reason: .imageLoaded(path: path))
-      Dependency graph expansion skips items already indexed
+      依赖图扩展会跳过已索引的项
 ```
 
-#### Scenario C — User selects an image already queued
+#### 场景 C —— 用户选中已经在队列中的镜像
 
 ```
-Sidebar selection change → SidebarViewModel emits imageSelected(path)
+Sidebar 选中变化 → SidebarViewModel 发出 imageSelected(path)
   → Coordinator → manager.prioritize(imagePath: path)
-      manager walks activeBatches, finds pending items matching path
-      marks hasPriorityBoost = true, adds to priorityBoostPaths set
-      emits .taskPrioritized
-      running / completed / absent paths: silent no-op
+      manager 遍历 activeBatches，找到匹配 path 的 pending 项
+      标记 hasPriorityBoost = true，加入 priorityBoostPaths 集合
+      发出 .taskPrioritized
+      正在运行 / 已完成 / 不存在的路径：静默 no-op
 ```
 
-#### Scenario D — Document closed
+#### 场景 D —— Document 关闭
 
 ```
 Document.close()
   → Coordinator.documentWillClose(documentState)
       for batchID in Coordinator.batchesFor(document):
           await manager.cancelBatch(batchID)
-      remove document entry
+      移除 document 条目
 ```
 
-#### Scenario E — Settings toggle (via `withObservationTracking`)
+#### 场景 E —— Settings 切换（通过 `withObservationTracking`）
 
 ```
 Coordinator.subscribeToSettings():
@@ -301,40 +301,40 @@ Coordinator.subscribeToSettings():
     } onChange: { [weak self] in
         Task { @MainActor in
             self?.handleSettingsChange()
-            self?.subscribeToSettings()   // re-register
+            self?.subscribeToSettings()   // 重新注册
         }
     }
 
 handleSettingsChange:
     isEnabled false → true:
-        for every open Document: run Scenario A (root = mainExecutablePath)
-        (do NOT replay historical loadImage calls)
+        对每个打开的 Document 执行场景 A（root = mainExecutablePath）
+        （不要回放历史 loadImage 调用）
     isEnabled true → false:
         await manager.cancelAllBatches()
-    depth / maxConcurrency change while enabled:
-        no-op against running batches; values apply to the next startBatch.
+    启用状态下 depth / maxConcurrency 变化:
+        对运行中的批次为 no-op；新值在下一次 startBatch 生效。
 ```
 
-Rationale: `Settings` is declared `@Observable`, so `withObservationTracking` is the native fit. Re-registering on each change is the documented one-shot-observer recovery pattern; it keeps the observer alive across each settings mutation without adding Combine infrastructure.
+理由：`Settings` 已经声明为 `@Observable`，`withObservationTracking` 是原生匹配。在 `onChange` 中重新注册是文档化的"一次性观察者"恢复模式；它在每次 settings 变化中都让观察者保持存活，且不引入 Combine 基础设施。
 
-#### Scenario F — User cancels from the popover
+#### 场景 F —— 用户从弹出框取消
 
 ```
-Popover cancel button → ViewModel cancelBatchRelay.accept(batchID)
+弹出框 Cancel 按钮 → ViewModel cancelBatchRelay.accept(batchID)
   → Coordinator → await manager.cancelBatch(id)
-      batch's driving Task → task.cancel()
-      TaskGroup children inherit cancellation
-      runSingleIndex catches CancellationError → item state .cancelled
-      already-completed items retain .completed
-      emits .batchCancelled
+      批次的驱动 Task → task.cancel()
+      TaskGroup 子任务继承取消
+      runSingleIndex 捕获 CancellationError → 项状态 .cancelled
+      已完成项保留 .completed
+      发出 .batchCancelled
 ```
 
-### Dependency Graph Expansion
+### 依赖图扩展
 
-Implemented by `expandDependencyGraph(rootPath:depth:)` inside the manager. Runs synchronously at the start of `startBatch` so the batch's total item count is known before the first `taskStarted` event fires — this keeps the popover progress bar accurate from the first frame.
+由 manager 内部的 `expandDependencyGraph(rootPath:depth:)` 实现。在 `startBatch` 开始时同步运行，因此在第一个 `taskStarted` 事件触发之前批次的总项数就已知 —— 这让弹出框的进度条从第一帧就保持准确。
 
 ```swift
-// Pseudocode
+// 伪代码
 func expandDependencyGraph(rootPath: String, depth: Int) async
     -> [RuntimeIndexingTaskItem]
 {
@@ -368,34 +368,34 @@ func expandDependencyGraph(rootPath: String, depth: Int) async
 }
 ```
 
-`Array.removeFirst()` is sufficient for the depths we allow (≤ 5); a deque is not warranted.
+我们允许的深度（≤ 5）下，`Array.removeFirst()` 已经够用；不需要双端队列。
 
-#### Dependency type filter
+#### 依赖类型筛选
 
-- **Included**: `.load`, `.reexport`, `.upwardLoad`.
-- **Skipped**: `.lazyLoad` — lazy-loaded dylibs may never actually load at runtime, so eagerly parsing them is speculative and wasteful.
+- **包含**: `.load`、`.reexport`、`.upwardLoad`。
+- **跳过**: `.lazyLoad` —— 懒加载的 dylib 在运行时可能从不真正加载，主动解析它们既是猜测又是浪费。
 
-`LC_LOAD_WEAK_DYLIB` is decoded by MachOKit as `DependType.load` (see `MachOImage.swift:168-173`); the `.weakLoad` enum case never arrives from `dependencies`, so no explicit branch is needed.
+`LC_LOAD_WEAK_DYLIB` 被 MachOKit 解码为 `DependType.load`（参见 `MachOImage.swift:168-173`）；`.weakLoad` 这一枚举值永远不会从 `dependencies` 出现，无需显式分支。
 
-#### Path resolution (`DylibPathResolver`)
+#### 路径解析（`DylibPathResolver`）
 
-Install names come in four shapes:
+install name 有四种形态:
 
-| Shape | Resolution |
+| 形态 | 解析 |
 |-------|------------|
-| `/System/Library/...` (absolute) | Use as-is. Verify file exists. |
-| `@rpath/Foo.framework/Foo` | For each `LC_RPATH` on the rooting image, substitute and take the first existing path. |
-| `@executable_path/...` | Substitute using the main executable's directory. |
-| `@loader_path/...` | Substitute using the current image's directory. |
+| `/System/Library/...`（绝对路径） | 原样使用，校验文件存在。 |
+| `@rpath/Foo.framework/Foo` | 对根镜像上每个 `LC_RPATH` 进行替换，取第一个存在的路径。 |
+| `@executable_path/...` | 用主可执行文件所在目录替换。 |
+| `@loader_path/...` | 用当前镜像所在目录替换。 |
 
-Returns `String?` — `nil` maps to a `.failed("path unresolved")` task item that does not recurse.
+返回 `String?` —— `nil` 映射为 `.failed("path unresolved")` 且不递归的 task item。
 
-### Concurrency Model
+### 并发模型
 
-Entirely Swift Concurrency — no `OperationQueue`, no `DispatchQueue`, no RxSwift in the work path. RxSwift is used only at the UI binding layer inside the coordinator.
+完全基于 Swift Concurrency —— 工作路径中没有 `OperationQueue`、没有 `DispatchQueue`、没有 RxSwift。RxSwift 仅用于 coordinator 内的 UI 绑定层。
 
 ```swift
-// Manager internals (sketch)
+// Manager 内部（草图）
 private func runBatch(id: RuntimeIndexingBatchID) async {
     let state = activeBatches[id]!
     eventsContinuation.yield(.batchStarted(state.batch))
@@ -412,7 +412,7 @@ private func runBatch(id: RuntimeIndexingBatchID) async {
         }
     }
 
-    finalizeBatch(id)    // emits .batchFinished or .batchCancelled
+    finalizeBatch(id)    // 发出 .batchFinished 或 .batchCancelled
 }
 
 private func runSingleIndex(batchID: RuntimeIndexingBatchID,
@@ -436,32 +436,32 @@ private func runSingleIndex(batchID: RuntimeIndexingBatchID,
 }
 ```
 
-#### Priority queue mechanics
+#### 优先级队列机制
 
-Each batch state owns an `Array<String>` of pending paths and a `Set<String>` of priority-boost members. `prioritize(imagePath:)` only mutates the set (and emits `.taskPrioritized`); the pop helper scans the pending array for the first boosted path, falling back to the array head when none is boosted. Priority cannot preempt an already-running child task — Swift structured concurrency does not support that. `prioritize` on a running or completed path is a silent no-op.
+每个批次状态持有一个 pending 路径的 `Array<String>` 以及 priority-boost 成员的 `Set<String>`。`prioritize(imagePath:)` 仅修改集合（并发出 `.taskPrioritized`）；pop 辅助函数会先在 pending 数组中扫描第一个被 boost 的路径，没有 boost 时退化为数组头部。优先级无法抢占已经在运行的子任务 —— Swift 结构化并发不支持。对运行中或已完成的路径调用 `prioritize` 是静默 no-op。
 
 #### `AsyncSemaphore`
 
-From `groue/Semaphore`. The dependency is already resolved at package level but is only declared for `RuntimeViewerCommunication`; this proposal adds an explicit `.product(name: "Semaphore", package: "Semaphore")` entry to the `RuntimeViewerCore` target's dependency list.
+来自 `groue/Semaphore`。该依赖在 package 层已经解析，但仅声明给 `RuntimeViewerCommunication`；本提案在 `RuntimeViewerCore` target 的 dependencies 列表中显式添加 `.product(name: "Semaphore", package: "Semaphore")`。
 
-#### UI refresh suppression
+#### UI 刷新抑制
 
-`loadImageForBackgroundIndexing(at:)` does **not** call `reloadData()`. Calling it N times during a batch would storm the sidebar. The coordinator triggers `await engine.reloadData(isReloadImageNodes: false)` once per `.batchFinished` / `.batchCancelled` event so the sidebar picks up the newly-indexed icons in a single update.
+`loadImageForBackgroundIndexing(at:)` **不**调用 `reloadData()`。在一次批次中调用 N 次会让 sidebar 被洪水攻击。Coordinator 在每次 `.batchFinished` / `.batchCancelled` 事件触发时调用一次 `await engine.reloadData(isReloadImageNodes: false)`，让 sidebar 在一次更新中拉起新索引的图标。
 
 ### Settings
 
-#### `BackgroundIndexing` struct (`Settings+Types.swift`)
+#### `BackgroundIndexing` 结构体（`Settings+Types.swift`）
 
 ```swift
 @Codable @MemberInit public struct BackgroundIndexing {
     @Default(false) public var isEnabled: Bool
-    @Default(1)     public var depth: Int               // valid 1...5
-    @Default(4)     public var maxConcurrency: Int      // valid 1...8
+    @Default(1)     public var depth: Int               // 有效区间 1...5
+    @Default(4)     public var maxConcurrency: Int      // 有效区间 1...8
     public static let `default` = Self()
 }
 ```
 
-Added to the root `Settings` class (which is `@Observable`) as:
+添加到根 `Settings` 类（已为 `@Observable`）作为：
 
 ```swift
 @Default(BackgroundIndexing.default)
@@ -470,55 +470,55 @@ public var backgroundIndexing: BackgroundIndexing = .init() {
 }
 ```
 
-Persisted by the existing `SettingsFileSystemStorage` auto-save. No Combine publisher is added to `Settings`.
+由已有的 `SettingsFileSystemStorage` 自动保存持久化。不向 `Settings` 添加 Combine publisher。
 
-#### `BackgroundIndexingSettingsView` (SwiftUI)
+#### `BackgroundIndexingSettingsView`（SwiftUI）
 
-At `RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/Components/BackgroundIndexingSettingsView.swift`. Reached via a new `SettingsPage.backgroundIndexing` case in `SettingsRootView.swift` (icon `square.stack.3d.down.right`, title `"Background Indexing"`).
+位于 `RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/Components/BackgroundIndexingSettingsView.swift`。通过在 `SettingsRootView.swift` 新增的 `SettingsPage.backgroundIndexing` case 进入（图标 `square.stack.3d.down.right`，标题 `"Background Indexing"`）。
 
-Form contents:
-- `Toggle "Enable background indexing"` bound to `$settings.isEnabled`.
-- Caption paragraph explaining behavior.
-- `Stepper` for depth (1...5), caption explaining the semantics.
-- `Stepper` for maxConcurrency (1...8), caption noting the CPU tradeoff.
+Form 内容：
+- `Toggle "Enable background indexing"` 绑定 `$settings.isEnabled`。
+- 解释行为的说明段落。
+- depth 的 `Stepper`（1...5），附带说明语义。
+- maxConcurrency 的 `Stepper`（1...8），附带说明 CPU 取舍。
 
-Cancel-all stays in the popover footer, not in Settings.
+Cancel-all 留在弹出框页脚，不放入 Settings。
 
-#### Settings change propagation
+#### Settings 变更传播
 
-The coordinator subscribes via `withObservationTracking` on `Settings.shared.backgroundIndexing`, re-registering inside `onChange`. See Scenario E for the concrete flow.
+Coordinator 通过 `withObservationTracking` 订阅 `Settings.shared.backgroundIndexing`，并在 `onChange` 内重新注册。具体流程参见场景 E。
 
-### UI: Toolbar Item + Popover
+### UI: Toolbar Item + 弹出框
 
 #### `BackgroundIndexingToolbarItem`
 
-`NSToolbarItem` subclass registered in `MainToolbarController.swift`. Identifier `backgroundIndexing`. Placed next to the existing `mcpStatus` item in default and allowed identifier lists (the existing case is literally `mcpStatus(sender:)`, not `mcpStatusPopover`).
+`NSToolbarItem` 子类，在 `MainToolbarController.swift` 注册。标识符 `backgroundIndexing`。在默认与允许的标识符列表中放置在已有的 `mcpStatus` 项旁边（已有的 case 字面量是 `mcpStatus(sender:)`，而非 `mcpStatusPopover`）。
 
-`view` is a `BackgroundIndexingToolbarItemView` (NSView) holding a centered 16pt icon (SF Symbol `square.stack.3d.down.right`) with an `NSProgressIndicator(style: .spinning)` overlaid when state is `indexing` or `hasFailures`. A small red badge dot is drawn over the bottom-right corner for `hasFailures`.
+`view` 是 `BackgroundIndexingToolbarItemView`（NSView），中间放一个 16pt 的图标（SF Symbol `square.stack.3d.down.right`），当状态为 `indexing` 或 `hasFailures` 时叠加一个 `NSProgressIndicator(style: .spinning)`。`hasFailures` 时会在右下角绘制一个小红点徽标。
 
-`IndexingToolbarState` enum: `.idle`, `.disabled`, `.indexing(percent: Double?)`, `.hasFailures(percent: Double?)`.
+`IndexingToolbarState` 枚举：`.idle`、`.disabled`、`.indexing(percent: Double?)`、`.hasFailures(percent: Double?)`。
 
-The view binds to a `Driver<IndexingToolbarState>` pushed from the coordinator via a weakly-held observer set at toolbar construction.
+view 通过 toolbar 构建时弱持有的 observer 集合绑定到 coordinator 推送的 `Driver<IndexingToolbarState>`。
 
-Clicking the item triggers the **existing** `MainRoute` surface with a new case:
+点击该项触发**已有**的 `MainRoute` 表面新增的 case：
 
 ```swift
 case backgroundIndexing(sender: NSView)
 ```
 
-Note the name has **no `Popover` suffix**, matching the sibling `mcpStatus(sender:)` precedent.
+注意名称**没有 `Popover` 后缀**，与同级的 `mcpStatus(sender:)` 保持一致。
 
 #### `BackgroundIndexingPopoverViewController`
 
-Base class `UXKitViewController<BackgroundIndexingPopoverViewModel>`. The ViewModel is `ViewModel<MainRoute>` — there is **no** separate `BackgroundIndexingPopoverRoute`. All routing goes through `MainRoute` cases (`openSettings`, `dismiss`, etc.) that already exist at the main level. Fixed width 380, height from ~120 (empty state) up to 400 (outline view with scroll).
+基类 `UXKitViewController<BackgroundIndexingPopoverViewModel>`。ViewModel 是 `ViewModel<MainRoute>` —— **没有**单独的 `BackgroundIndexingPopoverRoute`。所有路由都走主层级已经存在的 `MainRoute` case（`openSettings`、`dismiss` 等）。固定宽度 380，高度从约 120（空状态）到 400（带滚动的大纲视图）。
 
-Content layout:
+内容布局：
 
-- Header: `Label("Background Indexing")` plus a subtitle `Label` reading the aggregate progress.
-- Empty state A (disabled): icon + "Background indexing is disabled" + `"Open Settings"` button.
-- Empty state B (enabled, no batches): icon + "No active indexing tasks".
-- Body: `StatefulOutlineView` rendering `BackgroundIndexingNode`.
-- Footer: `HStackView` with `Cancel All` button (disabled when no active batch), `Clear Failed` button (visible only when there are retained failed batches), and `Close` button.
+- 头部：`Label("Background Indexing")` 加一个读取聚合进度的副标题 `Label`。
+- 空状态 A（已禁用）：图标 + "Background indexing is disabled" + `"Open Settings"` 按钮。
+- 空状态 B（已启用、无批次）：图标 + "No active indexing tasks"。
+- 主体：渲染 `BackgroundIndexingNode` 的 `StatefulOutlineView`。
+- 页脚：`HStackView`，包含 `Cancel All` 按钮（无活动批次时禁用）、`Clear Failed` 按钮（仅当存在保留的失败批次时可见）以及 `Close` 按钮。
 
 `BackgroundIndexingNode`:
 
@@ -529,12 +529,12 @@ enum BackgroundIndexingNode: Hashable {
 }
 ```
 
-Outline cells:
+大纲单元格:
 
-- Batch row: title derived from `reason`, `"{completed}/{total}"`, and a cancel button. Clicking cancel fires `cancelBatchRelay.accept(batchID)`.
-- Item row: status icon (pending grey dot / running spinning / completed green ✓ / failed red ✗ / cancelled grey ⊘) + display name + secondary label. Failed rows show the full install name and the error message. Rows with `hasPriorityBoost == true` show a `"priority"` tag.
+- Batch 行：标题由 `reason` 派生、`"{completed}/{total}"`，以及一个 cancel 按钮。点击 cancel 会触发 `cancelBatchRelay.accept(batchID)`。
+- Item 行：状态图标（pending 灰点 / running 旋转 / completed 绿色 ✓ / failed 红色 ✗ / cancelled 灰色 ⊘）+ 显示名 + 副标签。失败行展示完整 install name 与错误信息。`hasPriorityBoost == true` 的行展示一个 `"priority"` 标签。
 
-Defensive outline-view data source branches use `preconditionFailure("unexpected outline item type")` rather than returning a zero-initialized batch, so mis-wired callers surface immediately.
+防御性的大纲数据源分支使用 `preconditionFailure("unexpected outline item type")`，而不是返回零初始化的 batch，这样错误绑定的调用方会立即暴露。
 
 #### `BackgroundIndexingPopoverViewModel`
 
@@ -562,67 +562,67 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 }
 ```
 
-`isEnabled` is kept in sync with `Settings.shared.backgroundIndexing.isEnabled` via the **same** `withObservationTracking` re-registration loop used by the coordinator — it is not read once in `transform` and forgotten. The popover's empty states therefore react to the Settings toggle while open.
+`isEnabled` 通过与 coordinator **相同**的 `withObservationTracking` 重新注册循环与 `Settings.shared.backgroundIndexing.isEnabled` 保持同步 —— 不是在 `transform` 中读一次后遗忘。这样弹出框打开时它的空状态会随 Settings 切换而响应。
 
-`input.openSettings.emitOnNext` fires `router.trigger(.openSettings)` — the existing `MainRoute.openSettings` case.
+`input.openSettings.emitOnNext` 触发 `router.trigger(.openSettings)` —— 已有的 `MainRoute.openSettings` case。
 
-### Error Handling
+### 错误处理
 
-| Failure site | Behavior | UI |
+| 失败位置 | 行为 | UI |
 |---|---|---|
-| `MachOImage(name: path)` returns nil during graph expansion | Item → `.failed("cannot open MachOImage")`, no recursion | red ✗ + tooltip |
-| `@rpath` / `@executable_path` / `@loader_path` unresolved | Item → `.failed("path unresolved")`, no recursion | red ✗ + original install name |
-| `DyldUtilities.loadImage` throws (codesign, sandbox, missing file) | Item → `.failed(dlopenError.localizedDescription)` | red ✗ |
-| ObjC section parse throws | Item → `.failed(objcParseError)` | red ✗ |
-| Swift section parse throws | Item → `.failed(swiftParseError)`. `isImageIndexed` stays false because at least one factory has no cache for this path | red ✗ |
-| `Task.checkCancellation` throws | Item → `.cancelled`, no error event | grey ⊘ |
-| Coordinator receives event after Document released | `[weak self]` drops event silently | — |
+| 图扩展时 `MachOImage(name: path)` 返回 nil | 项 → `.failed("cannot open MachOImage")`，不递归 | 红色 ✗ + tooltip |
+| `@rpath` / `@executable_path` / `@loader_path` 未解析 | 项 → `.failed("path unresolved")`，不递归 | 红色 ✗ + 原始 install name |
+| `DyldUtilities.loadImage` 抛出（codesign、sandbox、文件缺失） | 项 → `.failed(dlopenError.localizedDescription)` | 红色 ✗ |
+| ObjC section 解析抛出 | 项 → `.failed(objcParseError)` | 红色 ✗ |
+| Swift section 解析抛出 | 项 → `.failed(swiftParseError)`。`isImageIndexed` 仍为 false，因为至少一个 factory 没有该路径的缓存 | 红色 ✗ |
+| `Task.checkCancellation` 抛出 | 项 → `.cancelled`，不发出错误事件 | 灰色 ⊘ |
+| Coordinator 在 Document 释放后收到事件 | `[weak self]` 静默丢弃事件 | — |
 
-`isImageIndexed(path:)` requires **both** factories to have a successfully-cached entry. Failure to parse leaves no cache entry, so the path re-enters the next batch's frontier. This is intentional — see alternative D.
+`isImageIndexed(path:)` 要求**两个** factory 都有成功缓存的条目。解析失败不会留下缓存项，因此该路径会重新进入下一批次的 frontier。这是有意为之 —— 参见替代方案 D。
 
-### Race / Edge Conditions
+### 竞态 / 边界条件
 
-1. **User manual `loadImage(path)` while a background batch is indexing the same path.**
-   The ObjC / Swift factories must serialize per-path parsing so two concurrent callers do not both parse. The plan phase verifies (and, if needed, introduces a `[String: Task<Section, Error>]` in-flight map inside each factory).
+1. **用户对正在被后台批次索引的相同路径执行手动 `loadImage(path)`。**
+   ObjC / Swift factory 必须按路径串行化解析，使两个并发调用方不会同时解析。规划阶段会核验（如有需要，会在每个 factory 中引入 `[String: Task<Section, Error>]` 形式的 in-flight map）。
 
-2. **Batch cancellation with partially-completed items.**
-   Completed items retain `.completed`; `loadedImagePaths` inserts are not rolled back. In-flight items that receive `CancellationError` mid-parse may leave the factories with partial sections — acceptable for this iteration; `isImageIndexed` then returns false and a future explicit load redoes the work.
+2. **批次取消时部分项已完成。**
+   已完成项保留 `.completed`；`loadedImagePaths` 的插入不会回滚。在解析过程中收到 `CancellationError` 的 in-flight 项可能在 factory 中留下部分 section —— 本次迭代可接受；`isImageIndexed` 之后会返回 false，未来的显式加载会重做工作。
 
-3. **Multiple batches for the same root.**
-   The manager dedupes: if an active batch already has `rootImagePath == root` and `reason`'s discriminant matches, return its existing `RuntimeIndexingBatchID` instead of starting another.
+3. **同一根镜像的多个批次。**
+   manager 去重：如果某活动批次的 `rootImagePath == root` 且 `reason` 的判别式匹配，返回其已有 `RuntimeIndexingBatchID` 而非新启动一个。
 
-4. **Document closure while events are mid-flight.**
-   `AsyncStream.Continuation.finish()` is called when the engine (and its manager) deinit. The coordinator's `Task { for await event in manager.events }` exits cleanly.
+4. **事件传输中 Document 关闭。**
+   引擎（及其 manager）deinit 时会调用 `AsyncStream.Continuation.finish()`。Coordinator 的 `Task { for await event in manager.events }` 会干净退出。
 
-### Assumptions
+### 假设
 
-1. **`DocumentState.runtimeEngine` is immutable for the lifetime of a Document.** The property is declared `@Observed public var runtimeEngine: RuntimeEngine = .local` (`DocumentState.swift:10-11`) for historical reasons, but callers do not reassign it after Document creation. The coordinator captures `engine = documentState.runtimeEngine` once at init; if this assumption is violated, batches are dispatched to the wrong engine. A doc comment on the property reinforces this contract.
+1. **`DocumentState.runtimeEngine` 在 Document 整个生命周期内不可变。** 该属性出于历史原因被声明为 `@Observed public var runtimeEngine: RuntimeEngine = .local`（`DocumentState.swift:10-11`），但调用方在 Document 创建后不会重新赋值。Coordinator 在 init 时一次性捕获 `engine = documentState.runtimeEngine`；如果该假设被打破，批次会被分发到错误的 engine。在该属性上加一段文档注释强化此契约。
 
-2. **`RuntimeBackgroundIndexingManager` runs in the engine's hosting process only.** For remote (XPC / directTCP) sources, the *engine methods* are mirrored via `request { local } remote: { RPC }`, but the *manager* lives in the server-side engine's actor. UI clients consume manager state only from their local engine reference.
+2. **`RuntimeBackgroundIndexingManager` 仅运行在引擎的宿主进程内。** 对于远程（XPC / directTCP）来源，*引擎方法*通过 `request { local } remote: { RPC }` 镜像，但 *manager* 存活在服务端引擎的 actor 中。UI 客户端只通过本地引擎引用消费 manager 状态。
 
-3. **Settings mutation frequency is low.** `withObservationTracking` re-registration fires once per property mutation. Because Settings sliders / toggles run at human-UI cadence, the re-registration cost is negligible.
+3. **Settings 修改频率较低。** `withObservationTracking` 重新注册在每次属性变更时触发一次。由于 Settings 的滑块 / toggle 以人类 UI 节奏运行，重新注册的成本可忽略不计。
 
-### Testing Strategy
+### 测试策略
 
-Added under `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/`.
+放在 `RuntimeViewerCore/Tests/RuntimeViewerCoreTests/BackgroundIndexing/` 下。
 
 1. `DylibPathResolverTests`
-   - `@rpath` single + multiple `LC_RPATH`, hit + miss.
-   - `@executable_path` and `@loader_path` substitution.
-   - Absolute path passthrough.
-2. `RuntimeBackgroundIndexingManagerTests` using a `MockBackgroundIndexingEngine` (`@unchecked Sendable`) conforming to a new internal `BackgroundIndexingEngineRepresenting` protocol.
-   - Graph expansion at depth 0, 1, 2; already-indexed short-circuit.
-   - `prioritize` causes the next dispatch to pick a boosted path. **Timing-based assertions are replaced with event-order assertions** (`taskStarted` sequence) to avoid CI flakiness.
-   - `cancelBatch` stops in-flight work, marks remaining pending items cancelled.
-   - Concurrency cap honored (spy counter never exceeds configured value).
-   - Event ordering: `batchStarted` precedes any `taskStarted`; `batchFinished` last.
-3. `RuntimeIndexingBatch` / event reducers if non-trivial reduction logic ends up on the coordinator side.
+   - `@rpath` 单条 + 多条 `LC_RPATH`，命中 + 未命中。
+   - `@executable_path` 与 `@loader_path` 替换。
+   - 绝对路径直通。
+2. `RuntimeBackgroundIndexingManagerTests` 使用一个遵循新内部协议 `BackgroundIndexingEngineRepresenting` 的 `MockBackgroundIndexingEngine`（`@unchecked Sendable`）。
+   - 深度 0、1、2 的图扩展；已索引短路。
+   - `prioritize` 让下一次分发选中被 boost 的路径。**基于时间的断言被替换为基于事件顺序的断言**（`taskStarted` 顺序），避免 CI 不稳定。
+   - `cancelBatch` 终止 in-flight 工作，将剩余 pending 项标记为 cancelled。
+   - 并发上限被遵守（spy 计数器永不超过配置值）。
+   - 事件顺序：`batchStarted` 早于任何 `taskStarted`；`batchFinished` 最后。
+3. 如果 coordinator 端最终承担了非平凡的归约逻辑，则补充 `RuntimeIndexingBatch` / 事件 reducer 测试。
 
-UI is not automated (no existing UI test harness); the plan includes a manual verification checklist.
+UI 不做自动化（没有现成的 UI 测试 harness）；plan 包含一份手动验证清单。
 
-### File Inventory
+### 文件清单
 
-#### New files
+#### 新增文件
 
 ```
 RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/
@@ -659,95 +659,95 @@ RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/
     BackgroundIndexingNode.swift
 ```
 
-Note the absence of a `BackgroundIndexingPopoverRoute.swift` — routing is via `MainRoute`.
+注意没有 `BackgroundIndexingPopoverRoute.swift` —— 路由通过 `MainRoute`。
 
-#### Modified files
+#### 修改的文件
 
 ```
 RuntimeViewerCore/Package.swift
-    + add .product(name: "Semaphore", package: "Semaphore") to RuntimeViewerCore target
+    + 在 RuntimeViewerCore target 增加 .product(name: "Semaphore", package: "Semaphore")
 
 RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings+Types.swift
-    + BackgroundIndexing struct
+    + BackgroundIndexing 结构体
 
 RuntimeViewerPackages/Sources/RuntimeViewerSettings/Settings.swift
-    + backgroundIndexing property
+    + backgroundIndexing 属性
 
 RuntimeViewerPackages/Sources/RuntimeViewerSettingsUI/SettingsRootView.swift
-    + SettingsPage.backgroundIndexing case and contentView branch
+    + SettingsPage.backgroundIndexing case 与 contentView 分支
 
 RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift
-    + backgroundIndexingManager stored property (set at end of init)
-    + isImageIndexed(path:) with request/remote dispatch
-    + mainExecutablePath() with request/remote dispatch
-    + loadImageForBackgroundIndexing(at:) with request/remote dispatch
-    + imageDidLoadPublisher (PassthroughSubject<String, Never>)
-    + emit imageDidLoadSubject.send(path) on loadImage(at:) success
-    + access level bumped to internal on objcSectionFactory / swiftSectionFactory
-    + new CommandNames + setMessageHandlerBinding handlers for the three new methods
+    + backgroundIndexingManager 存储属性（在 init 末尾设置）
+    + isImageIndexed(path:)，使用 request/remote 分发
+    + mainExecutablePath()，使用 request/remote 分发
+    + loadImageForBackgroundIndexing(at:)，使用 request/remote 分发
+    + imageDidLoadPublisher（PassthroughSubject<String, Never>）
+    + 在 loadImage(at:) 成功时发出 imageDidLoadSubject.send(path)
+    + objcSectionFactory / swiftSectionFactory 访问级别提升至 internal
+    + 为三个新方法新增 CommandNames + setMessageHandlerBinding 处理器
 
 RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeObjCSection.swift
 RuntimeViewerCore/Sources/RuntimeViewerCore/Core/RuntimeSwiftSection.swift
-    + hasCachedSection(for:) inspector
-    + optional per-path in-flight dedupe (plan verifies)
+    + hasCachedSection(for:) 查询接口
+    + 可选的按路径 in-flight 去重（plan 验证）
 
 RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift
-    + backgroundIndexingCoordinator property
-    + doc comment asserting runtimeEngine immutability
+    + backgroundIndexingCoordinator 属性
+    + 文档注释，断言 runtimeEngine 不可变
 
 RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainRoute.swift
-    + backgroundIndexing(sender:) case (no "Popover" suffix)
+    + backgroundIndexing(sender:) case（不带 "Popover" 后缀）
 
 RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainToolbarController.swift
-    + backgroundIndexing item identifier + factory
-    + wireBackgroundIndexing(item:) hookup
+    + backgroundIndexing 项标识符 + 工厂
+    + wireBackgroundIndexing(item:) 绑定
 
 RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift
-    + backgroundIndexing(sender:) transition case
+    + backgroundIndexing(sender:) 转换 case
 
 RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift
-    + invoke coordinator.documentDidOpen / documentWillClose
+    + 调用 coordinator.documentDidOpen / documentWillClose
 ```
 
-All new files under `RuntimeViewerUsingAppKit/.../BackgroundIndexing/` must be added to the Xcode project manually (consistent with the MCPServer pattern noted in project memory).
+`RuntimeViewerUsingAppKit/.../BackgroundIndexing/` 下所有新文件必须手动加入 Xcode 项目（与 project memory 中提到的 MCPServer 模式一致）。
 
-## Alternatives Considered
+## 替代方案考量
 
-### A. Subscribe to `Settings` via a new `Combine.PassthroughSubject`
+### A. 通过新增的 `Combine.PassthroughSubject` 订阅 `Settings`
 
-Add a `PassthroughSubject<Settings, Never>` to `Settings`, emit from `scheduleAutoSave`, and let the coordinator subscribe with Combine. Rejected because `Settings` is already `@Observable` — adding a parallel Combine channel would duplicate the source of truth and force future readers to pick one. `withObservationTracking` is the native fit and scales to the few properties we observe.
+在 `Settings` 上加一个 `PassthroughSubject<Settings, Never>`，从 `scheduleAutoSave` 中发出，让 coordinator 用 Combine 订阅。被否决，因为 `Settings` 已是 `@Observable` —— 增加一条平行 Combine 通道会复制事实来源，并迫使未来的读者二选一。`withObservationTracking` 是原生匹配，且对我们观察的少量属性可以扩展。
 
-### B. Separate `BackgroundIndexingPopoverRoute` enum
+### B. 单独的 `BackgroundIndexingPopoverRoute` 枚举
 
-Mirror the `MCPStatusPopover` structure and define a dedicated Route enum. Rejected because `MainCoordinator` is already bound to `SceneCoordinator<MainRoute, MainTransition>`; adding a second, conditional `Router` conformance would not compile. Forwarding via a separate adapter was considered but is heavier than just adding a case to `MainRoute`, which costs one line.
+镜像 `MCPStatusPopover` 的结构，定义一个专属的 Route 枚举。被否决，因为 `MainCoordinator` 已经绑定到 `SceneCoordinator<MainRoute, MainTransition>`；增加第二个、有条件的 `Router` conformance 无法编译。考虑过通过单独的 adapter 转发，但比直接给 `MainRoute` 加一个 case（仅一行成本）更重。
 
-### C. Non-dispatching local-only engine extensions
+### C. 不分发的、仅本地的 engine 扩展
 
-Keep `isImageIndexed` / `mainExecutablePath` / `loadImageForBackgroundIndexing` as pure local reads (no `request { local } remote: { RPC }` wrapping). Rejected because this would silently return wrong data when the document targets a remote source (XPC / directTCP) — the local engine has no knowledge of the remote process's loaded images.
+让 `isImageIndexed` / `mainExecutablePath` / `loadImageForBackgroundIndexing` 保持纯本地读取（不包裹 `request { local } remote: { RPC }`）。被否决，因为当 document 目标是远程源（XPC / directTCP）时这会静默返回错误数据 —— 本地 engine 对远程进程已加载的镜像一无所知。
 
-### D. Cache empty/nil parse results to create an "attempted" bit
+### D. 缓存空 / nil 解析结果以建立"已尝试"位
 
-Let `hasCachedSection(for:)` count failed parses as indexed, so failures are not retried. Rejected: the factory cache currently stores a successful `Section` value, and introducing a `Result<Section, Error>` or parallel `attemptedFailures` set propagates through many call sites. The simpler semantics — "indexed" = "parsed successfully" — means failed paths retry on the next batch, which is acceptable given how rare deterministic-but-recoverable parse failures are in practice.
+让 `hasCachedSection(for:)` 把解析失败也算作已索引，从而避免重试。被否决：factory 缓存目前存的是成功的 `Section` 值，引入 `Result<Section, Error>` 或并行的 `attemptedFailures` 集合会传播到许多调用点。更简单的语义 —— "indexed" = "成功解析" —— 意味着失败路径会在下一批次中重试，鉴于实际中确定性但可恢复的解析失败相当少见，这一选择可接受。
 
-### E. Drop finished/cancelled batches from the UI immediately
+### E. UI 立即丢弃已完成 / 已取消的批次
 
-Simpler reducer logic: when `.batchFinished` / `.batchCancelled` arrives, remove the batch from the coordinator relay and the popover forgets it existed. Rejected because failed batches carry actionable information; silently losing them means the toolbar's `hasFailures` indicator never surfaces. Instead, finished batches with any `.failed` item are retained until the user clicks `Clear Failed` in the popover.
+更简单的归约逻辑：`.batchFinished` / `.batchCancelled` 到达时从 coordinator relay 中移除批次，弹出框就忘掉它存在过。被否决，因为失败的批次承载着可操作信息；静默丢失它们意味着 toolbar 的 `hasFailures` 指示器永远不会浮现。改为：包含任何 `.failed` 项的已完成批次会被保留，直到用户点击弹出框中的 `Clear Failed`。
 
-## Impact
+## 影响
 
-- **Breaking changes**: No. The feature is opt-in (default off) and does not alter the existing `loadImage(at:)` semantics.
-- **Files affected**: see File Inventory above.
-- **Migration needed**: No. Settings defaults are written by the existing `@Codable` path; absent keys fall back to the `@Default` values.
+- **破坏性变更**: 无。该功能是可选的（默认关闭），且不修改既有 `loadImage(at:)` 的语义。
+- **受影响文件**: 见上文文件清单。
+- **是否需要迁移**: 不需要。Settings 默认值由已有的 `@Codable` 路径写入；缺失键回退到 `@Default` 值。
 
-## Decision Log
+## 决策日志
 
-| Date | Decision | Reason |
+| 日期 | 决策 | 理由 |
 |------|----------|--------|
-| 2026-04-24 | Created as Draft | Spec derived from brainstorming on opt-in, Swift-Concurrency-based background indexing for dyld-loaded dependency closures |
-| 2026-04-24 | Settings subscription → `withObservationTracking` | `Settings` is `@Observable`; avoid parallel Combine channel |
-| 2026-04-24 | `BackgroundIndexingPopoverRoute` merged into `MainRoute` | `MainCoordinator` is `SceneCoordinator<MainRoute, …>`; conditional second conformance not compilable |
-| 2026-04-24 | All new engine methods use `request { local } remote: { RPC }` | Remote (XPC / directTCP) sources would otherwise read local-process data |
-| 2026-04-24 | `isImageIndexed` = "successfully parsed" only | Avoids Result-wrapping every factory cache entry; failed paths retry |
-| 2026-04-24 | `DocumentState.runtimeEngine` treated as immutable | Coordinator captures engine once at init; reassignment is out of scope |
-| 2026-04-24 | Finished batches with failures retained until dismissed | Preserves actionable failure information; drives toolbar `hasFailures` state |
-| 2026-04-24 | Status → Accepted | Review decisions incorporated; plan regenerated to match |
+| 2026-04-24 | 创建为 Draft | 规范来自针对可选、基于 Swift Concurrency 的 dyld 已加载依赖闭包后台索引的头脑风暴 |
+| 2026-04-24 | Settings 订阅 → `withObservationTracking` | `Settings` 是 `@Observable`；避免平行 Combine 通道 |
+| 2026-04-24 | `BackgroundIndexingPopoverRoute` 合入 `MainRoute` | `MainCoordinator` 是 `SceneCoordinator<MainRoute, …>`；条件性的第二个 conformance 无法编译 |
+| 2026-04-24 | 所有新增 engine 方法都使用 `request { local } remote: { RPC }` | 否则远程（XPC / directTCP）源会读到本地进程数据 |
+| 2026-04-24 | `isImageIndexed` = 仅 "成功解析" | 避免对每个 factory 缓存项做 Result 包装；失败路径会重试 |
+| 2026-04-24 | `DocumentState.runtimeEngine` 视为不可变 | Coordinator 在 init 时一次性捕获 engine；重新赋值不在范围 |
+| 2026-04-24 | 包含失败的已完成批次保留至被清除 | 保留可操作的失败信息；驱动 toolbar `hasFailures` 状态 |
+| 2026-04-24 | 状态 → Accepted | Review 决策已落实；plan 重新生成以匹配 |
