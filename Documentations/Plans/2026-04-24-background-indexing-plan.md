@@ -534,7 +534,7 @@ func hasCachedSection(for path: String) -> Bool {
 
 匹配 Step 1 中观察到的精确存储名。如果 factory 使用 `cache` 或 `_sections`，请相应替换。
 
-- [ ] **Step 4: 放宽 factory 的访问级别（必做）**
+- [ ] **Step 4: 放宽 factory 与 `request<T>` 分发原语的访问级别（必做）**
 
 `RuntimeEngine.swift:147-149` 当前将两个 factory 都声明为 `private`：
 
@@ -543,7 +543,15 @@ private let objcSectionFactory: RuntimeObjCSectionFactory
 private let swiftSectionFactory: RuntimeSwiftSectionFactory
 ```
 
-将两者都改为 `internal`（去掉 `private` 关键字；默认即 `internal`）。下面的 `+BackgroundIndexing.swift` 扩展需要这一改动。已经核验过当前代码 —— 这两个 factory 现在确为 `private`。
+`RuntimeEngine.swift:468` 当前将 `request<T>` 也声明为 `private`：
+
+```swift
+private func request<T>(local: () async throws -> T,
+                        remote: (_ senderConnection: RuntimeConnection) async throws -> T)
+    async throws -> T { ... }
+```
+
+将这三处 **全部** 改为 `internal`（去掉 `private` 关键字；默认即 `internal`）。下面 Step 6 / 任务 4 / 任务 4.5 创建的 `RuntimeEngine+BackgroundIndexing.swift` 扩展位于 **不同文件**，Swift 的 `private` 不允许跨文件 extension 访问 —— 即便在同一类型同一 module。`request<T>` 与两个 factory 都会被那个扩展引用，必须提至 `internal`。已经核验过当前代码 —— 这三处现在均为 `private`。
 
 - [ ] **Step 5: 在 `CommandNames` 中加 `.isImageIndexed` 并注册服务端处理器**
 
@@ -775,7 +783,9 @@ sendRemoteDataIfNeeded(name: .imageDidLoad, payload: path)
         let foundation = "/System/Library/Frameworks/Foundation.framework/Foundation"
         let expectation = expectation(description: "imageDidLoad")
         var received: String?
-        let cancellable = await engine.imageDidLoadPublisher.sink { path in
+        // imageDidLoadPublisher is `nonisolated` — no await needed; Swift 6
+        // would warn "no 'async' operations occur in 'await' expression".
+        let cancellable = engine.imageDidLoadPublisher.sink { path in
             received = path
             expectation.fulfill()
         }
@@ -816,46 +826,63 @@ git commit -m "feat(core): imageDidLoadPublisher for per-path load notifications
 文件 `BackgroundIndexingEngineRepresenting.swift`:
 
 ```swift
-import MachOKit
-
 /// Abstraction seam for `RuntimeBackgroundIndexingManager` to interact with a
 /// `RuntimeEngine`. Lets tests swap in a fake engine without real dyld I/O.
-protocol BackgroundIndexingEngineRepresenting: AnyObject, Sendable {
-    func isImageIndexed(path: String) async -> Bool
+///
+/// Methods that proxy to remote sources via `RuntimeEngine.request { ... } remote: { ... }`
+/// are `async throws` because the XPC / TCP transport can fail. Pure-local
+/// queries (`canOpenImage`) stay non-throwing.
+///
+/// Note: the protocol intentionally does NOT expose `MachOImage` —— that type
+/// is a non-Sendable struct (contains unsafe pointers); returning it across
+/// actor boundaries triggers Swift 6 strict-concurrency errors. Callers that
+/// only need to gate recursion can use `canOpenImage(at:)` instead.
+///
+/// Conformance is `Sendable` only —— no `AnyObject` constraint. The manager
+/// holds the engine by value (`engine: any BackgroundIndexingEngineRepresenting`),
+/// no `weak`/`unowned` is needed, and `actor RuntimeEngine`'s conformance
+/// would otherwise depend on the Swift 5.7+ "actor satisfies AnyObject" edge
+/// behavior unnecessarily.
+protocol BackgroundIndexingEngineRepresenting: Sendable {
+    func isImageIndexed(path: String) async throws -> Bool
     func loadImageForBackgroundIndexing(at path: String) async throws
-    func mainExecutablePath() async -> String
-    /// Returns `MachOImage` for the given path, or nil when the image cannot
-    /// be opened. Exposed so the mock can return deterministic dependency lists.
-    func machOImage(for path: String) async -> MachOImage?
-    /// Returns the LC_RPATH entries for the image at `path`.
-    func rpaths(for path: String) async -> [String]
+    func mainExecutablePath() async throws -> String
+    /// Whether the image at `path` can be opened as a MachO. Pure local check.
+    func canOpenImage(at path: String) async -> Bool
+    /// Returns the LC_RPATH entries for the image at `path`. Empty when the
+    /// image cannot be opened.
+    func rpaths(for path: String) async throws -> [String]
     /// Returns the resolved dependency dylib paths for the image at `path`,
-    /// excluding lazy-load entries. Implementations may return nil entries
-    /// for unresolved install names; the caller will mark them failed.
+    /// excluding lazy-load entries. May return nil `resolvedPath` entries for
+    /// unresolved install names; the caller marks them failed.
     func dependencies(for path: String)
-        async -> [(installName: String, resolvedPath: String?)]
+        async throws -> [(installName: String, resolvedPath: String?)]
 }
 ```
 
 - [ ] **Step 2: 让 `RuntimeEngine` 遵循该协议**
 
-追加到 `RuntimeEngine+BackgroundIndexing.swift`:
+追加到 `RuntimeEngine+BackgroundIndexing.swift`。`MachOImage(name:)` 仅在 actor-isolated 实现内部使用，**不**作为协议返回值跨边界传递：
 
 ```swift
+import MachOKit
+
 extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
-    func machOImage(for path: String) -> MachOImage? {
-        MachOImage(name: path)
+    func canOpenImage(at path: String) -> Bool {
+        MachOImage(name: path) != nil
     }
 
     func rpaths(for path: String) -> [String] {
         guard let image = MachOImage(name: path) else { return [] }
-        return image.rpaths   // adjust to actual API name from Task 2 exploration
+        return image.rpaths   // confirmed: MachOImage.swift:145 returns [String]
     }
 
-    func dependencies(for path: String) -> [(installName: String, resolvedPath: String?)] {
+    func dependencies(for path: String) async throws
+        -> [(installName: String, resolvedPath: String?)]
+    {
         guard let image = MachOImage(name: path) else { return [] }
         let resolver = DylibPathResolver()
-        let main = mainExecutablePath()
+        let main = try await mainExecutablePath()
         let rpathList = image.rpaths
         return image.dependencies
             .filter { $0.type != .lazyLoad }
@@ -870,7 +897,7 @@ extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
 }
 ```
 
-如果实际的 MachOImage API 将 `rpaths` 返回为如 `[RpathCommand]`、其 `.path` 为字符串，请把 `image.rpaths` 替换为正确的访问器（如 `image.rpaths.map { $0.path }`）。本任务开头先做探索，并坚持使用已核验的 API。
+注：`canOpenImage` 与 `rpaths` 的 conformance 实现保留为 non-throwing，Swift 允许 sync / non-throwing 函数满足 `async throws` 协议要求。`dependencies` 必须是 `async throws`，因为它内部 `try await mainExecutablePath()`（远端分发可能抛错）。`MachOImage` 类型自身不出现在协议表面 —— 它是非 Sendable 的结构体，仅在 actor-isolated 实现内部使用。
 
 - [ ] **Step 3: 创建 mock**
 
@@ -924,7 +951,10 @@ final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting,
 
     func mainExecutablePath() async -> String { mainExecutable }
 
-    func machOImage(for path: String) async -> MachOImage? { nil }
+    func canOpenImage(at path: String) async -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return paths[path] != nil
+    }
     func rpaths(for path: String) async -> [String] { [] }
     func dependencies(for path: String)
         async -> [(installName: String, resolvedPath: String?)]
@@ -934,6 +964,8 @@ final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting,
     }
 }
 ```
+
+注：mock 的所有方法保留为 non-throwing 形式（`async -> ...` 而非 `async throws -> ...`）—— Swift 允许更弱的实现满足更强的协议要求。这样测试代码内调用 mock 时仍需 `try await`（因为通过 protocol 调用），但 mock 内部不必显式 throw。`MachOImage` 不再出现在 mock 的接口或导入中。
 
 - [ ] **Step 4: 编译检查**
 
@@ -1066,11 +1098,11 @@ public actor RuntimeBackgroundIndexingManager {
         return id
     }
 
-    // Placeholder — Task 8 replaces with real BFS.
+    // Placeholder — Task 7 replaces with real BFS.
     func expandDependencyGraph(rootPath: String, depth: Int)
         async -> [RuntimeIndexingTaskItem]
     {
-        if await engine.isImageIndexed(path: rootPath) { return [] }
+        if (try? await engine.isImageIndexed(path: rootPath)) == true { return [] }
         return [.init(id: rootPath, resolvedPath: rootPath,
                       state: .pending, hasPriorityBoost: false)]
     }
@@ -1224,20 +1256,30 @@ func expandDependencyGraph(rootPath: String, depth: Int)
         let (path, level) = frontier.removeFirst()
         guard visited.insert(path).inserted else { continue }
 
-        if await engine.isImageIndexed(path: path) { continue }
+        // `try?` — if the engine errors out (e.g. remote XPC drops mid-batch),
+        // treat the image as unindexed; loadImageForBackgroundIndexing will
+        // surface a real failure later. This matches Evolution 0002 Alt D:
+        // failure ≠ indexed.
+        if (try? await engine.isImageIndexed(path: path)) == true { continue }
 
-        // Before recursing, confirm the image opens. If not, record a failed
-        // item and do not recurse.
-        if await engine.machOImage(for: path) == nil && path != rootPath {
-            // Root is allowed to be represented even if we cannot open it —
-            // loadImageForBackgroundIndexing will surface the failure later.
+        // Non-root paths that can't be opened as MachO go straight to
+        // `.failed` and don't recurse — saves a wasted dlopen attempt later.
+        // Root is always represented so that the batch has at least one item.
+        if path != rootPath && !(await engine.canOpenImage(at: path)) {
+            items.append(.init(id: path, resolvedPath: path,
+                               state: .failed(message: "cannot open MachOImage"),
+                               hasPriorityBoost: false))
+            continue
         }
 
         items.append(.init(id: path, resolvedPath: path,
                            state: .pending, hasPriorityBoost: false))
         guard level < depth else { continue }
 
-        for dep in await engine.dependencies(for: path) {
+        // `try?` — if dependency lookup fails, treat as no deps; the path
+        // itself is still pending and will be retried on next batch.
+        let deps = (try? await engine.dependencies(for: path)) ?? []
+        for dep in deps {
             if let resolved = dep.resolvedPath {
                 if !visited.contains(resolved) {
                     frontier.append((resolved, level + 1))
@@ -1369,8 +1411,8 @@ git commit -m "feat(core): implement dependency graph BFS for background indexin
         init(base: any BackgroundIndexingEngineRepresenting, counter: ConcurrencyCounter) {
             self.base = base; self.counter = counter
         }
-        func isImageIndexed(path: String) async -> Bool {
-            await base.isImageIndexed(path: path)
+        func isImageIndexed(path: String) async throws -> Bool {
+            try await base.isImageIndexed(path: path)
         }
         func loadImageForBackgroundIndexing(at path: String) async throws {
             counter.enter()
@@ -1378,20 +1420,22 @@ git commit -m "feat(core): implement dependency graph BFS for background indexin
             try await Task.sleep(nanoseconds: 20_000_000)
             try await base.loadImageForBackgroundIndexing(at: path)
         }
-        func mainExecutablePath() async -> String { await base.mainExecutablePath() }
-        func machOImage(for path: String) async -> MachOImage? {
-            await base.machOImage(for: path)
+        func mainExecutablePath() async throws -> String {
+            try await base.mainExecutablePath()
         }
-        func rpaths(for path: String) async -> [String] { await base.rpaths(for: path) }
+        func canOpenImage(at path: String) async -> Bool {
+            await base.canOpenImage(at: path)
+        }
+        func rpaths(for path: String) async throws -> [String] {
+            try await base.rpaths(for: path)
+        }
         func dependencies(for path: String)
-            async -> [(installName: String, resolvedPath: String?)]
+            async throws -> [(installName: String, resolvedPath: String?)]
         {
-            await base.dependencies(for: path)
+            try await base.dependencies(for: path)
         }
     }
 ```
-
-如果测试文件顶部尚未添加 `import MachOKit`，请添加。
 
 - [ ] **Step 2: 用真正的执行替换 `runBatch` 桩**
 
@@ -1715,7 +1759,7 @@ rg -n "init\(source|actor RuntimeEngine" /Volumes/Repositories/Private/Org/MxIri
 
 - [ ] **Step 2: 增加显式存储属性，并在 `init` 末尾初始化**
 
-actor 上的 `lazy var` 强制每次首次访问都通过 actor 隔离，使初始化点不直观，且与 `nonisolated` 访问器交互不顺畅。改用一个显式的隐式可解包存储属性，作为 `init` 的最后一行赋值：
+actor 上的 `lazy var` 强制每次首次访问都通过 actor 隔离，初始化时机变得不直观，且与 `nonisolated` 属性访问器交互不顺畅。改用一个显式的隐式可解包存储属性，作为 `init` 的最后一行赋值：
 
 ```swift
 // Near the other stored properties:
@@ -1725,7 +1769,7 @@ public private(set) var backgroundIndexingManager: RuntimeBackgroundIndexingMana
 self.backgroundIndexingManager = RuntimeBackgroundIndexingManager(engine: self)
 ```
 
-IUO 的理由：actor 不能在 `init` 完成对其他存储属性的注册前把 `self` 交给 manager；而 manager 在 init 之后是只读的 —— 不存在重新赋值的路径，也不存在一行 bootstrap 之外的 nil 访问路径。
+为什么 IUO 而不是普通 `let`：`RuntimeEngine.init` 末尾把 `self` 交给 `RuntimeBackgroundIndexingManager(engine: self)` 时，所有其他 stored property 已经初始化完成（参见 `RuntimeEngine.swift:178-179`），因此不存在"前向引用 self"问题。真正需要 IUO 的原因是更纯粹的初始化时机偏好：把 manager 的构造放在 `init` 末尾、所有其它依赖到位之后，是最易读的写法；普通 `let` 要求在声明时给初值，把构造表达式上提到 stored-property 区域反而割裂了"engine 完成 → 构造 manager"这条线性叙事。manager 在 init 之后只读，不存在重新赋值或 nil 访问路径，IUO 的不安全面在此被结构性地约束住。
 
 - [ ] **Step 3: 构建**
 
@@ -1770,10 +1814,13 @@ rg -n "public struct MCP|public struct Notifications|public var mcp" /Volumes/Re
 }
 ```
 
-在根 `Settings` 结构体中、紧挨 `mcp` 加入新存储属性：
+在根 `Settings` 类中、紧挨 `mcp` 加入新存储属性。**必须**镜像现有字段的 `didSet { scheduleAutoSave() }` 模式（见 `Settings.swift:14-37` 中 `general` / `notifications` / `transformer` / `mcp` / `update` 全部使用这一形式），否则 toggle / depth / maxConcurrency 改动不会自动写盘：
 
 ```swift
-@Default(BackgroundIndexing.default) public var backgroundIndexing: BackgroundIndexing
+@Default(BackgroundIndexing.default)
+public var backgroundIndexing: BackgroundIndexing = .init() {
+    didSet { scheduleAutoSave() }
+}
 ```
 
 - [ ] **Step 3: 构建 packages**
@@ -1919,6 +1966,7 @@ import RuntimeViewerSettings
 import RxSwift
 import RxRelay
 
+@MainActor
 public final class RuntimeBackgroundIndexingCoordinator {
     public struct AggregateState: Equatable, Sendable {
         public var hasActiveBatch: Bool
@@ -1979,16 +2027,18 @@ public final class RuntimeBackgroundIndexingCoordinator {
     // MARK: - Event pump (AsyncStream → Relay)
 
     private func startEventPump() {
+        // The class is `@MainActor`, so this Task and its `for await` loop
+        // run on the main actor. `apply(event:)` can be called synchronously
+        // without an extra `MainActor.run` hop.
         eventPumpTask = Task { [weak self] in
             guard let self else { return }
             let stream = await self.engine.backgroundIndexingManager.events
             for await event in stream {
-                await MainActor.run { self.apply(event: event) }
+                self.apply(event: event)
             }
         }
     }
 
-    @MainActor
     private func apply(event: RuntimeIndexingEvent) {
         var batches = batchesRelay.value
         switch event {
@@ -2026,7 +2076,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
         return copy
     }
 
-    @MainActor
     private func refreshAggregate(batches: [RuntimeIndexingBatch]) {
         let hasActive = !batches.isEmpty
         let hasFailure = batches.contains {
@@ -2075,18 +2124,23 @@ git commit -m "feat(application): coordinator skeleton for background indexing"
 ```swift
 extension RuntimeBackgroundIndexingCoordinator {
     public func documentDidOpen() {
+        // The class is `@MainActor`, so this Task inherits main-actor isolation
+        // and can mutate `documentBatchIDs` synchronously after the awaits.
         Task { [weak self] in
             guard let self else { return }
-            let settings = await self.currentBackgroundIndexingSettings()
+            let settings = self.currentBackgroundIndexingSettings()
             guard settings.isEnabled else { return }
-            let root = await engine.mainExecutablePath()
-            guard !root.isEmpty else { return }
+            // mainExecutablePath is `async throws` because remote (XPC / TCP)
+            // sources may fail; on launch we silently skip the batch in that
+            // case rather than surface the error to the user.
+            guard let root = try? await engine.mainExecutablePath(),
+                  !root.isEmpty else { return }
             let id = await engine.backgroundIndexingManager.startBatch(
                 rootImagePath: root,
                 depth: settings.depth,
                 maxConcurrency: settings.maxConcurrency,
                 reason: .appLaunch)
-            await MainActor.run { self.documentBatchIDs.insert(id) }
+            self.documentBatchIDs.insert(id)
         }
     }
 
@@ -2100,7 +2154,7 @@ extension RuntimeBackgroundIndexingCoordinator {
         }
     }
 
-    private func currentBackgroundIndexingSettings() async -> BackgroundIndexing {
+    private func currentBackgroundIndexingSettings() -> BackgroundIndexing {
         // Access the Settings snapshot via the project's existing mechanism.
         // If `Settings.shared` is the accessor, use it; adjust to match.
         Settings.shared.backgroundIndexing
@@ -2130,53 +2184,59 @@ git commit -m "feat(application): documentDidOpen / documentWillClose hooks for 
 **文件:**
 - 修改: `RuntimeBackgroundIndexingCoordinator.swift`
 
-- [ ] **Step 1: 检查 engine 的镜像加载信号**
+**为什么用 Combine `.values` 桥到 AsyncStream:** 任务 4.5 引入的 `imageDidLoadPublisher` 是 `some Publisher<String, Never>`（Combine）。Coordinator 已经用 `Task { for await event in stream }` 模式消费 manager 的 `AsyncStream`（任务 14 `startEventPump`），把 publisher 桥到 async-for-loop 复用同一模式，比再起一条 RxCombine bridge 简单。
 
-```bash
-rg -n "didLoadImage|imageLoaded|imageDidLoad|PublishSubject.*String" /Volumes/Repositories/Private/Org/MxIris-Reverse-Engineering/RuntimeViewer/RuntimeViewerCore/Sources/RuntimeViewerCore/ | head
+- [ ] **Step 1: 添加按 path 的事件泵存储**
+
+在 coordinator 类内、与 `eventPumpTask` 并列：
+
+```swift
+private var imageLoadedPumpTask: Task<Void, Never>?
 ```
 
-记录精确的 Rx observable 或 async sequence 名称，调整下面的订阅以匹配。
+更新 `deinit` 一并取消：
+
+```swift
+deinit {
+    eventPumpTask?.cancel()
+    imageLoadedPumpTask?.cancel()
+}
+```
 
 - [ ] **Step 2: 在 coordinator init 的 `startEventPump()` 之后增加订阅**
 
 ```swift
-private func subscribeToImageLoadedEvents() {
-    // Adjust to the actual observable name discovered in Step 1.
-    engine.imageLoadedSignal
-        .emitOnNext { [weak self] path in
-            guard let self else { return }
-            Task { await self.handleImageLoaded(path: path) }
+private func startImageLoadedPump() {
+    // Class is `@MainActor`; this Task and `for await` loop run on the main
+    // actor. `handleImageLoaded` doesn't need a `MainActor.run` hop.
+    imageLoadedPumpTask = Task { [weak self] in
+        guard let self else { return }
+        // Combine.Publisher.values bridges to AsyncSequence on macOS 12+ /
+        // iOS 15+; the project's deployment targets satisfy this. Errors are
+        // Never on this publisher, so no try is needed.
+        for await path in self.engine.imageDidLoadPublisher.values {
+            await self.handleImageLoaded(path: path)
         }
-        .disposed(by: disposeBag)
+    }
 }
 
 private func handleImageLoaded(path: String) async {
-    let settings = await currentBackgroundIndexingSettings()
+    let settings = currentBackgroundIndexingSettings()
     guard settings.isEnabled else { return }
     // Avoid double-starting if the path is the main executable being opened
-    // at app launch — documentDidOpen already dispatched that batch.
+    // at app launch — documentDidOpen already dispatched that batch. Manager
+    // dedups batches that share rootImagePath + reason discriminant, so a
+    // second call here is a no-op rather than a wasted batch.
     let id = await engine.backgroundIndexingManager.startBatch(
         rootImagePath: path,
         depth: settings.depth,
         maxConcurrency: settings.maxConcurrency,
         reason: .imageLoaded(path: path))
-    await MainActor.run { self.documentBatchIDs.insert(id) }
+    self.documentBatchIDs.insert(id)
 }
 ```
 
-在 `init` 末尾调用 `subscribeToImageLoadedEvents()`。
-
-如果 engine 仅暴露 `AsyncSequence`（不是 Rx），把订阅替换为：
-
-```swift
-imageEventPumpTask = Task { [weak self] in
-    guard let self else { return }
-    for await path in self.engine.imageLoadedAsyncSequence {
-        await self.handleImageLoaded(path: path)
-    }
-}
-```
+在 `init` 末尾、`startEventPump()` 之后调用 `startImageLoadedPump()`。
 
 - [ ] **Step 3: 构建**
 
@@ -2212,13 +2272,14 @@ import RuntimeViewerSettings
 在 coordinator 类上加私有状态：
 
 ```swift
-@MainActor private var lastKnownIsEnabled: Bool = false
+private var lastKnownIsEnabled: Bool = false
 ```
 
 - [ ] **Step 2: 实现 observation 循环**
 
+类已是 `@MainActor`,所有方法默认在主线程运行,不必再单独标 `@MainActor`。
+
 ```swift
-@MainActor
 private func subscribeToSettings() {
     withObservationTracking {
         let snapshot = Settings.shared.backgroundIndexing
@@ -2236,7 +2297,6 @@ private func subscribeToSettings() {
     }
 }
 
-@MainActor
 private func handleSettingsChange() {
     let latest = Settings.shared.backgroundIndexing
     let wasEnabled = lastKnownIsEnabled
@@ -2255,14 +2315,12 @@ private func handleSettingsChange() {
 
 - [ ] **Step 3: 在 init 中播种初始状态并注册**
 
-在 `init` 末尾：
+类是 `@MainActor`,init 也在主线程,直接同步播种与订阅:
 
 ```swift
-Task { @MainActor [weak self] in
-    guard let self else { return }
-    self.lastKnownIsEnabled = Settings.shared.backgroundIndexing.isEnabled
-    self.subscribeToSettings()
-}
+// At end of init(documentState:)
+self.lastKnownIsEnabled = Settings.shared.backgroundIndexing.isEnabled
+self.subscribeToSettings()
 ```
 
 - [ ] **Step 4: 构建**
@@ -2317,9 +2375,11 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     @Observed private(set) var nodes: [BackgroundIndexingNode] = []
     @Observed private(set) var isEnabled: Bool = false
     @Observed private(set) var hasAnyBatch: Bool = false
+    @Observed private(set) var hasAnyFailure: Bool = false
     @Observed private(set) var subtitle: String = ""
 
     private let coordinator: RuntimeBackgroundIndexingCoordinator
+    private let openSettingsRelay = PublishRelay<Void>()
 
     init(documentState: DocumentState,
          router: any Router<MainRoute>,
@@ -2339,7 +2399,13 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         let nodes: Driver<[BackgroundIndexingNode]>
         let isEnabled: Driver<Bool>
         let hasAnyBatch: Driver<Bool>
+        let hasAnyFailure: Driver<Bool>
         let subtitle: Driver<String>
+        // Forwarded to the ViewController so it can call
+        // `SettingsWindowController.shared.showWindow(nil)` directly —— mirrors
+        // MCPStatusPopoverViewController.swift:200-203 (no `MainRoute` case
+        // exists for openSettings).
+        let openSettings: Signal<Void>
     }
 
     func transform(_ input: Input) -> Output {
@@ -2354,17 +2420,19 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
             .disposed(by: rx.disposeBag)
 
         coordinator.aggregateStateObservable
-            .map(Self.subtitleFor)
-            .asDriver(onErrorJustReturn: "")
-            .driveOnNext { [weak self] s in
+            .asDriver(onErrorDriveWith: .empty())
+            .driveOnNext { [weak self] state in
                 guard let self else { return }
-                subtitle = s
+                subtitle = Self.subtitleFor(state)
+                hasAnyFailure = state.hasAnyFailure
             }
             .disposed(by: rx.disposeBag)
 
-        // isEnabled must stay reactive — the popover's empty states
-        // depend on it. Use withObservationTracking like the coordinator
-        // so toggling Settings while the popover is open updates the view.
+        // ViewModel base class (`open class ViewModel<Route: Routable>`) is
+        // `@MainActor`, so `transform` runs on the main actor and can call
+        // `subscribeToIsEnabled()` synchronously. Synchronous seed is what
+        // keeps the popover's first frame from flashing the "disabled"
+        // empty state when Settings is actually enabled.
         subscribeToIsEnabled()
 
         input.cancelBatch.emitOnNext { [weak self] id in
@@ -2382,20 +2450,23 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
             coordinator.clearFailedBatches()
         }.disposed(by: rx.disposeBag)
 
+        // Forward the user signal to the output. The ViewController will
+        // open the Settings window directly — see MCPStatusPopover precedent.
         input.openSettings.emitOnNext { [weak self] in
             guard let self else { return }
-            router.trigger(.openSettings)
+            openSettingsRelay.accept(())
         }.disposed(by: rx.disposeBag)
 
         return Output(
             nodes: $nodes.asDriver(),
             isEnabled: $isEnabled.asDriver(),
             hasAnyBatch: $hasAnyBatch.asDriver(),
-            subtitle: $subtitle.asDriver()
+            hasAnyFailure: $hasAnyFailure.asDriver(),
+            subtitle: $subtitle.asDriver(),
+            openSettings: openSettingsRelay.asSignal()
         )
     }
 
-    @MainActor
     private func subscribeToIsEnabled() {
         withObservationTracking {
             _ = Settings.shared.backgroundIndexing.isEnabled
@@ -2476,6 +2547,7 @@ git commit -m "feat(ui): popover ViewModel on MainRoute + BackgroundIndexingNode
 import AppKit
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
+import RuntimeViewerSettingsUI    // SettingsWindowController.shared
 import RuntimeViewerUI
 import RxCocoa
 import RxSwift
@@ -2487,6 +2559,7 @@ final class BackgroundIndexingPopoverViewController:
     // MARK: - Relays
     private let cancelBatchRelay = PublishRelay<RuntimeIndexingBatchID>()
     private let cancelAllRelay = PublishRelay<Void>()
+    private let clearFailedRelay = PublishRelay<Void>()
     private let openSettingsRelay = PublishRelay<Void>()
 
     // MARK: - Views
@@ -2520,6 +2593,11 @@ final class BackgroundIndexingPopoverViewController:
         $0.bezelStyle = .accessoryBarAction
         $0.title = "Cancel All"
     }
+    private let clearFailedButton = NSButton().then {
+        $0.bezelStyle = .accessoryBarAction
+        $0.title = "Clear Failed"
+        $0.isHidden = true   // shown only when a retained failed batch exists
+    }
     private let closeButton = NSButton().then {
         $0.bezelStyle = .accessoryBarAction
         $0.title = "Close"
@@ -2541,6 +2619,7 @@ final class BackgroundIndexingPopoverViewController:
         }
         let buttonStack = HStackView(spacing: 8) {
             cancelAllButton
+            clearFailedButton
             closeButton
         }
         buttonStack.alignment = .centerY
@@ -2589,6 +2668,8 @@ final class BackgroundIndexingPopoverViewController:
     private func setupActions() {
         cancelAllButton.target = self
         cancelAllButton.action = #selector(cancelAllClicked)
+        clearFailedButton.target = self
+        clearFailedButton.action = #selector(clearFailedClicked)
         closeButton.target = self
         closeButton.action = #selector(closeClicked)
         openSettingsButton.target = self
@@ -2596,6 +2677,7 @@ final class BackgroundIndexingPopoverViewController:
     }
 
     @objc private func cancelAllClicked() { cancelAllRelay.accept(()) }
+    @objc private func clearFailedClicked() { clearFailedRelay.accept(()) }
     @objc private func closeClicked() { dismiss(nil) }
     @objc private func openSettingsClicked() { openSettingsRelay.accept(()) }
 
@@ -2604,6 +2686,7 @@ final class BackgroundIndexingPopoverViewController:
         let input = BackgroundIndexingPopoverViewModel.Input(
             cancelBatch: cancelBatchRelay.asSignal(),
             cancelAll: cancelAllRelay.asSignal(),
+            clearFailed: clearFailedRelay.asSignal(),
             openSettings: openSettingsRelay.asSignal()
         )
         let output = viewModel.transform(input)
@@ -2618,6 +2701,20 @@ final class BackgroundIndexingPopoverViewController:
                 openSettingsButton.isHidden = enabled
             }
             .disposed(by: rx.disposeBag)
+
+        output.hasAnyFailure
+            .driveOnNext { [weak self] hasFailure in
+                guard let self else { return }
+                clearFailedButton.isHidden = !hasFailure
+            }
+            .disposed(by: rx.disposeBag)
+
+        // Direct-call into the Settings window. There is no `MainRoute.openSettings`
+        // case — see MCPStatusPopoverViewController.swift:200-203 for the same pattern.
+        output.openSettings.emitOnNext {
+            SettingsWindowController.shared.showWindow(nil)
+        }
+        .disposed(by: rx.disposeBag)
 
         Observable.combineLatest(
             output.isEnabled.asObservable(),
@@ -2993,7 +3090,7 @@ case .backgroundIndexing(let sender):
                          behavior: .transient))
 ```
 
-不需要 `extension MainCoordinator: Router where Route == ...` 包装 —— `self` 已经是 `Router<MainRoute>`，弹出框的 `openSettings` 按钮直接触发 `router.trigger(.openSettings)`（`MainRoute` 上已有该 case）。
+不需要 `extension MainCoordinator: Router where Route == ...` 包装 —— `self` 已经是 `Router<MainRoute>`,作为 ViewModel 的 router 注入即可。弹出框的 `Open Settings` 按钮**不**经 router:`MainRoute` 没有 `openSettings` case;ViewController 在 `setupBindings` 中订阅 `output.openSettings` 直接调用 `SettingsWindowController.shared.showWindow(nil)`(与 `MCPStatusPopoverViewController` 完全相同的处理方式)。
 
 - [ ] **Step 5: 构建**
 
@@ -3148,14 +3245,13 @@ case .batchCancelled(let cancelled):
 
 ```swift
 public func clearFailedBatches() {
-    Task { @MainActor [weak self] in
-        guard let self else { return }
-        let remaining = batchesRelay.value.filter { batch in
-            !batch.items.contains { if case .failed = $0.state { true } else { false } }
-        }
-        batchesRelay.accept(remaining)
-        refreshAggregate(batches: remaining)
+    // Class is `@MainActor`; we're already on the main thread when called
+    // from the popover's button. No hop required.
+    let remaining = batchesRelay.value.filter { batch in
+        !batch.items.contains { if case .failed = $0.state { true } else { false } }
     }
+    batchesRelay.accept(remaining)
+    refreshAggregate(batches: remaining)
 }
 ```
 
