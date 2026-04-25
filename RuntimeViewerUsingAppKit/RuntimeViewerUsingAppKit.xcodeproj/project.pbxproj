@@ -38,6 +38,7 @@
 		E96BF91D2F60541F009C40D2 /* MCPStatusPopoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96BF91C2F60541F009C40D2 /* MCPStatusPopoverViewModel.swift */; };
 		E9BD1A112FA000020000ABCD /* BackgroundIndexingNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9BD1A102FA000010000ABCD /* BackgroundIndexingNode.swift */; };
 		E9BD1A132FA000040000ABCD /* BackgroundIndexingPopoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9BD1A122FA000030000ABCD /* BackgroundIndexingPopoverViewModel.swift */; };
+		E9BD1A172FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9BD1A162FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift */; };
 		E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */; };
 		E96DE1E32F0ACE8D00F9BAB2 /* CheckboxButton+.swift in Sources */ = {isa = PBXBuildFile; fileRef = E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */; };
 		E975449A2C42BA5B00CC9DDD /* LoadFrameworksViewController.xib in Resources */ = {isa = PBXBuildFile; fileRef = E97544992C42BA5B00CC9DDD /* LoadFrameworksViewController.xib */; };
@@ -258,6 +259,7 @@
 		E96BF91C2F60541F009C40D2 /* MCPStatusPopoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPStatusPopoverViewModel.swift; sourceTree = "<group>"; };
 		E9BD1A102FA000010000ABCD /* BackgroundIndexingNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundIndexingNode.swift; sourceTree = "<group>"; };
 		E9BD1A122FA000030000ABCD /* BackgroundIndexingPopoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundIndexingPopoverViewModel.swift; sourceTree = "<group>"; };
+		E9BD1A162FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundIndexingPopoverViewController.swift; sourceTree = "<group>"; };
 		E96CF5322EC7A4A600CBC159 /* RuntimeSource+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RuntimeSource+.swift"; sourceTree = "<group>"; };
 		E96DE1E22F0ACE8D00F9BAB2 /* CheckboxButton+.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CheckboxButton+.swift"; sourceTree = "<group>"; };
 		E97544982C42BA5B00CC9DDD /* LoadFrameworksViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadFrameworksViewController.swift; sourceTree = "<group>"; };
@@ -528,6 +530,7 @@
 			children = (
 				E9BD1A102FA000010000ABCD /* BackgroundIndexingNode.swift */,
 				E9BD1A122FA000030000ABCD /* BackgroundIndexingPopoverViewModel.swift */,
+				E9BD1A162FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift */,
 			);
 			path = BackgroundIndexing;
 			sourceTree = "<group>";
@@ -976,6 +979,7 @@
 				E96BF91D2F60541F009C40D2 /* MCPStatusPopoverViewModel.swift in Sources */,
 				E9BD1A112FA000020000ABCD /* BackgroundIndexingNode.swift in Sources */,
 				E9BD1A132FA000040000ABCD /* BackgroundIndexingPopoverViewModel.swift in Sources */,
+				E9BD1A172FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift in Sources */,
 				E9F11E0B2F123EEC0052B0A3 /* SidebarRootCoordinator.swift in Sources */,
 				E921246B2F447BA1007481E4 /* ExportingConfigurationViewModel.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
