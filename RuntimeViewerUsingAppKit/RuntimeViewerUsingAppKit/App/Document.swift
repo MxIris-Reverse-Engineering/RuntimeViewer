@@ -18,6 +18,12 @@ final class Document: NSDocument {
 
     override func makeWindowControllers() {
         addWindowController(mainCoordinator.windowController)
+        documentState.backgroundIndexingCoordinator.documentDidOpen()
+    }
+
+    override func close() {
+        documentState.backgroundIndexingCoordinator.documentWillClose()
+        super.close()
     }
 
     override func data(ofType typeName: String) throws -> Data {
