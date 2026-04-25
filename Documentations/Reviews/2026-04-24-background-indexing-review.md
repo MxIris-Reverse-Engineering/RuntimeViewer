@@ -1,234 +1,203 @@
-# Background Indexing Design & Plan — 审查遗留问题
+# Background Indexing Evolution & Plan — 审查闭环记录
 
 审查对象:
-- [2026-04-24-background-indexing-design.md](../Plans/2026-04-24-background-indexing-design.md)
+- [0002-background-indexing.md](../Evolution/0002-background-indexing.md)(原 `Plans/2026-04-24-background-indexing-design.md`,已挪至 Evolution 并改成演进文档格式)
 - [2026-04-24-background-indexing-plan.md](../Plans/2026-04-24-background-indexing-plan.md)
 
-本文件只记录尚未闭环的问题。已在对话中确定方案、不再单独跟踪的决策:
-- Settings 变化订阅 → 改用 `@Observable` + `withObservationTracking` 重注册模式
-- `BackgroundIndexingPopoverRoute` 合并进 `MainRoute`(ViewModel 改成 `ViewModel<MainRoute>`)
-- 远程 source 支持 → 所有 engine 新方法按 `request { 本地 } remote: { RPC }` 模式实现,server dispatcher 挂对应 handler
+本文件现为闭环记录:列出审查中发现的问题,并标注每项是否已在 evolution 0002 / plan 中落实。
 
 ---
 
-## Critical — 不修会直接编译失败或运行出错
+## 已决议并落地
 
-### C1. `Semaphore` 不是 `RuntimeViewerCore` 的直接依赖
-
-`Package.swift` 里 `Semaphore` 只挂在 `RuntimeViewerCommunication` target 下。Plan 的 `RuntimeBackgroundIndexingManager.swift` 里 `import Semaphore` 会找不到 module。
-
-**修复**:在 `RuntimeViewerCore/Package.swift` 的 `RuntimeViewerCore` target dependencies 追加:
-```swift
-.product(name: "Semaphore", package: "Semaphore")
-```
-
-Plan 需新增 Task 0 专做此事。
+| 决议 | 落地位置 |
+|------|---------|
+| Settings 变化订阅 → `@Observable` + `withObservationTracking` 重注册模式 | Plan Task 17;Evolution Scenario E / Alternative A |
+| `BackgroundIndexingPopoverRoute` 合并进 `MainRoute`,ViewModel 为 `ViewModel<MainRoute>` | Plan Task 18 / Task 21;Evolution Alternative B / Components |
+| 远程 source 支持 → 所有 engine 新方法按 `request { 本地 } remote: { RPC }` 模式实现,server dispatcher 挂对应 handler | Plan Task 3 / Task 4 / Task 4.5;Evolution "Remote Dispatch Model" |
 
 ---
 
-### C2. `section(for:)` 的签名和 Plan 假设不一致
+## Critical — 已全部落地
 
-真实签名(`RuntimeObjCSection.swift:704`、`RuntimeSwiftSection.swift:802`):
-```swift
-func section(for imagePath: String, progressContinuation: ...) async throws
-    -> (isExisted: Bool, section: RuntimeObjCSection)
-```
+### C1. `Semaphore` 不是 `RuntimeViewerCore` 的直接依赖 — ✅ 已修
 
-Plan 里 `loadImageForBackgroundIndexing` 漏了 `try await`:
-```swift
-_ = objcSectionFactory.section(for: path)
-_ = swiftSectionFactory.section(for: path)
-```
+`Package.swift:163` 里 `Semaphore` 只挂在 `RuntimeViewerCommunication` target 下。Plan 的 `RuntimeBackgroundIndexingManager.swift` 里 `import Semaphore` 会找不到 module(尤其一旦启用 `.memberImportVisibility`)。
 
-**修复**:与 `RuntimeEngine.loadImage(at:)`(`RuntimeEngine.swift:485-495`)一致:
-```swift
-_ = try await objcSectionFactory.section(for: path)
-_ = try await swiftSectionFactory.section(for: path)
-```
+**落地**:新增 **Plan Task 0**,在 `RuntimeViewerCore` target dependencies 追加 `.product(name: "Semaphore", package: "Semaphore")`。
 
 ---
 
-### C3. `engine.imageLoadedSignal` 不存在
+### C2. `section(for:)` 的签名和 Plan 假设不一致 — ✅ 已修
 
-Plan Task 16 Step 2 订阅 `engine.imageLoadedSignal`,但 `RuntimeEngine` 只暴露 `reloadDataPublisher: some Publisher<Void, Never>`(无 path 载荷)和 `imageNodesPublisher`(全量列表)。
+真实签名(`RuntimeObjCSection.swift:704`、`RuntimeSwiftSection.swift:802`)是 `async throws -> (isExisted: Bool, section: ...)`。
 
-**修复**:在 `RuntimeEngine` 新增一个带 path 的 publisher,`loadImage(at:)` 的本地分支和远程 dispatcher 对应 handler 都要 emit:
-```swift
-private nonisolated let imageDidLoadSubject = PassthroughSubject<String, Never>()
-public nonisolated var imageDidLoadPublisher: some Publisher<String, Never> {
-    imageDidLoadSubject.eraseToAnyPublisher()
-}
-```
-`loadImage(at:)` 成功后 `imageDidLoadSubject.send(path)`。Plan Task 16 订阅该 publisher。
+**落地**:**Plan Task 4 Step 4** 的 `loadImageForBackgroundIndexing` 本地实现改成 `try await` 两个 factory 调用,与 `RuntimeEngine.swift:485-495` 一致。
 
 ---
 
-### C4. 值类型 `Hashable` 声明不一致
+### C3. `engine.imageLoadedSignal` 不存在 — ✅ 已修
 
-Plan Task 19 声明 `BackgroundIndexingNode: Hashable`,但其关联值 `RuntimeIndexingBatch` / `RuntimeIndexingTaskItem` / `RuntimeIndexingBatchReason` / `RuntimeIndexingTaskState` / `RuntimeIndexingBatchID` / `ResolvedDependency` 只有 `Sendable, Identifiable, Equatable`。
+`RuntimeEngine` 只暴露 `reloadDataPublisher: some Publisher<Void, Never>` 和 `imageNodesPublisher`,没有带 path 的 publisher。
 
-**修复**:Task 1 所有值类型统一加 `Hashable`:
-```swift
-public struct RuntimeIndexingBatchID: Hashable, Sendable { ... }
-public enum RuntimeIndexingBatchReason: Sendable, Hashable { ... }
-public enum RuntimeIndexingTaskState: Sendable, Hashable { ... }
-public struct RuntimeIndexingTaskItem: Sendable, Identifiable, Hashable { ... }
-public struct RuntimeIndexingBatch: Sendable, Identifiable, Hashable { ... }
-public struct ResolvedDependency: Codable, Sendable, Hashable { ... }
-```
+**落地**:新增 **Plan Task 4.5**(`imageDidLoadPublisher`),在 `RuntimeEngine` 新增 `imageDidLoadSubject: PassthroughSubject<String, Never>`;本地 `loadImage(at:)` 成功后 emit;新增 `.imageDidLoad` CommandName 让远程 dispatcher 也可以 forward。**Plan Task 16** 订阅该 publisher。
 
 ---
 
-## Significant — 需要拍板的语义/假设
+### C4. 值类型 `Hashable` 声明不一致 — ✅ 已修
 
-### S1. Factory 缓存只在解析成功时写入;失败路径语义未定
+`BackgroundIndexingNode: Hashable` 要求关联值也是 `Hashable`。
 
-`RuntimeObjCSection.swift:710-713`:
-```swift
-let section = try await RuntimeObjCSection(...)
-sections[imagePath] = section  // throw 时不写缓存
-```
-
-所以 `hasCachedSection(path) = (sections[path] != nil)` 实际等价于"解析成功过"。失败 path 下一个 batch 会重试。
-
-设计文档写了"cache empty / nil results as well — the cache key's presence becomes the 'attempted' bit",但 plan 悬空。二选一:
-
-- **方案 A**(对齐设计文档):给 factory 加 `attemptedFailures: Set<String>` 或把缓存值改成 `Result<Section, Error>`,`isImageIndexed` 包含失败路径。
-- **方案 B**(简化):`isImageIndexed` 语义定为"成功解析过",设计 + 测试文档明确"失败 path 每次重试"。
+**落地**:**Plan Task 1** 改标题为 "Create Sendable + Hashable value types ...",所有 `RuntimeIndexingBatchID` / `RuntimeIndexingBatchReason` / `RuntimeIndexingTaskState` / `RuntimeIndexingTaskItem` / `RuntimeIndexingBatch` / `RuntimeIndexingEvent` 统一加 `Hashable`;新增 `ResolvedDependency.swift` 文件。
 
 ---
 
-### S2. `DocumentState.runtimeEngine` 是 `@Observed`,可被重新赋值
+## Significant — 已拍板
 
-`DocumentState.swift`:
-```swift
-@Observed public var runtimeEngine: RuntimeEngine = .local
-```
+### S1. Factory 缓存只在解析成功时写入;失败路径语义未定 — ✅ 已拍板(方案 B)
 
-Coordinator init 时的 `let engine = documentState.runtimeEngine` 只做一次性捕获。如果 Document 生命周期内切换 local/remote,Coordinator 持有旧 actor,batch 发到错的进程。
+**决议**:采用 **方案 B** —— `isImageIndexed` 语义定为"成功解析过",失败 path 下一个 batch 重试。
 
-**修复**(择一):
-- (a) 文档里明确约定:`runtimeEngine` 在 Document 生命周期内不变 —— 写进设计文档 Assumptions。
-- (b) Coordinator 订阅 `documentState.$runtimeEngine`,切换时 `cancelAllBatches` 并重绑。
-
-推荐 (a)。
+**落地**:Evolution 0002 "Terminology: Loaded vs. Indexed" 明确 "Failure to parse does **not** count as indexed";"Error Handling" 小节和 "Alternative D" 展开理由。Plan Task 3 `hasCachedSection(for:)` 保持 `sections[path] != nil` 语义无需改动 factory 内部。
 
 ---
 
-## Moderate — 名字/结构错位,机械修复但别漏
+### S2. `DocumentState.runtimeEngine` 是 `@Observed`,可被重新赋值 — ✅ 已拍板(方案 a)
 
-### M1. 路由案例名不一致
+**决议**:采用 **方案 a** —— 约定 `runtimeEngine` 在 Document 生命周期内不变。
 
-`MainRoute.swift:18` 实际是 `case mcpStatus(sender: NSView)`,不是 `mcpStatusPopover`。
-
-**修复**:
-- Plan Task 22 文案 `next to mcpStatusPopover` → `next to mcpStatus`。
-- 新增 case 按现有风格命名为 `backgroundIndexing(sender:)`,不带 Popover 后缀。
+**落地**:Evolution 0002 "Assumptions" 1 写明;**Plan Task 22 Step 1** 在 `DocumentState.swift` 现有 `@Observed public var runtimeEngine` 声明上补 doc comment 重申不可重赋。
 
 ---
 
-### M2. `actor` 内 `lazy var` 的指引不准
+## Moderate — 已全部落地
 
-Plan Task 11 把 `lazy var backgroundIndexingManager` 作为主方案。actor 的 `lazy` 初始化触发点走 actor 隔离,实践里不自然。
+### M1. 路由案例名不一致 — ✅ 已修
 
-**修复**:主方案改为显式存储 + init 末尾赋值,删 `lazy` 分支:
+**落地**:**Plan Task 21** 改为 "Register the toolbar item and add the `MainRoute.backgroundIndexing` case",新增 case 命名为 `backgroundIndexing(sender:)`(不带 Popover 后缀),与现有 `mcpStatus(sender:)` 对齐。
+
+---
+
+### M2. `actor` 内 `lazy var` 的指引不准 — ✅ 已修
+
+**落地**:**Plan Task 11 Step 2** 改成显式存储属性 + init 末尾赋值:
+
 ```swift
 public private(set) var backgroundIndexingManager: RuntimeBackgroundIndexingManager!
-
-// init 末尾
+// ...
 self.backgroundIndexingManager = RuntimeBackgroundIndexingManager(engine: self)
 ```
 
----
-
-### M3. `objcSectionFactory` / `swiftSectionFactory` 当前是 `private`
-
-`RuntimeEngine.swift:147-149`:
-```swift
-private let objcSectionFactory: RuntimeObjCSectionFactory
-private let swiftSectionFactory: RuntimeSwiftSectionFactory
-```
-
-Plan 的 `RuntimeEngine+BackgroundIndexing.swift` 在 extension 里访问两者 —— extension 不能访问 private(除非同文件)。
-
-**修复**:Task 3 里把"如果是 private 再改"改成**必做**:提升到 `internal`,或把 extension 方法写进主文件。
+`lazy` 分支已删除。
 
 ---
 
-### M4. `DependType.weakLoad` 实际遇不到
+### M3. `objcSectionFactory` / `swiftSectionFactory` 当前是 `private` — ✅ 已修
 
-MachOKit 的 `MachOImage.swift:174-180` 把 `.loadWeakDylib` 归并到 `.load`,`.weakLoad` case 只在 DependType 定义里声明。
-
-**修复**:设计文档 Dependency type filter 一节改成:
-> Included: `.load`, `.reexport`, `.upwardLoad`(注:weak-linked dylib 在 MachOKit 里也解析为 `.load`)
-> Skipped: `.lazyLoad`
+**落地**:**Plan Task 3 Step 4** 标记为 "must-do",把两个 factory 的访问级别从 `private` 改为 `internal`,以便 `RuntimeEngine+BackgroundIndexing.swift` 的 extension 访问。
 
 ---
 
-### M5. BFS 容器在设计文档和 plan 之间漂移
+### M4. `DependType.weakLoad` 实际遇不到 — ✅ 已修
 
-设计文档写 `Deque<(path, level)>`,Plan 用 `Array + removeFirst()`。深度 ≤5 不影响正确性。
-
-**修复**(择一):把设计文档改成 Array,或把 Plan 回退到 Deque —— 保持一致。
+**落地**:Evolution 0002 "Dependency type filter" 明确写 "Included: `.load`, `.reexport`, `.upwardLoad`;`.lazyLoad` skipped。`LC_LOAD_WEAK_DYLIB` 被 MachOKit 解码为 `.load`(见 `MachOImage.swift:168-173`)"。
 
 ---
 
-## Minor — 清理项
+### M5. BFS 容器在设计文档和 plan 之间漂移 — ✅ 已修
 
-### m1. Task 17 是空 checklist
-
-Plan Task 17 明确写"Skip — the placeholder is intentional"。执行 plan 时会疑惑。
-
-**修复**:删 Task 17,或把"prioritize API 已存在"验证合进 Task 24 Step 1。
+**落地**:Evolution 0002 "Dependency Graph Expansion" 改为 `Array + removeFirst()`,并说明 `Array.removeFirst()` 对 depth ≤ 5 足够。与 Plan Task 7 对齐。
 
 ---
 
-### m2. `test_mainExecutablePath_returnsNonEmptyPath` 注释缺失
+## Minor — 已全部落地
 
-该测试拿到的是 XCTest runner 的路径,不是 RuntimeViewer.app。断言本身没错,但执行者会误解。
+### m1. Task 17 是空 checklist — ✅ 已修
 
-**修复**:加一行注释说明 `mainExecutablePath()` 在测试里返回 XCTest runner 路径,这恰好验证"返回 dyld image 0"契约。
-
----
-
-### m3. Popover outline view `child(_:ofItem:)` defensive 分支
-
-Plan Task 20 失败分支构造了一个空 `RuntimeIndexingBatch` 返回,会掩盖逻辑错误。
-
-**修复**:换成 `preconditionFailure("unexpected outline item type")`。
+**落地**:原 Task 17("Expose prioritize entry point for sidebar selection")整段删除。编号重排后 Task 17 现在是 "React to Settings changes via `withObservationTracking`"。
 
 ---
 
-### m4. `mutating(_:_:)` 全局函数污染模块
+### m2. `test_mainExecutablePath_returnsNonEmptyPath` 注释缺失 — ✅ 已修
 
-Plan Task 14 把 `mutating<T>` helper 放在 `RuntimeBackgroundIndexingCoordinator.swift` 末尾作为全局函数。
-
-**修复**:挪到 Coordinator 的 `private` extension,或加 `private` file-scope。
+**落地**:**Plan Task 4 Step 2** 在测试函数上方补注释说明在 XCTest context 下该方法返回 test runner 的路径,这恰好验证"返回 dyld image 0"契约。
 
 ---
 
-### m5. 优先级测试靠 sleep 控制顺序,易 flake
+### m3. Popover outline view `child(_:ofItem:)` defensive 分支 — ✅ 已修
 
-Plan Task 10 `test_prioritize_movesPendingItemAhead` 用 `Task.sleep(15_000_000)` / `30_000_000` 控制 ordering,CI 卡顿会 flake。
-
-**修复**(择一):
-- 给 MockEngine 加"手动步进"机制(`continuation` 闸门),测试确定性控制每一步完成时机。
-- 或把断言改为"`taskPrioritized` 事件被 emit 且 `priorityBoostPaths` 包含该 path"这种不依赖时序的等价条件。
+**落地**:**Plan Task 19 Step 1** 的 `NSOutlineViewDataSource.child(_:ofItem:)` failure 分支改成 `preconditionFailure("unexpected outline item type: \(type(of: item))")`。
 
 ---
 
-## 修复顺序建议
+### m4. `mutating(_:_:)` 全局函数污染模块 — ✅ 已修
 
-改 plan 自身、再落 code:
+**落地**:**Plan Task 14** 把 `mutating<T>` helper 从文件末尾的全局函数挪到 `RuntimeBackgroundIndexingCoordinator` class 的 private method(在 `apply(event:)` 下方)。
 
-1. **新增 Task 0**:C1(`Semaphore` 依赖)
-2. **Task 1 改**:C4(`Hashable`);补 `ResolvedDependency` 类型
-3. **Task 3 改**:C2(`try await`)、M3(`internal`)
-4. **新增 Task 4.x**:C3(`imageDidLoadPublisher`)
-5. **Task 11 改**:M2(去掉 `lazy var`)
-6. **Task 17 改**:m1(删/合并)
-7. **Task 20 改**:m3(`preconditionFailure`)
-8. **Task 10 / 14 改**:m5(去 sleep)、m4(helper 挪位)
+---
 
-S1 / S2 需先拍板语义/假设再落 plan。
-M1 / M4 / M5 / m2 是文档/注释一致性,对照改即可。
+### m5. 优先级测试靠 sleep 控制顺序,易 flake — ✅ 已修
+
+**落地**:**Plan Task 10 Step 1** 将 `test_prioritize_movesPendingItemAhead` 重写为 `test_prioritize_emitsTaskPrioritizedEvent`,通过断言 `.taskPrioritized` 事件序列来验证,不依赖 `Task.sleep` 时序。
+
+---
+
+## Review 自己遗漏的问题(新增 N1–N6)
+
+下列问题在初稿 review 中未捕捉,已在本轮更新时落到 evolution / plan。
+
+### N1. Popover ViewModel 的 `isEnabled` 只在 `transform` 里读一次
+
+原 plan Task 19(现 Task 18)写 `isEnabled = Settings.shared.backgroundIndexing.isEnabled`,后续 Settings 切换 toggle 时不刷新,popover 的 empty state 卡死。
+
+**落地**:**Plan Task 18 Step 2** 新增 `subscribeToIsEnabled()` 方法,用同样的 `withObservationTracking` re-register 模式同步 `isEnabled`。`init` 里 seed 初值。
+
+---
+
+### N2. Coordinator 一次性捕获 `runtimeEngine` 与 S2 联动
+
+Coordinator `init` 里 `self.engine = documentState.runtimeEngine` 一次性捕获,配合 `@Observed` 的 `runtimeEngine` 可以被重新赋值,会出现持有旧 engine 的 bug。
+
+**落地**:与 S2 合并处理 —— Evolution Assumptions 与 Plan Task 22 Step 1 的 doc comment 统一约束。
+
+---
+
+### N3. MockEngine / InstrumentedEngine 缺 `@unchecked Sendable`
+
+协议声明 `AnyObject, Sendable`,但 `MockBackgroundIndexingEngine` / `InstrumentedEngine` 以 `NSLock + var` 守同步,Swift 6 concurrency checker 下会报非 Sendable。
+
+**落地**:**Plan Task 5 Step 3** 给 `MockBackgroundIndexingEngine` 加 `@unchecked Sendable`;**Task 8 Step 1** 的 `InstrumentedEngine` 同样加 `@unchecked Sendable`。`ConcurrencyCounter` 原本已有。
+
+---
+
+### N4. `mainExecutablePath` 本地实现与 design dyld index 0 的契约
+
+原 plan Task 4 Step 3 用 `DyldUtilities.imageNames().first ?? ""`;dyld 合约是 image 0 就是主执行体,但没在 plan 里明确。远程分支更需要分发。
+
+**落地**:**Plan Task 4 Step 4** 本地分支加注释 `// dyld guarantees image index 0 is the main executable.`;远程走 `request { local } remote: { RPC }` 分发,具体按 R3 决议落实(新增 `.mainExecutablePath` CommandName)。
+
+---
+
+### N5. Task 10 prioritize 测试断言本身依赖实现细节
+
+原断言基于 load 顺序和 `maxConcurrency=1` 的假设,加 sleep 导致更容易 flake。
+
+**落地**:与 m5 合并 —— **Plan Task 10 Step 1** 断言改为事件序列(不依赖时序的等价条件),具体是 `.taskPrioritized` 事件序列。
+
+---
+
+### N6. `.batchFinished` 立刻从 UI 移除,失败批次无处可见
+
+原 plan Task 25(现 Task 24)的 reducer `batches.removeAll { $0.id == finished.id }` 在 `.batchFinished` 也直接删,含 `.failed` 子项的批次随之消失,toolbar 的 `.hasFailures` 永远不会亮。
+
+**落地**:**Plan Task 24** 重写为 "Retain failed batches; refresh image list once per batch finish",`.batchFinished` 含失败子项则保留 batch,直到用户按 Popover 的 `Clear Failed` 触发 `clearFailedBatches()`。Evolution 0002 Alternative E 解释此权衡。
+
+---
+
+## 收尾状态
+
+- **Evolution 0002** 已生效,替代原 `Plans/2026-04-24-background-indexing-design.md`(文件已删除)。
+- **Plan** 按 review 全部建议更新,Tasks 重编号为 0 / 1–4 / 4.5 / 5–26,并补 "Why" 说明段落。
+- **本 review** 不再存在 open issue,保留作为历史闭环记录。
+
+新发现的问题请新开一轮 review 记录,不要追加到本文件。
