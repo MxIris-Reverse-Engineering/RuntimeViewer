@@ -56,10 +56,28 @@ extension Settings {
         /// The fixed port number to use when useFixedPort is true
         @Default(9277)
         public var fixedPort: UInt16
-        
+
         public static let `default` = Self()
 
         /// The port file name used by both the MCP HTTP server and the settings UI.
         public static let portFileName = "mcp-http-port"
+    }
+
+    @Codable
+    @MemberInit
+    public struct BackgroundIndexing {
+        /// Whether background indexing is enabled
+        @Default(false)
+        public var isEnabled: Bool
+
+        /// Indexing depth (valid range enforced by the Settings UI: 1...5)
+        @Default(1)
+        public var depth: Int
+
+        /// Maximum concurrent indexing tasks (valid range enforced by the Settings UI: 1...8)
+        @Default(4)
+        public var maxConcurrency: Int
+
+        public static let `default` = Self()
     }
 }

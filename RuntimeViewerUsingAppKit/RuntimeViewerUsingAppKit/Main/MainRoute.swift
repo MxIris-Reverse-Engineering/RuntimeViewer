@@ -16,6 +16,7 @@ public enum MainRoute: Routable {
     case loadFramework
     case attachToProcess
     case mcpStatus(sender: NSView)
+    case backgroundIndexing(sender: NSView)
     case dismiss
     case exportInterfaces
 }

@@ -1,0 +1,292 @@
+import Foundation
+import Observation
+import RuntimeViewerCore
+import RxSwift
+import RxRelay
+import Dependencies
+
+#if canImport(RuntimeViewerSettings)
+import RuntimeViewerSettings
+#endif
+
+@MainActor
+public final class RuntimeBackgroundIndexingCoordinator {
+    public struct AggregateState: Equatable, Sendable {
+        public var hasActiveBatch: Bool
+        public var hasAnyFailure: Bool
+        public var progress: Double?   // 0...1, nil when idle
+
+        public init(hasActiveBatch: Bool, hasAnyFailure: Bool, progress: Double?) {
+            self.hasActiveBatch = hasActiveBatch
+            self.hasAnyFailure = hasAnyFailure
+            self.progress = progress
+        }
+    }
+
+    private unowned let documentState: DocumentState
+    private let engine: RuntimeEngine
+    private let disposeBag = DisposeBag()
+
+    private let batchesRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
+    private let aggregateRelay = BehaviorRelay<AggregateState>(
+        value: .init(hasActiveBatch: false, hasAnyFailure: false, progress: nil)
+    )
+
+    private var documentBatchIDs: Set<RuntimeIndexingBatchID> = []
+    private var eventPumpTask: Task<Void, Never>?
+    private var imageLoadedPumpTask: Task<Void, Never>?
+    private var lastKnownIsEnabled: Bool = false
+
+    public init(documentState: DocumentState) {
+        self.documentState = documentState
+        self.engine = documentState.runtimeEngine
+        startEventPump()
+        #if canImport(RuntimeViewerSettings)
+        startImageLoadedPump()
+        bootstrapSettingsObservation()
+        #endif
+    }
+
+    deinit {
+        eventPumpTask?.cancel()
+        imageLoadedPumpTask?.cancel()
+    }
+
+    // MARK: - Public observables for UI
+
+    public var batchesObservable: Observable<[RuntimeIndexingBatch]> {
+        batchesRelay.asObservable()
+    }
+
+    public var aggregateStateObservable: Observable<AggregateState> {
+        aggregateRelay.asObservable()
+    }
+
+    // MARK: - Public command surface
+
+    public func cancelBatch(_ id: RuntimeIndexingBatchID) {
+        Task { [engine] in
+            await engine.backgroundIndexingManager.cancelBatch(id)
+        }
+    }
+
+    public func cancelAllBatches() {
+        Task { [engine] in
+            await engine.backgroundIndexingManager.cancelAllBatches()
+        }
+    }
+
+    public func prioritize(imagePath: String) {
+        Task { [engine] in
+            await engine.backgroundIndexingManager.prioritize(imagePath: imagePath)
+        }
+    }
+
+    public func clearFailedBatches() {
+        // Class is `@MainActor`; we're already on the main thread when called
+        // from the popover's button. No hop required.
+        let remaining = batchesRelay.value.filter { batch in
+            !batch.items.contains { item in
+                if case .failed = item.state { return true } else { return false }
+            }
+        }
+        batchesRelay.accept(remaining)
+        refreshAggregate(batches: remaining)
+    }
+
+    // MARK: - Event pump (AsyncStream → Relay)
+
+    private func startEventPump() {
+        // The class is `@MainActor`, so this Task and its `for await` loop
+        // run on the main actor. `apply(event:)` can be called synchronously
+        // without an extra `MainActor.run` hop.
+        eventPumpTask = Task { [weak self] in
+            guard let self else { return }
+            let stream = await self.engine.backgroundIndexingManager.events
+            for await event in stream {
+                self.apply(event: event)
+            }
+        }
+    }
+
+    private func apply(event: RuntimeIndexingEvent) {
+        var batches = batchesRelay.value
+        switch event {
+        case .batchStarted(let batch):
+            batches.append(batch)
+        case .taskStarted(let id, let path):
+            batches = batches.map { mutating($0) { batch in
+                guard batch.id == id, let itemIndex = batch.items.firstIndex(where: { $0.id == path })
+                else { return }
+                batch.items[itemIndex].state = .running
+            }}
+        case .taskFinished(let id, let path, let result):
+            batches = batches.map { mutating($0) { batch in
+                guard batch.id == id, let itemIndex = batch.items.firstIndex(where: { $0.id == path })
+                else { return }
+                batch.items[itemIndex].state = result
+            }}
+        case .taskPrioritized(let id, let path):
+            batches = batches.map { mutating($0) { batch in
+                guard batch.id == id, let itemIndex = batch.items.firstIndex(where: { $0.id == path })
+                else { return }
+                batch.items[itemIndex].hasPriorityBoost = true
+            }}
+        case .batchFinished(let finished):
+            if finished.items.contains(where: {
+                if case .failed = $0.state { return true } else { return false }
+            }) {
+                // Keep the failed batch in the list until the user dismisses it.
+                if let batchIndex = batches.firstIndex(where: { $0.id == finished.id }) {
+                    batches[batchIndex] = finished
+                }
+            } else {
+                batches.removeAll { $0.id == finished.id }
+                documentBatchIDs.remove(finished.id)
+            }
+            Task { [engine] in
+                await engine.reloadData(isReloadImageNodes: false)
+            }
+
+        case .batchCancelled(let cancelled):
+            // Cancellation always removes — user already acknowledged the outcome.
+            batches.removeAll { $0.id == cancelled.id }
+            documentBatchIDs.remove(cancelled.id)
+            Task { [engine] in
+                await engine.reloadData(isReloadImageNodes: false)
+            }
+        }
+        batchesRelay.accept(batches)
+        refreshAggregate(batches: batches)
+    }
+
+    private func mutating<Value>(_ value: Value, _ mutate: (inout Value) -> Void) -> Value {
+        var copy = value
+        mutate(&copy)
+        return copy
+    }
+
+    private func refreshAggregate(batches: [RuntimeIndexingBatch]) {
+        let hasActive = !batches.isEmpty
+        let hasFailure = batches.contains { batch in
+            batch.items.contains { item in
+                if case .failed = item.state { return true }
+                return false
+            }
+        }
+        let totalItems = batches.reduce(0) { $0 + $1.totalCount }
+        let doneItems = batches.reduce(0) { $0 + $1.completedCount }
+        let progress: Double? = totalItems > 0
+            ? Double(doneItems) / Double(totalItems)
+            : nil
+        aggregateRelay.accept(
+            .init(hasActiveBatch: hasActive, hasAnyFailure: hasFailure,
+                  progress: progress))
+    }
+}
+
+#if canImport(RuntimeViewerSettings)
+extension RuntimeBackgroundIndexingCoordinator {
+    public func documentDidOpen() {
+        // The class is `@MainActor`, so this Task inherits main-actor isolation
+        // and can mutate `documentBatchIDs` synchronously after the awaits.
+        Task { [weak self] in
+            guard let self else { return }
+            let settings = self.currentBackgroundIndexingSettings()
+            guard settings.isEnabled else { return }
+            // mainExecutablePath is `async throws` because remote (XPC / TCP)
+            // sources may fail; on launch we silently skip the batch in that
+            // case rather than surface the error to the user.
+            guard let root = try? await engine.mainExecutablePath(),
+                  !root.isEmpty else { return }
+            let id = await engine.backgroundIndexingManager.startBatch(
+                rootImagePath: root,
+                depth: settings.depth,
+                maxConcurrency: settings.maxConcurrency,
+                reason: .appLaunch)
+            self.documentBatchIDs.insert(id)
+        }
+    }
+
+    public func documentWillClose() {
+        let ids = documentBatchIDs
+        documentBatchIDs.removeAll()
+        Task { [engine] in
+            for id in ids {
+                await engine.backgroundIndexingManager.cancelBatch(id)
+            }
+        }
+    }
+
+    private func startImageLoadedPump() {
+        // Class is `@MainActor`; this Task and `for await` loop run on the main
+        // actor. `handleImageLoaded` doesn't need a `MainActor.run` hop.
+        imageLoadedPumpTask = Task { [weak self] in
+            guard let self else { return }
+            // Combine.Publisher.values bridges to AsyncSequence on macOS 12+ /
+            // iOS 15+; the project's deployment targets satisfy this. Errors are
+            // Never on this publisher, so no try is needed.
+            for await path in self.engine.imageDidLoadPublisher.values {
+                await self.handleImageLoaded(path: path)
+            }
+        }
+    }
+
+    private func handleImageLoaded(path: String) async {
+        let settings = currentBackgroundIndexingSettings()
+        guard settings.isEnabled else { return }
+        // Avoid double-starting if the path is the main executable being opened
+        // at app launch — documentDidOpen already dispatched that batch. Manager
+        // dedups batches that share rootImagePath + reason discriminant, so a
+        // second call here is a no-op rather than a wasted batch.
+        let id = await engine.backgroundIndexingManager.startBatch(
+            rootImagePath: path,
+            depth: settings.depth,
+            maxConcurrency: settings.maxConcurrency,
+            reason: .imageLoaded(path: path))
+        self.documentBatchIDs.insert(id)
+    }
+
+    private func currentBackgroundIndexingSettings() -> Settings.BackgroundIndexing {
+        @Dependency(\.settings) var settings
+        return settings.backgroundIndexing
+    }
+
+    private func bootstrapSettingsObservation() {
+        self.lastKnownIsEnabled = currentBackgroundIndexingSettings().isEnabled
+        self.subscribeToSettings()
+    }
+
+    private func subscribeToSettings() {
+        withObservationTracking {
+            let snapshot = currentBackgroundIndexingSettings()
+            _ = snapshot.isEnabled
+            _ = snapshot.depth
+            _ = snapshot.maxConcurrency
+        } onChange: { [weak self] in
+            // onChange fires off the main actor synchronously after any mutation.
+            // Hop back to MainActor to (a) handle the change and (b) re-register.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.handleSettingsChange()
+                self.subscribeToSettings()
+            }
+        }
+    }
+
+    private func handleSettingsChange() {
+        let latest = currentBackgroundIndexingSettings()
+        let wasEnabled = lastKnownIsEnabled
+        lastKnownIsEnabled = latest.isEnabled
+        if !wasEnabled && latest.isEnabled {
+            documentDidOpen()                               // Scenario E: off→on
+        } else if wasEnabled && !latest.isEnabled {
+            Task { [engine] in
+                await engine.backgroundIndexingManager.cancelAllBatches()
+            }
+        }
+        // depth / maxConcurrency changes: intentional no-op; next startBatch picks
+        // up the new values.
+    }
+}
+#endif
