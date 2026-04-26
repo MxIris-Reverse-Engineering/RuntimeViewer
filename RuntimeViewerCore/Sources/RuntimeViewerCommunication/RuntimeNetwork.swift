@@ -79,18 +79,22 @@ public enum RuntimeNetworkBonjour {
         return String(cString: buffer)
     }
 
-    /// The human-readable host name for this device, used in Bonjour TXT records.
+    /// Synchronous, non-blocking local host name.
     ///
-    /// On iOS 16+, `UIDevice.current.name` returns a generic model name (e.g. "iPhone")
-    /// without the `user-assigned-device-name` entitlement. We use the Bonjour hostname
-    /// (e.g. "JHs-iPhone") as a more identifiable fallback.
+    /// Safe to read from any thread — it never touches the network — but the
+    /// value can be a generic fallback like `"iPhone"` on iOS devices because
+    /// the only non-blocking sources (`gethostname(2)`, `UIDevice.current.name`
+    /// without the `user-assigned-device-name` entitlement) don't expose the
+    /// user's device name.
+    ///
+    /// Use this only where blocking is unacceptable (e.g. as the default
+    /// `RuntimeEngine.hostInfo`). For Bonjour TXT records and service names
+    /// that other devices will see, prefer ``resolvedHostName()``.
     public static let localHostName: String = {
         #if os(macOS)
         return (SCDynamicStoreCopyComputerName(nil, nil) as? String)
             ?? systemHostName()
         #else
-        // On real devices (iOS 16+), UIDevice.current.name returns generic "iPhone"
-        // without entitlement, so prefer the Bonjour hostname (e.g. "jhs-iphone-pro").
         #if !targetEnvironment(simulator)
         let hostName = systemHostName()
             .replacingOccurrences(of: ".local", with: "")
@@ -108,10 +112,39 @@ public enum RuntimeNetworkBonjour {
         #endif
     }()
 
-    static func makeService(name: String) -> NWListener.Service {
+    /// User-friendly local host name, resolved off the calling thread.
+    ///
+    /// On iOS devices `ProcessInfo.processInfo.hostName` reaches the
+    /// user-assigned name (e.g. `"JHs-iPhone"`) by performing a *blocking*
+    /// reverse-DNS lookup against mDNSResponder. We hop onto a detached
+    /// background task so the calling thread (often the main thread during
+    /// scene-create) is never blocked even when the mDNS cache is cold —
+    /// that scenario was the cause of the `0x8BADF00D` watchdog crash on
+    /// first launch.
+    ///
+    /// The mDNSResponder cache means the second call is essentially free.
+    public static func resolvedHostName() async -> String {
+        await Task.detached(priority: .utility) {
+            #if os(macOS)
+            if let name = SCDynamicStoreCopyComputerName(nil, nil) as? String,
+               !name.isEmpty {
+                return name
+            }
+            #elseif !targetEnvironment(simulator) && !os(watchOS)
+            let mdnsName = ProcessInfo.processInfo.hostName
+                .replacingOccurrences(of: ".local", with: "")
+            if !mdnsName.isEmpty && mdnsName != "localhost" {
+                return mdnsName
+            }
+            #endif
+            return localHostName
+        }.value
+    }
+
+    static func makeService(name: String) async -> NWListener.Service {
         var txtRecord = NWTXTRecord()
         txtRecord[instanceIDKey] = localInstanceID
-        txtRecord[hostNameKey] = localHostName
+        txtRecord[hostNameKey] = await resolvedHostName()
         txtRecord[modelIDKey] = DeviceMetadata.current.modelIdentifier
         txtRecord[osVersionKey] = DeviceMetadata.current.osVersion
         if DeviceMetadata.current.isSimulator {

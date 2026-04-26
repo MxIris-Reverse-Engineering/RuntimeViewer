@@ -465,6 +465,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -494,6 +495,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -656,8 +658,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingUIKit/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer requires local network permissions to use the Bonjour discovery service";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer uses the local network to discover and connect to runtime inspection services on nearby devices.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -697,8 +700,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RuntimeViewerUsingUIKit/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer requires local network permissions to use the Bonjour discovery service";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer uses the local network to discover and connect to runtime inspection services on nearby devices.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
