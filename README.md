@@ -70,7 +70,7 @@ If Catalyst or code-injected applications don't appear in the directory list, tr
 - **Main application**: macOS 15+
 - **RuntimeViewerCore** (inspection engine): macOS 10.15+, iOS 13+, Mac Catalyst 13+, watchOS 6+, tvOS 13+, visionOS 1+
 - **MCP integration**: macOS 15+
-- **Swift**: 5 language mode, Xcode 15+
+- **Build toolchain**: Xcode 26.2+ (Swift 5 language mode)
 
 ## Screenshots
 
