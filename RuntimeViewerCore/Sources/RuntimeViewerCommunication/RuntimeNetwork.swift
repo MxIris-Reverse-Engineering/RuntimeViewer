@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 public import FoundationToolbox
 import Network
 #if canImport(UIKit)
@@ -62,6 +63,22 @@ public enum RuntimeNetworkBonjour {
         return newID
     }()
 
+    /// Reads the kernel hostname via POSIX `gethostname(2)`.
+    ///
+    /// `ProcessInfo.processInfo.hostName` and `Host.current().name` go through
+    /// `-[NSHost name]`, which performs a *blocking* reverse-DNS lookup. On a
+    /// fresh iOS install with a cold mDNS cache that lookup can stall the
+    /// caller for tens of seconds — long enough to trip FrontBoard's
+    /// scene-create watchdog (`0x8BADF00D`). `gethostname(2)` reads the value
+    /// directly from the kernel and never touches the network.
+    private static func systemHostName() -> String {
+        var buffer = [CChar](repeating: 0, count: 256)
+        guard gethostname(&buffer, buffer.count) == 0 else {
+            return ""
+        }
+        return String(cString: buffer)
+    }
+
     /// The human-readable host name for this device, used in Bonjour TXT records.
     ///
     /// On iOS 16+, `UIDevice.current.name` returns a generic model name (e.g. "iPhone")
@@ -70,12 +87,12 @@ public enum RuntimeNetworkBonjour {
     public static let localHostName: String = {
         #if os(macOS)
         return (SCDynamicStoreCopyComputerName(nil, nil) as? String)
-            ?? ProcessInfo.processInfo.hostName
+            ?? systemHostName()
         #else
         // On real devices (iOS 16+), UIDevice.current.name returns generic "iPhone"
         // without entitlement, so prefer the Bonjour hostname (e.g. "jhs-iphone-pro").
         #if !targetEnvironment(simulator)
-        let hostName = ProcessInfo.processInfo.hostName
+        let hostName = systemHostName()
             .replacingOccurrences(of: ".local", with: "")
         if !hostName.isEmpty && hostName != "localhost" {
             return hostName
@@ -86,7 +103,7 @@ public enum RuntimeNetworkBonjour {
         #elseif canImport(UIKit)
         return UIDevice.current.name
         #else
-        return ProcessInfo.processInfo.hostName
+        return systemHostName()
         #endif
         #endif
     }()
