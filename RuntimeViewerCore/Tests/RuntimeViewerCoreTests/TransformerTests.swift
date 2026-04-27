@@ -11,6 +11,7 @@ struct TransformerConfigurationTests {
         let config = Transformer.Configuration.default
         #expect(config.hasEnabledModules == false)
         #expect(config.objc.cType.isEnabled == false)
+        #expect(config.objc.ivarOffset.isEnabled == false)
         #expect(config.swift.swiftFieldOffset.isEnabled == false)
         #expect(config.swift.swiftTypeLayout.isEnabled == false)
         #expect(config.swift.swiftEnumLayout.isEnabled == false)
@@ -20,6 +21,13 @@ struct TransformerConfigurationTests {
     func hasEnabledModulesCType() {
         var config = Transformer.Configuration.default
         config.objc.cType.isEnabled = true
+        #expect(config.hasEnabledModules == true)
+    }
+
+    @Test("hasEnabledModules returns true when ObjCIvarOffset is enabled")
+    func hasEnabledModulesObjCIvarOffset() {
+        var config = Transformer.Configuration.default
+        config.objc.ivarOffset.isEnabled = true
         #expect(config.hasEnabledModules == true)
     }
 
@@ -49,6 +57,8 @@ struct TransformerConfigurationTests {
         var config = Transformer.Configuration.default
         config.objc.cType.isEnabled = true
         config.objc.cType.replacements = [.double: "CGFloat"]
+        config.objc.ivarOffset.isEnabled = true
+        config.objc.ivarOffset.template = "ivar: ${offset}"
         config.swift.swiftFieldOffset.isEnabled = true
         config.swift.swiftFieldOffset.template = "offset: ${startOffset}"
 
@@ -159,6 +169,70 @@ struct TransformerCTypeTests {
         let original = Transformer.CType(isEnabled: true, replacements: [.int: "int32_t", .double: "CGFloat"])
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(Transformer.CType.self, from: data)
+        #expect(decoded == original)
+    }
+}
+
+// MARK: - ObjCIvarOffset Tests
+
+@Suite("Transformer.ObjCIvarOffset")
+struct TransformerObjCIvarOffsetTests {
+    @Test("displayName")
+    func displayName() {
+        #expect(Transformer.ObjCIvarOffset.displayName == "ObjC Ivar Offset Comment")
+    }
+
+    @Test("default init")
+    func defaultInit() {
+        let module = Transformer.ObjCIvarOffset()
+        #expect(module.isEnabled == false)
+        #expect(module.template == Transformer.ObjCIvarOffset.Templates.standard)
+        #expect(module.useHexadecimal == true)
+    }
+
+    @Test("transform with standard template and hex")
+    func transformStandardHex() {
+        let module = Transformer.ObjCIvarOffset(isEnabled: true, template: Transformer.ObjCIvarOffset.Templates.standard, useHexadecimal: true)
+        let result = module.transform(.init(offset: 32))
+        #expect(result == "offset: 0x20")
+    }
+
+    @Test("transform with standard template and decimal")
+    func transformStandardDecimal() {
+        let module = Transformer.ObjCIvarOffset(isEnabled: true, template: Transformer.ObjCIvarOffset.Templates.standard, useHexadecimal: false)
+        let result = module.transform(.init(offset: 32))
+        #expect(result == "offset: 32")
+    }
+
+    @Test("contains checks token presence in template")
+    func containsToken() {
+        let module = Transformer.ObjCIvarOffset(template: Transformer.ObjCIvarOffset.Templates.standard)
+        #expect(module.contains(.offset) == true)
+
+        let staticModule = Transformer.ObjCIvarOffset(template: "offset")
+        #expect(staticModule.contains(.offset) == false)
+    }
+
+    @Test("Token placeholder")
+    func tokenPlaceholder() {
+        #expect(Transformer.ObjCIvarOffset.Token.offset.placeholder == "${offset}")
+    }
+
+    @Test("Token displayName")
+    func tokenDisplayName() {
+        #expect(Transformer.ObjCIvarOffset.Token.offset.displayName == "Offset")
+    }
+
+    @Test("Templates.all has 3 entries")
+    func templatesAll() {
+        #expect(Transformer.ObjCIvarOffset.Templates.all.count == 3)
+    }
+
+    @Test("Codable round-trip")
+    func codable() throws {
+        let original = Transformer.ObjCIvarOffset(isEnabled: true, template: "custom: ${offset}", useHexadecimal: false)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(Transformer.ObjCIvarOffset.self, from: data)
         #expect(decoded == original)
     }
 }

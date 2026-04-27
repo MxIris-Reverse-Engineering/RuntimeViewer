@@ -49,9 +49,12 @@ extension Transformer {
     public struct ObjCConfiguration: Sendable, Equatable, Hashable {
         @Default(ifMissing: Transformer.CType())
         public var cType: Transformer.CType
+        @Default(ifMissing: Transformer.ObjCIvarOffset())
+        public var ivarOffset: Transformer.ObjCIvarOffset
 
-        public init(cType: CType = .init()) {
+        public init(cType: CType = .init(), ivarOffset: ObjCIvarOffset = .init()) {
             self.cType = cType
+            self.ivarOffset = ivarOffset
         }
     }
 }
@@ -105,7 +108,7 @@ extension Transformer {
         
         /// Whether any module is enabled.
         public var hasEnabledModules: Bool {
-            objc.cType.isEnabled || swift.swiftFieldOffset.isEnabled || swift.swiftVTableOffset.isEnabled || swift.swiftMemberAddress.isEnabled || swift.swiftTypeLayout.isEnabled || swift.swiftEnumLayout.isEnabled
+            objc.cType.isEnabled || objc.ivarOffset.isEnabled || swift.swiftFieldOffset.isEnabled || swift.swiftVTableOffset.isEnabled || swift.swiftMemberAddress.isEnabled || swift.swiftTypeLayout.isEnabled || swift.swiftEnumLayout.isEnabled
         }
     }
 }

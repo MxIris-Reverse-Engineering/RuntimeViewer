@@ -339,6 +339,7 @@ actor RuntimeObjCSection {
         #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
         let cTypeReplacements = transformer.cType.isEnabled ? transformer.cType.replacements : [:]
+        let ivarOffsetTransformer = transformer.ivarOffset.isEnabled ? transformer.ivarOffset : nil
         let objcDumpContext = ObjCDumpContext(machO: machO, options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
             guard let name else { return true }
             if isStruct {
@@ -347,6 +348,7 @@ actor RuntimeObjCSection {
                 return self.unions[name] == nil
             }
         }
+        objcDumpContext.ivarOffsetTransformer = ivarOffsetTransformer
 
         switch name.kind {
         case .objc(.type(.class)):
