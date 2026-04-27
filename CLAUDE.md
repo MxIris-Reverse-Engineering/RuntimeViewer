@@ -10,6 +10,18 @@ Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspec
 
 **Workspace preference**: Before running any `xcodebuild` / `swift build` / `swift test`, check whether `../MxIris-Reverse-Engineering.xcworkspace` (sibling of this repo) exists. If it does, **use that workspace** via `xcodebuild -workspace ../MxIris-Reverse-Engineering.xcworkspace -scheme <scheme> ...` — it wires this repo together with local checkouts of MachOKit / MachOObjCSection / MachOSwiftSection / swift-capstone / swift-demangling / swift-semantic-string / swift-syntax that may contain in-progress fixes not yet published upstream. Building against the remote SPM resolution can hit stale errors (e.g. the MachOSwiftSection `@Mutex` macro expansion bug) that the workspace's local checkout already fixes. Only fall back to the standalone commands below when the workspace is absent.
 
+**Catalyst helper build order**: For native macOS builds, build
+`RuntimeViewerCatalystHelper` first, then build `RuntimeViewer macOS` /
+`RuntimeViewerUsingAppKit` in the same Xcode/DerivedData session. Do not model
+this as a direct target dependency: Xcode treats the Mac Catalyst helper as
+iOS-family embedded content and rejects it from the macOS app target.
+`ReleaseScript.sh` already handles this by archiving/exporting the helper before
+the main app.
+
+Recommended Xcode order:
+1. Build `RuntimeViewerCatalystHelper` for `My Mac (Mac Catalyst)`.
+2. Build `RuntimeViewer macOS` for `My Mac`.
+
 ```bash
 # Debug build (x86_64 and arm64e)
 ./BuildScript.sh

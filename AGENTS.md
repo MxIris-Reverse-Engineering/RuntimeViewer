@@ -8,6 +8,19 @@ Runtime Viewer is a macOS/iOS application for inspecting Objective-C and Swift r
 
 ## Build Commands
 
+### Catalyst Helper Build Order
+
+For native macOS builds, build `RuntimeViewerCatalystHelper` first, then build
+`RuntimeViewer macOS` / `RuntimeViewerUsingAppKit` in the same Xcode/DerivedData
+session. Do not model this as a direct target dependency: Xcode treats the Mac
+Catalyst helper as iOS-family embedded content and rejects it from the macOS app
+target. `ReleaseScript.sh` already handles this by archiving/exporting the
+helper before the main app.
+
+Recommended Xcode order:
+1. Build `RuntimeViewerCatalystHelper` for `My Mac (Mac Catalyst)`.
+2. Build `RuntimeViewer macOS` for `My Mac`.
+
 ```bash
 # Debug build (x86_64 and arm64e)
 ./BuildScript.sh
