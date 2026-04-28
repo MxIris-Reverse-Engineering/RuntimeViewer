@@ -1,7 +1,7 @@
 package import Foundation
 import FoundationToolbox
 import MachO.dyld
-import MachOKit
+package import MachOKit
 
 public struct DyldOpenError: Error {
     public let message: String?
@@ -57,6 +57,26 @@ package enum DyldUtilities {
             .map { String(cString: $0) })
         #log(.debug, "Retrieved \(names.count, privacy: .public) image names from dyld")
         return names
+    }
+
+    /// Resolves a filesystem path to its loaded `MachOImage`.
+    ///
+    /// For the main executable's path, returns `MachOImage.current()` rather
+    /// than performing a basename lookup. In Debug builds Xcode emits the
+    /// product as a thin stub at `Contents/MacOS/<Name>` plus a sibling
+    /// `<Name>.debug.dylib` that holds the real code; `MachOImage(name:)`
+    /// strips both extensions and matches by basename, so it picks the stub
+    /// (loaded first at dyld index 0) and the caller never sees the actual
+    /// dependency graph or sections. `MachOImage.current(_:)` resolves via
+    /// `#dsohandle` of the calling code, so it always returns the image that
+    /// actually contains our compiled symbols (the `.debug.dylib` in Debug,
+    /// the main executable in statically linked Release).
+    package static func machOImage(forPath path: String) -> MachOImage? {
+        if path == imageNames().first {
+            return MachOImage.current()
+        }
+        let imageName = path.lastPathComponent.deletingPathExtension.deletingPathExtension
+        return MachOImage(name: imageName)
     }
 
     package func imagePath(for ptr: UnsafeRawPointer) -> String? {
