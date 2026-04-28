@@ -12,6 +12,8 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 
     private let cancelBatchRelay = PublishRelay<RuntimeIndexingBatchID>()
 
+    private let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableSingleColumnOutlineView()
+    
     // MARK: - Views
 
     private let titleLabel = Label("Background Indexing").then {
@@ -21,6 +23,14 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
     private let subtitleLabel = Label("").then {
         $0.font = .systemFont(ofSize: 11)
         $0.textColor = .secondaryLabelColor
+    }
+
+    private let headerSeparator = NSBox().then {
+        $0.boxType = .separator
+    }
+
+    private let footerSeparator = NSBox().then {
+        $0.boxType = .separator
     }
 
     private let emptyDisabledView = Label("Background indexing is disabled").then {
@@ -37,15 +47,6 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         $0.alignment = .center
         $0.textColor = .secondaryLabelColor
     }
-
-    private let outlineView = NSOutlineView().then {
-        $0.headerView = nil
-        $0.rowSizeStyle = .small
-        $0.selectionHighlightStyle = .regular
-        $0.indentationPerLevel = 16
-    }
-
-    private let scrollView = ScrollView()
 
     private let cancelAllButton = NSButton().then {
         $0.bezelStyle = .accessoryBarAction
@@ -69,7 +70,7 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         super.viewDidLoad()
         setupLayout()
         setupOutlineView()
-        preferredContentSize = NSSize(width: 380, height: 300)
+        preferredContentSize = NSSize(width: 380, height: 320)
     }
 
     private func setupLayout() {
@@ -94,29 +95,44 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 
         contentView.hierarchy {
             headerStack
+            headerSeparator
+            scrollView
             emptyDisabledStack
             emptyIdleView
-            scrollView
+            footerSeparator
             buttonStack
         }
 
         headerStack.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview().inset(12)
+            make.top.equalToSuperview().inset(12)
+            make.leading.trailing.equalToSuperview().inset(16)
         }
 
-        emptyDisabledStack.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-            make.width.lessThanOrEqualToSuperview().offset(-32)
-        }
-
-        emptyIdleView.snp.makeConstraints { make in
-            make.center.equalToSuperview()
+        headerSeparator.snp.makeConstraints { make in
+            make.top.equalTo(headerStack.snp.bottom).offset(10)
+            make.leading.trailing.equalToSuperview()
+            make.height.equalTo(1)
         }
 
         scrollView.snp.makeConstraints { make in
-            make.top.equalTo(headerStack.snp.bottom).offset(8)
-            make.leading.trailing.equalToSuperview().inset(8)
-            make.bottom.equalTo(buttonStack.snp.top).offset(-8)
+            make.top.equalTo(headerSeparator.snp.bottom).offset(10)
+            make.leading.trailing.equalToSuperview().inset(12)
+            make.bottom.equalTo(footerSeparator.snp.top).offset(-10)
+        }
+
+        emptyDisabledStack.snp.makeConstraints { make in
+            make.center.equalTo(scrollView)
+            make.width.lessThanOrEqualTo(scrollView).offset(-32)
+        }
+
+        emptyIdleView.snp.makeConstraints { make in
+            make.center.equalTo(scrollView)
+        }
+
+        footerSeparator.snp.makeConstraints { make in
+            make.bottom.equalTo(buttonStack.snp.top).offset(-10)
+            make.leading.trailing.equalToSuperview()
+            make.height.equalTo(1)
         }
 
         buttonStack.snp.makeConstraints { make in
@@ -125,10 +141,9 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
     }
 
     private func setupOutlineView() {
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("status"))
-        column.resizingMask = .autoresizingMask
-        outlineView.addTableColumn(column)
-        outlineView.outlineTableColumn = column
+        outlineView.headerView = nil
+        outlineView.usesAutomaticRowHeights = true
+        outlineView.backgroundColor = .clear
     }
 
     // MARK: - Bindings
@@ -187,26 +202,25 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         .drive(scrollView.rx.isHidden)
         .disposed(by: rx.disposeBag)
 
+        // Cell provider only handles cell creation + binding. Live updates
+        // happen through per-cell driver subscriptions because RxAppKit's
+        // staged-changeset path calls `reloadItem(_:)` (redraw only, no
+        // `viewFor:item:` re-invocation) for content updates.
         output.nodes.drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, node: BackgroundIndexingNode) -> NSView? in
             switch node {
             case .batch(let batch, _):
                 let cell = outlineView.box.makeView(ofClass: BatchCellView.self)
-                cell.configure(
-                    reason: batch.reason,
-                    completedCount: batch.completedCount,
-                    totalCount: batch.totalCount,
-                    // Hide cancel for batches the manager has already finalized
-                    // (kept around as failed-retain rows pending user dismiss).
-                    isCancellable: !batch.isFinished,
+                cell.bind(
+                    batch: viewModel.batch(for: batch.id),
                     onCancel: { [weak self] in
                         guard let self else { return }
                         cancelBatchRelay.accept(batch.id)
                     }
                 )
                 return cell
-            case .item(_, let item):
+            case .item(let batchID, let item):
                 let cell = outlineView.box.makeView(ofClass: ItemCellView.self)
-                cell.configure(item: item)
+                cell.bind(item: viewModel.item(for: batchID, itemID: item.id))
                 return cell
             }
         }
@@ -222,7 +236,19 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 
 extension BackgroundIndexingPopoverViewController {
     private final class BatchCellView: NSTableCellView {
-        let titleLabel = Label("")
+        private let titleLabel = Label("").then {
+            $0.font = .systemFont(ofSize: 12, weight: .semibold)
+        }
+        private let countLabel = Label("").then {
+            $0.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            $0.textColor = .secondaryLabelColor
+        }
+        private let progressIndicator = NSProgressIndicator().then {
+            $0.style = .bar
+            $0.isIndeterminate = false
+            $0.controlSize = .small
+            $0.minValue = 0
+        }
         private let cancelButton = NSButton().then {
             $0.bezelStyle = .accessoryBar
             $0.isBordered = false
@@ -233,6 +259,7 @@ extension BackgroundIndexingPopoverViewController {
             $0.toolTip = "Cancel this batch"
             $0.contentTintColor = .secondaryLabelColor
         }
+        private var disposeBag = DisposeBag()
         private var onCancel: (() -> Void)?
 
         override init(frame frameRect: NSRect) {
@@ -240,21 +267,30 @@ extension BackgroundIndexingPopoverViewController {
             cancelButton.target = self
             cancelButton.action = #selector(cancelButtonClicked)
 
-            let stack = HStackView(spacing: 6) {
+            // Title takes remaining space; count + cancel hug their intrinsic size.
+            titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            countLabel.setContentHuggingPriority(.required, for: .horizontal)
+            countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+            cancelButton.setContentHuggingPriority(.required, for: .horizontal)
+            cancelButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+            let topRow = HStackView(alignment: .centerY, spacing: 6) {
                 titleLabel
+                countLabel
                 cancelButton
             }
-            stack.alignment = .centerY
+
+            let stack = VStackView(spacing: 4) {
+                topRow
+                progressIndicator
+            }
 
             addSubview(stack)
             stack.snp.makeConstraints { make in
+                make.top.equalToSuperview().offset(4)
+                make.bottom.equalToSuperview().offset(-4)
                 make.leading.trailing.equalToSuperview()
-                make.centerY.equalToSuperview()
             }
-            // Title takes remaining space; button hugs its intrinsic size.
-            titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            cancelButton.setContentHuggingPriority(.required, for: .horizontal)
-            cancelButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
 
         @available(*, unavailable)
@@ -262,16 +298,30 @@ extension BackgroundIndexingPopoverViewController {
             fatalError("init(coder:) has not been implemented")
         }
 
-        func configure(
-            reason: RuntimeIndexingBatchReason,
-            completedCount: Int,
-            totalCount: Int,
-            isCancellable: Bool,
-            onCancel: @escaping () -> Void
-        ) {
+        func bind(batch: Driver<RuntimeIndexingBatch>,
+                  onCancel: @escaping () -> Void)
+        {
+            // Reset on every bind so cell reuse drops the prior subscription.
+            disposeBag = DisposeBag()
             self.onCancel = onCancel
-            cancelButton.isHidden = !isCancellable
-            titleLabel.stringValue = "\(Self.title(for: reason))   \(completedCount)/\(totalCount)"
+
+            batch.driveOnNext { [weak self] batch in
+                guard let self else { return }
+                update(with: batch)
+            }
+            .disposed(by: disposeBag)
+        }
+
+        private func update(with batch: RuntimeIndexingBatch) {
+            cancelButton.isHidden = batch.isFinished
+            titleLabel.stringValue = Self.title(for: batch.reason)
+            countLabel.stringValue = "\(batch.completedCount)/\(batch.totalCount)"
+
+            progressIndicator.maxValue = max(Double(batch.totalCount), 1)
+            progressIndicator.doubleValue = Double(batch.completedCount)
+            // Only meaningful while the batch is active; finished batches drop
+            // the bar so the row collapses to the title row alone.
+            progressIndicator.isHidden = batch.isFinished
         }
 
         @objc private func cancelButtonClicked() {
@@ -293,13 +343,34 @@ extension BackgroundIndexingPopoverViewController {
     }
 
     private final class ItemCellView: NSTableCellView {
-        let titleLabel = Label("")
+        // Raw NSImageView (not the project's ImageView wrapper): the wrapper
+        // sets `wantsUpdateLayer = true`, which flattens the image into
+        // `layer.contents` and destroys the per-part sublayer hierarchy that
+        // SF Symbol effects (`.rotate`, `.bounce`, etc.) depend on.
+        private let iconImageView = NSImageView().then {
+            $0.imageScaling = .scaleProportionallyDown
+        }
+        private let titleLabel = Label("")
+        private var disposeBag = DisposeBag()
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
-            addSubview(titleLabel)
-            titleLabel.snp.makeConstraints { make in
-                make.leading.trailing.centerY.equalToSuperview()
+
+            iconImageView.setContentHuggingPriority(.required, for: .horizontal)
+            iconImageView.setContentCompressionResistancePriority(.required, for: .horizontal)
+            titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+            let stack = HStackView(alignment: .centerY, spacing: 6) {
+                iconImageView
+                titleLabel
+            }
+
+            addSubview(stack)
+            stack.snp.makeConstraints { make in
+                make.edges.equalToSuperview()
+            }
+            iconImageView.snp.makeConstraints { make in
+                make.size.equalTo(12)
             }
         }
 
@@ -308,26 +379,58 @@ extension BackgroundIndexingPopoverViewController {
             fatalError("init(coder:) has not been implemented")
         }
 
-        func configure(item: RuntimeIndexingTaskItem) {
+        func bind(item: Driver<RuntimeIndexingTaskItem>) {
+            disposeBag = DisposeBag()
+            item.driveOnNext { [weak self] item in
+                guard let self else { return }
+                update(with: item)
+            }
+            .disposed(by: disposeBag)
+        }
+
+        private func update(with item: RuntimeIndexingTaskItem) {
+            iconImageView.image = Self.iconImage(for: item.state)
+            iconImageView.contentTintColor = Self.iconTint(for: item.state)
+
+            // Cell can be reused or transition between states; clear any prior
+            // effect before deciding whether to attach a fresh one.
+            iconImageView.removeAllSymbolEffects()
+            if case .running = item.state {
+                iconImageView.addSymbolEffect(.rotate, options: .repeating)
+            }
+
             let nameSource = item.resolvedPath ?? item.id
             let name = (nameSource as NSString).lastPathComponent
-            let prefix: String = {
-                switch item.state {
-                case .pending: return "·"
-                case .running: return "↻"
-                case .completed: return "✓"
-                case .failed: return "✗"
-                case .cancelled: return "⊘"
-                }
-            }()
-            var text = "\(prefix) \(name)"
+            var text = name
             if case .failed(let message) = item.state {
-                text = "\(prefix) \(item.id)  —  \(message)"
+                text = "\(item.id)  —  \(message)"
             }
             if item.hasPriorityBoost, case .pending = item.state {
                 text += "   (priority)"
             }
             titleLabel.stringValue = text
+        }
+
+        private static func iconImage(for state: RuntimeIndexingTaskState) -> NSImage? {
+            let symbolName: String
+            switch state {
+            case .pending: symbolName = "circle"
+            case .running: symbolName = "arrow.triangle.2.circlepath"
+            case .completed: symbolName = "checkmark.circle.fill"
+            case .failed: symbolName = "xmark.circle.fill"
+            case .cancelled: symbolName = "minus.circle.fill"
+            }
+            return NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+        }
+
+        private static func iconTint(for state: RuntimeIndexingTaskState) -> NSColor {
+            switch state {
+            case .pending: return .tertiaryLabelColor
+            case .running: return .systemBlue
+            case .completed: return .systemGreen
+            case .failed: return .systemRed
+            case .cancelled: return .systemOrange
+            }
         }
     }
 }

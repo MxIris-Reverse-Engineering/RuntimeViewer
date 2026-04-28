@@ -106,6 +106,31 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         )
     }
 
+    /// Fine-grained driver scoped to a single batch. Cells subscribe to this
+    /// directly because RxAppKit's `elementUpdated` path uses
+    /// `NSOutlineView.reloadItem(_:)`, which only marks the row for redisplay —
+    /// it does not re-invoke `viewFor:item:`, so the cell would otherwise show
+    /// stale data until scroll/click forces a relayout.
+    func batch(for id: RuntimeIndexingBatchID) -> Driver<RuntimeIndexingBatch> {
+        coordinator.batchesObservable
+            .compactMap { $0.first(where: { $0.id == id }) }
+            .distinctUntilChanged()
+            .asDriver(onErrorDriveWith: .empty())
+    }
+
+    /// Same rationale as `batch(for:)`, scoped to one item inside a batch.
+    func item(for batchID: RuntimeIndexingBatchID, itemID: String)
+        -> Driver<RuntimeIndexingTaskItem>
+    {
+        coordinator.batchesObservable
+            .compactMap { batches in
+                batches.first(where: { $0.id == batchID })?
+                    .items.first(where: { $0.id == itemID })
+            }
+            .distinctUntilChanged()
+            .asDriver(onErrorDriveWith: .empty())
+    }
+
     private func subscribeToIsEnabled() {
         withObservationTracking {
             _ = settings.indexing.backgroundMode.isEnabled
