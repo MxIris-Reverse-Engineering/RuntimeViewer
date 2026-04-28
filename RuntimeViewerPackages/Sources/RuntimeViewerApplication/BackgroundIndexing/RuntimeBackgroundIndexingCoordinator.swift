@@ -24,7 +24,12 @@ public final class RuntimeBackgroundIndexingCoordinator {
     }
 
     private unowned let documentState: DocumentState
-    private let engine: RuntimeEngine
+    /// The engine this coordinator currently drives. Mutable so `MainCoordinator`
+    /// can switch sources (Local ↔ XPC ↔ Bonjour) without recreating the
+    /// coordinator: an RxSwift subscription on `documentState.$runtimeEngine`
+    /// picks up reassignments and rewires the pumps onto the new engine's
+    /// `backgroundIndexingManager`.
+    private var engine: RuntimeEngine
     private let disposeBag = DisposeBag()
 
     private let batchesRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
@@ -45,6 +50,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
         startImageLoadedPump()
         bootstrapSettingsObservation()
         #endif
+        bootstrapEngineObservation()
     }
 
     deinit {
@@ -182,6 +188,67 @@ public final class RuntimeBackgroundIndexingCoordinator {
         aggregateRelay.accept(
             .init(hasActiveBatch: hasActive, hasAnyFailure: hasFailure,
                   progress: progress))
+    }
+
+    // MARK: - Engine swap (source switch)
+
+    /// Subscribes to `documentState.$runtimeEngine`. When `MainCoordinator`
+    /// reassigns the engine on a source switch, `handleEngineSwap` tears down
+    /// the old pumps, cancels in-flight document batches on the old manager,
+    /// and rewires onto the new engine's manager.
+    private func bootstrapEngineObservation() {
+        // skip(1) — BehaviorRelay replays its current value on subscribe; that
+        // value matches the engine captured in init, so we don't need to react
+        // to it. Only subsequent reassignments are real source switches.
+        documentState.$runtimeEngine
+            .skip(1)
+            .subscribeOnNext { [weak self] newEngine in
+                guard let self else { return }
+                self.handleEngineSwap(to: newEngine)
+            }
+            .disposed(by: disposeBag)
+    }
+
+    private func handleEngineSwap(to newEngine: RuntimeEngine) {
+        // Capture the old engine before we overwrite, so we can dispatch a
+        // best-effort cancel to its manager for any document batches we own.
+        let oldEngine = engine
+        let oldBatchIDs = documentBatchIDs
+
+        // 1) Stop pumps tied to the old engine. The Tasks were `for await`
+        //    looping over an AsyncStream owned by the old manager; cancelling
+        //    them ends the loops cleanly.
+        eventPumpTask?.cancel()
+        imageLoadedPumpTask?.cancel()
+        eventPumpTask = nil
+        imageLoadedPumpTask = nil
+
+        // 2) Best-effort cancel of in-flight batches on the old manager.
+        //    Fire-and-forget — old engine's manager will deinit shortly.
+        if !oldBatchIDs.isEmpty {
+            Task {
+                for id in oldBatchIDs {
+                    await oldEngine.backgroundIndexingManager.cancelBatch(id)
+                }
+            }
+        }
+
+        // 3) Drop UI state — the old engine's batches no longer apply.
+        documentBatchIDs.removeAll()
+        batchesRelay.accept([])
+        refreshAggregate(batches: [])
+
+        // 4) Switch the captured engine reference.
+        engine = newEngine
+
+        // 5) Restart pumps on the new engine's manager.
+        startEventPump()
+        #if canImport(RuntimeViewerSettings)
+        startImageLoadedPump()
+        // If the feature is enabled, treat the swap like a fresh document
+        // open — the new engine's main executable should be indexed.
+        documentDidOpen()
+        #endif
     }
 }
 
