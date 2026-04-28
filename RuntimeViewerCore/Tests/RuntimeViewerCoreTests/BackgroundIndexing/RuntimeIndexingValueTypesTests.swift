@@ -1,33 +1,33 @@
-import XCTest
+import Testing
 @testable import RuntimeViewerCore
 
-final class RuntimeIndexingValueTypesTests: XCTestCase {
-    func test_batchID_isUnique() {
+@Suite struct RuntimeIndexingValueTypesTests {
+    @Test func batchIDIsUnique() {
         let a = RuntimeIndexingBatchID()
         let b = RuntimeIndexingBatchID()
-        XCTAssertNotEqual(a, b)
+        #expect(a != b)
     }
 
-    func test_taskItem_isNotCompletedWhenPending() {
+    @Test func taskItemIsNotCompletedWhenPending() {
         let item = RuntimeIndexingTaskItem(id: "/foo", resolvedPath: "/foo",
                                            state: .pending, hasPriorityBoost: false)
-        XCTAssertFalse(item.state.isTerminal)
+        #expect(!item.state.isTerminal)
     }
 
-    func test_taskState_failedIsTerminal() {
+    @Test func taskStateFailedIsTerminal() {
         let state = RuntimeIndexingTaskState.failed(message: "boom")
-        XCTAssertTrue(state.isTerminal)
+        #expect(state.isTerminal)
     }
 
-    func test_taskState_cancelledIsTerminal() {
-        XCTAssertTrue(RuntimeIndexingTaskState.cancelled.isTerminal)
+    @Test func taskStateCancelledIsTerminal() {
+        #expect(RuntimeIndexingTaskState.cancelled.isTerminal)
     }
 
-    func test_taskState_completedIsTerminal() {
-        XCTAssertTrue(RuntimeIndexingTaskState.completed.isTerminal)
+    @Test func taskStateCompletedIsTerminal() {
+        #expect(RuntimeIndexingTaskState.completed.isTerminal)
     }
 
-    func test_batch_progress_reportsCompletedFraction() {
+    @Test func batchProgressReportsCompletedFraction() {
         let items: [RuntimeIndexingTaskItem] = [
             .init(id: "/a", resolvedPath: "/a", state: .completed, hasPriorityBoost: false),
             .init(id: "/b", resolvedPath: "/b", state: .completed, hasPriorityBoost: false),
@@ -43,7 +43,7 @@ final class RuntimeIndexingValueTypesTests: XCTestCase {
             isCancelled: false,
             isFinished: false
         )
-        XCTAssertEqual(batch.completedCount, 3)   // completed + failed both count toward "done"
-        XCTAssertEqual(batch.totalCount, 4)
+        #expect(batch.completedCount == 3)   // completed + failed both count toward "done"
+        #expect(batch.totalCount == 4)
     }
 }

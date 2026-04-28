@@ -1,8 +1,9 @@
-import XCTest
+import Foundation
 import Semaphore
+import Testing
 @testable import RuntimeViewerCore
 
-final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
+@Suite final class RuntimeBackgroundIndexingManagerTests {
     /// Keepalives for engines / wrappers passed to a manager.
     ///
     /// Production safety: `RuntimeBackgroundIndexingManager.engine` is `unowned`
@@ -12,7 +13,8 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     /// In tests we construct mocks as locals and ARC may eagerly release them
     /// across `await` suspension points — at which point the manager's unowned
     /// reference dangles and the next access traps. Stash mocks in this array
-    /// to pin them to the test instance's lifetime.
+    /// to pin them to the suite instance's lifetime; Swift Testing instantiates
+    /// a fresh suite per test, so the array is scoped to one test naturally.
     private var aliveObjects: [AnyObject] = []
 
     @discardableResult
@@ -21,19 +23,14 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         return object
     }
 
-    override func tearDown() async throws {
-        aliveObjects.removeAll()
-        try await super.tearDown()
-    }
-
-    func test_currentBatches_initiallyEmpty() async {
+    @Test func currentBatchesInitiallyEmpty() async {
         let engine = keep(MockBackgroundIndexingEngine())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let batches = await manager.currentBatches()
-        XCTAssertTrue(batches.isEmpty)
+        #expect(batches.isEmpty)
     }
 
-    func test_events_streamYieldsBatchStarted_thenFinished_forEmptyGraph() async {
+    @Test func eventsStreamYieldsBatchStartedThenFinishedForEmptyGraph() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/fake/Root",
                        .init(isIndexed: true))   // short-circuit immediately
@@ -53,34 +50,32 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
             return seen
         }
 
-        let id = await manager.startBatch(rootImagePath: "/fake/Root",
-                                          depth: 0, maxConcurrency: 1,
-                                          reason: .manual)
-        XCTAssertNotNil(id)
+        _ = await manager.startBatch(rootImagePath: "/fake/Root",
+                                     depth: 0, maxConcurrency: 1,
+                                     reason: .manual)
         let finalSeen = await consumer.value
-        XCTAssertEqual(finalSeen, ["started", "finished"])
+        #expect(finalSeen == ["started", "finished"])
     }
 
-    func test_expand_emptyWhenRootAlreadyIndexed() async {
+    @Test func expandEmptyWhenRootAlreadyIndexed() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init(isIndexed: true))
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let items = await manager.expandDependencyGraph(rootPath: "/App", depth: 5)
-        XCTAssertTrue(items.isEmpty)
+        #expect(items.isEmpty)
     }
 
-    func test_expand_depth1_includesRootAndDirectDeps() async {
+    @Test func expandDepth1IncludesRootAndDirectDeps() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init(
             dependencies: [("/UIKit", "/UIKit"), ("/Foundation", "/Foundation")]
         ))
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let items = await manager.expandDependencyGraph(rootPath: "/App", depth: 1)
-        XCTAssertEqual(Set(items.map(\.id)),
-                       Set(["/App", "/UIKit", "/Foundation"]))
+        #expect(Set(items.map(\.id)) == Set(["/App", "/UIKit", "/Foundation"]))
     }
 
-    func test_expand_depth1_doesNotIncludeSecondLevel() async {
+    @Test func expandDepth1DoesNotIncludeSecondLevel() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/UIKit", "/UIKit")]))
@@ -88,10 +83,10 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
                        .init(dependencies: [("/CoreGraphics", "/CoreGraphics")]))
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let items = await manager.expandDependencyGraph(rootPath: "/App", depth: 1)
-        XCTAssertEqual(Set(items.map(\.id)), Set(["/App", "/UIKit"]))
+        #expect(Set(items.map(\.id)) == Set(["/App", "/UIKit"]))
     }
 
-    func test_expand_skipsAlreadyIndexedDeps() async {
+    @Test func expandSkipsAlreadyIndexedDeps() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/UIKit", "/UIKit"),
@@ -99,22 +94,24 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         engine.program(path: "/UIKit", .init(isIndexed: true))
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let items = await manager.expandDependencyGraph(rootPath: "/App", depth: 1)
-        XCTAssertEqual(Set(items.map(\.id)), Set(["/App", "/Foundation"]))
+        #expect(Set(items.map(\.id)) == Set(["/App", "/Foundation"]))
     }
 
-    func test_expand_unresolvedInstallNameBecomesFailedItem() async {
+    @Test func expandUnresolvedInstallNameBecomesFailedItem() async throws {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init(
             dependencies: [("@rpath/Missing", nil)]
         ))
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let items = await manager.expandDependencyGraph(rootPath: "/App", depth: 1)
-        let missing = items.first { $0.id == "@rpath/Missing" }
-        XCTAssertNotNil(missing)
-        if case .failed = missing?.state {} else { XCTFail("expected failed state") }
+        let missing = try #require(items.first { $0.id == "@rpath/Missing" })
+        guard case .failed = missing.state else {
+            Issue.record("expected failed state, got \(missing.state)")
+            return
+        }
     }
 
-    func test_expand_dedupsSharedDependencies() async {
+    @Test func expandDedupsSharedDependencies() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/A", "/A"), ("/B", "/B")]))
@@ -125,10 +122,10 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let items = await manager.expandDependencyGraph(rootPath: "/App", depth: 2)
         let sharedCount = items.filter { $0.id == "/Shared" }.count
-        XCTAssertEqual(sharedCount, 1)
+        #expect(sharedCount == 1)
     }
 
-    func test_batch_indexesAllPendingItems() async {
+    @Test func batchIndexesAllPendingItems() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/A", "/A"), ("/B", "/B")]))
@@ -139,12 +136,12 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         let finishedBatch = await runToFinish(manager: manager,
                                               root: "/App", depth: 1,
                                               maxConcurrency: 2)
-        XCTAssertTrue(finishedBatch.items.allSatisfy { $0.state == .completed })
+        #expect(finishedBatch.items.allSatisfy { $0.state == .completed })
         let indexed = engine.loadedOrder()
-        XCTAssertEqual(Set(indexed), Set(["/App", "/A", "/B"]))
+        #expect(Set(indexed) == Set(["/App", "/A", "/B"]))
     }
 
-    func test_batch_respectsMaxConcurrency() async {
+    @Test func batchRespectsMaxConcurrency() async {
         let engine = keep(MockBackgroundIndexingEngine())
         // 6 dependencies, concurrency cap 2 → never exceed 2 simultaneous loads
         let deps = (0..<6).map { (installName: "/D\($0)", resolvedPath: "/D\($0)") }
@@ -158,10 +155,10 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
 
         _ = await runToFinish(manager: manager, root: "/App", depth: 1,
                               maxConcurrency: 2)
-        XCTAssertLessThanOrEqual(counter.peak, 2)
+        #expect(counter.peak <= 2)
     }
 
-    func test_batch_failedLoad_yieldsFailedTaskState() async {
+    @Test func batchFailedLoadYieldsFailedTaskState() async throws {
         struct LoadError: Error {}
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
@@ -171,15 +168,15 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
 
         let batch = await runToFinish(manager: manager,
                                       root: "/App", depth: 1, maxConcurrency: 1)
-        let broken = batch.items.first { $0.id == "/Broken" }
-        XCTAssertNotNil(broken)
-        guard case .failed(let message) = broken?.state else {
-            XCTFail("expected .failed"); return
+        let broken = try #require(batch.items.first { $0.id == "/Broken" })
+        guard case .failed(let message) = broken.state else {
+            Issue.record("expected .failed, got \(broken.state)")
+            return
         }
-        XCTAssertFalse(message.isEmpty)
+        #expect(!message.isEmpty)
     }
 
-    func test_cancelBatch_stopsPendingItemsAndEmitsCancelledEvent() async {
+    @Test func cancelBatchStopsPendingItemsAndEmitsCancelledEvent() async {
         let engine = keep(MockBackgroundIndexingEngine())
         let deps = (0..<5).map { (installName: "/D\($0)", resolvedPath: "/D\($0)") }
         engine.program(path: "/App", .init(dependencies: deps))
@@ -199,10 +196,10 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 10_000_000)
         await manager.cancelBatch(id)
         let batch = await consumer.value
-        XCTAssertTrue(batch.isCancelled)
+        #expect(batch.isCancelled)
     }
 
-    func test_cancelAll_cancelsEveryBatch() async {
+    @Test func cancelAllCancelsEveryBatch() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/A", .init(dependencies: [("/A1", "/A1")]))
         engine.program(path: "/A1", .init())
@@ -213,14 +210,14 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
                                            maxConcurrency: 1, reason: .manual)
         let idB = await manager.startBatch(rootImagePath: "/B", depth: 1,
                                            maxConcurrency: 1, reason: .manual)
-        XCTAssertNotEqual(idA, idB)
+        #expect(idA != idB)
         await manager.cancelAllBatches()
         try? await Task.sleep(nanoseconds: 50_000_000)
         let remaining = await manager.currentBatches()
-        XCTAssertTrue(remaining.isEmpty)
+        #expect(remaining.isEmpty)
     }
 
-    func test_prioritize_emitsTaskPrioritizedEvent() async {
+    @Test func prioritizeEmitsTaskPrioritizedEvent() async {
         // Time-independent assertion: verify the manager emits
         // `.taskPrioritized` for a pending path and does NOT emit it for
         // running / absent paths. Load order would depend on sleep timing
@@ -250,10 +247,10 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         await manager.prioritize(imagePath: "/D2")
 
         let boosted = await consumer.value
-        XCTAssertEqual(boosted, ["/D2"])
+        #expect(boosted == ["/D2"])
     }
 
-    func test_prioritize_isNoOpForUnknownPath() async {
+    @Test func prioritizeIsNoOpForUnknownPath() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
