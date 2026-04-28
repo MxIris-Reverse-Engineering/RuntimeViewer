@@ -1,24 +1,29 @@
-import XCTest
 import Combine
+import Foundation
+import Testing
 @testable import RuntimeViewerCore
 
-final class RuntimeEngineIndexStateTests: XCTestCase {
-    func test_isImageIndexed_falseForUnvisitedPath() async throws {
+@Suite struct RuntimeEngineIndexStateTests {
+    private static let foundation = "/System/Library/Frameworks/Foundation.framework/Foundation"
+    private static let coreText = "/System/Library/Frameworks/CoreText.framework/CoreText"
+
+    @Test func isImageIndexedFalseForUnvisitedPath() async throws {
         let engine = RuntimeEngine(source: .local)
         let indexed = try await engine.isImageIndexed(path: "/never/seen")
-        XCTAssertFalse(indexed)
+        #expect(!indexed)
     }
 
-    func test_isImageIndexed_trueAfterLoadImage() async throws {
-        let foundation = "/System/Library/Frameworks/Foundation.framework/Foundation"
-        try XCTSkipUnless(
-            FileManager.default.fileExists(atPath: foundation),
+    @Test(
+        .enabled(
+            if: FileManager.default.fileExists(atPath: foundation),
             "Requires macOS with Foundation.framework present"
         )
+    )
+    func isImageIndexedTrueAfterLoadImage() async throws {
         let engine = RuntimeEngine(source: .local)
-        try await engine.loadImage(at: foundation)
-        let indexed = try await engine.isImageIndexed(path: foundation)
-        XCTAssertTrue(indexed)
+        try await engine.loadImage(at: Self.foundation)
+        let indexed = try await engine.isImageIndexed(path: Self.foundation)
+        #expect(indexed)
     }
 
     /// Verifies the contract that `isImageIndexed` normalizes the input path the
@@ -31,59 +36,71 @@ final class RuntimeEngineIndexStateTests: XCTestCase {
     /// raw and patched forms are identical and this test still pins the
     /// contract: regression coverage triggers if the patcher's behavior ever
     /// changes such that the two forms diverge.
-    func test_isImageIndexed_normalizesPath() async throws {
-        let raw = "/System/Library/Frameworks/Foundation.framework/Foundation"
-        try XCTSkipUnless(
-            FileManager.default.fileExists(atPath: raw),
+    @Test(
+        .enabled(
+            if: FileManager.default.fileExists(atPath: foundation),
             "Requires macOS with Foundation.framework present"
         )
+    )
+    func isImageIndexedNormalizesPath() async throws {
         let engine = RuntimeEngine(source: .local)
-        try await engine.loadImage(at: raw)
+        try await engine.loadImage(at: Self.foundation)
 
         // After load, both raw and patched forms should report indexed.
-        let patched = DyldUtilities.patchImagePathForDyld(raw)
-        let indexedRaw = try await engine.isImageIndexed(path: raw)
+        let patched = DyldUtilities.patchImagePathForDyld(Self.foundation)
+        let indexedRaw = try await engine.isImageIndexed(path: Self.foundation)
         let indexedPatched = try await engine.isImageIndexed(path: patched)
-        XCTAssertTrue(indexedRaw, "isImageIndexed must return true for the unpatched path")
-        XCTAssertTrue(indexedPatched, "isImageIndexed must return true for the patched path too")
+        #expect(indexedRaw, "isImageIndexed must return true for the unpatched path")
+        #expect(indexedPatched, "isImageIndexed must return true for the patched path too")
     }
 
-    func test_mainExecutablePath_returnsNonEmptyPath() async throws {
-        // In the XCTest context this returns the test runner's executable path,
-        // which validates the "return dyld image 0" contract without requiring
+    @Test func mainExecutablePathReturnsNonEmptyPath() async throws {
+        // In the test runner this returns the runner's executable path, which
+        // validates the "return dyld image 0" contract without requiring
         // RuntimeViewer.app to be running.
         let engine = RuntimeEngine(source: .local)
         let path = try await engine.mainExecutablePath()
-        XCTAssertFalse(path.isEmpty)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+        #expect(!path.isEmpty)
+        #expect(FileManager.default.fileExists(atPath: path))
     }
 
-    func test_loadImageForBackgroundIndexing_doesNotTriggerReloadData() async throws {
-        // CoreText is reliable across macOS versions; if it's absent, skip.
-        let path = "/System/Library/Frameworks/CoreText.framework/CoreText"
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: path),
-                          "Requires macOS with CoreText.framework present")
+    @Test(
+        .enabled(
+            if: FileManager.default.fileExists(atPath: coreText),
+            "Requires macOS with CoreText.framework present"
+        )
+    )
+    func loadImageForBackgroundIndexingDoesNotTriggerReloadData() async throws {
+        // CoreText is reliable across macOS versions.
         let engine = RuntimeEngine(source: .local)
-        try await engine.loadImageForBackgroundIndexing(at: path)
-        let indexed = try await engine.isImageIndexed(path: path)
-        XCTAssertTrue(indexed)
+        try await engine.loadImageForBackgroundIndexing(at: Self.coreText)
+        let indexed = try await engine.isImageIndexed(path: Self.coreText)
+        #expect(indexed)
     }
 
-    func test_imageDidLoadPublisher_firesAfterLoadImage() async throws {
-        let foundation = "/System/Library/Frameworks/Foundation.framework/Foundation"
-        try XCTSkipUnless(FileManager.default.fileExists(atPath: foundation),
-                          "Requires macOS with Foundation.framework present")
+    @Test(
+        .enabled(
+            if: FileManager.default.fileExists(atPath: foundation),
+            "Requires macOS with Foundation.framework present"
+        )
+    )
+    func imageDidLoadPublisherFiresAfterLoadImage() async throws {
         let engine = RuntimeEngine(source: .local)
-        let expectation = expectation(description: "imageDidLoad")
-        var received: String?
-        // imageDidLoadPublisher is `nonisolated` — no await needed.
-        let cancellable = engine.imageDidLoadPublisher.sink { path in
-            received = path
-            expectation.fulfill()
+
+        // Buffer publisher emissions into an AsyncStream constructed *before*
+        // we trigger loadImage, so the subscription is live by the time the
+        // engine's PassthroughSubject sends.
+        let stream = AsyncStream<String> { continuation in
+            let cancellable = engine.imageDidLoadPublisher.sink { path in
+                continuation.yield(path)
+            }
+            continuation.onTermination = { _ in cancellable.cancel() }
         }
-        try await engine.loadImage(at: foundation)
-        await fulfillment(of: [expectation], timeout: 5)
-        cancellable.cancel()
-        XCTAssertEqual(received, foundation)
+
+        try await engine.loadImage(at: Self.foundation)
+
+        var iterator = stream.makeAsyncIterator()
+        let received = await iterator.next()
+        #expect(received == Self.foundation)
     }
 }

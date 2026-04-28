@@ -1,65 +1,60 @@
-import XCTest
+import Foundation
+import Testing
 @testable import RuntimeViewerCore
 
-final class DylibPathResolverTests: XCTestCase {
+@Suite struct DylibPathResolverTests {
     private let resolver = DylibPathResolver()
 
-    func test_absolutePath_returnsAsIsWhenExists() throws {
+    /// Candidates probed by `absolutePathAcceptsDyldSharedCachePath`. Lifted
+    /// out so the `.enabled(if:)` trait can reuse it as a registration-time
+    /// gate (no candidate in cache → skip the test on this host).
+    private static let dyldSharedCacheCandidates = [
+        "/System/Library/Frameworks/Foundation.framework/Foundation",
+        "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+        "/usr/lib/libobjc.A.dylib",
+        "/usr/lib/libSystem.B.dylib",
+    ]
+
+    @Test func absolutePathReturnsAsIsWhenExists() {
         // Use /usr/lib/dyld because most "dylibs" live in the dyld shared cache
         // and have no on-disk file on Apple Silicon Macs (e.g. libSystem.B.dylib).
         // /usr/lib/dyld is a real on-disk file across macOS versions.
         let path = "/usr/lib/dyld"
-        XCTAssertTrue(FileManager.default.fileExists(atPath: path),
-                      "precondition: /usr/lib/dyld exists in this test env")
-        XCTAssertEqual(
-            resolver.resolve(installName: path,
-                             imagePath: "/any", rpaths: [],
-                             mainExecutablePath: "/any"),
-            path
+        #expect(FileManager.default.fileExists(atPath: path),
+                "precondition: /usr/lib/dyld exists in this test env")
+        #expect(resolver.resolve(installName: path,
+                                 imagePath: "/any", rpaths: [],
+                                 mainExecutablePath: "/any") == path)
+    }
+
+    @Test func absolutePathReturnsNilWhenMissing() {
+        #expect(resolver.resolve(installName: "/nonexistent/Foo.dylib",
+                                 imagePath: "/any", rpaths: [],
+                                 mainExecutablePath: "/any") == nil)
+    }
+
+    @Test(
+        .enabled(
+            if: dyldSharedCacheCandidates.contains(where: DyldUtilities.isInDyldSharedCache),
+            "no candidate in dyld shared cache (test env may lack cache access)"
         )
-    }
-
-    func test_absolutePath_returnsNilWhenMissing() {
-        XCTAssertNil(resolver.resolve(installName: "/nonexistent/Foo.dylib",
-                                      imagePath: "/any", rpaths: [],
-                                      mainExecutablePath: "/any"))
-    }
-
-    func test_absolutePath_acceptsDyldSharedCachePath() throws {
+    )
+    func absolutePathAcceptsDyldSharedCachePath() throws {
         // System frameworks live in the dyld shared cache and have no on-disk
         // file on Apple Silicon. The resolver must accept them anyway,
         // otherwise BFS marks every UIKit/Foundation dependency as
         // "path unresolved" and the toolbar floods with red ✗ rows.
-        //
-        // Try a handful of well-known cache residents — pick the first one
-        // this host's cache reports membership for. Empty `picked` means
-        // the test process couldn't load DyldCacheLoaded.current at all
-        // (sandboxed test runners on some CI configs), in which case skip.
-        let candidates = [
-            "/System/Library/Frameworks/Foundation.framework/Foundation",
-            "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
-            "/usr/lib/libobjc.A.dylib",
-            "/usr/lib/libSystem.B.dylib",
-        ]
-        let picked = candidates.first(where: DyldUtilities.isInDyldSharedCache)
-        try XCTSkipUnless(
-            picked != nil,
-            "no candidate found in this host's dyld shared cache (test env may lack cache access)"
+        let candidate = try #require(
+            Self.dyldSharedCacheCandidates.first(where: DyldUtilities.isInDyldSharedCache)
         )
-        let candidate = picked!
-        XCTAssertFalse(
-            FileManager.default.fileExists(atPath: candidate),
-            "precondition: \(candidate) should NOT exist on disk on this host"
-        )
-        XCTAssertEqual(
-            resolver.resolve(installName: candidate,
-                             imagePath: "/any", rpaths: [],
-                             mainExecutablePath: "/any"),
-            candidate
-        )
+        #expect(!FileManager.default.fileExists(atPath: candidate),
+                "precondition: \(candidate) should NOT exist on disk on this host")
+        #expect(resolver.resolve(installName: candidate,
+                                 imagePath: "/any", rpaths: [],
+                                 mainExecutablePath: "/any") == candidate)
     }
 
-    func test_executablePath_substitutesMainExecutableDir() throws {
+    @Test func executablePathSubstitutesMainExecutableDir() throws {
         let tempDir = FileManager.default.temporaryDirectory.path
         let exePath = tempDir + "/FakeExe"
         let frameworkPath = tempDir + "/Foo"
@@ -73,10 +68,10 @@ final class DylibPathResolverTests: XCTestCase {
             installName: "@executable_path/Foo",
             imagePath: "/any", rpaths: [],
             mainExecutablePath: exePath)
-        XCTAssertEqual(resolved, frameworkPath)
+        #expect(resolved == frameworkPath)
     }
 
-    func test_loaderPath_substitutesImageDir() throws {
+    @Test func loaderPathSubstitutesImageDir() throws {
         let tempDir = FileManager.default.temporaryDirectory.path
         let imagePath = tempDir + "/FakeLib"
         let siblingPath = tempDir + "/Sibling"
@@ -90,10 +85,10 @@ final class DylibPathResolverTests: XCTestCase {
             installName: "@loader_path/Sibling",
             imagePath: imagePath, rpaths: [],
             mainExecutablePath: "/any")
-        XCTAssertEqual(resolved, siblingPath)
+        #expect(resolved == siblingPath)
     }
 
-    func test_rpath_usesFirstMatchingRpath() throws {
+    @Test func rpathUsesFirstMatchingRpath() throws {
         let tempDir = FileManager.default.temporaryDirectory.path
         let rpath1 = tempDir + "/DoesNotExist"
         let rpath2 = tempDir + "/RPath2"
@@ -109,13 +104,13 @@ final class DylibPathResolverTests: XCTestCase {
             installName: "@rpath/MyLib",
             imagePath: "/any", rpaths: [rpath1, rpath2],
             mainExecutablePath: "/any")
-        XCTAssertEqual(resolved, target)
+        #expect(resolved == target)
     }
 
-    func test_rpath_returnsNilWhenNoMatch() {
-        XCTAssertNil(resolver.resolve(
+    @Test func rpathReturnsNilWhenNoMatch() {
+        #expect(resolver.resolve(
             installName: "@rpath/Missing",
             imagePath: "/any", rpaths: ["/nope1", "/nope2"],
-            mainExecutablePath: "/any"))
+            mainExecutablePath: "/any") == nil)
     }
 }
