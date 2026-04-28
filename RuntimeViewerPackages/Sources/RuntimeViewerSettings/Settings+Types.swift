@@ -65,18 +65,27 @@ extension Settings {
 
     @Codable
     @MemberInit
-    public struct BackgroundIndexing {
-        /// Whether background indexing is enabled
-        @Default(false)
-        public var isEnabled: Bool
+    public struct Indexing {
+        @Codable
+        @MemberInit
+        public struct BackgroundMode {
+            /// Whether background indexing is enabled
+            @Default(false)
+            public var isEnabled: Bool
 
-        /// Indexing depth (valid range enforced by the Settings UI: 1...5)
-        @Default(1)
-        public var depth: Int
+            /// Indexing depth (valid range enforced by the Settings UI: 1...5)
+            @Default(1)
+            public var depth: Int
 
-        /// Maximum concurrent indexing tasks (valid range enforced by the Settings UI: 1...8)
-        @Default(4)
-        public var maxConcurrency: Int
+            /// Maximum concurrent indexing tasks (Settings UI clamps to 1...processorCount)
+            @Default(4)
+            public var maxConcurrency: Int
+
+            public static let `default` = Self()
+        }
+
+        @Default(BackgroundMode.default)
+        public var backgroundMode: BackgroundMode
 
         public static let `default` = Self()
     }

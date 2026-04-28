@@ -108,19 +108,19 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 
     private func subscribeToIsEnabled() {
         withObservationTracking {
-            _ = settings.backgroundIndexing.isEnabled
+            _ = settings.indexing.backgroundMode.isEnabled
         } onChange: { [weak self] in
             // `onChange` fires off the main actor right after a mutation;
             // hop back to the main actor to read the latest value and
             // re-register the observation.
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.isEnabled = self.settings.backgroundIndexing.isEnabled
+                self.isEnabled = self.settings.indexing.backgroundMode.isEnabled
                 self.subscribeToIsEnabled()
             }
         }
         // Seed the current value synchronously on initial subscribe.
-        isEnabled = settings.backgroundIndexing.isEnabled
+        isEnabled = settings.indexing.backgroundMode.isEnabled
     }
 
     private static func renderNodes(from batches: [RuntimeIndexingBatch])

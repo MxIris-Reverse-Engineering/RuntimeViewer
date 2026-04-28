@@ -336,9 +336,9 @@ extension RuntimeBackgroundIndexingCoordinator {
         self.documentBatchIDs.insert(id)
     }
 
-    private func currentBackgroundIndexingSettings() -> Settings.BackgroundIndexing {
+    private func currentBackgroundIndexingSettings() -> Settings.Indexing.BackgroundMode {
         @Dependency(\.settings) var settings
-        return settings.backgroundIndexing
+        return settings.indexing.backgroundMode
     }
 
     private func bootstrapSettingsObservation() {
