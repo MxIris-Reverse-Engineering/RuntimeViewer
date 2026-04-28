@@ -78,6 +78,54 @@ import Testing
         #expect(indexed)
     }
 
+    /// Pins the writer-side normalization contract: `loadImage(at:)` must
+    /// canonicalize the path before inserting it into `loadedImagePaths`, so
+    /// that downstream readers (which all canonicalize before lookup) hit.
+    ///
+    /// On most macOS hosts `patchImagePathForDyld` is identity, so this test
+    /// passes trivially. It still pins the contract — if someone removes the
+    /// writer-side patch or the patch starts diverging in some environment,
+    /// this test catches the regression.
+    @Test(
+        .enabled(
+            if: FileManager.default.fileExists(atPath: foundation),
+            "Requires macOS with Foundation.framework present"
+        )
+    )
+    func loadImageInsertsCanonicalPathIntoLoadedImagePaths() async throws {
+        let engine = RuntimeEngine(source: .local)
+        try await engine.loadImage(at: Self.foundation)
+
+        let canonical = DyldUtilities.patchImagePathForDyld(Self.foundation)
+        let loaded = await engine.loadedImagePaths
+        #expect(
+            loaded.contains(canonical),
+            "loadImage must store the canonical (patched) form so reader-side lookups hit"
+        )
+    }
+
+    /// Same contract as `loadImageInsertsCanonicalPathIntoLoadedImagePaths`,
+    /// applied to the background indexing entry point.
+    @Test(
+        .enabled(
+            if: FileManager.default.fileExists(atPath: coreText),
+            "Requires macOS with CoreText.framework present"
+        )
+    )
+    func loadImageForBackgroundIndexingInsertsCanonicalPathIntoLoadedImagePaths()
+        async throws
+    {
+        let engine = RuntimeEngine(source: .local)
+        try await engine.loadImageForBackgroundIndexing(at: Self.coreText)
+
+        let canonical = DyldUtilities.patchImagePathForDyld(Self.coreText)
+        let loaded = await engine.loadedImagePaths
+        #expect(
+            loaded.contains(canonical),
+            "loadImageForBackgroundIndexing must store the canonical form"
+        )
+    }
+
     @Test(
         .enabled(
             if: FileManager.default.fileExists(atPath: foundation),

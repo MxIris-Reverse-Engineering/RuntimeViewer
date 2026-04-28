@@ -529,13 +529,21 @@ extension RuntimeEngine {
 
     public func loadImage(at path: String) async throws {
         try await request {
-            try DyldUtilities.loadImage(at: path)
-            _ = try await objcSectionFactory.section(for: path)
-            _ = try await swiftSectionFactory.section(for: path)
+            // Canonicalize on entry so internal storage (loadedImagePaths,
+            // section factory caches) stays symmetric with reader-side
+            // lookups (isImageLoaded, isImageIndexed, _objects), all of which
+            // patch first. On macOS this is identity; on iOS Simulator it
+            // applies DYLD_ROOT_PATH so dyld's own image-name reports match.
+            // patchImagePathForDyld is idempotent — re-patching an already
+            // patched path is safe.
+            let canonical = DyldUtilities.patchImagePathForDyld(path)
+            try DyldUtilities.loadImage(at: canonical)
+            _ = try await objcSectionFactory.section(for: canonical)
+            _ = try await swiftSectionFactory.section(for: canonical)
             reloadData(isReloadImageNodes: false)
-            loadedImagePaths.insert(path)
-            imageDidLoadSubject.send(path)
-            sendRemoteImageDidLoadIfNeeded(path: path)
+            loadedImagePaths.insert(canonical)
+            imageDidLoadSubject.send(canonical)
+            sendRemoteImageDidLoadIfNeeded(path: canonical)
         } remote: {
             try await $0.sendMessage(name: .loadImage, request: path)
         }
