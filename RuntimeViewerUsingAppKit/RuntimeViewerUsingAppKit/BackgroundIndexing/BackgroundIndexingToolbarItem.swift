@@ -15,16 +15,14 @@ final class BackgroundIndexingToolbarItem: NSToolbarItem {
         paletteLabel = "Background Indexing"
         toolTip = "Background indexing status"
         view = itemView
+
+        // The actual click receiver is the button inside `itemView`. The
+        // toolbar item's own target/action is also wired so the item works
+        // when it appears in the overflow menu (where there is no view).
+        itemView.button.target = self
+        itemView.button.action = #selector(clicked)
         target = self
         action = #selector(clicked)
-    }
-
-    func bindState(_ driver: Driver<BackgroundIndexingToolbarState>) {
-        driver.driveOnNext { [weak self] state in
-            guard let self else { return }
-            itemView.state = state
-        }
-        .disposed(by: disposeBag)
     }
 
     @objc private func clicked() {
