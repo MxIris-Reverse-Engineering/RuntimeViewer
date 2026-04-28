@@ -14,9 +14,7 @@ public actor RuntimeBackgroundIndexingManager {
 
     init(engine: any BackgroundIndexingEngineRepresenting) {
         self.engine = engine
-        var cont: AsyncStream<RuntimeIndexingEvent>.Continuation!
-        self.stream = AsyncStream { cont = $0 }
-        self.continuation = cont
+        (self.stream, self.continuation) = AsyncStream<RuntimeIndexingEvent>.makeStream()
     }
 
     deinit { continuation.finish() }
@@ -114,10 +112,18 @@ public actor RuntimeBackgroundIndexingManager {
     {
         var visited: Set<String> = []
         var items: [RuntimeIndexingTaskItem] = []
-        var frontier: [(path: String, level: Int)] = [(rootPath, 0)]
+        // `ancestorRpaths` carries the LC_RPATH entries collected from every
+        // loader walking up the chain to `rootPath`. dyld combines these with
+        // the visited image's own LC_RPATH when resolving `@rpath/...`, so a
+        // child framework with no LC_RPATH still resolves siblings via the
+        // host's rpath. Root starts with `[]` and each level appends the
+        // current image's own rpaths before descending. We don't dedup —
+        // dyld doesn't either, and order matters for first-match resolution.
+        var frontier: [(path: String, level: Int, ancestorRpaths: [String])] =
+            [(rootPath, 0, [])]
 
         while !frontier.isEmpty {
-            let (path, level) = frontier.removeFirst()
+            let (path, level, ancestorRpaths) = frontier.removeFirst()
             guard visited.insert(path).inserted else { continue }
 
             // `try?` — if the engine errors out (e.g. remote XPC drops mid-batch),
@@ -145,11 +151,17 @@ public actor RuntimeBackgroundIndexingManager {
 
             // `try?` — if dependency lookup fails, treat as no deps; the path
             // itself is still pending and will be retried on next batch.
-            let deps = (try? await engine.dependencies(for: path)) ?? []
+            let deps = (try? await engine.dependencies(
+                for: path, ancestorRpaths: ancestorRpaths)) ?? []
+            // Pre-compute the ancestor list for the next level once. Failing
+            // this lookup degrades the next level to "no inherited rpaths",
+            // matching the `try?` failure-mode of `dependencies`/`isImageIndexed`.
+            let ownRpaths = (try? await engine.rpaths(for: path)) ?? []
+            let descendantAncestors = ancestorRpaths + ownRpaths
             for dep in deps {
                 if let resolved = dep.resolvedPath {
                     if !visited.contains(resolved) {
-                        frontier.append((resolved, level + 1))
+                        frontier.append((resolved, level + 1, descendantAncestors))
                     }
                 } else {
                     if visited.insert(dep.installName).inserted {

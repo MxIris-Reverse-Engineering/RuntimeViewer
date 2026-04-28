@@ -10,11 +10,18 @@ final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting,
         var isIndexed: Bool = false
         var shouldFailLoad: Error? = nil
         var dependencies: [(installName: String, resolvedPath: String?)] = []
+        var rpaths: [String] = []
+    }
+
+    struct DependenciesCall: Sendable, Equatable {
+        var path: String
+        var ancestorRpaths: [String]
     }
 
     private let lock = NSLock()
     private var paths: [String: ProgrammedPath] = [:]
     private var loadOrder: [String] = []
+    private var dependenciesCallLog: [DependenciesCall] = []
     var mainExecutable: String = "/fake/MainApp"
 
     func program(path: String, _ entry: ProgrammedPath) {
@@ -25,6 +32,11 @@ final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting,
     func loadedOrder() -> [String] {
         lock.lock(); defer { lock.unlock() }
         return loadOrder
+    }
+
+    func dependenciesCalls() -> [DependenciesCall] {
+        lock.lock(); defer { lock.unlock() }
+        return dependenciesCallLog
     }
 
     func isImageIndexed(path: String) async -> Bool {
@@ -48,11 +60,15 @@ final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting,
         lock.lock(); defer { lock.unlock() }
         return paths[path] != nil
     }
-    func rpaths(for path: String) async -> [String] { [] }
-    func dependencies(for path: String)
+    func rpaths(for path: String) async -> [String] {
+        lock.lock(); defer { lock.unlock() }
+        return paths[path]?.rpaths ?? []
+    }
+    func dependencies(for path: String, ancestorRpaths: [String])
         async -> [(installName: String, resolvedPath: String?)]
     {
         lock.lock(); defer { lock.unlock() }
+        dependenciesCallLog.append(.init(path: path, ancestorRpaths: ancestorRpaths))
         return paths[path]?.dependencies ?? []
     }
 }
