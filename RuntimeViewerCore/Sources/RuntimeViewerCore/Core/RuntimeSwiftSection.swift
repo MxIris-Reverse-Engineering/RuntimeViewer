@@ -183,9 +183,8 @@ actor RuntimeSwiftSection {
 
     init(imagePath: String, factory: RuntimeSwiftSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing Swift section for image: \(imagePath, privacy: .public)")
-        let imageName = imagePath.lastPathComponent.deletingPathExtension.deletingPathExtension
-        guard let machO = MachOImage(name: imageName) else {
-            #log(.error, "Failed to create MachOImage for: \(imageName, privacy: .public)")
+        guard let machO = DyldUtilities.machOImage(forPath: imagePath) else {
+            #log(.error, "Failed to create MachOImage for: \(imagePath, privacy: .public)")
             throw Error.invalidMachOImage
         }
         self.factory = factory
