@@ -28,11 +28,13 @@ extension RuntimeEngine {
     /// Used by the background indexing manager to avoid UI refresh storms.
     public func loadImageForBackgroundIndexing(at path: String) async throws {
         try await request {
-            // Mirror loadImage(at:) byte-for-byte sans reloadData(isReloadImageNodes:).
-            try DyldUtilities.loadImage(at: path)
-            _ = try await objcSectionFactory.section(for: path)
-            _ = try await swiftSectionFactory.section(for: path)
-            loadedImagePaths.insert(path)
+            // Mirror loadImage(at:) byte-for-byte sans reloadData. See loadImage
+            // for the canonicalization rationale.
+            let canonical = DyldUtilities.patchImagePathForDyld(path)
+            try DyldUtilities.loadImage(at: canonical)
+            _ = try await objcSectionFactory.section(for: canonical)
+            _ = try await swiftSectionFactory.section(for: canonical)
+            loadedImagePaths.insert(canonical)
         } remote: { senderConnection in
             try await senderConnection.sendMessage(
                 name: .loadImageForBackgroundIndexing, request: path)

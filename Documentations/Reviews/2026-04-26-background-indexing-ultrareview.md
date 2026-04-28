@@ -15,7 +15,7 @@
 - ✅ **N2 source switch staleness** — 已修(同 implementation-review I3)。Coordinator 通过 RxSwift `documentState.$runtimeEngine.skip(1)` 响应 swap。详见上
 - ✅ **N4 DylibPathResolver 拒绝 dyld shared cache** — 已修。`DyldUtilities.isInDyldSharedCache(_:)` 加 Set-cache 字面查询,`DylibPathResolver.pathExists` 兼顾文件系统与 cache。**字面匹配,不规范化** —— 与本审查建议的方向一致(让真实失败显式呈现);用户明确选 "字面匹配" 是因为 macOS 上 versioned ↔ unversioned 的规范化在 install name 形式不一致时有误导风险,iOS 不需要规范化。详见 Evolution 0002 假设 #4 与决策日志 2026-04-28(N4)
 - ⏳ **N3 (manager dedup),Nit-1 (per-batch cancel 按钮),Nit-2 (.settingsEnabled reason),Nit-3 (documentBatchIDs 失败保留泄漏)** — 未处理,follow-up
-- 🟡 **Pre-1 (path normalization)** — 部分修复。`DyldUtilities.patchImagePathForDyld` 增加幂等性保护(commit `a033d3d`),避免 iOS Simulator 下 `dyld` 已经返回 patched path 时再次 patch 产生 `/sim_root/sim_root/...` 双前缀。Reader/writer 不对称的根本对齐留给 iOS Simulator 支持工作(Step 2)
+- ✅ **Pre-1 (path normalization)** — 已修。Step 1(commit `a033d3d`)给 `DyldUtilities.patchImagePathForDyld` 加幂等性保护,避免 iOS Simulator 下 `dyld` 已经返回 patched path 时再次 patch 产生 `/sim_root/sim_root/...` 双前缀。Step 2 在 `loadImage(at:)` 与 `loadImageForBackgroundIndexing(at:)` 入口 patch,内部存储(`loadedImagePaths` / section factory caches / `imageDidLoadSubject`)统一 canonical 形式,wire 上保持 raw(receiver 各自 patch)。Reader/writer 现在一致 canonical
 
 ---
 
@@ -208,7 +208,7 @@ case .batchFinished(let finished):
 
 ## Pre-existing(P2 跟进)
 
-### Pre-1. `isImageIndexed` 与 `loadImageForBackgroundIndexing` 路径规范化不对称 🟡 PARTIAL FIX 2026-04-28
+### Pre-1. `isImageIndexed` 与 `loadImageForBackgroundIndexing` 路径规范化不对称 ✅ FIXED 2026-04-28
 
 **文件**: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift:6-15`
 
@@ -233,7 +233,15 @@ case .batchFinished(let finished):
 
 这一步并未改变 reader/writer 的对称性 —— `isImageIndexed` 仍 patch、writer 仍 raw,iOS Simulator 上语义层 bug 依旧。但它**清掉了 Step 2 在 writer 入口加 patch 时会撞上的双前缀地雷**。
 
-**Step 2(待办,绑 iOS Simulator)**:走"彻底方案" —— `loadImage(at:)` / `loadImageForBackgroundIndexing(at:)` 入口 patch,内部存储统一 patched 形式,wire 上仍是 raw。Step 1 已保证多次 patch 安全,Step 2 可以放心铺开。本 PR 不阻塞。
+**Step 2 修复 2026-04-28**:走"彻底方案"。`loadImage(at:)` 与 `loadImageForBackgroundIndexing(at:)` 入口 `let canonical = DyldUtilities.patchImagePathForDyld(path)`,后续所有 `DyldUtilities.loadImage` / `objcSectionFactory.section(for:)` / `swiftSectionFactory.section(for:)` / `loadedImagePaths.insert` / `imageDidLoadSubject.send` / `sendRemoteImageDidLoadIfNeeded` 全部用 `canonical`。wire 上仍是 raw(`request: path` 不变),让 receiver 自行 patch —— 跨进程 / 跨平台 server-client 不假设两端有相同 `DYLD_ROOT_PATH`。
+
+与现有 `_objects(in:)`(line 461/467)与 `_localObjectsWithProgress`(line 605/611)的 "先 patch 再 insert" 对齐。Reader 端 `isImageLoaded`(line 524)、`isImageIndexed`(line 8)早就 patch 后查询,现在 writer/reader 完全对称。
+
+新增契约测试:
+- `loadImageInsertsCanonicalPathIntoLoadedImagePaths`(`RuntimeEngineIndexStateTests.swift`)—— 加载 Foundation 后断言 `loadedImagePaths.contains(canonical)`
+- `loadImageForBackgroundIndexingInsertsCanonicalPathIntoLoadedImagePaths` —— 同上,针对 BG 入口
+
+测试在 macOS host 上因 patch 是 identity 而 trivially 通过(与 `isImageIndexedNormalizesPath` 同模式),pinning the contract for iOS Simulator regression coverage。265/265 单元测试通过。
 
 ---
 
