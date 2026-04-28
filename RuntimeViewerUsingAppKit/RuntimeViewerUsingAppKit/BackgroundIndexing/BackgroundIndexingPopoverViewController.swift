@@ -8,6 +8,10 @@ import RxSwift
 import SnapKit
 
 final class BackgroundIndexingPopoverViewController: UXKitViewController<BackgroundIndexingPopoverViewModel> {
+    // MARK: - Relays
+
+    private let cancelBatchRelay = PublishRelay<RuntimeIndexingBatchID>()
+
     // MARK: - Views
 
     private let titleLabel = Label("Background Indexing").then {
@@ -133,7 +137,7 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         super.setupBindings(for: viewModel)
 
         let input = BackgroundIndexingPopoverViewModel.Input(
-            cancelBatch: .never(),
+            cancelBatch: cancelBatchRelay.asSignal(),
             cancelAll: cancelAllButton.rx.click.asSignal(),
             clearFailed: clearFailedButton.rx.click.asSignal(),
             openSettings: openSettingsButton.rx.click.asSignal()
@@ -183,14 +187,21 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         .drive(scrollView.rx.isHidden)
         .disposed(by: rx.disposeBag)
 
-        output.nodes.drive(outlineView.rx.nodes) { (outlineView: NSOutlineView, _: NSTableColumn?, node: BackgroundIndexingNode) -> NSView? in
+        output.nodes.drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, node: BackgroundIndexingNode) -> NSView? in
             switch node {
             case .batch(let batch, _):
                 let cell = outlineView.box.makeView(ofClass: BatchCellView.self)
                 cell.configure(
                     reason: batch.reason,
                     completedCount: batch.completedCount,
-                    totalCount: batch.totalCount
+                    totalCount: batch.totalCount,
+                    // Hide cancel for batches the manager has already finalized
+                    // (kept around as failed-retain rows pending user dismiss).
+                    isCancellable: !batch.isFinished,
+                    onCancel: { [weak self] in
+                        guard let self else { return }
+                        cancelBatchRelay.accept(batch.id)
+                    }
                 )
                 return cell
             case .item(_, let item):
@@ -212,13 +223,38 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 extension BackgroundIndexingPopoverViewController {
     private final class BatchCellView: NSTableCellView {
         let titleLabel = Label("")
+        private let cancelButton = NSButton().then {
+            $0.bezelStyle = .accessoryBar
+            $0.isBordered = false
+            $0.image = NSImage(
+                systemSymbolName: "xmark.circle",
+                accessibilityDescription: "Cancel batch")
+            $0.imagePosition = .imageOnly
+            $0.toolTip = "Cancel this batch"
+            $0.contentTintColor = .secondaryLabelColor
+        }
+        private var onCancel: (() -> Void)?
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
-            addSubview(titleLabel)
-            titleLabel.snp.makeConstraints { make in
-                make.leading.trailing.centerY.equalToSuperview()
+            cancelButton.target = self
+            cancelButton.action = #selector(cancelButtonClicked)
+
+            let stack = HStackView(spacing: 6) {
+                titleLabel
+                cancelButton
             }
+            stack.alignment = .centerY
+
+            addSubview(stack)
+            stack.snp.makeConstraints { make in
+                make.leading.trailing.equalToSuperview()
+                make.centerY.equalToSuperview()
+            }
+            // Title takes remaining space; button hugs its intrinsic size.
+            titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            cancelButton.setContentHuggingPriority(.required, for: .horizontal)
+            cancelButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
 
         @available(*, unavailable)
@@ -229,9 +265,17 @@ extension BackgroundIndexingPopoverViewController {
         func configure(
             reason: RuntimeIndexingBatchReason,
             completedCount: Int,
-            totalCount: Int
+            totalCount: Int,
+            isCancellable: Bool,
+            onCancel: @escaping () -> Void
         ) {
+            self.onCancel = onCancel
+            cancelButton.isHidden = !isCancellable
             titleLabel.stringValue = "\(Self.title(for: reason))   \(completedCount)/\(totalCount)"
+        }
+
+        @objc private func cancelButtonClicked() {
+            onCancel?()
         }
 
         private static func title(for reason: RuntimeIndexingBatchReason) -> String {
