@@ -126,14 +126,12 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     private static func renderNodes(from batches: [RuntimeIndexingBatch])
         -> [BackgroundIndexingNode]
     {
-        var out: [BackgroundIndexingNode] = []
-        for batch in batches {
-            out.append(.batch(batch))
-            for item in batch.items {
-                out.append(.item(batchID: batch.id, item: item))
+        batches.map { batch in
+            let itemNodes = batch.items.map { item in
+                BackgroundIndexingNode.item(batchID: batch.id, item: item)
             }
+            return .batch(batch, items: itemNodes)
         }
-        return out
     }
 
     private static func subtitleFor(
