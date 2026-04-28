@@ -3368,3 +3368,55 @@ EOF
   - 手动 QA → 任务 25。
 - **review 决策已落实:** 2026-04-24 review 中三条头部决策 —— 通过 `withObservationTracking` 处理 Settings（任务 17）、`BackgroundIndexingPopoverRoute` 合入 `MainRoute`（任务 18/21）、engine 方法的 `request/remote` 分发（任务 3/4）—— 均有专属任务与显式理由段落。
 - **类型一致性:** `RuntimeIndexingBatchID`、`RuntimeIndexingBatch`、`RuntimeIndexingTaskState`、`RuntimeIndexingEvent`、`RuntimeIndexingBatchReason`、`RuntimeIndexingTaskItem`、`ResolvedDependency`、`BackgroundIndexingToolbarState`、`BackgroundIndexing`、`BackgroundIndexingNode`、`BackgroundIndexingPopoverViewModel`、`BackgroundIndexingPopoverViewController`、`BackgroundIndexingToolbarItem`、`BackgroundIndexingToolbarItemView`、`RuntimeBackgroundIndexingManager`、`RuntimeBackgroundIndexingCoordinator`、`DylibPathResolver`、`BackgroundIndexingEngineRepresenting` —— 所有交叉引用名称在定义任务与消费任务之间一致。任何位置都没有引入 `BackgroundIndexingPopoverRoute` 类型。
+
+---
+
+## Post-review fixes (2026-04-28)
+
+`feature/runtime-background-indexing` 已合并 Task 0–24 之后,implementation-review 与 ultrareview 提出的 3 条高优先级问题在原分支上后续修补,不重新走 plan-task 流程,但记录在此以便未来追溯。
+
+### Fix #1 — N1 RuntimeEngine ↔ Manager 循环引用
+
+**问题来源:** ultrareview N1。`engine.backgroundIndexingManager` 强持 manager + manager 的 `private let engine: any BackgroundIndexingEngineRepresenting` 强持 engine = 跨 source switch 累积泄漏(每次 attach/detach 漏一对 engine + manager + section caches)。
+
+**改动:**
+- `BackgroundIndexingEngineRepresenting.swift`:`: Sendable` → `: AnyObject, Sendable`
+- `RuntimeBackgroundIndexingManager.swift`:`private let engine` → `private unowned let engine`
+- `RuntimeBackgroundIndexingManagerTests.swift`:加 `aliveObjects: [AnyObject]` + `keep<T: AnyObject>(_:) -> T` helper,把所有 `MockBackgroundIndexingEngine()` / `InstrumentedEngine(...)` 局部包成 `keep(...)`。tearDown 清空。原因:测试里 mock 与 manager 是平行 local,unowned 在 ARC 跨 await 释放 mock 后会读到悬空指针。
+
+**验证:** `swift test` —— 412/412 通过(此前 `test_expand_dedupsSharedDependencies` 因 `Fatal error: Attempted to read an unowned reference but object 0x... was already destroyed` 失败,加 keep 后稳定通过)。
+
+### Fix #2 — I3 / N2 source switch coordinator staleness
+
+**问题来源:** implementation-review I3 / ultrareview N2。Coordinator 在 init 时一次性快照 `documentState.runtimeEngine`;`MainCoordinator.prepareTransition(.main(...))` 改写 engine 后 coordinator 的 pump、`documentBatchIDs` cancel、`prioritize` 全部走旧 manager。
+
+**改动:**
+- `RuntimeBackgroundIndexingCoordinator.swift`:
+  - `engine`: `let` → `var`(见类型 doc comment)
+  - 加 `bootstrapEngineObservation()`(init 末尾调用),订阅 `documentState.$runtimeEngine.skip(1)`(`@Observed` 暴露的 RxSwift `BehaviorRelay`)
+  - 加 `handleEngineSwap(to:)`:取旧 engine 与 `documentBatchIDs` 快照 → 取消旧 pumps → fire-and-forget 取消旧 manager 上 doc batches → 清 `documentBatchIDs` / `batchesRelay` / `aggregateRelay` → `engine = newEngine` → 重启 `startEventPump` / `startImageLoadedPump` → 若 isEnabled 重新 `documentDidOpen()`
+- `DocumentState.swift`:`runtimeEngine` doc comment 改为"reassignable;coordinator subscribes via `$runtimeEngine` and rewires"
+
+**验证:** `swift build` RuntimeViewerPackages 干净;coordinator 的事件归约逻辑 / 现有 manager 测试无变化,无回归。
+
+### Fix #3 — N4 DylibPathResolver 拒绝 dyld shared cache 系统镜像
+
+**问题来源:** ultrareview N4。Apple Silicon 上 `/usr/lib/libobjc.A.dylib`、`/usr/lib/libSystem.B.dylib`、系统 framework 等无磁盘文件,resolver 走 `fileManager.fileExists` 一律返回 `nil` → BFS 把每个系统依赖标 `.failed("path unresolved")`,toolbar 永久红徽。
+
+**改动:**
+- `DyldUtilities.swift`:加 `package static func isInDyldSharedCache(_ path: String) -> Bool`,Set-cache。`invalidDyldSharedCacheImagePathsCache()` 同步清 Set 缓存。**字面比较,不规范化** —— cache 中存的是平台原生形式(macOS versioned,iOS unversioned),与 install name 不一致时让 BFS 走真实失败,见 Evolution 假设 #4 与决策日志 2026-04-28(N4)
+- `DylibPathResolver.swift`:加 `private func pathExists(_:) -> Bool`,先 `fileManager.fileExists`,再 `DyldUtilities.isInDyldSharedCache`,任一通过即可。所有 4 处 `fileManager.fileExists(atPath:)` 替换
+- `DylibPathResolverTests.swift`:加 `test_absolutePath_acceptsDyldSharedCachePath`,从 `[Foundation.framework/Foundation, CoreFoundation.framework/CoreFoundation, /usr/lib/libobjc.A.dylib, /usr/lib/libSystem.B.dylib]` 取第一个本机 `isInDyldSharedCache` 命中的路径,断言 `fileExists == false`、resolver 返回原路径。`XCTSkipUnless` 处理 cache 不可访问的环境
+
+**验证:** macOS host 测试中 `/usr/lib/libobjc.A.dylib` 命中,确认 install name 形式与 cache 字面匹配的路径走得通;不匹配的(macOS 上的 unversioned framework install name)按预期失败。
+
+### 未处理(本轮范围外)
+
+- **implementation-review I5 / ultrareview Pre-1**:`isImageIndexed` patch 路径 / `loadImageForBackgroundIndexing` 不 patch —— 仅 iOS Simulator(`DYLD_ROOT_PATH` 非空)激活,绑 iOS Simulator 支持工作,不在本轮
+- **implementation-review I1 / I2 / I4 / I6,Minor M1–M10,ultrareview N3 / Nit-1 / Nit-2 / Nit-3**:中低优先级,作为后续 follow-up
+
+### 文档同步
+
+- `Documentations/Evolution/0002-background-indexing.md`:第 174 / 148 行附近的协议 / manager 段落、第 261 行 coordinator 职责、新增场景 G、假设 #1 撤销 + #4 新增、决策日志 2026-04-28 三条
+- `Documentations/Reviews/2026-04-26-background-indexing-implementation-review.md`:I3 标已修
+- `Documentations/Reviews/2026-04-26-background-indexing-ultrareview.md`:N1 / N2 / N4 标已修
