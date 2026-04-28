@@ -11,6 +11,7 @@ final class ObjCDumpContext {
     let machO: MachOImage
     var options: ObjCGenerationOptions
     var cTypeReplacements: [Transformer.CType.Pattern: String] = [:]
+    var ivarOffsetTransformer: Transformer.ObjCIvarOffset?
     var currentArray: SemanticString?
     var methodIMPs: [String: UInt64] = [:]
     var classMethodIMPs: [String: UInt64] = [:]
@@ -232,7 +233,11 @@ extension ObjCIvarInfo {
 
         if context.options.addIvarOffsetComments {
             Space()
-            Comment("offset: \(offset)")
+            if let ivarOffsetTransformer = context.ivarOffsetTransformer {
+                Comment(ivarOffsetTransformer.transform(.init(offset: offset)))
+            } else {
+                Comment("offset: \(offset)")
+            }
         }
     }
 }

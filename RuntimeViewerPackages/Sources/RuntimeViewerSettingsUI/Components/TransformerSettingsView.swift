@@ -32,6 +32,22 @@ struct TransformerSettingsView: View {
                 }
             }
 
+            // MARK: - ObjC Ivar Offset Module
+
+            Section {
+                Toggle("Transform ObjC Ivar Offset Comment", isOn: $config.objc.ivarOffset.isEnabled)
+            } footer: {
+                Text("Transform ObjC ivar offset comment format in ObjC interfaces.")
+            }
+
+            if config.objc.ivarOffset.isEnabled {
+                Section {
+                    ObjCIvarOffsetEditor(module: $config.objc.ivarOffset)
+                } header: {
+                    Text("Output Format")
+                }
+            }
+
             // MARK: - Swift Field Offset Module
 
             Section {
@@ -192,6 +208,65 @@ private struct CTypePresets: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+        }
+    }
+}
+
+// MARK: - ObjC Ivar Offset Editor
+
+private struct ObjCIvarOffsetEditor: View {
+    @Binding var module: Transformer.ObjCIvarOffset
+    @State private var textFieldHeight: CGFloat = 24
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 10) {
+            GridRow {
+                Text("Template")
+                    .foregroundStyle(.secondary)
+                    .gridColumnAlignment(.trailing)
+
+                TokenTemplateTextField(text: $module.template, height: $textFieldHeight)
+                    .frame(height: max(24, textFieldHeight))
+            }
+
+            GridRow {
+                Text("Radix")
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $module.useHexadecimal) {
+                    Text("Decimal").tag(false)
+                    Text("Hexadecimal").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+
+            GridRow {
+                Text("Tokens")
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    ForEach(Transformer.ObjCIvarOffset.Token.allCases, id: \.self) { token in
+                        CopyableTokenChip(token: token, placeholder: token.placeholder)
+                    }
+                }
+            }
+
+            GridRow {
+                Text("Presets")
+                    .foregroundStyle(.secondary)
+
+                FlowLayout(spacing: 6) {
+                    ForEach(Transformer.ObjCIvarOffset.Templates.all, id: \.name) { preset in
+                        Button(preset.name) {
+                            module.template = preset.template
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
         }
     }
 }
