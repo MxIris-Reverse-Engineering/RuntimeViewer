@@ -18,7 +18,7 @@ set -e
 # ==========================================
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WORKSPACE_NAME="RuntimeViewer"
-WORKSPACE_PATH="${SCRIPT_DIR}/${WORKSPACE_NAME}.xcworkspace"
+WORKSPACE_PATH="${SCRIPT_DIR}/${WORKSPACE_NAME}-Distribution.xcworkspace"
 SCHEME_MACOS="RuntimeViewerServer"
 SCHEME_MOBILE="RuntimeViewerMobileServer"
 FRAMEWORK_NAME="RuntimeViewerServer"
@@ -30,6 +30,7 @@ CONFIGURATION="Distribution"
 # Parse arguments
 VERBOSE=false
 CLEAN_BUILD=true
+UPDATE_PACKAGES=true
 USER_PLATFORMS=()
 CPU_CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 8)
 
@@ -37,9 +38,11 @@ usage() {
     echo "Usage: $0 [options] [Platforms...]"
     echo ""
     echo "Options:"
-    echo "  -v, --verbose      Show detailed build output"
-    echo "  --no-clean         Skip cleaning before build"
-    echo "  -h, --help         Show this help message"
+    echo "  -v, --verbose            Show detailed build output"
+    echo "  --no-clean               Skip cleaning before build"
+    echo "  --no-update-packages     Skip forcing a Swift package update"
+    echo "                           (just resolve from existing Package.resolved)"
+    echo "  -h, --help               Show this help message"
     echo ""
     echo "Platforms (if none specified, builds all):"
     echo "  macOS, macCatalyst, iOS, tvOS, watchOS, visionOS"
@@ -63,6 +66,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-clean)
             CLEAN_BUILD=false
+            shift
+            ;;
+        --no-update-packages)
+            UPDATE_PACKAGES=false
             shift
             ;;
         -h|--help)
@@ -144,6 +151,54 @@ if [ "$CLEAN_BUILD" = true ]; then
 fi
 mkdir -p "$ARCHIVE_PATH"
 mkdir -p "$OUTPUT_DIR/DerivedData"
+
+# ==========================================
+# Update / Resolve Workspace Package Dependencies
+# ==========================================
+# Note: Do NOT run `swift package update` on individual packages —
+# the workspace unifies swift-syntax via a local checkout
+# (RuntimeViewerPrecompiledLibraries/swift-syntax). Resolving each
+# package standalone would pick incompatible upstream constraints
+# (e.g. SwiftMCP wants 602.x while RxSwiftPlus wants 601.x).
+#
+# To force a real update (latest versions matching workspace
+# constraints) we:
+#   1. delete the workspace's Package.resolved
+#   2. point -resolvePackageDependencies at our clean
+#      $OUTPUT_DIR/DerivedData so SPM cannot reuse a stale
+#      SourcePackages/checkouts directory from the default
+#      ~/Library/Developer/Xcode/DerivedData location.
+# Without (2), SPM happily keeps an older transitive version
+# (e.g. swift-dyld-private 1.1.0) even though a newer matching
+# version (1.2.0) is available in the repository cache.
+# Both Package.resolved and DerivedData are gitignored / disposable.
+WORKSPACE_RESOLVED="$WORKSPACE_PATH/xcshareddata/swiftpm/Package.resolved"
+RESOLVE_DERIVED_DATA="$OUTPUT_DIR/DerivedData"
+
+if [ "$UPDATE_PACKAGES" = true ] && [ -f "$WORKSPACE_RESOLVED" ]; then
+    echo "🔄 Removing workspace Package.resolved to force update..."
+    rm -f "$WORKSPACE_RESOLVED"
+fi
+
+echo "📦 Resolving workspace package dependencies..."
+if [ "$VERBOSE" = true ]; then
+    if ! xcodebuild -resolvePackageDependencies \
+        -workspace "$WORKSPACE_PATH" \
+        -scheme "$SCHEME_MACOS" \
+        -derivedDataPath "$RESOLVE_DERIVED_DATA"; then
+        echo "❌ Failed to resolve workspace package dependencies"
+        exit 1
+    fi
+else
+    if ! xcodebuild -resolvePackageDependencies \
+        -workspace "$WORKSPACE_PATH" \
+        -scheme "$SCHEME_MACOS" \
+        -derivedDataPath "$RESOLVE_DERIVED_DATA" > /dev/null 2>&1; then
+        echo "❌ Failed to resolve workspace package dependencies (re-run with -v to see details)"
+        exit 1
+    fi
+fi
+echo ""
 
 # ==========================================
 # Function: Build Archive
