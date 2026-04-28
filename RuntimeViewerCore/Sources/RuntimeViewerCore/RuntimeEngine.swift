@@ -202,8 +202,8 @@ public actor RuntimeEngine {
         self.pushesRuntimeData = pushesRuntimeData
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
-        #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
         self.backgroundIndexingManager = RuntimeBackgroundIndexingManager(engine: self)
+        #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
     public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: (any Sendable)? = nil) async throws {
