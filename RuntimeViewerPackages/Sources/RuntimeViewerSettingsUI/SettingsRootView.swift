@@ -20,7 +20,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     case general = "General"
     case notifications = "Notifications"
     case transformer = "Transformer"
-    case backgroundIndexing = "Background Indexing"
+    case indexing = "Indexing"
     case mcp = "MCP"
     case updates = "Updates"
     case helper = "Helper"
@@ -32,7 +32,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
         case .general: "gearshape"
         case .notifications: "bell.badge"
         case .transformer: "arrow.triangle.2.circlepath"
-        case .backgroundIndexing: "square.stack.3d.down.right"
+        case .indexing: "square.stack.3d.down.right"
         case .mcp: "network"
         case .updates: "arrow.down.circle"
         case .helper: "wrench.and.screwdriver"
@@ -45,7 +45,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
         case .general: GeneralSettingsView()
         case .notifications: NotificationSettingsView()
         case .transformer: TransformerSettingsView()
-        case .backgroundIndexing: BackgroundIndexingSettingsView()
+        case .indexing: IndexingSettingsView()
         case .mcp: MCPSettingsView()
         case .updates: UpdateSettingsView()
         case .helper: HelperServiceSettingsView()
