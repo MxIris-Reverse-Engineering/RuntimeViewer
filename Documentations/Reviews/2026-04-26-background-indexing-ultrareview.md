@@ -15,7 +15,7 @@
 - ✅ **N2 source switch staleness** — 已修(同 implementation-review I3)。Coordinator 通过 RxSwift `documentState.$runtimeEngine.skip(1)` 响应 swap。详见上
 - ✅ **N4 DylibPathResolver 拒绝 dyld shared cache** — 已修。`DyldUtilities.isInDyldSharedCache(_:)` 加 Set-cache 字面查询,`DylibPathResolver.pathExists` 兼顾文件系统与 cache。**字面匹配,不规范化** —— 与本审查建议的方向一致(让真实失败显式呈现);用户明确选 "字面匹配" 是因为 macOS 上 versioned ↔ unversioned 的规范化在 install name 形式不一致时有误导风险,iOS 不需要规范化。详见 Evolution 0002 假设 #4 与决策日志 2026-04-28(N4)
 - ⏳ **N3 (manager dedup),Nit-1 (per-batch cancel 按钮),Nit-2 (.settingsEnabled reason),Nit-3 (documentBatchIDs 失败保留泄漏)** — 未处理,follow-up
-- ⏳ **Pre-1 (path normalization)** — 仅 iOS Simulator 激活,绑 iOS Simulator 支持工作,本轮不修
+- 🟡 **Pre-1 (path normalization)** — 部分修复。`DyldUtilities.patchImagePathForDyld` 增加幂等性保护(commit `a033d3d`),避免 iOS Simulator 下 `dyld` 已经返回 patched path 时再次 patch 产生 `/sim_root/sim_root/...` 双前缀。Reader/writer 不对称的根本对齐留给 iOS Simulator 支持工作(Step 2)
 
 ---
 
@@ -208,7 +208,7 @@ case .batchFinished(let finished):
 
 ## Pre-existing(P2 跟进)
 
-### Pre-1. `isImageIndexed` 与 `loadImageForBackgroundIndexing` 路径规范化不对称
+### Pre-1. `isImageIndexed` 与 `loadImageForBackgroundIndexing` 路径规范化不对称 🟡 PARTIAL FIX 2026-04-28
 
 **文件**: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+BackgroundIndexing.swift:6-15`
 
@@ -220,11 +220,20 @@ case .batchFinished(let finished):
 
 测试 `test_isImageIndexed_normalizesPath`(`RuntimeEngineIndexStateTests.swift:36-50`)的注释自己点出:"On most macOS hosts ... the raw and patched forms are identical and this test still pins the contract" —— 测试只 pin 契约不检查端到端工作。
 
-**修法**(择一):
+**原修法**(择一):
 - 廉价:从 `isImageIndexed` 拿掉 patch,与 writer 的 raw 契约对齐,顺便审计 `isImageLoaded`。
 - 彻底:在 `loadImageForBackgroundIndexing` / `loadImage(at:)` / 所有 cache writer 都加 patch,保留 `isImageIndexed` 的 patch。
 
-绑 iOS Simulator 支持工作,本 PR 不阻塞。
+**Step 1 修复 2026-04-28**(commit `a033d3d`):优先解决"彻底方案"的隐藏陷阱 —— `patchImagePathForDyld` 此前不幂等,iOS Simulator 下 `dyld` 返回的 image name 已经是 patched 形式,在 reader 入口再 patch 一次会得到 `/sim_root/sim_root/usr/lib/libobjc.A.dylib` 双前缀。
+
+修法:
+- `DyldUtilities.swift` 拆出 pure overload `patchImagePathForDyld(_:rootPath:)`,显式接收 `rootPath`,默认 wrapper 透过它读 `ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]`。便于测试不污染进程 env。
+- 主体加幂等性 guard:`if imagePath == rootPath || imagePath.hasPrefix(rootPath + "/") { return imagePath }`。注意 `rootPath + "/"` 而非 `rootPath`,避免 `/sim_root_other/file` 在 rootPath 为 `/sim_root` 时被误判为 already-patched。
+- 新建 `DyldUtilitiesTests.swift`(7 个 `@Test`):identity 情形(nil rootPath / 相对路径 / path 等于 rootPath)、基本 patching、幂等性(patch×2、patch×3 都等于 patch×1)、prefix 精度(sibling prefix 不被误识别)。
+
+这一步并未改变 reader/writer 的对称性 —— `isImageIndexed` 仍 patch、writer 仍 raw,iOS Simulator 上语义层 bug 依旧。但它**清掉了 Step 2 在 writer 入口加 patch 时会撞上的双前缀地雷**。
+
+**Step 2(待办,绑 iOS Simulator)**:走"彻底方案" —— `loadImage(at:)` / `loadImageForBackgroundIndexing(at:)` 入口 patch,内部存储统一 patched 形式,wire 上仍是 raw。Step 1 已保证多次 patch 安全,Step 2 可以放心铺开。本 PR 不阻塞。
 
 ---
 
