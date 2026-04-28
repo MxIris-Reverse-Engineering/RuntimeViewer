@@ -25,6 +25,40 @@ final class DylibPathResolverTests: XCTestCase {
                                       mainExecutablePath: "/any"))
     }
 
+    func test_absolutePath_acceptsDyldSharedCachePath() throws {
+        // System frameworks live in the dyld shared cache and have no on-disk
+        // file on Apple Silicon. The resolver must accept them anyway,
+        // otherwise BFS marks every UIKit/Foundation dependency as
+        // "path unresolved" and the toolbar floods with red ✗ rows.
+        //
+        // Try a handful of well-known cache residents — pick the first one
+        // this host's cache reports membership for. Empty `picked` means
+        // the test process couldn't load DyldCacheLoaded.current at all
+        // (sandboxed test runners on some CI configs), in which case skip.
+        let candidates = [
+            "/System/Library/Frameworks/Foundation.framework/Foundation",
+            "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+            "/usr/lib/libobjc.A.dylib",
+            "/usr/lib/libSystem.B.dylib",
+        ]
+        let picked = candidates.first(where: DyldUtilities.isInDyldSharedCache)
+        try XCTSkipUnless(
+            picked != nil,
+            "no candidate found in this host's dyld shared cache (test env may lack cache access)"
+        )
+        let candidate = picked!
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: candidate),
+            "precondition: \(candidate) should NOT exist on disk on this host"
+        )
+        XCTAssertEqual(
+            resolver.resolve(installName: candidate,
+                             imagePath: "/any", rpaths: [],
+                             mainExecutablePath: "/any"),
+            candidate
+        )
+    }
+
     func test_executablePath_substitutesMainExecutableDir() throws {
         let tempDir = FileManager.default.temporaryDirectory.path
         let exePath = tempDir + "/FakeExe"

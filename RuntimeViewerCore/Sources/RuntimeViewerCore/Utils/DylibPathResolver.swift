@@ -19,7 +19,7 @@ struct DylibPathResolver {
                 let candidate = expand(rpath, imagePath: imagePath,
                                        mainExecutablePath: mainExecutablePath)
                     + "/" + tail
-                if fileManager.fileExists(atPath: candidate) {
+                if pathExists(candidate) {
                     return candidate
                 }
             }
@@ -29,15 +29,25 @@ struct DylibPathResolver {
             let tail = String(installName.dropFirst("@executable_path/".count))
             let candidate = (mainExecutablePath as NSString)
                 .deletingLastPathComponent + "/" + tail
-            return fileManager.fileExists(atPath: candidate) ? candidate : nil
+            return pathExists(candidate) ? candidate : nil
         }
         if installName.hasPrefix("@loader_path/") {
             let tail = String(installName.dropFirst("@loader_path/".count))
             let candidate = (imagePath as NSString)
                 .deletingLastPathComponent + "/" + tail
-            return fileManager.fileExists(atPath: candidate) ? candidate : nil
+            return pathExists(candidate) ? candidate : nil
         }
-        return fileManager.fileExists(atPath: installName) ? installName : nil
+        return pathExists(installName) ? installName : nil
+    }
+
+    /// True when `path` is either an on-disk file OR an image baked into the
+    /// dyld shared cache. Apple Silicon ships system frameworks (Foundation,
+    /// UIKit, libobjc, libSystem, ...) inside the cache with no backing file,
+    /// so a pure `FileManager.fileExists` check rejects them as unresolved.
+    private func pathExists(_ path: String) -> Bool {
+        if fileManager.fileExists(atPath: path) { return true }
+        if DyldUtilities.isInDyldSharedCache(path) { return true }
+        return false
     }
 
     private func expand(_ rpath: String,

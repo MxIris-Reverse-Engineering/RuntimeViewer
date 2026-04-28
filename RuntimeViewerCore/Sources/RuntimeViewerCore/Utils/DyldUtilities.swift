@@ -66,7 +66,8 @@ package enum DyldUtilities {
     }
 
     private static var dyldSharedCacheImagePathsCache: [String]?
-    
+    private static var dyldSharedCacheImagePathsSetCache: Set<String>?
+
     private static func dyldSharedCacheImagePaths() -> [String] {
         if let dyldSharedCacheImagePathsCache {
             #log(.debug, "Using cached dyld shared cache image paths (\(dyldSharedCacheImagePathsCache.count, privacy: .public) paths)")
@@ -83,9 +84,36 @@ package enum DyldUtilities {
         return results
     }
 
+    /// Whether `path` corresponds to an image baked into the dyld shared cache.
+    ///
+    /// On Apple Silicon (and recent Intel macOS), system dylibs like
+    /// `/usr/lib/libobjc.A.dylib` have **no on-disk file** ——
+    /// `FileManager.fileExists` returns `false` for them. Callers that need
+    /// to validate "does this image really exist" must check both the
+    /// filesystem and this set.
+    ///
+    /// Lookup is by literal equality against the cache's stored paths. The
+    /// cache stores the platform-native form (`Foundation.framework/Versions/C/Foundation`
+    /// on macOS, `Foundation.framework/Foundation` on iOS); install names that
+    /// use a different form fall through to a real "path unresolved" failure
+    /// rather than being silently rewritten.
+    package static func isInDyldSharedCache(_ path: String) -> Bool {
+        return dyldSharedCacheImagePathsSet().contains(path)
+    }
+
+    private static func dyldSharedCacheImagePathsSet() -> Set<String> {
+        if let dyldSharedCacheImagePathsSetCache {
+            return dyldSharedCacheImagePathsSetCache
+        }
+        let set = Set(dyldSharedCacheImagePaths())
+        dyldSharedCacheImagePathsSetCache = set
+        return set
+    }
+
     package static func invalidDyldSharedCacheImagePathsCache() {
         #log(.debug, "Invalidating dyld shared cache image paths cache")
         dyldSharedCacheImagePathsCache = nil
+        dyldSharedCacheImagePathsSetCache = nil
     }
 
     package static var dyldSharedCacheImageRootNode: RuntimeImageNode {
