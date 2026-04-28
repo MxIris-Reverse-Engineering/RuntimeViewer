@@ -14,9 +14,25 @@ package enum DyldUtilities {
     package static let removeImageNotification = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
 
     package static func patchImagePathForDyld(_ imagePath: String) -> String {
+        patchImagePathForDyld(
+            imagePath,
+            rootPath: ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]
+        )
+    }
+
+    /// Pure overload that takes the dyld root path explicitly so callers
+    /// (and tests) can drive the patching logic without touching process env.
+    ///
+    /// Idempotent: calling repeatedly with the same `rootPath` returns the
+    /// same string after the first invocation. This matters because dyld
+    /// reports already-patched paths in simulator runners — re-patching them
+    /// would produce a doubled prefix like `/sim_root/sim_root/usr/lib/...`.
+    package static func patchImagePathForDyld(_ imagePath: String, rootPath: String?) -> String {
         guard imagePath.starts(with: "/") else { return imagePath }
-        let rootPath = ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]
         guard let rootPath else { return imagePath }
+        if imagePath == rootPath || imagePath.hasPrefix(rootPath + "/") {
+            return imagePath
+        }
         return rootPath.appending(imagePath)
     }
 
