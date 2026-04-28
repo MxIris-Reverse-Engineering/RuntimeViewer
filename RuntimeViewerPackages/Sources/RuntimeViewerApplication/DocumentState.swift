@@ -9,15 +9,11 @@ public final class DocumentState {
 
     /// The runtime engine backing this Document.
     ///
-    /// Per Evolution 0002 (Background Indexing) Assumption #1, this property
-    /// is treated as **immutable for the lifetime of the Document**. The
-    /// declaration uses `@Observed public var` for historical reasons (early
-    /// callers needed to swap in a remote engine after init), but current
-    /// callers MUST NOT reassign it after the Document is opened.
-    ///
-    /// `RuntimeBackgroundIndexingCoordinator` (and any future per-engine
-    /// actor) captures this reference at init time; reassignment would
-    /// silently route work to a stale engine.
+    /// Reassignable: `MainCoordinator` swaps this when the user changes source
+    /// (Local ↔ XPC ↔ Bonjour). `RuntimeBackgroundIndexingCoordinator`
+    /// subscribes to `$runtimeEngine` and rewires its pumps onto the new
+    /// engine's `backgroundIndexingManager`, cancelling the old engine's
+    /// in-flight document batches as it goes.
     @Observed
     public var runtimeEngine: RuntimeEngine = .local
 
