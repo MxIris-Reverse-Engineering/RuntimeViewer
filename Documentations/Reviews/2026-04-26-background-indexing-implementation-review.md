@@ -10,6 +10,12 @@
 
 **判定**: SHIP, with conditions —— 没有阻塞 merge 的 Critical issue,但有 6 条 Important 与 10 条 Minor 建议,部分应在 PR 中或紧随 PR 处理。
 
+**2026-04-28 更新 — 修复状态:**
+
+- ✅ **I3 source-switch staleness** — 已修。Coordinator 通过 RxSwift 订阅 `documentState.$runtimeEngine.skip(1)`,变化时 cancel 旧 pumps、cancel 旧 doc batches、清 relays、切引用、重启 pumps、若 isEnabled 重发 main exec batch。详见 [plan post-review fixes](../Plans/2026-04-24-background-indexing-plan.md#post-review-fixes-2026-04-28) 与 [Evolution 0002](../Evolution/0002-background-indexing.md) 假设 #1 / 场景 G / 决策日志 2026-04-28
+- ⏳ **I1 (manager dedup)、I2 (loadImageForBackgroundIndexing 不发 imageDidLoadSubject 的 doc/test)、I4 (prioritize doc)、I6 (NSTableCellView 复用)、所有 Minor M1–M10** — 未处理,follow-up
+- ⏳ **I5 (path normalization 不对称)** — 仅 iOS Simulator 激活,绑 iOS Simulator 支持工作,本轮不修
+
 **验证结果**:
 - `swift test` in `RuntimeViewerCore`:445/445 通过(其中 4 个 `XCTSkipUnless` 在 sandbox 下跳过 Foundation/CoreText 测试,本机 GUI 运行时全部命中)。
 - `swift build` in `RuntimeViewerPackages`:0 错误,我们引入 0 警告。
@@ -65,7 +71,7 @@ Coordinator 在 [`RuntimeBackgroundIndexingCoordinator.swift:240-241`](../../Run
 - doc comment 只提了不调 `reloadData`,没提不发 `imageDidLoadSubject` —— 后者对正确性同样关键。加一行说明。
 - `RuntimeEngineIndexStateTests.swift:61-70`(`test_loadImageForBackgroundIndexing_doesNotTriggerReloadData`)名字是 reloadData 跳过,但断言只检查"image 变成 indexed",既没断言"无 reload 通知"也没断言"无 imageDidLoad 通知"。补一个 `Combine.sink` 断言"调用期间 publisher 不发火"。
 
-### I3. Source-switch 时 coordinator 抓住旧 engine
+### I3. Source-switch 时 coordinator 抓住旧 engine ✅ FIXED 2026-04-28
 
 `MainCoordinator.swift:34` 在 `.main(let runtimeEngine)` 时 reassign `documentState.runtimeEngine`。`backgroundIndexingCoordinator` 是 `lazy var`,首次访问后捕获了那时候的 engine + manager。后果:
 
@@ -80,6 +86,8 @@ Coordinator 在 [`RuntimeBackgroundIndexingCoordinator.swift:240-241`](../../Run
 - 或让 coordinator 不持有 `engine`,每次现取 `documentState.runtimeEngine`(但这样事件泵也得重建,反而更复杂)。
 
 建议第一种作为紧随 PR 的修复,而不是无限期 follow-up。文件 `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift:34` 与 `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift:37-38`。
+
+**修复 2026-04-28**:采用方案 (b) 的轻量变体 —— coordinator 不重建,通过 RxSwift `documentState.$runtimeEngine.skip(1)` 订阅 swap。`engine` 改 `var`,`handleEngineSwap(to:)` 取消旧 pumps、cancel 旧 manager 上的 doc batches(fire-and-forget)、清 `documentBatchIDs` / `batchesRelay` / `aggregateRelay`、切引用、重启 pumps、若 isEnabled 重发 main exec batch。`DocumentState.runtimeEngine` 的 doc comment 同步改为 reassignable。`MainCoordinator.prepareTransition` `.main(...)` 路径无变,沿用现有 `documentState.runtimeEngine = runtimeEngine` 触发 BehaviorRelay。
 
 ### I4. `prioritize(imagePath:)` 对已 dispatched 的路径无效
 

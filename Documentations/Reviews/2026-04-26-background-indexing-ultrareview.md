@@ -9,11 +9,19 @@
 
 **判定**: 没有阻塞 merge 的 Critical 项;有 4 条 Normal 与 3 条 Nit + 1 条 pre-existing 跟进项。
 
+**2026-04-28 更新 — 修复状态:**
+
+- ✅ **N1 RuntimeEngine ↔ Manager 循环引用** — 已修。协议恢复 `: AnyObject, Sendable`,manager 改 `private unowned let engine`。生产上 engine 强持 manager,unowned 反向引用安全(engine deinit 同步释放 manager)。测试加 `keep(_:)` helper 兜住平行 local mock 的 ARC 寿命。详见 [plan post-review fixes](../Plans/2026-04-24-background-indexing-plan.md#post-review-fixes-2026-04-28) 与 [Evolution 0002](../Evolution/0002-background-indexing.md) 决策日志 2026-04-28
+- ✅ **N2 source switch staleness** — 已修(同 implementation-review I3)。Coordinator 通过 RxSwift `documentState.$runtimeEngine.skip(1)` 响应 swap。详见上
+- ✅ **N4 DylibPathResolver 拒绝 dyld shared cache** — 已修。`DyldUtilities.isInDyldSharedCache(_:)` 加 Set-cache 字面查询,`DylibPathResolver.pathExists` 兼顾文件系统与 cache。**字面匹配,不规范化** —— 与本审查建议的方向一致(让真实失败显式呈现);用户明确选 "字面匹配" 是因为 macOS 上 versioned ↔ unversioned 的规范化在 install name 形式不一致时有误导风险,iOS 不需要规范化。详见 Evolution 0002 假设 #4 与决策日志 2026-04-28(N4)
+- ⏳ **N3 (manager dedup),Nit-1 (per-batch cancel 按钮),Nit-2 (.settingsEnabled reason),Nit-3 (documentBatchIDs 失败保留泄漏)** — 未处理,follow-up
+- ⏳ **Pre-1 (path normalization)** — 仅 iOS Simulator 激活,绑 iOS Simulator 支持工作,本轮不修
+
 ---
 
 ## Normal
 
-### N1. `RuntimeEngine` ↔ `RuntimeBackgroundIndexingManager` 循环引用导致每个远程 engine 泄漏
+### N1. `RuntimeEngine` ↔ `RuntimeBackgroundIndexingManager` 循环引用导致每个远程 engine 泄漏 ✅ FIXED 2026-04-28
 
 **文件**: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeBackgroundIndexingManager.swift:4-16`
 
@@ -32,7 +40,9 @@ Evolution 0002 决议 N4 主动把协议从 `AnyObject, Sendable` 改成纯 `Sen
 
 **修法**:回退 N4 决议,把协议恢复为 `AnyObject, Sendable`,manager 持有改为 `private weak var engine: (any BackgroundIndexingEngineRepresenting)?`(或 `unowned` 如果文档约定 engine 寿命包住 manager)。所有 callsite `try await engine?.…`,nil 时直接 bail。约 3 行核心改动 + doc comment 修正。
 
-### N2. Coordinator 跨 source 切换捕获过时 `RuntimeEngine`
+**修复 2026-04-28**:协议改 `AnyObject, Sendable`,manager 用 `private unowned let engine`(非 `weak`)。理由:engine 强持 manager(`RuntimeEngine.backgroundIndexingManager: RuntimeBackgroundIndexingManager!`),engine deinit 必然先释放 `backgroundIndexingManager` 属性,manager 一同消亡 —— unowned 反向引用没机会悬空。`weak` 会引入 nil-safety 模板代码而无实际收益。测试里 mock 与 manager 是平行 local,加 `keep(_:)` helper 把 mock 钉到 test instance 的 `aliveObjects` 数组。详见 Evolution 0002 决策日志 2026-04-28(回退 N4 决议)。
+
+### N2. Coordinator 跨 source 切换捕获过时 `RuntimeEngine` ✅ FIXED 2026-04-28
 
 **文件**: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift:40-48`
 
@@ -57,6 +67,8 @@ Evolution 0002 决议 N4 主动把协议从 `AnyObject, Sendable` 改成纯 `Sen
 - (b) 让 coordinator 订阅 `documentState.$runtimeEngine`,变更时取消 pump、swap `self.engine`、重启 pump。改动更深但保留失败批次 state。
 
 推荐 (a),与"每个 Document/engine 对一个 coordinator"心智模型一致。
+
+**修复 2026-04-28**:采用方案 (b) 的轻量变体 —— coordinator 不重建,通过 RxSwift `documentState.$runtimeEngine.skip(1)`(`@Observed` 暴露的 `BehaviorRelay`)订阅 swap。`engine` 改 `var`,`handleEngineSwap(to:)` 取消旧 pumps、cancel 旧 manager 上的 doc batches(fire-and-forget)、清 `documentBatchIDs` / `batchesRelay` / `aggregateRelay`、切引用、重启 pumps、若 isEnabled 重发 main exec batch。Coordinator 实例不变,所以 toolbar 的 `coordinator.aggregateStateObservable` 订阅链自动跟随;失败批次状态不跨 swap 保留(swap 时清空,因为它属于旧 engine)。`DocumentState.runtimeEngine` 的 doc comment 改为 reassignable。详见 Evolution 0002 假设 #1 / 场景 G / 决策日志 2026-04-28。
 
 ### N3. Manager batch dedup 注释/spec 都说有,代码中没实现
 
@@ -83,7 +95,7 @@ Evolution 0002 第 626 行:*"manager 去重:如果某活动批次的 `rootImageP
 - 把规则放宽为"任意匹配 `rootImagePath`",抓住 `.appLaunch` ↔ `.imageLoaded` 这一对。
 - 否则**至少删掉 coordinator 的误导注释**,不要让未来维护者以为有保护。
 
-### N4. `DylibPathResolver` 拒绝所有 dyld-shared-cache 系统 framework
+### N4. `DylibPathResolver` 拒绝所有 dyld-shared-cache 系统 framework ✅ FIXED 2026-04-28
 
 **文件**: `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DylibPathResolver.swift:36-41`
 
@@ -112,6 +124,17 @@ Task 24 后 batch 含 `.failed` 即被保留,toolbar 永久 `hasFailures` 红徽
 **修法**(两选一):
 - 让绝对路径也接受 `DyldUtilities.dyldSharedCacheImagePaths()` 返回集合的成员,Set 查找 O(1),列表本就缓存。
 - 对绝对路径直接跳过 `fileExists` 检查,把判定权交给 `DyldUtilities.loadImage`,真正 `dlopen` 失败时再标 `.failed` —— 让"失败"项有意义。
+
+**修复 2026-04-28**:采用第一种方案。`DyldUtilities` 加 `package static func isInDyldSharedCache(_:) -> Bool`(Set 缓存,与 `dyldSharedCacheImagePathsCache` 同步 invalidate)。`DylibPathResolver` 加 `private func pathExists(_:) -> Bool`,先 `fileManager.fileExists`,再 `DyldUtilities.isInDyldSharedCache`,任一通过即可。所有 4 处 `fileManager.fileExists(atPath:)` 替换为 `pathExists`。
+
+**字面比较,不规范化**:cache 中存的是平台原生形式 —— macOS 上 `Foundation.framework/Versions/C/Foundation`、iOS 上 `Foundation.framework/Foundation`。本审查的"也加 versioned ↔ unversioned 规范化"建议被否决,原因:
+- macOS 上 install name 实际形式不一定按 `Versions/X/` 规则映射(取决于二进制),规范化在边角情况误导
+- iOS 不需要规范化,加规范化只服务 macOS,但 macOS 上仍可能有 install name 与 cache 不一致的真实失败
+- `/usr/lib/libobjc.A.dylib` / `/usr/lib/libSystem.B.dylib` 在两个平台 cache 里都是无歧义形式,直接命中 —— 这覆盖了系统 dylib 的常见路径
+
+让 install name 与 cache 形式不匹配的依赖走 `.failed("path unresolved")` 是有意为之 —— 是真实的解析失败,不是误报。详见 Evolution 0002 假设 #4 与决策日志 2026-04-28(N4)。
+
+新增测试 `test_absolutePath_acceptsDyldSharedCachePath`(`DylibPathResolverTests.swift`)从 `[Foundation.framework/Foundation, CoreFoundation.framework/CoreFoundation, /usr/lib/libobjc.A.dylib, /usr/lib/libSystem.B.dylib]` 取第一个本机 `isInDyldSharedCache` 命中的路径,断言 `fileExists == false`、resolver 返回原路径。`XCTSkipUnless` 兜住 cache 不可访问的环境。本机 macOS 命中 `/usr/lib/libobjc.A.dylib`。
 
 ---
 

@@ -3,7 +3,7 @@
 - **状态**: Accepted
 - **作者**: JH
 - **日期**: 2026-04-24
-- **最后更新**: 2026-04-24
+- **最后更新**: 2026-04-28
 
 ## 摘要
 
@@ -147,11 +147,15 @@ setMessageHandlerBinding(forName: .loadImageForBackgroundIndexing, of: self) { $
 
 #### `RuntimeBackgroundIndexingManager`（actor）
 
-持有所有运行中的批次以及所有事件流。在 `RuntimeEngine` init 时创建,**通过协议 `BackgroundIndexingEngineRepresenting` 按值持有引擎**(`engine: any BackgroundIndexingEngineRepresenting`):manager 不直接依赖具体的 `RuntimeEngine` 类型,只通过协议表面消费 `isImageIndexed` / `mainExecutablePath` / `loadImageForBackgroundIndexing` / `canOpenImage` / `rpaths` / `dependencies` 等方法。`RuntimeEngine`(actor)只是该协议的一个 conformance,测试用 `MockBackgroundIndexingEngine`(`@unchecked Sendable`)与 `InstrumentedEngine` 同样 conform。这条 seam 让 manager 单元测试不需要真实 dyld I/O,也避免 actor↔actor 之间的 `unowned` 反向引用。
+持有所有运行中的批次以及所有事件流。在 `RuntimeEngine` init 时创建,**通过协议 `BackgroundIndexingEngineRepresenting` 以 `unowned` 反向引用持有引擎**(`unowned let engine: any BackgroundIndexingEngineRepresenting`):engine 强持 manager(`RuntimeEngine.backgroundIndexingManager: RuntimeBackgroundIndexingManager!`),如果 manager 也强引用回 engine 就形成跨 source-switch 累积泄漏的环(参见 ultrareview N1)。`unowned` 在生产上安全,因为 engine deinit 必然先释放 `backgroundIndexingManager` 属性,manager 一同消亡,反向引用没有机会悬空。manager 不直接依赖具体的 `RuntimeEngine` 类型,只通过协议表面消费 `isImageIndexed` / `mainExecutablePath` / `loadImageForBackgroundIndexing` / `canOpenImage` / `rpaths` / `dependencies` 等方法。`RuntimeEngine`(actor)只是该协议的一个 conformance,测试用 `MockBackgroundIndexingEngine`(`@unchecked Sendable`)与 `InstrumentedEngine` 同样 conform。
 
 ```swift
 public actor RuntimeBackgroundIndexingManager {
-    private let engine: any BackgroundIndexingEngineRepresenting
+    /// `unowned` because the engine owns this manager via
+    /// `RuntimeEngine.backgroundIndexingManager`. Strong back-reference
+    /// would form a cycle that leaks engine + manager + section caches on
+    /// every source switch.
+    private unowned let engine: any BackgroundIndexingEngineRepresenting
 
     public nonisolated var events: AsyncStream<RuntimeIndexingEvent> { ... }
 
@@ -173,10 +177,10 @@ public actor RuntimeBackgroundIndexingManager {
 
 #### `BackgroundIndexingEngineRepresenting`（协议）
 
-manager 与具体 engine 类型之间的抽象 seam。仅 `: Sendable`(无 `AnyObject` —— manager 按值持有,无引用语义需求;参见决策日志 2026-04-26)。
+manager 与具体 engine 类型之间的抽象 seam。`: AnyObject, Sendable` —— manager 通过 `unowned let engine` 持有,需要类受限的 existential。参见决策日志 2026-04-28(回退了 2026-04-26 的暂时性"仅 Sendable"决议,因为 ultrareview N1 暴露了真实的 RuntimeEngine ↔ Manager 强引用环)。
 
 ```swift
-protocol BackgroundIndexingEngineRepresenting: Sendable {
+protocol BackgroundIndexingEngineRepresenting: AnyObject, Sendable {
     func isImageIndexed(path: String) async throws -> Bool
     func loadImageForBackgroundIndexing(at path: String) async throws
     func mainExecutablePath() async throws -> String
@@ -192,9 +196,10 @@ protocol BackgroundIndexingEngineRepresenting: Sendable {
 - **不暴露 `MachOImage`**:该类型为非 Sendable 结构体(包含 unsafe pointer),跨 actor 边界返回会触发 Swift 6 严格并发错误。需要门控递归的调用方走 `canOpenImage(at:)`,需要查依赖的走 `dependencies(for:)`(在 conformance 实现里 actor 隔离地调用 `MachOImage`)。
 - **几乎所有方法都是 `async throws`**:`RuntimeEngine` conformance 内部走 `request { local } remote: { RPC }`,远程分支(XPC / directTCP)可能抛错。`canOpenImage` 是纯本地查询,保持 non-throwing。
 - **conformances**:
-  - `extension RuntimeEngine: BackgroundIndexingEngineRepresenting`(生产路径,actor)
+  - `extension RuntimeEngine: BackgroundIndexingEngineRepresenting`(生产路径,actor —— actors 自动满足 `AnyObject`)
   - `final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting, @unchecked Sendable`(单元测试)
   - `final class InstrumentedEngine: BackgroundIndexingEngineRepresenting, @unchecked Sendable`(并发计数测试包装器)
+- **测试 keepalive 约定**:`unowned let` 要求 engine 寿命覆盖 manager。生产上由 `RuntimeEngine.backgroundIndexingManager` 强持回 manager 自动满足(engine deinit 时 manager 一同释放,unowned 不会悬空);测试里 mock 与 manager 是平行 local,ARC 可在 `await` 前先释放 mock —— `RuntimeBackgroundIndexingManagerTests` 用 `keep(_:)` helper 把 mock 钉到 test instance 的 `aliveObjects` 数组上,tearDown 清空。
 
 #### Sendable 值类型
 
@@ -262,6 +267,7 @@ public enum RuntimeIndexingEvent: Sendable {
 5. 维护从事件归约而来的 `batchesRelay: BehaviorRelay<[RuntimeIndexingBatch]>`。**包含任意失败项的已完成批次会被保留**在 `batchesRelay` 中，直到用户在弹出框中通过"Clear Failed"显式清除；干净完成与取消会立即移除。
 6. 暴露 `aggregateStateDriver: Driver<IndexingToolbarState>`。`hasFailures` 由保留下来的失败批次推导。
 7. 持有按 Document 维度的批次跟踪：`[Document.ID: Set<RuntimeIndexingBatchID>]`。
+8. 通过 RxSwift 订阅 `documentState.$runtimeEngine.skip(1)`(BehaviorRelay) 响应 source switch:取消旧 manager 上的 doc batches、停掉旧 pumps、清空 `batchesRelay` / `aggregateRelay`、把 `self.engine` 切到新 engine、重启 pumps、若 isEnabled 则重新触发 `documentDidOpen()`。`engine` 字段为 `var`,每次 swap 时被覆盖。参见决策日志 2026-04-28(I3 / N2)。
 
 ### 数据流场景
 
@@ -346,6 +352,44 @@ handleSettingsChange:
 
 理由：`Settings` 已经声明为 `@Observable`，`withObservationTracking` 是原生匹配。在 `onChange` 中重新注册是文档化的"一次性观察者"恢复模式；它在每次 settings 变化中都让观察者保持存活，且不引入 Combine 基础设施。
 
+#### 场景 G —— Source switch (用户在 toolbar PopUp 切换 Local / XPC / Bonjour)
+
+```
+MainCoordinator.prepareTransition(.main(let runtimeEngine)):
+    documentState.runtimeEngine = runtimeEngine    // BehaviorRelay 触发
+
+Coordinator (RxSwift 订阅,在 init 末尾通过 bootstrapEngineObservation 注册):
+    documentState.$runtimeEngine.skip(1).subscribeOnNext { [weak self] newEngine in
+        self?.handleEngineSwap(to: newEngine)
+    }
+
+handleEngineSwap(to: newEngine):
+    let oldEngine = self.engine
+    let oldBatchIDs = self.documentBatchIDs
+
+    // 1) 拆掉旧 pumps
+    eventPumpTask?.cancel(); imageLoadedPumpTask?.cancel()
+
+    // 2) Best-effort 取消旧 manager 上的 doc batches(fire-and-forget)
+    Task { for id in oldBatchIDs {
+        await oldEngine.backgroundIndexingManager.cancelBatch(id)
+    } }
+
+    // 3) 清 UI relays —— 旧 batches 不再适用
+    documentBatchIDs.removeAll()
+    batchesRelay.accept([])
+    refreshAggregate(batches: [])
+
+    // 4) 切到新 engine
+    self.engine = newEngine
+
+    // 5) 重启 pumps,若 isEnabled 重新触发 main exec batch
+    startEventPump(); startImageLoadedPump()
+    documentDidOpen()
+```
+
+`skip(1)` 跳过 BehaviorRelay 在 subscribe 时回放的初值(与 init 时捕获的引用相同)。Coordinator 实例本身不重建 —— 它的 relays / aggregateState 持续驱动 toolbar,toolbar 的 `coordinator.aggregateStateObservable` 订阅链不需要重新连接。`engine` 字段从 `let` 改为 `var`。`DocumentState.runtimeEngine` 不再是不可变(参见假设 #1)。
+
 #### 场景 F —— 用户从弹出框取消
 
 ```
@@ -412,12 +456,16 @@ install name 有四种形态:
 
 | 形态 | 解析 |
 |-------|------------|
-| `/System/Library/...`（绝对路径） | 原样使用，校验文件存在。 |
-| `@rpath/Foo.framework/Foo` | 对根镜像上每个 `LC_RPATH` 进行替换，取第一个存在的路径。 |
-| `@executable_path/...` | 用主可执行文件所在目录替换。 |
-| `@loader_path/...` | 用当前镜像所在目录替换。 |
+| `/System/Library/...`（绝对路径） | 原样使用，通过 `pathExists` 校验。 |
+| `@rpath/Foo.framework/Foo` | 对根镜像上每个 `LC_RPATH` 进行替换，取第一个 `pathExists` 通过的候选。 |
+| `@executable_path/...` | 用主可执行文件所在目录替换，再 `pathExists` 校验。 |
+| `@loader_path/...` | 用当前镜像所在目录替换，再 `pathExists` 校验。 |
 
 返回 `String?` —— `nil` 映射为 `.failed("path unresolved")` 且不递归的 task item。
+
+`pathExists(_:)` 同时接受**磁盘文件**与 **dyld shared cache 内的字面路径**(通过 `DyldUtilities.isInDyldSharedCache(_:)`,Set 缓存)。Apple Silicon 与近代 Intel macOS 上 `/usr/lib/libobjc.A.dylib`、`/usr/lib/libSystem.B.dylib`、`Foundation.framework/Versions/C/Foundation` 等系统镜像无磁盘文件,只在 cache 中。
+
+**不做版本规范化**:cache 中存的就是平台原生形式(macOS versioned / iOS unversioned),`isInDyldSharedCache` 做字面比较。LC_LOAD_DYLIB install name 与 cache 形式不匹配时(典型场景:macOS 上 `Foundation.framework/Foundation` 不带 `Versions/C/`),走 `.failed("path unresolved")` —— 这是真实的解析失败,不是误报。参见假设 #4 与决策日志 2026-04-28(N4)。
 
 ### 并发模型
 
@@ -630,11 +678,13 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 
 ### 假设
 
-1. **`DocumentState.runtimeEngine` 在 Document 整个生命周期内不可变。** 该属性出于历史原因被声明为 `@Observed public var runtimeEngine: RuntimeEngine = .local`（`DocumentState.swift:10-11`），但调用方在 Document 创建后不会重新赋值。Coordinator 在 init 时一次性捕获 `engine = documentState.runtimeEngine`；如果该假设被打破，批次会被分发到错误的 engine。在该属性上加一段文档注释强化此契约。
+1. **`DocumentState.runtimeEngine` 在 Document 生命周期内可被重新赋值(source switch)。** 该属性声明为 `@Observed public var runtimeEngine: RuntimeEngine = .local`(`DocumentState.swift`),`MainCoordinator.prepareTransition(.main(...))` 会在用户切换 source(Local / XPC / Bonjour)时改写它。Coordinator 通过 RxSwift 订阅 `documentState.$runtimeEngine.skip(1)` 响应这一变化:取消旧 manager 的 doc batches、停旧 pumps、清 UI relays、把 `self.engine` 切到新 engine、重启 pumps、若 isEnabled 重新触发 `documentDidOpen()`。Coordinator 实例不重建,只是重新指向新 engine 的 manager —— 见场景 G。**先前 2026-04-26 的"不可变"假设已撤销** —— 实际代码路径(`MainCoordinator.swift:34`)始终违反该假设,导致 ultrareview N2 报告的 toolbar staleness。
 
 2. **`RuntimeBackgroundIndexingManager` 与 engine 一对一构造,在客户端进程内活着。** 对于远程(XPC / directTCP)来源,manager 实例仍在客户端运行,但其内部调用的 engine 公共方法(`isImageIndexed` / `mainExecutablePath` / `loadImageForBackgroundIndexing` / `dependencies(for:)` 等)都走 `request { local } remote: { RPC }` 分发,真正的索引工作由服务端目标进程执行。UI 客户端通过本地引擎引用消费 manager 事件流。
 
 3. **Settings 修改频率较低。** `withObservationTracking` 重新注册在每次属性变更时触发一次。由于 Settings 的滑块 / toggle 以人类 UI 节奏运行，重新注册的成本可忽略不计。
+
+4. **`DyldUtilities.dyldSharedCacheImagePaths()` 返回当前平台原生路径形式。** macOS 上 framework 路径带版本号(`Foundation.framework/Versions/C/Foundation`),iOS 上不带。`DyldUtilities.isInDyldSharedCache(_:)` 做**字面比较**,不在 macOS 上把 install name 规范化到 versioned 形式。如果 LC_LOAD_DYLIB install name 不与 cache 字面匹配(macOS 二进制可能既出现 versioned 也出现 unversioned),则该依赖在 BFS 中报 "path unresolved" 失败 —— 这是真实的解析失败,不是误报。`/usr/lib/libobjc.A.dylib` 这种纯 dylib 在两个平台 cache 里都是无歧义形式,直接命中。参见决策日志 2026-04-28(N4)。
 
 ### 测试策略
 
@@ -789,3 +839,6 @@ RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift
 | 2026-04-26 | `RuntimeBackgroundIndexingCoordinator` 整体 `@MainActor` | `DocumentState` 是 `@MainActor`,coordinator init 跨 actor 读 `runtimeEngine` 在 Swift 6 严格并发下报错;统一标注后简化所有事件归约路径 |
 | 2026-04-26 | `BackgroundIndexingEngineRepresenting` 仅 `: Sendable`(去掉 `AnyObject`) | 协议无任何方法需要引用语义;去掉 `AnyObject` 避免 actor conformance 的边角依赖 |
 | 2026-04-26 | Manager 通过 `BackgroundIndexingEngineRepresenting` 协议消费 engine,不直接依赖 `RuntimeEngine` 类型 | manager 单元测试无需构造真实 engine(用 `MockBackgroundIndexingEngine` / `InstrumentedEngine`);避免 actor↔actor 之间的 `unowned` 反向引用;Plan Task 5 先于 Task 6,协议先于实现 |
+| 2026-04-28 | **回退**:`BackgroundIndexingEngineRepresenting: AnyObject, Sendable`,manager 改 `private unowned let engine` | ultrareview N1 暴露真实泄漏:`engine.backgroundIndexingManager` 强持 manager + manager 强持 engine = 跨 source switch 累积泄漏。Actor 满足 `AnyObject`;unowned 在生产上安全(engine deinit → manager 同步释放,反向引用没机会悬空)。测试加 `keep(_:)` helper 兜住平行 local mock 的 ARC 寿命 |
+| 2026-04-28 | **撤销**:`DocumentState.runtimeEngine` 视为可变;coordinator 通过 RxSwift `documentState.$runtimeEngine.skip(1)` 订阅响应 source switch | 2026-04-24 假设"不可变"与代码现状(`MainCoordinator.swift:34` 在 `.main(...)` 时改写)长期不一致 → ultrareview N2 / implementation-review I3 报告 toolbar 静默断连。Coordinator `engine: var`,`handleEngineSwap(to:)` 取消旧 manager doc batches、停旧 pumps、清 relays、切引用、重启 pumps、若 isEnabled 重发 main exec batch |
+| 2026-04-28 | `DylibPathResolver.pathExists` 兼顾文件系统与 `DyldUtilities.isInDyldSharedCache`,**字面匹配,不规范化** | ultrareview N4:Apple Silicon 上 `/usr/lib/lib*` / 系统 framework 无磁盘文件,纯 `fileExists` 拒绝全部 → batch 充满 "path unresolved" 红 ✗ 误报。规范化 macOS versioned ↔ unversioned 风险高(install name 与 cache 形式不一定按规则映射,iOS 还要分支),不如让真实失败显式呈现。`/usr/lib/libobjc.A.dylib` 这类无歧义路径在两平台都直接命中 |
