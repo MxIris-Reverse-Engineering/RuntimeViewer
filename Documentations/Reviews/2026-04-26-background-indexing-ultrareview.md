@@ -14,7 +14,10 @@
 - ✅ **N1 RuntimeEngine ↔ Manager 循环引用** — 已修。协议恢复 `: AnyObject, Sendable`,manager 改 `private unowned let engine`。生产上 engine 强持 manager,unowned 反向引用安全(engine deinit 同步释放 manager)。测试加 `keep(_:)` helper 兜住平行 local mock 的 ARC 寿命。详见 [plan post-review fixes](../Plans/2026-04-24-background-indexing-plan.md#post-review-fixes-2026-04-28) 与 [Evolution 0002](../Evolution/0002-background-indexing.md) 决策日志 2026-04-28
 - ✅ **N2 source switch staleness** — 已修(同 implementation-review I3)。Coordinator 通过 RxSwift `documentState.$runtimeEngine.skip(1)` 响应 swap。详见上
 - ✅ **N4 DylibPathResolver 拒绝 dyld shared cache** — 已修。`DyldUtilities.isInDyldSharedCache(_:)` 加 Set-cache 字面查询,`DylibPathResolver.pathExists` 兼顾文件系统与 cache。**字面匹配,不规范化** —— 与本审查建议的方向一致(让真实失败显式呈现);用户明确选 "字面匹配" 是因为 macOS 上 versioned ↔ unversioned 的规范化在 install name 形式不一致时有误导风险,iOS 不需要规范化。详见 Evolution 0002 假设 #4 与决策日志 2026-04-28(N4)
-- ⏳ **N3 (manager dedup),Nit-1 (per-batch cancel 按钮),Nit-2 (.settingsEnabled reason),Nit-3 (documentBatchIDs 失败保留泄漏)** — 未处理,follow-up
+- ✅ **N3 manager dedup** — 已修。`startBatch` 在 expand 前后两次扫 `activeBatches`,命中 `!isFinished && rootImagePath == 入参` 即返回旧 ID;reason 判别式不参与比较,所以 `.appLaunch` ↔ `.imageLoaded(path:)` 折叠到一个 batch。Coordinator 的 `handleImageLoaded` 注释同步更新。新增两条 manager 测试(同 root 跨 reason 命中、batch finalize 后允许新批次)
+- ✅ **Nit-1 per-batch cancel 按钮** — 已修。`BatchCellView` 加 inline `xmark.circle` borderless 按钮,通过 closure 把 `batch.id` 推到新的 `cancelBatchRelay`(对接已经存在的 Input.cancelBatch → coordinator → manager 路径)。`isFinished` 的批次(failed-retain 行)按钮隐藏
+- ✅ **Nit-2 .settingsEnabled reason 永不构造** — 已修。抽 `startMainExecutableBatch(reason:)` helper,`documentDidOpen()` 传 `.appLaunch`,`handleSettingsChange` off→on 分支传 `.settingsEnabled`。Popover 的 `title(for: .settingsEnabled) → "Settings enabled"` 不再死代码
+- ✅ **Nit-3 documentBatchIDs 失败保留泄漏** — 已修。`.batchFinished` 分支(无论 UI 是否保留 batch)统一 `documentBatchIDs.remove(finished.id)`;`clearFailedBatches()` 计算被清掉的 id 集合并 `documentBatchIDs.subtract`。`documentWillClose` 不再向 manager 派发 ghost ids 的 cancel Task
 - ✅ **Pre-1 (path normalization)** — 已修。Step 1(commit `a033d3d`)给 `DyldUtilities.patchImagePathForDyld` 加幂等性保护,避免 iOS Simulator 下 `dyld` 已经返回 patched path 时再次 patch 产生 `/sim_root/sim_root/...` 双前缀。Step 2 在 `loadImage(at:)` 与 `loadImageForBackgroundIndexing(at:)` 入口 patch,内部存储(`loadedImagePaths` / section factory caches / `imageDidLoadSubject`)统一 canonical 形式,wire 上保持 raw(receiver 各自 patch)。Reader/writer 现在一致 canonical
 
 ---
@@ -70,7 +73,7 @@ Evolution 0002 决议 N4 主动把协议从 `AnyObject, Sendable` 改成纯 `Sen
 
 **修复 2026-04-28**:采用方案 (b) 的轻量变体 —— coordinator 不重建,通过 RxSwift `documentState.$runtimeEngine.skip(1)`(`@Observed` 暴露的 `BehaviorRelay`)订阅 swap。`engine` 改 `var`,`handleEngineSwap(to:)` 取消旧 pumps、cancel 旧 manager 上的 doc batches(fire-and-forget)、清 `documentBatchIDs` / `batchesRelay` / `aggregateRelay`、切引用、重启 pumps、若 isEnabled 重发 main exec batch。Coordinator 实例不变,所以 toolbar 的 `coordinator.aggregateStateObservable` 订阅链自动跟随;失败批次状态不跨 swap 保留(swap 时清空,因为它属于旧 engine)。`DocumentState.runtimeEngine` 的 doc comment 改为 reassignable。详见 Evolution 0002 假设 #1 / 场景 G / 决策日志 2026-04-28。
 
-### N3. Manager batch dedup 注释/spec 都说有,代码中没实现
+### N3. Manager batch dedup 注释/spec 都说有,代码中没实现 ✅ FIXED 2026-04-28
 
 **文件**: `RuntimeViewerCore/Sources/RuntimeViewerCore/BackgroundIndexing/RuntimeBackgroundIndexingManager.swift:51-73`
 
@@ -94,6 +97,12 @@ Evolution 0002 第 626 行:*"manager 去重:如果某活动批次的 `rootImageP
 - 实现 dedup,扫 `activeBatches.values` 找 `!isFinished && rootImagePath == root && (reason 判别式相同 OR 同根扩展规则)`,命中则返回旧 ID。约 10 行。
 - 把规则放宽为"任意匹配 `rootImagePath`",抓住 `.appLaunch` ↔ `.imageLoaded` 这一对。
 - 否则**至少删掉 coordinator 的误导注释**,不要让未来维护者以为有保护。
+
+**修复 2026-04-28**:走第二条路 —— 规则放宽到"任意匹配 `rootImagePath`",reason 判别式不参与。`startBatch` 抽 `private func findActiveBatchID(forRootImagePath:)` helper,在 `expandDependencyGraph` 前后各扫一次 `activeBatches`:第一次省去无谓 expand 工作,第二次兜住 actor 重入(若 A 与 B 同时 `await` expand,actor 可能交错执行,re-check + insert 在 actor 上是原子的,所以输家总能看到赢家的 insertion)。Coordinator `handleImageLoaded` 的注释从 "shares rootImagePath + reason discriminant" 改成 "dedups by `rootImagePath`",并指出 `Set.insert` 让重复 id 在 `documentBatchIDs` 上是 no-op。
+
+新增 manager tests(`RuntimeBackgroundIndexingManagerTests.swift`):
+- `startBatchDedupsByRootImagePathAcrossDifferentReasons` —— `.appLaunch` 与 `.imageLoaded(path:)` 在同 root 上必须返回相同 id
+- `startBatchAllowsNewBatchAfterPreviousFinishedForSameRoot` —— batch finalize 后同 root 允许新批次,确保 dedup 不锈住已完成历史
 
 ### N4. `DylibPathResolver` 拒绝所有 dyld-shared-cache 系统 framework ✅ FIXED 2026-04-28
 
@@ -140,7 +149,7 @@ Task 24 后 batch 含 `.failed` 即被保留,toolbar 永久 `hasFailures` 红徽
 
 ## Nit
 
-### Nit-1. 每批次 Cancel 按钮缺失,`cancelBatchRelay` 是死代码
+### Nit-1. 每批次 Cancel 按钮缺失,`cancelBatchRelay` 是死代码 ✅ FIXED 2026-04-28
 
 **文件**: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewController.swift:282-311`
 
@@ -156,7 +165,11 @@ Evolution 0002 第 521 行:*"Batch 行:标题由 reason 派生、`{completed}/{t
 
 (A) 是正确选择 —— 基础设施已经全部就位,只缺一个按钮。
 
-### Nit-2. Settings off→on 触发用错误 `reason`
+**修复 2026-04-28**:走 (A)。`BackgroundIndexingPopoverViewController` 加 `cancelBatchRelay: PublishRelay<RuntimeIndexingBatchID>`,Input.cancelBatch 从 `.never()` 改成 `cancelBatchRelay.asSignal()`(下游 ViewModel → coordinator → manager 路径已经全部就位)。`BatchCellView` 加 inline `xmark.circle` SF Symbol 按钮(`bezelStyle = .accessoryBar`,`isBordered = false`,`contentTintColor = .secondaryLabelColor`),通过 `onCancel: () -> Void` 闭包把 `batch.id` 注入。
+
+`configure(...)` 多收一个 `isCancellable: Bool` 参数 ——`!batch.isFinished` 时显示按钮,failed-retain 状态(manager 已 finalize,UI 仅留显)隐藏。HStackView 排版,`titleLabel` 拿 `.defaultLow` content hugging,按钮拿 `.required` 让按钮固定大小、标题 fill。
+
+### Nit-2. Settings off→on 触发用错误 `reason` ✅ FIXED 2026-04-28
 
 **文件**: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift:277-290`
 
@@ -175,7 +188,9 @@ if !wasEnabled && latest.isEnabled {
 
 **修法**:抽 `private func startMainExecutableBatch(reason: RuntimeIndexingBatchReason)` helper,`documentDidOpen()` 传 `.appLaunch`,`handleSettingsChange` off→on 分支传 `.settingsEnabled`。
 
-### Nit-3. `documentBatchIDs` 泄漏失败完成批次的 ID
+**修复 2026-04-28**:照办。`documentDidOpen()` 退化为 `startMainExecutableBatch(reason: .appLaunch)`,helper 收住所有 main exec batch 的派发逻辑(check settings.isEnabled、`mainExecutablePath` 容错、`startBatch`、写入 `documentBatchIDs`)。`handleSettingsChange` off→on 分支改调 `startMainExecutableBatch(reason: .settingsEnabled)`。`title(for: .settingsEnabled) → "Settings enabled"` 不再死代码,popover 在 settings 切换触发的 batch 上显示正确标题。索引行为完全相同(同 root / 同 depth / 同 maxConcurrency)。
+
+### Nit-3. `documentBatchIDs` 泄漏失败完成批次的 ID ✅ FIXED 2026-04-28
 
 **文件**: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift:135-158`
 
@@ -203,6 +218,8 @@ case .batchFinished(let finished):
 **修法**(两处,共 ~5 行):
 - 失败保留分支补 `documentBatchIDs.remove(finished.id)`(batch 在 manager 侧已 finalize,无论 UI 是否保留)。
 - `clearFailedBatches()` 计算被清掉的 batches,从 `documentBatchIDs` 减。
+
+**修复 2026-04-28**:照办。`apply(event:)` 的 `.batchFinished` 分支把 `documentBatchIDs.remove(finished.id)` 提升到 if/else 之外 —— 不管失败保留还是干净路径,manager 都已 finalize,documentBatchIDs 总要清掉;UI 是否留显 batch 是独立决定。`clearFailedBatches()` 重写:先快照 `batchesRelay.value`,过滤后算 `removedIDs = Set(allBatches.map(\.id)).subtracting(remaining.map(\.id))`,`documentBatchIDs.subtract(removedIDs)`。`documentWillClose` 不再向 manager 派发 ghost id 的 cancel Task。
 
 ---
 
