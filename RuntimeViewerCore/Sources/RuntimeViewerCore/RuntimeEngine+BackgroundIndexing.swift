@@ -14,11 +14,13 @@ extension RuntimeEngine {
         }
     }
 
-    /// Path of the target process's main executable (dyld image at index 0).
+    /// Path of the target process's main executable.
     public func mainExecutablePath() async throws -> String {
         try await request {
-            // dyld guarantees image index 0 is the main executable.
-            DyldUtilities.imageNames().first ?? ""
+            // `imageNames().first` is unreliable under `DYLD_INSERT_LIBRARIES`
+            // (Xcode injects `libLogRedirect.dylib` at index 0 during debug
+            // runs). `_NSGetExecutablePath` always returns the host binary.
+            DyldUtilities.mainExecutablePath()
         } remote: { senderConnection in
             try await senderConnection.sendMessage(name: .mainExecutablePath)
         }
@@ -56,7 +58,7 @@ extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
         return image.rpaths
     }
 
-    func dependencies(for path: String) async throws
+    func dependencies(for path: String, ancestorRpaths: [String]) async throws
         -> [(installName: String, resolvedPath: String?)]
     {
         guard let image = DyldUtilities.machOImage(forPath: path) else {
@@ -64,17 +66,30 @@ extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
         }
         let resolver = DylibPathResolver()
         let main = try await mainExecutablePath()
-        let rpathList = image.rpaths
+        // dyld searches the union of every loader's LC_RPATH walking up the
+        // chain to the main executable plus the image's own LC_RPATH. The BFS
+        // accumulates ancestors into `ancestorRpaths`; appending self-rpaths
+        // matches dyld's lookup order (loaders first, then self).
+        let mergedRpaths = ancestorRpaths + image.rpaths
         return image.dependencies
             .filter { $0.type != .lazyLoad }
-            .map { dependency in
+            .compactMap { dependency in
                 let installName = dependency.dylib.name
                 let resolvedPath = resolver.resolve(
                     installName: installName,
                     imagePath: path,
-                    rpaths: rpathList,
+                    rpaths: mergedRpaths,
                     mainExecutablePath: main
                 )
+                // LC_LOAD_WEAK_DYLIB: dyld silently skips at runtime when the
+                // target isn't on disk (e.g. Xcode embeds
+                // `libswiftCompatibilitySpan.dylib` only for older deployment
+                // targets). Mirror that here — surfacing it as `.failed("path
+                // unresolved")` floods the popover with red ✗ rows for a
+                // miss the runtime explicitly tolerates.
+                if resolvedPath == nil, dependency.type == .weakLoad {
+                    return nil
+                }
                 return (installName, resolvedPath)
             }
     }

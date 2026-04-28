@@ -125,6 +125,46 @@ import Testing
         #expect(sharedCount == 1)
     }
 
+    /// dyld resolves `@rpath/...` against the union of every loader's
+    /// LC_RPATH walking up the chain to the main executable. The BFS must
+    /// pass each visited image's accumulated ancestor rpaths to the engine
+    /// so that frameworks without their own LC_RPATH (very common —
+    /// they rely on the host app's rpath to find sibling frameworks) still
+    /// get their `@rpath/...` deps resolved instead of marked
+    /// `.failed("path unresolved")`.
+    @Test func expandPropagatesAncestorRpathsToDescendants() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        // Root has rpath ["/HostFrameworks"], depends on /Child.
+        engine.program(path: "/Root", .init(
+            dependencies: [(installName: "@rpath/Child", resolvedPath: "/Child")],
+            rpaths: ["/HostFrameworks"]
+        ))
+        // Child has its own rpath ["/ChildOwn"], depends on /Grandchild.
+        engine.program(path: "/Child", .init(
+            dependencies: [(installName: "@rpath/Grandchild", resolvedPath: "/Grandchild")],
+            rpaths: ["/ChildOwn"]
+        ))
+        // Grandchild has no deps and no rpaths; just a leaf.
+        engine.program(path: "/Grandchild", .init())
+
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+        _ = await manager.expandDependencyGraph(rootPath: "/Root", depth: 5)
+
+        let calls = engine.dependenciesCalls()
+
+        let rootCall = calls.first { $0.path == "/Root" }
+        #expect(rootCall?.ancestorRpaths == [],
+                "root has no ancestors above it")
+
+        let childCall = calls.first { $0.path == "/Child" }
+        #expect(childCall?.ancestorRpaths == ["/HostFrameworks"],
+                "child must inherit root's LC_RPATH")
+
+        let grandchildCall = calls.first { $0.path == "/Grandchild" }
+        #expect(grandchildCall?.ancestorRpaths == ["/HostFrameworks", "/ChildOwn"],
+                "grandchild inherits both root's and child's LC_RPATH, in loader-chain order")
+    }
+
     @Test func batchIndexesAllPendingItems() async {
         let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
@@ -365,10 +405,10 @@ import Testing
         func rpaths(for path: String) async throws -> [String] {
             try await base.rpaths(for: path)
         }
-        func dependencies(for path: String)
+        func dependencies(for path: String, ancestorRpaths: [String])
             async throws -> [(installName: String, resolvedPath: String?)]
         {
-            try await base.dependencies(for: path)
+            try await base.dependencies(for: path, ancestorRpaths: ancestorRpaths)
         }
     }
 }

@@ -27,6 +27,15 @@ protocol BackgroundIndexingEngineRepresenting: AnyObject, Sendable {
     /// Returns the resolved dependency dylib paths for the image at `path`,
     /// excluding lazy-load entries. May return nil `resolvedPath` entries for
     /// unresolved install names; the caller marks them failed.
-    func dependencies(for path: String)
+    ///
+    /// `ancestorRpaths` are the LC_RPATH entries collected from every loader
+    /// walking up the chain to the main executable. dyld's real `@rpath/...`
+    /// resolution searches the union of the image's own LC_RPATH and the
+    /// LC_RPATH of every loader in the chain, so a child framework that has
+    /// no LC_RPATH but is loaded via the host's LC_RPATH still resolves at
+    /// runtime. Pass `[]` for the root image; the BFS in
+    /// `RuntimeBackgroundIndexingManager.expandDependencyGraph` accumulates
+    /// each visited image's own rpaths into the value passed to its children.
+    func dependencies(for path: String, ancestorRpaths: [String])
         async throws -> [(installName: String, resolvedPath: String?)]
 }

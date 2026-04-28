@@ -59,6 +59,35 @@ package enum DyldUtilities {
         return names
     }
 
+    /// Path of the host process's main executable.
+    ///
+    /// Uses `_NSGetExecutablePath()` rather than `imageNames().first` because
+    /// dyld image index 0 is **not** guaranteed to be the host executable when
+    /// the process was launched with `DYLD_INSERT_LIBRARIES`. Xcode injects
+    /// `/Applications/Xcode.app/Contents/Developer/usr/lib/libLogRedirect.dylib`
+    /// during debug runs and that dylib lands at index 0, so `imageNames().first`
+    /// returns Xcode's helper instead of the app binary. Downstream uses
+    /// (BFS root path, `@executable_path/...` rpath expansion) need the real
+    /// executable or every `@rpath/...` resolves against Xcode's directory and
+    /// gets reported as `path unresolved`.
+    package static func mainExecutablePath() -> String {
+        var bufSize: UInt32 = 1024
+        var buf = [CChar](repeating: 0, count: Int(bufSize))
+        if _NSGetExecutablePath(&buf, &bufSize) == 0 {
+            return String(cString: buf)
+        }
+        // bufSize was too small. _NSGetExecutablePath wrote the required size
+        // back into `bufSize`; allocate accordingly and retry.
+        buf = [CChar](repeating: 0, count: Int(bufSize))
+        if _NSGetExecutablePath(&buf, &bufSize) == 0 {
+            return String(cString: buf)
+        }
+        // Last-resort fallback. Won't happen in practice, but better than
+        // returning "" — `@executable_path` expansion downstream prefers an
+        // imperfect path over an empty one.
+        return imageNames().first ?? ""
+    }
+
     /// Resolves a filesystem path to its loaded `MachOImage`.
     ///
     /// For the main executable's path, returns `MachOImage.current()` rather
@@ -71,8 +100,14 @@ package enum DyldUtilities {
     /// `#dsohandle` of the calling code, so it always returns the image that
     /// actually contains our compiled symbols (the `.debug.dylib` in Debug,
     /// the main executable in statically linked Release).
+    ///
+    /// Uses `mainExecutablePath()` (which goes through `_NSGetExecutablePath`)
+    /// for the main-executable check rather than `imageNames().first`, since
+    /// the latter returns Xcode's injected `libLogRedirect.dylib` under
+    /// `DYLD_INSERT_LIBRARIES` and would skip the `MachOImage.current()`
+    /// branch for the actual host binary path.
     package static func machOImage(forPath path: String) -> MachOImage? {
-        if path == imageNames().first {
+        if path == mainExecutablePath() {
             return MachOImage.current()
         }
         let imageName = path.lastPathComponent.deletingPathExtension.deletingPathExtension

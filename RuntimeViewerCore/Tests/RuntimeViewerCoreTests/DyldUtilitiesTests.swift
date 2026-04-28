@@ -68,3 +68,22 @@ struct DyldUtilitiesTests {
         #expect(result == "/sim_root/sim_root_other/file")
     }
 }
+
+/// `imageNames().first` would silently return the wrong path under
+/// `DYLD_INSERT_LIBRARIES` (e.g. Xcode injects `libLogRedirect.dylib` during
+/// debug runs and it ends up at dyld image index 0, not the host executable).
+/// `mainExecutablePath()` must use `_NSGetExecutablePath` so that
+/// `@executable_path/...` rpath expansion stays correct in those scenarios.
+@Suite("DyldUtilities.mainExecutablePath")
+struct DyldUtilitiesMainExecutablePathTests {
+    @Test("returns absolute path of running test process")
+    func returnsAbsolutePath() {
+        let path = DyldUtilities.mainExecutablePath()
+        #expect(path.hasPrefix("/"), "expected absolute path, got: \(path)")
+        #expect(!path.isEmpty)
+        // The test runner exists on disk (no dyld_shared_cache games for the
+        // main executable itself), so a vanilla file existence check applies.
+        #expect(FileManager.default.fileExists(atPath: path),
+                "test runner exe should exist on disk: \(path)")
+    }
+}
