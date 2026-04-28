@@ -2,7 +2,11 @@ import Foundation
 import Semaphore
 
 public actor RuntimeBackgroundIndexingManager {
-    private let engine: any BackgroundIndexingEngineRepresenting
+    /// `unowned` because the engine owns this manager
+    /// (`RuntimeEngine.backgroundIndexingManager`); a strong back-reference
+    /// would form a retain cycle that leaks engine + manager + section caches
+    /// on every source switch.
+    private unowned let engine: any BackgroundIndexingEngineRepresenting
     private let stream: AsyncStream<RuntimeIndexingEvent>
     private let continuation: AsyncStream<RuntimeIndexingEvent>.Continuation
 

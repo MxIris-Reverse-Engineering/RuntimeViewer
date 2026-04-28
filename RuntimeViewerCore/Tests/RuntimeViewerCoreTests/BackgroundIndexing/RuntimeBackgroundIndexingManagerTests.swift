@@ -3,15 +3,38 @@ import Semaphore
 @testable import RuntimeViewerCore
 
 final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
+    /// Keepalives for engines / wrappers passed to a manager.
+    ///
+    /// Production safety: `RuntimeBackgroundIndexingManager.engine` is `unowned`
+    /// because the engine owns the manager (`RuntimeEngine.backgroundIndexingManager`),
+    /// so the engine always outlives the manager in real code.
+    ///
+    /// In tests we construct mocks as locals and ARC may eagerly release them
+    /// across `await` suspension points — at which point the manager's unowned
+    /// reference dangles and the next access traps. Stash mocks in this array
+    /// to pin them to the test instance's lifetime.
+    private var aliveObjects: [AnyObject] = []
+
+    @discardableResult
+    private func keep<T: AnyObject>(_ object: T) -> T {
+        aliveObjects.append(object)
+        return object
+    }
+
+    override func tearDown() async throws {
+        aliveObjects.removeAll()
+        try await super.tearDown()
+    }
+
     func test_currentBatches_initiallyEmpty() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let batches = await manager.currentBatches()
         XCTAssertTrue(batches.isEmpty)
     }
 
     func test_events_streamYieldsBatchStarted_thenFinished_forEmptyGraph() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/fake/Root",
                        .init(isIndexed: true))   // short-circuit immediately
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
@@ -39,7 +62,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_expand_emptyWhenRootAlreadyIndexed() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init(isIndexed: true))
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         let items = await manager.expandDependencyGraph(rootPath: "/App", depth: 5)
@@ -47,7 +70,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_expand_depth1_includesRootAndDirectDeps() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init(
             dependencies: [("/UIKit", "/UIKit"), ("/Foundation", "/Foundation")]
         ))
@@ -58,7 +81,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_expand_depth1_doesNotIncludeSecondLevel() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/UIKit", "/UIKit")]))
         engine.program(path: "/UIKit",
@@ -69,7 +92,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_expand_skipsAlreadyIndexedDeps() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/UIKit", "/UIKit"),
                                             ("/Foundation", "/Foundation")]))
@@ -80,7 +103,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_expand_unresolvedInstallNameBecomesFailedItem() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init(
             dependencies: [("@rpath/Missing", nil)]
         ))
@@ -92,7 +115,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_expand_dedupsSharedDependencies() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/A", "/A"), ("/B", "/B")]))
         engine.program(path: "/A",
@@ -106,7 +129,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_batch_indexesAllPendingItems() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/A", "/A"), ("/B", "/B")]))
         engine.program(path: "/A", .init())
@@ -122,7 +145,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_batch_respectsMaxConcurrency() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         // 6 dependencies, concurrency cap 2 → never exceed 2 simultaneous loads
         let deps = (0..<6).map { (installName: "/D\($0)", resolvedPath: "/D\($0)") }
         engine.program(path: "/App", .init(dependencies: deps))
@@ -130,7 +153,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
 
         // Monkey-patch engine with a concurrency-counting wrapper.
         let counter = ConcurrencyCounter()
-        let wrapped = InstrumentedEngine(base: engine, counter: counter)
+        let wrapped = keep(InstrumentedEngine(base: engine, counter: counter))
         let manager = RuntimeBackgroundIndexingManager(engine: wrapped)
 
         _ = await runToFinish(manager: manager, root: "/App", depth: 1,
@@ -140,7 +163,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
 
     func test_batch_failedLoad_yieldsFailedTaskState() async {
         struct LoadError: Error {}
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App",
                        .init(dependencies: [("/Broken", "/Broken")]))
         engine.program(path: "/Broken", .init(shouldFailLoad: LoadError()))
@@ -157,7 +180,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_cancelBatch_stopsPendingItemsAndEmitsCancelledEvent() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         let deps = (0..<5).map { (installName: "/D\($0)", resolvedPath: "/D\($0)") }
         engine.program(path: "/App", .init(dependencies: deps))
         for dep in deps { engine.program(path: dep.installName, .init()) }
@@ -180,7 +203,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_cancelAll_cancelsEveryBatch() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/A", .init(dependencies: [("/A1", "/A1")]))
         engine.program(path: "/A1", .init())
         engine.program(path: "/B", .init(dependencies: [("/B1", "/B1")]))
@@ -202,7 +225,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
         // `.taskPrioritized` for a pending path and does NOT emit it for
         // running / absent paths. Load order would depend on sleep timing
         // and is flaky on CI — event emission is the real contract.
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         let deps = ["/D0", "/D1", "/D2"]
         engine.program(path: "/App", .init(
             dependencies: deps.map { ($0, $0) }
@@ -231,7 +254,7 @@ final class RuntimeBackgroundIndexingManagerTests: XCTestCase {
     }
 
     func test_prioritize_isNoOpForUnknownPath() async {
-        let engine = MockBackgroundIndexingEngine()
+        let engine = keep(MockBackgroundIndexingEngine())
         engine.program(path: "/App", .init())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
         _ = await manager.startBatch(rootImagePath: "/App", depth: 0,

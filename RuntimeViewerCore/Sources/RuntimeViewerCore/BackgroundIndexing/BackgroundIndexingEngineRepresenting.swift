@@ -10,12 +10,12 @@
 /// actor boundaries triggers Swift 6 strict-concurrency errors. Callers that
 /// only need to gate recursion can use `canOpenImage(at:)` instead.
 ///
-/// Conformance is `Sendable` only —— no `AnyObject` constraint. The manager
-/// holds the engine by value (`engine: any BackgroundIndexingEngineRepresenting`),
-/// no `weak`/`unowned` is needed, and `actor RuntimeEngine`'s conformance
-/// would otherwise depend on the Swift 5.7+ "actor satisfies AnyObject" edge
-/// behavior unnecessarily.
-protocol BackgroundIndexingEngineRepresenting: Sendable {
+/// Conformance is `AnyObject, Sendable` so the manager can hold the engine via
+/// `unowned let engine`. The engine owns the manager
+/// (`RuntimeEngine.backgroundIndexingManager`); making the back-reference
+/// non-retaining breaks the cycle that would otherwise leak engine + manager
+/// + section caches on every source switch.
+protocol BackgroundIndexingEngineRepresenting: AnyObject, Sendable {
     func isImageIndexed(path: String) async throws -> Bool
     func loadImageForBackgroundIndexing(at path: String) async throws
     func mainExecutablePath() async throws -> String
