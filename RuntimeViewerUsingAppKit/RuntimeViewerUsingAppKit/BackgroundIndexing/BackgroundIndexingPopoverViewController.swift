@@ -7,16 +7,7 @@ import RxCocoa
 import RxSwift
 import SnapKit
 
-final class BackgroundIndexingPopoverViewController:
-    UXKitViewController<BackgroundIndexingPopoverViewModel>
-{
-    // MARK: - Relays
-
-    private let cancelBatchRelay = PublishRelay<RuntimeIndexingBatchID>()
-    private let cancelAllRelay = PublishRelay<Void>()
-    private let clearFailedRelay = PublishRelay<Void>()
-    private let openSettingsRelay = PublishRelay<Void>()
-
+final class BackgroundIndexingPopoverViewController: UXKitViewController<BackgroundIndexingPopoverViewModel> {
     // MARK: - Views
 
     private let titleLabel = Label("Background Indexing").then {
@@ -68,17 +59,12 @@ final class BackgroundIndexingPopoverViewController:
         $0.title = "Close"
     }
 
-    // MARK: - Outline data
-
-    private var renderedNodes: [BackgroundIndexingNode] = []
-
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupLayout()
         setupOutlineView()
-        setupActions()
         preferredContentSize = NSSize(width: 380, height: 300)
     }
 
@@ -139,37 +125,6 @@ final class BackgroundIndexingPopoverViewController:
         column.resizingMask = .autoresizingMask
         outlineView.addTableColumn(column)
         outlineView.outlineTableColumn = column
-        outlineView.dataSource = self
-        outlineView.delegate = self
-    }
-
-    private func setupActions() {
-        cancelAllButton.target = self
-        cancelAllButton.action = #selector(cancelAllClicked)
-        clearFailedButton.target = self
-        clearFailedButton.action = #selector(clearFailedClicked)
-        closeButton.target = self
-        closeButton.action = #selector(closeClicked)
-        openSettingsButton.target = self
-        openSettingsButton.action = #selector(openSettingsClicked)
-    }
-
-    // MARK: - Actions
-
-    @objc private func cancelAllClicked() {
-        cancelAllRelay.accept(())
-    }
-
-    @objc private func clearFailedClicked() {
-        clearFailedRelay.accept(())
-    }
-
-    @objc private func closeClicked() {
-        dismiss(nil)
-    }
-
-    @objc private func openSettingsClicked() {
-        openSettingsRelay.accept(())
     }
 
     // MARK: - Bindings
@@ -178,30 +133,34 @@ final class BackgroundIndexingPopoverViewController:
         super.setupBindings(for: viewModel)
 
         let input = BackgroundIndexingPopoverViewModel.Input(
-            cancelBatch: cancelBatchRelay.asSignal(),
-            cancelAll: cancelAllRelay.asSignal(),
-            clearFailed: clearFailedRelay.asSignal(),
-            openSettings: openSettingsRelay.asSignal()
+            cancelBatch: .never(),
+            cancelAll: cancelAllButton.rx.click.asSignal(),
+            clearFailed: clearFailedButton.rx.click.asSignal(),
+            openSettings: openSettingsButton.rx.click.asSignal()
         )
         let output = viewModel.transform(input)
+
+        closeButton.rx.click.asSignal()
+            .emitOnNext { [weak self] in
+                guard let self else { return }
+                dismiss(nil)
+            }
+            .disposed(by: rx.disposeBag)
 
         output.subtitle
             .drive(subtitleLabel.rx.stringValue)
             .disposed(by: rx.disposeBag)
 
         output.isEnabled
-            .driveOnNext { [weak self] enabled in
-                guard let self else { return }
-                emptyDisabledView.isHidden = enabled
-                openSettingsButton.isHidden = enabled
-            }
+            .drive(emptyDisabledView.rx.isHidden)
             .disposed(by: rx.disposeBag)
 
-        output.hasAnyFailure
-            .driveOnNext { [weak self] hasFailure in
-                guard let self else { return }
-                clearFailedButton.isHidden = !hasFailure
-            }
+        output.isEnabled
+            .drive(openSettingsButton.rx.isHidden)
+            .disposed(by: rx.disposeBag)
+
+        output.hasAnyFailure.not()
+            .drive(clearFailedButton.rx.isHidden)
             .disposed(by: rx.disposeBag)
 
         // Direct-call into the Settings window. There is no `MainRoute.openSettings`
@@ -212,91 +171,100 @@ final class BackgroundIndexingPopoverViewController:
             }
             .disposed(by: rx.disposeBag)
 
-        Observable
-            .combineLatest(
-                output.isEnabled.asObservable(),
-                output.hasAnyBatch.asObservable()
-            )
-            .subscribeOnNext { [weak self] enabled, hasBatches in
-                guard let self else { return }
-                emptyIdleView.isHidden = !enabled || hasBatches
-                scrollView.isHidden = !enabled || !hasBatches
-            }
-            .disposed(by: rx.disposeBag)
+        Driver.combineLatest(output.isEnabled, output.hasAnyBatch) { enabled, hasBatches in
+            !enabled || hasBatches
+        }
+        .drive(emptyIdleView.rx.isHidden)
+        .disposed(by: rx.disposeBag)
 
-        output.nodes
-            .driveOnNext { [weak self] nodes in
-                guard let self else { return }
-                renderedNodes = nodes
-                outlineView.reloadData()
-                outlineView.expandItem(nil, expandChildren: true)
+        Driver.combineLatest(output.isEnabled, output.hasAnyBatch) { enabled, hasBatches in
+            !enabled || !hasBatches
+        }
+        .drive(scrollView.rx.isHidden)
+        .disposed(by: rx.disposeBag)
+
+        output.nodes.drive(outlineView.rx.nodes) { (outlineView: NSOutlineView, _: NSTableColumn?, node: BackgroundIndexingNode) -> NSView? in
+            switch node {
+            case .batch(let batch, _):
+                let cell = outlineView.box.makeView(ofClass: BatchCellView.self)
+                cell.configure(
+                    reason: batch.reason,
+                    completedCount: batch.completedCount,
+                    totalCount: batch.totalCount
+                )
+                return cell
+            case .item(_, let item):
+                let cell = outlineView.box.makeView(ofClass: ItemCellView.self)
+                cell.configure(item: item)
+                return cell
             }
-            .disposed(by: rx.disposeBag)
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.nodes.driveOnNext { [weak self] _ in
+            guard let self else { return }
+            outlineView.expandItem(nil, expandChildren: true)
+        }
+        .disposed(by: rx.disposeBag)
     }
 }
 
-// MARK: - NSOutlineViewDataSource & Delegate
+extension BackgroundIndexingPopoverViewController {
+    private final class BatchCellView: NSTableCellView {
+        let titleLabel = Label("")
 
-extension BackgroundIndexingPopoverViewController: NSOutlineViewDataSource, NSOutlineViewDelegate {
-    func outlineView(_ outlineView: NSOutlineView,
-                     numberOfChildrenOfItem item: Any?) -> Int
-    {
-        if item == nil {
-            return renderedNodes.filter {
-                if case .batch = $0 { return true } else { return false }
-            }.count
-        }
-        guard let node = item as? BackgroundIndexingNode,
-              case .batch(let batch) = node
-        else { return 0 }
-        return batch.items.count
-    }
-
-    func outlineView(_ outlineView: NSOutlineView,
-                     child index: Int,
-                     ofItem item: Any?) -> Any
-    {
-        if item == nil {
-            let batches = renderedNodes.compactMap { node -> RuntimeIndexingBatch? in
-                if case .batch(let batch) = node { return batch } else { return nil }
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            addSubview(titleLabel)
+            titleLabel.snp.makeConstraints { make in
+                make.leading.trailing.centerY.equalToSuperview()
             }
-            return BackgroundIndexingNode.batch(batches[index])
         }
-        guard let node = item as? BackgroundIndexingNode,
-              case .batch(let batch) = node
-        else {
-            preconditionFailure("unexpected outline item type: \(type(of: item))")
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
         }
-        return BackgroundIndexingNode.item(batchID: batch.id,
-                                           item: batch.items[index])
+
+        func configure(
+            reason: RuntimeIndexingBatchReason,
+            completedCount: Int,
+            totalCount: Int
+        ) {
+            titleLabel.stringValue = "\(Self.title(for: reason))   \(completedCount)/\(totalCount)"
+        }
+
+        private static func title(for reason: RuntimeIndexingBatchReason) -> String {
+            switch reason {
+            case .appLaunch:
+                return "App launch indexing"
+            case .imageLoaded(let path):
+                return "\((path as NSString).lastPathComponent) deps"
+            case .settingsEnabled:
+                return "Settings enabled"
+            case .manual:
+                return "Manual indexing"
+            }
+        }
     }
 
-    func outlineView(_ outlineView: NSOutlineView,
-                     isItemExpandable item: Any) -> Bool
-    {
-        if let node = item as? BackgroundIndexingNode,
-           case .batch = node { return true }
-        return false
-    }
+    private final class ItemCellView: NSTableCellView {
+        let titleLabel = Label("")
 
-    func outlineView(_ outlineView: NSOutlineView,
-                     viewFor tableColumn: NSTableColumn?,
-                     item: Any) -> NSView?
-    {
-        guard let node = item as? BackgroundIndexingNode else { return nil }
-
-        let cell = NSTableCellView()
-        let label = Label("")
-        cell.hierarchy { label }
-        label.snp.makeConstraints { make in
-            make.leading.trailing.centerY.equalToSuperview()
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            addSubview(titleLabel)
+            titleLabel.snp.makeConstraints { make in
+                make.leading.trailing.centerY.equalToSuperview()
+            }
         }
 
-        switch node {
-        case .batch(let batch):
-            let title = Self.title(for: batch.reason)
-            label.stringValue = "\(title)   \(batch.completedCount)/\(batch.totalCount)"
-        case .item(_, let item):
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func configure(item: RuntimeIndexingTaskItem) {
             let nameSource = item.resolvedPath ?? item.id
             let name = (nameSource as NSString).lastPathComponent
             let prefix: String = {
@@ -315,22 +283,7 @@ extension BackgroundIndexingPopoverViewController: NSOutlineViewDataSource, NSOu
             if item.hasPriorityBoost, case .pending = item.state {
                 text += "   (priority)"
             }
-            label.stringValue = text
-        }
-
-        return cell
-    }
-
-    private static func title(for reason: RuntimeIndexingBatchReason) -> String {
-        switch reason {
-        case .appLaunch:
-            return "App launch indexing"
-        case .imageLoaded(let path):
-            return "\((path as NSString).lastPathComponent) deps"
-        case .settingsEnabled:
-            return "Settings enabled"
-        case .manual:
-            return "Manual indexing"
+            titleLabel.stringValue = text
         }
     }
 }
