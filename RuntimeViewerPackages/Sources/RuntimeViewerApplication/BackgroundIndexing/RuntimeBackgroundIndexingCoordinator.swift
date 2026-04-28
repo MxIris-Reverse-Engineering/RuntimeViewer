@@ -91,11 +91,18 @@ public final class RuntimeBackgroundIndexingCoordinator {
     public func clearFailedBatches() {
         // Class is `@MainActor`; we're already on the main thread when called
         // from the popover's button. No hop required.
-        let remaining = batchesRelay.value.filter { batch in
+        let allBatches = batchesRelay.value
+        let remaining = allBatches.filter { batch in
             !batch.items.contains { item in
                 if case .failed = item.state { return true } else { return false }
             }
         }
+        // Drop the cleared batches from documentBatchIDs as well — they're
+        // already finalized on the manager side, but leaving their ids here
+        // makes documentBatchIDs grow unboundedly and causes documentWillClose
+        // to fire no-op cancel Tasks for ghost ids.
+        let removedIDs = Set(allBatches.map(\.id)).subtracting(remaining.map(\.id))
+        documentBatchIDs.subtract(removedIDs)
         batchesRelay.accept(remaining)
         refreshAggregate(batches: remaining)
     }
@@ -148,8 +155,13 @@ public final class RuntimeBackgroundIndexingCoordinator {
                 }
             } else {
                 batches.removeAll { $0.id == finished.id }
-                documentBatchIDs.remove(finished.id)
             }
+            // The manager finalized this batch regardless of failure status —
+            // it's already removed from `activeBatches`. Drop it from
+            // `documentBatchIDs` too so `documentWillClose` doesn't fire
+            // no-op cancel Tasks for ghost ids. The UI side decision to keep
+            // failed batches visible is independent of this bookkeeping.
+            documentBatchIDs.remove(finished.id)
             Task { [engine] in
                 await engine.reloadData(isReloadImageNodes: false)
             }
@@ -255,6 +267,15 @@ public final class RuntimeBackgroundIndexingCoordinator {
 #if canImport(RuntimeViewerSettings)
 extension RuntimeBackgroundIndexingCoordinator {
     public func documentDidOpen() {
+        startMainExecutableBatch(reason: .appLaunch)
+    }
+
+    /// Shared logic for "index the main executable" batches. Both the document
+    /// open path (reason `.appLaunch`) and the off→on settings toggle (reason
+    /// `.settingsEnabled`) funnel through here so the popover's title-by-reason
+    /// branch surfaces the correct label instead of always saying "App launch
+    /// indexing".
+    private func startMainExecutableBatch(reason: RuntimeIndexingBatchReason) {
         // The class is `@MainActor`, so this Task inherits main-actor isolation
         // and can mutate `documentBatchIDs` synchronously after the awaits.
         Task { [weak self] in
@@ -270,7 +291,7 @@ extension RuntimeBackgroundIndexingCoordinator {
                 rootImagePath: root,
                 depth: settings.depth,
                 maxConcurrency: settings.maxConcurrency,
-                reason: .appLaunch)
+                reason: reason)
             self.documentBatchIDs.insert(id)
         }
     }
@@ -302,10 +323,11 @@ extension RuntimeBackgroundIndexingCoordinator {
     private func handleImageLoaded(path: String) async {
         let settings = currentBackgroundIndexingSettings()
         guard settings.isEnabled else { return }
-        // Avoid double-starting if the path is the main executable being opened
-        // at app launch — documentDidOpen already dispatched that batch. Manager
-        // dedups batches that share rootImagePath + reason discriminant, so a
-        // second call here is a no-op rather than a wasted batch.
+        // If `documentDidOpen` is currently indexing the same path (e.g. dyld
+        // fires this notification for the main executable right after launch),
+        // the manager dedups by `rootImagePath` and returns the existing
+        // batch's id. Inserting it into `documentBatchIDs` is a no-op on the
+        // Set when it's already tracked.
         let id = await engine.backgroundIndexingManager.startBatch(
             rootImagePath: path,
             depth: settings.depth,
@@ -346,7 +368,10 @@ extension RuntimeBackgroundIndexingCoordinator {
         let wasEnabled = lastKnownIsEnabled
         lastKnownIsEnabled = latest.isEnabled
         if !wasEnabled && latest.isEnabled {
-            documentDidOpen()                               // Scenario E: off→on
+            // Scenario E: off→on. Use `.settingsEnabled` so the popover's
+            // title-by-reason mapping shows "Settings enabled" instead of
+            // the misleading "App launch indexing".
+            startMainExecutableBatch(reason: .settingsEnabled)
         } else if wasEnabled && !latest.isEnabled {
             Task { [engine] in
                 await engine.backgroundIndexingManager.cancelAllBatches()

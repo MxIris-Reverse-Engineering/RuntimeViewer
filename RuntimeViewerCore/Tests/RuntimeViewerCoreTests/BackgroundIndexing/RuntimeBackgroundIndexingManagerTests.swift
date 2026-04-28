@@ -260,6 +260,55 @@ import Testing
         // No crash; batch still completes. No .taskPrioritized emitted.
     }
 
+    /// Real-world double-batch: `documentDidOpen` dispatches `.appLaunch` on the
+    /// main executable; concurrently `imageDidLoadPublisher` fires for the same
+    /// path and `handleImageLoaded` dispatches `.imageLoaded`. Without dedup
+    /// these become two parallel batches indexing the same dependency graph.
+    /// The manager must collapse them to a single batch (same id returned).
+    @Test func startBatchDedupsByRootImagePathAcrossDifferentReasons() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        // depth 0 with `isIndexed: false` → batch contains one pending item
+        // whose load awaits 5ms in the mock; batch A stays active during the
+        // second startBatch call.
+        engine.program(path: "/App", .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        let firstId = await manager.startBatch(
+            rootImagePath: "/App", depth: 0,
+            maxConcurrency: 1, reason: .appLaunch)
+        let secondId = await manager.startBatch(
+            rootImagePath: "/App", depth: 0,
+            maxConcurrency: 1, reason: .imageLoaded(path: "/App"))
+
+        #expect(
+            firstId == secondId,
+            "Same rootImagePath while batch is active must return the existing id"
+        )
+
+        // Cleanup so the test doesn't leave a Task in flight.
+        await manager.cancelBatch(firstId)
+    }
+
+    /// After a batch finishes, the same root may be re-batched (e.g. another
+    /// dlopen of an unloaded dep). Dedup must NOT bind to historical batches.
+    @Test func startBatchAllowsNewBatchAfterPreviousFinishedForSameRoot() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        engine.program(path: "/App", .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        let firstBatch = await runToFinish(manager: manager,
+                                           root: "/App", depth: 0,
+                                           maxConcurrency: 1)
+        // After the batch completes, a fresh startBatch on the same root must
+        // produce a new id — the prior batch is no longer active.
+        let secondId = await manager.startBatch(
+            rootImagePath: "/App", depth: 0,
+            maxConcurrency: 1, reason: .manual)
+        #expect(firstBatch.id != secondId)
+
+        await manager.cancelBatch(secondId)
+    }
+
     // MARK: - Test helpers
     private func runToFinish(manager: RuntimeBackgroundIndexingManager,
                              root: String, depth: Int,

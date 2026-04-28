@@ -58,8 +58,33 @@ public actor RuntimeBackgroundIndexingManager {
         maxConcurrency: Int,
         reason: RuntimeIndexingBatchReason
     ) async -> RuntimeIndexingBatchID {
+        // Dedup before doing any expansion work. Real-world trigger:
+        // `documentDidOpen` dispatches `.appLaunch` on the main executable
+        // and dyld's add-image notification simultaneously fires
+        // `handleImageLoaded` with the same path, dispatching `.imageLoaded`.
+        // Two concurrent batches on the same root would duplicate work and
+        // race for the same section caches.
+        //
+        // We dedup by `rootImagePath` only — `reason` is intentionally
+        // ignored so `.appLaunch` ↔ `.imageLoaded(path:)` (which have
+        // different discriminants) collapse together. Callers that want
+        // a fresh batch must wait for the previous one to finish.
+        if let existingId = findActiveBatchID(forRootImagePath: rootImagePath) {
+            return existingId
+        }
+
         let id = RuntimeIndexingBatchID()
         let items = await expandDependencyGraph(rootPath: rootImagePath, depth: depth)
+
+        // Re-check after the suspension: actor reentrancy means another
+        // `startBatch` call for the same root could have raced us through
+        // its own `expandDependencyGraph`. The check + insert below is
+        // atomic on the actor (no awaits between them) so the loser of the
+        // race always sees the winner's insertion.
+        if let existingId = findActiveBatchID(forRootImagePath: rootImagePath) {
+            return existingId
+        }
+
         let batch = RuntimeIndexingBatch(
             id: id, rootImagePath: rootImagePath, depth: depth,
             reason: reason, items: items,
@@ -74,6 +99,14 @@ public actor RuntimeBackgroundIndexingManager {
         }
         activeBatches[id]?.drivingTask = drivingTask
         return id
+    }
+
+    private func findActiveBatchID(forRootImagePath rootImagePath: String)
+        -> RuntimeIndexingBatchID?
+    {
+        activeBatches.first { _, state in
+            !state.batch.isFinished && state.batch.rootImagePath == rootImagePath
+        }?.key
     }
 
     func expandDependencyGraph(rootPath: String, depth: Int)
