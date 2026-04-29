@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import FoundationToolbox
 import UserNotifications
@@ -137,3 +138,4 @@ extension DependencyValues {
         set { self[RuntimeConnectionNotificationServiceKey.self] = newValue }
     }
 }
+#endif

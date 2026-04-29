@@ -1,9 +1,11 @@
+#if os(macOS)
 import AppKit
 import Foundation
 import FoundationToolbox
 import OrderedCollections
 import ServiceManagement
 import SystemConfiguration
+import Dependencies
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
@@ -11,6 +13,7 @@ import RuntimeViewerHelperClient
 import RuntimeViewerCatalystExtensions
 
 @Loggable
+@MainActor
 public final class RuntimeEngineManager {
     public static let shared = RuntimeEngineManager()
 
@@ -132,7 +135,7 @@ public final class RuntimeEngineManager {
                     return
                 }
                 #log(.info,"Bonjour endpoint discovered: \(endpoint.name, privacy: .public), instanceID: \(endpoint.instanceID ?? "nil", privacy: .public), attempting connection...")
-                Task {
+                Task { @MainActor in
                     await self.connectToBonjourEndpoint(endpoint)
                 }
             },
@@ -149,7 +152,7 @@ public final class RuntimeEngineManager {
             }
         )
 
-        Task {
+        Task { @MainActor in
             do {
                 #log(.info,"Launching system runtime engines...")
                 try await self.launchSystemRuntimeEngines()
@@ -170,7 +173,7 @@ public final class RuntimeEngineManager {
 
         #log(.info,"Starting Bonjour server with name: \(name, privacy: .public)")
 
-        Task {
+        Task { @MainActor in
             do {
                 try await engine.connect()
                 #log(.info,"Bonjour server connected with name: \(name, privacy: .public)")
@@ -211,7 +214,7 @@ public final class RuntimeEngineManager {
             #log(.info,"Successfully connected to Bonjour endpoint: \(endpoint.name, privacy: .public)")
 
             // Request the remote peer's engine list for mirroring
-            Task {
+            Task { @MainActor in
                 do {
                     #log(.debug,"[EngineMirroring] requesting engine list from \(endpoint.name, privacy: .public)...")
                     let descriptors = try await runtimeEngine.requestEngineList()
@@ -327,7 +330,7 @@ public final class RuntimeEngineManager {
 
         if let pendingBonjourReconnect {
             #log(.info,"Reconnecting to pending Bonjour endpoint after termination: \(pendingBonjourReconnect.name, privacy: .public)")
-            Task {
+            Task { @MainActor in
                 await self.connectToBonjourEndpoint(pendingBonjourReconnect)
             }
         }
@@ -427,7 +430,7 @@ public final class RuntimeEngineManager {
 
     private func observeRuntimeEngineState(_ runtimeEngine: RuntimeEngine) {
         runtimeEngine.statePublisher.asObservable()
-            .subscribeOnNext { [weak self, weak runtimeEngine] state in
+            .subscribeOnNextMainActor { [weak self, weak runtimeEngine] state in
                 guard let self, let runtimeEngine else { return }
                 switch state {
                 case .initializing:
@@ -474,33 +477,27 @@ public final class RuntimeEngineManager {
     /// per-source reconciliation model.
     private func cleanupMirroredEnginesOnDisconnect(of runtimeEngine: RuntimeEngine) {
         // Case 1: the disconnected engine is itself a mirrored entry.
-        let ownMirroredIDs = mirroredEngines.compactMap { (id, engine) in
-            engine === runtimeEngine ? id : nil
-        }
-        if !ownMirroredIDs.isEmpty {
-            for id in ownMirroredIDs {
-                if let mirrored = mirroredEngines.removeValue(forKey: id) {
-                    Task { await mirrored.stop() }
-                }
-                engineIconCache.removeValue(forKey: id)
-                mirroredEngineOwnership.removeValue(forKey: id)
+        let ownMirrorRemovals = mirrorRegistry.clearOwnMirror(matching: runtimeEngine)
+        if !ownMirrorRemovals.isEmpty {
+            for removal in ownMirrorRemovals {
+                let stopped = removal.engine
+                Task { @MainActor in await stopped.stop() }
+                engineIconCache.removeValue(forKey: removal.engineID)
             }
+            mirroredEngines = mirrorRegistry.engines
             return
         }
 
         // Case 2: direct peer disconnect — remove everything we owned via this peer.
-        let directUpstreamID = runtimeEngine.hostInfo.hostID
-        let affectedIDs = mirroredEngineOwnership.compactMap { (id, ownerHostID) in
-            ownerHostID == directUpstreamID ? id : nil
+        let peerRemovals = mirrorRegistry.clearAllOwnedBy(hostID: runtimeEngine.hostInfo.hostID)
+        for removal in peerRemovals {
+            let stopped = removal.engine
+            Task { @MainActor in await stopped.stop() }
+            engineIconCache.removeValue(forKey: removal.engineID)
         }
-        for id in affectedIDs {
-            if let mirrored = mirroredEngines.removeValue(forKey: id) {
-                Task { await mirrored.stop() }
-            }
-            engineIconCache.removeValue(forKey: id)
-            mirroredEngineOwnership.removeValue(forKey: id)
+        if !peerRemovals.isEmpty {
+            mirroredEngines = mirrorRegistry.engines
         }
-        lastReceivedDescriptorIDsBySource.removeValue(forKey: directUpstreamID)
     }
 
     // MARK: - Icon Management
@@ -581,11 +578,11 @@ public final class RuntimeEngineManager {
         // When a Bonjour client connects to our server, push the current engine list
         if let bonjourServerEngine {
             bonjourServerEngine.statePublisher.asObservable()
-                .subscribeOnNext { [weak self] state in
+                .subscribeOnNextMainActor { [weak self] state in
                     guard let self else { return }
                     if case .connected = state {
                         #log(.info,"Bonjour server client connected, pushing engine list")
-                        Task {
+                        Task { @MainActor in
                             let descriptors = await self.buildEngineDescriptors()
                             try? await bonjourServerEngine.pushEngineListChanged(descriptors)
                         }
@@ -651,105 +648,74 @@ public final class RuntimeEngineManager {
 
     // MARK: - Engine Mirroring (Client-Side)
 
-    /// Last descriptor ID set received from each direct upstream, keyed by upstream host ID.
-    /// Used for per-source dedup: a repeat push from source B that matches B's previous
-    /// payload is skipped, without any interaction with other sources' state.
-    private var lastReceivedDescriptorIDsBySource: [String: Set<String>] = [:]
-
-    /// Maps a mirrored engine's globalID to the direct upstream host ID that reported it.
-    /// This is the direct peer we received the descriptor from (append-self's last element),
-    /// NOT the original host (`descriptor.originChain.first`). Two mirrored engines with the
-    /// same originating host may have different owners if they arrived via different peers.
-    /// First-come-first-served: if two peers report the same engineID, the first one owns it
-    /// and subsequent duplicates are ignored until the owner drops it.
-    private var mirroredEngineOwnership: [String: String] = [:]
+    /// Owns the per-source dedup cache, ownership map, and the actual mirrored
+    /// engine dictionary. All mutation goes through here so the reconcile rules
+    /// can be exercised by unit tests without spinning up the full network stack.
+    private let mirrorRegistry = RuntimeEngineMirrorRegistry()
 
     func handleEngineListChanged(_ descriptors: [RemoteEngineDescriptor], from engine: RuntimeEngine) {
         let sourceHostID = engine.hostInfo.hostID
         #log(.debug,"[EngineMirroring] handleEngineListChanged called with \(descriptors.count, privacy: .public) descriptors from source=\(sourceHostID, privacy: .public) (\(engine.source.description, privacy: .public))")
 
-        // Filter out cycles first
-        let filteredDescriptors = descriptors.filter { descriptor in
-            if descriptor.originChain.contains(RuntimeNetworkBonjour.localInstanceID) {
-                #log(.debug,"[EngineMirroring] skipping \(descriptor.engineID, privacy: .public): cycle detected (originChain contains \(RuntimeNetworkBonjour.localInstanceID, privacy: .public))")
-                return false
-            }
-            return true
-        }
-
-        // Per-source dedup: skip only if THIS source's last payload was identical.
-        // Must be keyed by source — a global `lastReceivedDescriptorIDs` would let source B's
-        // update match source C's previous set and be silently dropped.
-        let newIDSet = Set(filteredDescriptors.map(\.engineID))
-        let previousIDSetFromThisSource = lastReceivedDescriptorIDsBySource[sourceHostID] ?? []
-        #log(.debug,"[EngineMirroring] per-source dedup check for \(sourceHostID, privacy: .public): last=\(previousIDSetFromThisSource.sorted().joined(separator: ", "), privacy: .public), new=\(newIDSet.sorted().joined(separator: ", "), privacy: .public)")
-        if newIDSet == previousIDSetFromThisSource {
-            #log(.debug,"[EngineMirroring] skipping duplicate descriptor set from \(sourceHostID, privacy: .public)")
-            return
-        }
-        lastReceivedDescriptorIDsBySource[sourceHostID] = newIDSet
-
-        for d in filteredDescriptors {
+        for d in descriptors {
             #log(.debug,"[EngineMirroring]   descriptor: \(d.engineID, privacy: .public) host:\(d.directTCPHost, privacy: .public) port:\(d.directTCPPort, privacy: .public) originChain:\(d.originChain.joined(separator: ","), privacy: .public)")
         }
 
-        // Per-source reconcile: operate ONLY on engines owned by this source. Engines owned by
-        // other sources must not be touched — otherwise host B's push would wipe host C's mirrors.
-        let currentIDsFromThisSource = Set(
-            mirroredEngineOwnership.compactMap { (id, ownerHostID) in
-                ownerHostID == sourceHostID ? id : nil
+        let outcome = mirrorRegistry.reconcile(
+            descriptors: descriptors,
+            fromHostID: sourceHostID,
+            localInstanceID: RuntimeNetworkBonjour.localInstanceID,
+            engineFactory: { descriptor in
+                RuntimeEngine(
+                    source: .directTCP(
+                        name: descriptor.source.description,
+                        host: descriptor.directTCPHost,
+                        port: descriptor.directTCPPort,
+                        role: .client
+                    ),
+                    hostInfo: HostInfo(
+                        hostID: descriptor.originChain.first ?? "",
+                        hostName: descriptor.hostName,
+                        metadata: descriptor.metadata
+                    ),
+                    originChain: descriptor.originChain
+                )
             }
         )
 
-        // Remove engines that THIS source no longer reports.
-        for id in currentIDsFromThisSource.subtracting(newIDSet) {
-            if let engine = mirroredEngines.removeValue(forKey: id) {
-                Task { await engine.stop() }
-                engineIconCache.removeValue(forKey: id)
-            }
-            mirroredEngineOwnership.removeValue(forKey: id)
-        }
+        switch outcome {
+        case .skippedDuplicate:
+            #log(.debug,"[EngineMirroring] skipping duplicate descriptor set from \(sourceHostID, privacy: .public)")
+            return
 
-        // Add new engines. If an engineID is already present (owned by another source that
-        // reported it first), skip — first-come-first-served keeps behavior simple and matches
-        // the previous implicit contract.
-        for descriptor in filteredDescriptors {
-            guard mirroredEngines[descriptor.engineID] == nil else { continue }
-
-            let mirroredEngine = RuntimeEngine(
-                source: .directTCP(
-                    name: descriptor.source.description,
-                    host: descriptor.directTCPHost,
-                    port: descriptor.directTCPPort,
-                    role: .client
-                ),
-                hostInfo: HostInfo(
-                    hostID: descriptor.originChain.first ?? "",
-                    hostName: descriptor.hostName,
-                    metadata: descriptor.metadata
-                ),
-                originChain: descriptor.originChain
-            )
-
-            mirroredEngines[descriptor.engineID] = mirroredEngine
-            mirroredEngineOwnership[descriptor.engineID] = sourceHostID
-            observeRuntimeEngineState(mirroredEngine)
-
-            // Cache app icon from descriptor if available
-            if let iconData = descriptor.iconData, let image = NSImage(data: iconData) {
-                engineIconCache[mirroredEngine.engineID] = image
+        case .applied(let removed, let added):
+            for removal in removed {
+                let stopped = removal.engine
+                Task { @MainActor in await stopped.stop() }
+                engineIconCache.removeValue(forKey: removal.engineID)
             }
 
-            Task {
-                do {
-                    try await mirroredEngine.connect()
-                } catch {
-                    #log(.error,"Failed to connect mirrored engine \(descriptor.engineID, privacy: .public): \(error, privacy: .public)")
+            for addition in added {
+                let mirroredEngine = addition.engine
+                let descriptor = addition.descriptor
+                observeRuntimeEngineState(mirroredEngine)
+
+                if let iconData = descriptor.iconData, let image = NSImage(data: iconData) {
+                    engineIconCache[mirroredEngine.engineID] = image
+                }
+
+                Task { @MainActor in
+                    do {
+                        try await mirroredEngine.connect()
+                    } catch {
+                        #log(.error,"Failed to connect mirrored engine \(descriptor.engineID, privacy: .public): \(error, privacy: .public)")
+                    }
                 }
             }
-        }
 
-        rebuildSections()
+            mirroredEngines = mirrorRegistry.engines
+            rebuildSections()
+        }
     }
 
     // MARK: - Section Building
@@ -789,6 +755,7 @@ public final class RuntimeEngineManager {
 
 extension RuntimeEngineManager: ReactiveCompatible {}
 
+@MainActor
 extension Reactive where Base == RuntimeEngineManager {
     public var runtimeEngines: Driver<[RuntimeEngine]> {
         Driver.combineLatest(
@@ -807,13 +774,16 @@ extension Reactive where Base == RuntimeEngineManager {
 
 // MARK: - Dependencies
 
-private enum RuntimeEngineManagerKey: DependencyKey {
+@MainActor
+private enum RuntimeEngineManagerKey: @MainActor DependencyKey {
     static let liveValue = RuntimeEngineManager.shared
 }
 
+@MainActor
 extension DependencyValues {
     public var runtimeEngineManager: RuntimeEngineManager {
         get { self[RuntimeEngineManagerKey.self] }
         set { self[RuntimeEngineManagerKey.self] = newValue }
     }
 }
+#endif

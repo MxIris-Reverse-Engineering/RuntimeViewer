@@ -456,6 +456,8 @@ let package = Package(
                 "RuntimeViewerArchitectures",
                 .target(name: "RuntimeViewerSettings", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerSettingsUI", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),
@@ -495,6 +497,14 @@ let package = Package(
         .testTarget(
             name: "RuntimeViewerSettingsTests",
             dependencies: ["RuntimeViewerSettings"]
+        ),
+
+        .testTarget(
+            name: "RuntimeViewerApplicationTests",
+            dependencies: [
+                "RuntimeViewerApplication",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+            ]
         ),
 
     ],
