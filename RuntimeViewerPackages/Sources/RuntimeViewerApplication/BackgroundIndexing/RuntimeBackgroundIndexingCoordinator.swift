@@ -33,6 +33,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
     private let disposeBag = DisposeBag()
 
     private let batchesRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
+    private let historyRelay = BehaviorRelay<[RuntimeIndexingBatch]>(value: [])
     private let aggregateRelay = BehaviorRelay<AggregateState>(
         value: .init(hasActiveBatch: false, hasAnyFailure: false, progress: nil)
     )
@@ -67,6 +68,15 @@ public final class RuntimeBackgroundIndexingCoordinator {
     public var aggregateStateObservable: Observable<AggregateState> {
         aggregateRelay.asObservable()
     }
+
+    public var historyObservable: Observable<[RuntimeIndexingBatch]> {
+        historyRelay.asObservable()
+    }
+
+    // Synchronous accessors so the ViewModel can do `Observable.combineLatest`
+    // without re-subscribing inside drive callbacks. Mirror `batchesRelay.value`.
+    public var batchesValue: [RuntimeIndexingBatch] { batchesRelay.value }
+    public var historyValue: [RuntimeIndexingBatch] { historyRelay.value }
 
     // MARK: - Public command surface
 
@@ -105,6 +115,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
         documentBatchIDs.subtract(removedIDs)
         batchesRelay.accept(remaining)
         refreshAggregate(batches: remaining)
+    }
+
+    public func clearHistory() {
+        historyRelay.accept([])
     }
 
     // MARK: - Event pump (AsyncStream → Relay)
@@ -146,10 +160,14 @@ public final class RuntimeBackgroundIndexingCoordinator {
                 batch.items[itemIndex].hasPriorityBoost = true
             }}
         case .batchFinished(let finished):
+            var updatedHistory = historyRelay.value
+            updatedHistory.insert(finished, at: 0)
+            historyRelay.accept(updatedHistory)
             if finished.items.contains(where: {
                 if case .failed = $0.state { return true } else { return false }
             }) {
                 // Keep the failed batch in the list until the user dismisses it.
+                // (Removed in Task 3 once history UI is wired.)
                 if let batchIndex = batches.firstIndex(where: { $0.id == finished.id }) {
                     batches[batchIndex] = finished
                 }
@@ -167,7 +185,11 @@ public final class RuntimeBackgroundIndexingCoordinator {
             }
 
         case .batchCancelled(let cancelled):
-            // Cancellation always removes — user already acknowledged the outcome.
+            // Cancellation always removes from active. Now also lands in history
+            // so the user can review what got cancelled.
+            var updatedHistory = historyRelay.value
+            updatedHistory.insert(cancelled, at: 0)
+            historyRelay.accept(updatedHistory)
             batches.removeAll { $0.id == cancelled.id }
             documentBatchIDs.remove(cancelled.id)
             Task { [engine] in
@@ -245,9 +267,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
             }
         }
 
-        // 3) Drop UI state — the old engine's batches no longer apply.
+        // 3) Drop UI state — the old engine's batches and history no longer apply.
         documentBatchIDs.removeAll()
         batchesRelay.accept([])
+        historyRelay.accept([])
         refreshAggregate(batches: [])
 
         // 4) Switch the captured engine reference.
