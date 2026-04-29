@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# ReleaseScript.sh — Archive, notarize, sign, and (optionally) publish a
+# ArchiveScript.sh — Archive, notarize, sign, and (optionally) publish a
 # RuntimeViewer release. Used by both local developers and CI.
 #
 # Usage:
-#   ./ReleaseScript.sh --version-tag vX.Y.Z \
+#   ./ArchiveScript.sh --version-tag vX.Y.Z \
+#                      [--configuration Release|Debug] \
 #                      [--release-notes Changelogs/vX.Y.Z.md] \
 #                      [--update-appcast] [--upload-to-github] [--commit-push]
-#   ./ReleaseScript.sh --help
+#   ./ArchiveScript.sh --help
 #
 # Run without --update-appcast / --upload-to-github / --commit-push for a
-# local build that only produces the signed, notarized zip.
+# local build that only produces the signed, notarized zip. The default
+# configuration is Release; pass --configuration Debug (or any other
+# configuration name defined in the workspace) for local validation.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -45,7 +48,7 @@ DOWNLOAD_URL_PREFIX_BASE="https://github.com/MxIris-Reverse-Engineering/RuntimeV
 RELEASE_NOTES_URL_PREFIX="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/tag/"
 
 fail() { echo "error: $*" >&2; exit 1; }
-log()  { echo "[ReleaseScript] $*"; }
+log()  { echo "[ArchiveScript] $*"; }
 
 # Pipe xcodebuild output through xcbeautify when it is installed; otherwise
 # fall back to cat so that neither CI nor local runs depend on the tool.
@@ -106,7 +109,7 @@ while [[ $# -gt 0 ]]; do
         --notary-api-key) NOTARY_API_KEY="$2"; shift 2;;
         --notary-key-id) NOTARY_KEY_ID="$2"; shift 2;;
         --notary-issuer-id) NOTARY_ISSUER_ID="$2"; shift 2;;
-        -h|--help) sed -n '2,12p' "$0" | sed 's/^# *//'; exit 0;;
+        -h|--help) sed -n '2,15p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done

@@ -12,7 +12,7 @@ A public release is cut by pushing an annotated git tag matching:
 - `v<MAJOR>.<MINOR>.<PATCH>` — stable release.
 - `v<MAJOR>.<MINOR>.<PATCH>-RC.<N>` / `-beta.<N>` / `-alpha.<N>` — pre-release.
 
-`ReleaseScript.sh` (and the `release.yml` workflow) infer the Sparkle channel
+`ArchiveScript.sh` (and the `release.yml` workflow) infer the Sparkle channel
 from the tag: anything matching `*-RC*|*-beta*|*-alpha*` goes into the `beta`
 channel, everything else goes into `stable`. Pass `--channel` explicitly to
 override. Pre-releases are only offered to clients that opt in via
@@ -28,7 +28,7 @@ Substitute the version tag in the example below for whichever release you are
 cutting (e.g. `v2.0.0-RC.4`, `v2.0.0`, `v2.1.0`).
 
 ```bash
-./ReleaseScript.sh --version-tag v2.0.0 \
+./ArchiveScript.sh --version-tag v2.0.0 \
                    --release-notes Changelogs/v2.0.0.md \
                    --update-appcast --upload-to-github --commit-push
 ```
@@ -44,7 +44,7 @@ for a local dry-run that only produces the signed, notarized zip under
 - `--ed-key-file <path>` — sign with an explicit PEM instead of the login
   Keychain; used by CI.
 
-Run `./ReleaseScript.sh --help` for the full list.
+Run `./ArchiveScript.sh --help` for the full list.
 
 ## CI release (automatic)
 
@@ -58,7 +58,7 @@ gh workflow run release.yml -f tag=v2.0.0 -f create_release=false   # build only
 
 CI watches `.github/workflows/release.yml`; it decodes the
 `SPARKLE_EDDSA_PRIVATE_KEY` secret to a tempfile and passes
-`--ed-key-file` to `ReleaseScript.sh`. Tag pushes always create/upload the
+`--ed-key-file` to `ArchiveScript.sh`. Tag pushes always create/upload the
 GitHub Release and commit the updated `docs/appcast.xml` back to `main`.
 
 ## EdDSA key management
@@ -71,7 +71,7 @@ below) affects every app that uses it — coordinate before regenerating.
 `"Private key for signing Sparkle updates"` (account `ed25519`, service
 `https://sparkle-project.org`). `generate_appcast` reads it automatically
 when invoked without `--ed-key-file`, which is what local runs of
-`ReleaseScript.sh` rely on.
+`ArchiveScript.sh` rely on.
 
 **CI use:** the same private key is stored as GitHub repo secret
 `SPARKLE_EDDSA_PRIVATE_KEY` in base64-encoded PEM form. The workflow decodes
@@ -100,7 +100,7 @@ gshred -u sparkle_ed25519_priv.pem      # or: rm -P sparkle_ed25519_priv.pem
 ```
 
 `-f` re-imports the key into the Keychain under the original item name. After
-that, local `ReleaseScript.sh` runs work again without `--ed-key-file`.
+that, local `ArchiveScript.sh` runs work again without `--ed-key-file`.
 
 **If both the Keychain copy and every offline backup are lost:**
 
@@ -150,6 +150,6 @@ backup).
   xcconfig's `//` comment rule mangles URLs).
 - Release notes: `Changelogs/<tag>.md`.
 - CI workflow: `.github/workflows/release.yml`.
-- Release driver: `ReleaseScript.sh`.
+- Release driver: `ArchiveScript.sh`.
 - Outstanding integration follow-ups:
   `Documentations/Plans/2026-04-21-sparkle-integration-followup.md`.

@@ -105,7 +105,7 @@ jobs:
           tar -xf /tmp/Sparkle.tar.xz -C "$RUNNER_TEMP/Sparkle"
           echo "$RUNNER_TEMP/Sparkle/bin" >> $GITHUB_PATH
 
-      - name: Run ReleaseScript
+      - name: Run ArchiveScript
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -123,7 +123,7 @@ jobs:
             CREATE_FLAGS=(--update-appcast --upload-to-github --commit-push)
           fi
 
-          ./ReleaseScript.sh \
+          ./ArchiveScript.sh \
             --notary-api-key "$NOTARY_KEY_FILE" \
             --notary-key-id "${{ secrets.NOTARY_KEY_ID }}" \
             --notary-issuer-id "${{ secrets.NOTARY_ISSUER_ID }}" \
