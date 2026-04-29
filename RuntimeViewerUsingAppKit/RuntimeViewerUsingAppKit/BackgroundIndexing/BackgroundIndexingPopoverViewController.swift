@@ -53,9 +53,9 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         $0.title = "Cancel All"
     }
 
-    private let clearFailedButton = NSButton().then {
+    private let clearHistoryButton = NSButton().then {
         $0.bezelStyle = .accessoryBarAction
-        $0.title = "Clear Failed"
+        $0.title = "Clear History"
         $0.isHidden = true
     }
 
@@ -81,7 +81,7 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 
         let buttonStack = HStackView(spacing: 8) {
             cancelAllButton
-            clearFailedButton
+            clearHistoryButton
             closeButton
         }
         buttonStack.alignment = .centerY
@@ -154,7 +154,7 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         let input = BackgroundIndexingPopoverViewModel.Input(
             cancelBatch: cancelBatchRelay.asSignal(),
             cancelAll: cancelAllButton.rx.click.asSignal(),
-            clearFailed: clearFailedButton.rx.click.asSignal(),
+            clearHistory: clearHistoryButton.rx.click.asSignal(),
             openSettings: openSettingsButton.rx.click.asSignal()
         )
         let output = viewModel.transform(input)
@@ -178,8 +178,8 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
             .drive(openSettingsButton.rx.isHidden)
             .disposed(by: rx.disposeBag)
 
-        output.hasAnyFailure.not()
-            .drive(clearFailedButton.rx.isHidden)
+        output.hasAnyHistory.not()
+            .drive(clearHistoryButton.rx.isHidden)
             .disposed(by: rx.disposeBag)
 
         // Direct-call into the Settings window. There is no `MainRoute.openSettings`
@@ -190,14 +190,18 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
             }
             .disposed(by: rx.disposeBag)
 
-        Driver.combineLatest(output.isEnabled, output.hasAnyBatch) { enabled, hasBatches in
-            !enabled || hasBatches
+        let hasAnyContent = Driver.combineLatest(output.hasAnyBatch, output.hasAnyHistory) {
+            $0 || $1
+        }
+
+        Driver.combineLatest(output.isEnabled, hasAnyContent) { enabled, hasContent in
+            !enabled || hasContent
         }
         .drive(emptyIdleView.rx.isHidden)
         .disposed(by: rx.disposeBag)
 
-        Driver.combineLatest(output.isEnabled, output.hasAnyBatch) { enabled, hasBatches in
-            !enabled || !hasBatches
+        Driver.combineLatest(output.isEnabled, hasAnyContent) { enabled, hasContent in
+            !enabled || !hasContent
         }
         .drive(scrollView.rx.isHidden)
         .disposed(by: rx.disposeBag)
@@ -230,9 +234,17 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         }
         .disposed(by: rx.disposeBag)
 
-        output.nodes.driveOnNext { [weak self] _ in
+        output.nodes.driveOnNext { [weak self] nodes in
             guard let self else { return }
-            outlineView.expandItem(nil, expandChildren: true)
+            // Auto-expand only the ACTIVE section and its batches. HISTORY stays
+            // collapsed by default; once the user expands it, NSOutlineView
+            // preserves that state across diffs (the section identifier is
+            // kind-only, see BackgroundIndexingNode.differenceIdentifier).
+            for node in nodes {
+                if case .section(.active, _) = node {
+                    outlineView.expandItem(node, expandChildren: true)
+                }
+            }
         }
         .disposed(by: rx.disposeBag)
     }

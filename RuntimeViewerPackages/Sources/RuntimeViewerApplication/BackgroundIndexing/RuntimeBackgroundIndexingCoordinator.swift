@@ -98,25 +98,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
         }
     }
 
-    public func clearFailedBatches() {
-        // Class is `@MainActor`; we're already on the main thread when called
-        // from the popover's button. No hop required.
-        let allBatches = batchesRelay.value
-        let remaining = allBatches.filter { batch in
-            !batch.items.contains { item in
-                if case .failed = item.state { return true } else { return false }
-            }
-        }
-        // Drop the cleared batches from documentBatchIDs as well — they're
-        // already finalized on the manager side, but leaving their ids here
-        // makes documentBatchIDs grow unboundedly and causes documentWillClose
-        // to fire no-op cancel Tasks for ghost ids.
-        let removedIDs = Set(allBatches.map(\.id)).subtracting(remaining.map(\.id))
-        documentBatchIDs.subtract(removedIDs)
-        batchesRelay.accept(remaining)
-        refreshAggregate(batches: remaining)
-    }
-
     public func clearHistory() {
         historyRelay.accept([])
     }
@@ -160,25 +141,8 @@ public final class RuntimeBackgroundIndexingCoordinator {
                 batch.items[itemIndex].hasPriorityBoost = true
             }}
         case .batchFinished(let finished):
-            var updatedHistory = historyRelay.value
-            updatedHistory.insert(finished, at: 0)
-            historyRelay.accept(updatedHistory)
-            if finished.items.contains(where: {
-                if case .failed = $0.state { return true } else { return false }
-            }) {
-                // Keep the failed batch in the list until the user dismisses it.
-                // (Removed in Task 3 once history UI is wired.)
-                if let batchIndex = batches.firstIndex(where: { $0.id == finished.id }) {
-                    batches[batchIndex] = finished
-                }
-            } else {
-                batches.removeAll { $0.id == finished.id }
-            }
-            // The manager finalized this batch regardless of failure status —
-            // it's already removed from `activeBatches`. Drop it from
-            // `documentBatchIDs` too so `documentWillClose` doesn't fire
-            // no-op cancel Tasks for ghost ids. The UI side decision to keep
-            // failed batches visible is independent of this bookkeeping.
+            appendToHistory(finished)
+            batches.removeAll { $0.id == finished.id }
             documentBatchIDs.remove(finished.id)
             Task { [engine] in
                 await engine.reloadData(isReloadImageNodes: false)
@@ -187,9 +151,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
         case .batchCancelled(let cancelled):
             // Cancellation always removes from active. Now also lands in history
             // so the user can review what got cancelled.
-            var updatedHistory = historyRelay.value
-            updatedHistory.insert(cancelled, at: 0)
-            historyRelay.accept(updatedHistory)
+            appendToHistory(cancelled)
             batches.removeAll { $0.id == cancelled.id }
             documentBatchIDs.remove(cancelled.id)
             Task { [engine] in
@@ -204,6 +166,12 @@ public final class RuntimeBackgroundIndexingCoordinator {
         var copy = value
         mutate(&copy)
         return copy
+    }
+
+    private func appendToHistory(_ batch: RuntimeIndexingBatch) {
+        var updatedHistory = historyRelay.value
+        updatedHistory.insert(batch, at: 0)
+        historyRelay.accept(updatedHistory)
     }
 
     private func refreshAggregate(batches: [RuntimeIndexingBatch]) {
