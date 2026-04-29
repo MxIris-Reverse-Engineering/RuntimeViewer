@@ -51,14 +51,14 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
             coordinator.historyObservable
         )
         .map { active, history in
-            Self.renderNodes(active: active, history: history)
+            (Self.renderNodes(active: active, history: history), active, history)
         }
-        .asDriver(onErrorJustReturn: [])
-        .driveOnNext { [weak self] newNodes in
+        .asDriver(onErrorJustReturn: ([], [], []))
+        .driveOnNext { [weak self] newNodes, active, history in
             guard let self else { return }
             nodes = newNodes
-            hasAnyBatch = !coordinator.batchesValue.isEmpty
-            hasAnyHistory = !coordinator.historyValue.isEmpty
+            hasAnyBatch = !active.isEmpty
+            hasAnyHistory = !history.isEmpty
         }
         .disposed(by: rx.disposeBag)
 
