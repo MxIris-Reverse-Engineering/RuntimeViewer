@@ -3,7 +3,7 @@
 - **状态**: Accepted
 - **作者**: JH
 - **日期**: 2026-04-24
-- **最后更新**: 2026-04-28
+- **最后更新**: 2026-04-29
 
 ## 摘要
 
@@ -264,10 +264,12 @@ public enum RuntimeIndexingEvent: Sendable {
 2. 监听引擎的 `imageDidLoadPublisher` → 为该镜像启动一次依赖批次。
 3. 监听 Sidebar 的镜像选中信号 → 调用 `manager.prioritize(path:)`。
 4. 将 `manager.events`（AsyncStream）桥接到 `eventRelay: PublishRelay<RuntimeIndexingEvent>`（RxSwift）。
-5. 维护从事件归约而来的 `batchesRelay: BehaviorRelay<[RuntimeIndexingBatch]>`。**包含任意失败项的已完成批次会被保留**在 `batchesRelay` 中，直到用户在弹出框中通过"Clear Failed"显式清除；干净完成与取消会立即移除。
-6. 暴露 `aggregateStateDriver: Driver<IndexingToolbarState>`。`hasFailures` 由保留下来的失败批次推导。
+5. 维护两条事件归约 relay:
+   - `batchesRelay: BehaviorRelay<[RuntimeIndexingBatch]>` —— 仅包含**未 finalized** 的活跃批次。任何 `.batchFinished` / `.batchCancelled` 事件到达时立即移除对应批次(失败也一并移除,不再保留在此 relay 内 —— 参见 2026-04-29 决策)。
+   - `historyRelay: BehaviorRelay<[RuntimeIndexingBatch]>` —— 已 finalized 的批次历史(成功、失败、取消三类合并),**最新在前**。仅在当前 Document 的 Coordinator 内存中累积 —— Document 关闭时随 Coordinator deinit 一起消亡;源切换时由 `handleEngineSwap` 显式清空(与 `batchesRelay.accept([])` 对称,因为旧 engine 的 batch 元数据对新 engine 无意义)。用户通过弹出框的 `Clear History` 按钮(取代旧 `Clear Failed`)显式清空。
+6. 暴露 `aggregateStateObservable: Observable<AggregateState>`(字段 `hasActiveBatch` / `progress` 用于弹出框副标题)。原计划中给 toolbar 的 `IndexingToolbarState` 已在实现期被简化为静态 IconButton(`BackgroundIndexingToolbarItem`),因此 `AggregateState.hasAnyFailure` 字段虽保留为公共 API 但不再被任何消费方读取。
 7. 持有按 Document 维度的批次跟踪：`[Document.ID: Set<RuntimeIndexingBatchID>]`。
-8. 通过 RxSwift 订阅 `documentState.$runtimeEngine.skip(1)`(BehaviorRelay) 响应 source switch:取消旧 manager 上的 doc batches、停掉旧 pumps、清空 `batchesRelay` / `aggregateRelay`、把 `self.engine` 切到新 engine、重启 pumps、若 isEnabled 则重新触发 `documentDidOpen()`。`engine` 字段为 `var`,每次 swap 时被覆盖。参见决策日志 2026-04-28(I3 / N2)。
+8. 通过 RxSwift 订阅 `documentState.$runtimeEngine.skip(1)`(BehaviorRelay) 响应 source switch:取消旧 manager 上的 doc batches、停掉旧 pumps、清空 `batchesRelay` / `historyRelay` / `aggregateRelay`、把 `self.engine` 切到新 engine、重启 pumps、若 isEnabled 则重新触发 `documentDidOpen()`。`engine` 字段为 `var`,每次 swap 时被覆盖。参见决策日志 2026-04-28(I3 / N2)。
 
 ### 数据流场景
 
@@ -375,9 +377,10 @@ handleEngineSwap(to: newEngine):
         await oldEngine.backgroundIndexingManager.cancelBatch(id)
     } }
 
-    // 3) 清 UI relays —— 旧 batches 不再适用
+    // 3) 清 UI relays —— 旧 batches / 历史均不再适用
     documentBatchIDs.removeAll()
     batchesRelay.accept([])
+    historyRelay.accept([])
     refreshAggregate(batches: [])
 
     // 4) 切到新 engine
@@ -593,23 +596,31 @@ case backgroundIndexing(sender: NSView)
 
 - 头部：`Label("Background Indexing")` 加一个读取聚合进度的副标题 `Label`。
 - 空状态 A（已禁用）：图标 + "Background indexing is disabled" + `"Open Settings"` 按钮。
-- 空状态 B（已启用、无批次）：图标 + "No active indexing tasks"。
-- 主体：渲染 `BackgroundIndexingNode` 的 `StatefulOutlineView`。
-- 页脚：`HStackView`，包含 `Cancel All` 按钮（无活动批次时禁用）、`Clear Failed` 按钮（仅当存在保留的失败批次时可见）以及 `Close` 按钮。
+- 空状态 B（已启用、无任何活跃 / 历史批次）：图标 + "No active indexing tasks"。
+- 主体：渲染 `BackgroundIndexingNode` 的 `StatefulOutlineView`,顶层为两个 section:
+  - `ACTIVE` —— 默认展开,展示活跃批次及其 items。空时仅显示 section 头(无子行)。
+  - `HISTORY` —— 默认折叠,展示已 finalized 批次(最新在前)。**仅当 `historyRelay` 非空时才出现**,空时整段 section 不渲染。用户展开 section 后,内部各个 batch 仍保持折叠(单独点击 disclosure 才展开 items),与活跃 batch 默认全展开形成对比 —— 历史是浏览,不是监控。
+- 页脚：`HStackView`,包含 `Cancel All` 按钮(无活动批次时禁用)、`Clear History` 按钮(仅当 `historyRelay` 非空时可见)以及 `Close` 按钮。
 
 `BackgroundIndexingNode`:
 
 ```swift
 enum BackgroundIndexingNode: Hashable {
-    case batch(RuntimeIndexingBatch)
+    case section(SectionKind, batches: [BackgroundIndexingNode])
+    case batch(RuntimeIndexingBatch, items: [BackgroundIndexingNode])
     case item(batchID: RuntimeIndexingBatchID, item: RuntimeIndexingTaskItem)
+
+    enum SectionKind: Hashable { case active, history }
 }
 ```
 
+`differenceIdentifier` 对 `.section` 仅取 `SectionKind`(不掺入 children)—— RxAppKit 的 staged-changeset 把 section 内 batch 的增删归约为子层 diff,不重建 section 行,从而**保住用户对 section header 的展开 / 折叠状态**。
+
 大纲单元格:
 
-- Batch 行：标题由 `reason` 派生、`"{completed}/{total}"`，以及一个 cancel 按钮。点击 cancel 会触发 `cancelBatchRelay.accept(batchID)`。
-- Item 行：状态图标（pending 灰点 / running 旋转 / completed 绿色 ✓ / failed 红色 ✗ / cancelled 灰色 ⊘）+ 显示名 + 副标签。失败行展示完整 install name 与错误信息。`hasPriorityBoost == true` 的行展示一个 `"priority"` 标签。
+- Section header 行 (`SectionHeaderCellView`,本提案新增的私有嵌套类型):标题 `ACTIVE` / `HISTORY` + 子项计数。纯展示,无 Rx,无 disposeBag。
+- Batch 行 (`BatchCellView`):标题由 `reason` 派生、`"{completed}/{total}"`,以及一个 cancel 按钮。点击 cancel 会触发 `cancelBatchRelay.accept(batchID)`。**finalized 批次复用同一 cell**,通过 `batch.isFinished` 隐藏 cancel 按钮和 progress bar。
+- Item 行 (`ItemCellView`):状态图标(pending 灰点 / running 旋转 / completed 绿色 ✓ / failed 红色 ✗ / cancelled 灰色 ⊘) + 显示名 + 副标签。失败行展示完整 install name 与错误信息。`hasPriorityBoost == true` 的行展示一个 `"priority"` 标签。历史 batch 内的 items 复用同一 cell,无需特化。
 
 防御性的大纲数据源分支使用 `preconditionFailure("unexpected outline item type")`，而不是返回零初始化的 batch，这样错误绑定的调用方会立即暴露。
 
@@ -619,21 +630,21 @@ enum BackgroundIndexingNode: Hashable {
 final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     @Observed private(set) var nodes: [BackgroundIndexingNode] = []
     @Observed private(set) var isEnabled: Bool = false
-    @Observed private(set) var hasAnyBatch: Bool = false
-    @Observed private(set) var hasAnyFailure: Bool = false
+    @Observed private(set) var hasAnyBatch: Bool = false       // active 非空
+    @Observed private(set) var hasAnyHistory: Bool = false     // history 非空
     @Observed private(set) var subtitle: String = ""
 
     struct Input {
         let cancelBatch: Signal<RuntimeIndexingBatchID>
         let cancelAll: Signal<Void>
-        let clearFailed: Signal<Void>
+        let clearHistory: Signal<Void>
         let openSettings: Signal<Void>
     }
     struct Output {
         let nodes: Driver<[BackgroundIndexingNode]>
         let isEnabled: Driver<Bool>
         let hasAnyBatch: Driver<Bool>
-        let hasAnyFailure: Driver<Bool>
+        let hasAnyHistory: Driver<Bool>
         let subtitle: Driver<String>
         // Forwarded to the ViewController, which calls
         // `SettingsWindowController.shared.showWindow(nil)` directly.
@@ -644,7 +655,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 }
 ```
 
-`isEnabled` 通过与 coordinator **相同**的 `withObservationTracking` 重新注册循环与 `Settings.shared.backgroundIndexing.isEnabled` 保持同步 —— 不是在 `transform` 中读一次后遗忘。这样弹出框打开时它的空状态会随 Settings 切换而响应。`hasAnyFailure` 由 coordinator 的 `aggregateState` 派生,驱动 `Clear Failed` 按钮的可见性。
+`isEnabled` 通过与 coordinator **相同**的 `withObservationTracking` 重新注册循环与 `Settings.shared.backgroundIndexing.isEnabled` 保持同步 —— 不是在 `transform` 中读一次后遗忘。这样弹出框打开时它的空状态会随 Settings 切换而响应。`hasAnyHistory` 由 `coordinator.historyObservable` 派生,驱动 `Clear History` 按钮的可见性以及 `HISTORY` section 是否渲染;`hasAnyBatch || hasAnyHistory` 决定空状态 B 是否隐藏。`transform` 中通过 `Observable.combineLatest(coordinator.batchesObservable, coordinator.historyObservable)` 合成 `nodes`,顶层产出 `[.section(.active, ...), .section(.history, ...)]`(history 为空则只产出第一个)。
 
 `input.openSettings` 在 `transform` 内被中转到 `output.openSettings`(经一个内部 `PublishRelay`);ViewController 在 `setupBindings` 中订阅 `output.openSettings` 并直接调用 `SettingsWindowController.shared.showWindow(nil)` —— 见 `MCPStatusPopoverViewController.swift:200-203` 的同款先例。**不**经 `router.trigger(.openSettings)`,因为 `MainRoute` 没有该 case。
 
@@ -815,7 +826,9 @@ RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift
 
 ### E. UI 立即丢弃已完成 / 已取消的批次
 
-更简单的归约逻辑：`.batchFinished` / `.batchCancelled` 到达时从 coordinator relay 中移除批次，弹出框就忘掉它存在过。被否决，因为失败的批次承载着可操作信息；静默丢失它们意味着 toolbar 的 `hasFailures` 指示器永远不会浮现。改为：包含任何 `.failed` 项的已完成批次会被保留，直到用户点击弹出框中的 `Clear Failed`。
+更简单的归约逻辑：`.batchFinished` / `.batchCancelled` 到达时从 coordinator relay 中移除批次，弹出框就忘掉它存在过。被否决，因为失败的批次承载着可操作信息；静默丢失它们意味着 toolbar 的 `hasFailures` 指示器永远不会浮现。
+
+**2026-04-29 修订**:不再保留失败批次于 `batchesRelay`,而是引入并行的 `historyRelay`,把所有 finalized 批次(成功 / 失败 / 取消)统一归入 history。失败信息仍可见(展开 history batch 时 `.failed` 项的红色 ✗ 图标和错误信息保留),用户用 `Clear History` 一键清空。原文里的 toolbar `hasFailures` 红点在实现期已被简化为静态 IconButton,`AggregateState.hasAnyFailure` 字段保留但无消费方,本次修订把它彻底从弹出框 ViewModel 的 Output 中下线。详见决策日志 2026-04-29。
 
 ## 影响
 
@@ -842,3 +855,4 @@ RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift
 | 2026-04-28 | **回退**:`BackgroundIndexingEngineRepresenting: AnyObject, Sendable`,manager 改 `private unowned let engine` | ultrareview N1 暴露真实泄漏:`engine.backgroundIndexingManager` 强持 manager + manager 强持 engine = 跨 source switch 累积泄漏。Actor 满足 `AnyObject`;unowned 在生产上安全(engine deinit → manager 同步释放,反向引用没机会悬空)。测试加 `keep(_:)` helper 兜住平行 local mock 的 ARC 寿命 |
 | 2026-04-28 | **撤销**:`DocumentState.runtimeEngine` 视为可变;coordinator 通过 RxSwift `documentState.$runtimeEngine.skip(1)` 订阅响应 source switch | 2026-04-24 假设"不可变"与代码现状(`MainCoordinator.swift:34` 在 `.main(...)` 时改写)长期不一致 → ultrareview N2 / implementation-review I3 报告 toolbar 静默断连。Coordinator `engine: var`,`handleEngineSwap(to:)` 取消旧 manager doc batches、停旧 pumps、清 relays、切引用、重启 pumps、若 isEnabled 重发 main exec batch |
 | 2026-04-28 | `DylibPathResolver.pathExists` 兼顾文件系统与 `DyldUtilities.isInDyldSharedCache`,**字面匹配,不规范化** | ultrareview N4:Apple Silicon 上 `/usr/lib/lib*` / 系统 framework 无磁盘文件,纯 `fileExists` 拒绝全部 → batch 充满 "path unresolved" 红 ✗ 误报。规范化 macOS versioned ↔ unversioned 风险高(install name 与 cache 形式不一定按规则映射,iOS 还要分支),不如让真实失败显式呈现。`/usr/lib/libobjc.A.dylib` 这类无歧义路径在两平台都直接命中 |
+| 2026-04-29 | **修订替代方案 E**:不再把失败批次保留于 `batchesRelay`;Coordinator 新增 `historyRelay`,所有 finalized 批次(成功 / 失败 / 取消)统一归入 history;弹出框新增 `HISTORY` 顶层 section(默认折叠),`Clear Failed` 按钮替换为 `Clear History` | 用户反馈:目前弹出框只能看到"正在跑的"和"失败留存的",看不到一次会话里完整的索引历史。同一 relay 既存活跃又存失败的设计语义混在一起,扩展成"完整历史"会让 active 概念被污染 —— 拆成两个 relay 是更干净的演化。toolbar `hasFailures` 红点在实现期被砍掉(`BackgroundIndexingToolbarItem` 是静态 IconButton),`AggregateState.hasAnyFailure` 不再有消费方,弹出框 ViewModel 的 `hasAnyFailure` Output 同步下线,改为 `hasAnyHistory`。`BackgroundIndexingNode` 加 `.section(SectionKind, batches:)` case,identifier kind-only 保住 section 展开状态 |
