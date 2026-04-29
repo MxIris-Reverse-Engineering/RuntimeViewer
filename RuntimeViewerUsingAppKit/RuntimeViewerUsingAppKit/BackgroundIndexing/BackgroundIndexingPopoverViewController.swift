@@ -351,6 +351,18 @@ extension BackgroundIndexingPopoverViewController {
                 make.bottom.equalToSuperview().offset(-4)
                 make.leading.trailing.equalToSuperview()
             }
+
+            // VStackView's default alignment is .centerX, which leaves children
+            // sized by their horizontal intrinsicContentSize. NSProgressIndicator
+            // and HStackView return noIntrinsicMetric horizontally, so without
+            // these explicit width pins Auto Layout reports an ambiguous width
+            // for the cell. Pin both rows to the stack's leading/trailing.
+            topRow.snp.makeConstraints { make in
+                make.leading.trailing.equalTo(stack)
+            }
+            progressIndicator.snp.makeConstraints { make in
+                make.leading.trailing.equalTo(stack)
+            }
         }
 
         @available(*, unavailable)
