@@ -73,11 +73,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
         historyRelay.asObservable()
     }
 
-    // Synchronous accessors so the ViewModel can do `Observable.combineLatest`
-    // without re-subscribing inside drive callbacks. Mirror `batchesRelay.value`.
-    public var batchesValue: [RuntimeIndexingBatch] { batchesRelay.value }
-    public var historyValue: [RuntimeIndexingBatch] { historyRelay.value }
-
     // MARK: - Public command surface
 
     public func cancelBatch(_ id: RuntimeIndexingBatchID) {
@@ -119,6 +114,13 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
     private func apply(event: RuntimeIndexingEvent) {
         var batches = batchesRelay.value
+        // Collect batches that need to be appended to history. We defer the
+        // actual `appendToHistory` calls until after `batchesRelay.accept` so
+        // that `combineLatest(batchesObservable, historyObservable)` never emits
+        // a transient state where the same batch appears in both ACTIVE and
+        // HISTORY sections (which would produce duplicate `differenceIdentifier`
+        // values and undefined DifferenceKit behavior).
+        var historyAdditions: [RuntimeIndexingBatch] = []
         switch event {
         case .batchStarted(let batch):
             batches.append(batch)
@@ -141,9 +143,9 @@ public final class RuntimeBackgroundIndexingCoordinator {
                 batch.items[itemIndex].hasPriorityBoost = true
             }}
         case .batchFinished(let finished):
-            appendToHistory(finished)
             batches.removeAll { $0.id == finished.id }
             documentBatchIDs.remove(finished.id)
+            historyAdditions.append(finished)
             Task { [engine] in
                 await engine.reloadData(isReloadImageNodes: false)
             }
@@ -151,15 +153,22 @@ public final class RuntimeBackgroundIndexingCoordinator {
         case .batchCancelled(let cancelled):
             // Cancellation always removes from active. Now also lands in history
             // so the user can review what got cancelled.
-            appendToHistory(cancelled)
             batches.removeAll { $0.id == cancelled.id }
             documentBatchIDs.remove(cancelled.id)
+            historyAdditions.append(cancelled)
             Task { [engine] in
                 await engine.reloadData(isReloadImageNodes: false)
             }
         }
+        // Settle the active-batches relay first so it no longer contains the
+        // finished/cancelled batch before history is updated.
         batchesRelay.accept(batches)
         refreshAggregate(batches: batches)
+        // Now safe to push history: combineLatest will emit (new batches without
+        // finished, new history with finished) — a fully consistent state.
+        for batchToArchive in historyAdditions {
+            appendToHistory(batchToArchive)
+        }
     }
 
     private func mutating<Value>(_ value: Value, _ mutate: (inout Value) -> Void) -> Value {
