@@ -1,4 +1,4 @@
-public struct ResolvedDependency: Sendable, Hashable {
+public struct RuntimeResolvedDependency: Sendable, Hashable {
     public let installName: String
     public let resolvedPath: String?
 

@@ -2,24 +2,31 @@ import Foundation
 import Semaphore
 
 public actor RuntimeBackgroundIndexingManager {
+    struct BatchState {
+        var batch: RuntimeIndexingBatch
+        var maxConcurrency: Int
+        var drivingTask: Task<Void, Never>?
+        var priorityBoostPaths: Set<String> = []
+    }
+
     /// `unowned` because the engine owns this manager
     /// (`RuntimeEngine.backgroundIndexingManager`); a strong back-reference
     /// would form a retain cycle that leaks engine + manager + section caches
     /// on every source switch.
-    private unowned let engine: any BackgroundIndexingEngineRepresenting
+    private unowned let engine: any RuntimeBackgroundIndexingEngineRepresenting
     private let stream: AsyncStream<RuntimeIndexingEvent>
     private let continuation: AsyncStream<RuntimeIndexingEvent>.Continuation
 
     private var activeBatches: [RuntimeIndexingBatchID: BatchState] = [:]
 
-    init(engine: any BackgroundIndexingEngineRepresenting) {
+    public nonisolated var events: AsyncStream<RuntimeIndexingEvent> { stream }
+
+    init(engine: any RuntimeBackgroundIndexingEngineRepresenting) {
         self.engine = engine
         (self.stream, self.continuation) = AsyncStream<RuntimeIndexingEvent>.makeStream()
     }
 
     deinit { continuation.finish() }
-
-    public nonisolated var events: AsyncStream<RuntimeIndexingEvent> { stream }
 
     public func currentBatches() -> [RuntimeIndexingBatch] {
         activeBatches.values.map(\.batch)
@@ -34,7 +41,9 @@ public actor RuntimeBackgroundIndexingManager {
 
     public func cancelAllBatches() {
         let ids = Array(activeBatches.keys)
-        for id in ids { cancelBatch(id) }
+        for id in ids {
+            cancelBatch(id)
+        }
     }
 
     public func prioritize(imagePath: String) {
@@ -86,7 +95,8 @@ public actor RuntimeBackgroundIndexingManager {
         let batch = RuntimeIndexingBatch(
             id: id, rootImagePath: rootImagePath, depth: depth,
             reason: reason, items: items,
-            isCancelled: false, isFinished: false)
+            isCancelled: false, isFinished: false
+        )
         let state = BatchState(batch: batch, maxConcurrency: max(1, maxConcurrency))
         activeBatches[id] = state
         continuation.yield(.batchStarted(batch))
@@ -100,16 +110,14 @@ public actor RuntimeBackgroundIndexingManager {
     }
 
     private func findActiveBatchID(forRootImagePath rootImagePath: String)
-        -> RuntimeIndexingBatchID?
-    {
+        -> RuntimeIndexingBatchID? {
         activeBatches.first { _, state in
             !state.batch.isFinished && state.batch.rootImagePath == rootImagePath
         }?.key
     }
 
     func expandDependencyGraph(rootPath: String, depth: Int)
-        async -> [RuntimeIndexingTaskItem]
-    {
+        async -> [RuntimeIndexingTaskItem] {
         var visited: Set<String> = []
         var items: [RuntimeIndexingTaskItem] = []
         // `ancestorRpaths` carries the LC_RPATH entries collected from every
@@ -152,7 +160,8 @@ public actor RuntimeBackgroundIndexingManager {
             // `try?` — if dependency lookup fails, treat as no deps; the path
             // itself is still pending and will be retried on next batch.
             let deps = (try? await engine.dependencies(
-                for: path, ancestorRpaths: ancestorRpaths)) ?? []
+                for: path, ancestorRpaths: ancestorRpaths
+            )) ?? []
             // Pre-compute the ancestor list for the next level once. Failing
             // this lookup degrades the next level to "no inherited rpaths",
             // matching the `try?` failure-mode of `dependencies`/`isImageIndexed`.
@@ -217,8 +226,7 @@ public actor RuntimeBackgroundIndexingManager {
         batchID: RuntimeIndexingBatchID, pending: inout [String]
     ) -> String {
         if let state = activeBatches[batchID],
-           let boostedPendingIndex = pending.firstIndex(where: { state.priorityBoostPaths.contains($0) })
-        {
+           let boostedPendingIndex = pending.firstIndex(where: { state.priorityBoostPaths.contains($0) }) {
             return pending.remove(at: boostedPendingIndex)
         }
         return pending.removeFirst()
@@ -246,8 +254,7 @@ public actor RuntimeBackgroundIndexingManager {
 
     private func updateItemState(batchID: RuntimeIndexingBatchID,
                                  path: String,
-                                 state: RuntimeIndexingTaskState)
-    {
+                                 state: RuntimeIndexingTaskState) {
         guard var batchState = activeBatches[batchID] else { return }
         if let itemIndex = batchState.batch.items.firstIndex(where: { $0.id == path }) {
             batchState.batch.items[itemIndex].state = state
@@ -263,9 +270,8 @@ public actor RuntimeBackgroundIndexingManager {
         // Mark any still-pending or running items as cancelled so the UI reflects state.
         if effectiveCancel {
             for itemIndex in state.batch.items.indices
-            where state.batch.items[itemIndex].state == .pending
-                || state.batch.items[itemIndex].state == .running
-            {
+                where state.batch.items[itemIndex].state == .pending
+                || state.batch.items[itemIndex].state == .running {
                 state.batch.items[itemIndex].state = .cancelled
             }
         }
@@ -276,12 +282,5 @@ public actor RuntimeBackgroundIndexingManager {
             continuation.yield(.batchFinished(state.batch))
         }
         activeBatches[id] = nil
-    }
-
-    struct BatchState {
-        var batch: RuntimeIndexingBatch
-        var maxConcurrency: Int
-        var drivingTask: Task<Void, Never>?
-        var priorityBoostPaths: Set<String> = []
     }
 }
