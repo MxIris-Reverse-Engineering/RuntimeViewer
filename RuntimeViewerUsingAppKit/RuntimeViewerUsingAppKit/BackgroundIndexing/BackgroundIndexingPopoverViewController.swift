@@ -208,6 +208,10 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         // `viewFor:item:` re-invocation) for content updates.
         output.nodes.drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, node: BackgroundIndexingNode) -> NSView? in
             switch node {
+            case .section(let kind, let batches):
+                let cell = outlineView.box.makeView(ofClass: SectionHeaderCellView.self)
+                cell.configure(kind: kind, count: batches.count)
+                return cell
             case .batch(let batch, _):
                 let cell = outlineView.box.makeView(ofClass: BatchCellView.self)
                 cell.bind(
@@ -235,6 +239,50 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 }
 
 extension BackgroundIndexingPopoverViewController {
+    private final class SectionHeaderCellView: NSTableCellView {
+        private let titleLabel = Label("").then {
+            $0.font = .systemFont(ofSize: 11, weight: .semibold)
+            $0.textColor = .secondaryLabelColor
+        }
+        private let countLabel = Label("").then {
+            $0.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            $0.textColor = .tertiaryLabelColor
+        }
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+
+            titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            countLabel.setContentHuggingPriority(.required, for: .horizontal)
+            countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+            let stack = HStackView(alignment: .centerY, spacing: 6) {
+                titleLabel
+                countLabel
+            }
+
+            addSubview(stack)
+            stack.snp.makeConstraints { make in
+                make.top.equalToSuperview().offset(4)
+                make.bottom.equalToSuperview().offset(-4)
+                make.leading.trailing.equalToSuperview()
+            }
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        func configure(kind: BackgroundIndexingNode.SectionKind, count: Int) {
+            switch kind {
+            case .active:  titleLabel.stringValue = "ACTIVE"
+            case .history: titleLabel.stringValue = "HISTORY"
+            }
+            countLabel.stringValue = "\(count)"
+        }
+    }
+
     private final class BatchCellView: NSTableCellView {
         private let titleLabel = Label("").then {
             $0.font = .systemFont(ofSize: 12, weight: .semibold)
