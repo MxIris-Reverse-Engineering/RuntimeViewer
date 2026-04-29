@@ -13,7 +13,7 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
     private let cancelBatchRelay = PublishRelay<RuntimeIndexingBatchID>()
 
     private let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableSingleColumnOutlineView()
-    
+
     // MARK: - Views
 
     private let titleLabel = Label("Background Indexing").then {
@@ -142,8 +142,8 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 
     private func setupOutlineView() {
         outlineView.headerView = nil
-        outlineView.usesAutomaticRowHeights = true
         outlineView.backgroundColor = .clear
+        outlineView.usesAutomaticRowHeights = true
     }
 
     // MARK: - Bindings
@@ -159,6 +159,8 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         )
         let output = viewModel.transform(input)
 
+        outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
+        
         closeButton.rx.click.asSignal()
             .emitOnNext { [weak self] in
                 guard let self else { return }
@@ -250,20 +252,28 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
     }
 }
 
+extension BackgroundIndexingPopoverViewController: NSOutlineViewDelegate {
+    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+        guard let node = item as? BackgroundIndexingNode, case .item = node else { return false }
+        return true
+    }
+}
+
 extension BackgroundIndexingPopoverViewController {
-    private final class SectionHeaderCellView: NSTableCellView {
+    private final class SectionHeaderCellView: TableCellView {
         private let titleLabel = Label("").then {
             $0.font = .systemFont(ofSize: 11, weight: .semibold)
             $0.textColor = .secondaryLabelColor
         }
+
         private let countLabel = Label("").then {
             $0.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
             $0.textColor = .tertiaryLabelColor
         }
-
-        override init(frame frameRect: NSRect) {
-            super.init(frame: frameRect)
-
+        
+        override func setup() {
+            super.setup()
+            
             titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
             countLabel.setContentHuggingPriority(.required, for: .horizontal)
             countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -281,49 +291,49 @@ extension BackgroundIndexingPopoverViewController {
             }
         }
 
-        @available(*, unavailable)
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
         func configure(kind: BackgroundIndexingNode.SectionKind, count: Int) {
             switch kind {
-            case .active:  titleLabel.stringValue = "ACTIVE"
+            case .active: titleLabel.stringValue = "ACTIVE"
             case .history: titleLabel.stringValue = "HISTORY"
             }
             countLabel.stringValue = "\(count)"
         }
     }
 
-    private final class BatchCellView: NSTableCellView {
+    private final class BatchCellView: TableCellView {
         private let titleLabel = Label("").then {
             $0.font = .systemFont(ofSize: 12, weight: .semibold)
         }
+
         private let countLabel = Label("").then {
             $0.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
             $0.textColor = .secondaryLabelColor
         }
+
         private let progressIndicator = NSProgressIndicator().then {
             $0.style = .bar
             $0.isIndeterminate = false
             $0.controlSize = .small
             $0.minValue = 0
         }
+
         private let cancelButton = NSButton().then {
             $0.bezelStyle = .accessoryBar
             $0.isBordered = false
             $0.image = NSImage(
                 systemSymbolName: "xmark.circle",
-                accessibilityDescription: "Cancel batch")
+                accessibilityDescription: "Cancel batch"
+            )
             $0.imagePosition = .imageOnly
             $0.toolTip = "Cancel this batch"
             $0.contentTintColor = .secondaryLabelColor
         }
-        private var disposeBag = DisposeBag()
+
         private var onCancel: (() -> Void)?
 
-        override init(frame frameRect: NSRect) {
-            super.init(frame: frameRect)
+        override func setup() {
+            super.setup()
+            
             cancelButton.target = self
             cancelButton.action = #selector(cancelButtonClicked)
 
@@ -365,23 +375,17 @@ extension BackgroundIndexingPopoverViewController {
             }
         }
 
-        @available(*, unavailable)
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
-        }
-
         func bind(batch: Driver<RuntimeIndexingBatch>,
-                  onCancel: @escaping () -> Void)
-        {
+                  onCancel: @escaping () -> Void) {
             // Reset on every bind so cell reuse drops the prior subscription.
-            disposeBag = DisposeBag()
+            rx.disposeBag = DisposeBag()
             self.onCancel = onCancel
 
             batch.driveOnNext { [weak self] batch in
                 guard let self else { return }
                 update(with: batch)
             }
-            .disposed(by: disposeBag)
+            .disposed(by: rx.disposeBag)
         }
 
         private func update(with batch: RuntimeIndexingBatch) {
@@ -414,23 +418,24 @@ extension BackgroundIndexingPopoverViewController {
         }
     }
 
-    private final class ItemCellView: NSTableCellView {
-        // Raw NSImageView (not the project's ImageView wrapper): the wrapper
-        // sets `wantsUpdateLayer = true`, which flattens the image into
-        // `layer.contents` and destroys the per-part sublayer hierarchy that
-        // SF Symbol effects (`.rotate`, `.bounce`, etc.) depend on.
+    private final class ItemCellView: TableCellView {
+        /// Raw NSImageView (not the project's ImageView wrapper): the wrapper
+        /// sets `wantsUpdateLayer = true`, which flattens the image into
+        /// `layer.contents` and destroys the per-part sublayer hierarchy that
+        /// SF Symbol effects (`.rotate`, `.bounce`, etc.) depend on.
         private let iconImageView = NSImageView().then {
             $0.imageScaling = .scaleProportionallyDown
         }
+
         private let titleLabel = Label("")
-        private var disposeBag = DisposeBag()
 
-        override init(frame frameRect: NSRect) {
-            super.init(frame: frameRect)
-
+        override func setup() {
+            super.setup()
+            
             iconImageView.setContentHuggingPriority(.required, for: .horizontal)
             iconImageView.setContentCompressionResistancePriority(.required, for: .horizontal)
             titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
             let stack = HStackView(alignment: .centerY, spacing: 6) {
                 iconImageView
@@ -438,26 +443,25 @@ extension BackgroundIndexingPopoverViewController {
             }
 
             addSubview(stack)
+
             stack.snp.makeConstraints { make in
                 make.edges.equalToSuperview()
             }
+
             iconImageView.snp.makeConstraints { make in
                 make.size.equalTo(12)
             }
-        }
 
-        @available(*, unavailable)
-        required init?(coder: NSCoder) {
-            fatalError("init(coder:) has not been implemented")
+            titleLabel.maximumNumberOfLines = 1
         }
 
         func bind(item: Driver<RuntimeIndexingTaskItem>) {
-            disposeBag = DisposeBag()
+            rx.disposeBag = DisposeBag()
             item.driveOnNext { [weak self] item in
                 guard let self else { return }
                 update(with: item)
             }
-            .disposed(by: disposeBag)
+            .disposed(by: rx.disposeBag)
         }
 
         private func update(with item: RuntimeIndexingTaskItem) {
