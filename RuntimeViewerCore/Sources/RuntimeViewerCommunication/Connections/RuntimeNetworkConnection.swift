@@ -388,7 +388,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         var lastError: Error = RuntimeConnectionError.listenerWaiting
         for attempt in 0..<Self.maxListenerRetries {
             let newListener = try NWListener(using: listenerParameters)
-            newListener.service = RuntimeNetworkBonjour.makeService(name: serviceName)
+            newListener.service = await RuntimeNetworkBonjour.makeService(name: serviceName)
             self.listener = newListener
 
             if attempt > 0 {
@@ -575,7 +575,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
         ownStateSubject.send(.connecting)
 
         let newListener = try NWListener(using: listenerParameters)
-        newListener.service = RuntimeNetworkBonjour.makeService(name: serviceName)
+        newListener.service = await RuntimeNetworkBonjour.makeService(name: serviceName)
         self.listener = newListener
 
         newListener.stateUpdateHandler = { [weak self] state in
