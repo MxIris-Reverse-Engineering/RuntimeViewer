@@ -379,12 +379,12 @@ import Testing
         func exit() { lock.lock(); current -= 1; lock.unlock() }
     }
 
-    private final class InstrumentedEngine: BackgroundIndexingEngineRepresenting,
+    private final class InstrumentedEngine: RuntimeBackgroundIndexingEngineRepresenting,
                                              @unchecked Sendable
     {
-        let base: any BackgroundIndexingEngineRepresenting
+        let base: any RuntimeBackgroundIndexingEngineRepresenting
         let counter: ConcurrencyCounter
-        init(base: any BackgroundIndexingEngineRepresenting, counter: ConcurrencyCounter) {
+        init(base: any RuntimeBackgroundIndexingEngineRepresenting, counter: ConcurrencyCounter) {
             self.base = base; self.counter = counter
         }
         func isImageIndexed(path: String) async throws -> Bool {

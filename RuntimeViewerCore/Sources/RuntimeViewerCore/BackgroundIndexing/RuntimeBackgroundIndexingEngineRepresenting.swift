@@ -15,7 +15,7 @@
 /// (`RuntimeEngine.backgroundIndexingManager`); making the back-reference
 /// non-retaining breaks the cycle that would otherwise leak engine + manager
 /// + section caches on every source switch.
-protocol BackgroundIndexingEngineRepresenting: AnyObject, Sendable {
+protocol RuntimeBackgroundIndexingEngineRepresenting: AnyObject, Sendable {
     func isImageIndexed(path: String) async throws -> Bool
     func loadImageForBackgroundIndexing(at path: String) async throws
     func mainExecutablePath() async throws -> String

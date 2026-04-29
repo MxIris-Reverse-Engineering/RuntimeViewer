@@ -3,7 +3,7 @@ import Foundation
 
 // `@unchecked Sendable` is required because the protocol is `Sendable` and this
 // class stores mutable state protected by `NSLock` rather than an actor.
-final class MockBackgroundIndexingEngine: BackgroundIndexingEngineRepresenting,
+final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineRepresenting,
                                           @unchecked Sendable
 {
     struct ProgrammedPath: Sendable {

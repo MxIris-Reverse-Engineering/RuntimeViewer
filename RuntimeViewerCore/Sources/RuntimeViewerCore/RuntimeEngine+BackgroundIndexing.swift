@@ -46,7 +46,7 @@ extension RuntimeEngine {
 
 // MARK: - BackgroundIndexingEngineRepresenting
 
-extension RuntimeEngine: BackgroundIndexingEngineRepresenting {
+extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
     func canOpenImage(at path: String) -> Bool {
         DyldUtilities.machOImage(forPath: path) != nil
     }
