@@ -11,7 +11,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     @Observed private(set) var nodes: [BackgroundIndexingNode] = []
     @Observed private(set) var isEnabled: Bool = false
     @Observed private(set) var hasAnyBatch: Bool = false
-    @Observed private(set) var hasAnyFailure: Bool = false
+    @Observed private(set) var hasAnyHistory: Bool = false
     @Observed private(set) var subtitle: String = ""
 
     private let coordinator: RuntimeBackgroundIndexingCoordinator
@@ -28,7 +28,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     struct Input {
         let cancelBatch: Signal<RuntimeIndexingBatchID>
         let cancelAll: Signal<Void>
-        let clearFailed: Signal<Void>
+        let clearHistory: Signal<Void>
         let openSettings: Signal<Void>
     }
 
@@ -36,7 +36,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         let nodes: Driver<[BackgroundIndexingNode]>
         let isEnabled: Driver<Bool>
         let hasAnyBatch: Driver<Bool>
-        let hasAnyFailure: Driver<Bool>
+        let hasAnyHistory: Driver<Bool>
         let subtitle: Driver<String>
         // Forwarded to the ViewController so it can call
         // `SettingsWindowController.shared.showWindow(nil)` directly — mirrors
@@ -46,22 +46,27 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     }
 
     func transform(_ input: Input) -> Output {
-        coordinator.batchesObservable
-            .map(Self.renderNodes)
-            .asDriver(onErrorJustReturn: [])
-            .driveOnNext { [weak self] newNodes in
-                guard let self else { return }
-                nodes = newNodes
-                hasAnyBatch = !newNodes.isEmpty
-            }
-            .disposed(by: rx.disposeBag)
+        Observable.combineLatest(
+            coordinator.batchesObservable,
+            coordinator.historyObservable
+        )
+        .map { active, history in
+            Self.renderNodes(active: active, history: history)
+        }
+        .asDriver(onErrorJustReturn: [])
+        .driveOnNext { [weak self] newNodes in
+            guard let self else { return }
+            nodes = newNodes
+            hasAnyBatch = !coordinator.batchesValue.isEmpty
+            hasAnyHistory = !coordinator.historyValue.isEmpty
+        }
+        .disposed(by: rx.disposeBag)
 
         coordinator.aggregateStateObservable
             .asDriver(onErrorDriveWith: .empty())
             .driveOnNext { [weak self] state in
                 guard let self else { return }
                 subtitle = Self.subtitleFor(state)
-                hasAnyFailure = state.hasAnyFailure
             }
             .disposed(by: rx.disposeBag)
 
@@ -82,9 +87,9 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        input.clearFailed.emitOnNext { [weak self] in
+        input.clearHistory.emitOnNext { [weak self] in
             guard let self else { return }
-            coordinator.clearFailedBatches()
+            coordinator.clearHistory()
         }
         .disposed(by: rx.disposeBag)
 
@@ -100,7 +105,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
             nodes: $nodes.asDriver(),
             isEnabled: $isEnabled.asDriver(),
             hasAnyBatch: $hasAnyBatch.asDriver(),
-            hasAnyFailure: $hasAnyFailure.asDriver(),
+            hasAnyHistory: $hasAnyHistory.asDriver(),
             subtitle: $subtitle.asDriver(),
             openSettings: openSettingsRelay.asSignal()
         )
@@ -148,15 +153,29 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         isEnabled = settings.indexing.backgroundMode.isEnabled
     }
 
-    private static func renderNodes(from batches: [RuntimeIndexingBatch])
+    private static func renderNodes(active: [RuntimeIndexingBatch],
+                                    history: [RuntimeIndexingBatch])
         -> [BackgroundIndexingNode]
     {
-        batches.map { batch in
-            let itemNodes = batch.items.map { item in
-                BackgroundIndexingNode.item(batchID: batch.id, item: item)
-            }
-            return .batch(batch, items: itemNodes)
+        let activeBatchNodes = active.map(makeBatchNode)
+        var nodes: [BackgroundIndexingNode] = [.section(.active, batches: activeBatchNodes)]
+        // History section is omitted entirely when empty so it doesn't clutter
+        // the popover with an empty header. Active is always present so the
+        // user always has the "ACTIVE" group as context.
+        if !history.isEmpty {
+            let historyBatchNodes = history.map(makeBatchNode)
+            nodes.append(.section(.history, batches: historyBatchNodes))
         }
+        return nodes
+    }
+
+    private static func makeBatchNode(_ batch: RuntimeIndexingBatch)
+        -> BackgroundIndexingNode
+    {
+        let itemNodes = batch.items.map { item in
+            BackgroundIndexingNode.item(batchID: batch.id, item: item)
+        }
+        return .batch(batch, items: itemNodes)
     }
 
     private static func subtitleFor(
