@@ -469,16 +469,22 @@ public final class RuntimeEngineManager {
     /// 1. The disconnected engine IS itself a mirrored engine (its directTCP connection to a
     ///    proxy died). Remove only that specific entry; no peer-wide cleanup.
     ///
-    /// 2. The disconnected engine is a direct peer (Bonjour client or system engine) that had
-    ///    pushed descriptors to us. Remove every mirrored engine whose recorded direct upstream
-    ///    (`mirroredEngineOwnership`) matches this peer's `hostInfo.hostID`. Critically, this
-    ///    includes engines transitively mirrored through the peer (e.g. A → B → C: if B
-    ///    disconnects, A should drop its mirror of C because C is unreachable without B).
+    /// 2. The disconnected engine is a direct peer (Bonjour client or system engine). The
+    ///    peer can play either role in the topology, and we have to cover both:
     ///
-    /// The old implementation matched by `engine.hostInfo.hostID == runtimeEngine.hostInfo.hostID`,
-    /// which both wiped too little (transitive mirrors were missed because their hostInfo.hostID
-    /// is the original host C, not the direct upstream B) and could interact badly with the
-    /// per-source reconciliation model.
+    ///    - **Intermediate-node disconnect** — the peer was forwarding other hosts' engines
+    ///      to us. Drop every mirror with `ownership == peer.hostID`, including transitive
+    ///      entries (A → B → C, B disconnects → drop B's forwarded mirror of C). Handled by
+    ///      `clearAllOwnedBy(hostID:)`.
+    ///    - **Leaf-node disconnect** — the peer's own engines may have reached us via some
+    ///      other forwarder, so they have `ownership = forwarder ≠ peer.hostID`. Drop every
+    ///      mirror whose `engineID` prefix is `peer.hostID/` (A → B → C, C disconnects → drop
+    ///      every mirror of C regardless of who forwarded it). Handled by
+    ///      `clearAllWithHostID(hostID:)`.
+    ///
+    ///    Both run on every direct-peer disconnect — the disjoint match-keys mean the union
+    ///    covers all topologies; the registry handles overlap gracefully (an entry removed
+    ///    by the first call simply isn't seen by the second).
     private func cleanupMirroredEnginesOnDisconnect(of runtimeEngine: RuntimeEngine) {
         // Case 1: the disconnected engine is itself a mirrored entry.
         let ownMirrorRemovals = mirrorRegistry.clearOwnMirror(matching: runtimeEngine)
@@ -492,14 +498,17 @@ public final class RuntimeEngineManager {
             return
         }
 
-        // Case 2: direct peer disconnect — remove everything we owned via this peer.
-        let peerRemovals = mirrorRegistry.clearAllOwnedBy(hostID: runtimeEngine.hostInfo.hostID)
-        for removal in peerRemovals {
+        // Case 2: direct peer disconnect — handle both intermediate and leaf topologies.
+        let disconnectedHostID = runtimeEngine.hostInfo.hostID
+        let peerRemovals = mirrorRegistry.clearAllOwnedBy(hostID: disconnectedHostID)
+        let originRemovals = mirrorRegistry.clearAllWithHostID(hostID: disconnectedHostID)
+        let allRemovals = peerRemovals + originRemovals
+        for removal in allRemovals {
             let stopped = removal.engine
             Task { @MainActor in await stopped.stop() }
             engineIconCache.removeValue(forKey: removal.engineID)
         }
-        if !peerRemovals.isEmpty {
+        if !allRemovals.isEmpty {
             mirroredEngines = mirrorRegistry.engines
         }
     }

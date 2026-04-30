@@ -128,11 +128,16 @@ public final class RuntimeEngineMirrorRegistry {
         return removals
     }
 
-    /// Case 2: the disconnected engine is a direct peer that had pushed descriptors
-    /// to us. Remove every mirrored engine whose recorded direct upstream matches
-    /// the peer's `hostID`, including engines transitively mirrored through the peer
-    /// (e.g. A → B → C: if B disconnects, drop the mirror of C). Also clears the
-    /// dedup cache for that source so the next reconnect re-pushes a fresh payload.
+    /// Removes every mirrored engine whose recorded direct upstream is `hostID` —
+    /// i.e. entries this peer forwarded to us. Also clears the dedup cache for that
+    /// source so a later reconnect re-pushes a fresh payload.
+    ///
+    /// Suitable for the **intermediate-node disconnect** half of a direct-peer
+    /// disconnect (A → B → C, B disconnects → drop B's forwarded mirror of C).
+    /// On its own this is **not** sufficient when the disconnected peer is the leaf
+    /// (C in the chain above): mirrors of C reached us with `ownership = B`, not C,
+    /// so they survive this call. Pair with `clearAllWithHostID(hostID:)` for the
+    /// leaf half.
     @discardableResult
     public func clearAllOwnedBy(hostID: String) -> [ReconcileOutcome.Removal] {
         let affectedIDs = ownership.compactMap { (id, ownerHostID) in
@@ -146,6 +151,30 @@ public final class RuntimeEngineMirrorRegistry {
             ownership.removeValue(forKey: id)
         }
         lastDescriptorIDsBySource.removeValue(forKey: hostID)
+        return removals
+    }
+
+    /// Removes every mirrored engine whose `engineID` is namespaced under `hostID`
+    /// (recall `engineID = "{hostID}/{localID}"`), regardless of which forwarder
+    /// pushed the descriptor.
+    ///
+    /// Suitable for the **leaf-node disconnect** half of a direct-peer disconnect
+    /// (A → B → C, C disconnects → drop every mirror of C, even those forwarded by B
+    /// whose `ownership = B`). Does **not** touch `lastDescriptorIDsBySource`: that
+    /// cache keys on the direct upstream (forwarder), which is unrelated to the leaf
+    /// going away — if B re-pushes later without C's entries, normal reconcile takes
+    /// care of it.
+    @discardableResult
+    public func clearAllWithHostID(hostID: String) -> [ReconcileOutcome.Removal] {
+        let prefix = "\(hostID)/"
+        let affectedIDs = engines.keys.filter { $0.hasPrefix(prefix) }
+        var removals: [ReconcileOutcome.Removal] = []
+        for id in affectedIDs {
+            if let mirrored = engines.removeValue(forKey: id) {
+                removals.append(.init(engineID: id, engine: mirrored))
+            }
+            ownership.removeValue(forKey: id)
+        }
         return removals
     }
 }

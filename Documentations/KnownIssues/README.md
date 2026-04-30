@@ -27,3 +27,11 @@ when picking up follow-up work.
   follow-up `/ultrareview` pass on the same branch @ `c88cb2b`. Six issues
   (3 Normal, 3 Nit); notably, UR.3 reactivates FP.4 because the new
   reconnection Task invalidates the original false-positive premise.
+- [2026-04-30-engine-mirroring-routing-findings.md](2026-04-30-engine-mirroring-routing-findings.md) —
+  field-report investigation against `chore/script-rename-and-engine-move`.
+  Two Major issues in cross-host engine mirroring: EM.1 iOS/visionOS sidebar
+  permanently loading because `requestEngineList` has no timeout and silently
+  hangs on awdl0; EM.2 leaf-disconnect leaves stale device-name mirror in
+  sidebar because Case-2 cleanup only matches by ownership, not by `engineID`
+  prefix. Companion architecture walkthrough at
+  [`Documentations/EngineMirroringWalkthrough.md`](../EngineMirroringWalkthrough.md).

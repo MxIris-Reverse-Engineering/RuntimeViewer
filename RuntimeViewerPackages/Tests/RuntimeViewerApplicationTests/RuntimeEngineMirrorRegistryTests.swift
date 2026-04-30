@@ -264,6 +264,100 @@ struct RuntimeEngineMirrorRegistryTests {
         #expect(registry.ownership["X/orphan"] == "host-A")
     }
 
+    @Test("clearAllWithHostID removes everything namespaced under the host, regardless of ownership")
+    func clearAllWithHostIDMatchesByEngineIDPrefix() {
+        // Topology: leaf 'C' is reachable to us both directly (C pushes its own engines,
+        // so ownership=C) and via intermediate 'B' (B forwards C's engines, so ownership=B,
+        // but engineID still starts with 'C/'). Plus an unrelated host 'D' whose entries
+        // must survive.
+        let registry = RuntimeEngineMirrorRegistry()
+        _ = registry.reconcile(
+            descriptors: [
+                descriptor(engineID: "C/e1", originChain: ["C"]),
+                descriptor(engineID: "C/e2", originChain: ["C"]),
+            ],
+            fromHostID: "C",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+        _ = registry.reconcile(
+            descriptors: [descriptor(engineID: "C/e3", originChain: ["C", "B"])],
+            fromHostID: "B",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+        _ = registry.reconcile(
+            descriptors: [descriptor(engineID: "D/e1", originChain: ["D"])],
+            fromHostID: "D",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+
+        let removed = registry.clearAllWithHostID(hostID: "C")
+
+        #expect(Set(removed.map(\.engineID)) == ["C/e1", "C/e2", "C/e3"])
+        #expect(registry.engines.keys.elements == ["D/e1"])
+        #expect(registry.ownership == ["D/e1": "D"])
+        // Dedup caches are untouched — clearAllWithHostID is keyed on the leaf's hostID,
+        // which is unrelated to which forwarder's cache should be invalidated.
+        #expect(registry.lastDescriptorIDsBySource["C"] == ["C/e1", "C/e2"])
+        #expect(registry.lastDescriptorIDsBySource["B"] == ["C/e3"])
+        #expect(registry.lastDescriptorIDsBySource["D"] == ["D/e1"])
+    }
+
+    @Test("clearAllWithHostID returns empty when no engineID is namespaced under the host")
+    func clearAllWithHostIDIsEmptyWhenNoMatch() {
+        let registry = RuntimeEngineMirrorRegistry()
+        _ = registry.reconcile(
+            descriptors: [descriptor(engineID: "host-A/e1", originChain: ["host-A"])],
+            fromHostID: "host-A",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+
+        #expect(registry.clearAllWithHostID(hostID: "missing-host").isEmpty)
+        #expect(registry.engines.keys.elements == ["host-A/e1"])
+    }
+
+    @Test("leaf disconnect via union(clearAllOwnedBy, clearAllWithHostID) drops both routes")
+    func leafDisconnectDropsForwardedMirrors() {
+        // Mirrors the manager-side cleanup: a leaf peer C disconnects. Entries can be
+        // either directly owned by C or forwarded through some other peer; both groups
+        // must go away in a single disconnect handler. clearAllOwnedBy alone would miss
+        // the forwarded mirror; clearAllWithHostID alone would miss the dedup-cache
+        // invalidation. The union covers both.
+        let registry = RuntimeEngineMirrorRegistry()
+        // C's own engine, forwarded directly by C.
+        _ = registry.reconcile(
+            descriptors: [descriptor(engineID: "C/local", originChain: ["C"])],
+            fromHostID: "C",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+        // B forwards C's other engine alongside its own — must arrive in a single
+        // reconcile, otherwise B's second push without C/forwarded would clear it.
+        _ = registry.reconcile(
+            descriptors: [
+                descriptor(engineID: "C/forwarded", originChain: ["C", "B"]),
+                descriptor(engineID: "B/local", originChain: ["B"]),
+            ],
+            fromHostID: "B",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+
+        let peer = registry.clearAllOwnedBy(hostID: "C")
+        let origin = registry.clearAllWithHostID(hostID: "C")
+        let all = peer + origin
+
+        #expect(Set(all.map(\.engineID)) == ["C/local", "C/forwarded"])
+        #expect(registry.engines.keys.elements == ["B/local"])
+        #expect(registry.ownership == ["B/local": "B"])
+        // C's dedup cache went away with clearAllOwnedBy; B's stays.
+        #expect(registry.lastDescriptorIDsBySource["C"] == nil)
+        #expect(registry.lastDescriptorIDsBySource["B"] == ["C/forwarded", "B/local"])
+    }
+
     // MARK: - Concurrency
 
     /// Race-condition regression test. The crash that motivated this refactor came from
