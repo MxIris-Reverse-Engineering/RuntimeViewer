@@ -73,15 +73,6 @@
       }
     },
     {
-      "identity" : "dyldprivate",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/DyldPrivate",
-      "state" : {
-        "revision" : "3b4d596b702d7c8f589d0babe42c7387e5d24dbc",
-        "version" : "1330.0.0"
-      }
-    },
-    {
       "identity" : "enumkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/gringoireDM/EnumKit.git",
@@ -104,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "fdf527ec843ff56e19f807ff4675e48699227a7f",
-        "version" : "0.4.0"
+        "revision" : "d011291f5e8d6430fb91b52296dda50e85dc5c11",
+        "version" : "0.5.2"
       }
     },
     {
@@ -178,6 +169,33 @@
       "state" : {
         "revision" : "9badd94674dbcb9291458421e25a70971733a08f",
         "version" : "0.2.0"
+      }
+    },
+    {
+      "identity" : "machokit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
+      "state" : {
+        "revision" : "d6d8fc4fe355c31a25eeda4b87d9e8a959d6784a",
+        "version" : "0.49.102"
+      }
+    },
+    {
+      "identity" : "machoobjcsection",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
+      "state" : {
+        "revision" : "38661a32c597281ece378fd8edde3dc6bdb39a7a",
+        "version" : "0.7.100"
+      }
+    },
+    {
+      "identity" : "machoswiftsection",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
+      "state" : {
+        "revision" : "8ef8bdc2e9391f1291fa9d94ed67f12253b1ae49",
+        "version" : "0.11.0"
       }
     },
     {
@@ -325,6 +343,15 @@
       }
     },
     {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "066e75a8b3e99962685d6a90cdd5293ebffd9261",
+        "version" : "2.9.1"
+      }
+    },
+    {
       "identity" : "swift-apinotes",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-DeveloperTool/swift-apinotes",
@@ -433,6 +460,15 @@
       }
     },
     {
+      "identity" : "swift-confidential",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Library-Forks/swift-confidential.git",
+      "state" : {
+        "revision" : "0e3e84cc18ffb4b39c4e51d9deacc3007e5fc67b",
+        "version" : "0.5.100"
+      }
+    },
+    {
       "identity" : "swift-crypto",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
@@ -451,12 +487,30 @@
       }
     },
     {
+      "identity" : "swift-demangling",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
+      "state" : {
+        "revision" : "b1c84b6b76e41d83d4a8b3d107ce19fd7fe2d135",
+        "version" : "0.3.0"
+      }
+    },
+    {
       "identity" : "swift-dependencies",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
         "revision" : "c79f72b3e67a1eb64f66f76704c22ed6a5c1ed84",
         "version" : "1.11.0"
+      }
+    },
+    {
+      "identity" : "swift-dyld-private",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-dyld-private",
+      "state" : {
+        "revision" : "2f5ce94df9b1356d3c75793a659bf22f35bc8699",
+        "version" : "1.2.0"
       }
     },
     {
@@ -559,12 +613,12 @@
       }
     },
     {
-      "identity" : "swift-snapshot-testing",
+      "identity" : "swift-semantic-string",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
       "state" : {
-        "revision" : "05b6f05b55ff9e2dcdcc21ac78c6ba81ea624791",
-        "version" : "1.19.1"
+        "revision" : "1c3438861ea6dbba0856ab02071d683914468e82",
+        "version" : "0.1.1"
       }
     },
     {

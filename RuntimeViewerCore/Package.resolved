@@ -1,5 +1,5 @@
 {
-  "originHash" : "f62988f5005732be3f31139344a88726364520046cb8b9b143f65b6868ecf65d",
+  "originHash" : "5ad1b0fb0dd0d521378f9ffe9ff750c89174776b069fe779b0c543437379ee6a",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -60,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
       "state" : {
-        "revision" : "93539ee3fc3fbc5a12bc0f01dcb0f6c6c241b827",
-        "version" : "0.49.101"
+        "revision" : "d6d8fc4fe355c31a25eeda4b87d9e8a959d6784a",
+        "version" : "0.49.102"
       }
     },
     {
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
       "state" : {
-        "revision" : "3bd3996afe8147eef60133fd2fad3ba6ef38baa4",
-        "version" : "0.6.105"
+        "revision" : "38661a32c597281ece378fd8edde3dc6bdb39a7a",
+        "version" : "0.7.100"
       }
     },
     {
@@ -125,15 +125,6 @@
       "state" : {
         "revision" : "47ddc958a3962f9bb0fe08de1c8f39723e472228",
         "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "sparkle",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sparkle-project/Sparkle",
-      "state" : {
-        "revision" : "066e75a8b3e99962685d6a90cdd5293ebffd9261",
-        "version" : "2.9.1"
       }
     },
     {
@@ -220,10 +211,10 @@
     {
       "identity" : "swift-confidential",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/securevale/swift-confidential.git",
+      "location" : "https://github.com/MxIris-Library-Forks/swift-confidential.git",
       "state" : {
-        "revision" : "791e9d042db3ed4070c6a1ccfc44885990874751",
-        "version" : "0.5.2"
+        "revision" : "0e3e84cc18ffb4b39c4e51d9deacc3007e5fc67b",
+        "version" : "0.5.100"
       }
     },
     {
@@ -258,8 +249,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-dyld-private",
       "state" : {
-        "revision" : "e9b306c07f53d68a0a1f40ae5b402763748231e1",
-        "version" : "1.1.0"
+        "revision" : "2f5ce94df9b1356d3c75793a659bf22f35bc8699",
+        "version" : "1.2.0"
       }
     },
     {
