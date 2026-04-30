@@ -232,7 +232,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/ide-icons",
-            exact: "0.1.1"
+            from: "0.1.3"
         ),
         .package(
             url: "https://github.com/gringoireDM/RxEnumKit",
