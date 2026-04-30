@@ -87,6 +87,7 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
         parameters.includePeerToPeer = true
+        parameters.serviceClass = .responsiveData
 
         self.connection = NWConnection(to: endpoint, using: parameters)
         try start()
@@ -372,6 +373,7 @@ final class RuntimeNetworkServerConnection: RuntimeConnectionBase<RuntimeNetwork
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
         parameters.includePeerToPeer = true
+        parameters.serviceClass = .responsiveData
         self.listenerParameters = parameters
 
         super.init()

@@ -100,6 +100,7 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
         parameters.includePeerToPeer = true
+        parameters.serviceClass = .responsiveData
 
         self.connection = NWConnection(
             host: NWEndpoint.Host(host),
@@ -462,6 +463,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
         parameters.includePeerToPeer = true
+        parameters.serviceClass = .responsiveData
         self.listenerParameters = parameters
 
         super.init()

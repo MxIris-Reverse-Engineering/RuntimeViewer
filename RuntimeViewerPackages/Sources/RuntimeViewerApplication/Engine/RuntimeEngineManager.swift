@@ -64,6 +64,26 @@ public final class RuntimeEngineManager {
     /// instead of being hidden as management-only connections.
     private var directBonjourEngines: Set<ObjectIdentifier> = []
 
+    /// Per-engine liveness ping. AWDL-routed peers (iOS / visionOS / Apple TV)
+    /// can leave a TCP connection in `.ready` long after the remote process has
+    /// died — TCP keepalive probes get answered by the host kernel even when
+    /// the app is gone, so NWConnection never fires `.disconnected`. The
+    /// heartbeat re-sends `engineList` on a fixed cadence and `stop()`s the
+    /// engine after `bonjourHeartbeatMaxConsecutiveFailures` consecutive
+    /// timeouts, letting the existing disconnect path drop the stale entry.
+    private var bonjourHeartbeatTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
+
+    private static let bonjourHeartbeatInterval: UInt64 = 30_000_000_000 // 30 seconds
+    private static let bonjourHeartbeatTimeout: TimeInterval = 5
+    private static let bonjourHeartbeatMaxConsecutiveFailures = 2
+
+    /// Initial-handshake retry. AWDL channel slots can miss a single 5 s
+    /// `engineList` request even on a healthy peer, then succeed on the next
+    /// attempt. One retry absorbs that without prematurely demoting the engine
+    /// to direct.
+    private static let initialEngineListMaxAttempts = 2
+    private static let initialEngineListRetryDelay: UInt64 = 1_000_000_000 // 1 second
+
     // MARK: - Dependencies
 
     @Dependency(\.helperServiceManager)
@@ -215,29 +235,37 @@ public final class RuntimeEngineManager {
 
             // Request the remote peer's engine list for mirroring
             Task { @MainActor in
-                do {
-                    #log(.debug,"[EngineMirroring] requesting engine list from \(endpoint.name, privacy: .public)...")
-                    // 5s deadline: peers without engine sharing (iOS, visionOS) or whose
-                    // bonjour transport is silently dead (e.g. flaky AWDL) would otherwise
-                    // hang this Task forever. On timeout we fall through to the catch block,
-                    // which marks the engine as a direct bonjour entry.
-                    let descriptors = try await runtimeEngine.requestEngineList(timeout: 5)
-                    #log(.debug,"[EngineMirroring] received \(descriptors.count, privacy: .public) descriptors from \(endpoint.name, privacy: .public)")
-                    if descriptors.isEmpty {
-                        // Remote doesn't support engine sharing (e.g. iOS, injected app).
-                        // Show the Bonjour engine directly in the Toolbar.
-                        #log(.debug,"[EngineMirroring] remote \(endpoint.name, privacy: .public) returned 0 descriptors, marking as direct engine")
-                        self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
-                        self.rebuildSections()
-                    } else {
-                        self.handleEngineListChanged(descriptors, from: runtimeEngine)
+                #log(.debug,"[EngineMirroring] requesting engine list from \(endpoint.name, privacy: .public)...")
+                // 5s deadline per attempt: peers without engine sharing (iOS, visionOS) or
+                // whose bonjour transport is silently dead (e.g. flaky AWDL) would otherwise
+                // hang this Task forever. One retry absorbs an AWDL slot miss before the
+                // catch block marks the engine as a direct bonjour entry.
+                var lastError: Error?
+                for attempt in 1...Self.initialEngineListMaxAttempts {
+                    do {
+                        let descriptors = try await runtimeEngine.requestEngineList(timeout: Self.bonjourHeartbeatTimeout)
+                        #log(.debug,"[EngineMirroring] received \(descriptors.count, privacy: .public) descriptors from \(endpoint.name, privacy: .public)")
+                        if descriptors.isEmpty {
+                            #log(.debug,"[EngineMirroring] remote \(endpoint.name, privacy: .public) returned 0 descriptors, marking as direct engine")
+                            self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
+                            self.rebuildSections()
+                        } else {
+                            self.handleEngineListChanged(descriptors, from: runtimeEngine)
+                        }
+                        self.startBonjourHeartbeat(for: runtimeEngine)
+                        return
+                    } catch {
+                        lastError = error
+                        #log(.error,"[EngineMirroring] requestEngineList attempt \(attempt, privacy: .public)/\(Self.initialEngineListMaxAttempts, privacy: .public) failed for \(endpoint.name, privacy: .public): \(error, privacy: .public)")
+                        if attempt < Self.initialEngineListMaxAttempts {
+                            try? await Task.sleep(nanoseconds: Self.initialEngineListRetryDelay)
+                        }
                     }
-                } catch {
-                    #log(.error,"[EngineMirroring] Failed to request engine list: \(error, privacy: .public)")
-                    // Treat as direct engine so it still appears in the UI
-                    self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
-                    self.rebuildSections()
                 }
+                #log(.error,"[EngineMirroring] giving up on engine list for \(endpoint.name, privacy: .public), marking as direct: \(String(describing: lastError), privacy: .public)")
+                self.directBonjourEngines.insert(ObjectIdentifier(runtimeEngine))
+                self.rebuildSections()
+                self.startBonjourHeartbeat(for: runtimeEngine)
             }
         } catch {
             #log(.error,"Failed to connect to Bonjour endpoint: \(endpoint.name, privacy: .public) (attempt \(attempt + 1, privacy: .public)): \(error, privacy: .public)")
@@ -323,6 +351,7 @@ public final class RuntimeEngineManager {
         let removedEngines = runtimeEngines.filter { $0.source == source }
         for engine in removedEngines {
             engineIconCache.removeValue(forKey: engine.engineID)
+            stopBonjourHeartbeat(for: engine)
         }
         systemRuntimeEngines.removeAll { $0.source == source }
         attachedRuntimeEngines.removeAll { $0.source == source }
@@ -511,6 +540,42 @@ public final class RuntimeEngineManager {
         if !allRemovals.isEmpty {
             mirroredEngines = mirrorRegistry.engines
         }
+    }
+
+    // MARK: - Bonjour Heartbeat
+
+    private func startBonjourHeartbeat(for runtimeEngine: RuntimeEngine) {
+        let key = ObjectIdentifier(runtimeEngine)
+        bonjourHeartbeatTasks[key]?.cancel()
+
+        let task = Task { @MainActor [weak self, weak runtimeEngine] in
+            var consecutiveFailures = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: Self.bonjourHeartbeatInterval)
+                guard !Task.isCancelled, let self, let runtimeEngine else { return }
+                do {
+                    let descriptors = try await runtimeEngine.requestEngineList(timeout: Self.bonjourHeartbeatTimeout)
+                    consecutiveFailures = 0
+                    if !descriptors.isEmpty {
+                        self.handleEngineListChanged(descriptors, from: runtimeEngine)
+                    }
+                } catch {
+                    consecutiveFailures += 1
+                    #log(.info,"[EngineHeartbeat] \(runtimeEngine.source.description, privacy: .public) failed (\(consecutiveFailures, privacy: .public)/\(Self.bonjourHeartbeatMaxConsecutiveFailures, privacy: .public)): \(error, privacy: .public)")
+                    if consecutiveFailures >= Self.bonjourHeartbeatMaxConsecutiveFailures {
+                        #log(.info,"[EngineHeartbeat] \(runtimeEngine.source.description, privacy: .public) hit max failures, stopping engine")
+                        await runtimeEngine.stop()
+                        return
+                    }
+                }
+            }
+        }
+        bonjourHeartbeatTasks[key] = task
+    }
+
+    private func stopBonjourHeartbeat(for runtimeEngine: RuntimeEngine) {
+        let key = ObjectIdentifier(runtimeEngine)
+        bonjourHeartbeatTasks.removeValue(forKey: key)?.cancel()
     }
 
     // MARK: - Icon Management
