@@ -7,13 +7,6 @@ import RuntimeViewerApplication
 final class SidebarRootDirectoryViewController: SidebarRootViewController<SidebarRootDirectoryViewModel> {
     private let addToBookmarkRelay = PublishRelay<SidebarRootCellViewModel>()
 
-    private let addToBookmarkHUD = SystemHUD(
-        configuration: .init(
-            image: SFSymbols(systemName: .bookmarkFill, pointSize: 90, weight: .medium).nsuiImgae,
-            title: "Added Bookmark"
-        )
-    )
-
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -29,7 +22,8 @@ final class SidebarRootDirectoryViewController: SidebarRootViewController<Sideba
     @objc private func addToBookmarkMenuItemAction(_ sender: NSMenuItem) {
         guard outlineView.hasValidClickedRow, let cellViewModel = outlineView.itemAtClickedRow as? SidebarRootCellViewModel else { return }
         addToBookmarkRelay.accept(cellViewModel)
-        addToBookmarkHUD.show(delay: 1)
+        SystemHUD.default.configuration = .addToBookmarkHUDConfiguration
+        SystemHUD.default.show(delay: 1)
     }
 
     override func setupBindings(for viewModel: SidebarRootDirectoryViewModel) {
@@ -41,4 +35,11 @@ final class SidebarRootDirectoryViewController: SidebarRootViewController<Sideba
 
         _ = viewModel.transform(input)
     }
+}
+
+extension SystemHUD.Configuration {
+    static let addToBookmarkHUDConfiguration = SystemHUD.Configuration(
+        image: SFSymbols(systemName: .bookmarkFill, pointSize: 90, weight: .medium).nsuiImgae,
+        title: "Added Bookmark"
+    )
 }
