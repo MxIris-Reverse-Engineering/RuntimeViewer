@@ -321,20 +321,132 @@ struct RuntimeMessageChannelErrorTests {
         let errors: [RuntimeMessageChannelError] = [
             .notConnected,
             .receiveFailed,
+            .requestTimeout,
         ]
-        #expect(errors.count == 2)
+        #expect(errors.count == 3)
     }
 
     @Test("Error descriptions are non-nil")
     func testErrorDescriptions() {
         #expect(RuntimeMessageChannelError.notConnected.errorDescription != nil)
         #expect(RuntimeMessageChannelError.receiveFailed.errorDescription != nil)
+        #expect(RuntimeMessageChannelError.requestTimeout.errorDescription != nil)
     }
 
     @Test("Error descriptions contain meaningful text")
     func testErrorDescriptionContent() {
         #expect(RuntimeMessageChannelError.notConnected.errorDescription!.contains("not connected"))
         #expect(RuntimeMessageChannelError.receiveFailed.errorDescription!.contains("receive"))
+        #expect(RuntimeMessageChannelError.requestTimeout.errorDescription!.contains("timed out"))
+    }
+}
+
+// MARK: - Timeout Tests
+
+@Suite("RuntimeMessageChannel Timeout", .serialized)
+struct RuntimeMessageChannelTimeoutTests {
+
+    @Test("sendRequest with non-nil timeout throws requestTimeout when no response arrives")
+    func testTimeoutFiresWhenResponseMissing() async throws {
+        let channel = RuntimeMessageChannel()
+        let identifier = "timeout-test-1"
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+
+        let start = Date()
+        do {
+            let _: String = try await channel.sendRequest(
+                requestData: payload,
+                timeout: 0.2
+            ) { _ in
+                // Writer succeeds, but no response is ever delivered.
+            }
+            Issue.record("expected requestTimeout to throw")
+        } catch RuntimeMessageChannelError.requestTimeout {
+            // expected
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        #expect(elapsed >= 0.2)
+        #expect(elapsed < 1.0)
+
+        // Once the deadline fired, the pending entry must be gone — a late response
+        // arriving with the same identifier should not match anything.
+        let lateDelivery = channel.deliverToPendingRequest(identifier: identifier, data: Data())
+        #expect(lateDelivery == false)
+    }
+
+    @Test("sendRequest with timeout still returns response when it arrives in time")
+    func testTimeoutDoesNotFireWhenResponseFastEnough() async throws {
+        let channel = RuntimeMessageChannel()
+        let identifier = "timeout-test-2"
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+
+        async let response: String = channel.sendRequest(
+            requestData: payload,
+            timeout: 1.0
+        ) { _ in
+            // Writer succeeds; deliverToPendingRequest fires below.
+        }
+
+        // Give sendRequest a beat to register the pending continuation, then deliver the
+        // response synthetically. We deliver the same wire shape sendRequest expects:
+        // an outer RuntimeRequestData whose `data` field decodes into Response.
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let responseEnvelope = try RuntimeRequestData(identifier: identifier, value: "ok")
+        let envelopeData = try JSONEncoder().encode(responseEnvelope)
+        let delivered = channel.deliverToPendingRequest(identifier: identifier, data: envelopeData)
+        #expect(delivered)
+
+        let actual = try await response
+        #expect(actual == "ok")
+    }
+
+    @Test("sendRequest with nil timeout does not race a deadline against response")
+    func testNilTimeoutDoesNotFire() async throws {
+        let channel = RuntimeMessageChannel()
+        let identifier = "timeout-test-3"
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+
+        async let response: String = channel.sendRequest(
+            requestData: payload,
+            timeout: nil
+        ) { _ in }
+
+        // Sleep longer than the would-be deadlines from the other tests; with timeout=nil
+        // the call must still be waiting for an explicit response or disconnect.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let responseEnvelope = try RuntimeRequestData(identifier: identifier, value: "delivered")
+        let envelopeData = try JSONEncoder().encode(responseEnvelope)
+        let delivered = channel.deliverToPendingRequest(identifier: identifier, data: envelopeData)
+        #expect(delivered)
+
+        let actual = try await response
+        #expect(actual == "delivered")
+    }
+
+    @Test("sendRequest propagates writer error and does not block on timeout")
+    func testWriterFailureUnblocksImmediately() async throws {
+        struct WriterFailure: Error, Equatable {}
+
+        let channel = RuntimeMessageChannel()
+        let identifier = "timeout-test-4"
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+
+        let start = Date()
+        do {
+            let _: String = try await channel.sendRequest(
+                requestData: payload,
+                timeout: 5.0
+            ) { _ in
+                throw WriterFailure()
+            }
+            Issue.record("expected writer failure to propagate")
+        } catch is WriterFailure {
+            // expected
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        // Should resolve via the writer-error path well before the 5 s deadline.
+        #expect(elapsed < 1.0)
     }
 }
 

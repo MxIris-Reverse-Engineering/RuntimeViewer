@@ -292,11 +292,25 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     }
 
     /// Sends a request and waits for a response.
+    ///
+    /// - Parameters:
+    ///   - requestData: The request payload framed by `RuntimeRequestData`.
+    ///   - timeout: Optional deadline (seconds). When non-nil, if no response arrives within
+    ///     the deadline the call throws `RuntimeMessageChannelError.requestTimeout` and the
+    ///     pending entry is removed, so a late response will be ignored. When `nil` the call
+    ///     waits indefinitely (the historical behaviour) and only unblocks when the response
+    ///     arrives, the writer fails, or `finishReceiving` is invoked.
+    ///   - writer: Async closure that performs the actual transport write.
     func sendRequest<Response: Codable>(
         requestData: RuntimeRequestData,
+        timeout: TimeInterval? = nil,
         writer: @escaping @Sendable (Data) async throws -> Void
     ) async throws -> Response {
         await sendSemaphore.wait()
+        // Use defer so the semaphore is released on every exit path — including when the
+        // continuation throws. The previous implementation released only on the success path
+        // and leaked the slot whenever sendRequest threw, blocking every subsequent caller.
+        defer { sendSemaphore.signal() }
 
         #log(.debug, "Sending request: \(requestData.identifier, privacy: .public)")
         let data = try JSONEncoder().encode(requestData)
@@ -311,14 +325,24 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
                     try await writer(dataToSend)
                 } catch {
                     // Remove pending request and resume with error
-                    _ = self.pendingRequests.withLock { $0.removeValue(forKey: requestData.identifier) }
-                    #log(.error, "Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
-                    continuation.resume(throwing: error)
+                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: requestData.identifier) }) {
+                        #log(.error, "Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
+                        pending.resume(throwing: error)
+                    }
+                }
+            }
+
+            if let timeout {
+                let identifier = requestData.identifier
+                Task {
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) {
+                        #log(.error, "Request \(identifier, privacy: .public) timed out after \(timeout, privacy: .public)s")
+                        pending.resume(throwing: RuntimeMessageChannelError.requestTimeout)
+                    }
                 }
             }
         }
-
-        sendSemaphore.signal()
 
         #log(.debug, "Received response for: \(requestData.identifier, privacy: .public)")
         let response = try JSONDecoder().decode(RuntimeRequestData.self, from: responseData)
@@ -372,6 +396,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 enum RuntimeMessageChannelError: Error, LocalizedError, Sendable {
     case notConnected
     case receiveFailed
+    case requestTimeout
 
     var errorDescription: String? {
         switch self {
@@ -379,6 +404,8 @@ enum RuntimeMessageChannelError: Error, LocalizedError, Sendable {
             return "Message channel is not connected"
         case .receiveFailed:
             return "Failed to receive message"
+        case .requestTimeout:
+            return "Request timed out before a response arrived"
         }
     }
 }

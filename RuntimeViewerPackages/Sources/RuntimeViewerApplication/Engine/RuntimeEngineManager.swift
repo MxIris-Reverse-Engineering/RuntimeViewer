@@ -217,7 +217,11 @@ public final class RuntimeEngineManager {
             Task { @MainActor in
                 do {
                     #log(.debug,"[EngineMirroring] requesting engine list from \(endpoint.name, privacy: .public)...")
-                    let descriptors = try await runtimeEngine.requestEngineList()
+                    // 5s deadline: peers without engine sharing (iOS, visionOS) or whose
+                    // bonjour transport is silently dead (e.g. flaky AWDL) would otherwise
+                    // hang this Task forever. On timeout we fall through to the catch block,
+                    // which marks the engine as a direct bonjour entry.
+                    let descriptors = try await runtimeEngine.requestEngineList(timeout: 5)
                     #log(.debug,"[EngineMirroring] received \(descriptors.count, privacy: .public) descriptors from \(endpoint.name, privacy: .public)")
                     if descriptors.isEmpty {
                         // Remote doesn't support engine sharing (e.g. iOS, injected app).
