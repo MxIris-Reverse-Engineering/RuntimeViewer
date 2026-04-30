@@ -747,9 +747,64 @@ public final class RuntimeEngineManager {
             }
         }
 
+        sections = deduplicateForwardedMirrors(in: sections)
+
         let sectionSummary = sections.map { "\($0.hostName)(\($0.engines.count))" }.joined(separator: ", ")
         #log(.debug,"[EngineIcon] rebuildSections: \(sections.count, privacy: .public) sections — \(sectionSummary, privacy: .public)")
         runtimeEngineSections = sections
+    }
+
+    /// Drops mirrored engines that duplicate an entry the local app already reaches
+    /// directly. The duplicates come in via the engine sharing protocol — e.g. a
+    /// neighbouring Mac directly connects to an iPhone (or to another Mac that
+    /// hadn't yet returned an engine list), wraps that connection as an engine, and
+    /// forwards the descriptor to us. We then mirror it, producing a second entry
+    /// under the same section with the same display name as the route we already
+    /// hold ourselves.
+    ///
+    /// Doing this in the section-build step (instead of inside the mirror reconcile
+    /// or as an evict on direct-connect) means `mirrorRegistry` keeps the alternate
+    /// route around. If the local direct path drops, the mirror is still present in
+    /// `mirroredEngines` and reappears on the very next `rebuildSections` call —
+    /// no waiting for the upstream peer to re-push.
+    ///
+    /// `localRouteNames` is built from *all* of this host's local-route engines —
+    /// including Bonjour client engines that `rebuildSections` hides as management
+    /// connections — because forwarded mirrors of those exact connections are still
+    /// what we need to suppress.
+    private func deduplicateForwardedMirrors(in sections: [RuntimeEngineSection]) -> [RuntimeEngineSection] {
+        return sections.map { section in
+            let localRouteNames = Set(
+                runtimeEngines
+                    .filter { engine in
+                        guard engine.hostInfo.hostID == section.hostID else { return false }
+                        return systemRuntimeEngines.contains(where: { $0 === engine })
+                            || attachedRuntimeEngines.contains(where: { $0 === engine })
+                            || bonjourRuntimeEngines.contains(where: { $0 === engine })
+                    }
+                    .map { $0.source.description }
+            )
+            guard !localRouteNames.isEmpty else { return section }
+
+            let dedupedEngines = section.engines.filter { engine in
+                // Always keep direct local routes that survived rebuildSections.
+                if systemRuntimeEngines.contains(where: { $0 === engine })
+                    || attachedRuntimeEngines.contains(where: { $0 === engine })
+                    || bonjourRuntimeEngines.contains(where: { $0 === engine }) {
+                    return true
+                }
+                // A mirror with the same display name as a local route to this same
+                // host is the same remote engine reached the long way round; drop it.
+                return !localRouteNames.contains(engine.source.description)
+            }
+
+            guard dedupedEngines.count != section.engines.count else { return section }
+            return RuntimeEngineSection(
+                hostName: section.hostName,
+                hostID: section.hostID,
+                engines: dedupedEngines
+            )
+        }
     }
 }
 
