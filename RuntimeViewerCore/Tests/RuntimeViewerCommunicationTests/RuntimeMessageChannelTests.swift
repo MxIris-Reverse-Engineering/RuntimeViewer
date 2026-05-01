@@ -448,6 +448,52 @@ struct RuntimeMessageChannelTimeoutTests {
         // Should resolve via the writer-error path well before the 5 s deadline.
         #expect(elapsed < 1.0)
     }
+
+    @Test("a finished request's timeout task does not spuriously fail a later same-identifier request")
+    func testTimeoutDoesNotPoisonLaterRequestUnderSameIdentifier() async throws {
+        struct WriterFailure: Error, Equatable {}
+
+        let channel = RuntimeMessageChannel()
+        let identifier = "timeout-test-5"
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+
+        // Step 1: first request fails fast in the writer, with a short timeout. If the
+        // timeout task were left orphaned, it would wake at ~0.3 s and remove whatever
+        // entry happens to be registered under the same identifier — clobbering step 2.
+        do {
+            let _: String = try await channel.sendRequest(
+                requestData: payload,
+                timeout: 0.3
+            ) { _ in
+                throw WriterFailure()
+            }
+            Issue.record("expected writer failure to propagate")
+        } catch is WriterFailure {
+            // expected
+        }
+
+        // Step 2: register a second request under the *same* identifier, with a longer
+        // timeout. Sleep past the first request's would-be deadline (0.3 s) but well
+        // under the second's (3 s), then deliver a synthetic response.
+        async let secondResponse: String = channel.sendRequest(
+            requestData: payload,
+            timeout: 3.0
+        ) { _ in
+            // Writer succeeds; deliverToPendingRequest resolves below.
+        }
+
+        // Give sendRequest time to register the pending continuation, then sleep past
+        // the first request's stale deadline.
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let envelope = try RuntimeRequestData(identifier: identifier, value: "ok")
+        let envelopeData = try JSONEncoder().encode(envelope)
+        let delivered = channel.deliverToPendingRequest(identifier: identifier, data: envelopeData)
+        #expect(delivered, "second request should still be pending — first request's timer must not have removed it")
+
+        let actual = try await secondResponse
+        #expect(actual == "ok")
+    }
 }
 
 // MARK: - RuntimeStdioError Tests
