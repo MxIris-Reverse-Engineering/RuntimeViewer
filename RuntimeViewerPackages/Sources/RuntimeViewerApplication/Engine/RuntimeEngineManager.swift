@@ -74,15 +74,28 @@ public final class RuntimeEngineManager {
     private var bonjourHeartbeatTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
     private static let bonjourHeartbeatInterval: UInt64 = 30_000_000_000 // 30 seconds
-    private static let bonjourHeartbeatTimeout: TimeInterval = 5
+    /// 15 s tolerates AWDL congestion: when a remote peer (especially a
+    /// simulator routed through a VM) finishes connecting, it pushes a
+    /// multi-MB `imageList` blob before it can answer our small `engineList`
+    /// request. Observed round-trips of 11 s on a healthy Vision Pro
+    /// simulator make a 5 s deadline too aggressive — the request would time
+    /// out even though the response was already in flight.
+    private static let bonjourHeartbeatTimeout: TimeInterval = 15
     private static let bonjourHeartbeatMaxConsecutiveFailures = 2
 
-    /// Initial-handshake retry. AWDL channel slots can miss a single 5 s
+    /// Initial-handshake retry. AWDL channel slots can miss a single
     /// `engineList` request even on a healthy peer, then succeed on the next
     /// attempt. One retry absorbs that without prematurely demoting the engine
     /// to direct.
     private static let initialEngineListMaxAttempts = 2
     private static let initialEngineListRetryDelay: UInt64 = 1_000_000_000 // 1 second
+    /// Wait briefly after the connection becomes ready before issuing the
+    /// first `engineList` request. The remote peer typically pushes its
+    /// initial `imageList` (often >1 MB) immediately on connect; sending the
+    /// request right away forces the small RPC to queue behind that bulk
+    /// transfer on AWDL, which can blow the timeout. A 2 s grace gives the
+    /// initial push time to drain.
+    private static let initialEngineListPreflightDelay: UInt64 = 2_000_000_000 // 2 seconds
 
     // MARK: - Dependencies
 
@@ -235,8 +248,11 @@ public final class RuntimeEngineManager {
 
             // Request the remote peer's engine list for mirroring
             Task { @MainActor in
+                // Let the remote's initial imageList push drain before
+                // competing for the AWDL channel with our small RPC.
+                try? await Task.sleep(nanoseconds: Self.initialEngineListPreflightDelay)
                 #log(.debug,"[EngineMirroring] requesting engine list from \(endpoint.name, privacy: .public)...")
-                // 5s deadline per attempt: peers without engine sharing (iOS, visionOS) or
+                // Deadline per attempt: peers without engine sharing (iOS, visionOS) or
                 // whose bonjour transport is silently dead (e.g. flaky AWDL) would otherwise
                 // hang this Task forever. One retry absorbs an AWDL slot miss before the
                 // catch block marks the engine as a direct bonjour entry.
@@ -479,11 +495,24 @@ public final class RuntimeEngineManager {
                     } else {
                         #log(.info,"Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public)")
                     }
-                    runtimeConnectionNotificationService.notifyDisconnected(source: runtimeEngine.source, error: error)
+
+                    let disconnectedHostID = runtimeEngine.hostInfo.hostID
+                    let disconnectedSource = runtimeEngine.source
 
                     self.cleanupMirroredEnginesOnDisconnect(of: runtimeEngine)
 
                     terminateRuntimeEngine(for: runtimeEngine.source)
+
+                    // Only notify if the host has fully vanished from the
+                    // sidebar. A direct Bonjour engine can drop while a
+                    // forwarded mirror of the same peer (received via a
+                    // third-party Mac) keeps the host visible — firing a
+                    // "disconnected" notification then would contradict
+                    // what the user sees on screen.
+                    let stillReachable = self.runtimeEngineSections.contains { $0.hostID == disconnectedHostID }
+                    if !stillReachable {
+                        runtimeConnectionNotificationService.notifyDisconnected(source: disconnectedSource, error: error)
+                    }
                 default:
                     break
                 }
@@ -886,6 +915,7 @@ public final class RuntimeEngineManager {
     }
 }
 
+@MainActor
 extension RuntimeEngineManager: ReactiveCompatible {}
 
 @MainActor
