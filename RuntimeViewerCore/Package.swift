@@ -4,9 +4,19 @@
 import PackageDescription
 import Foundation
 
-let appkitPlatforms: [Platform] = [.macOS]
-
-let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS, .macCatalyst, .watchOS]
+func envEnable(_ key: String, default defaultValue: Bool = false) -> Bool {
+    let value = Context.environment[key]
+    guard let value else {
+        return defaultValue
+    }
+    if value == "1" {
+        return true
+    } else if value == "0" {
+        return false
+    } else {
+        return defaultValue
+    }
+}
 
 extension Package.Dependency {
     enum LocalSearchPath {
@@ -41,6 +51,12 @@ extension Package.Dependency {
     }
 }
 
+let appkitPlatforms: [Platform] = [.macOS]
+
+let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS, .macCatalyst, .watchOS]
+
+let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
+
 let package = Package(
     name: "RuntimeViewerCore",
     platforms: [
@@ -65,7 +81,7 @@ let package = Package(
             local: .package(
                 path: "../../MachOKit",
                 isRelative: true,
-                isEnabled: false
+                isEnabled: usingLocalDependencies
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
@@ -76,7 +92,7 @@ let package = Package(
             local: .package(
                 path: "../../MachOObjCSection",
                 isRelative: true,
-                isEnabled: false
+                isEnabled: usingLocalDependencies
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
@@ -87,7 +103,7 @@ let package = Package(
             local: .package(
                 path: "../../MachOSwiftSection",
                 isRelative: true,
-                isEnabled: false
+                isEnabled: usingLocalDependencies
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
