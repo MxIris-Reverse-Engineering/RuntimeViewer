@@ -9,6 +9,10 @@ on:
         description: 'Tag to release (e.g. v2.1.0 or v2.1.0-RC.1)'
         required: true
         type: string
+      ref:
+        description: 'Branch/tag/SHA to checkout (defaults to inputs.tag). Use this when dispatching a CI dry run from a branch where the tag does not yet exist.'
+        required: false
+        type: string
       channel:
         description: 'Release channel (leave empty to infer from tag)'
         type: choice
@@ -34,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.ref || inputs.tag || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Select Xcode
@@ -105,7 +109,7 @@ jobs:
           tar -xf /tmp/Sparkle.tar.xz -C "$RUNNER_TEMP/Sparkle"
           echo "$RUNNER_TEMP/Sparkle/bin" >> $GITHUB_PATH
 
-      - name: Run ReleaseScript
+      - name: Run ArchiveScript
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -123,7 +127,7 @@ jobs:
             CREATE_FLAGS=(--update-appcast --upload-to-github --commit-push)
           fi
 
-          ./ReleaseScript.sh \
+          ./ArchiveScript.sh \
             --notary-api-key "$NOTARY_KEY_FILE" \
             --notary-key-id "${{ secrets.NOTARY_KEY_ID }}" \
             --notary-issuer-id "${{ secrets.NOTARY_ISSUER_ID }}" \

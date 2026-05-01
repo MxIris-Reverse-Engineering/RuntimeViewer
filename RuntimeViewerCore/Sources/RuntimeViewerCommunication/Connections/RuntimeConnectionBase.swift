@@ -57,24 +57,36 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
     }
 
     func sendMessage<Response: Codable>(name: String) async throws -> Response {
+        try await sendMessage(name: name, timeout: nil)
+    }
+
+    func sendMessage<Response: Codable>(name: String, timeout: TimeInterval?) async throws -> Response {
         guard let connection = underlyingConnection else {
             throw RuntimeConnectionError.notConnected
         }
-        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: RuntimeMessageNull.null))
+        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: RuntimeMessageNull.null), timeout: timeout)
     }
 
     func sendMessage<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
+        try await sendMessage(request: request, timeout: nil)
+    }
+
+    func sendMessage<Request: RuntimeRequest>(request: Request, timeout: TimeInterval?) async throws -> Request.Response {
         guard let connection = underlyingConnection else {
             throw RuntimeConnectionError.notConnected
         }
-        return try await connection.send(request: request)
+        return try await connection.send(request: request, timeout: timeout)
     }
 
     func sendMessage<Response: Codable>(name: String, request: some Codable) async throws -> Response {
+        try await sendMessage(name: name, request: request, timeout: nil)
+    }
+
+    func sendMessage<Response: Codable>(name: String, request: some Codable, timeout: TimeInterval?) async throws -> Response {
         guard let connection = underlyingConnection else {
             throw RuntimeConnectionError.notConnected
         }
-        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: request))
+        return try await connection.send(requestData: RuntimeRequestData(identifier: name, value: request), timeout: timeout)
     }
 
     func setMessageHandler(name: String, handler: @escaping @Sendable () async throws -> Void) {
@@ -126,10 +138,12 @@ protocol RuntimeUnderlyingConnection: Sendable {
     func send(requestData: RuntimeRequestData) async throws
 
     /// Sends a request and returns the response.
-    func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response
+    /// - Parameter timeout: Optional deadline (seconds). Forwarded to the underlying message
+    ///   channel; `nil` keeps the historical "wait until response or disconnect" behaviour.
+    func send<Response: Codable>(requestData: RuntimeRequestData, timeout: TimeInterval?) async throws -> Response
 
     /// Sends a typed request and returns its response.
-    func send<Request: RuntimeRequest>(request: Request) async throws -> Request.Response
+    func send<Request: RuntimeRequest>(request: Request, timeout: TimeInterval?) async throws -> Request.Response
 
     /// Registers a message handler for the given name.
     func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Response)

@@ -100,6 +100,7 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
         parameters.includePeerToPeer = true
+        parameters.serviceClass = .responsiveData
 
         self.connection = NWConnection(
             host: NWEndpoint.Host(host),
@@ -258,15 +259,15 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
         #log(.debug, "Sent request: \(requestData.identifier, privacy: .public)")
     }
 
-    func send<Response: Codable>(requestData: RuntimeRequestData) async throws -> Response {
-        try await messageChannel.sendRequest(requestData: requestData) { [weak self] data in
+    func send<Response: Codable>(requestData: RuntimeRequestData, timeout: TimeInterval?) async throws -> Response {
+        try await messageChannel.sendRequest(requestData: requestData, timeout: timeout) { [weak self] data in
             try await self?.sendRaw(data: data)
         }
     }
 
-    func send<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
+    func send<Request: RuntimeRequest>(request: Request, timeout: TimeInterval?) async throws -> Request.Response {
         let requestData = try RuntimeRequestData(request: request)
-        return try await send(requestData: requestData)
+        return try await send(requestData: requestData, timeout: timeout)
     }
 
     func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) {
@@ -462,6 +463,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
 
         let parameters = NWParameters(tls: nil, tcp: tcpOptions)
         parameters.includePeerToPeer = true
+        parameters.serviceClass = .responsiveData
         self.listenerParameters = parameters
 
         super.init()

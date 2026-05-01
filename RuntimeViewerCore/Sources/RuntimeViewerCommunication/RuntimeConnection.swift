@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 public import Combine
 
 /// Protocol defining the unified interface for all runtime communication channels.
@@ -97,10 +97,25 @@ public protocol RuntimeConnection: Sendable {
     /// - Returns: The decoded response.
     func sendMessage<Response: Codable>(name: String) async throws -> Response
 
+    /// Sends a message and waits for a response, with an optional deadline.
+    /// - Parameters:
+    ///   - name: The message identifier.
+    ///   - timeout: Maximum time (seconds) to wait for the response. `nil` means wait
+    ///     indefinitely (the historical behaviour). When the deadline fires, the call throws
+    ///     a transport-specific timeout error and the pending entry is dropped, so any late
+    ///     response is ignored.
+    /// - Returns: The decoded response.
+    /// - Note: Transports that don't natively support per-request deadlines (e.g. XPC) fall
+    ///   back to ignoring `timeout`.
+    func sendMessage<Response: Codable>(name: String, timeout: TimeInterval?) async throws -> Response
+
     /// Sends a typed request and waits for its associated response.
     /// - Parameter request: The request conforming to `RuntimeRequest`.
     /// - Returns: The response type defined by the request.
     func sendMessage<Request: RuntimeRequest>(request: Request) async throws -> Request.Response
+
+    /// Sends a typed request and waits for its associated response, with an optional deadline.
+    func sendMessage<Request: RuntimeRequest>(request: Request, timeout: TimeInterval?) async throws -> Request.Response
 
     /// Sends a message with a payload and waits for a response.
     /// - Parameters:
@@ -108,6 +123,9 @@ public protocol RuntimeConnection: Sendable {
     ///   - request: The request payload to send.
     /// - Returns: The decoded response.
     func sendMessage<Response: Codable>(name: String, request: some Codable) async throws -> Response
+
+    /// Sends a message with a payload and waits for a response, with an optional deadline.
+    func sendMessage<Response: Codable>(name: String, request: some Codable, timeout: TimeInterval?) async throws -> Response
 
     /// Registers a handler for messages with no payload and no response.
     /// - Parameters:
@@ -148,4 +166,19 @@ public protocol RuntimeConnection: Sendable {
 
 extension RuntimeConnection {
     public var connectionInfo: RuntimeConnectionInfo? { nil }
+
+    /// Default implementation: ignore the timeout and forward to the no-timeout overload.
+    /// Transports that natively support per-request deadlines (e.g. those built on
+    /// `RuntimeMessageChannel`) override this to honour the parameter.
+    public func sendMessage<Response: Codable>(name: String, timeout: TimeInterval?) async throws -> Response {
+        try await sendMessage(name: name)
+    }
+
+    public func sendMessage<Request: RuntimeRequest>(request: Request, timeout: TimeInterval?) async throws -> Request.Response {
+        try await sendMessage(request: request)
+    }
+
+    public func sendMessage<Response: Codable>(name: String, request: some Codable, timeout: TimeInterval?) async throws -> Response {
+        try await sendMessage(name: name, request: request)
+    }
 }

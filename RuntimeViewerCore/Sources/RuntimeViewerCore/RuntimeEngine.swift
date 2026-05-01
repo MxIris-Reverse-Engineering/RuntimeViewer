@@ -632,11 +632,18 @@ extension RuntimeEngine {
 
     }
 
-    public func requestEngineList() async throws -> [RemoteEngineDescriptor] {
+    /// Asks the connected peer for its shared engine list.
+    ///
+    /// On macOS the peer answers with a non-empty descriptor list; on platforms without
+    /// `RuntimeEngineManager` (iOS, visionOS, etc.) the peer either returns an empty list
+    /// or never replies. The default `timeout` of 5 s lets the caller fall through to the
+    /// "treat as direct engine" branch instead of hanging forever on a flaky link
+    /// (e.g. AWDL between iPhone and Mac).
+    public func requestEngineList(timeout: TimeInterval = 5) async throws -> [RemoteEngineDescriptor] {
         try await request {
             []
         } remote: {
-            try await $0.sendMessage(name: .engineList)
+            try await $0.sendMessage(name: .engineList, timeout: timeout)
         }
     }
 
@@ -664,6 +671,10 @@ extension RuntimeConnection {
 
     func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames) async throws -> Response {
         return try await sendMessage(name: name.commandName)
+    }
+
+    func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames, timeout: TimeInterval?) async throws -> Response {
+        return try await sendMessage(name: name.commandName, timeout: timeout)
     }
 
     func sendMessage<Response: Codable>(name: RuntimeEngine.CommandNames, request: some Codable) async throws -> Response {

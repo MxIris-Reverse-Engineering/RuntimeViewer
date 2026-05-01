@@ -15,7 +15,7 @@ Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspec
 `RuntimeViewerUsingAppKit` in the same Xcode/DerivedData session. Do not model
 this as a direct target dependency: Xcode treats the Mac Catalyst helper as
 iOS-family embedded content and rejects it from the macOS app target.
-`ReleaseScript.sh` already handles this by archiving/exporting the helper before
+`ArchiveScript.sh` already handles this by archiving/exporting the helper before
 the main app.
 
 Recommended Xcode order:
@@ -32,9 +32,9 @@ xcodebuild build -scheme RuntimeViewerUsingAppKit -configuration Debug -destinat
 # Release build (archives Catalyst helper + main app, notarizes, and optionally
 # generates appcast + uploads GitHub Release). Uses scheme "RuntimeViewer macOS".
 # Omit the distribution flags for a local signed zip only.
-./ReleaseScript.sh
+./ArchiveScript.sh
 # Cut a full release (appcast + GitHub Release + commit docs/appcast.xml):
-./ReleaseScript.sh --update-appcast --upload-to-github --commit-push --version-tag vX.Y.Z
+./ArchiveScript.sh --update-appcast --upload-to-github --commit-push --version-tag vX.Y.Z
 
 # Build RuntimeViewerServer XCFramework (all platforms)
 ./BuildRuntimeViewerServerXCFramework.sh

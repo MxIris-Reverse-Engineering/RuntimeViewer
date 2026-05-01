@@ -38,7 +38,7 @@ to the private key — either via the login Keychain (default) or via the
 - **Task 11 (local, pre-merge validation):**
 
   ```bash
-  ./ReleaseScript.sh --version-tag v2.1.0-dryrun \
+  ./ArchiveScript.sh --version-tag v2.1.0-dryrun \
       --channel beta --update-appcast \
       --skip-notarization --skip-open-finder 2>&1 | xcsift
   ```

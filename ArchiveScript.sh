@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# ReleaseScript.sh — Archive, notarize, sign, and (optionally) publish a
+# ArchiveScript.sh — Archive, notarize, sign, and (optionally) publish a
 # RuntimeViewer release. Used by both local developers and CI.
 #
 # Usage:
-#   ./ReleaseScript.sh --version-tag vX.Y.Z \
+#   ./ArchiveScript.sh --version-tag vX.Y.Z \
+#                      [--configuration Release|Debug] \
 #                      [--release-notes Changelogs/vX.Y.Z.md] \
+#                      [--update-packages] \
 #                      [--update-appcast] [--upload-to-github] [--commit-push]
-#   ./ReleaseScript.sh --help
+#   ./ArchiveScript.sh --help
 #
 # Run without --update-appcast / --upload-to-github / --commit-push for a
-# local build that only produces the signed, notarized zip.
+# local build that only produces the signed, notarized zip. The default
+# configuration is Release; pass --configuration Debug (or any other
+# configuration name defined in the workspace) for local validation. Pass
+# --update-packages to refresh SwiftPM pins before archiving.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -26,6 +31,7 @@ VERSION_TAG=""
 CHANNEL=""
 RELEASE_NOTES=""
 ED_KEY_FILE=""
+UPDATE_PACKAGES=false
 UPDATE_APPCAST=false
 UPLOAD_TO_GITHUB=false
 COMMIT_PUSH=false
@@ -45,7 +51,7 @@ DOWNLOAD_URL_PREFIX_BASE="https://github.com/MxIris-Reverse-Engineering/RuntimeV
 RELEASE_NOTES_URL_PREFIX="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/tag/"
 
 fail() { echo "error: $*" >&2; exit 1; }
-log()  { echo "[ReleaseScript] $*"; }
+log()  { echo "[ArchiveScript] $*"; }
 
 # Pipe xcodebuild output through xcbeautify when it is installed; otherwise
 # fall back to cat so that neither CI nor local runs depend on the tool.
@@ -94,6 +100,7 @@ while [[ $# -gt 0 ]]; do
         --channel) CHANNEL="$2"; shift 2;;
         --release-notes) RELEASE_NOTES="$2"; shift 2;;
         --ed-key-file) ED_KEY_FILE="$2"; shift 2;;
+        --update-packages) UPDATE_PACKAGES=true; shift;;
         --update-appcast) UPDATE_APPCAST=true; shift;;
         --upload-to-github) UPLOAD_TO_GITHUB=true; shift;;
         --commit-push) COMMIT_PUSH=true; shift;;
@@ -106,7 +113,7 @@ while [[ $# -gt 0 ]]; do
         --notary-api-key) NOTARY_API_KEY="$2"; shift 2;;
         --notary-key-id) NOTARY_KEY_ID="$2"; shift 2;;
         --notary-issuer-id) NOTARY_ISSUER_ID="$2"; shift 2;;
-        -h|--help) sed -n '2,12p' "$0" | sed 's/^# *//'; exit 0;;
+        -h|--help) sed -n '2,17p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -132,7 +139,7 @@ fi
 
 log "workspace=$WORKSPACE scheme=$SCHEME configuration=$CONFIGURATION build=$BUILD_NUMBER"
 log "version_tag=${VERSION_TAG:-<none>} channel=${CHANNEL:-<none>}"
-log "update_appcast=$UPDATE_APPCAST upload_to_github=$UPLOAD_TO_GITHUB commit_push=$COMMIT_PUSH"
+log "update_packages=$UPDATE_PACKAGES update_appcast=$UPDATE_APPCAST upload_to_github=$UPLOAD_TO_GITHUB commit_push=$COMMIT_PUSH"
 
 BUILD_PATH="$PROJECT_DIR/Products/Archives"
 EXPORT_PATH="$BUILD_PATH/Products/Export"
@@ -162,6 +169,35 @@ collect_xcdistributionlogs() {
 trap collect_xcdistributionlogs EXIT
 
 log "xcodebuild logs: $LOG_DIR"
+
+update_packages() {
+    log "Updating Swift package dependencies"
+    run swift package update --package-path "$PROJECT_DIR/RuntimeViewerCore"
+    run swift package update --package-path "$PROJECT_DIR/RuntimeViewerPackages"
+
+    local workspace_path="$WORKSPACE"
+    if [[ "$workspace_path" != /* ]]; then
+        workspace_path="$PROJECT_DIR/$workspace_path"
+    fi
+
+    local workspace_package_resolved="$workspace_path/xcshareddata/swiftpm/Package.resolved"
+    log "Refreshing workspace package pins"
+    run rm -f "$workspace_package_resolved"
+
+    XCODEBUILD_LOG_NAME="resolve-catalyst-helper-packages" run_piped xcodebuild -resolvePackageDependencies \
+        -workspace "$WORKSPACE" \
+        -scheme "$CATALYST_SCHEME" \
+        -skipPackagePluginValidation -skipMacroValidation
+
+    XCODEBUILD_LOG_NAME="resolve-main-packages" run_piped xcodebuild -resolvePackageDependencies \
+        -workspace "$WORKSPACE" \
+        -scheme "$SCHEME" \
+        -skipPackagePluginValidation -skipMacroValidation
+}
+
+if $UPDATE_PACKAGES; then
+    update_packages
+fi
 
 log "Archiving Catalyst helper"
 XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \

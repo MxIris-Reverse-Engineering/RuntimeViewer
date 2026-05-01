@@ -16,13 +16,6 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
 
     private let addToBookmarkRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
-    private let addToBookmarkHUD = SystemHUD(
-        configuration: .init(
-            image: SFSymbols(systemName: .bookmarkFill, pointSize: 90, weight: .medium).nsuiImgae,
-            title: "Added Bookmark"
-        )
-    )
-
     @Dependency(\.appDefaults)
     private var appDefaults
 
@@ -89,14 +82,13 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         ) {}
     }
 
-    
-
     @objc private func addToBookmarkMenuItemAction(_ sender: NSMenuItem) {
         guard outlineView.hasValidClickedRow, let cellViewModel = outlineView.itemAtClickedRow as? SidebarRuntimeObjectCellViewModel else { return }
         addToBookmarkRelay.accept(cellViewModel)
-        addToBookmarkHUD.show(delay: 1)
+        SystemHUD.default.configuration = .addToBookmarkHUDConfiguration
+        SystemHUD.default.show(delay: 1)
     }
-    
+
     override func responds(to aSelector: Selector!) -> Bool {
         guard let aSelector else { return super.responds(to: aSelector) }
         switch aSelector {

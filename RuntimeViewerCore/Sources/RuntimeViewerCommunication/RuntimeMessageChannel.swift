@@ -106,8 +106,12 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Message handlers keyed by message identifier.
     private let messageHandlers = Mutex<[String: RuntimeMessageHandler]>([:])
 
-    /// Pending request continuations keyed by request identifier.
-    private let pendingRequests = Mutex<[String: CheckedContinuation<Data, Error>]>([:])
+    /// In-flight request bookkeeping keyed by request identifier. The entry holds both
+    /// the awaited continuation and the optional timeout `Task` so the success and
+    /// writer-error paths can cancel the timer before it fires — without that, an
+    /// orphaned timer from a finished request can wake later and incorrectly time out
+    /// a *different* request that happened to be registered under the same identifier.
+    private let pendingRequests = Mutex<[String: PendingRequest]>([:])
 
     /// Buffer for incoming data.
     private let receivingData = Mutex<Data>(Data())
@@ -183,11 +187,12 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     ///   - data: The response data to deliver.
     /// - Returns: `true` if the data was delivered to a pending request, `false` otherwise.
     func deliverToPendingRequest(identifier: String, data: Data) -> Bool {
-        guard let continuation = pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) else {
+        guard let pending = pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) else {
             return false
         }
         #log(.debug, "Delivered response to pending request: \(identifier, privacy: .public)")
-        continuation.resume(returning: data)
+        pending.cancelTimeoutTask()
+        pending.continuation.resume(returning: data)
         return true
     }
 
@@ -257,17 +262,18 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
         // Drain any pending requests that were waiting for a response on the now-dead channel
         // and resume each with an error so the `await` in `sendRequest` unblocks.
-        let drainedContinuations: [CheckedContinuation<Data, Error>] = pendingRequests.withLock { pending in
+        let drainedRequests: [PendingRequest] = pendingRequests.withLock { pending in
             let values = Array(pending.values)
             pending.removeAll()
             return values
         }
-        if !drainedContinuations.isEmpty {
-            #log(.info, "finishReceiving: draining \(drainedContinuations.count, privacy: .public) pending request(s)")
+        if !drainedRequests.isEmpty {
+            #log(.info, "finishReceiving: draining \(drainedRequests.count, privacy: .public) pending request(s)")
         }
         let resumeError: any Error = error ?? RuntimeMessageChannelError.notConnected
-        for continuation in drainedContinuations {
-            continuation.resume(throwing: resumeError)
+        for pending in drainedRequests {
+            pending.cancelTimeoutTask()
+            pending.continuation.resume(throwing: resumeError)
         }
     }
 
@@ -292,11 +298,25 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     }
 
     /// Sends a request and waits for a response.
+    ///
+    /// - Parameters:
+    ///   - requestData: The request payload framed by `RuntimeRequestData`.
+    ///   - timeout: Optional deadline (seconds). When non-nil, if no response arrives within
+    ///     the deadline the call throws `RuntimeMessageChannelError.requestTimeout` and the
+    ///     pending entry is removed, so a late response will be ignored. When `nil` the call
+    ///     waits indefinitely (the historical behaviour) and only unblocks when the response
+    ///     arrives, the writer fails, or `finishReceiving` is invoked.
+    ///   - writer: Async closure that performs the actual transport write.
     func sendRequest<Response: Codable>(
         requestData: RuntimeRequestData,
+        timeout: TimeInterval? = nil,
         writer: @escaping @Sendable (Data) async throws -> Void
     ) async throws -> Response {
         await sendSemaphore.wait()
+        // Use defer so the semaphore is released on every exit path — including when the
+        // continuation throws. The previous implementation released only on the success path
+        // and leaked the slot whenever sendRequest threw, blocking every subsequent caller.
+        defer { sendSemaphore.signal() }
 
         #log(.debug, "Sending request: \(requestData.identifier, privacy: .public)")
         let data = try JSONEncoder().encode(requestData)
@@ -304,21 +324,39 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
         // Register pending request before sending
         let responseData: Data = try await withCheckedThrowingContinuation { continuation in
-            pendingRequests.withLock { $0[requestData.identifier] = continuation }
+            let pending = PendingRequest(continuation: continuation)
+            pendingRequests.withLock { $0[requestData.identifier] = pending }
+
+            // Spawn the timeout task before the writer task so the entry is fully wired
+            // up — including its cancel handle — before any code path that resolves the
+            // continuation can run. The success/writer-error paths cancel the timer so
+            // it cannot wake later and incorrectly time out a re-used identifier.
+            if let timeout {
+                let identifier = requestData.identifier
+                let timeoutTask = Task {
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    if Task.isCancelled { return }
+                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) {
+                        #log(.error, "Request \(identifier, privacy: .public) timed out after \(timeout, privacy: .public)s")
+                        pending.continuation.resume(throwing: RuntimeMessageChannelError.requestTimeout)
+                    }
+                }
+                pending.setTimeoutTask(timeoutTask)
+            }
 
             Task {
                 do {
                     try await writer(dataToSend)
                 } catch {
                     // Remove pending request and resume with error
-                    _ = self.pendingRequests.withLock { $0.removeValue(forKey: requestData.identifier) }
-                    #log(.error, "Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
-                    continuation.resume(throwing: error)
+                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: requestData.identifier) }) {
+                        #log(.error, "Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
+                        pending.cancelTimeoutTask()
+                        pending.continuation.resume(throwing: error)
+                    }
                 }
             }
         }
-
-        sendSemaphore.signal()
 
         #log(.debug, "Received response for: \(requestData.identifier, privacy: .public)")
         let response = try JSONDecoder().decode(RuntimeRequestData.self, from: responseData)
@@ -366,12 +404,39 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     }
 }
 
+// MARK: - PendingRequest
+
+/// Bookkeeping for a single in-flight request. Owns the continuation that `sendRequest`
+/// is awaiting and an optional timeout `Task` whose handle is held under a lock so the
+/// success and writer-error paths can cancel it before it has a chance to fire against a
+/// later request that registered under the same identifier.
+private final class PendingRequest: @unchecked Sendable {
+    let continuation: CheckedContinuation<Data, Error>
+    private let timeoutTask = Mutex<Task<Void, Never>?>(nil)
+
+    init(continuation: CheckedContinuation<Data, Error>) {
+        self.continuation = continuation
+    }
+
+    func setTimeoutTask(_ task: Task<Void, Never>) {
+        timeoutTask.withLock { $0 = task }
+    }
+
+    func cancelTimeoutTask() {
+        timeoutTask.withLock { task in
+            task?.cancel()
+            task = nil
+        }
+    }
+}
+
 // MARK: - RuntimeMessageChannelError
 
 /// Errors that can occur during message channel operations.
 enum RuntimeMessageChannelError: Error, LocalizedError, Sendable {
     case notConnected
     case receiveFailed
+    case requestTimeout
 
     var errorDescription: String? {
         switch self {
@@ -379,6 +444,8 @@ enum RuntimeMessageChannelError: Error, LocalizedError, Sendable {
             return "Message channel is not connected"
         case .receiveFailed:
             return "Failed to receive message"
+        case .requestTimeout:
+            return "Request timed out before a response arrived"
         }
     }
 }

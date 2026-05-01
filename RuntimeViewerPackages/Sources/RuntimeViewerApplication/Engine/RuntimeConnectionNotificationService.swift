@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 import FoundationToolbox
 import UserNotifications
@@ -8,6 +9,7 @@ import Dependencies
 
 /// Service responsible for sending local notifications for runtime connection events.
 @Loggable
+@MainActor
 public final class RuntimeConnectionNotificationService: NSObject {
     public static let shared = RuntimeConnectionNotificationService()
 
@@ -87,7 +89,8 @@ public final class RuntimeConnectionNotificationService: NSObject {
 
 // MARK: - UNUserNotificationCenterDelegate
 
-extension RuntimeConnectionNotificationService: UNUserNotificationCenterDelegate {
+@MainActor
+extension RuntimeConnectionNotificationService: @MainActor UNUserNotificationCenterDelegate {
     public func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -127,13 +130,16 @@ extension RuntimeSource {
 
 // MARK: - Dependencies
 
-private enum RuntimeConnectionNotificationServiceKey: DependencyKey {
+@MainActor
+private enum RuntimeConnectionNotificationServiceKey: @MainActor DependencyKey {
     static let liveValue = RuntimeConnectionNotificationService.shared
 }
 
+@MainActor
 extension DependencyValues {
     public var runtimeConnectionNotificationService: RuntimeConnectionNotificationService {
         get { self[RuntimeConnectionNotificationServiceKey.self] }
         set { self[RuntimeConnectionNotificationServiceKey.self] = newValue }
     }
 }
+#endif

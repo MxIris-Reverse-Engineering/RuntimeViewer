@@ -14,7 +14,7 @@ For native macOS builds, build `RuntimeViewerCatalystHelper` first, then build
 `RuntimeViewer macOS` / `RuntimeViewerUsingAppKit` in the same Xcode/DerivedData
 session. Do not model this as a direct target dependency: Xcode treats the Mac
 Catalyst helper as iOS-family embedded content and rejects it from the macOS app
-target. `ReleaseScript.sh` already handles this by archiving/exporting the
+target. `ArchiveScript.sh` already handles this by archiving/exporting the
 helper before the main app.
 
 Recommended Xcode order:
@@ -30,7 +30,7 @@ xcodebuild build -scheme RuntimeViewerUsingAppKit -configuration Debug -destinat
 
 # Release build (archives + notarizes; add --update-appcast --upload-to-github --commit-push
 # --version-tag vX.Y.Z to cut a full release with Sparkle appcast update).
-./ReleaseScript.sh
+./ArchiveScript.sh
 ```
 
 ## Architecture
