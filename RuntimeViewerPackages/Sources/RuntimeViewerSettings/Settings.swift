@@ -31,6 +31,11 @@ public final class Settings {
         didSet { scheduleAutoSave() }
     }
 
+    @Default(Indexing.default)
+    public var indexing: Indexing = .init() {
+        didSet { scheduleAutoSave() }
+    }
+
     @Default(Update.default)
     public var update: Update = .init() {
         didSet { scheduleAutoSave() }
@@ -74,6 +79,7 @@ public final class Settings {
             notifications = decoded.notifications
             transformer = decoded.transformer
             mcp = decoded.mcp
+            indexing = decoded.indexing
             update = decoded.update
             #log(.debug, "Settings loaded successfully.")
         } catch {

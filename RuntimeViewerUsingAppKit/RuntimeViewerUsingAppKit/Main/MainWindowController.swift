@@ -4,6 +4,8 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
 import RuntimeViewerCatalystExtensions
+import RxCocoa
+import RxSwift
 import UniformTypeIdentifiers
 
 final class MainWindow: NSWindow {
@@ -106,6 +108,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
             attachToProcessClick: toolbarController.attachItem.button.rx.click.asSignal(),
             mcpStatusClick: toolbarController.mcpStatusItem.button.rx.clickWithSelf.asSignal().map { $0 },
+            backgroundIndexingClick: toolbarController.backgroundIndexingItem.button.rx.clickWithSelf.asSignal().map { $0 },
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal()
         )
