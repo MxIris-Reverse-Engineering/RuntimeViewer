@@ -348,8 +348,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mxcl/Version",
       "state" : {
-        "revision" : "67ce582bb9de70e1eb2ee41fd71aad3b5f86d97b",
-        "version" : "2.2.0"
+        "revision" : "3043fcd2a50375db76d89ff206a612471833d1c2",
+        "version" : "2.2.1"
       }
     },
     {

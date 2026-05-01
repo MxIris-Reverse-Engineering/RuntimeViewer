@@ -113,8 +113,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Library-Forks/ide-icons",
       "state" : {
-        "revision" : "9c3cf2809c12316378a782e4b2752c8a1bd0f046",
-        "version" : "0.1.1"
+        "revision" : "d262688aecaf1cdab961b2a504566ae5f71c29d1",
+        "version" : "0.1.3"
       }
     },
     {
