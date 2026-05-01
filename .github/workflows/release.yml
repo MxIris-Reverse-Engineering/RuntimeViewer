@@ -33,6 +33,7 @@ jobs:
     runs-on: ${{ inputs.runner || 'macos-26' }}
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout
