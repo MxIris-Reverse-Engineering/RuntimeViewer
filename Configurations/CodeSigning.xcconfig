@@ -2,14 +2,14 @@
 // Create Configurations/custom.xcconfig to override these values locally.
 
 RUNTIME_VIEWER_DEVELOPMENT_TEAM = D5Q73692VW
-RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_COMMON_NAME = Apple Development: JieHui Lai (4ZZALU97YZ)
 
 RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer
 RUNTIME_VIEWER_APP_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer
 RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService
 
-RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_REQUIREMENT = certificate leaf[subject.CN] = "$(RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_COMMON_NAME)" and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */
-RUNTIME_VIEWER_DISTRIBUTION_CERTIFICATE_REQUIREMENT = (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM))
+RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_REQUIREMENT = certificate leaf[subject.OU] = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM) and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */
+// `and` binds tighter than `or` in csreq, so the outer parens around the `or` group are load-bearing — they keep the team OU check from being bypassed on the Apple Distribution branch.
+RUNTIME_VIEWER_DISTRIBUTION_CERTIFICATE_REQUIREMENT = (certificate leaf[field.1.2.840.113635.100.6.1.9] /* exists */ or (certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */)) and certificate leaf[subject.OU] = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM)
 
 RUNTIME_VIEWER_DEBUG_SM_PRIVILEGED_EXECUTABLE = identifier "$(RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER)" and anchor apple generic and $(RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_REQUIREMENT)
 RUNTIME_VIEWER_RELEASE_SM_PRIVILEGED_EXECUTABLE = anchor apple generic and identifier "$(RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER)" and $(RUNTIME_VIEWER_DISTRIBUTION_CERTIFICATE_REQUIREMENT)
