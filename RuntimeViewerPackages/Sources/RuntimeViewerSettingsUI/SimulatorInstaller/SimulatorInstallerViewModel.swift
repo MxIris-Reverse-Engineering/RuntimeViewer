@@ -1,25 +1,31 @@
 #if os(macOS)
 
-import AppKit
 import Foundation
+import Observation
 
 @MainActor
-final class SimulatorInstallerViewModel: ObservableObject {
+@Observable
+final class SimulatorInstallerViewModel {
     let currentVersion: String
 
-    @Published var version: String
-    @Published private(set) var artifacts: [SimulatorRuntimeViewerArtifact] = []
-    @Published private(set) var simulators: [RuntimeViewerSimulatorDevice] = []
-    @Published private(set) var selectedArtifactID: SimulatorRuntimeViewerArtifact.ID?
-    @Published private(set) var selectedSimulatorID: RuntimeViewerSimulatorDevice.ID?
-    @Published private(set) var isDownloading = false
-    @Published private(set) var isInstalling = false
-    @Published private(set) var downloadProgress: Double?
-    @Published private(set) var downloadStatus = "Ready"
-    @Published private(set) var installStatus = "Choose a simulator and a downloaded RuntimeViewer.app."
+    var version: String
+    private(set) var artifacts: [SimulatorRuntimeViewerArtifact] = []
+    private(set) var simulators: [RuntimeViewerSimulatorDevice] = []
+    var selectedArtifactID: SimulatorRuntimeViewerArtifact.ID?
+    var selectedSimulatorID: RuntimeViewerSimulatorDevice.ID?
+    private(set) var isDownloading = false
+    private(set) var isInstalling = false
+    private(set) var downloadProgress: Double?
+    private(set) var downloadStatus = "Ready"
+    private(set) var installStatus = "Choose a simulator and a downloaded RuntimeViewer.app."
 
+    @ObservationIgnored
     private let service: SimulatorRuntimeViewerInstallerService
+
+    @ObservationIgnored
     private var downloadTask: Task<Void, Never>?
+
+    @ObservationIgnored
     private var installTask: Task<Void, Never>?
 
     init(service: SimulatorRuntimeViewerInstallerService = SimulatorRuntimeViewerInstallerService()) {
@@ -81,14 +87,6 @@ final class SimulatorInstallerViewModel: ObservableObject {
         } catch {
             installStatus = error.localizedDescription
         }
-    }
-
-    func selectArtifact(id: SimulatorRuntimeViewerArtifact.ID?) {
-        selectedArtifactID = id
-    }
-
-    func selectSimulator(id: RuntimeViewerSimulatorDevice.ID?) {
-        selectedSimulatorID = id
     }
 
     func resetVersion() {
