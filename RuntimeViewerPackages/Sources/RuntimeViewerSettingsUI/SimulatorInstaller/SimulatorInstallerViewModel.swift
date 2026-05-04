@@ -4,21 +4,19 @@ import AppKit
 import Foundation
 
 @MainActor
-final class SimulatorInstallerViewModel {
+final class SimulatorInstallerViewModel: ObservableObject {
     let currentVersion: String
-    var version: String
 
-    private(set) var artifacts: [SimulatorRuntimeViewerArtifact] = []
-    private(set) var simulators: [RuntimeViewerSimulatorDevice] = []
-    private(set) var selectedArtifactID: SimulatorRuntimeViewerArtifact.ID?
-    private(set) var selectedSimulatorID: RuntimeViewerSimulatorDevice.ID?
-    private(set) var isDownloading = false
-    private(set) var isInstalling = false
-    private(set) var downloadProgress: Double?
-    private(set) var downloadStatus = "Ready"
-    private(set) var installStatus = "Choose a simulator and a downloaded RuntimeViewer.app."
-
-    var onChange: (() -> Void)?
+    @Published var version: String
+    @Published private(set) var artifacts: [SimulatorRuntimeViewerArtifact] = []
+    @Published private(set) var simulators: [RuntimeViewerSimulatorDevice] = []
+    @Published private(set) var selectedArtifactID: SimulatorRuntimeViewerArtifact.ID?
+    @Published private(set) var selectedSimulatorID: RuntimeViewerSimulatorDevice.ID?
+    @Published private(set) var isDownloading = false
+    @Published private(set) var isInstalling = false
+    @Published private(set) var downloadProgress: Double?
+    @Published private(set) var downloadStatus = "Ready"
+    @Published private(set) var installStatus = "Choose a simulator and a downloaded RuntimeViewer.app."
 
     private let service: SimulatorRuntimeViewerInstallerService
     private var downloadTask: Task<Void, Never>?
@@ -67,7 +65,6 @@ final class SimulatorInstallerViewModel {
         } catch {
             downloadStatus = error.localizedDescription
         }
-        notify()
     }
 
     func refreshSimulators() async {
@@ -84,22 +81,18 @@ final class SimulatorInstallerViewModel {
         } catch {
             installStatus = error.localizedDescription
         }
-        notify()
     }
 
     func selectArtifact(id: SimulatorRuntimeViewerArtifact.ID?) {
         selectedArtifactID = id
-        notify()
     }
 
     func selectSimulator(id: RuntimeViewerSimulatorDevice.ID?) {
         selectedSimulatorID = id
-        notify()
     }
 
     func resetVersion() {
         version = currentVersion
-        notify()
     }
 
     func downloadSelectedVersion() {
@@ -109,7 +102,6 @@ final class SimulatorInstallerViewModel {
         isDownloading = true
         downloadProgress = 0
         downloadStatus = "Downloading v\(SimulatorRuntimeViewerInstallerService.normalizedVersion(requestedVersion))..."
-        notify()
 
         downloadTask?.cancel()
         downloadTask = Task { [weak self] in
@@ -120,7 +112,6 @@ final class SimulatorInstallerViewModel {
                         guard let self else { return }
                         self.downloadProgress = progress
                         self.downloadStatus = "Downloading \(Int((progress * 100).rounded()))%"
-                        self.notify()
                     }
                 }
 
@@ -140,7 +131,6 @@ final class SimulatorInstallerViewModel {
             }
 
             isDownloading = false
-            notify()
         }
     }
 
@@ -154,7 +144,6 @@ final class SimulatorInstallerViewModel {
         } catch {
             downloadStatus = error.localizedDescription
         }
-        notify()
     }
 
     func installSelectedArtifact() {
@@ -162,7 +151,6 @@ final class SimulatorInstallerViewModel {
 
         isInstalling = true
         installStatus = "Installing v\(selectedArtifact.version) to \(selectedSimulator.name)..."
-        notify()
 
         installTask?.cancel()
         installTask = Task { [weak self] in
@@ -177,12 +165,7 @@ final class SimulatorInstallerViewModel {
             }
 
             isInstalling = false
-            notify()
         }
-    }
-
-    private func notify() {
-        onChange?()
     }
 }
 

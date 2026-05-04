@@ -1,25 +1,27 @@
 #if os(macOS)
 
 import AppKit
+import SwiftUI
 
-final class SimulatorInstallerWindowController: NSWindowController {
-    static let shared = SimulatorInstallerWindowController()
+public final class SimulatorInstallerWindowController: NSWindowController {
+    public static let shared = SimulatorInstallerWindowController()
 
-    private let installerViewController = SimulatorInstallerViewController(
-        viewModel: SimulatorInstallerViewModel()
-    )
+    private let viewModel = SimulatorInstallerViewModel()
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 540),
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 460),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Simulator App Installer"
         window.collectionBehavior.insert(.fullScreenNone)
+        window.minSize = NSSize(width: 600, height: 420)
         window.setFrameAutosaveName("SimulatorInstallerWindowController")
-        window.contentViewController = installerViewController
+        window.contentViewController = NSHostingController(
+            rootView: SimulatorInstallerView(viewModel: viewModel)
+        )
         super.init(window: window)
         window.center()
     }
@@ -29,7 +31,7 @@ final class SimulatorInstallerWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func showWindow(_ sender: Any?) {
+    public override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
         window?.makeKeyAndOrderFront(sender)
         NSApp.activate(ignoringOtherApps: true)
