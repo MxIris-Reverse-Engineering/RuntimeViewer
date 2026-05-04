@@ -1,0 +1,9 @@
+#include "../CodeSigning.xcconfig"
+//#include "../Shared/Release.xcconfig"
+
+SMPrivilegedExecutable = $(RUNTIME_VIEWER_RELEASE_SM_PRIVILEGED_EXECUTABLE)
+
+// Sparkle feed URL is hardcoded in Info.plist (SUFeedURL) because xcconfig's `//`
+// comment rule makes URL values awkward to express here.
+// Matching EdDSA private key lives in the login Keychain; see Documentations/SparkleRelease.md.
+SPARKLE_PUBLIC_ED_KEY = jlL11Arlrn0YtrQn66hxwUZeBI6dFxP2Wluq6eEYzss=

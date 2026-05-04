@@ -1,0 +1,5 @@
+#include "Config.xcconfig"
+#include "../CodeSigning.xcconfig"
+#include "../Shared/Release.xcconfig"
+
+SMAuthorizedClient = $(RUNTIME_VIEWER_RELEASE_SM_AUTHORIZED_CLIENT)
