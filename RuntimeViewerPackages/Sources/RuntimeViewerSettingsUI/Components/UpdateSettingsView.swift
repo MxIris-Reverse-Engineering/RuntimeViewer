@@ -57,6 +57,11 @@ struct UpdateSettingsView: View {
                 Toggle("Automatically download and install updates",
                        isOn: $automaticallyDownloads)
                     .disabled(!automaticallyChecks)
+                Button {
+                    SimulatorInstallerWindowController.shared.showWindow(nil)
+                } label: {
+                    Label("Open Simulator Installer", systemImage: "iphone.and.arrow.forward")
+                }
             } header: {
                 Text("Installation")
             }
