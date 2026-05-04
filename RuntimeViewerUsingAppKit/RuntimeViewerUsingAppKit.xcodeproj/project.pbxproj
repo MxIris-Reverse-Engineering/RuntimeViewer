@@ -242,10 +242,10 @@
 		E94E36C52CF84AF8006101C8 /* AttachToProcessViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachToProcessViewController.swift; sourceTree = "<group>"; };
 		E94E36C82CF87BD6006101C8 /* RuntimeViewerSymbols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeViewerSymbols.swift; sourceTree = "<group>"; };
 		E9530A3B2D9D5898008FBC7F /* SIPChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SIPChecker.swift; sourceTree = "<group>"; };
-		E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
-		E95CDA662DAA6FA900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
-		E95CDA672DAA970300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
-		E95CDA682DAA970900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/RuntimeViewerService/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		E95CDA662DAA6FA900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = ../Configurations/RuntimeViewerService/Release.xcconfig; sourceTree = SOURCE_ROOT; };
+		E95CDA672DAA970300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/RuntimeViewerUsingAppKit/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		E95CDA682DAA970900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = ../Configurations/RuntimeViewerUsingAppKit/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = RuntimeViewerUsingAppKit.xctestplan; sourceTree = "<group>"; };
 		E9668FFB2CEF7140007B344A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9668FFC2CEF7140007B344A /* launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = launchd.plist; sourceTree = "<group>"; };
@@ -283,7 +283,7 @@
 		E9A9D7F52F5F110300A10DD3 /* MCPStatusPopoverViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPStatusPopoverViewController.swift; sourceTree = "<group>"; };
 		E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPlaceholderViewController.swift; sourceTree = "<group>"; };
 		E9B4C6542F35E9C800823FE0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
-		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Config.xcconfig; path = ../Configurations/RuntimeViewerService/Config.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9C9E9CE2C2D10C600C4AA34 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitPlugin.swift; sourceTree = "<group>"; };
 		E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitPluginImpl.swift; sourceTree = "<group>"; };
@@ -311,9 +311,10 @@
 		E9F11E0A2F123EEC0052B0A3 /* SidebarRootCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootCoordinator.swift; sourceTree = "<group>"; };
 		E9F11E152F12671D0052B0A3 /* TabViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabViewController.swift; sourceTree = "<group>"; };
 		E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRootBookmarkViewController.swift; sourceTree = "<group>"; };
-		E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
-		E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Shared-Release.xcconfig"; sourceTree = "<group>"; };
-		E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "Shared-Debug.xcconfig"; sourceTree = "<group>"; };
+		E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Shared.xcconfig; path = ../Configurations/Shared/Shared.xcconfig; sourceTree = SOURCE_ROOT; };
+		E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Shared-Release.xcconfig"; path = ../Configurations/Shared/Release.xcconfig; sourceTree = SOURCE_ROOT; };
+		E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Shared-Debug.xcconfig"; path = ../Configurations/Shared/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = CodeSigning.xcconfig; path = ../Configurations/CodeSigning.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCellView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -382,6 +383,7 @@
 			children = (
 				E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */,
 				E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */,
+				E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */,
 				E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */,
 				E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */,
 				E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */,
@@ -1047,6 +1049,7 @@
 /* Begin XCBuildConfiguration section */
 		E9432FED2C0D614A00362862 /* Debug configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1082,7 +1085,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1114,6 +1117,7 @@
 		};
 		E9432FEE2C0D614A00362862 /* Release configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1149,7 +1153,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1187,6 +1191,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
@@ -1245,6 +1250,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
@@ -1301,6 +1307,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -1346,6 +1353,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -1383,7 +1391,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -1400,7 +1408,7 @@
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -1419,6 +1427,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1444,6 +1453,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1469,6 +1479,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/$(TARGETNAME)/Info.plist";
@@ -1488,6 +1499,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
 				INFOPLIST_FILE = "$(SRCROOT)/$(TARGETNAME)/Info.plist";
@@ -1503,7 +1515,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -1519,7 +1531,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;

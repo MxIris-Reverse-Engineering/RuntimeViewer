@@ -1,4 +1,5 @@
 .DS_Store
+/Configurations/custom.xcconfig
 .swiftpm
 RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
 archive

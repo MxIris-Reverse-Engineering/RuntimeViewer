@@ -1,0 +1,11 @@
+// Copy this file to custom.xcconfig in this directory and keep it untracked.
+// The default maintainer values live in CodeSigning.xcconfig.
+
+// RUNTIME_VIEWER_DEVELOPMENT_TEAM = YOURTEAMID
+// RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_COMMON_NAME = Apple Development: Your Name (TEAMID)
+
+// Override these only if you need a fully custom SMJobBless requirement.
+// RUNTIME_VIEWER_DEBUG_SM_PRIVILEGED_EXECUTABLE = identifier "com.JH.RuntimeViewerService" and anchor apple generic and $(RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_REQUIREMENT)
+// RUNTIME_VIEWER_RELEASE_SM_PRIVILEGED_EXECUTABLE = anchor apple generic and identifier "com.JH.RuntimeViewerService" and $(RUNTIME_VIEWER_DISTRIBUTION_CERTIFICATE_REQUIREMENT)
+// RUNTIME_VIEWER_DEBUG_SM_AUTHORIZED_CLIENT = identifier "dev.JH.RuntimeViewer" and anchor apple generic and $(RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_REQUIREMENT)
+// RUNTIME_VIEWER_RELEASE_SM_AUTHORIZED_CLIENT = anchor apple generic and identifier "com.JH.RuntimeViewer" and $(RUNTIME_VIEWER_DISTRIBUTION_CERTIFICATE_REQUIREMENT)
