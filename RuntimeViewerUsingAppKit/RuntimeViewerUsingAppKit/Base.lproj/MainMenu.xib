@@ -31,6 +31,11 @@
                                     <action selector="showSettings:" target="Voe-Tx-rLC" id="4qT-9w-3Oc"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Simulator App Installer…" secondaryImage="iphone.and.arrow.forward" catalog="system" keyEquivalent="I" id="acX-7p-Sim">
+                                <connections>
+                                    <action selector="showSimulatorInstaller:" target="Voe-Tx-rLC" id="dd3-QQ-Sim"/>
+                                </connections>
+                            </menuItem>
                             <menuItem isSeparatorItem="YES" id="wFC-TO-SCJ"/>
                             <menuItem title="Services" id="NMo-om-nkz">
                                 <modifierMask key="keyEquivalentModifierMask"/>

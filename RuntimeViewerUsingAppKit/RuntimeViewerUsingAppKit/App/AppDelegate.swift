@@ -147,4 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @IBAction func showSettings(_ sender: Any?) {
         SettingsWindowController.shared.showWindow(nil)
     }
+
+    @IBAction func showSimulatorInstaller(_ sender: Any?) {
+        SimulatorInstallerWindowController.shared.showWindow(nil)
+    }
 }
