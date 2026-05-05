@@ -119,6 +119,10 @@ let package = Package(
             from: "0.1.0"
         ),
         .package(
+            url: "https://github.com/apple/swift-collections",
+            from: "1.1.0"
+        ),
+        .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
             from: "0.4.0"
         ),
@@ -127,8 +131,8 @@ let package = Package(
             from: "0.5.100"
         ),
         .package(
-            url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
-            from: "0.5.3-fork"
+            url: "https://github.com/gohanlon/swift-memberwise-init-macro",
+            from: "0.6.0"
         ),
         .package(
             url: "https://github.com/mxcl/Version",
@@ -166,6 +170,7 @@ let package = Package(
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
                 .product(name: "MetaCodable", package: "MetaCodable"),
                 .product(name: "Semaphore", package: "Semaphore"),
+                .product(name: "DequeModule", package: "swift-collections"),
             ],
             swiftSettings: [
                 .internalImportsByDefault,

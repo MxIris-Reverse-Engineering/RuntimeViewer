@@ -58,14 +58,15 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
         return image.rpaths
     }
 
-    func dependencies(for path: String, ancestorRpaths: [String]) async throws
+    func dependencies(for path: String,
+                      ancestorRpaths: [String],
+                      mainExecutablePath: String) async throws
         -> [(installName: String, resolvedPath: String?)]
     {
         guard let image = DyldUtilities.machOImage(forPath: path) else {
             return []
         }
         let resolver = DylibPathResolver()
-        let main = try await mainExecutablePath()
         // dyld searches the union of every loader's LC_RPATH walking up the
         // chain to the main executable plus the image's own LC_RPATH. The BFS
         // accumulates ancestors into `ancestorRpaths`; appending self-rpaths
@@ -79,7 +80,7 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
                     installName: installName,
                     imagePath: path,
                     rpaths: mergedRpaths,
-                    mainExecutablePath: main
+                    mainExecutablePath: mainExecutablePath
                 )
                 // LC_LOAD_WEAK_DYLIB: dyld silently skips at runtime when the
                 // target isn't on disk (e.g. Xcode embeds

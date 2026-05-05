@@ -11,6 +11,13 @@ import RuntimeViewerSettings
 
 @MainActor
 public final class RuntimeBackgroundIndexingCoordinator {
+    /// Soft cap on `historyRelay` size. A long-running session that triggers
+    /// many `imageLoaded` notifications would otherwise grow history without
+    /// bound; once this cap is exceeded we drop the oldest entries from the
+    /// tail (history is inserted at index 0, so the tail is the oldest).
+    /// The user can still manually clear via `clearHistory()`.
+    private static let maxHistoryEntries = 100
+
     public struct AggregateState: Equatable, Sendable {
         public var hasActiveBatch: Bool
         public var hasAnyFailure: Bool
@@ -180,6 +187,9 @@ public final class RuntimeBackgroundIndexingCoordinator {
     private func appendToHistory(_ batch: RuntimeIndexingBatch) {
         var updatedHistory = historyRelay.value
         updatedHistory.insert(batch, at: 0)
+        if updatedHistory.count > Self.maxHistoryEntries {
+            updatedHistory.removeLast(updatedHistory.count - Self.maxHistoryEntries)
+        }
         historyRelay.accept(updatedHistory)
     }
 

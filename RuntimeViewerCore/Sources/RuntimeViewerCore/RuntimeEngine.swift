@@ -180,10 +180,11 @@ public actor RuntimeEngine {
     public private(set) var xpcListenerEndpoint: (any Sendable)?
 
     /// Coordinator for background indexing batches that load and index images
-    /// without blocking the main runtime data flow. Created at the end of
-    /// `init` so it can capture `self` after all other stored properties are
-    /// initialized.
-    public private(set) var backgroundIndexingManager: RuntimeBackgroundIndexingManager!
+    /// without blocking the main runtime data flow. `lazy` so it captures
+    /// `self` only after all other stored properties are initialized; the
+    /// actor's isolation guarantees the lazy initialization is single-threaded.
+    public private(set) lazy var backgroundIndexingManager: RuntimeBackgroundIndexingManager =
+        RuntimeBackgroundIndexingManager(engine: self)
 
     public init(
         source: RuntimeSource,
@@ -202,7 +203,6 @@ public actor RuntimeEngine {
         self.pushesRuntimeData = pushesRuntimeData
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
-        self.backgroundIndexingManager = RuntimeBackgroundIndexingManager(engine: self)
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 

@@ -405,10 +405,14 @@ import Testing
         func rpaths(for path: String) async throws -> [String] {
             try await base.rpaths(for: path)
         }
-        func dependencies(for path: String, ancestorRpaths: [String])
+        func dependencies(for path: String,
+                          ancestorRpaths: [String],
+                          mainExecutablePath: String)
             async throws -> [(installName: String, resolvedPath: String?)]
         {
-            try await base.dependencies(for: path, ancestorRpaths: ancestorRpaths)
+            try await base.dependencies(for: path,
+                                        ancestorRpaths: ancestorRpaths,
+                                        mainExecutablePath: mainExecutablePath)
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import Semaphore
+import DequeModule
 
 public actor RuntimeBackgroundIndexingManager {
     struct BatchState {
@@ -120,6 +121,13 @@ public actor RuntimeBackgroundIndexingManager {
         async -> [RuntimeIndexingTaskItem] {
         var visited: Set<String> = []
         var items: [RuntimeIndexingTaskItem] = []
+        // Fetch `mainExecutablePath` once at BFS entry and thread it through
+        // every `dependencies(for:...)` call below. Without this, a 50-image
+        // graph triggers 50 redundant calls (50 XPC / TCP round-trips on a
+        // remote source). `try?` falls back to "" — `DylibPathResolver`
+        // handles an empty `mainExecutablePath` by failing `@executable_path`
+        // resolution, which mirrors a missing-host behavior anyway.
+        let mainExecutablePath = (try? await engine.mainExecutablePath()) ?? ""
         // `ancestorRpaths` carries the LC_RPATH entries collected from every
         // loader walking up the chain to `rootPath`. dyld combines these with
         // the visited image's own LC_RPATH when resolving `@rpath/...`, so a
@@ -127,11 +135,13 @@ public actor RuntimeBackgroundIndexingManager {
         // host's rpath. Root starts with `[]` and each level appends the
         // current image's own rpaths before descending. We don't dedup —
         // dyld doesn't either, and order matters for first-match resolution.
-        var frontier: [(path: String, level: Int, ancestorRpaths: [String])] =
+        //
+        // `Deque` (swift-collections) gives O(1) `popFirst()`; `Array.removeFirst()`
+        // is O(n) and would make a deep BFS quadratic.
+        var frontier: Deque<(path: String, level: Int, ancestorRpaths: [String])> =
             [(rootPath, 0, [])]
 
-        while !frontier.isEmpty {
-            let (path, level, ancestorRpaths) = frontier.removeFirst()
+        while let (path, level, ancestorRpaths) = frontier.popFirst() {
             guard visited.insert(path).inserted else { continue }
 
             // `try?` — if the engine errors out (e.g. remote XPC drops mid-batch),
@@ -160,7 +170,9 @@ public actor RuntimeBackgroundIndexingManager {
             // `try?` — if dependency lookup fails, treat as no deps; the path
             // itself is still pending and will be retried on next batch.
             let deps = (try? await engine.dependencies(
-                for: path, ancestorRpaths: ancestorRpaths
+                for: path,
+                ancestorRpaths: ancestorRpaths,
+                mainExecutablePath: mainExecutablePath
             )) ?? []
             // Pre-compute the ancestor list for the next level once. Failing
             // this lookup degrades the next level to "no inherited rpaths",

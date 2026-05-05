@@ -16,6 +16,7 @@ final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineReprese
     struct DependenciesCall: Sendable, Equatable {
         var path: String
         var ancestorRpaths: [String]
+        var mainExecutablePath: String
     }
 
     private let lock = NSLock()
@@ -64,11 +65,15 @@ final class MockBackgroundIndexingEngine: RuntimeBackgroundIndexingEngineReprese
         lock.lock(); defer { lock.unlock() }
         return paths[path]?.rpaths ?? []
     }
-    func dependencies(for path: String, ancestorRpaths: [String])
+    func dependencies(for path: String,
+                      ancestorRpaths: [String],
+                      mainExecutablePath: String)
         async -> [(installName: String, resolvedPath: String?)]
     {
         lock.lock(); defer { lock.unlock() }
-        dependenciesCallLog.append(.init(path: path, ancestorRpaths: ancestorRpaths))
+        dependenciesCallLog.append(.init(path: path,
+                                         ancestorRpaths: ancestorRpaths,
+                                         mainExecutablePath: mainExecutablePath))
         return paths[path]?.dependencies ?? []
     }
 }

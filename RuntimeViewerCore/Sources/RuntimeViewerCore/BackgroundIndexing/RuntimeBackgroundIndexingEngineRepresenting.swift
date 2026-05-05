@@ -36,6 +36,13 @@ protocol RuntimeBackgroundIndexingEngineRepresenting: AnyObject, Sendable {
     /// runtime. Pass `[]` for the root image; the BFS in
     /// `RuntimeBackgroundIndexingManager.expandDependencyGraph` accumulates
     /// each visited image's own rpaths into the value passed to its children.
-    func dependencies(for path: String, ancestorRpaths: [String])
+    ///
+    /// `mainExecutablePath` is fetched once by the BFS at entry and threaded
+    /// through every call so a deep dependency graph does not trigger one
+    /// `mainExecutablePath()` call per node — a measurable win on remote
+    /// (XPC / TCP) sources where each call is a network round-trip.
+    func dependencies(for path: String,
+                      ancestorRpaths: [String],
+                      mainExecutablePath: String)
         async throws -> [(installName: String, resolvedPath: String?)]
 }
