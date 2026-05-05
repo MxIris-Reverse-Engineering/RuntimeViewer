@@ -2,7 +2,7 @@
 
 import PackageDescription
 
-let tag = "601.0.1"
+let tag = "603.0.1"
 
 let package = Package(
     name: "swift-syntax",
@@ -30,6 +30,7 @@ let package = Package(
         .library(name: "SwiftSyntaxMacroExpansion", targets: ["SwiftSyntaxMacroExpansion_Aggregation"]),
         .library(name: "SwiftSyntaxMacrosTestSupport", targets: ["SwiftSyntaxMacrosTestSupport_Aggregation"]),
         .library(name: "SwiftSyntaxMacrosGenericTestSupport", targets: ["SwiftSyntaxMacrosGenericTestSupport_Aggregation"]),
+        .library(name: "SwiftWarningControl", targets: ["SwiftWarningControl_Aggregation"]),
         .library(name: "_SwiftCompilerPluginMessageHandling", targets: ["SwiftCompilerPluginMessageHandling_Aggregation"]),
         .library(name: "_SwiftLibraryPluginProvider", targets: ["SwiftLibraryPluginProvider_Aggregation"]),
     ],
@@ -44,8 +45,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftBasicFormat",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftBasicFormat.xcframework.zip",
-            checksum: "94365ab0f550e63d788c2379193bcaef059d4c155d587eacc0648deb4dcdf418"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftBasicFormat.xcframework.zip",
+            checksum: "c618343f8fa52d0e5b7e105c399ebdb1614fe9bfc0b00e979f1899cec016013a"
         ),
 
         // MARK: - SwiftCompilerPlugin
@@ -59,8 +60,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftCompilerPlugin",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftCompilerPlugin.xcframework.zip",
-            checksum: "e3cad3e5b8c29b70c85fe05dd85622ad3a82f9ad48789ed7998bee35b34475da"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftCompilerPlugin.xcframework.zip",
+            checksum: "b111ca056c11148cd35f8c1db7cf811c39a6c1bbe0098f986241f13a15232363"
         ),
 
         // MARK: - SwiftDiagnostics
@@ -73,8 +74,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftDiagnostics",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftDiagnostics.xcframework.zip",
-            checksum: "50bf401279fc1f35f177bd40e4a1a107950dbb442fcde7a3fdce47836eb2016b"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftDiagnostics.xcframework.zip",
+            checksum: "bf3e38730511d9b7d575f274eae7376c75da3740d26013fd81db531fb4a41bf5"
         ),
 
         // MARK: - SwiftIDEUtils
@@ -89,8 +90,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftIDEUtils",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftIDEUtils.xcframework.zip",
-            checksum: "82a31659ddf3a24a89a17863aabaeea15024dd92267898c27b3d03a5298e3827"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftIDEUtils.xcframework.zip",
+            checksum: "9292b83bf44352d41ab44897d4320354d63c4415dd407104dbf84e8d71e9c2bb"
         ),
 
         // MARK: - SwiftIfConfig
@@ -102,12 +103,29 @@ let package = Package(
                 "SwiftSyntaxBuilder_Aggregation",
                 "SwiftDiagnostics_Aggregation",
                 "SwiftOperators_Aggregation",
+                "SwiftParser_Aggregation",
             ]
         ),
         .binaryTarget(
             name: "SwiftIfConfig",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftIfConfig.xcframework.zip",
-            checksum: "86d9fb1a73a5c1f7f71d384abdd7f631a0b6a10de7660fe3fd577f1f1650c0a7"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftIfConfig.xcframework.zip",
+            checksum: "3ea38962cd2575045018c42ed767dcf4f0236980b64dc05815120c9d4828f4da"
+        ),
+
+        // MARK: - SwiftWarningControl
+        .target(
+            name: "SwiftWarningControl_Aggregation",
+            dependencies: [
+                .target(name: "SwiftWarningControl"),
+                "SwiftSyntax_Aggregation",
+                "SwiftParser_Aggregation",
+                "SwiftDiagnostics_Aggregation",
+            ]
+        ),
+        .binaryTarget(
+            name: "SwiftWarningControl",
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftWarningControl.xcframework.zip",
+            checksum: "22da29cd1142ca5a6d5f6a83d17e85490aad1e0ca9aa8fba67cc9422e1237031"
         ),
 
         // MARK: - SwiftLexicalLookup
@@ -121,8 +139,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftLexicalLookup",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftLexicalLookup.xcframework.zip",
-            checksum: "7f2f318e7caf5e6bc8707b3ddd812f77913852cbd699be6fafdc7e9e4638b0f8"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftLexicalLookup.xcframework.zip",
+            checksum: "0596aac34ce00959c7ca2118e76c4b83ae10fcb3e9fcb0acfb818f3141b954fc"
         ),
 
         // MARK: - SwiftOperators
@@ -137,8 +155,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftOperators",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftOperators.xcframework.zip",
-            checksum: "d6da125f107d2e0109b8f5056ab5f62a57ecc7a6f8760d7068628f0d660084ef"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftOperators.xcframework.zip",
+            checksum: "5a11e8c3b0dd203ccd305c0eb9ed7aa0d4a23091e23b0b4606fc9f6f526ffa08"
         ),
 
         // MARK: - SwiftParser
@@ -151,8 +169,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftParser",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftParser.xcframework.zip",
-            checksum: "873e3a52f51db1f46531877d81d747c0b9c8125e801b0f40472c5b94359d57c1"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftParser.xcframework.zip",
+            checksum: "9dab752eae2408dd22ec54de4ac5b76fb29c1c60145fda2280f74349a2a2466c"
         ),
 
         // MARK: - SwiftParserDiagnostics
@@ -168,8 +186,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftParserDiagnostics",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftParserDiagnostics.xcframework.zip",
-            checksum: "7b6776f6941e1b32250694927c59e72abe952582eaad269da6183118349746ca"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftParserDiagnostics.xcframework.zip",
+            checksum: "e027f0f544a890c2ea68ee495e0087a106ab2fec29ab8a9e0c32a4aad216c435"
         ),
 
         // MARK: - SwiftRefactor
@@ -185,8 +203,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftRefactor",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftRefactor.xcframework.zip",
-            checksum: "b402430b131e6a9133dbb6cbc8760096454b97d3e6d9d97e3f0cfb4ea7bd0b42"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftRefactor.xcframework.zip",
+            checksum: "adee4dbe5fd80014ace943540cc1d0289d1f0963d66bf0aa2a73d56803bb673a"
         ),
 
         // MARK: - SwiftSyntax
@@ -199,12 +217,14 @@ let package = Package(
                 "SwiftSyntax510_Aggregation",
                 "SwiftSyntax600_Aggregation",
                 "SwiftSyntax601_Aggregation",
+                "SwiftSyntax602_Aggregation",
+                "SwiftSyntax603_Aggregation",
             ]
         ),
         .binaryTarget(
             name: "SwiftSyntax",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntax.xcframework.zip",
-            checksum: "d06ed8d94024fa44041a4ee0bf84610353cbaf1576bb7bfa91e952ef779c870a"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntax.xcframework.zip",
+            checksum: "6bc4112d83b32001aa02cda91b7095d0b2455a9d7c91f1606377c8db9108124c"
         ),
 
         // MARK: - SwiftSyntaxBuilder
@@ -221,8 +241,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntaxBuilder",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntaxBuilder.xcframework.zip",
-            checksum: "4d9554178485ee66242b68662e92710461a0a1f641e0703c74e24c313a55251d"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntaxBuilder.xcframework.zip",
+            checksum: "71ab335736b649a03035f8cf2d953063cd184f293a761961834f1e543ccbc5d6"
         ),
 
         // MARK: - SwiftSyntaxMacros
@@ -231,6 +251,7 @@ let package = Package(
             dependencies: [
                 .target(name: "SwiftSyntaxMacros"),
                 "SwiftDiagnostics_Aggregation",
+                "SwiftIfConfig_Aggregation",
                 "SwiftParser_Aggregation",
                 "SwiftSyntax_Aggregation",
                 "SwiftSyntaxBuilder_Aggregation",
@@ -238,8 +259,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntaxMacros",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntaxMacros.xcframework.zip",
-            checksum: "428f898a1e7852dec98d4c09185fb1a87e7fc77e0203ba83a0db90b360c6e035"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntaxMacros.xcframework.zip",
+            checksum: "581516c1ac947fb6445d78053b090fb1db408b38152fd7233552a81caec15275"
         ),
 
         // MARK: - SwiftSyntaxMacroExpansion
@@ -256,8 +277,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntaxMacroExpansion",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntaxMacroExpansion.xcframework.zip",
-            checksum: "2ddcd299bd7523b53f02a005ec066831cbac20677292ee198801a3eafb8cf696"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntaxMacroExpansion.xcframework.zip",
+            checksum: "a557fd52179897ebc222391112f43698ceef3984debb186edccaafa74c38b1da"
         ),
 
         // MARK: - SwiftSyntaxMacrosTestSupport
@@ -273,8 +294,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntaxMacrosTestSupport",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntaxMacrosTestSupport.xcframework.zip",
-            checksum: "8ae3781cd5ad9e63b653a99a3c7ba1efd1eeaa2d831122d05868ea80b9998529"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntaxMacrosTestSupport.xcframework.zip",
+            checksum: "d3f88d08d219191ce96b010ff7d536597b7fd530fc3c6235efc8b6afcf6cc879"
         ),
 
         // MARK: - SwiftSyntaxMacrosGenericTestSupport
@@ -285,6 +306,7 @@ let package = Package(
                 "_SwiftSyntaxGenericTestSupport_Aggregation",
                 "SwiftDiagnostics_Aggregation",
                 "SwiftIDEUtils_Aggregation",
+                "SwiftIfConfig_Aggregation",
                 "SwiftParser_Aggregation",
                 "SwiftSyntaxMacros_Aggregation",
                 "SwiftSyntaxMacroExpansion_Aggregation",
@@ -292,8 +314,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntaxMacrosGenericTestSupport",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntaxMacrosGenericTestSupport.xcframework.zip",
-            checksum: "5601a9d686cc84f5b32e1c6c04a01f3fe16c8f5216f1edec648b6d2ce0aa1d04"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntaxMacrosGenericTestSupport.xcframework.zip",
+            checksum: "2e5c562015c4f4a87fa702319e57824252169317282561d82c41a89cd6d77b0e"
         ),
 
         // MARK: - _SwiftCompilerPluginMessageHandling
@@ -303,8 +325,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "_SwiftCompilerPluginMessageHandling",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/_SwiftCompilerPluginMessageHandling.xcframework.zip",
-            checksum: "df02239aac44cb97402c49d04ebdb8d63880d1cf6d2730bdafb0c71d594b31b9"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/_SwiftCompilerPluginMessageHandling.xcframework.zip",
+            checksum: "b6ffe3faee8d00d06ab378fc5d21a3f9372ffed426ccf3f3afde20b649708748"
         ),
 
         // MARK: - _SwiftLibraryPluginProvider
@@ -314,41 +336,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "_SwiftLibraryPluginProvider",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/_SwiftLibraryPluginProvider.xcframework.zip",
-            checksum: "d5aeedeefa4aa7f424054147f4d55809f65f30174a3235bfd7cde957b4e8631f"
-        ),
-
-        // MARK: - _SwiftLibraryPluginProviderCShims
-        .target(
-            name: "_SwiftLibraryPluginProviderCShims_Aggregation",
-            dependencies: [.target(name: "_SwiftLibraryPluginProviderCShims")]
-        ),
-        .binaryTarget(
-            name: "_SwiftLibraryPluginProviderCShims",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/_SwiftLibraryPluginProviderCShims.xcframework.zip",
-            checksum: "889ee8bf53509090f75fe39e5a74784af8eacdd896f7a314f1dff4fa60a5a8ca"
-        ),
-
-        // MARK: - _SwiftSyntaxCShims
-        .target(
-            name: "_SwiftSyntaxCShims_Aggregation",
-            dependencies: [.target(name: "_SwiftSyntaxCShims")]
-        ),
-        .binaryTarget(
-            name: "_SwiftSyntaxCShims",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/_SwiftSyntaxCShims.xcframework.zip",
-            checksum: "f4d14eabe1bec36dfe7ebc13f4a159dbb046e966579af5d8d807e151c2aa6c9b"
-        ),
-
-        // MARK: - _SwiftSyntaxGenericTestSupport
-        .target(
-            name: "_SwiftSyntaxGenericTestSupport_Aggregation",
-            dependencies: [.target(name: "_SwiftSyntaxGenericTestSupport")]
-        ),
-        .binaryTarget(
-            name: "_SwiftSyntaxGenericTestSupport",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/_SwiftSyntaxGenericTestSupport.xcframework.zip",
-            checksum: "884d1c5983a63e1863d38049174933f5c734a2537c91c26a1d241c08c4aeeeac"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/_SwiftLibraryPluginProvider.xcframework.zip",
+            checksum: "7154bcca61bbfab015dea3171dd0bfdc741e6dd3133ad492146a3411b208ea11"
         ),
 
         // MARK: - SwiftCompilerPluginMessageHandling
@@ -367,8 +356,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftCompilerPluginMessageHandling",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftCompilerPluginMessageHandling.xcframework.zip",
-            checksum: "d405da850c46662e7995110bfa1b21d2c900d61d24864bd4f4a47f3d94097014"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftCompilerPluginMessageHandling.xcframework.zip",
+            checksum: "5fa2ede4d41c836b479e1958d43f15796d9a054e55c647911183dc1e7a2cd8a3"
         ),
 
         // MARK: - SwiftLibraryPluginProvider
@@ -383,8 +372,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftLibraryPluginProvider",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftLibraryPluginProvider.xcframework.zip",
-            checksum: "8cdccb3839eb1f94eb601f347ada3839848add1b6c92cf415fab57c11727f396"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftLibraryPluginProvider.xcframework.zip",
+            checksum: "536d4e9f39008539d2511e460a19d741d133a6f174237be90b6badb6242ef125"
         ),
 
         // MARK: - SwiftSyntax509
@@ -394,8 +383,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntax509",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntax509.xcframework.zip",
-            checksum: "9c362169c3e677e0670c3630d1215d26b31191250db76516ea399f350d9b45ad"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntax509.xcframework.zip",
+            checksum: "aefb80f9df4e2edcbe2e56820b7fe3f19c086d3cd5dc08a0cc30ca4baaf04076"
         ),
 
         // MARK: - SwiftSyntax510
@@ -405,8 +394,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntax510",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntax510.xcframework.zip",
-            checksum: "d3a578ad0c7d352b6940397480d8f040b5095065af3836de66b6961eea28501c"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntax510.xcframework.zip",
+            checksum: "bfbb9cc7985a8ab35615a63a7151b6ac056f70e6bead6beff762d618b5d62167"
         ),
 
         // MARK: - SwiftSyntax600
@@ -416,8 +405,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntax600",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntax600.xcframework.zip",
-            checksum: "83c09d90b60f67c001d6f598a657c6cf0b457acad466f823074112b40ff678cf"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntax600.xcframework.zip",
+            checksum: "25c9a883a6c19665339810adaaa18ae93feb291e65a727e368198adb90e3ebec"
         ),
 
         // MARK: - SwiftSyntax601
@@ -427,8 +416,63 @@ let package = Package(
         ),
         .binaryTarget(
             name: "SwiftSyntax601",
-            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/601.0.1/SwiftSyntax601.xcframework.zip",
-            checksum: "eed0abae3c33170a43441bd4c35f95e7591e05b7482cb10833803551dab5ebbd"
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntax601.xcframework.zip",
+            checksum: "c0fcf94b38dd1360de4792006a6032c94a5348e63f65d115e44e5a181e6d2f9d"
+        ),
+
+        // MARK: - SwiftSyntax602
+        .target(
+            name: "SwiftSyntax602_Aggregation",
+            dependencies: [.target(name: "SwiftSyntax602")]
+        ),
+        .binaryTarget(
+            name: "SwiftSyntax602",
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntax602.xcframework.zip",
+            checksum: "0ddf958a9e254a12e43db2ed20d23f3a36411aa6ef26f960d16f4a5f5e045326"
+        ),
+
+        // MARK: - SwiftSyntax603
+        .target(
+            name: "SwiftSyntax603_Aggregation",
+            dependencies: [.target(name: "SwiftSyntax603")]
+        ),
+        .binaryTarget(
+            name: "SwiftSyntax603",
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/SwiftSyntax603.xcframework.zip",
+            checksum: "180fdab9b4d6379aecadbbf981a322044160931f64a0067644ae0da01db0caf9"
+        ),
+
+        // MARK: - _SwiftLibraryPluginProviderCShims
+        .target(
+            name: "_SwiftLibraryPluginProviderCShims_Aggregation",
+            dependencies: [.target(name: "_SwiftLibraryPluginProviderCShims")]
+        ),
+        .binaryTarget(
+            name: "_SwiftLibraryPluginProviderCShims",
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/_SwiftLibraryPluginProviderCShims.xcframework.zip",
+            checksum: "85e4d61db781898fd4618f2e122d23919c2d94b4025852ab0472bd72e5dc333d"
+        ),
+
+        // MARK: - _SwiftSyntaxCShims
+        .target(
+            name: "_SwiftSyntaxCShims_Aggregation",
+            dependencies: [.target(name: "_SwiftSyntaxCShims")]
+        ),
+        .binaryTarget(
+            name: "_SwiftSyntaxCShims",
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/_SwiftSyntaxCShims.xcframework.zip",
+            checksum: "f28b4f9298979aa3d437e6bda6254f580cb41bf87e3e62c47558bf97658aac29"
+        ),
+
+        // MARK: - _SwiftSyntaxGenericTestSupport
+        .target(
+            name: "_SwiftSyntaxGenericTestSupport_Aggregation",
+            dependencies: [.target(name: "_SwiftSyntaxGenericTestSupport")]
+        ),
+        .binaryTarget(
+            name: "_SwiftSyntaxGenericTestSupport",
+            url: "https://github.com/MxIris-DeveloperTool/swift-syntax-builder/releases/download/603.0.1/_SwiftSyntaxGenericTestSupport.xcframework.zip",
+            checksum: "590862887165d6c114ff0adc4dbf8049f7f9e5f86c7ccba325c477054a616980"
         ),
 
     ]
