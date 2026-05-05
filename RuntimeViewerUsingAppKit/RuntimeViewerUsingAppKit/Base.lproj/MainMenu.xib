@@ -31,7 +31,7 @@
                                     <action selector="showSettings:" target="Voe-Tx-rLC" id="4qT-9w-3Oc"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Simulator App Installer…" secondaryImage="iphone.and.arrow.forward" catalog="system" keyEquivalent="I" id="acX-7p-Sim">
+                            <menuItem title="Simulator App Installer…" secondaryImage="iphone.and.arrow.forward.inward" catalog="system" keyEquivalent="I" id="acX-7p-Sim">
                                 <connections>
                                     <action selector="showSimulatorInstaller:" target="Voe-Tx-rLC" id="dd3-QQ-Sim"/>
                                 </connections>
@@ -278,6 +278,7 @@
     </objects>
     <resources>
         <image name="bolt" catalog="system" width="13" height="17"/>
+        <image name="iphone.and.arrow.forward.inward" catalog="system" width="14" height="16"/>
         <image name="square.and.arrow.up" catalog="system" width="15" height="18"/>
     </resources>
 </document>
