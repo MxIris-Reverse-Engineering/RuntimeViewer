@@ -17,10 +17,11 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     private let coordinator: RuntimeBackgroundIndexingCoordinator
     private let openSettingsRelay = PublishRelay<Void>()
 
-    init(documentState: DocumentState,
-         router: any Router<MainRoute>,
-         coordinator: RuntimeBackgroundIndexingCoordinator)
-    {
+    init(
+        documentState: DocumentState,
+        router: any Router<MainRoute>,
+        coordinator: RuntimeBackgroundIndexingCoordinator
+    ) {
         self.coordinator = coordinator
         super.init(documentState: documentState, router: router)
     }
@@ -38,11 +39,6 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         let hasAnyBatch: Driver<Bool>
         let hasAnyHistory: Driver<Bool>
         let subtitle: Driver<String>
-        // Forwarded to the ViewController so it can call
-        // `SettingsWindowController.shared.showWindow(nil)` directly — mirrors
-        // MCPStatusPopoverViewController.swift:200-203 (no `MainRoute` case
-        // exists for openSettings).
-        let openSettings: Signal<Void>
     }
 
     func transform(_ input: Input) -> Output {
@@ -75,6 +71,8 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         // value below.
         subscribeToIsEnabled()
 
+        input.openSettings.emit(to: appRouter.rx.trigger(.settings)).disposed(by: rx.disposeBag)
+
         input.cancelBatch.emitOnNext { [weak self] id in
             guard let self else { return }
             coordinator.cancelBatch(id)
@@ -106,8 +104,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
             isEnabled: $isEnabled.asDriver(),
             hasAnyBatch: $hasAnyBatch.asDriver(),
             hasAnyHistory: $hasAnyHistory.asDriver(),
-            subtitle: $subtitle.asDriver(),
-            openSettings: openSettingsRelay.asSignal()
+            subtitle: $subtitle.asDriver()
         )
     }
 
@@ -133,8 +130,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 
     /// Same rationale as `batch(for:)`, scoped to one item inside a batch.
     func item(for batchID: RuntimeIndexingBatchID, itemID: String)
-        -> Driver<RuntimeIndexingTaskItem>
-    {
+        -> Driver<RuntimeIndexingTaskItem> {
         Observable.combineLatest(
             coordinator.batchesObservable,
             coordinator.historyObservable
@@ -165,10 +161,11 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         isEnabled = settings.indexing.backgroundMode.isEnabled
     }
 
-    private static func renderNodes(active: [RuntimeIndexingBatch],
-                                    history: [RuntimeIndexingBatch])
-        -> [BackgroundIndexingNode]
-    {
+    private static func renderNodes(
+        active: [RuntimeIndexingBatch],
+        history: [RuntimeIndexingBatch]
+    )
+        -> [BackgroundIndexingNode] {
         let activeBatchNodes = active.map(makeBatchNode)
         var nodes: [BackgroundIndexingNode] = [.section(.active, batches: activeBatchNodes)]
         // History section is omitted entirely when empty so it doesn't clutter
@@ -182,8 +179,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     }
 
     private static func makeBatchNode(_ batch: RuntimeIndexingBatch)
-        -> BackgroundIndexingNode
-    {
+        -> BackgroundIndexingNode {
         let itemNodes = batch.items.map { item in
             BackgroundIndexingNode.item(batchID: batch.id, item: item)
         }

@@ -64,7 +64,6 @@ final class MCPStatusPopoverViewModel<Route: Routable>: ViewModel<Route> {
 
     struct Output {
         let state: Driver<MCPServerState>
-        let openSettings: Signal<Void>
     }
 
     func transform(_ input: Input) -> Output {
@@ -77,7 +76,7 @@ final class MCPStatusPopoverViewModel<Route: Routable>: ViewModel<Route> {
             guard let self else { return }
             switch state {
             case .disabled:
-                openSettingsRelay.accept(())
+                appRouter.trigger(.settings)
             case .stopped:
                 MCPService.shared.start(for: AppMCPBridgeDocumentProvider())
             case .running:
@@ -103,8 +102,7 @@ final class MCPStatusPopoverViewModel<Route: Routable>: ViewModel<Route> {
         .disposed(by: rx.disposeBag)
 
         return Output(
-            state: $state.asDriver(),
-            openSettings: openSettingsRelay.asSignal()
+            state: $state.asDriver()
         )
     }
 }

@@ -196,10 +196,5 @@ final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopove
             updateUI(for: state)
         }
         .disposed(by: rx.disposeBag)
-
-        output.openSettings.emitOnNext {
-            SettingsWindowController.shared.showWindow(nil)
-        }
-        .disposed(by: rx.disposeBag)
     }
 }

@@ -184,14 +184,6 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
             .drive(clearHistoryButton.rx.isHidden)
             .disposed(by: rx.disposeBag)
 
-        // Direct-call into the Settings window. There is no `MainRoute.openSettings`
-        // case — see MCPStatusPopoverViewController for the same pattern.
-        output.openSettings
-            .emitOnNext {
-                SettingsWindowController.shared.showWindow(nil)
-            }
-            .disposed(by: rx.disposeBag)
-
         let hasAnyContent = Driver.combineLatest(output.hasAnyBatch, output.hasAnyHistory) {
             $0 || $1
         }
