@@ -15,7 +15,6 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     @Observed private(set) var subtitle: String = ""
 
     private let coordinator: RuntimeBackgroundIndexingCoordinator
-    private let openSettingsRelay = PublishRelay<Void>()
 
     init(
         documentState: DocumentState,
@@ -88,14 +87,6 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         input.clearHistory.emitOnNext { [weak self] in
             guard let self else { return }
             coordinator.clearHistory()
-        }
-        .disposed(by: rx.disposeBag)
-
-        // Forward openSettings to output so the ViewController can call
-        // `SettingsWindowController.shared.showWindow(nil)` directly.
-        input.openSettings.emitOnNext { [weak self] in
-            guard let self else { return }
-            openSettingsRelay.accept(())
         }
         .disposed(by: rx.disposeBag)
 
