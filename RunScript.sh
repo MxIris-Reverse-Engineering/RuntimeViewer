@@ -94,3 +94,76 @@ XCODEBUILD_LOG_INDEX=0
 
 mkdir -p "$LOG_DIR"
 log "xcodebuild logs: $LOG_DIR"
+
+update_packages() {
+    log "Updating Swift package dependencies"
+    run swift package update --package-path "$PROJECT_DIR/RuntimeViewerCore"
+    run swift package update --package-path "$PROJECT_DIR/RuntimeViewerPackages"
+
+    local workspace_path="$WORKSPACE"
+    if [[ "$workspace_path" != /* ]]; then
+        workspace_path="$PROJECT_DIR/$workspace_path"
+    fi
+
+    local workspace_package_resolved="$workspace_path/xcshareddata/swiftpm/Package.resolved"
+    log "Refreshing workspace package pins"
+    run rm -f "$workspace_package_resolved"
+
+    XCODEBUILD_LOG_NAME="resolve-catalyst-helper-packages" run_piped xcodebuild -resolvePackageDependencies \
+        -workspace "$WORKSPACE" \
+        -scheme "$CATALYST_SCHEME" \
+        -skipPackagePluginValidation -skipMacroValidation
+
+    XCODEBUILD_LOG_NAME="resolve-main-packages" run_piped xcodebuild -resolvePackageDependencies \
+        -workspace "$WORKSPACE" \
+        -scheme "$SCHEME" \
+        -skipPackagePluginValidation -skipMacroValidation
+}
+
+if $UPDATE_PACKAGES; then
+    update_packages
+fi
+
+log "Building Catalyst helper (arm64e)"
+XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
+    -workspace "$WORKSPACE" \
+    -scheme "$CATALYST_SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -destination 'generic/platform=macOS,variant=Mac Catalyst' \
+    -derivedDataPath "$DERIVED_DATA" \
+    -skipPackagePluginValidation -skipMacroValidation \
+    ARCHS=arm64e ONLY_ACTIVE_ARCH=NO \
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+
+log "Building main app (arm64e)"
+XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
+    -workspace "$WORKSPACE" \
+    -scheme "$SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -destination 'generic/platform=macOS' \
+    -derivedDataPath "$DERIVED_DATA" \
+    -skipPackagePluginValidation -skipMacroValidation \
+    ARCHS=arm64e ONLY_ACTIVE_ARCH=NO \
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+
+PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"
+APP_PATH=""
+if [[ -d "$PRODUCTS_DIR" ]]; then
+    APP_PATH=$(find "$PRODUCTS_DIR" -maxdepth 1 -type d -name '*.app' | head -1)
+fi
+if $DRY_RUN; then
+    APP_PATH="${APP_PATH:-<app-path>}"
+else
+    [[ -n "$APP_PATH" && -d "$APP_PATH" ]] || fail "expected built *.app under $PRODUCTS_DIR"
+fi
+
+if $LAUNCH; then
+    log "Launching $APP_PATH"
+    run open "$APP_PATH"
+else
+    log "Launch skipped (--no-launch)"
+fi
+
+log "Done. Outputs:"
+log "  app:                 $APP_PATH"
+log "  derived_data:        $DERIVED_DATA"
