@@ -232,9 +232,9 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
     private func handleEngineSwap(to newEngine: RuntimeEngine) {
         // Capture the old engine before we overwrite, so we can dispatch a
-        // best-effort cancel to its manager for any document batches we own.
+        // cancel to its manager covering both already-tracked batches and
+        // any swap-window arrivals.
         let oldEngine = engine
-        let oldBatchIDs = documentBatchIDs
 
         // 1) Stop pumps tied to the old engine. The Tasks were `for await`
         //    looping over an AsyncStream owned by the old manager; cancelling
@@ -244,14 +244,20 @@ public final class RuntimeBackgroundIndexingCoordinator {
         eventPumpTask = nil
         imageLoadedPumpTask = nil
 
-        // 2) Best-effort cancel of in-flight batches on the old manager.
+        // 2) Cancel **all** in-flight batches on the old manager — not just
+        //    the ones in `documentBatchIDs`. A `startBatch` Task that
+        //    suspended before its id was inserted into `documentBatchIDs`
+        //    would otherwise leak: the `self.engine === engine` guard in
+        //    `startMainExecutableBatch` / `handleImageLoaded` correctly drops
+        //    its id, but the batch itself remains active on the old manager
+        //    and runs to completion uninterrupted, occupying CPU and the
+        //    section-cache slots until the old engine is finally deinit'd.
+        //    `cancelAllBatches` covers both already-tracked batches and any
+        //    swap-window arrivals.
+        //
         //    Fire-and-forget — old engine's manager will deinit shortly.
-        if !oldBatchIDs.isEmpty {
-            Task {
-                for id in oldBatchIDs {
-                    await oldEngine.backgroundIndexingManager.cancelBatch(id)
-                }
-            }
+        Task {
+            await oldEngine.backgroundIndexingManager.cancelAllBatches()
         }
 
         // 3) Drop UI state — the old engine's batches and history no longer apply.
