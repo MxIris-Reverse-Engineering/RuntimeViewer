@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 新增 `RuntimeViewer-Debug.xcworkspace` 与 `RunScript.sh`，通过命令行 xcodebuild 编译并启动 Debug + arm64e 版本主 app，绕开 Xcode GUI 在 arm64e 模式下的编译 bug。
+**Goal:** 新增 `RuntimeViewer-Debug.xcworkspace`、`Debug-arm64e` build configuration、`RunScript.sh`，通过命令行 xcodebuild 编译并启动只在两个目标 target 带 arm64e 切片的 Debug 版本主 app，绕开 Xcode GUI 在 arm64e 模式下的编译 bug。
 
-**Architecture:** 复制 `RuntimeViewer.xcworkspace` 的本地依赖工作区，叠加 `iOSPackagesShouldBuildARM64e=true`；脚本骨架与工具函数模仿 `ArchiveScript.sh`，但只保留构建 + launch 流程，去除 archive / export / notarize / appcast / upload 等发版步骤；通过命令行参数 `ARCHS=arm64e ONLY_ACTIVE_ARCH=NO` 强制主 app 切片为纯 arm64e。
+**Architecture:** 复制 `RuntimeViewer.xcworkspace` 的本地依赖工作区，叠加 `iOSPackagesShouldBuildARM64e=true`；在 `RuntimeViewerUsingAppKit.xcodeproj` 与 `RuntimeViewerServer.xcodeproj` 里增加 `Debug-arm64e` configuration（基于 Debug，仅给 `RuntimeViewerServer.framework` 和 `dev.mxiris.runtimeviewer.service` 两个 target 设 `EPA=YES`）；脚本骨架与工具函数模仿 `ArchiveScript.sh`，去除发版步骤，使用 `-configuration Debug-arm64e` 让需要 arm64e 切片的 target 自然拿到该切片；不传命令行 ARCHS override 以避免污染 SwiftMacro plugin 等 build-host 工具。
 
 **Tech Stack:** bash, xcodebuild, xcbeautify（可选）
 
@@ -18,7 +18,9 @@
 |------|------|------|
 | 创建 | `RuntimeViewer-Debug.xcworkspace/contents.xcworkspacedata` | 工作区文件引用列表（与 `RuntimeViewer.xcworkspace` 一致，含本地兄弟仓库） |
 | 创建 | `RuntimeViewer-Debug.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings` | `iOSPackagesShouldBuildARM64e=true` 等 workspace 级开关 |
-| 创建 | `RunScript.sh` | 命令行 Debug + arm64e 构建 / 启动入口 |
+| 修改 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj/project.pbxproj` | 给所有 target + project 增加 `Debug-arm64e` build configuration（dev.mxiris.runtimeviewer.service 设 `EPA=YES`，其余沿用 Debug） |
+| 修改 | `RuntimeViewerServer/RuntimeViewerServer.xcodeproj/project.pbxproj` | 给 RuntimeViewerServer/RuntimeViewerMobileServer + project 增加 `Debug-arm64e`（RuntimeViewerServer 设 `EPA=YES`） |
+| 创建 | `RunScript.sh` | 命令行 `Debug-arm64e` 配置构建 / 启动入口 |
 
 ---
 
@@ -156,7 +158,7 @@ cd "$PROJECT_DIR"
 WORKSPACE="RuntimeViewer-Debug.xcworkspace"
 SCHEME="RuntimeViewer macOS"
 CATALYST_SCHEME="RuntimeViewerCatalystHelper"
-CONFIGURATION="Debug"
+CONFIGURATION="Debug-arm64e"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 DERIVED_DATA="$PROJECT_DIR/DerivedData/Debug-arm64e"
 
@@ -343,7 +345,7 @@ fi
 继续追加：
 
 ```bash
-log "Building Catalyst helper (arm64e)"
+log "Building Catalyst helper"
 XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
     -scheme "$CATALYST_SCHEME" \
@@ -351,7 +353,6 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -destination 'generic/platform=macOS,variant=Mac Catalyst' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
-    ARCHS=arm64e ONLY_ACTIVE_ARCH=NO \
     "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 ```
 
@@ -360,7 +361,7 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
 继续追加：
 
 ```bash
-log "Building main app (arm64e)"
+log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
     -scheme "$SCHEME" \
@@ -368,13 +369,13 @@ XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -destination 'generic/platform=macOS' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
-    ARCHS=arm64e ONLY_ACTIVE_ARCH=NO \
     "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
 PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"
 APP_PATH=""
 if [[ -d "$PRODUCTS_DIR" ]]; then
-    APP_PATH=$(find "$PRODUCTS_DIR" -maxdepth 1 -type d -name '*.app' | head -1)
+    APP_PATH=$(find "$PRODUCTS_DIR" -maxdepth 1 -type d -name 'RuntimeViewer*.app' \
+        -not -name 'RuntimeViewerCatalystHelper.app' | head -1)
 fi
 if $DRY_RUN; then
     APP_PATH="${APP_PATH:-<app-path>}"
@@ -477,29 +478,35 @@ EOF
 - `iOSPackagesShouldBuildARM64e` 未生效（确认 Task 1 Step 2 的 plist 写对了）
 - 本地兄弟仓库不存在（确认 `../MachOKit` 等仓库都在）
 
-- [ ] **Step 2: 用 lipo 验证主 app 切片**
+- [ ] **Step 2: 用 lipo 验证关键二进制的切片**
 
 ```bash
-APP_PATH=$(find DerivedData/Debug-arm64e/Build/Products/Debug -maxdepth 1 -type d -name '*.app' | head -1)
-BINARY_NAME=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_PATH/Contents/Info.plist")
-lipo -info "$APP_PATH/Contents/MacOS/$BINARY_NAME"
+APP_PATH=$(find DerivedData/Debug-arm64e/Build/Products/Debug-arm64e \
+    -maxdepth 1 -type d -name 'RuntimeViewer*.app' \
+    -not -name 'RuntimeViewerCatalystHelper.app' | head -1)
+
+# 主 app（EPA=NO，预期 arm64-only，不含 arm64e）
+lipo -info "$APP_PATH/Contents/MacOS/RuntimeViewer-Debug"
+
+# RuntimeViewerServer.framework（EPA=YES，预期含 arm64e）
+lipo -info "$APP_PATH/Contents/Resources/RuntimeViewerServer.framework/RuntimeViewerServer"
+
+# dev.mxiris.runtimeviewer.service（EPA=YES，预期含 arm64e）
+lipo -info "$APP_PATH/Contents/Library/LaunchServices/dev.mxiris.runtimeviewer.service"
 ```
 
-预期：
+预期输出：
 
 ```
-Non-fat file: .../Contents/MacOS/RuntimeViewer is architecture: arm64e
+... RuntimeViewer-Debug are: x86_64 arm64
+... RuntimeViewerServer are: x86_64 arm64 arm64e
+... dev.mxiris.runtimeviewer.service are: x86_64 arm64 arm64e
 ```
 
-或：
-
-```
-Architectures in the fat file: ... are: arm64e
-```
-
-**必须** 输出 `arm64e`，**不应**单独出现 `arm64`（无 e 后缀）。
-
-如果出现 `arm64` 而非 `arm64e`，说明命令行 `ARCHS=arm64e` 未生效，回到 Task 3 Step 2/3 检查命令行参数。
+主 app **不应**含 `arm64e`（因为它在 Debug-arm64e 下保持 EPA=NO）。
+后两者**必须**含 `arm64e`，否则说明 Debug-arm64e configuration 在该
+target 上的 `ENABLE_POINTER_AUTHENTICATION=YES` 设置丢失，回到工程
+build settings 检查。
 
 - [ ] **Step 3: 真实启动**
 
@@ -531,7 +538,7 @@ git status
 - ✅ Catalyst helper 不可跳过 → Task 3 Step 2（无 `--skip-catalyst-helper` 开关）
 - ✅ 主 app build → Task 3 Step 3
 - ✅ 编译完默认 `open .app` → Task 3 Step 4
-- ✅ 强制 arm64e（命令行 `ARCHS=arm64e ONLY_ACTIVE_ARCH=NO`）→ Task 3 Step 2/3
+- ✅ arm64e 切片只落到目标 target（RuntimeViewerServer.framework、dev.mxiris.runtimeviewer.service）→ 由 `Debug-arm64e` configuration 的 `ENABLE_POINTER_AUTHENTICATION=YES` 提供（前置 Setup，已 commit），脚本不传任何 ARCHS override
 - ✅ Workspace 层 arm64e（`iOSPackagesShouldBuildARM64e=true`）→ Task 1 Step 2
 - ✅ DerivedData 独立路径 → Task 2 Step 1
 - ✅ lipo 验证 arm64e → Task 4 Step 2
@@ -541,6 +548,6 @@ git status
 
 **Type / 命名一致性:** 变量名 `WORKSPACE` / `SCHEME` / `CATALYST_SCHEME` / `CONFIGURATION` / `BUILD_NUMBER` / `DERIVED_DATA` / `UPDATE_PACKAGES` / `LAUNCH` / `DRY_RUN` / `LOG_DIR` / `XCODEBUILD_LOG_INDEX` / `XCODEBUILD_LOG_NAME` 在 Task 2 / Task 3 之间引用一致；函数名 `fail` / `log` / `pretty` / `run` / `run_piped` / `update_packages` 一致。
 
-**Commit 边界:** 三个 commit（workspace / 脚本骨架 / 编译流程）独立可 revert，不互相依赖到对方未 commit 的代码。
+**Commit 边界:** workspace、Debug-arm64e configuration、脚本骨架、编译流程各自独立 commit，可单独 revert，互不依赖对方未 commit 的代码。
 
 无需修改，进入 handoff。
