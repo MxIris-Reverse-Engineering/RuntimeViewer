@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# RunScript.sh — Build and launch a Debug + arm64e RuntimeViewer using
-# xcodebuild from the command line. The Xcode GUI fails to compile under
-# iOSPackagesShouldBuildARM64e=true; this script bypasses that bug.
+# RunScript.sh — Build and launch RuntimeViewer with the Debug-arm64e
+# configuration via xcodebuild. The Debug-arm64e configuration adds an
+# arm64e slice only to the targets that need to inspect arm64e processes
+# (RuntimeViewerServer.framework, dev.mxiris.runtimeviewer.service); the
+# main app stays arm64-only just like Debug. The Xcode GUI fails to
+# compile under iOSPackagesShouldBuildARM64e=true, so xcodebuild from the
+# command line is the only working path.
 #
 # Usage:
 #   ./RunScript.sh                          # build + launch
@@ -21,7 +25,7 @@ cd "$PROJECT_DIR"
 WORKSPACE="RuntimeViewer-Debug.xcworkspace"
 SCHEME="RuntimeViewer macOS"
 CATALYST_SCHEME="RuntimeViewerCatalystHelper"
-CONFIGURATION="Debug"
+CONFIGURATION="Debug-arm64e"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 DERIVED_DATA="$PROJECT_DIR/DerivedData/Debug-arm64e"
 
@@ -79,7 +83,7 @@ while [[ $# -gt 0 ]]; do
         --update-packages) UPDATE_PACKAGES=true; shift;;
         --no-launch) LAUNCH=false; shift;;
         --dry-run) DRY_RUN=true; shift;;
-        -h|--help) sed -n '2,14p' "$0" | sed 's/^# *//'; exit 0;;
+        -h|--help) sed -n '2,18p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -124,7 +128,7 @@ if $UPDATE_PACKAGES; then
     update_packages
 fi
 
-log "Building Catalyst helper (arm64e)"
+log "Building Catalyst helper"
 XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
     -scheme "$CATALYST_SCHEME" \
@@ -132,10 +136,9 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -destination 'generic/platform=macOS,variant=Mac Catalyst' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
-    ARCHS=arm64e ONLY_ACTIVE_ARCH=NO \
     "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
-log "Building main app (arm64e)"
+log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
     -scheme "$SCHEME" \
@@ -143,13 +146,13 @@ XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -destination 'generic/platform=macOS' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
-    ARCHS=arm64e ONLY_ACTIVE_ARCH=NO \
     "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
 PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"
 APP_PATH=""
 if [[ -d "$PRODUCTS_DIR" ]]; then
-    APP_PATH=$(find "$PRODUCTS_DIR" -maxdepth 1 -type d -name '*.app' | head -1)
+    APP_PATH=$(find "$PRODUCTS_DIR" -maxdepth 1 -type d -name 'RuntimeViewer*.app' \
+        -not -name 'RuntimeViewerCatalystHelper.app' | head -1)
 fi
 if $DRY_RUN; then
     APP_PATH="${APP_PATH:-<app-path>}"
