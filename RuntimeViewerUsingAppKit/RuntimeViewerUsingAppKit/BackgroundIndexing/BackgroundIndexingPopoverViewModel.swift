@@ -68,7 +68,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         // ViewModel base class is `@MainActor`, so `transform` runs on the
         // main actor; we can subscribe synchronously and seed the initial
         // value below.
-        subscribeToIsEnabled()
+        bootstrapIsEnabledObservation()
 
         input.openSettings.emit(to: appRouter.rx.trigger(.settings)).disposed(by: rx.disposeBag)
 
@@ -135,7 +135,18 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         .asDriver(onErrorDriveWith: .empty())
     }
 
-    private func subscribeToIsEnabled() {
+    /// Seeds `isEnabled` from settings once and registers the observation.
+    /// Mirrors `RuntimeBackgroundIndexingCoordinator.bootstrapSettingsObservation`'s
+    /// "seed on bootstrap, only re-register on change" pattern.
+    private func bootstrapIsEnabledObservation() {
+        isEnabled = settings.indexing.backgroundMode.isEnabled
+        registerIsEnabledObservation()
+    }
+
+    /// Registers a one-shot Observation tracker. Re-registers itself on every
+    /// change because Observation's `withObservationTracking` is single-fire —
+    /// the `onChange` closure runs once, then the tracker is gone.
+    private func registerIsEnabledObservation() {
         withObservationTracking {
             _ = settings.indexing.backgroundMode.isEnabled
         } onChange: { [weak self] in
@@ -145,11 +156,9 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.isEnabled = self.settings.indexing.backgroundMode.isEnabled
-                self.subscribeToIsEnabled()
+                self.registerIsEnabledObservation()
             }
         }
-        // Seed the current value synchronously on initial subscribe.
-        isEnabled = settings.indexing.backgroundMode.isEnabled
     }
 
     private static func renderNodes(
