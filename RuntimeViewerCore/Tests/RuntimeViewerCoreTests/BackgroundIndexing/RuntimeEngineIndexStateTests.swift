@@ -64,18 +64,73 @@ import Testing
         #expect(FileManager.default.fileExists(atPath: path))
     }
 
+    /// Pins three contracts in one shot:
+    /// 1. `loadImageForBackgroundIndexing` actually marks the image indexed.
+    /// 2. It does NOT emit `reloadDataPublisher` (otherwise a depth-2+ BFS
+    ///    would storm the sidebar with a refresh per visited image).
+    /// 3. It does NOT emit `imageDidLoadPublisher` (otherwise the
+    ///    background indexing coordinator's image-loaded pump would
+    ///    recursively spawn a fresh batch for every image we just indexed).
     @Test(
         .enabled(
             if: FileManager.default.fileExists(atPath: coreText),
             "Requires macOS with CoreText.framework present"
         )
     )
-    func loadImageForBackgroundIndexingDoesNotTriggerReloadData() async throws {
-        // CoreText is reliable across macOS versions.
+    func loadImageForBackgroundIndexingMarksIndexedAndDoesNotEmitPublishers() async throws {
         let engine = RuntimeEngine(source: .local)
+
+        let counters = EmissionCounters()
+        let imageLoadCancellable = engine.imageDidLoadPublisher.sink { _ in
+            counters.incrementImageLoad()
+        }
+        let reloadDataCancellable = engine.reloadDataPublisher.sink { _ in
+            counters.incrementReloadData()
+        }
+        defer {
+            imageLoadCancellable.cancel()
+            reloadDataCancellable.cancel()
+        }
+
         try await engine.loadImageForBackgroundIndexing(at: Self.coreText)
+
         let indexed = try await engine.isImageIndexed(path: Self.coreText)
-        #expect(indexed)
+        #expect(indexed,
+                "loadImageForBackgroundIndexing must populate the section caches")
+        #expect(counters.imageLoadCount == 0,
+                "loadImageForBackgroundIndexing must not emit imageDidLoadPublisher")
+        #expect(counters.reloadDataCount == 0,
+                "loadImageForBackgroundIndexing must not emit reloadDataPublisher")
+    }
+
+    /// Test-local thread-safe counter pair. PassthroughSubject delivers to
+    /// `.sink` synchronously on whatever thread `.send` is called from, so
+    /// the actor task driving `loadImageForBackgroundIndexing` and the test
+    /// task can race on these counters.
+    private final class EmissionCounters: @unchecked Sendable {
+        private let lock = NSLock()
+        private var imageLoad = 0
+        private var reloadData = 0
+
+        func incrementImageLoad() {
+            lock.lock(); defer { lock.unlock() }
+            imageLoad += 1
+        }
+
+        func incrementReloadData() {
+            lock.lock(); defer { lock.unlock() }
+            reloadData += 1
+        }
+
+        var imageLoadCount: Int {
+            lock.lock(); defer { lock.unlock() }
+            return imageLoad
+        }
+
+        var reloadDataCount: Int {
+            lock.lock(); defer { lock.unlock() }
+            return reloadData
+        }
     }
 
     /// Pins the writer-side normalization contract: `loadImage(at:)` must
