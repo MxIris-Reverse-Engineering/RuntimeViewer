@@ -288,7 +288,12 @@ extension RuntimeBackgroundIndexingCoordinator {
     private func startMainExecutableBatch(reason: RuntimeIndexingBatchReason) {
         // The class is `@MainActor`, so this Task inherits main-actor isolation
         // and can mutate `documentBatchIDs` synchronously after the awaits.
-        Task { [weak self] in
+        // Capture `engine` at task creation so every await below targets the
+        // same engine even if `handleEngineSwap` reassigns `self.engine` while
+        // we are suspended — otherwise we could submit the old engine's root
+        // path to the new engine's manager and leak a stray batch id into
+        // `documentBatchIDs`.
+        Task { [weak self, engine] in
             guard let self else { return }
             let settings = self.currentBackgroundIndexingSettings()
             guard settings.isEnabled else { return }
@@ -302,6 +307,11 @@ extension RuntimeBackgroundIndexingCoordinator {
                 depth: settings.depth,
                 maxConcurrency: settings.maxConcurrency,
                 reason: reason)
+            // If the engine swapped while we were suspended, the batch landed
+            // on the now-old manager which `handleEngineSwap` has already
+            // cleaned up; don't pollute `documentBatchIDs` with an id whose
+            // manager we no longer drive.
+            guard self.engine === engine else { return }
             self.documentBatchIDs.insert(id)
         }
     }
@@ -319,18 +329,21 @@ extension RuntimeBackgroundIndexingCoordinator {
     private func startImageLoadedPump() {
         // Class is `@MainActor`; this Task and `for await` loop run on the main
         // actor. `handleImageLoaded` doesn't need a `MainActor.run` hop.
-        imageLoadedPumpTask = Task { [weak self] in
+        // Capture `engine` so the pump (and the `handleImageLoaded` call below)
+        // stay bound to the engine that owned this pump at startup, even if
+        // `self.engine` is reassigned by `handleEngineSwap` mid-flight.
+        imageLoadedPumpTask = Task { [weak self, engine] in
             guard let self else { return }
             // Combine.Publisher.values bridges to AsyncSequence on macOS 12+ /
             // iOS 15+; the project's deployment targets satisfy this. Errors are
             // Never on this publisher, so no try is needed.
-            for await path in self.engine.imageDidLoadPublisher.values {
-                await self.handleImageLoaded(path: path)
+            for await path in engine.imageDidLoadPublisher.values {
+                await self.handleImageLoaded(path: path, on: engine)
             }
         }
     }
 
-    private func handleImageLoaded(path: String) async {
+    private func handleImageLoaded(path: String, on engine: RuntimeEngine) async {
         let settings = currentBackgroundIndexingSettings()
         guard settings.isEnabled else { return }
         // If `documentDidOpen` is currently indexing the same path (e.g. dyld
@@ -343,6 +356,10 @@ extension RuntimeBackgroundIndexingCoordinator {
             depth: settings.depth,
             maxConcurrency: settings.maxConcurrency,
             reason: .imageLoaded(path: path))
+        // If the engine swapped while we were suspended on `startBatch`, the
+        // id belongs to the old manager and `handleEngineSwap` has already
+        // cleared `documentBatchIDs`; don't reintroduce a stale id.
+        guard self.engine === engine else { return }
         self.documentBatchIDs.insert(id)
     }
 
