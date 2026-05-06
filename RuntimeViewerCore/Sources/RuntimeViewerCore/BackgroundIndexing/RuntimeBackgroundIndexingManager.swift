@@ -47,6 +47,23 @@ public actor RuntimeBackgroundIndexingManager {
         }
     }
 
+    /// Best-effort priority boost for `imagePath` inside any active batch.
+    ///
+    /// Items currently in `.pending` state are marked with `hasPriorityBoost`
+    /// and inserted into the batch's `priorityBoostPaths` set, which
+    /// `popNextPrioritizedPath` consults so the next free slot dispatches
+    /// the boosted item ahead of FIFO order.
+    ///
+    /// Items already dispatched (`.running`) or already terminal
+    /// (`.completed` / `.failed` / `.cancelled`) are silent no-ops —
+    /// `prioritize` cannot preempt running tasks. Items that have been
+    /// removed from `runBatch`'s local pending array (i.e. about to dispatch)
+    /// will also miss the boost; the contract is "boosts items that haven't
+    /// been picked yet."
+    ///
+    /// Each successful boost emits `.taskPrioritized(batchID:path:)`. Tested
+    /// for event emission (not load order, which depends on scheduler timing)
+    /// by `test_prioritize_emitsTaskPrioritizedEvent`.
     public func prioritize(imagePath: String) {
         for (id, var state) in activeBatches {
             if let itemIndex = state.batch.items.firstIndex(where: {
@@ -89,6 +106,13 @@ public actor RuntimeBackgroundIndexingManager {
         // its own `expandDependencyGraph`. The check + insert below is
         // atomic on the actor (no awaits between them) so the loser of the
         // race always sees the winner's insertion.
+        //
+        // Both racers run a full BFS before this second check — we
+        // intentionally don't hold the actor across BFS so cancel/prioritize
+        // remain responsive. The loser's BFS work is discarded; concurrent
+        // triggers (`documentDidOpen` + dyld add-image notification firing
+        // for the same path) are infrequent enough that this is the right
+        // trade-off versus serializing all batches behind one in-flight BFS.
         if let existingId = findActiveBatchID(forRootImagePath: rootImagePath) {
             return existingId
         }

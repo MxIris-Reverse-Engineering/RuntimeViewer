@@ -26,8 +26,14 @@ extension RuntimeEngine {
         }
     }
 
-    /// Like `loadImage(at:)` but does **not** call `reloadData()`.
-    /// Used by the background indexing manager to avoid UI refresh storms.
+    /// Like `loadImage(at:)` but does **not** call `reloadData()` and does
+    /// **not** emit `imageDidLoadPublisher`.
+    ///
+    /// Both omissions are deliberate. Triggering `reloadData()` for every
+    /// image visited by a depth-2+ BFS would storm the sidebar during a
+    /// background batch; emitting `imageDidLoadPublisher` would feed
+    /// `RuntimeBackgroundIndexingCoordinator`'s image-loaded pump and
+    /// recursively spawn a fresh batch for every image we just indexed.
     public func loadImageForBackgroundIndexing(at path: String) async throws {
         try await request {
             // Mirror loadImage(at:) byte-for-byte sans reloadData. See loadImage
