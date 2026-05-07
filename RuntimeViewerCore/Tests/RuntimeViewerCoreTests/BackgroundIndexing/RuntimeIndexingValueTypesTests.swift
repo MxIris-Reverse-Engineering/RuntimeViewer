@@ -27,12 +27,13 @@ import Testing
         #expect(RuntimeIndexingTaskState.completed.isTerminal)
     }
 
-    @Test func batchProgressReportsCompletedFraction() {
+    @Test func batchProgressReportsFinishedFraction() {
         let items: [RuntimeIndexingTaskItem] = [
             .init(id: "/a", resolvedPath: "/a", state: .completed, hasPriorityBoost: false),
             .init(id: "/b", resolvedPath: "/b", state: .completed, hasPriorityBoost: false),
             .init(id: "/c", resolvedPath: "/c", state: .pending, hasPriorityBoost: false),
             .init(id: "/d", resolvedPath: "/d", state: .failed(message: "x"), hasPriorityBoost: false),
+            .init(id: "/e", resolvedPath: "/e", state: .cancelled, hasPriorityBoost: false),
         ]
         let batch = RuntimeIndexingBatch(
             id: RuntimeIndexingBatchID(),
@@ -43,7 +44,13 @@ import Testing
             isCancelled: false,
             isFinished: false
         )
-        #expect(batch.completedCount == 3)   // completed + failed both count toward "done"
-        #expect(batch.totalCount == 4)
+        #expect(batch.totalCount == 5)
+        // `finishedCount` powers the progress bar — every terminal state counts
+        // because the work item has stopped, regardless of outcome.
+        #expect(batch.finishedCount == 4)
+        #expect(batch.succeededCount == 2)
+        #expect(batch.failedCount == 1)
+        #expect(batch.cancelledCount == 1)
+        #expect(batch.progress == 0.8)
     }
 }

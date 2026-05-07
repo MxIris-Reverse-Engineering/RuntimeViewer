@@ -30,6 +30,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         let cancelAll: Signal<Void>
         let clearHistory: Signal<Void>
         let openSettings: Signal<Void>
+        let close: Signal<Void>
     }
 
     struct Output {
@@ -71,6 +72,8 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         bootstrapIsEnabledObservation()
 
         input.openSettings.emit(to: appRouter.rx.trigger(.settings)).disposed(by: rx.disposeBag)
+
+        input.close.emit(to: router.rx.trigger(.dismiss)).disposed(by: rx.disposeBag)
 
         input.cancelBatch.emitOnNext { [weak self] id in
             guard let self else { return }

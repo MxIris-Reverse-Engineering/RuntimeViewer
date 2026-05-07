@@ -155,18 +155,12 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
             cancelBatch: cancelBatchRelay.asSignal(),
             cancelAll: cancelAllButton.rx.click.asSignal(),
             clearHistory: clearHistoryButton.rx.click.asSignal(),
-            openSettings: openSettingsButton.rx.click.asSignal()
+            openSettings: openSettingsButton.rx.click.asSignal(),
+            close: closeButton.rx.click.asSignal()
         )
         let output = viewModel.transform(input)
 
         outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
-        
-        closeButton.rx.click.asSignal()
-            .emitOnNext { [weak self] in
-                guard let self else { return }
-                dismiss(nil)
-            }
-            .disposed(by: rx.disposeBag)
 
         output.subtitle
             .drive(subtitleLabel.rx.stringValue)
@@ -246,8 +240,7 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 
 extension BackgroundIndexingPopoverViewController: NSOutlineViewDelegate {
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        guard let node = item as? BackgroundIndexingNode, case .item = node else { return false }
-        return true
+        return false
     }
 }
 
@@ -383,13 +376,47 @@ extension BackgroundIndexingPopoverViewController {
         private func update(with batch: RuntimeIndexingBatch) {
             cancelButton.isHidden = batch.isFinished
             titleLabel.stringValue = Self.title(for: batch.reason)
-            countLabel.stringValue = "\(batch.completedCount)/\(batch.totalCount)"
+            countLabel.attributedStringValue = Self.countText(for: batch)
 
             progressIndicator.maxValue = max(Double(batch.totalCount), 1)
-            progressIndicator.doubleValue = Double(batch.completedCount)
+            progressIndicator.doubleValue = Double(batch.finishedCount)
             // Only meaningful while the batch is active; finished batches drop
             // the bar so the row collapses to the title row alone.
             progressIndicator.isHidden = batch.isFinished
+        }
+
+        /// `succeededCount/totalCount` reads as "X succeeded out of Y" — the
+        /// failure / cancellation tail is rendered in a tinted suffix so a
+        /// fully-failed batch can no longer masquerade as a fully-succeeded
+        /// one (which the older `finishedCount/totalCount` label did).
+        private static func countText(for batch: RuntimeIndexingBatch) -> NSAttributedString {
+            let font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            let prefix = NSMutableAttributedString(
+                string: "\(batch.succeededCount)/\(batch.totalCount)",
+                attributes: [
+                    .font: font,
+                    .foregroundColor: NSColor.secondaryLabelColor
+                ]
+            )
+            if batch.failedCount > 0 {
+                prefix.append(NSAttributedString(
+                    string: "  ·  \(batch.failedCount) failed",
+                    attributes: [
+                        .font: font,
+                        .foregroundColor: NSColor.systemRed
+                    ]
+                ))
+            }
+            if batch.cancelledCount > 0 {
+                prefix.append(NSAttributedString(
+                    string: "  ·  \(batch.cancelledCount) cancelled",
+                    attributes: [
+                        .font: font,
+                        .foregroundColor: NSColor.systemOrange
+                    ]
+                ))
+            }
+            return prefix
         }
 
         @objc private func cancelButtonClicked() {

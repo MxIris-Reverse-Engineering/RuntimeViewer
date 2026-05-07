@@ -202,7 +202,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
             }
         }
         let totalItems = batches.reduce(0) { $0 + $1.totalCount }
-        let doneItems = batches.reduce(0) { $0 + $1.completedCount }
+        let doneItems = batches.reduce(0) { $0 + $1.finishedCount }
         let progress: Double? = totalItems > 0
             ? Double(doneItems) / Double(totalItems)
             : nil
