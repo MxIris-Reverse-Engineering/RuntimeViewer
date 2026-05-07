@@ -54,8 +54,6 @@ enum MCPConfigType {
 final class MCPStatusPopoverViewModel<Route: Routable>: ViewModel<Route> {
     @Observed private(set) var state: MCPServerState = MCPService.shared.serverState
 
-    private let openSettingsRelay = PublishRelay<Void>()
-
     struct Input {
         let actionButtonClick: Signal<Void>
         let copyPortClick: Signal<Void>
