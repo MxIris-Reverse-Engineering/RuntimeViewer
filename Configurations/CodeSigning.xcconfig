@@ -3,9 +3,25 @@
 
 RUNTIME_VIEWER_DEVELOPMENT_TEAM = D5Q73692VW
 
+// Main app (RuntimeViewerUsingAppKit, RuntimeViewerUsingUIKit, RuntimeViewerUsingVision)
 RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer
 RUNTIME_VIEWER_APP_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer
+
+// SMJobBless privileged helper (com.JH.RuntimeViewerService target)
 RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService
+
+// Mac Catalyst helper app (RuntimeViewerCatalystHelper target)
+RUNTIME_VIEWER_CATALYST_HELPER_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCatalystHelper
+RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelper
+
+// Mac Catalyst helper plugin bundle (RuntimeViewerCatalystHelperPlugin target).
+// Plugin uses one identifier across all configurations because the helper app
+// loads it by exact bundle identifier and a debug variant would silently fail
+// to load when run from Xcode against a release-built helper.
+RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelperPlugin
+
+// XPC server framework (RuntimeViewerServer / RuntimeViewerMobileServer targets)
+RUNTIME_VIEWER_SERVER_BUNDLE_IDENTIFIER = com.MxIris.RuntimeViewerServer
 
 RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_REQUIREMENT = certificate leaf[subject.OU] = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM) and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */
 // `and` binds tighter than `or` in csreq, so the outer parens around the `or` group are load-bearing — they keep the team OU check from being bypassed on the Apple Distribution branch.
