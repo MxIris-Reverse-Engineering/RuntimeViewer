@@ -41,7 +41,16 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
                 return isFilterEmptyNodes ? !$0.isEmpty : true
             }
             .observe(on: ConcurrentDispatchQueueScheduler(qos: .userInteractive))
-            .flatMapLatest { nodes -> [String: SidebarRootCellViewModel] in
+            // `map` (not `flatMapLatest`) — a sync body fed to RxConcurrency's
+            // `flatMapLatest(_:async)` overload is silently wrapped in
+            // `Observable.async { Task { ... } }`, and `Task` inherits the
+            // surrounding `@MainActor` isolation from `ViewModel`. That hop
+            // overrides `.observe(on: ConcurrentDispatchQueueScheduler(...))`
+            // and lands the iterator (which lazy-builds every cell view model
+            // and its NSAttributedString) on the main thread — visible at
+            // ~386ms in time profiles. `map` keeps the work on the background
+            // scheduler we asked for.
+            .map { nodes -> [String: SidebarRootCellViewModel] in
                 #log(.info, "\(Self.self, privacy: .public) Indexing sidebar nodes...")
                 var allNodes: [String: SidebarRootCellViewModel] = [:]
                 for rootNode in nodes {
