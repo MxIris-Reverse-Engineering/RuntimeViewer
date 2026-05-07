@@ -45,6 +45,29 @@ public final class RuntimeBackgroundIndexingCoordinator {
         value: .init(hasActiveBatch: false, hasAnyFailure: false, progress: nil)
     )
 
+    /// Authoritative active-batches storage. Mutated synchronously inside
+    /// `apply(event:)`; copied into `batchesRelay` only on flush so that
+    /// task-level events (one per started/finished image) don't fan out a
+    /// full subscriber storm 100+ times per second during a busy batch.
+    private var stagedBatches: [RuntimeIndexingBatch] = []
+    /// Pending history archives from `batchFinished` / `batchCancelled`,
+    /// delivered to `historyRelay` only after the corresponding active-batch
+    /// removal has been published — see `flushPendingUpdates` for the
+    /// active-then-history ordering rationale.
+    private var pendingHistoryAdditions: [RuntimeIndexingBatch] = []
+    private var hasPendingActiveChange = false
+    private var pendingAggregateRefresh = false
+    /// `true` while `scheduleCoalescedFlush` has a `Task` outstanding that
+    /// will call `flushPendingUpdates` on the next runloop tick. Guards
+    /// against piling up redundant flush tasks when events arrive in bursts.
+    private var hasScheduledFlush = false
+
+    /// One frame at 60Hz. Coalesces task-level events that arrive together
+    /// (e.g. `taskFinished(A)` immediately followed by `taskStarted(B)` as a
+    /// worker picks up the next item) into a single relay publish so the
+    /// popover redraws at a sustainable rate.
+    private static let coalesceWindowNanos: UInt64 = 16_000_000
+
     private var documentBatchIDs: Set<RuntimeIndexingBatchID> = []
     private var eventPumpTask: Task<Void, Never>?
     private var imageLoadedPumpTask: Task<Void, Never>?
@@ -101,6 +124,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
     }
 
     public func clearHistory() {
+        // Drop pending archives too — otherwise a `.batchFinished` whose
+        // history hop was waiting on the coalesce window would still land
+        // after the user cleared.
+        pendingHistoryAdditions.removeAll()
         historyRelay.accept([])
     }
 
@@ -120,68 +147,133 @@ public final class RuntimeBackgroundIndexingCoordinator {
     }
 
     private func apply(event: RuntimeIndexingEvent) {
-        var batches = batchesRelay.value
-        // Collect batches that need to be appended to history. We defer the
-        // actual `appendToHistory` calls until after `batchesRelay.accept` so
-        // that `combineLatest(batchesObservable, historyObservable)` never emits
-        // a transient state where the same batch appears in both ACTIVE and
-        // HISTORY sections (which would produce duplicate `differenceIdentifier`
-        // values and undefined DifferenceKit behavior).
-        var historyAdditions: [RuntimeIndexingBatch] = []
+        // Lifecycle events (batch{Started,Finished,Cancelled}) are rare and
+        // user-visible, so they bypass the coalesce window and flush the
+        // current state immediately. Per-task events (task{Started,Finished,
+        // Prioritized}) only schedule a coalesced flush — see
+        // `scheduleCoalescedFlush` for the rate cap.
+        var requiresImmediateFlush = false
+
         switch event {
         case .batchStarted(let batch):
-            batches.append(batch)
+            stagedBatches.append(batch)
+            hasPendingActiveChange = true
+            pendingAggregateRefresh = true
+            requiresImmediateFlush = true
         case .taskStarted(let id, let path):
-            batches = batches.map { mutating($0) { batch in
-                guard batch.id == id, let itemIndex = batch.items.firstIndex(where: { $0.id == path })
-                else { return }
-                batch.items[itemIndex].state = .running
-            }}
+            if mutateTaskItem(batchID: id, path: path, { item in
+                item.state = .running
+            }) {
+                hasPendingActiveChange = true
+                pendingAggregateRefresh = true
+            }
         case .taskFinished(let id, let path, let result):
-            batches = batches.map { mutating($0) { batch in
-                guard batch.id == id, let itemIndex = batch.items.firstIndex(where: { $0.id == path })
-                else { return }
-                batch.items[itemIndex].state = result
-            }}
+            if mutateTaskItem(batchID: id, path: path, { item in
+                item.state = result
+            }) {
+                hasPendingActiveChange = true
+                pendingAggregateRefresh = true
+            }
         case .taskPrioritized(let id, let path):
-            batches = batches.map { mutating($0) { batch in
-                guard batch.id == id, let itemIndex = batch.items.firstIndex(where: { $0.id == path })
-                else { return }
-                batch.items[itemIndex].hasPriorityBoost = true
-            }}
+            // Priority boost doesn't change progress / hasFailure / hasActive,
+            // so we skip the aggregate refresh.
+            if mutateTaskItem(batchID: id, path: path, { item in
+                item.hasPriorityBoost = true
+            }) {
+                hasPendingActiveChange = true
+            }
         case .batchFinished(let finished):
-            batches.removeAll { $0.id == finished.id }
+            stagedBatches.removeAll { $0.id == finished.id }
             documentBatchIDs.remove(finished.id)
-            historyAdditions.append(finished)
+            pendingHistoryAdditions.append(finished)
+            hasPendingActiveChange = true
+            pendingAggregateRefresh = true
+            requiresImmediateFlush = true
             Task { [engine] in
                 await engine.reloadData(isReloadImageNodes: false)
             }
-
         case .batchCancelled(let cancelled):
             // Cancellation always removes from active. Now also lands in history
             // so the user can review what got cancelled.
-            batches.removeAll { $0.id == cancelled.id }
+            stagedBatches.removeAll { $0.id == cancelled.id }
             documentBatchIDs.remove(cancelled.id)
-            historyAdditions.append(cancelled)
+            pendingHistoryAdditions.append(cancelled)
+            hasPendingActiveChange = true
+            pendingAggregateRefresh = true
+            requiresImmediateFlush = true
             Task { [engine] in
                 await engine.reloadData(isReloadImageNodes: false)
             }
         }
-        // Settle the active-batches relay first so it no longer contains the
-        // finished/cancelled batch before history is updated.
-        batchesRelay.accept(batches)
-        refreshAggregate(batches: batches)
-        // Now safe to push history: combineLatest will emit (new batches without
-        // finished, new history with finished) — a fully consistent state.
-        for batchToArchive in historyAdditions {
-            appendToHistory(batchToArchive)
+
+        if requiresImmediateFlush {
+            flushPendingUpdates()
+        } else {
+            scheduleCoalescedFlush()
         }
     }
 
-    private func mutating<Value>(_ value: Value, _ mutate: (inout Value) -> Void) -> Value {
-        var copy = value
-        mutate(&copy)
-        return copy
+    /// Locates `(batchID, path)` inside `stagedBatches` and applies `mutate`
+    /// in place. Returns `true` on a successful hit so the caller can flip
+    /// the appropriate dirty flags. Returns `false` when the batch or item
+    /// can't be found — stale events that arrive after a swap or
+    /// cancellation must not poison the flush state.
+    private func mutateTaskItem(
+        batchID: RuntimeIndexingBatchID,
+        path: String,
+        _ mutate: (inout RuntimeIndexingTaskItem) -> Void
+    ) -> Bool {
+        guard let batchIndex = stagedBatches.firstIndex(where: { $0.id == batchID }),
+              let itemIndex = stagedBatches[batchIndex].items.firstIndex(where: { $0.id == path })
+        else { return false }
+        mutate(&stagedBatches[batchIndex].items[itemIndex])
+        return true
+    }
+
+    /// Asks main-actor to call `flushPendingUpdates` on the next runloop tick
+    /// (~16ms out). Idempotent: bursty events that all arrive inside the
+    /// window collapse into a single publish.
+    private func scheduleCoalescedFlush() {
+        guard !hasScheduledFlush else { return }
+        hasScheduledFlush = true
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.coalesceWindowNanos)
+            self?.flushPendingUpdates()
+        }
+    }
+
+    /// Publishes `stagedBatches` to `batchesRelay`, then drains pending
+    /// `historyAdditions` into `historyRelay`. See the active-then-history
+    /// ordering note: any batch that just transitioned to history must have
+    /// already disappeared from `batchesRelay` before it appears in
+    /// `historyRelay`, otherwise `combineLatest(batches, history)` would emit
+    /// a transient frame with the same `differenceIdentifier` in both
+    /// sections and DifferenceKit's behavior is undefined.
+    private func flushPendingUpdates() {
+        hasScheduledFlush = false
+        guard hasPendingActiveChange || !pendingHistoryAdditions.isEmpty else {
+            return
+        }
+        let activeChanged = hasPendingActiveChange
+        let aggregateChanged = pendingAggregateRefresh
+        hasPendingActiveChange = false
+        pendingAggregateRefresh = false
+
+        if activeChanged {
+            batchesRelay.accept(stagedBatches)
+        }
+        if aggregateChanged {
+            refreshAggregate(batches: stagedBatches)
+        }
+        // Now safe to push history: subscribers see (new batches without
+        // finished, new history with finished) — a fully consistent state.
+        if !pendingHistoryAdditions.isEmpty {
+            let toArchive = pendingHistoryAdditions
+            pendingHistoryAdditions = []
+            for batch in toArchive {
+                appendToHistory(batch)
+            }
+        }
     }
 
     private func appendToHistory(_ batch: RuntimeIndexingBatch) {
@@ -261,7 +353,13 @@ public final class RuntimeBackgroundIndexingCoordinator {
         }
 
         // 3) Drop UI state — the old engine's batches and history no longer apply.
+        //    Also reset the coalescing state so that any flush task currently
+        //    sleeping out the 16ms window sees clean buffers when it wakes.
         documentBatchIDs.removeAll()
+        stagedBatches.removeAll()
+        pendingHistoryAdditions.removeAll()
+        hasPendingActiveChange = false
+        pendingAggregateRefresh = false
         batchesRelay.accept([])
         historyRelay.accept([])
         refreshAggregate(batches: [])
