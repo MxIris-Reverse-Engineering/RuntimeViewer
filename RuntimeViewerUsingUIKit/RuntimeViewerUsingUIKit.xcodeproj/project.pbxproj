@@ -474,7 +474,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = RuntimeViewer;
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -504,7 +504,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_RELEASE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = RuntimeViewer;
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -675,7 +675,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = RuntimeViewer;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
@@ -717,7 +717,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_RELEASE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = RuntimeViewer;
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
