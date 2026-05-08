@@ -45,22 +45,12 @@ public final class RuntimeBackgroundIndexingCoordinator {
         value: .init(hasActiveBatch: false, hasAnyFailure: false, progress: nil)
     )
 
-    /// Authoritative active-batches storage. Mutated synchronously inside
-    /// `apply(event:)`; copied into `batchesRelay` only on flush so that
-    /// task-level events (one per started/finished image) don't fan out a
-    /// full subscriber storm 100+ times per second during a busy batch.
-    private var stagedBatches: [RuntimeIndexingBatch] = []
-    /// Pending history archives from `batchFinished` / `batchCancelled`,
-    /// delivered to `historyRelay` only after the corresponding active-batch
-    /// removal has been published — see `flushPendingUpdates` for the
-    /// active-then-history ordering rationale.
-    private var pendingHistoryAdditions: [RuntimeIndexingBatch] = []
-    private var hasPendingActiveChange = false
-    private var pendingAggregateRefresh = false
-    /// `true` while `scheduleCoalescedFlush` has a `Task` outstanding that
-    /// will call `flushPendingUpdates` on the next runloop tick. Guards
-    /// against piling up redundant flush tasks when events arrive in bursts.
-    private var hasScheduledFlush = false
+    /// Authoritative staging state for in-flight batches plus the dirty flags
+    /// the flush path consumes. Lives behind an `NSLock` rather than on the
+    /// main actor so that the worker→coordinator AsyncStream pump can apply
+    /// 100+ task events per second without ever waking the main thread —
+    /// only the 16ms coalesced flush hops to main.
+    private let staging = StagingStore()
 
     /// One frame at 60Hz. Coalesces task-level events that arrive together
     /// (e.g. `taskFinished(A)` immediately followed by `taskStarted(B)` as a
@@ -68,7 +58,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// popover redraws at a sustainable rate.
     private static let coalesceWindowNanos: UInt64 = 16_000_000
 
-    private var documentBatchIDs: Set<RuntimeIndexingBatchID> = []
     private var eventPumpTask: Task<Void, Never>?
     private var imageLoadedPumpTask: Task<Void, Never>?
     private var lastKnownIsEnabled: Bool = false
@@ -127,152 +116,80 @@ public final class RuntimeBackgroundIndexingCoordinator {
         // Drop pending archives too — otherwise a `.batchFinished` whose
         // history hop was waiting on the coalesce window would still land
         // after the user cleared.
-        pendingHistoryAdditions.removeAll()
+        staging.clearPendingHistory()
         historyRelay.accept([])
     }
 
     // MARK: - Event pump (AsyncStream → Relay)
 
     private func startEventPump() {
-        // The class is `@MainActor`, so this Task and its `for await` loop
-        // run on the main actor. `apply(event:)` can be called synchronously
-        // without an extra `MainActor.run` hop.
-        eventPumpTask = Task { [weak self] in
-            guard let self else { return }
-            let stream = await self.engine.backgroundIndexingManager.events
+        // Detached so the `for await` loop and `staging.applyEvent` run off the
+        // main actor. With `maxConcurrency` workers churning, the manager fires
+        // 100+ task events per second; under the previous main-actor pump each
+        // event woke main once even though only the 16ms coalesced flush
+        // actually publishes. Now main only wakes on `flush()` or the immediate
+        // lifecycle flush below.
+        let engine = self.engine
+        eventPumpTask = Task.detached { [weak self] in
+            let stream = await engine.backgroundIndexingManager.events
             for await event in stream {
-                self.apply(event: event)
+                guard let self else { return }
+                self.handleEvent(event, on: engine)
             }
         }
     }
 
-    private func apply(event: RuntimeIndexingEvent) {
-        // Lifecycle events (batch{Started,Finished,Cancelled}) are rare and
-        // user-visible, so they bypass the coalesce window and flush the
-        // current state immediately. Per-task events (task{Started,Finished,
-        // Prioritized}) only schedule a coalesced flush — see
-        // `scheduleCoalescedFlush` for the rate cap.
-        var requiresImmediateFlush = false
+    /// Off-main event entry point. Mutates the lock-protected staging state
+    /// inline, then dispatches the minimal main-actor work the outcome
+    /// requires (immediate flush for lifecycle events, scheduled flush for
+    /// task events, `engine.reloadData` for batch terminations).
+    nonisolated private func handleEvent(_ event: RuntimeIndexingEvent, on engine: RuntimeEngine) {
+        let outcome = staging.applyEvent(event)
 
-        switch event {
-        case .batchStarted(let batch):
-            stagedBatches.append(batch)
-            hasPendingActiveChange = true
-            pendingAggregateRefresh = true
-            requiresImmediateFlush = true
-        case .taskStarted(let id, let path):
-            if mutateTaskItem(batchID: id, path: path, { item in
-                item.state = .running
-            }) {
-                hasPendingActiveChange = true
-                pendingAggregateRefresh = true
-            }
-        case .taskFinished(let id, let path, let result):
-            if mutateTaskItem(batchID: id, path: path, { item in
-                item.state = result
-            }) {
-                hasPendingActiveChange = true
-                pendingAggregateRefresh = true
-            }
-        case .taskPrioritized(let id, let path):
-            // Priority boost doesn't change progress / hasFailure / hasActive,
-            // so we skip the aggregate refresh.
-            if mutateTaskItem(batchID: id, path: path, { item in
-                item.hasPriorityBoost = true
-            }) {
-                hasPendingActiveChange = true
-            }
-        case .batchFinished(let finished):
-            stagedBatches.removeAll { $0.id == finished.id }
-            documentBatchIDs.remove(finished.id)
-            pendingHistoryAdditions.append(finished)
-            hasPendingActiveChange = true
-            pendingAggregateRefresh = true
-            requiresImmediateFlush = true
-            Task { [engine] in
-                await engine.reloadData(isReloadImageNodes: false)
-            }
-        case .batchCancelled(let cancelled):
-            // Cancellation always removes from active. Now also lands in history
-            // so the user can review what got cancelled.
-            stagedBatches.removeAll { $0.id == cancelled.id }
-            documentBatchIDs.remove(cancelled.id)
-            pendingHistoryAdditions.append(cancelled)
-            hasPendingActiveChange = true
-            pendingAggregateRefresh = true
-            requiresImmediateFlush = true
+        if outcome.shouldReloadEngineImages {
+            // Fire-and-forget: each finished/cancelled batch nudges the engine
+            // to reload its non-image-node data. Detached + capture so the
+            // dispatch isn't tied to coordinator isolation.
             Task { [engine] in
                 await engine.reloadData(isReloadImageNodes: false)
             }
         }
 
-        if requiresImmediateFlush {
-            flushPendingUpdates()
-        } else {
-            scheduleCoalescedFlush()
+        if outcome.requiresImmediateFlush {
+            Task { @MainActor [weak self] in
+                self?.flushPendingUpdates()
+            }
+        } else if outcome.didScheduleCoalescedFlush {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: Self.coalesceWindowNanos)
+                self?.flushPendingUpdates()
+            }
         }
     }
 
-    /// Locates `(batchID, path)` inside `stagedBatches` and applies `mutate`
-    /// in place. Returns `true` on a successful hit so the caller can flip
-    /// the appropriate dirty flags. Returns `false` when the batch or item
-    /// can't be found — stale events that arrive after a swap or
-    /// cancellation must not poison the flush state.
-    private func mutateTaskItem(
-        batchID: RuntimeIndexingBatchID,
-        path: String,
-        _ mutate: (inout RuntimeIndexingTaskItem) -> Void
-    ) -> Bool {
-        guard let batchIndex = stagedBatches.firstIndex(where: { $0.id == batchID }),
-              let itemIndex = stagedBatches[batchIndex].items.firstIndex(where: { $0.id == path })
-        else { return false }
-        mutate(&stagedBatches[batchIndex].items[itemIndex])
-        return true
-    }
-
-    /// Asks main-actor to call `flushPendingUpdates` on the next runloop tick
-    /// (~16ms out). Idempotent: bursty events that all arrive inside the
-    /// window collapse into a single publish.
-    private func scheduleCoalescedFlush() {
-        guard !hasScheduledFlush else { return }
-        hasScheduledFlush = true
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: Self.coalesceWindowNanos)
-            self?.flushPendingUpdates()
-        }
-    }
-
-    /// Publishes `stagedBatches` to `batchesRelay`, then drains pending
-    /// `historyAdditions` into `historyRelay`. See the active-then-history
-    /// ordering note: any batch that just transitioned to history must have
-    /// already disappeared from `batchesRelay` before it appears in
-    /// `historyRelay`, otherwise `combineLatest(batches, history)` would emit
-    /// a transient frame with the same `differenceIdentifier` in both
-    /// sections and DifferenceKit's behavior is undefined.
+    /// Drains the staging snapshot to the relays. Always runs on the main
+    /// actor because `BehaviorRelay` subscribers (popover view models) expect
+    /// main-thread delivery; the staging mutations themselves happened off-main.
+    /// See the active-then-history ordering note: any batch that just
+    /// transitioned to history must have already disappeared from
+    /// `batchesRelay` before it appears in `historyRelay`, otherwise
+    /// `combineLatest(batches, history)` would emit a transient frame with
+    /// the same `differenceIdentifier` in both sections and DifferenceKit's
+    /// behavior is undefined.
     private func flushPendingUpdates() {
-        hasScheduledFlush = false
-        guard hasPendingActiveChange || !pendingHistoryAdditions.isEmpty else {
-            return
-        }
-        let activeChanged = hasPendingActiveChange
-        let aggregateChanged = pendingAggregateRefresh
-        hasPendingActiveChange = false
-        pendingAggregateRefresh = false
+        let snapshot = staging.snapshotForFlush()
+        guard snapshot.hasWork else { return }
 
-        if activeChanged {
-            batchesRelay.accept(stagedBatches)
+        if snapshot.activeChanged {
+            batchesRelay.accept(snapshot.batches)
         }
-        if aggregateChanged {
-            refreshAggregate(batches: stagedBatches)
+        if snapshot.aggregateChanged {
+            refreshAggregate(batches: snapshot.batches)
         }
         // Now safe to push history: subscribers see (new batches without
         // finished, new history with finished) — a fully consistent state.
-        if !pendingHistoryAdditions.isEmpty {
-            let toArchive = pendingHistoryAdditions
-            pendingHistoryAdditions = []
-            for batch in toArchive {
-                appendToHistory(batch)
-            }
+        for batch in snapshot.historyAdditions {
+            appendToHistory(batch)
         }
     }
 
@@ -355,11 +272,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
         // 3) Drop UI state — the old engine's batches and history no longer apply.
         //    Also reset the coalescing state so that any flush task currently
         //    sleeping out the 16ms window sees clean buffers when it wakes.
-        documentBatchIDs.removeAll()
-        stagedBatches.removeAll()
-        pendingHistoryAdditions.removeAll()
-        hasPendingActiveChange = false
-        pendingAggregateRefresh = false
+        staging.clearForEngineSwap()
         batchesRelay.accept([])
         historyRelay.accept([])
         refreshAggregate(batches: [])
@@ -416,13 +329,12 @@ extension RuntimeBackgroundIndexingCoordinator {
             // cleaned up; don't pollute `documentBatchIDs` with an id whose
             // manager we no longer drive.
             guard self.engine === engine else { return }
-            self.documentBatchIDs.insert(id)
+            self.staging.insertDocumentBatchID(id)
         }
     }
 
     public func documentWillClose() {
-        let ids = documentBatchIDs
-        documentBatchIDs.removeAll()
+        let ids = staging.takeAllDocumentBatchIDs()
         Task { [engine] in
             for id in ids {
                 await engine.backgroundIndexingManager.cancelBatch(id)
@@ -464,7 +376,7 @@ extension RuntimeBackgroundIndexingCoordinator {
         // id belongs to the old manager and `handleEngineSwap` has already
         // cleared `documentBatchIDs`; don't reintroduce a stale id.
         guard self.engine === engine else { return }
-        self.documentBatchIDs.insert(id)
+        self.staging.insertDocumentBatchID(id)
     }
 
     private func currentBackgroundIndexingSettings() -> Settings.Indexing.BackgroundMode {
@@ -513,3 +425,196 @@ extension RuntimeBackgroundIndexingCoordinator {
     }
 }
 #endif
+
+// MARK: - StagingStore
+
+extension RuntimeBackgroundIndexingCoordinator {
+    /// Outcome of `StagingStore.applyEvent` — tells the coordinator what main-
+    /// actor work the event triggered. Computed under the staging lock so the
+    /// "did I just take ownership of the in-flight flush?" decision is atomic.
+    fileprivate struct ApplyOutcome {
+        var requiresImmediateFlush: Bool = false
+        var didScheduleCoalescedFlush: Bool = false
+        var shouldReloadEngineImages: Bool = false
+    }
+
+    /// Snapshot taken at the start of a flush. The lock is released before the
+    /// coordinator publishes to the relays, so subscribers run unblocked while
+    /// the next batch of events keeps mutating the staging store.
+    fileprivate struct FlushSnapshot {
+        let activeChanged: Bool
+        let aggregateChanged: Bool
+        let batches: [RuntimeIndexingBatch]
+        let historyAdditions: [RuntimeIndexingBatch]
+
+        var hasWork: Bool { activeChanged || aggregateChanged || !historyAdditions.isEmpty }
+    }
+
+    /// Lock-protected staging for `RuntimeBackgroundIndexingCoordinator`.
+    /// Holds everything the off-main event pump touches; the coordinator's
+    /// main-actor methods only see snapshots produced under the same lock.
+    /// `@unchecked Sendable` because synchronization is via `NSLock` rather
+    /// than the data-race detector.
+    fileprivate final class StagingStore: @unchecked Sendable {
+        private let lock = NSLock()
+
+        // All fields below are touched only under `lock`.
+        private var stagedBatches: [RuntimeIndexingBatch] = []
+        private var pendingHistoryAdditions: [RuntimeIndexingBatch] = []
+        private var hasPendingActiveChange = false
+        private var pendingAggregateRefresh = false
+        /// `true` while a `Task { @MainActor } sleep+flush` pair is outstanding.
+        /// Set under the lock when an event causes a coalesced flush to be
+        /// scheduled, cleared under the lock by `snapshotForFlush`. Bursty
+        /// events that all arrive inside the window collapse into a single
+        /// publish exactly as before.
+        private var hasScheduledFlush = false
+        private var documentBatchIDs: Set<RuntimeIndexingBatchID> = []
+
+        /// Mutates the staged state for one event from the manager's
+        /// AsyncStream. Returns the work the coordinator owes to the main
+        /// actor. Stale events that arrive after a swap or cancellation —
+        /// where the batch / item can no longer be located — are dropped
+        /// silently rather than poisoning the dirty flags.
+        func applyEvent(_ event: RuntimeIndexingEvent) -> ApplyOutcome {
+            lock.lock()
+            defer { lock.unlock() }
+
+            var outcome = ApplyOutcome()
+
+            switch event {
+            case .batchStarted(let batch):
+                stagedBatches.append(batch)
+                hasPendingActiveChange = true
+                pendingAggregateRefresh = true
+                outcome.requiresImmediateFlush = true
+            case .taskStarted(let id, let path):
+                if mutateTaskItemLocked(batchID: id, path: path, { item in
+                    item.state = .running
+                }) {
+                    hasPendingActiveChange = true
+                    pendingAggregateRefresh = true
+                }
+            case .taskFinished(let id, let path, let result):
+                if mutateTaskItemLocked(batchID: id, path: path, { item in
+                    item.state = result
+                }) {
+                    hasPendingActiveChange = true
+                    pendingAggregateRefresh = true
+                }
+            case .taskPrioritized(let id, let path):
+                // Priority boost doesn't change progress / hasFailure /
+                // hasActive, so we skip the aggregate refresh.
+                if mutateTaskItemLocked(batchID: id, path: path, { item in
+                    item.hasPriorityBoost = true
+                }) {
+                    hasPendingActiveChange = true
+                }
+            case .batchFinished(let finished):
+                stagedBatches.removeAll { $0.id == finished.id }
+                documentBatchIDs.remove(finished.id)
+                pendingHistoryAdditions.append(finished)
+                hasPendingActiveChange = true
+                pendingAggregateRefresh = true
+                outcome.requiresImmediateFlush = true
+                outcome.shouldReloadEngineImages = true
+            case .batchCancelled(let cancelled):
+                // Cancellation always removes from active. Lands in history
+                // too so the user can review what got cancelled.
+                stagedBatches.removeAll { $0.id == cancelled.id }
+                documentBatchIDs.remove(cancelled.id)
+                pendingHistoryAdditions.append(cancelled)
+                hasPendingActiveChange = true
+                pendingAggregateRefresh = true
+                outcome.requiresImmediateFlush = true
+                outcome.shouldReloadEngineImages = true
+            }
+
+            // Schedule a coalesced flush only when nothing else has staked a
+            // claim on the next-tick wake-up. The immediate-flush path will
+            // pick up the same dirty flags so the scheduled task would be a
+            // duplicate.
+            if !outcome.requiresImmediateFlush, !hasScheduledFlush,
+               hasPendingActiveChange || !pendingHistoryAdditions.isEmpty {
+                hasScheduledFlush = true
+                outcome.didScheduleCoalescedFlush = true
+            }
+
+            return outcome
+        }
+
+        /// Locates `(batchID, path)` and mutates the item in place. Returns
+        /// `true` only on a hit so the caller knows the dirty flags are
+        /// meaningful. Must be called with `lock` already held.
+        private func mutateTaskItemLocked(
+            batchID: RuntimeIndexingBatchID,
+            path: String,
+            _ mutate: (inout RuntimeIndexingTaskItem) -> Void
+        ) -> Bool {
+            guard let batchIndex = stagedBatches.firstIndex(where: { $0.id == batchID }),
+                  let itemIndex = stagedBatches[batchIndex].items.firstIndex(where: { $0.id == path })
+            else { return false }
+            mutate(&stagedBatches[batchIndex].items[itemIndex])
+            return true
+        }
+
+        /// Resets dirty flags + drains pending history under the lock and
+        /// returns the snapshot to publish. `hasScheduledFlush` is cleared
+        /// here so the next event that arrives after the snapshot is taken
+        /// can stake a claim on the *next* coalesced flush.
+        func snapshotForFlush() -> FlushSnapshot {
+            lock.lock()
+            defer { lock.unlock() }
+            let activeChanged = hasPendingActiveChange
+            let aggregateChanged = pendingAggregateRefresh
+            let historyAdditions = pendingHistoryAdditions
+
+            hasPendingActiveChange = false
+            pendingAggregateRefresh = false
+            pendingHistoryAdditions = []
+            hasScheduledFlush = false
+
+            // Snapshot batches only when the flush will actually publish them
+            // — saves an array copy on the priority-boost-only path.
+            let batches = (activeChanged || aggregateChanged) ? stagedBatches : []
+
+            return FlushSnapshot(
+                activeChanged: activeChanged,
+                aggregateChanged: aggregateChanged,
+                batches: batches,
+                historyAdditions: historyAdditions
+            )
+        }
+
+        func clearForEngineSwap() {
+            lock.lock()
+            defer { lock.unlock() }
+            stagedBatches.removeAll()
+            pendingHistoryAdditions.removeAll()
+            hasPendingActiveChange = false
+            pendingAggregateRefresh = false
+            hasScheduledFlush = false
+            documentBatchIDs.removeAll()
+        }
+
+        func clearPendingHistory() {
+            lock.lock()
+            defer { lock.unlock() }
+            pendingHistoryAdditions.removeAll()
+        }
+
+        func insertDocumentBatchID(_ id: RuntimeIndexingBatchID) {
+            lock.lock()
+            defer { lock.unlock() }
+            documentBatchIDs.insert(id)
+        }
+
+        func takeAllDocumentBatchIDs() -> Set<RuntimeIndexingBatchID> {
+            lock.lock()
+            defer { lock.unlock() }
+            let ids = documentBatchIDs
+            documentBatchIDs.removeAll()
+            return ids
+        }
+    }
+}
