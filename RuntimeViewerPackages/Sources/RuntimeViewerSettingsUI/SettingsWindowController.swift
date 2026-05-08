@@ -3,9 +3,9 @@ import SwiftUI
 import UIFoundation
 import RuntimeViewerSettings
 
-public final class SettingsWindow: NSWindow {}
+package final class SettingsWindow: NSWindow {}
 
-public final class SettingsWindowController: XiblessWindowController<SettingsWindow> {
+package final class SettingsWindowController: XiblessWindowController<SettingsWindow> {
     public static let shared = SettingsWindowController()
 
     private lazy var settingsViewController = SettingsViewController()
@@ -70,4 +70,17 @@ extension NSSplitViewItem {
             class_getInstanceMethod(self as AnyClass, collapseSwizzled)!
         )
     }
+}
+
+import Dependencies
+
+extension DependencyValues {
+    package var settingsWindowController: SettingsWindowController {
+        set { self[SettingsWindowControllerKey.self] = newValue }
+        get { self[SettingsWindowControllerKey.self] }
+    }
+}
+
+private enum SettingsWindowControllerKey: DependencyKey {
+    static let liveValue: SettingsWindowController = .shared
 }

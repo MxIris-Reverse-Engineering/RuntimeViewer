@@ -11,9 +11,13 @@ import RuntimeViewerArchitectures
 import RuntimeViewerMCPBridge
 import RuntimeViewerHelperClient
 
+@MainActor
 @Loggable(.private)
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    @Dependency(\.appRouter)
+    private var appRouter
+    
     @Dependency(\.settings)
     private var settings
 
@@ -65,7 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task.detached {
             do {
                 let store = try OSLogStore(scope: .currentProcessIdentifier)
-                let position = store.position(date: Self.launchDate)
+                let position = await store.position(date: Self.launchDate)
                 let entries = try store.getEntries(at: position)
 
                 var content = ""
@@ -148,7 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @IBAction func showSettings(_ sender: Any?) {
-        SettingsWindowController.shared.showWindow(nil)
+        appRouter.trigger(.settings)
     }
 
     @IBAction func showSimulatorInstaller(_ sender: Any?) {

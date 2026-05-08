@@ -14,10 +14,17 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
 
     @Dependency(\.appDefaults)
     public var appDefaults
+    
+    #if os(macOS)
+    @Dependency(\.appRouter)
+    public var appRouter
+    #endif
+    
     #if canImport(RuntimeViewerSettings)
     @Dependency(\.settings)
     public var settings
     #endif
+    
     public let errorRelay = PublishRelay<Error>()
 
     package let _commonLoading = ActivityIndicator()

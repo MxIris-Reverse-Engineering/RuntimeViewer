@@ -1,5 +1,5 @@
 {
-  "originHash" : "a3dd8fcc311882d02a960d48c289a156d4e6905b90262ad225bc4c3c8ced6b64",
+  "originHash" : "559e3422e65f895209b7bc59f592f199a4ce355371a1a367f971bf06b56fc6fd",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
-        "revision" : "d011291f5e8d6430fb91b52296dda50e85dc5c11",
-        "version" : "0.5.2"
+        "revision" : "22f92afb2520417e60a464a6a5abb88621c2b43d",
+        "version" : "0.5.3"
       }
     },
     {
@@ -292,10 +292,10 @@
     {
       "identity" : "swift-memberwise-init-macro",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
+      "location" : "https://github.com/gohanlon/swift-memberwise-init-macro",
       "state" : {
-        "revision" : "6121b169fb5a83d7262a69b640468606f98c6c6e",
-        "version" : "0.5.3-fork.1"
+        "revision" : "d0fb82bb6638051524214fb54524bfcd876735a1",
+        "version" : "0.6.0"
       }
     },
     {

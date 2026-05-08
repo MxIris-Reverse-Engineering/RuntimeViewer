@@ -125,6 +125,16 @@ public actor RuntimeEngineProxyServer {
             try await engine.isImageLoaded(path: path)
         }
 
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.isImageIndexed.commandName) {
+            [engine] (path: String) -> Bool in
+            try await engine.isImageIndexed(path: path)
+        }
+
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.mainExecutablePath.commandName) {
+            [engine] () -> String in
+            try await engine.mainExecutablePath()
+        }
+
         connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimeObjectsInImage.commandName) {
             [engine] (image: String) -> [RuntimeObject] in
             try await engine.objects(in: image)
@@ -143,6 +153,11 @@ public actor RuntimeEngineProxyServer {
         connection.setMessageHandler(name: RuntimeEngine.CommandNames.loadImage.commandName) {
             [engine] (path: String) in
             try await engine.loadImage(at: path)
+        }
+
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.loadImageForBackgroundIndexing.commandName) {
+            [engine] (path: String) in
+            try await engine.loadImageForBackgroundIndexing(at: path)
         }
 
         connection.setMessageHandler(name: RuntimeEngine.CommandNames.imageNameOfClassName.commandName) {

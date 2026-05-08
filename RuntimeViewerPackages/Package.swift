@@ -338,8 +338,8 @@ let package = Package(
             )
         ),
         .package(
-            url: "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
-            from: "0.5.3-fork"
+            url: "https://github.com/gohanlon/swift-memberwise-init-macro",
+            from: "0.6.0"
         ),
         .package(
             url: "https://github.com/pointfreeco/swift-dependencies",

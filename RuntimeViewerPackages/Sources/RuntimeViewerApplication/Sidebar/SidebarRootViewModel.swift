@@ -41,7 +41,16 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
                 return isFilterEmptyNodes ? !$0.isEmpty : true
             }
             .observe(on: ConcurrentDispatchQueueScheduler(qos: .userInteractive))
-            .flatMapLatest { nodes -> [String: SidebarRootCellViewModel] in
+            // `map` (not `flatMapLatest`) — a sync body fed to RxConcurrency's
+            // `flatMapLatest(_:async)` overload is silently wrapped in
+            // `Observable.async { Task { ... } }`, and `Task` inherits the
+            // surrounding `@MainActor` isolation from `ViewModel`. That hop
+            // overrides `.observe(on: ConcurrentDispatchQueueScheduler(...))`
+            // and lands the iterator (which lazy-builds every cell view model
+            // and its NSAttributedString) on the main thread — visible at
+            // ~386ms in time profiles. `map` keeps the work on the background
+            // scheduler we asked for.
+            .map { nodes -> [String: SidebarRootCellViewModel] in
                 #log(.info, "\(Self.self, privacy: .public) Indexing sidebar nodes...")
                 var allNodes: [String: SidebarRootCellViewModel] = [:]
                 for rootNode in nodes {
@@ -95,6 +104,20 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
                 self.router.trigger(.clickedNode(viewModel.node))
                 #endif
             }
+        }
+        .disposed(by: rx.disposeBag)
+
+        // Selecting a leaf node (i.e. an image, not a path-segment folder)
+        // hints the background indexer to prioritize that image's pending
+        // tasks. Non-leaf rows correspond to filesystem path segments and
+        // have no associated image path, so they are filtered out.
+        // Note: `node.path` strips the synthetic root component (e.g.
+        // "Dyld Shared Cache") that prefixes `absolutePath`, yielding the
+        // real dyld image path expected by the indexing manager.
+        input.selectedNode.emitOnNextMainActor { [weak self] viewModel in
+            guard let self else { return }
+            guard viewModel.node.isLeaf else { return }
+            documentState.backgroundIndexingCoordinator.prioritize(imagePath: viewModel.node.path)
         }
         .disposed(by: rx.disposeBag)
 

@@ -570,10 +570,10 @@
     {
       "identity" : "swift-memberwise-init-macro",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
+      "location" : "https://github.com/gohanlon/swift-memberwise-init-macro",
       "state" : {
-        "revision" : "6121b169fb5a83d7262a69b640468606f98c6c6e",
-        "version" : "0.5.3-fork.1"
+        "revision" : "d0fb82bb6638051524214fb54524bfcd876735a1",
+        "version" : "0.6.0"
       }
     },
     {

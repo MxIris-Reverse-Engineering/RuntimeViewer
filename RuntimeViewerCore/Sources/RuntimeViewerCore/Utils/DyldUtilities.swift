@@ -1,7 +1,7 @@
 package import Foundation
 import FoundationToolbox
 import MachO.dyld
-import MachOKit
+package import MachOKit
 
 public struct DyldOpenError: Error {
     public let message: String?
@@ -14,9 +14,25 @@ package enum DyldUtilities {
     package static let removeImageNotification = Notification.Name("com.JH.RuntimeViewerCore.DyldRegisterObserver.removeImageNotification")
 
     package static func patchImagePathForDyld(_ imagePath: String) -> String {
+        patchImagePathForDyld(
+            imagePath,
+            rootPath: ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]
+        )
+    }
+
+    /// Pure overload that takes the dyld root path explicitly so callers
+    /// (and tests) can drive the patching logic without touching process env.
+    ///
+    /// Idempotent: calling repeatedly with the same `rootPath` returns the
+    /// same string after the first invocation. This matters because dyld
+    /// reports already-patched paths in simulator runners — re-patching them
+    /// would produce a doubled prefix like `/sim_root/sim_root/usr/lib/...`.
+    package static func patchImagePathForDyld(_ imagePath: String, rootPath: String?) -> String {
         guard imagePath.starts(with: "/") else { return imagePath }
-        let rootPath = ProcessInfo.processInfo.environment["DYLD_ROOT_PATH"]
         guard let rootPath else { return imagePath }
+        if imagePath == rootPath || imagePath.hasPrefix(rootPath + "/") {
+            return imagePath
+        }
         return rootPath.appending(imagePath)
     }
 
@@ -43,6 +59,61 @@ package enum DyldUtilities {
         return names
     }
 
+    /// Path of the host process's main executable.
+    ///
+    /// Uses `_NSGetExecutablePath()` rather than `imageNames().first` because
+    /// dyld image index 0 is **not** guaranteed to be the host executable when
+    /// the process was launched with `DYLD_INSERT_LIBRARIES`. Xcode injects
+    /// `/Applications/Xcode.app/Contents/Developer/usr/lib/libLogRedirect.dylib`
+    /// during debug runs and that dylib lands at index 0, so `imageNames().first`
+    /// returns Xcode's helper instead of the app binary. Downstream uses
+    /// (BFS root path, `@executable_path/...` rpath expansion) need the real
+    /// executable or every `@rpath/...` resolves against Xcode's directory and
+    /// gets reported as `path unresolved`.
+    package static func mainExecutablePath() -> String {
+        var bufSize: UInt32 = 1024
+        var buf = [CChar](repeating: 0, count: Int(bufSize))
+        if _NSGetExecutablePath(&buf, &bufSize) == 0 {
+            return String(cString: buf)
+        }
+        // bufSize was too small. _NSGetExecutablePath wrote the required size
+        // back into `bufSize`; allocate accordingly and retry.
+        buf = [CChar](repeating: 0, count: Int(bufSize))
+        if _NSGetExecutablePath(&buf, &bufSize) == 0 {
+            return String(cString: buf)
+        }
+        // Last-resort fallback. Won't happen in practice, but better than
+        // returning "" — `@executable_path` expansion downstream prefers an
+        // imperfect path over an empty one.
+        return imageNames().first ?? ""
+    }
+
+    /// Resolves a filesystem path to its loaded `MachOImage`.
+    ///
+    /// For the main executable's path, returns `MachOImage.current()` rather
+    /// than performing a basename lookup. In Debug builds Xcode emits the
+    /// product as a thin stub at `Contents/MacOS/<Name>` plus a sibling
+    /// `<Name>.debug.dylib` that holds the real code; `MachOImage(name:)`
+    /// strips both extensions and matches by basename, so it picks the stub
+    /// (loaded first at dyld index 0) and the caller never sees the actual
+    /// dependency graph or sections. `MachOImage.current(_:)` resolves via
+    /// `#dsohandle` of the calling code, so it always returns the image that
+    /// actually contains our compiled symbols (the `.debug.dylib` in Debug,
+    /// the main executable in statically linked Release).
+    ///
+    /// Uses `mainExecutablePath()` (which goes through `_NSGetExecutablePath`)
+    /// for the main-executable check rather than `imageNames().first`, since
+    /// the latter returns Xcode's injected `libLogRedirect.dylib` under
+    /// `DYLD_INSERT_LIBRARIES` and would skip the `MachOImage.current()`
+    /// branch for the actual host binary path.
+    package static func machOImage(forPath path: String) -> MachOImage? {
+        if path == mainExecutablePath() {
+            return MachOImage.current()
+        }
+        let imageName = path.lastPathComponent.deletingPathExtension.deletingPathExtension
+        return MachOImage(name: imageName)
+    }
+
     package func imagePath(for ptr: UnsafeRawPointer) -> String? {
         var info: Dl_info = .init()
         dladdr(ptr, &info)
@@ -66,7 +137,8 @@ package enum DyldUtilities {
     }
 
     private static var dyldSharedCacheImagePathsCache: [String]?
-    
+    private static var dyldSharedCacheImagePathsSetCache: Set<String>?
+
     private static func dyldSharedCacheImagePaths() -> [String] {
         if let dyldSharedCacheImagePathsCache {
             #log(.debug, "Using cached dyld shared cache image paths (\(dyldSharedCacheImagePathsCache.count, privacy: .public) paths)")
@@ -83,9 +155,36 @@ package enum DyldUtilities {
         return results
     }
 
+    /// Whether `path` corresponds to an image baked into the dyld shared cache.
+    ///
+    /// On Apple Silicon (and recent Intel macOS), system dylibs like
+    /// `/usr/lib/libobjc.A.dylib` have **no on-disk file** ——
+    /// `FileManager.fileExists` returns `false` for them. Callers that need
+    /// to validate "does this image really exist" must check both the
+    /// filesystem and this set.
+    ///
+    /// Lookup is by literal equality against the cache's stored paths. The
+    /// cache stores the platform-native form (`Foundation.framework/Versions/C/Foundation`
+    /// on macOS, `Foundation.framework/Foundation` on iOS); install names that
+    /// use a different form fall through to a real "path unresolved" failure
+    /// rather than being silently rewritten.
+    package static func isInDyldSharedCache(_ path: String) -> Bool {
+        return dyldSharedCacheImagePathsSet().contains(path)
+    }
+
+    private static func dyldSharedCacheImagePathsSet() -> Set<String> {
+        if let dyldSharedCacheImagePathsSetCache {
+            return dyldSharedCacheImagePathsSetCache
+        }
+        let set = Set(dyldSharedCacheImagePaths())
+        dyldSharedCacheImagePathsSetCache = set
+        return set
+    }
+
     package static func invalidDyldSharedCacheImagePathsCache() {
         #log(.debug, "Invalidating dyld shared cache image paths cache")
         dyldSharedCacheImagePathsCache = nil
+        dyldSharedCacheImagePathsSetCache = nil
     }
 
     package static var dyldSharedCacheImageRootNode: RuntimeImageNode {

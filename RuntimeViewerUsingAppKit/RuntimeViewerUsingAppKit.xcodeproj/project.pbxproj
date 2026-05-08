@@ -74,6 +74,10 @@
 		E9A9D7F62F5F110300A10DD3 /* MCPStatusPopoverViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A9D7F52F5F110300A10DD3 /* MCPStatusPopoverViewController.swift */; };
 		E9AA36222C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */; };
 		E9B4C6562F35E9C800823FE0 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9B4C6542F35E9C800823FE0 /* main.swift */; };
+		E9BD1A112FA000020000ABCD /* BackgroundIndexingNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9BD1A102FA000010000ABCD /* BackgroundIndexingNode.swift */; };
+		E9BD1A132FA000040000ABCD /* BackgroundIndexingPopoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9BD1A122FA000030000ABCD /* BackgroundIndexingPopoverViewModel.swift */; };
+		E9BD1A172FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9BD1A162FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift */; };
+		E9BD1A1B2FA0000A0000ABCD /* BackgroundIndexingToolbarItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9BD1A1A2FA000090000ABCD /* BackgroundIndexingToolbarItem.swift */; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9C9E9DD2C2D169D00C4AA34 /* AppKitPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */; };
 		E9C9E9DE2C2D169D00C4AA34 /* AppKitPluginImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C9E9DC2C2D169D00C4AA34 /* AppKitPluginImpl.swift */; };
@@ -283,6 +287,10 @@
 		E9A9D7F52F5F110300A10DD3 /* MCPStatusPopoverViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPStatusPopoverViewController.swift; sourceTree = "<group>"; };
 		E9AA36212C3089AB00A9B2E4 /* InspectorPlaceholderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPlaceholderViewController.swift; sourceTree = "<group>"; };
 		E9B4C6542F35E9C800823FE0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		E9BD1A102FA000010000ABCD /* BackgroundIndexingNode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundIndexingNode.swift; sourceTree = "<group>"; };
+		E9BD1A122FA000030000ABCD /* BackgroundIndexingPopoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundIndexingPopoverViewModel.swift; sourceTree = "<group>"; };
+		E9BD1A162FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundIndexingPopoverViewController.swift; sourceTree = "<group>"; };
+		E9BD1A1A2FA000090000ABCD /* BackgroundIndexingToolbarItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundIndexingToolbarItem.swift; sourceTree = "<group>"; };
 		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Config.xcconfig; path = ../Configurations/RuntimeViewerService/Config.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9C9E9CE2C2D10C600C4AA34 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9C9E9DB2C2D169D00C4AA34 /* AppKitPlugin.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitPlugin.swift; sourceTree = "<group>"; };
@@ -425,6 +433,7 @@
 				E97544A22C42D0F600CC9DDD /* Load Frameworks */,
 				E94E36C42CF84A9F006101C8 /* Attach Process */,
 				E9A9D8032F5F254800A10DD3 /* MCP */,
+				E9BD1A142FA000050000ABCD /* BackgroundIndexing */,
 				E92CB2E52F41E7560091450B /* Exporting */,
 				E9CE07BF2C14981D0070A6E8 /* Utils */,
 				E94E36C72CF87BBC006101C8 /* Resources */,
@@ -520,6 +529,17 @@
 				E9B4C6542F35E9C800823FE0 /* main.swift */,
 			);
 			path = com.mxiris.runtimeviewer.service;
+			sourceTree = "<group>";
+		};
+		E9BD1A142FA000050000ABCD /* BackgroundIndexing */ = {
+			isa = PBXGroup;
+			children = (
+				E9BD1A102FA000010000ABCD /* BackgroundIndexingNode.swift */,
+				E9BD1A122FA000030000ABCD /* BackgroundIndexingPopoverViewModel.swift */,
+				E9BD1A162FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift */,
+				E9BD1A1A2FA000090000ABCD /* BackgroundIndexingToolbarItem.swift */,
+			);
+			path = BackgroundIndexing;
 			sourceTree = "<group>";
 		};
 		E9CE07BA2C1497EA0070A6E8 /* Base */ = {
@@ -950,6 +970,10 @@
 				E9935B972F448910006DB4EC /* ExportingCompletionViewController.swift in Sources */,
 				E94330182C0DA62500362862 /* SidebarRootDirectoryViewController.swift in Sources */,
 				E96BF91D2F60541F009C40D2 /* MCPStatusPopoverViewModel.swift in Sources */,
+				E9BD1A112FA000020000ABCD /* BackgroundIndexingNode.swift in Sources */,
+				E9BD1A132FA000040000ABCD /* BackgroundIndexingPopoverViewModel.swift in Sources */,
+				E9BD1A172FA000060000ABCD /* BackgroundIndexingPopoverViewController.swift in Sources */,
+				E9BD1A1B2FA0000A0000ABCD /* BackgroundIndexingToolbarItem.swift in Sources */,
 				E9F11E0B2F123EEC0052B0A3 /* SidebarRootCoordinator.swift in Sources */,
 				E921246B2F447BA1007481E4 /* ExportingConfigurationViewModel.swift in Sources */,
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,

@@ -1,5 +1,5 @@
 {
-  "originHash" : "bd4df935af2b5e4cf487388024217ae88b99653ca258a531474c95182210beb3",
+  "originHash" : "3fdd53e06571765e2b65cf3bf5203e39ef3c8fde743ea292edb370feb83f27c3",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -94,10 +94,10 @@
     {
       "identity" : "frameworktoolbox",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
+      "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
-        "revision" : "d011291f5e8d6430fb91b52296dda50e85dc5c11",
-        "version" : "0.5.2"
+        "revision" : "22f92afb2520417e60a464a6a5abb88621c2b43d",
+        "version" : "0.5.3"
       }
     },
     {
@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
       "state" : {
-        "revision" : "c152c1915f60c51e4afa0752656993ee5b3c63db",
-        "version" : "8.8.1"
+        "revision" : "cf8be20d07654570554c8a8a4952bc8a5766a8b0",
+        "version" : "8.9.0"
       }
     },
     {
@@ -254,6 +254,24 @@
       }
     },
     {
+      "identity" : "runningapplicationkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
+      "state" : {
+        "revision" : "5ff991e2b32445cebce2514fbc428594dfa092cd",
+        "version" : "0.3.2"
+      }
+    },
+    {
+      "identity" : "rxappkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/RxAppKit",
+      "state" : {
+        "revision" : "e4ea5c272acdc4f1c220bcc0a44d79cebf1ed98b",
+        "version" : "0.3.1"
+      }
+    },
+    {
       "identity" : "rxcombine",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/CombineCommunity/RxCombine",
@@ -294,8 +312,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
       "state" : {
-        "revision" : "4f3ab85a5ce982d430265004e588e4c7da748d06",
-        "version" : "0.2.2"
+        "revision" : "d40a7d551b58ce3006eaabcaa3721b99db72ea78",
+        "version" : "0.2.3"
       }
     },
     {
@@ -517,10 +535,10 @@
     {
       "identity" : "swift-memberwise-init-macro",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/swift-memberwise-init-macro",
+      "location" : "https://github.com/gohanlon/swift-memberwise-init-macro",
       "state" : {
-        "revision" : "6121b169fb5a83d7262a69b640468606f98c6c6e",
-        "version" : "0.5.3-fork.1"
+        "revision" : "d0fb82bb6638051524214fb54524bfcd876735a1",
+        "version" : "0.6.0"
       }
     },
     {
@@ -614,6 +632,15 @@
       }
     },
     {
+      "identity" : "uifoundation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/UIFoundation",
+      "state" : {
+        "revision" : "d7c490fd668e26ccf82e1776ce77c32e4ca8f3e3",
+        "version" : "0.5.1"
+      }
+    },
+    {
       "identity" : "uxkitcoordinator",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
@@ -627,8 +654,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mxcl/Version",
       "state" : {
-        "revision" : "67ce582bb9de70e1eb2ee41fd71aad3b5f86d97b",
-        "version" : "2.2.0"
+        "revision" : "3043fcd2a50375db76d89ff206a612471833d1c2",
+        "version" : "2.2.1"
       }
     },
     {
