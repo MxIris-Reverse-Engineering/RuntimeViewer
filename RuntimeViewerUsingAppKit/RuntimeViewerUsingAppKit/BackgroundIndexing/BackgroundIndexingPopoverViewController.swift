@@ -6,7 +6,9 @@ import RuntimeViewerUI
 import RxCocoa
 import RxSwift
 import SnapKit
+import FoundationToolbox
 
+@Loggable
 final class BackgroundIndexingPopoverViewController: UXKitViewController<BackgroundIndexingPopoverViewModel> {
     // MARK: - Relays
 
@@ -224,12 +226,13 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 
         output.nodes.driveOnNext { [weak self] nodes in
             guard let self else { return }
+//            #log(.fault, "Nodes Update")
             // Auto-expand only the ACTIVE section and its batches. HISTORY stays
             // collapsed by default; once the user expands it, NSOutlineView
             // preserves that state across diffs (the section identifier is
             // kind-only, see BackgroundIndexingNode.differenceIdentifier).
             for node in nodes {
-                if case .section(.active, _) = node {
+                if case .section(.active, _) = node, !outlineView.isItemExpanded(node) {
                     outlineView.expandItem(node, expandChildren: true)
                 }
             }
