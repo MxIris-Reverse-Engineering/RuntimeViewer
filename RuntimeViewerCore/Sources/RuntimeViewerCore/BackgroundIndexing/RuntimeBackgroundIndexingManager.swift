@@ -126,7 +126,15 @@ public actor RuntimeBackgroundIndexingManager {
         activeBatches[id] = state
         continuation.yield(.batchStarted(batch))
 
-        let drivingTask = Task { [weak self] in
+        // `.utility` so the kernel's QoS-aware scheduler lets the main thread
+        // preempt indexing work during user interaction. Without an explicit
+        // priority this task inherits the caller's (`@MainActor` coordinator
+        // → `.userInitiated`), which puts indexing in the same QoS band as
+        // window-drag CGS round-trips and CA Transaction commits — observable
+        // as titlebar-drag jank while indexing runs. `.utility` keeps the
+        // semantics ("user knows it's running") without competing with
+        // interactive work.
+        let drivingTask = Task(priority: .utility) { [weak self] in
             guard let self else { return }
             await self.runBatch(id: id)
         }
@@ -247,7 +255,11 @@ public actor RuntimeBackgroundIndexingManager {
                     break
                 }
                 if Task.isCancelled { wasCancelled = true; break }
-                group.addTask { [weak self] in
+                // Mirror the parent driving task's `.utility` priority: child
+                // tasks inherit the parent here, but spelling it out makes the
+                // QoS contract explicit and guards against future changes that
+                // might wrap `runBatch` in a higher-priority Task.
+                group.addTask(priority: .utility) { [weak self] in
                     defer { semaphore.signal() }
                     await self?.runSingleIndex(batchID: id, path: path)
                 }
