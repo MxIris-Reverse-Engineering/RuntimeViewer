@@ -6,7 +6,7 @@ import RuntimeViewerArchitectures
 import MemberwiseInit
 
 @Loggable(.private)
-public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
+public final class InspectorClassViewModel: ViewModel<InspectorRuntimeObjectRoute> {
     @Observed
     private var runtimeObject: RuntimeObject
 
@@ -30,7 +30,7 @@ public final class InspectorClassViewModel: ViewModel<InspectorRoute> {
         )
     }
 
-    public init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<InspectorRoute>) {
+    public init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<InspectorRuntimeObjectRoute>) {
         self.runtimeObject = runtimeObject
         super.init(documentState: documentState, router: router)
     }

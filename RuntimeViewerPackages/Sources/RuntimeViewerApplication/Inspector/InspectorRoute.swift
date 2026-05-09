@@ -23,3 +23,22 @@ public enum InspectorRoute: Routable {
     /// `documentState.selectedRuntimeObject` (which the sidebar mirrors).
     case selectRuntimeObject(RuntimeObject)
 }
+
+#if os(macOS)
+@AssociatedValue(.public)
+@CaseCheckable(.public)
+public enum InspectorRuntimeObjectRoute: Routable {
+    case initial
+    case classHierarchy
+    case specialization
+    /// Forwarded up to `InspectorCoordinator` so it can re-trigger
+    /// `InspectorRoute.requestSpecializationSheet` on itself, which
+    /// `MainCoordinator` already listens for.
+    case requestSpecializationSheet(RuntimeObject)
+    /// Forwarded up to `InspectorCoordinator` so it can re-trigger
+    /// `InspectorRoute.selectRuntimeObject` on itself.
+    case selectRuntimeObject(RuntimeObject)
+}
+#else
+public typealias InspectorRuntimeObjectRoute = InspectorRoute
+#endif

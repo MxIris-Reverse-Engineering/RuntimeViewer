@@ -22,6 +22,10 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
 
     let documentState: DocumentState
 
+    private var runtimeObjectCoordinators: [InspectorRuntimeObjectCoordinator] = []
+
+    private var childEventDisposeBag = DisposeBag()
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
@@ -30,15 +34,15 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
     override func prepareTransition(for route: InspectorRoute) -> InspectorTransition {
         switch route {
         case .placeholder:
-            let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
-            let viewController = InspectorPlaceholderViewController()
-            viewController.setupBindings(for: viewModel)
-            return .set([viewController], animated: true)
+            resetRuntimeObjectStack()
+            return .set([makePlaceholder()], animated: true)
         case .root(let inspectableObject):
-            return .set([makeTransition(for: inspectableObject)], animated: true)
+            resetRuntimeObjectStack()
+            return .set([makePresentable(for: inspectableObject)], animated: true)
         case .next(let inspectableObject):
-            return .push(makeTransition(for: inspectableObject), animated: true)
+            return .push(makePresentable(for: inspectableObject), animated: true)
         case .back:
+            runtimeObjectCoordinators.popLast()?.removeFromParent()
             return .pop(animated: true)
         case .requestSpecializationSheet(let object):
             delegate?.inspectorCoordinator(self, requestSpecializationSheetFor: object)
@@ -49,85 +53,49 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
         }
     }
 
-    func makeTransition(for inspectableObject: InspectableObject) -> UXViewController {
+    private func makePresentable(for inspectableObject: InspectableObject) -> Presentable {
         switch inspectableObject {
         case .node:
             return makePlaceholder()
         case .object(let runtimeObject):
-            switch runtimeObject.kind {
-            case .objc(.type(.class)):
-                let viewModel = InspectorClassViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
-                let viewController = InspectorClassViewController()
-                viewController.setupBindings(for: viewModel)
-                return viewController
-            case .swift(.type):
-                let isClass: Bool
-                if case .swift(.type(.class)) = runtimeObject.kind {
-                    isClass = true
-                } else {
-                    isClass = false
-                }
-                let isGeneric = runtimeObject.properties.contains(.isGeneric)
-                let isSpecialized = runtimeObject.properties.contains(.isSpecialized)
-                let needsHierarchy = isClass
-                let needsSpecialization = isGeneric && !isSpecialized
-
-                if needsHierarchy && needsSpecialization {
-                    let hierarchyViewController = makeSwiftHierarchyViewController(for: runtimeObject)
-                    let specializationViewController = makeSwiftSpecializationViewController(for: runtimeObject)
-                    let tabViewController = InspectorSwiftTypeViewController()
-                    tabViewController.setTabViewItems([
-                        TabViewItem(
-                            normalSymbol: .init(systemName: .squareStack3dUp),
-                            selectedSymbol: .init(systemName: .squareStack3dUpFill),
-                            viewController: hierarchyViewController
-                        ),
-                        TabViewItem(
-                            normalSymbol: .init(systemName: .curlybracesSquare),
-                            selectedSymbol: .init(systemName: .curlybracesSquareFill),
-                            viewController: specializationViewController
-                        ),
-                    ])
-                    return tabViewController
-                }
-                if needsHierarchy {
-                    return makeSwiftHierarchyViewController(for: runtimeObject)
-                }
-                if needsSpecialization {
-                    return makeSwiftSpecializationViewController(for: runtimeObject)
-                }
-                return makePlaceholder()
-            default:
+            guard InspectorRuntimeObjectCoordinator.canInspect(runtimeObject) else {
                 return makePlaceholder()
             }
+            let runtimeObjectCoordinator = InspectorRuntimeObjectCoordinator(
+                documentState: documentState,
+                runtimeObject: runtimeObject
+            )
+            bind(runtimeObjectCoordinator: runtimeObjectCoordinator)
+            runtimeObjectCoordinators.append(runtimeObjectCoordinator)
+            return runtimeObjectCoordinator
         }
+    }
+
+    private func bind(runtimeObjectCoordinator: InspectorRuntimeObjectCoordinator) {
+        runtimeObjectCoordinator.rx.didCompleteTransition()
+            .subscribeOnNext { [weak self] route in
+                guard let self else { return }
+                switch route {
+                case .requestSpecializationSheet(let object):
+                    trigger(.requestSpecializationSheet(object))
+                case .selectRuntimeObject(let object):
+                    trigger(.selectRuntimeObject(object))
+                default:
+                    break
+                }
+            }
+            .disposed(by: childEventDisposeBag)
+    }
+
+    private func resetRuntimeObjectStack() {
+        runtimeObjectCoordinators.forEach { $0.removeFromParent() }
+        runtimeObjectCoordinators.removeAll()
+        childEventDisposeBag = DisposeBag()
     }
 
     private func makePlaceholder() -> UXViewController {
         let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
         let viewController = InspectorPlaceholderViewController()
-        viewController.setupBindings(for: viewModel)
-        return viewController
-    }
-
-    private func makeSwiftHierarchyViewController(for runtimeObject: RuntimeObject) -> UXViewController {
-        let viewModel = InspectorClassViewModel(
-            runtimeObject: runtimeObject,
-            documentState: documentState,
-            router: self
-        )
-        let viewController = InspectorClassViewController()
-        viewController.setupBindings(for: viewModel)
-        return viewController
-    }
-
-    private func makeSwiftSpecializationViewController(for runtimeObject: RuntimeObject) -> UXViewController {
-        let viewModel = InspectorSwiftSpecializationViewModel(
-            runtimeObject: runtimeObject,
-            documentState: documentState,
-            router: self
-        )
-        let viewController = InspectorSwiftSpecializationViewController()
         viewController.setupBindings(for: viewModel)
         return viewController
     }

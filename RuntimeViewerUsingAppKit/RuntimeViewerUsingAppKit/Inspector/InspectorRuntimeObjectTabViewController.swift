@@ -4,4 +4,4 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-final class InspectorSwiftTypeViewController: TabViewController {}
+final class InspectorRuntimeObjectTabViewController: TabViewController {}
