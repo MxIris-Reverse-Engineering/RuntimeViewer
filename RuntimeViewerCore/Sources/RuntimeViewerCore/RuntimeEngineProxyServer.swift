@@ -170,6 +170,16 @@ public actor RuntimeEngineProxyServer {
             try await engine.memberAddresses(for: request.object, memberName: request.memberName)
         }
 
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.specializationRequest.commandName) {
+            [engine] (object: RuntimeObject) -> RuntimeSpecializationRequest in
+            try await engine.specializationRequest(for: object)
+        }
+
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.specialize.commandName) {
+            [engine] (request: RuntimeEngine.SpecializeRequest) -> RuntimeObject in
+            try await engine.specialize(request.object, with: request.selection)
+        }
+
         #if canImport(AppKit)
         let engineSource = engine.source
         connection.setMessageHandler(name: Self.iconRequestCommand) {

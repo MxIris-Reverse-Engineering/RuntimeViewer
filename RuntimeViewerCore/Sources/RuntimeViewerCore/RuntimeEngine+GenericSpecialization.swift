@@ -1,0 +1,67 @@
+import Foundation
+
+// MARK: - User-driven Generic Specialization
+
+extension RuntimeEngine {
+    /// Build a `RuntimeSpecializationRequest` for a generic Swift type so the
+    /// caller can collect a user selection (concrete arguments) before invoking
+    /// `specialize(_:with:)`.
+    ///
+    /// Bridges to `RuntimeSwiftSection` on the local arm; on a client engine
+    /// the request is forwarded to the connected server that owns the indexer.
+    /// The wire format is built from public Codable types
+    /// (`RuntimeSpecializationRequest`) so the client does not need
+    /// `@_spi(Support) SwiftInterface` to deserialize the response.
+    public func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
+        try await request {
+            guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath) else {
+                throw EngineError.imageNotIndexed(imagePath: object.imagePath)
+            }
+            return try await swiftSection.specializationRequest(for: object)
+        } remote: { senderConnection in
+            try await senderConnection.sendMessage(name: .specializationRequest, request: object)
+        }
+    }
+
+    /// Specialize the given generic Swift type and register the resulting
+    /// concrete `TypeDefinition` as a child of the original generic. Returns
+    /// the new `RuntimeObject` representing the specialization so the caller
+    /// can synchronously update selection state (e.g. drive
+    /// `documentState.selectedRuntimeObject` to the new node) without waiting
+    /// for the sidebar reload to settle.
+    ///
+    /// Triggers `reloadData(isReloadImageNodes: false)` on the local arm so
+    /// the sidebar picks up the new specialized child via the standard
+    /// `objects(in:)` path; on the server arm the same reload notification
+    /// is forwarded to any connected client.
+    @discardableResult
+    public func specialize(
+        _ object: RuntimeObject,
+        with selection: RuntimeSpecializationSelection
+    ) async throws -> RuntimeObject {
+        try await specialize(for: .init(object: object, selection: selection))
+    }
+
+    /// Internal (rather than `private`) so that
+    /// `RuntimeEngine.setMessageHandlerBinding(forName:of:to:)` in `RuntimeEngine.swift`
+    /// can reference `$0.specialize(for:)` across files. `private` extension
+    /// members are only visible within the file declaring the extension.
+    @discardableResult
+    func specialize(for request: SpecializeRequest) async throws -> RuntimeObject {
+        try await self.request {
+            guard let swiftSection = await swiftSectionFactory.existingSection(for: request.object.imagePath) else {
+                throw EngineError.imageNotIndexed(imagePath: request.object.imagePath)
+            }
+            let runtimeObject = try await swiftSection.specialize(for: request.object, with: request.selection)
+            reloadData(isReloadImageNodes: false)
+            return runtimeObject
+        } remote: { senderConnection in
+            try await senderConnection.sendMessage(name: .specialize, request: request)
+        }
+    }
+
+    struct SpecializeRequest: Codable, Sendable {
+        let object: RuntimeObject
+        let selection: RuntimeSpecializationSelection
+    }
+}

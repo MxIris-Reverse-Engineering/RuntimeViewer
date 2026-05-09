@@ -9,10 +9,16 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     
     public struct Properties: OptionSet, Codable, Hashable, Sendable {
         public let rawValue: Int
-        
+
         public init(rawValue: Int) { self.rawValue = rawValue }
-        
+
         public static let isGeneric = Self(rawValue: 1 << 0)
+
+        /// Marks a runtime object that was produced by user-driven specialization
+        /// of a generic Swift type. The corresponding TypeDefinition carries a
+        /// non-nil `metadata` and is rendered with concrete generic arguments
+        /// substituted in.
+        public static let isSpecialized = Self(rawValue: 1 << 1)
     }
     
     public let name: String

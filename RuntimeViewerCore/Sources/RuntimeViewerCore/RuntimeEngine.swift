@@ -68,6 +68,8 @@ public actor RuntimeEngine {
         case engineList
         case engineListChanged
         case objectsLoadingProgress
+        case specializationRequest
+        case specialize
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
@@ -315,6 +317,8 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
         setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
+        setMessageHandlerBinding(forName: .specializationRequest, of: self) { $0.specializationRequest(for:) }
+        setMessageHandlerBinding(forName: .specialize, of: self) { $0.specialize(for:) }
         setMessageHandlerBinding(forName: .engineList) { _ -> [RemoteEngineDescriptor] in
             #log(.debug, "[EngineMirroring] engineList handler called, provider set: \(RuntimeEngine.engineListProvider != nil, privacy: .public)")
             let result = await RuntimeEngine.engineListProvider?() ?? []
@@ -506,7 +510,30 @@ public actor RuntimeEngine {
 // MARK: - Requests
 
 extension RuntimeEngine {
-    enum RequestError: Error {
+    public enum EngineError: Swift.Error, LocalizedError {
+        case imageNotIndexed(imagePath: String)
+        case typeNotGeneric
+        case unsupportedGenericParameter(description: String)
+        case specializationParameterNotFound(name: String)
+        case specializationCandidateNotFound(parameterName: String, candidateDisplayName: String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .imageNotIndexed(let imagePath):
+                return "Image is not indexed: \(imagePath)"
+            case .typeNotGeneric:
+                return "This type is not generic."
+            case .unsupportedGenericParameter(let description):
+                return description
+            case .specializationParameterNotFound(let name):
+                return "Specialization parameter not found: \(name)"
+            case .specializationCandidateNotFound(let parameterName, let candidateDisplayName):
+                return "Candidate '\(candidateDisplayName)' is not available for parameter '\(parameterName)' in this image's index."
+            }
+        }
+    }
+
+    enum RequestError: Swift.Error {
         case senderConnectionIsLose
     }
 
