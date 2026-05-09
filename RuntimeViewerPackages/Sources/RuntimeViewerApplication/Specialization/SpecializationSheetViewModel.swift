@@ -1,3 +1,5 @@
+#if os(macOS)
+
 import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
@@ -149,3 +151,6 @@ public final class SpecializationSheetViewModel: ViewModel<SpecializationRoute> 
         }
     }
 }
+
+
+#endif

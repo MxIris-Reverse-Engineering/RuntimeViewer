@@ -8,7 +8,6 @@ typealias SpecializationTransition = Transition<SpecializationSheetWindowControl
 
 @Loggable(.private)
 final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, SpecializationTransition> {
-
     protocol Delegate: AnyObject {
         func specializationCoordinator(
             _ coordinator: SpecializationCoordinator,
@@ -41,8 +40,8 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
         let viewController = SpecializationSheetViewController()
         viewController.setupBindings(for: viewModel)
         windowController.contentViewController = viewController
-        sheetViewModel = viewModel
-        sheetViewController = viewController
+        self.sheetViewModel = viewModel
+        self.sheetViewController = viewController
     }
 
     override func prepareTransition(for route: SpecializationRoute) -> SpecializationTransition {

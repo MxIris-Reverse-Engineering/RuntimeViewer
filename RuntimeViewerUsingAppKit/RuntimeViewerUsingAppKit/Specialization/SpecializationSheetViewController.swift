@@ -6,7 +6,6 @@ import RuntimeViewerApplication
 import SnapKit
 
 final class SpecializationSheetViewController: AppKitViewController<SpecializationSheetViewModel> {
-
     // MARK: - Relays
 
     private let cancelClickedRelay = PublishRelay<Void>()
@@ -163,7 +162,8 @@ final class SpecializationSheetViewController: AppKitViewController<Specializati
 
     private func applyLoadState(_ state: SpecializationSheetViewModel.LoadState) {
         switch state {
-        case .idle, .loading:
+        case .idle,
+             .loading:
             statusLabel.stringValue = "Loading…"
             statusLabel.isHidden = false
             formContainer.isHidden = true
@@ -247,6 +247,7 @@ extension SpecializationSheetViewController {
             chooseButton.action = #selector(chooseClicked)
         }
 
+        @available(*, unavailable)
         required init?(coder: NSCoder) {
             fatalError("init(coder:) has not been implemented")
         }
