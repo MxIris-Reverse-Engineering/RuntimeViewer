@@ -39,6 +39,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             sidebarCoordinator = SidebarCoordinator(documentState: documentState)
             contentCoordinator = ContentCoordinator(documentState: documentState)
             inspectorCoordinator = InspectorCoordinator(documentState: documentState)
+            inspectorCoordinator.delegate = self
             bindChildEvents()
             viewModel.completeTransition = sidebarCoordinator.rx.didCompleteTransition()
             windowController.setupBindings(for: viewModel)
@@ -89,6 +90,14 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             guard let exportingCoordinator = ExportingCoordinator(documentState: documentState) else { return .none() }
             addChild(exportingCoordinator)
             return .beginSheet(exportingCoordinator)
+        case .beginSpecializationSheet(let object):
+            let specializationCoordinator = SpecializationCoordinator(
+                documentState: documentState,
+                runtimeObject: object
+            )
+            specializationCoordinator.delegate = self
+            addChild(specializationCoordinator)
+            return .beginSheet(specializationCoordinator)
         }
     }
 
@@ -109,6 +118,8 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             lateResponderRegistry.initialResponder
         }
     }
+
+    // MARK: - Child coordinator delegates
 
     private func bindChildEvents() {
         childEventDisposeBag = DisposeBag()
@@ -154,5 +165,35 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 }
             }
             .disposed(by: childEventDisposeBag)
+    }
+}
+
+// MARK: - Inspector / Specialization delegate plumbing
+
+extension MainCoordinator: InspectorCoordinator.Delegate {
+    func inspectorCoordinator(
+        _: InspectorCoordinator,
+        requestSpecializationSheetFor object: RuntimeObject
+    ) {
+        contextTrigger(.beginSpecializationSheet(object))
+    }
+
+    func inspectorCoordinator(
+        _: InspectorCoordinator,
+        selectRuntimeObject object: RuntimeObject
+    ) {
+        // Routing through `.select(_)` reuses the existing content + inspector
+        // update path so the specialized child becomes the active selection
+        // without manual fan-out.
+        contextTrigger(.select(object))
+    }
+}
+
+extension MainCoordinator: SpecializationCoordinator.Delegate {
+    func specializationCoordinator(
+        _: SpecializationCoordinator,
+        didProduce specialized: RuntimeObject
+    ) {
+        contextTrigger(.select(specialized))
     }
 }
