@@ -88,8 +88,7 @@ actor RuntimeSwiftSection {
     /// indexer reference is captured exactly once and the caches built by
     /// repeated `findCandidates` invocations stay warm across user
     /// interactions.
-    private lazy var specializer: GenericSpecializer<MachOImage> =
-        GenericSpecializer(indexer: indexer)
+    private lazy var specializer: GenericSpecializer<MachOImage> = .init(machO: machO, conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer), indexer: factory.indexer)
 
     private enum InterfaceDefinitionName {
         case rootType(SwiftInterface.TypeName)
@@ -902,6 +901,10 @@ actor RuntimeSwiftSection {
         #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
         return hierarchy
     }
+    
+    fileprivate func setupForFactory(_ factory: RuntimeSwiftSectionFactory) {
+        factory.indexer.addSubIndexer(indexer)
+    }
 }
 
 extension SwiftInterface.TypeName {
@@ -1009,8 +1012,15 @@ extension SemanticString {
 
 @Loggable(.private)
 actor RuntimeSwiftSectionFactory {
+    
+    let indexer: SwiftInterfaceIndexer<MachOImage>
+    
     private var sections: [String: RuntimeSwiftSection] = [:]
 
+    init() {
+        indexer = .init(configuration: .init(), eventHandlers: [], in: .current())
+    }
+    
     func existingSection(for imagePath: String) -> RuntimeSwiftSection? {
         sections[imagePath]
     }
@@ -1027,6 +1037,7 @@ actor RuntimeSwiftSectionFactory {
         #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
         let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
         sections[imagePath] = section
+        await section.setupForFactory(self)
         #log(.debug, "Swift section created and cached")
         return (false, section)
     }
