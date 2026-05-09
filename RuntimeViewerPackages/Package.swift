@@ -148,6 +148,17 @@ let package = Package(
             path: "../RuntimeViewerCore"
         ),
         .package(
+            local: .package(
+                path: "../../MachOSwiftSection",
+                isRelative: true,
+                isEnabled: usingLocalDependencies
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
+                from: "0.8.1"
+            )
+        ),
+        .package(
             url: "https://github.com/ChimeHQ/Rearrange.git",
             from: "2.0.0"
         ),
