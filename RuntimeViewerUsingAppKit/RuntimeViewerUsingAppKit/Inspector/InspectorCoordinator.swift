@@ -69,18 +69,32 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
                 }
                 let isGeneric = runtimeObject.properties.contains(.isGeneric)
                 let isSpecialized = runtimeObject.properties.contains(.isSpecialized)
-                // Show the Swift-type inspector when there is something
-                // meaningful to display: any class type (Hierarchy panel) or a
-                // not-yet-specialized generic value type (Specialization tab).
-                if isClass || (isGeneric && !isSpecialized) {
-                    let viewModel = InspectorSwiftTypeViewModel(
-                        runtimeObject: runtimeObject,
-                        documentState: documentState,
-                        router: self
-                    )
-                    let viewController = InspectorSwiftTypeViewController()
-                    viewController.setupBindings(for: viewModel)
-                    return viewController
+                let needsHierarchy = isClass
+                let needsSpecialization = isGeneric && !isSpecialized
+
+                if needsHierarchy && needsSpecialization {
+                    let hierarchyViewController = makeSwiftHierarchyViewController(for: runtimeObject)
+                    let specializationViewController = makeSwiftSpecializationViewController(for: runtimeObject)
+                    let tabViewController = InspectorSwiftTypeViewController()
+                    tabViewController.setTabViewItems([
+                        TabViewItem(
+                            normalSymbol: .init(systemName: .squareStack3dUp),
+                            selectedSymbol: .init(systemName: .squareStack3dUpFill),
+                            viewController: hierarchyViewController
+                        ),
+                        TabViewItem(
+                            normalSymbol: .init(systemName: .curlybracesSquare),
+                            selectedSymbol: .init(systemName: .curlybracesSquareFill),
+                            viewController: specializationViewController
+                        ),
+                    ])
+                    return tabViewController
+                }
+                if needsHierarchy {
+                    return makeSwiftHierarchyViewController(for: runtimeObject)
+                }
+                if needsSpecialization {
+                    return makeSwiftSpecializationViewController(for: runtimeObject)
                 }
                 return makePlaceholder()
             default:
@@ -92,6 +106,28 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
     private func makePlaceholder() -> UXViewController {
         let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
         let viewController = InspectorPlaceholderViewController()
+        viewController.setupBindings(for: viewModel)
+        return viewController
+    }
+
+    private func makeSwiftHierarchyViewController(for runtimeObject: RuntimeObject) -> UXViewController {
+        let viewModel = InspectorClassViewModel(
+            runtimeObject: runtimeObject,
+            documentState: documentState,
+            router: self
+        )
+        let viewController = InspectorClassViewController()
+        viewController.setupBindings(for: viewModel)
+        return viewController
+    }
+
+    private func makeSwiftSpecializationViewController(for runtimeObject: RuntimeObject) -> UXViewController {
+        let viewModel = InspectorSwiftSpecializationViewModel(
+            runtimeObject: runtimeObject,
+            documentState: documentState,
+            router: self
+        )
+        let viewController = InspectorSwiftSpecializationViewController()
         viewController.setupBindings(for: viewModel)
         return viewController
     }
