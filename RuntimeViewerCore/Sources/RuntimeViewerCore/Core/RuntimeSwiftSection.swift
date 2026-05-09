@@ -813,7 +813,7 @@ actor RuntimeSwiftSection {
                 }
                 return RuntimeSpecializationRequest.Candidate(
                     id: id,
-                    displayName: upstreamCandidate.typeName.currentName,
+                    displayName: upstreamCandidate.typeName.name,
                     imagePath: imagePath,
                     isGeneric: upstreamCandidate.isGeneric
                 )
@@ -872,7 +872,7 @@ actor RuntimeSwiftSection {
         let constraintTokens: [String] = parameter.requirements.compactMap { requirement in
             switch requirement {
             case .protocol(let info):
-                return info.protocolName.currentName
+                return info.protocolName.name
             case .layout(let kind):
                 switch kind {
                 case .class: return "AnyObject"
