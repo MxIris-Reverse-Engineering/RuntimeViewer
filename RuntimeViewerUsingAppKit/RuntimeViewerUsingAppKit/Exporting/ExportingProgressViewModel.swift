@@ -66,7 +66,8 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
             directory: directory,
             objcFormat: exportingState.objcFormat,
             swiftFormat: exportingState.swiftFormat,
-            generationOptions: generationOptions
+            generationOptions: generationOptions,
+            includeMetadata: exportingState.includeMetadata
         )
 
         let reporter = RuntimeInterfaceExportReporter()

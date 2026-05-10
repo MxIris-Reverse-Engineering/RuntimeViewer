@@ -2,11 +2,17 @@ import AppKit
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
+import SwiftUI
+
+private enum ExportingAppStorageKeys {
+    static let includeMetadata = "Exporting.includeMetadata"
+}
 
 final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     struct Input {
         let objcFormatSelected: Signal<Int>
         let swiftFormatSelected: Signal<Int>
+        let includeMetadataSelected: Signal<Bool>
     }
 
     struct Output {
@@ -17,9 +23,13 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
         let imageName: Driver<String>
         let objcFormat: Driver<ExportFormat>
         let swiftFormat: Driver<ExportFormat>
+        let includeMetadata: Driver<Bool>
     }
 
     let exportingState: ExportingState
+
+    @AppStorage(ExportingAppStorageKeys.includeMetadata)
+    private var storedIncludeMetadata: Bool = true
 
     @Observed private(set) var isLoading: Bool = true
 
@@ -30,6 +40,7 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
+        exportingState.includeMetadata = storedIncludeMetadata
         loadObjects()
     }
 
@@ -59,6 +70,13 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        input.includeMetadataSelected.emitOnNext { [weak self] includeMetadata in
+            guard let self else { return }
+            storedIncludeMetadata = includeMetadata
+            exportingState.includeMetadata = includeMetadata
+        }
+        .disposed(by: rx.disposeBag)
+
         return Output(
             objcCount: exportingState.$allObjects.asDriver().map { $0.count { $0.kind.isObjC } },
             swiftCount: exportingState.$allObjects.asDriver().map { $0.count { $0.kind.isSwift } },
@@ -66,7 +84,8 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
             hasSwift: exportingState.$allObjects.asDriver().map { $0.contains { $0.kind.isSwift } },
             imageName: .just(exportingState.imageName),
             objcFormat: exportingState.$objcFormat.asDriver(),
-            swiftFormat: exportingState.$swiftFormat.asDriver()
+            swiftFormat: exportingState.$swiftFormat.asDriver(),
+            includeMetadata: exportingState.$includeMetadata.asDriver()
         )
     }
 }

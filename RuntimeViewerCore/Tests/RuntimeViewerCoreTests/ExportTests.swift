@@ -26,6 +26,21 @@ struct RuntimeInterfaceExportConfigurationTests {
         #expect(config.directory == directory)
         #expect(config.objcFormat == .singleFile)
         #expect(config.swiftFormat == .directory)
+        #expect(config.includeMetadata == true)
+    }
+
+    @Test("init can disable metadata output")
+    func initCanDisableMetadataOutput() {
+        let config = RuntimeInterfaceExportConfiguration(
+            imagePath: "/usr/lib/libobjc.A.dylib",
+            imageName: "libobjc.A",
+            directory: URL(fileURLWithPath: "/tmp/export"),
+            objcFormat: .singleFile,
+            swiftFormat: .directory,
+            generationOptions: .mcp,
+            includeMetadata: false
+        )
+        #expect(config.includeMetadata == false)
     }
 }
 
