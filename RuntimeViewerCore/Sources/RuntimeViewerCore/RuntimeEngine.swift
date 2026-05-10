@@ -834,6 +834,15 @@ extension RuntimeEngine {
                 }
             }
 
+            let metadata = RuntimeInterfaceExportMetadata.make(
+                configuration: configuration,
+                objcInterfaceCount: objcCount,
+                swiftInterfaceCount: swiftCount,
+                succeeded: succeeded,
+                failed: failed + writeFailed
+            )
+            try RuntimeInterfaceExportWriter.writeMetadata(metadata, to: configuration.directory)
+
             reporter.send(.phaseCompleted(.writing))
         } catch {
             reporter.send(.phaseFailed(.writing, error))

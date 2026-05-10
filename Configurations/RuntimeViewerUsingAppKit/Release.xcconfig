@@ -3,6 +3,10 @@
 
 SMPrivilegedExecutable = $(RUNTIME_VIEWER_RELEASE_SM_PRIVILEGED_EXECUTABLE)
 
+RUNTIME_VIEWER_BUILD_DATE = unknown
+RUNTIME_VIEWER_GIT_BRANCH = unknown
+RUNTIME_VIEWER_GIT_COMMIT = unknown
+
 // Sparkle feed URL is hardcoded in Info.plist (SUFeedURL) because xcconfig's `//`
 // comment rule makes URL values awkward to express here.
 // Matching EdDSA private key lives in the login Keychain; see Documentations/SparkleRelease.md.
