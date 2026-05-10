@@ -15,11 +15,11 @@ public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRun
     @MemberwiseInit(.public)
     public struct Input {
         public let addSpecializationClicked: Signal<Void>
-        public let selectSpecializationClicked: Signal<RuntimeObject>
+        public let selectSpecializationClicked: Signal<InspectorSwiftSpecializationCellViewModel>
     }
 
     public struct Output {
-        public let specializedChildren: Driver<[RuntimeObject]>
+        public let specializedChildren: Driver<[InspectorSwiftSpecializationCellViewModel]>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -29,15 +29,17 @@ public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRun
         }
         .disposed(by: rx.disposeBag)
 
-        input.selectSpecializationClicked.emitOnNext { [weak self] specialized in
+        input.selectSpecializationClicked.emitOnNext { [weak self] cellViewModel in
             guard let self else { return }
-            router.trigger(.selectRuntimeObject(specialized))
+            router.trigger(.selectRuntimeObject(cellViewModel.runtimeObject))
         }
         .disposed(by: rx.disposeBag)
 
         let specializedChildren = $runtimeObject
             .map { runtimeObject in
-                runtimeObject.children.filter { $0.properties.contains(.isSpecialized) }
+                runtimeObject.children
+                    .filter { $0.properties.contains(.isSpecialized) }
+                    .map(InspectorSwiftSpecializationCellViewModel.init)
             }
             .asDriverOnErrorJustComplete()
 

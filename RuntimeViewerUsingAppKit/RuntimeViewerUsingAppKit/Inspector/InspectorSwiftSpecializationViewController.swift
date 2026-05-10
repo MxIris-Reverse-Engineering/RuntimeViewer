@@ -7,27 +7,15 @@ import SnapKit
 
 final class InspectorSwiftSpecializationViewController: UXEffectViewController<InspectorSwiftSpecializationViewModel> {
 
-    // MARK: - Relays
-
-    private let addSpecializationRelay = PublishRelay<Void>()
-    private let selectSpecializationRelay = PublishRelay<RuntimeObject>()
-
     // MARK: - Subviews
 
     private let headerLabel = Label()
     private let emptyLabel = Label()
-    private let scrollView = ScrollView()
-    private let tableView = NSTableView()
+    private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
     private let addSpecializationButton = PushButton(
         title: "+ Add Specialization",
         titleFont: .systemFont(ofSize: 13)
     )
-
-    // MARK: - State
-
-    private var specializedChildren: [RuntimeObject] = []
-
-    private static let cellIdentifier = NSUserInterfaceItemIdentifier("SpecializedChildCell")
 
     override var contentViewUsingSafeArea: Bool { true }
 
@@ -61,26 +49,15 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             make.bottom.trailing.equalToSuperview().inset(8)
         }
 
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("specialized"))
-        column.title = "Type"
-        column.minWidth = 120
-        tableView.addTableColumn(column)
-
         tableView.do {
             $0.headerView = nil
             $0.allowsMultipleSelection = false
             $0.allowsEmptySelection = true
-            $0.target = self
-            $0.action = #selector(specializationRowClicked)
-            $0.dataSource = self
-            $0.delegate = self
             $0.rowHeight = 28
-            $0.style = .plain
+            $0.style = .inset
         }
 
         scrollView.do {
-            $0.documentView = tableView
-            $0.hasVerticalScroller = true
             $0.borderType = .lineBorder
             $0.autohidesScrollers = true
         }
@@ -96,30 +73,27 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             $0.stringValue = "No specializations yet."
             $0.isHidden = true
         }
-
-        addSpecializationButton.target = self
-        addSpecializationButton.action = #selector(addSpecializationClicked)
-    }
-
-    // MARK: - Actions
-
-    @objc private func addSpecializationClicked() {
-        addSpecializationRelay.accept(())
-    }
-
-    @objc private func specializationRowClicked() {
-        let row = tableView.clickedRow
-        guard row >= 0, row < specializedChildren.count else { return }
-        selectSpecializationRelay.accept(specializedChildren[row])
     }
 
     // MARK: - Bindings
 
     override func setupBindings(for viewModel: InspectorSwiftSpecializationViewModel) {
         super.setupBindings(for: viewModel)
+
+        let selectSpecialization: Signal<InspectorSwiftSpecializationCellViewModel> = tableView.rx
+            .itemClicked()
+            .compactMap { [weak tableView] index -> InspectorSwiftSpecializationCellViewModel? in
+                guard let tableView,
+                      index.row >= 0,
+                      index.row < tableView.numberOfRows
+                else { return nil }
+                return try? tableView.rx.model(at: index.row)
+            }
+            .asSignal(onErrorSignalWith: .empty())
+
         let input = InspectorSwiftSpecializationViewModel.Input(
-            addSpecializationClicked: addSpecializationRelay.asSignal(),
-            selectSpecializationClicked: selectSpecializationRelay.asSignal()
+            addSpecializationClicked: addSpecializationButton.rx.click.asSignal(),
+            selectSpecializationClicked: selectSpecialization
         )
         let output = viewModel.transform(input)
 
@@ -128,49 +102,51 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             ? "Specializations"
             : "Specializations of \(displayName)"
 
-        output.specializedChildren.driveOnNext { [weak self] children in
-            guard let self else { return }
-            specializedChildren = children
-            tableView.reloadData()
-            emptyLabel.isHidden = !children.isEmpty
-        }
-        .disposed(by: rx.disposeBag)
+        let specializedChildren = output.specializedChildren
+
+        specializedChildren
+            .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: InspectorSwiftSpecializationCellViewModel) -> NSView? in
+                let cellView = tableView.box.makeView(ofClass: SpecializedChildCellView.self)
+                cellView.bind(to: cellViewModel)
+                return cellView
+            }
+            .disposed(by: rx.disposeBag)
+
+        specializedChildren
+            .map(\.isEmpty)
+            .not()
+            .drive(emptyLabel.rx.isHidden)
+            .disposed(by: rx.disposeBag)
     }
 }
 
-// MARK: - NSTableViewDataSource / NSTableViewDelegate
+// MARK: - SpecializedChildCellView
 
-extension InspectorSwiftSpecializationViewController: NSTableViewDataSource, NSTableViewDelegate {
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        specializedChildren.count
-    }
+extension InspectorSwiftSpecializationViewController {
+    private final class SpecializedChildCellView: TableCellView {
+        private let nameLabel = Label()
 
-    func tableView(
-        _ tableView: NSTableView,
-        viewFor tableColumn: NSTableColumn?,
-        row: Int
-    ) -> NSView? {
-        guard row >= 0, row < specializedChildren.count else { return nil }
-        let cellView: NSTableCellView
-        if let recycled = tableView.makeView(
-            withIdentifier: InspectorSwiftSpecializationViewController.cellIdentifier,
-            owner: nil
-        ) as? NSTableCellView {
-            cellView = recycled
-        } else {
-            cellView = NSTableCellView()
-            cellView.identifier = InspectorSwiftSpecializationViewController.cellIdentifier
-            let textField = Label()
-            textField.font = .systemFont(ofSize: 13)
-            textField.textColor = .controlTextColor
-            cellView.textField = textField
-            cellView.addSubview(textField)
-            textField.snp.makeConstraints { make in
+        override func setup() {
+            super.setup()
+
+            hierarchy {
+                nameLabel
+            }
+
+            nameLabel.snp.makeConstraints { make in
                 make.leading.trailing.equalToSuperview().inset(4)
                 make.centerY.equalToSuperview()
             }
+
+            nameLabel.do {
+                $0.maximumNumberOfLines = 1
+            }
         }
-        cellView.textField?.stringValue = specializedChildren[row].displayName
-        return cellView
+
+        func bind(to viewModel: InspectorSwiftSpecializationCellViewModel) {
+            rx.disposeBag = DisposeBag()
+
+            viewModel.$name.asDriver().drive(nameLabel.rx.attributedStringValue).disposed(by: rx.disposeBag)
+        }
     }
 }
