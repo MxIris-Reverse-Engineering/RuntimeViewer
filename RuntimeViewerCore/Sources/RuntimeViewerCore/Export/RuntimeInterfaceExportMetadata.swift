@@ -34,6 +34,19 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
         let swiftInterfaceCount: Int
         let succeeded: Int
         let failed: Int
+        let dumpOptions: DumpOptionsInfo
+    }
+
+    struct DumpOptionsInfo: Codable, Sendable {
+        let objcHeaderOptions: [DumpOptionInfo]
+        let swiftInterfaceOptions: [DumpOptionInfo]
+        let transformerOptions: [DumpOptionInfo]
+    }
+
+    struct DumpOptionInfo: Codable, Sendable {
+        let name: String
+        let value: String
+        let description: String
     }
 
     struct LicenseInfo: Codable, Sendable {
@@ -64,7 +77,8 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
                 objcInterfaceCount: objcInterfaceCount,
                 swiftInterfaceCount: swiftInterfaceCount,
                 succeeded: succeeded,
-                failed: failed
+                failed: failed,
+                dumpOptions: .describe(configuration.generationOptions)
             ),
             license: .standard
         )
@@ -114,8 +128,19 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
             "- ObjC interfaces: \(export.objcInterfaceCount)",
             "- Swift interfaces: \(export.swiftInterfaceCount)",
             "- Succeeded: \(export.succeeded)",
-            "- Failed: \(export.failed)",
+            "- Failed: \(export.failed)"
+        ]
+
+        lines += [
             "",
+            "## Dump Options"
+        ]
+
+        appendOptionSection("Objective-C Header Options", export.dumpOptions.objcHeaderOptions, to: &lines)
+        appendOptionSection("Swift Interface Options", export.dumpOptions.swiftInterfaceOptions, to: &lines)
+        appendOptionSection("Transformer Options", export.dumpOptions.transformerOptions, to: &lines)
+
+        lines += [
             "## License",
             "",
             "- RuntimeViewer license: \(license.runtimeViewerLicense)",
@@ -124,6 +149,240 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
         ]
 
         return lines.joined(separator: "\n")
+    }
+}
+
+extension RuntimeInterfaceExportMetadata.DumpOptionsInfo {
+    static func describe(_ options: RuntimeObjectInterface.GenerationOptions) -> Self {
+        .init(
+            objcHeaderOptions: describe(options.objcHeaderOptions),
+            swiftInterfaceOptions: describe(options.swiftInterfaceOptions),
+            transformerOptions: describe(options.transformer)
+        )
+    }
+
+    private static func describe(_ options: ObjCGenerationOptions) -> [RuntimeInterfaceExportMetadata.DumpOptionInfo] {
+        [
+            option(
+                "Strip protocol conformance",
+                options.stripProtocolConformance,
+                "Omits protocol conformance lists from generated Objective-C declarations."
+            ),
+            option(
+                "Strip overrides",
+                options.stripOverrides,
+                "Omits method override markers from generated Objective-C declarations."
+            ),
+            option(
+                "Strip synthesized ivars",
+                options.stripSynthesizedIvars,
+                "Omits synthesized ivars from generated Objective-C output."
+            ),
+            option(
+                "Strip synthesized methods",
+                options.stripSynthesizedMethods,
+                "Omits synthesized methods from generated Objective-C output."
+            ),
+            option(
+                "Strip constructor methods",
+                options.stripCtorMethod,
+                "Omits constructor methods from generated Objective-C output."
+            ),
+            option(
+                "Strip destructor methods",
+                options.stripDtorMethod,
+                "Omits destructor methods from generated Objective-C output."
+            ),
+            option(
+                "Add ivar offset comments",
+                options.addIvarOffsetComments,
+                "Adds ivar memory offset comments to generated Objective-C ivar declarations."
+            ),
+            option(
+                "Add property attributes comments",
+                options.addPropertyAttributesComments,
+                "Adds property attribute comments to generated Objective-C properties."
+            ),
+            option(
+                "Add method IMP address comments",
+                options.addMethodIMPAddressComments,
+                "Adds implementation address comments to generated Objective-C methods."
+            ),
+            option(
+                "Add property accessor address comments",
+                options.addPropertyAccessorAddressComments,
+                "Adds getter and setter implementation address comments to generated Objective-C properties."
+            )
+        ]
+    }
+
+    private static func describe(_ options: SwiftGenerationOptions) -> [RuntimeInterfaceExportMetadata.DumpOptionInfo] {
+        [
+            option(
+                "Print stripped symbolic items",
+                options.printStrippedSymbolicItem,
+                "Prints symbolic Swift items that were stripped or could not be fully recovered."
+            ),
+            option(
+                "Print field offsets",
+                options.printFieldOffset,
+                "Adds stored-property field offset comments to generated Swift interfaces."
+            ),
+            option(
+                "Print expanded field offsets",
+                options.printExpandedFieldOffset,
+                "Adds expanded field offset information when the Swift metadata exposes it."
+            ),
+            option(
+                "Print vtable offsets",
+                options.printVTableOffset,
+                "Adds virtual table slot offset comments to generated Swift interfaces."
+            ),
+            option(
+                "Print protocol witness table offsets",
+                options.printPWTOffset,
+                "Adds protocol witness table offset comments to generated Swift interfaces."
+            ),
+            option(
+                "Print member addresses",
+                options.printMemberAddress,
+                "Adds member address comments to generated Swift declarations."
+            ),
+            option(
+                "Print type layouts",
+                options.printTypeLayout,
+                "Adds type size, stride, alignment, and layout comments to generated Swift interfaces."
+            ),
+            option(
+                "Print enum layouts",
+                options.printEnumLayout,
+                "Adds enum payload and tag layout comments to generated Swift interfaces."
+            ),
+            option(
+                "Synthesize opaque types",
+                options.synthesizeOpaqueType,
+                "Synthesizes placeholder declarations for opaque Swift types when needed."
+            ),
+            .init(
+                name: "Member sort order",
+                value: options.memberSortOrder.displayName,
+                description: "Controls how members are ordered in generated Swift interfaces."
+            )
+        ]
+    }
+
+    private static func describe(_ configuration: Transformer.Configuration) -> [RuntimeInterfaceExportMetadata.DumpOptionInfo] {
+        [
+            .init(
+                name: Transformer.CType.displayName,
+                value: moduleValue(
+                    isEnabled: configuration.objc.cType.isEnabled,
+                    details: ["replacements: \(replacementSummary(configuration.objc.cType.replacements))"]
+                ),
+                description: "Rewrites matching C primitive type spellings in Objective-C output."
+            ),
+            .init(
+                name: Transformer.ObjCIvarOffset.displayName,
+                value: moduleValue(
+                    isEnabled: configuration.objc.ivarOffset.isEnabled,
+                    details: [
+                        "template: `\(configuration.objc.ivarOffset.template)`",
+                        "number format: \(numberFormat(usesHexadecimal: configuration.objc.ivarOffset.useHexadecimal))"
+                    ]
+                ),
+                description: "Controls the text format for Objective-C ivar offset comments."
+            ),
+            .init(
+                name: Transformer.SwiftFieldOffset.displayName,
+                value: moduleValue(
+                    isEnabled: configuration.swift.swiftFieldOffset.isEnabled,
+                    details: [
+                        "template: `\(configuration.swift.swiftFieldOffset.template)`",
+                        "number format: \(numberFormat(usesHexadecimal: configuration.swift.swiftFieldOffset.useHexadecimal))"
+                    ]
+                ),
+                description: "Controls the text format for Swift field offset comments."
+            ),
+            .init(
+                name: Transformer.SwiftVTableOffset.displayName,
+                value: moduleValue(
+                    isEnabled: configuration.swift.swiftVTableOffset.isEnabled,
+                    details: [
+                        "template: `\(configuration.swift.swiftVTableOffset.template)`",
+                        "labeled template: `\(configuration.swift.swiftVTableOffset.labeledTemplate)`",
+                        "number format: \(numberFormat(usesHexadecimal: configuration.swift.swiftVTableOffset.useHexadecimal))"
+                    ]
+                ),
+                description: "Controls the text format for Swift virtual table offset comments."
+            ),
+            .init(
+                name: Transformer.SwiftMemberAddress.displayName,
+                value: moduleValue(
+                    isEnabled: configuration.swift.swiftMemberAddress.isEnabled,
+                    details: [
+                        "template: `\(configuration.swift.swiftMemberAddress.template)`",
+                        "number format: \(numberFormat(usesHexadecimal: configuration.swift.swiftMemberAddress.useHexadecimal))"
+                    ]
+                ),
+                description: "Controls the text format for Swift member address comments."
+            ),
+            .init(
+                name: Transformer.SwiftTypeLayout.displayName,
+                value: moduleValue(
+                    isEnabled: configuration.swift.swiftTypeLayout.isEnabled,
+                    details: [
+                        "template: `\(configuration.swift.swiftTypeLayout.template)`",
+                        "number format: \(numberFormat(usesHexadecimal: configuration.swift.swiftTypeLayout.useHexadecimal))"
+                    ]
+                ),
+                description: "Controls the text format for Swift type layout comments."
+            ),
+            .init(
+                name: Transformer.SwiftEnumLayout.displayName,
+                value: moduleValue(
+                    isEnabled: configuration.swift.swiftEnumLayout.isEnabled,
+                    details: [
+                        "template: `\(configuration.swift.swiftEnumLayout.template)`",
+                        "case template: `\(configuration.swift.swiftEnumLayout.caseTemplate)`",
+                        "memory offset template: `\(configuration.swift.swiftEnumLayout.memoryOffsetTemplate)`",
+                        "number format: \(numberFormat(usesHexadecimal: configuration.swift.swiftEnumLayout.useHexadecimal))"
+                    ]
+                ),
+                description: "Controls the text format for Swift enum layout comments."
+            )
+        ]
+    }
+
+    private static func option(
+        _ name: String,
+        _ isEnabled: Bool,
+        _ description: String
+    ) -> RuntimeInterfaceExportMetadata.DumpOptionInfo {
+        .init(name: name, value: enabledText(isEnabled), description: description)
+    }
+
+    private static func enabledText(_ isEnabled: Bool) -> String {
+        isEnabled ? "Enabled" : "Disabled"
+    }
+
+    private static func moduleValue(isEnabled: Bool, details: [String]) -> String {
+        ([enabledText(isEnabled)] + details).joined(separator: "; ")
+    }
+
+    private static func numberFormat(usesHexadecimal: Bool) -> String {
+        usesHexadecimal ? "hexadecimal" : "decimal"
+    }
+
+    private static func replacementSummary(_ replacements: [Transformer.CType.Pattern: String]) -> String {
+        let activeReplacements = replacements
+            .filter { !$0.value.isEmpty }
+            .sorted { $0.key.displayName < $1.key.displayName }
+
+        guard !activeReplacements.isEmpty else { return "none" }
+
+        return activeReplacements
+            .map { "`\($0.key.displayName) -> \($0.value)`" }
+            .joined(separator: ", ")
     }
 }
 
@@ -290,6 +549,17 @@ private extension RuntimeInterfaceExportConfiguration.Format {
     }
 }
 
+private extension SwiftGenerationOptions.MemberSortOrder {
+    var displayName: String {
+        switch self {
+        case .byCategory:
+            return "By category"
+        case .byOffset:
+            return "By offset"
+        }
+    }
+}
+
 private extension RuntimeInterfaceExportMetadata {
     static func isoString(from date: Date) -> String {
         let formatter = ISO8601DateFormatter()
@@ -300,5 +570,21 @@ private extension RuntimeInterfaceExportMetadata {
     func appendOptional(_ label: String, _ value: String?, to lines: inout [String]) {
         guard let value, !value.isEmpty else { return }
         lines.append("\(label): \(value)")
+    }
+
+    func appendOptionSection(
+        _ title: String,
+        _ options: [DumpOptionInfo],
+        to lines: inout [String]
+    ) {
+        lines += [
+            "",
+            "### \(title)",
+            ""
+        ]
+
+        for option in options {
+            lines.append("- \(option.name): \(option.value) - \(option.description)")
+        }
     }
 }

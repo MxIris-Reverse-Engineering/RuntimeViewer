@@ -75,10 +75,9 @@ enum RuntimeInterfaceExportWriter {
         let readmeURL = directory.appendingPathComponent("README.md")
         try metadata.makeREADME().write(to: readmeURL, atomically: true, encoding: .utf8)
 
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .xml
-        let plistData = try encoder.encode(metadata)
         let plistURL = directory.appendingPathComponent("RuntimeViewerExportInfo.plist")
-        try plistData.write(to: plistURL, options: .atomic)
+        if FileManager.default.fileExists(atPath: plistURL.path) {
+            try FileManager.default.removeItem(at: plistURL)
+        }
     }
 }

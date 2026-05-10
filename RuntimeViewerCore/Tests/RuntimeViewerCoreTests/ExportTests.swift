@@ -81,7 +81,7 @@ struct RuntimeInterfaceExportReporterTests {
 
 @Suite("RuntimeInterfaceExportMetadata")
 struct RuntimeInterfaceExportMetadataTests {
-    @Test("README includes RuntimeViewer, module, date, and license metadata")
+    @Test("README includes RuntimeViewer, module, date, options, and license metadata")
     func readmeIncludesExportMetadata() {
         let metadata = makeMetadata()
         let readme = metadata.makeREADME()
@@ -90,28 +90,30 @@ struct RuntimeInterfaceExportMetadataTests {
         #expect(readme.contains("- Path: /usr/lib/libExample.dylib"))
         #expect(readme.contains("- Mach-O current version: 1.2.3"))
         #expect(readme.contains("- Generated at: 1970-01-01T00:00:00.000Z"))
+        #expect(readme.contains("## Dump Options"))
+        #expect(readme.contains("- Add ivar offset comments: Enabled - Adds ivar memory offset comments"))
+        #expect(readme.contains("- Print member addresses: Enabled - Adds member address comments"))
+        #expect(readme.contains("- Member sort order: By category - Controls how members are ordered"))
+        #expect(readme.contains("- C Type Replacement: Disabled; replacements: none - Rewrites matching C primitive type spellings"))
         #expect(readme.contains("- RuntimeViewer license: MIT License"))
     }
 
-    @Test("writer emits README and structured plist sidecars")
-    func writerEmitsMetadataSidecars() throws {
+    @Test("writer emits README only and removes stale plist sidecar")
+    func writerEmitsReadmeOnly() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("RuntimeViewerExportMetadataTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
+
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let plistURL = directory.appendingPathComponent("RuntimeViewerExportInfo.plist")
+        try Data("stale".utf8).write(to: plistURL)
 
         let metadata = makeMetadata()
         try RuntimeInterfaceExportWriter.writeMetadata(metadata, to: directory)
 
         let readmeURL = directory.appendingPathComponent("README.md")
-        let plistURL = directory.appendingPathComponent("RuntimeViewerExportInfo.plist")
         #expect(FileManager.default.fileExists(atPath: readmeURL.path))
-        #expect(FileManager.default.fileExists(atPath: plistURL.path))
-
-        let plistData = try Data(contentsOf: plistURL)
-        let decoded = try PropertyListDecoder().decode(RuntimeInterfaceExportMetadata.self, from: plistData)
-        #expect(decoded.runtimeViewer.gitCommit == "abc123def456")
-        #expect(decoded.module.path == "/usr/lib/libExample.dylib")
-        #expect(decoded.export.succeeded == 10)
+        #expect(!FileManager.default.fileExists(atPath: plistURL.path))
     }
 
     private func makeMetadata() -> RuntimeInterfaceExportMetadata {
@@ -145,7 +147,8 @@ struct RuntimeInterfaceExportMetadataTests {
                 objcInterfaceCount: 4,
                 swiftInterfaceCount: 6,
                 succeeded: 10,
-                failed: 1
+                failed: 1,
+                dumpOptions: .describe(.mcp)
             ),
             license: .init(
                 runtimeViewerLicense: "MIT License",
