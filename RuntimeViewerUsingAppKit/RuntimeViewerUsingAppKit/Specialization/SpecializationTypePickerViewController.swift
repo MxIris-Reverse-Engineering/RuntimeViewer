@@ -6,38 +6,19 @@ import RuntimeViewerApplication
 import SnapKit
 
 /// Popover content for choosing a concrete type for a generic parameter.
-///
-/// Uses a raw `NSViewController` (rather than `AppKitViewController<VM>`)
-/// because the backing `TypePickerPopoverViewModel` is intentionally not a
-/// `ViewModelProtocol` conformer — popovers are short-lived UI primitives
-/// that don't need the standard error/loading/router infrastructure.
-final class TypePickerPopoverViewController: NSViewController {
-
-    private(set) var viewModel: TypePickerPopoverViewModel?
-
+final class SpecializationTypePickerViewController: UXKitViewController<SpecializationTypePickerViewModel> {
     // MARK: - Subviews
 
     private let searchField = NSSearchField()
-    private let scrollView = ScrollView()
-    private let tableView = NSTableView()
 
-    // MARK: - State
-
-    private var candidates: [RuntimeSpecializationRequest.Candidate] = []
-
-    private static let cellIdentifier = NSUserInterfaceItemIdentifier("CandidateCell")
+    private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
 
     // MARK: - Lifecycle
-
-    override func loadView() {
-        view = NSView()
-        view.frame = NSRect(x: 0, y: 0, width: 320, height: 320)
-    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.hierarchy {
+        contentView.hierarchy {
             searchField
             scrollView
         }
@@ -52,108 +33,81 @@ final class TypePickerPopoverViewController: NSViewController {
         }
 
         scrollView.do {
-            $0.documentView = tableView
-            $0.hasVerticalScroller = true
-            $0.borderType = .lineBorder
             $0.autohidesScrollers = true
         }
-
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("type"))
-        column.title = "Type"
-        column.minWidth = 200
-        tableView.addTableColumn(column)
 
         tableView.do {
             $0.headerView = nil
             $0.allowsMultipleSelection = false
             $0.allowsEmptySelection = true
-            $0.target = self
-            $0.action = #selector(tableViewClicked)
-            $0.dataSource = self
-            $0.delegate = self
-            $0.rowHeight = 36
+            $0.usesAutomaticRowHeights = true
             $0.style = .plain
         }
 
         searchField.do {
-            $0.target = self
-            $0.action = #selector(searchTextChanged)
             $0.sendsWholeSearchString = false
             $0.sendsSearchStringImmediately = true
             $0.placeholderString = "Search types…"
         }
-    }
 
-    // MARK: - Actions
-
-    @objc private func tableViewClicked() {
-        let row = tableView.clickedRow
-        guard row >= 0, row < candidates.count else { return }
-        viewModel?.selectCandidate(candidates[row])
-    }
-
-    @objc private func searchTextChanged() {
-        viewModel?.updateSearchText(searchField.stringValue)
+        preferredContentSize = NSSize(width: 320, height: 320)
     }
 
     // MARK: - Bindings
 
-    func setupBindings(for viewModel: TypePickerPopoverViewModel) {
-        loadViewIfNeeded()
-        rx.disposeBag = DisposeBag()
-        self.viewModel = viewModel
+    override func setupBindings(for viewModel: SpecializationTypePickerViewModel) {
+        super.setupBindings(for: viewModel)
 
-        viewModel.filteredCandidatesRelay
-            .asDriver()
-            .driveOnNext { [weak self] candidates in
-                guard let self else { return }
-                self.candidates = candidates
-                tableView.reloadData()
+        // The `rx.items` adapter installs the data source + required-method
+        // delegate proxy; `setDelegate` forwards optional delegate methods
+        // (e.g. `shouldSelectRow`) so generic candidates stay un-selectable.
+        tableView.rx.setDelegate(self).disposed(by: rx.disposeBag)
+
+        let candidateClicked: Signal<RuntimeSpecializationRequest.Candidate> = tableView.rx
+            .itemClicked()
+            .compactMap { [weak tableView] index -> RuntimeSpecializationRequest.Candidate? in
+                guard let tableView,
+                      index.row >= 0,
+                      index.row < tableView.numberOfRows
+                else { return nil }
+                return try? tableView.rx.model(at: index.row)
+            }
+            .asSignal(onErrorSignalWith: .empty())
+
+        let input = SpecializationTypePickerViewModel.Input(
+            searchString: searchField.rx.stringValue.asSignal(onErrorJustReturn: ""),
+            candidateClicked: candidateClicked
+        )
+        let output = viewModel.transform(input)
+
+        output.filteredCandidates
+            .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, candidate: RuntimeSpecializationRequest.Candidate) -> NSView? in
+                let cellView = tableView.box.makeView(ofClass: CandidateCellView.self)
+                cellView.configure(with: candidate)
+                return cellView
             }
             .disposed(by: rx.disposeBag)
     }
 }
 
-// MARK: - NSTableViewDataSource
-
-extension TypePickerPopoverViewController: NSTableViewDataSource {
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        candidates.count
-    }
-}
-
 // MARK: - NSTableViewDelegate
 
-extension TypePickerPopoverViewController: NSTableViewDelegate {
-    func tableView(
-        _ tableView: NSTableView,
-        viewFor tableColumn: NSTableColumn?,
-        row: Int
-    ) -> NSView? {
-        guard row >= 0, row < candidates.count else { return nil }
-        let cellView: CandidateCellView
-        if let recycled = tableView.makeView(
-            withIdentifier: TypePickerPopoverViewController.cellIdentifier,
-            owner: nil
-        ) as? CandidateCellView {
-            cellView = recycled
-        } else {
-            cellView = CandidateCellView()
-            cellView.identifier = TypePickerPopoverViewController.cellIdentifier
-        }
-        cellView.configure(with: candidates[row])
-        return cellView
-    }
-
+extension SpecializationTypePickerViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        guard row >= 0, row < candidates.count else { return false }
-        return !candidates[row].isGeneric
+        guard row >= 0,
+              let candidate: RuntimeSpecializationRequest.Candidate = try? tableView.rx.model(at: row)
+        else { return false }
+        return !candidate.isGeneric
     }
 }
+
+// `Candidate` is `Hashable`; DifferenceKit synthesizes default identifier and
+// content-equality implementations from `Hashable` + `Equatable`.
+extension RuntimeSpecializationRequest.Candidate: @retroactive Differentiable {}
 
 // MARK: - CandidateCellView
 
-extension TypePickerPopoverViewController {
+extension SpecializationTypePickerViewController {
     fileprivate final class CandidateCellView: NSTableCellView {
         private let nameLabel = Label()
         private let imageLabel = Label()

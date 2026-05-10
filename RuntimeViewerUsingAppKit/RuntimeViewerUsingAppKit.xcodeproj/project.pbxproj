@@ -11,10 +11,10 @@
 		8FC7CF2AD73A74EC8D81C0CB /* InspectorRuntimeObjectTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D57DB6E4F581069CBA /* InspectorRuntimeObjectTabViewController.swift */; };
 		8FC7CF2BD73A74EC8D81C0CB /* InspectorSwiftSpecializationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D67DB6E4F581069CBA /* InspectorSwiftSpecializationViewController.swift */; };
 		8FC7CF2CD73A74EC8D81C0CB /* InspectorRuntimeObjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D77DB6E4F581069CBA /* InspectorRuntimeObjectCoordinator.swift */; };
-		9677438C01BDD12085C27522 /* TypePickerPopoverViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C6DBFCCFA6B22702BC7667 /* TypePickerPopoverViewController.swift */; };
+		9677438C01BDD12085C27522 /* SpecializationTypePickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */; };
 		CB5EBCC699B082FC52857966 /* SpecializationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EC4339B0319BDED6270B85F /* SpecializationCoordinator.swift */; };
-		D9073E10AE2361972768175D /* SpecializationSheetViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D54B1B904A0B5FDFA93B2F /* SpecializationSheetViewController.swift */; };
-		D9913AAAD5EC88F6427B25C1 /* SpecializationSheetWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FBD344C22E90BA7623E9663 /* SpecializationSheetWindowController.swift */; };
+		D9073E10AE2361972768175D /* SpecializationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D54B1B904A0B5FDFA93B2F /* SpecializationViewController.swift */; };
+		D9913AAAD5EC88F6427B25C1 /* SpecializationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FBD344C22E90BA7623E9663 /* SpecializationWindowController.swift */; };
 		E90329732F5C6A450080B9CC /* dev.mxiris.runtimeviewer.service.plist in Embed LaunchDaemon */ = {isa = PBXBuildFile; fileRef = E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */; };
 		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
 		E92124642F447AE1007481E4 /* ExportingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E92124632F447AE1007481E4 /* ExportingState.swift */; };
@@ -59,6 +59,8 @@
 		E9935B922F44886A006DB4EC /* ExportingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */; };
 		E9935B952F448900006DB4EC /* ExportingCompletionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */; };
 		E9935B972F448910006DB4EC /* ExportingCompletionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */; };
+		E997A7482FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */; };
+		E997A7492FB04C8C008F4C00 /* SpecializationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */; };
 		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */; };
@@ -225,11 +227,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0FBD344C22E90BA7623E9663 /* SpecializationSheetWindowController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationSheetWindowController.swift; sourceTree = "<group>"; };
-		99D54B1B904A0B5FDFA93B2F /* SpecializationSheetViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationSheetViewController.swift; sourceTree = "<group>"; };
+		0FBD344C22E90BA7623E9663 /* SpecializationWindowController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationWindowController.swift; sourceTree = "<group>"; };
+		99D54B1B904A0B5FDFA93B2F /* SpecializationViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationViewController.swift; sourceTree = "<group>"; };
 		9BB7A834FDF101E624B4EEA8 /* UpdaterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterService.swift; sourceTree = "<group>"; };
 		9EC4339B0319BDED6270B85F /* SpecializationCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationCoordinator.swift; sourceTree = "<group>"; };
-		E5C6DBFCCFA6B22702BC7667 /* TypePickerPopoverViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TypePickerPopoverViewController.swift; sourceTree = "<group>"; };
+		E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationTypePickerViewController.swift; sourceTree = "<group>"; };
 		E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = dev.mxiris.runtimeviewer.service.plist; sourceTree = "<group>"; };
 		E91CD9962C2127AD00C989CC /* EventMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
 		E92124632F447AE1007481E4 /* ExportingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingState.swift; sourceTree = "<group>"; };
@@ -281,6 +283,8 @@
 		E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCoordinator.swift; sourceTree = "<group>"; };
 		E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewModel.swift; sourceTree = "<group>"; };
 		E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewController.swift; sourceTree = "<group>"; };
+		E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationTypePickerViewModel.swift; sourceTree = "<group>"; };
+		E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationViewModel.swift; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
@@ -388,9 +392,11 @@
 			isa = PBXGroup;
 			children = (
 				9EC4339B0319BDED6270B85F /* SpecializationCoordinator.swift */,
-				0FBD344C22E90BA7623E9663 /* SpecializationSheetWindowController.swift */,
-				99D54B1B904A0B5FDFA93B2F /* SpecializationSheetViewController.swift */,
-				E5C6DBFCCFA6B22702BC7667 /* TypePickerPopoverViewController.swift */,
+				0FBD344C22E90BA7623E9663 /* SpecializationWindowController.swift */,
+				99D54B1B904A0B5FDFA93B2F /* SpecializationViewController.swift */,
+				E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */,
+				E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */,
+				E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */,
 			);
 			path = Specialization;
 			sourceTree = "<group>";
@@ -596,19 +602,8 @@
 			children = (
 				E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */,
 				E9A825532C0E0FBD00D9A85D /* SidebarNavigationController.swift */,
-				E9F11E0A2F123EEC0052B0A3 /* SidebarRootCoordinator.swift */,
-				E9D470642F134210008BF7A9 /* SidebarRootTabViewController.swift */,
-				E9D470622F12A52A008BF7A9 /* SidebarRootViewController.swift */,
-				E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */,
-				E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */,
-				E94330172C0DA62500362862 /* SidebarRootDirectoryViewController.swift */,
-				E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */,
-				E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */,
-				E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */,
-				E9A825392C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift */,
-				E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */,
-				E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */,
-				E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */,
+				E9D7DA792FB08C9C00A9B187 /* Root */,
+				E9D7DA7B2FB08CA600A9B187 /* RuntimeObject */,
 			);
 			path = Sidebar;
 			sourceTree = "<group>";
@@ -664,6 +659,33 @@
 				9BB7A834FDF101E624B4EEA8 /* UpdaterService.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		E9D7DA792FB08C9C00A9B187 /* Root */ = {
+			isa = PBXGroup;
+			children = (
+				E9F11E0A2F123EEC0052B0A3 /* SidebarRootCoordinator.swift */,
+				E9D470642F134210008BF7A9 /* SidebarRootTabViewController.swift */,
+				E9D470622F12A52A008BF7A9 /* SidebarRootViewController.swift */,
+				E94BA6952E7EEB64006B553D /* SidebarRootTableRowView.swift */,
+				E9CE07B82C1497B30070A6E8 /* SidebarRootTableCellView.swift */,
+				E94330172C0DA62500362862 /* SidebarRootDirectoryViewController.swift */,
+				E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */,
+			);
+			path = Root;
+			sourceTree = "<group>";
+		};
+		E9D7DA7B2FB08CA600A9B187 /* RuntimeObject */ = {
+			isa = PBXGroup;
+			children = (
+				E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */,
+				E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */,
+				E9A825392C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift */,
+				E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */,
+				E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */,
+				E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */,
+			);
+			path = RuntimeObject;
 			sourceTree = "<group>";
 		};
 		E9E900E02C2CF9B000FADDCC /* RuntimeViewerCatalystHelperPlugin */ = {
@@ -962,6 +984,8 @@
 			files = (
 				E9D470672F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift in Sources */,
 				E9432FE62C0D614900362862 /* AppDelegate.swift in Sources */,
+				E997A7482FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift in Sources */,
+				E997A7492FB04C8C008F4C00 /* SpecializationViewModel.swift in Sources */,
 				735AF17B8EF9B5F85B95D1E9 /* UpdaterService.swift in Sources */,
 				E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */,
 				E9A8253A2C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift in Sources */,
@@ -1027,9 +1051,9 @@
 				E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */,
 				E9F11E182F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift in Sources */,
 				CB5EBCC699B082FC52857966 /* SpecializationCoordinator.swift in Sources */,
-				D9913AAAD5EC88F6427B25C1 /* SpecializationSheetWindowController.swift in Sources */,
-				D9073E10AE2361972768175D /* SpecializationSheetViewController.swift in Sources */,
-				9677438C01BDD12085C27522 /* TypePickerPopoverViewController.swift in Sources */,
+				D9913AAAD5EC88F6427B25C1 /* SpecializationWindowController.swift in Sources */,
+				D9073E10AE2361972768175D /* SpecializationViewController.swift in Sources */,
+				9677438C01BDD12085C27522 /* SpecializationTypePickerViewController.swift in Sources */,
 				8FC7CF2AD73A74EC8D81C0CB /* InspectorRuntimeObjectTabViewController.swift in Sources */,
 				8FC7CF2BD73A74EC8D81C0CB /* InspectorSwiftSpecializationViewController.swift in Sources */,
 				8FC7CF2CD73A74EC8D81C0CB /* InspectorRuntimeObjectCoordinator.swift in Sources */,

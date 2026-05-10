@@ -4,9 +4,10 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
+import RuntimeViewerApplication
 
 @Loggable(.private)
-public final class SpecializationSheetViewModel: ViewModel<SpecializationRoute> {
+public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
 
     public enum LoadState: Equatable, Sendable {
         case idle
@@ -30,25 +31,13 @@ public final class SpecializationSheetViewModel: ViewModel<SpecializationRoute> 
     @Observed
     public private(set) var canSpecialize: Bool = false
 
-    /// Public sink for popover-driven argument changes. The Coordinator pipes
-    /// the candidate-picker's `didSelect` signal here so the VM stays
-    /// agnostic of the popover's lifecycle.
-    public let parameterArgumentChangedRelay =
-        PublishRelay<(parameterName: String, candidate: RuntimeSpecializationRequest.Candidate)>()
-
-    /// Public sink for the per-row "Choose Type" button. The VC fires this
-    /// with the parameter name; the VM forwards it to the Coordinator (the
-    /// Coordinator resolves the anchor view back from the VC).
-    public let requestTypePickerClickedRelay = PublishRelay<String>()
-
     public struct Input {
         public let specializeClicked: Signal<Void>
         public let cancelClicked: Signal<Void>
-
-        public init(specializeClicked: Signal<Void>, cancelClicked: Signal<Void>) {
-            self.specializeClicked = specializeClicked
-            self.cancelClicked = cancelClicked
-        }
+        /// Fires when the user taps the "Choose Type" button on a row;
+        /// payload is the parameter name. The VM forwards it to the
+        /// coordinator, which resolves the anchor back from the VC.
+        public let requestTypePickerClicked: Signal<String>
     }
 
     public struct Output {
@@ -60,24 +49,11 @@ public final class SpecializationSheetViewModel: ViewModel<SpecializationRoute> 
     }
 
     public func transform(_ input: Input) -> Output {
-        parameterArgumentChangedRelay
-            .asSignal()
-            .emitOnNext { [weak self] (parameterName, candidate) in
-                guard let self else { return }
-                var newSelection = selection
-                newSelection.setCandidate(candidate, for: parameterName)
-                selection = newSelection
-                refreshCanSpecialize()
-            }
-            .disposed(by: rx.disposeBag)
-
-        requestTypePickerClickedRelay
-            .asSignal()
-            .emitOnNext { [weak self] parameterName in
-                guard let self else { return }
-                router.trigger(.requestTypePicker(parameterName: parameterName))
-            }
-            .disposed(by: rx.disposeBag)
+        input.requestTypePickerClicked.emitOnNext { [weak self] parameterName in
+            guard let self else { return }
+            router.trigger(.requestTypePicker(parameterName: parameterName))
+        }
+        .disposed(by: rx.disposeBag)
 
         input.specializeClicked.emitOnNext { [weak self] in
             guard let self else { return }
@@ -88,11 +64,7 @@ public final class SpecializationSheetViewModel: ViewModel<SpecializationRoute> 
         }
         .disposed(by: rx.disposeBag)
 
-        input.cancelClicked.emitOnNext { [weak self] in
-            guard let self else { return }
-            router.trigger(.cancel)
-        }
-        .disposed(by: rx.disposeBag)
+        input.cancelClicked.emit(to: router.rx.trigger(.cancel)).disposed(by: rx.disposeBag)
 
         return Output(
             request: $request.asDriver(onErrorJustReturn: nil),
@@ -107,8 +79,23 @@ public final class SpecializationSheetViewModel: ViewModel<SpecializationRoute> 
         self.runtimeObject = runtimeObject
         super.init(documentState: documentState, router: router)
         Task { [weak self] in
-            await self?.loadRequest()
+            guard let self else { return }
+            await loadRequest()
         }
+    }
+
+    /// Applies the candidate selected in the type-picker popover. The
+    /// coordinator calls this when handling
+    /// `SpecializationRoute.didSelectCandidate(...)`, so the VM stays
+    /// agnostic of the popover's lifecycle.
+    public func applyArgumentChange(
+        parameterName: String,
+        candidate: RuntimeSpecializationRequest.Candidate
+    ) {
+        var newSelection = selection
+        newSelection.setCandidate(candidate, for: parameterName)
+        selection = newSelection
+        refreshCanSpecialize()
     }
 
     private func refreshCanSpecialize() {
@@ -140,6 +127,14 @@ public final class SpecializationSheetViewModel: ViewModel<SpecializationRoute> 
 
     private func performSpecialize() async {
         do {
+            let validation = try await documentState.runtimeEngine.runtimePreflight(
+                for: runtimeObject,
+                with: selection
+            )
+            guard validation.isValid else {
+                errorRelay.accept(PreflightFailedError(errors: validation.errors))
+                return
+            }
             let specialized = try await documentState.runtimeEngine.specialize(
                 runtimeObject,
                 with: selection
@@ -149,6 +144,15 @@ public final class SpecializationSheetViewModel: ViewModel<SpecializationRoute> 
             #log(.error, "specialize failed: \(error, privacy: .public)")
             errorRelay.accept(error)
         }
+    }
+}
+
+private struct PreflightFailedError: LocalizedError {
+    let errors: [RuntimeSpecializationValidation.Error]
+
+    var errorDescription: String? {
+        let bullets = errors.map { "• \($0.description)" }.joined(separator: "\n")
+        return "Specialization is not valid:\n\(bullets)"
     }
 }
 
