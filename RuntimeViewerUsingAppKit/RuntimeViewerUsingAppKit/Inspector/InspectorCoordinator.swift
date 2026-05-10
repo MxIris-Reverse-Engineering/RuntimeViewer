@@ -24,8 +24,6 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
 
     private var runtimeObjectCoordinators: [InspectorRuntimeObjectCoordinator] = []
 
-    private var childEventDisposeBag = DisposeBag()
-
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
@@ -65,32 +63,15 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
                 documentState: documentState,
                 runtimeObject: runtimeObject
             )
-            bind(runtimeObjectCoordinator: runtimeObjectCoordinator)
+            runtimeObjectCoordinator.delegate = self
             runtimeObjectCoordinators.append(runtimeObjectCoordinator)
             return runtimeObjectCoordinator
         }
     }
 
-    private func bind(runtimeObjectCoordinator: InspectorRuntimeObjectCoordinator) {
-        runtimeObjectCoordinator.rx.didCompleteTransition()
-            .subscribeOnNext { [weak self] route in
-                guard let self else { return }
-                switch route {
-                case .requestSpecializationSheet(let object):
-                    trigger(.requestSpecializationSheet(object))
-                case .selectRuntimeObject(let object):
-                    trigger(.selectRuntimeObject(object))
-                default:
-                    break
-                }
-            }
-            .disposed(by: childEventDisposeBag)
-    }
-
     private func resetRuntimeObjectStack() {
         runtimeObjectCoordinators.forEach { $0.removeFromParent() }
         runtimeObjectCoordinators.removeAll()
-        childEventDisposeBag = DisposeBag()
     }
 
     private func makePlaceholder() -> UXViewController {
@@ -98,5 +79,21 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
         let viewController = InspectorPlaceholderViewController()
         viewController.setupBindings(for: viewModel)
         return viewController
+    }
+}
+
+extension InspectorCoordinator: InspectorRuntimeObjectCoordinator.Delegate {
+    func inspectorRuntimeObjectCoordinator(
+        _ coordinator: InspectorRuntimeObjectCoordinator,
+        didRequestSpecializationSheetFor object: RuntimeObject
+    ) {
+        trigger(.requestSpecializationSheet(object))
+    }
+
+    func inspectorRuntimeObjectCoordinator(
+        _ coordinator: InspectorRuntimeObjectCoordinator,
+        didSelectRuntimeObject object: RuntimeObject
+    ) {
+        trigger(.selectRuntimeObject(object))
     }
 }

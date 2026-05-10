@@ -63,6 +63,20 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
             outlineView.box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
         }
         .disposed(by: rx.disposeBag)
+
+        output.selectCell.emitOnNextMainActor { [weak self] result in
+            guard let self else { return }
+            let outlineView = outlineView
+            for ancestor in result.ancestors where !outlineView.isItemExpanded(ancestor) {
+                outlineView.expandItem(ancestor)
+            }
+            let row = outlineView.row(forItem: result.cell)
+            guard row >= 0, row < outlineView.numberOfRows else { return }
+            outlineView.selectRowIndexes(.init(integer: row), byExtendingSelection: false)
+            guard !outlineView.visibleRowIndexes.contains(row) else { return }
+            outlineView.box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
+        }
+        .disposed(by: rx.disposeBag)
     }
 
     @ArrayBuilder<Selector>

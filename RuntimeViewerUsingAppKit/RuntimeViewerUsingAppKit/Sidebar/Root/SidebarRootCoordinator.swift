@@ -7,6 +7,15 @@ import RuntimeViewerArchitectures
 typealias SidebarRootTransition = Transition<Void, SidebarRootTabViewController>
 
 final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRootTransition> {
+    protocol Delegate: AnyObject {
+        func rootCoordinator(
+            _ coordinator: SidebarRootCoordinator,
+            didClickImageNode imageNode: RuntimeImageNode
+        )
+    }
+
+    weak var delegate: Delegate?
+
     let documentState: DocumentState
 
     init(documentState: DocumentState) {
@@ -32,11 +41,9 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
             return .select(index: 0)
         case .bookmarks:
             return .select(index: 1)
-        default:
+        case .image(let imageNode):
+            delegate?.rootCoordinator(self, didClickImageNode: imageNode)
             return .none()
         }
     }
-
 }
-
-

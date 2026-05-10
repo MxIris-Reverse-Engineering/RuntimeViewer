@@ -7,6 +7,19 @@ import RuntimeViewerArchitectures
 typealias InspectorRuntimeObjectTransition = Transition<Void, InspectorRuntimeObjectTabViewController>
 
 final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeObjectRoute, InspectorRuntimeObjectTransition> {
+    protocol Delegate: AnyObject {
+        func inspectorRuntimeObjectCoordinator(
+            _ coordinator: InspectorRuntimeObjectCoordinator,
+            didRequestSpecializationSheetFor object: RuntimeObject
+        )
+        func inspectorRuntimeObjectCoordinator(
+            _ coordinator: InspectorRuntimeObjectCoordinator,
+            didSelectRuntimeObject object: RuntimeObject
+        )
+    }
+
+    weak var delegate: Delegate?
+
     let documentState: DocumentState
 
     let runtimeObject: RuntimeObject
@@ -30,7 +43,11 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
         case .specialization:
             guard let index = tabConfiguration.specializationIndex else { return .none() }
             return .select(index: index)
-        default:
+        case .requestSpecializationSheet(let object):
+            delegate?.inspectorRuntimeObjectCoordinator(self, didRequestSpecializationSheetFor: object)
+            return .none()
+        case .selectRuntimeObject(let object):
+            delegate?.inspectorRuntimeObjectCoordinator(self, didSelectRuntimeObject: object)
             return .none()
         }
     }

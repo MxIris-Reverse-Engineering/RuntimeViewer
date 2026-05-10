@@ -4,15 +4,36 @@ import RuntimeViewerArchitectures
 import MemberwiseInit
 
 public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
+    public typealias CellLookup = (cell: SidebarRuntimeObjectCellViewModel, ancestors: [SidebarRuntimeObjectCellViewModel])
+
     @Observed public private(set) var searchStringForOpenQuickly: String = ""
     @Observed public private(set) var nodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var filteredNodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var isFilteringForOpenQuickly: Bool = false
 
+    private let pendingSelectRelay = PublishRelay<RuntimeObject>()
+
     override var isSorted: Bool { true }
-    
+
     public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         super.init(imageNode: imageNode, documentState: documentState, router: router)
+    }
+
+    public func selectRuntimeObject(_ object: RuntimeObject) {
+        pendingSelectRelay.accept(object)
+    }
+
+    public static func findCell(
+        for object: RuntimeObject,
+        in nodes: [SidebarRuntimeObjectCellViewModel]
+    ) -> CellLookup? {
+        for node in nodes {
+            if node.runtimeObject == object { return (node, []) }
+            if let inner = findCell(for: object, in: node.children) {
+                return (inner.cell, [node] + inner.ancestors)
+            }
+        }
+        return nil
     }
 
     @MemberwiseInit(.public)
@@ -25,6 +46,7 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
     public struct Output {
         public let runtimeObjectsForOpenQuickly: Driver<[SidebarRuntimeObjectCellViewModel]>
         public let selectRuntimeObject: Signal<SidebarRuntimeObjectCellViewModel>
+        public let selectCell: Signal<CellLookup>
     }
 
     override func buildRuntimeObjects() async throws -> [RuntimeObject] {
@@ -100,9 +122,21 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
             }
             .disposed(by: rx.disposeBag)
 
+        let pendingResolved: Signal<CellLookup> = pendingSelectRelay
+            .asObservable()
+            .flatMapLatest { [weak self] object -> Observable<CellLookup> in
+                guard let self else { return .empty() }
+                return self.$nodes
+                    .asObservable()
+                    .compactMap { Self.findCell(for: object, in: $0) }
+                    .take(1)
+            }
+            .asSignal(onErrorSignalWith: .empty())
+
         return Output(
             runtimeObjectsForOpenQuickly: $filteredNodesForOpenQuickly.asDriver().skip(1),
-            selectRuntimeObject: input.runtimeObjectClickedForOpenQuickly
+            selectRuntimeObject: input.runtimeObjectClickedForOpenQuickly,
+            selectCell: pendingResolved
         )
     }
 }

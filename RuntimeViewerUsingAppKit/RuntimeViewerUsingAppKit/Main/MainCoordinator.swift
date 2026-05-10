@@ -21,8 +21,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 
     private(set) lazy var lateResponderRegistry = LateResponderRegistry()
 
-    private var childEventDisposeBag = DisposeBag()
-    
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowController: .init(documentState: documentState), initialRoute: .main(.local))
@@ -37,10 +35,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             contentCoordinator.removeFromParent()
             inspectorCoordinator.removeFromParent()
             sidebarCoordinator = SidebarCoordinator(documentState: documentState)
+            sidebarCoordinator.delegate = self
             contentCoordinator = ContentCoordinator(documentState: documentState)
+            contentCoordinator.delegate = self
             inspectorCoordinator = InspectorCoordinator(documentState: documentState)
             inspectorCoordinator.delegate = self
-            bindChildEvents()
             viewModel.completeTransition = sidebarCoordinator.rx.didCompleteTransition()
             windowController.setupBindings(for: viewModel)
             return .multiple(
@@ -51,7 +50,8 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 .route(on: inspectorCoordinator, to: .placeholder)
             )
         case .select(let runtimeObject):
-            return .route(on: contentCoordinator, to: .root(runtimeObject))
+            sidebarCoordinator.programmaticallySelectObject(runtimeObject)
+            return .none()
         case .sidebarBack:
             return .route(on: sidebarCoordinator, to: .back)
         case .contentBack:
@@ -119,56 +119,67 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         }
     }
 
-    // MARK: - Child coordinator delegates
-
-    private func bindChildEvents() {
-        childEventDisposeBag = DisposeBag()
-        
-        sidebarCoordinator.rx.didCompleteTransition()
-            .subscribeOnNext { [weak self] route in
-                guard let self else { return }
-                switch route {
-                case .clickedNode(let imageNode):
-                    documentState.currentImageNode = imageNode
-                case .selectedObject(let runtimeObject):
-                    documentState.selectedRuntimeObject = runtimeObject
-                    contentCoordinator.trigger(.root(runtimeObject))
-                case .back:
-                    documentState.currentImageNode = nil
-                    documentState.selectedRuntimeObject = nil
-                    contentCoordinator.trigger(.placeholder)
-                case .selectedNode:
-                    break
-                case .root:
-                    break
-                }
-            }
-            .disposed(by: childEventDisposeBag)
-        
-        contentCoordinator.rx.didCompleteTransition()
-            .subscribeOnNext { [weak self] route in
-                guard let self else { return }
-                let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
-                viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
-                switch route {
-                case .placeholder:
-                    documentState.selectedRuntimeObject = nil
-                    inspectorCoordinator.trigger(.placeholder)
-                case .root(let runtimeObject):
-                    documentState.selectedRuntimeObject = runtimeObject
-                    inspectorCoordinator.trigger(.root(.object(runtimeObject)))
-                case .next(let runtimeObject):
-                    documentState.selectedRuntimeObject = runtimeObject
-                    inspectorCoordinator.trigger(.next(.object(runtimeObject)))
-                case .back:
-                    inspectorCoordinator.trigger(.back)
-                }
-            }
-            .disposed(by: childEventDisposeBag)
+    private func updateContentStackDepth() {
+        let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
+        viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
     }
 }
 
-// MARK: - Inspector / Specialization delegate plumbing
+// MARK: - Sidebar / Content / Inspector / Specialization delegate plumbing
+
+extension MainCoordinator: SidebarCoordinator.Delegate {
+    func sidebarCoordinator(
+        _ coordinator: SidebarCoordinator,
+        didSelectObject runtimeObject: RuntimeObject
+    ) {
+        documentState.selectedRuntimeObject = runtimeObject
+        contentCoordinator.trigger(.root(runtimeObject))
+    }
+
+    func sidebarCoordinator(
+        _ coordinator: SidebarCoordinator,
+        didClickImageNode imageNode: RuntimeImageNode
+    ) {
+        documentState.currentImageNode = imageNode
+    }
+
+    func sidebarCoordinatorDidGoBack(_ coordinator: SidebarCoordinator) {
+        documentState.currentImageNode = nil
+        documentState.selectedRuntimeObject = nil
+        contentCoordinator.trigger(.placeholder)
+    }
+}
+
+extension MainCoordinator: ContentCoordinator.Delegate {
+    func contentCoordinatorDidShowPlaceholder(_ coordinator: ContentCoordinator) {
+        updateContentStackDepth()
+        documentState.selectedRuntimeObject = nil
+        inspectorCoordinator.trigger(.placeholder)
+    }
+
+    func contentCoordinator(
+        _ coordinator: ContentCoordinator,
+        didShowRoot runtimeObject: RuntimeObject
+    ) {
+        updateContentStackDepth()
+        documentState.selectedRuntimeObject = runtimeObject
+        inspectorCoordinator.trigger(.root(.object(runtimeObject)))
+    }
+
+    func contentCoordinator(
+        _ coordinator: ContentCoordinator,
+        didShowNext runtimeObject: RuntimeObject
+    ) {
+        updateContentStackDepth()
+        documentState.selectedRuntimeObject = runtimeObject
+        inspectorCoordinator.trigger(.next(.object(runtimeObject)))
+    }
+
+    func contentCoordinatorDidGoBack(_ coordinator: ContentCoordinator) {
+        updateContentStackDepth()
+        inspectorCoordinator.trigger(.back)
+    }
+}
 
 extension MainCoordinator: InspectorCoordinator.Delegate {
     func inspectorCoordinator(
@@ -182,9 +193,6 @@ extension MainCoordinator: InspectorCoordinator.Delegate {
         _: InspectorCoordinator,
         selectRuntimeObject object: RuntimeObject
     ) {
-        // Routing through `.select(_)` reuses the existing content + inspector
-        // update path so the specialized child becomes the active selection
-        // without manual fan-out.
         contextTrigger(.select(object))
     }
 }
