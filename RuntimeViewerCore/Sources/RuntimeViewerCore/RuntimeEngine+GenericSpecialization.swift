@@ -23,6 +23,38 @@ extension RuntimeEngine {
         }
     }
 
+    /// Run runtime-aware preflight on the user's selection before invoking
+    /// `specialize(_:with:)`. Surfaces protocol-conformance / layout /
+    /// base-class / same-type mismatches with structured diagnostics so the
+    /// UI can show them inline rather than letting `specialize` throw a
+    /// generic `specializationFailed`.
+    ///
+    /// `validation.isValid == true` does not guarantee `specialize` will
+    /// succeed (candidate metadata accessors are still evaluated lazily on
+    /// that path), but `false` *will* cause `specialize` to throw, so it is
+    /// safe to abort early when this returns errors.
+    public func runtimePreflight(
+        for object: RuntimeObject,
+        with selection: RuntimeSpecializationSelection
+    ) async throws -> RuntimeSpecializationValidation {
+        try await runtimePreflight(for: .init(object: object, selection: selection))
+    }
+
+    /// Internal (rather than `private`) so that
+    /// `RuntimeEngine.setMessageHandlerBinding(forName:of:to:)` in `RuntimeEngine.swift`
+    /// can reference `$0.runtimePreflight(for:)` across files. `private` extension
+    /// members are only visible within the file declaring the extension.
+    func runtimePreflight(for request: SpecializeRequest) async throws -> RuntimeSpecializationValidation {
+        try await self.request {
+            guard let swiftSection = await swiftSectionFactory.existingSection(for: request.object.imagePath) else {
+                throw EngineError.imageNotIndexed(imagePath: request.object.imagePath)
+            }
+            return try await swiftSection.runtimePreflight(for: request.object, with: request.selection)
+        } remote: { senderConnection in
+            try await senderConnection.sendMessage(name: .runtimePreflight, request: request)
+        }
+    }
+
     /// Specialize the given generic Swift type and register the resulting
     /// concrete `TypeDefinition` as a child of the original generic. Returns
     /// the new `RuntimeObject` representing the specialization so the caller

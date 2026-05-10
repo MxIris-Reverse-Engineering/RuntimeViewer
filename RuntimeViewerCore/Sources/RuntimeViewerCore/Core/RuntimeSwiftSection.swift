@@ -787,6 +787,81 @@ actor RuntimeSwiftSection {
         return runtimeObject
     }
 
+    func runtimePreflight(
+        for object: RuntimeObject,
+        with selection: RuntimeSpecializationSelection
+    ) async throws -> RuntimeSpecializationValidation {
+        let typeDefinition = try requireGenericTypeDefinition(for: object)
+        let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+        let upstreamSelection = try resolveUpstreamSelection(selection, against: upstreamRequest)
+        let upstreamValidation = specializer.runtimePreflight(selection: upstreamSelection, for: upstreamRequest)
+        return Self.translate(upstreamValidation)
+    }
+
+    private static func translate(_ validation: SpecializationValidation) -> RuntimeSpecializationValidation {
+        RuntimeSpecializationValidation(
+            isValid: validation.isValid,
+            errors: validation.errors.map(translate(_:)),
+            warnings: validation.warnings.map(translate(_:))
+        )
+    }
+
+    private static func translate(_ error: SpecializationValidation.Error) -> RuntimeSpecializationValidation.Error {
+        switch error {
+        case .missingArgument(let parameterName):
+            return .missingArgument(parameterName: parameterName)
+        case .protocolRequirementNotSatisfied(let parameterName, let protocolName, let actualType):
+            return .protocolRequirementNotSatisfied(
+                parameterName: parameterName,
+                protocolName: protocolName,
+                actualType: actualType
+            )
+        case .layoutRequirementNotSatisfied(let parameterName, let expectedLayout, let actualType):
+            return .layoutRequirementNotSatisfied(
+                parameterName: parameterName,
+                expectedLayout: String(describing: expectedLayout),
+                actualType: actualType
+            )
+        case .baseClassRequirementNotSatisfied(let parameterName, let expectedBaseClass, let actualType):
+            return .baseClassRequirementNotSatisfied(
+                parameterName: parameterName,
+                expectedBaseClass: expectedBaseClass,
+                actualType: actualType
+            )
+        case .sameTypeRequirementNotSatisfied(let parameterName, let expectedType, let actualType):
+            return .sameTypeRequirementNotSatisfied(
+                parameterName: parameterName,
+                expectedType: expectedType,
+                actualType: actualType
+            )
+        case .metadataResolutionFailed(let parameterName, let reason):
+            return .metadataResolutionFailed(parameterName: parameterName, reason: reason)
+        case .protocolDescriptorResolutionFailed(let parameterName, let protocolName, let reason):
+            return .protocolDescriptorResolutionFailed(
+                parameterName: parameterName,
+                protocolName: protocolName,
+                reason: reason
+            )
+        }
+    }
+
+    private static func translate(_ warning: SpecializationValidation.Warning) -> RuntimeSpecializationValidation.Warning {
+        switch warning {
+        case .extraArgument(let parameterName):
+            return .extraArgument(parameterName: parameterName)
+        case .associatedTypePathInSelection(let path):
+            return .associatedTypePathInSelection(path: path)
+        case .protocolNotInIndexer(let parameterName, let protocolName):
+            return .protocolNotInIndexer(parameterName: parameterName, protocolName: protocolName)
+        case .conformanceCheckFailed(let parameterName, let protocolName, let reason):
+            return .conformanceCheckFailed(parameterName: parameterName, protocolName: protocolName, reason: reason)
+        case .baseClassRequirementResolutionFailed(let parameterName, let reason):
+            return .baseClassRequirementResolutionFailed(parameterName: parameterName, reason: reason)
+        case .sameTypeRequirementResolutionSkipped(let parameterName, let reason):
+            return .sameTypeRequirementResolutionSkipped(parameterName: parameterName, reason: reason)
+        }
+    }
+
     private func requireGenericTypeDefinition(for object: RuntimeObject) throws -> TypeDefinition {
         guard let definitionName = nameToInterfaceDefinitionName[object],
               let typeName = definitionName.typeName

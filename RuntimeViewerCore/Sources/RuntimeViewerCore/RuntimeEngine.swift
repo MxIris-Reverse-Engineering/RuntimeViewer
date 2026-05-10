@@ -69,6 +69,7 @@ public actor RuntimeEngine {
         case engineListChanged
         case objectsLoadingProgress
         case specializationRequest
+        case runtimePreflight
         case specialize
 
         var commandName: String {
@@ -318,6 +319,7 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
         setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
         setMessageHandlerBinding(forName: .specializationRequest, of: self) { $0.specializationRequest(for:) }
+        setMessageHandlerBinding(forName: .runtimePreflight, of: self) { $0.runtimePreflight(for:) }
         setMessageHandlerBinding(forName: .specialize, of: self) { $0.specialize(for:) }
         setMessageHandlerBinding(forName: .engineList) { _ -> [RemoteEngineDescriptor] in
             #log(.debug, "[EngineMirroring] engineList handler called, provider set: \(RuntimeEngine.engineListProvider != nil, privacy: .public)")
