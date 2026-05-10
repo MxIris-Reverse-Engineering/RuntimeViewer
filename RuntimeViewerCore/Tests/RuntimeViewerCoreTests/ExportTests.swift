@@ -98,22 +98,20 @@ struct RuntimeInterfaceExportMetadataTests {
         #expect(readme.contains("- RuntimeViewer license: MIT License"))
     }
 
-    @Test("writer emits README only and removes stale plist sidecar")
+    @Test("writer emits README only")
     func writerEmitsReadmeOnly() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("RuntimeViewerExportMetadataTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: directory) }
-
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let plistURL = directory.appendingPathComponent("RuntimeViewerExportInfo.plist")
-        try Data("stale".utf8).write(to: plistURL)
 
         let metadata = makeMetadata()
         try RuntimeInterfaceExportWriter.writeMetadata(metadata, to: directory)
 
         let readmeURL = directory.appendingPathComponent("README.md")
         #expect(FileManager.default.fileExists(atPath: readmeURL.path))
-        #expect(!FileManager.default.fileExists(atPath: plistURL.path))
+        #expect(!FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("RuntimeViewerExportInfo.plist").path
+        ))
     }
 
     private func makeMetadata() -> RuntimeInterfaceExportMetadata {
