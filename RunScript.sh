@@ -128,6 +128,24 @@ if $UPDATE_PACKAGES; then
     update_packages
 fi
 
+GIT_COMMIT="$(git rev-parse --short=12 HEAD 2>/dev/null || true)"
+GIT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || git describe --tags --exact-match 2>/dev/null || true)"
+BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+[[ -n "$GIT_COMMIT" ]] || GIT_COMMIT="unknown"
+[[ -n "$GIT_BRANCH" ]] || GIT_BRANCH="unknown"
+if [[ "$GIT_COMMIT" != "unknown" ]] && [[ -n "$(git status --porcelain 2>/dev/null || true)" ]]; then
+    GIT_COMMIT="${GIT_COMMIT}-dirty"
+fi
+
+COMMON_XCODEBUILD_SETTINGS=(
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+    "RUNTIME_VIEWER_BUILD_DATE=$BUILD_DATE"
+    "RUNTIME_VIEWER_GIT_BRANCH=$GIT_BRANCH"
+    "RUNTIME_VIEWER_GIT_COMMIT=$GIT_COMMIT"
+)
+
+log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
+
 log "Building Catalyst helper"
 XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
@@ -136,7 +154,7 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -destination 'generic/platform=macOS,variant=Mac Catalyst' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
-    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+    "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
@@ -146,7 +164,7 @@ XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -destination 'generic/platform=macOS' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
-    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+    "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"
 APP_PATH=""

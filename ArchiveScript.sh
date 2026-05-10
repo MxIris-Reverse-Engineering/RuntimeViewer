@@ -199,6 +199,30 @@ if $UPDATE_PACKAGES; then
     update_packages
 fi
 
+GIT_COMMIT="$(git rev-parse --short=12 HEAD 2>/dev/null || true)"
+GIT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
+if [[ -z "$GIT_BRANCH" && -n "$VERSION_TAG" ]]; then
+    GIT_BRANCH="$VERSION_TAG"
+fi
+if [[ -z "$GIT_BRANCH" ]]; then
+    GIT_BRANCH="$(git describe --tags --exact-match 2>/dev/null || true)"
+fi
+BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+[[ -n "$GIT_COMMIT" ]] || GIT_COMMIT="unknown"
+[[ -n "$GIT_BRANCH" ]] || GIT_BRANCH="unknown"
+if [[ "$GIT_COMMIT" != "unknown" ]] && [[ -n "$(git status --porcelain 2>/dev/null || true)" ]]; then
+    GIT_COMMIT="${GIT_COMMIT}-dirty"
+fi
+
+COMMON_XCODEBUILD_SETTINGS=(
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+    "RUNTIME_VIEWER_BUILD_DATE=$BUILD_DATE"
+    "RUNTIME_VIEWER_GIT_BRANCH=$GIT_BRANCH"
+    "RUNTIME_VIEWER_GIT_COMMIT=$GIT_COMMIT"
+)
+
+log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
+
 log "Archiving Catalyst helper"
 XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
@@ -207,7 +231,7 @@ XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
     -destination 'generic/platform=macOS,variant=Mac Catalyst' \
     -archivePath "$CATALYST_HELPER_ARCHIVE" \
     -skipPackagePluginValidation -skipMacroValidation \
-    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+    "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 run rm -rf "$CATALYST_EXPORT_PATH/RuntimeViewerCatalystHelper.app"
 XCODEBUILD_LOG_NAME="export-catalyst-helper" run_piped xcodebuild -exportArchive \
@@ -227,7 +251,7 @@ XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -destination 'generic/platform=macOS' \
     -archivePath "$MAIN_ARCHIVE" \
     -skipPackagePluginValidation -skipMacroValidation \
-    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+    "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 run rm -rf "$EXPORT_PATH"
 XCODEBUILD_LOG_NAME="export-main" run_piped xcodebuild -exportArchive \
