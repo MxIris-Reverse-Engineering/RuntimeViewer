@@ -50,6 +50,7 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         }
 
         tableView.do {
+            $0.backgroundColor = .clear
             $0.headerView = nil
             $0.allowsMultipleSelection = false
             $0.allowsEmptySelection = true
@@ -58,8 +59,8 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         }
 
         scrollView.do {
-            $0.borderType = .lineBorder
             $0.autohidesScrollers = true
+            $0.backgroundColor = .clear
         }
 
         headerLabel.do {
