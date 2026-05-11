@@ -58,11 +58,6 @@ final class SpecializationTypePickerViewController: UXKitViewController<Speciali
     override func setupBindings(for viewModel: SpecializationTypePickerViewModel) {
         super.setupBindings(for: viewModel)
 
-        // The `rx.items` adapter installs the data source + required-method
-        // delegate proxy; `setDelegate` forwards optional delegate methods
-        // (e.g. `shouldSelectRow`) so generic candidates stay un-selectable.
-        tableView.rx.setDelegate(self).disposed(by: rx.disposeBag)
-
         let candidateClicked: Signal<RuntimeSpecializationRequest.Candidate> = tableView.rx
             .itemClicked()
             .compactMap { [weak tableView] index -> RuntimeSpecializationRequest.Candidate? in
@@ -87,17 +82,6 @@ final class SpecializationTypePickerViewController: UXKitViewController<Speciali
                 return cellView
             }
             .disposed(by: rx.disposeBag)
-    }
-}
-
-// MARK: - NSTableViewDelegate
-
-extension SpecializationTypePickerViewController: NSTableViewDelegate {
-    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        guard row >= 0,
-              let candidate: RuntimeSpecializationRequest.Candidate = try? tableView.rx.model(at: row)
-        else { return false }
-        return !candidate.isGeneric
     }
 }
 
@@ -161,8 +145,8 @@ extension SpecializationTypePickerViewController {
 
             genericBadge.do {
                 $0.font = .systemFont(ofSize: 10, weight: .medium)
-                $0.textColor = .systemRed
-                $0.stringValue = "GENERIC"
+                $0.textColor = .systemBlue
+                $0.stringValue = "NESTED"
             }
         }
 
@@ -170,11 +154,10 @@ extension SpecializationTypePickerViewController {
             nameLabel.stringValue = candidate.displayName
             imageLabel.stringValue = (candidate.imagePath as NSString).lastPathComponent
             genericBadge.isHidden = !candidate.isGeneric
-            let alpha: CGFloat = candidate.isGeneric ? 0.5 : 1.0
-            nameLabel.alphaValue = alpha
-            imageLabel.alphaValue = alpha
+            nameLabel.alphaValue = 1.0
+            imageLabel.alphaValue = 1.0
             toolTip = candidate.isGeneric
-                ? "Generic candidates require nested specialization, which is not supported in v1."
+                ? "Selecting this opens a nested specialization for the type's own generic parameters."
                 : nil
         }
     }
