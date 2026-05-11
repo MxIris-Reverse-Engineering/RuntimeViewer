@@ -22,8 +22,23 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     @Observed
     public private(set) var request: RuntimeSpecializationRequest?
 
-    @Observed
-    public private(set) var selection: RuntimeSpecializationSelection = .init()
+    /// Source-of-truth row tree for the outline form. The wire-level
+    /// `RuntimeSpecializationSelection` is derived at preflight / specialize
+    /// time by walking each row's `argument`, so we never have to keep two
+    /// states in sync.
+    public private(set) var topLevelRows: [SpecializationRowViewModel] = []
+
+    /// Re-emits the row array on every mutation so `outlineView.rx.nodes`
+    /// can diff and pick up new child rows. `@Observed` would filter
+    /// duplicate-reference array writes, which is what we *don't* want here
+    /// — children of an existing row mutate without changing the top-level
+    /// references.
+    private let topLevelRowsRelay = BehaviorRelay<[SpecializationRowViewModel]>(value: [])
+
+    /// Fires after a generic candidate's inner parameters have been installed
+    /// onto a row, so the controller can call `expandItem(_:expandChildren:)`
+    /// without juggling its own bookkeeping.
+    private let expandRowRelay = PublishRelay<SpecializationRowViewModel>()
 
     @Observed
     public private(set) var loadState: LoadState = .idle
@@ -34,24 +49,26 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     public struct Input {
         public let specializeClicked: Signal<Void>
         public let cancelClicked: Signal<Void>
-        /// Fires when the user taps the "Choose Type" button on a row;
-        /// payload is the parameter name. The VM forwards it to the
-        /// coordinator, which resolves the anchor back from the VC.
-        public let requestTypePickerClicked: Signal<String>
+        /// Fires when the user taps the "Choose Type" button on a row; the
+        /// payload is the row's `parameterPath`. The VM forwards the path
+        /// onto the coordinator, which resolves the anchor back from the VC
+        /// and presents the type-picker popover.
+        public let requestTypePickerClicked: Signal<[String]>
     }
 
     public struct Output {
         public let request: Driver<RuntimeSpecializationRequest?>
-        public let selection: Driver<RuntimeSpecializationSelection>
+        public let rows: Driver<[SpecializationRowViewModel]>
         public let loadState: Driver<LoadState>
         public let canSpecialize: Driver<Bool>
         public let runtimeObjectDisplayName: Driver<String>
+        public let expandRow: Signal<SpecializationRowViewModel>
     }
 
     public func transform(_ input: Input) -> Output {
-        input.requestTypePickerClicked.emitOnNext { [weak self] parameterName in
+        input.requestTypePickerClicked.emitOnNext { [weak self] parameterPath in
             guard let self else { return }
-            router.trigger(.requestTypePicker(parameterName: parameterName))
+            router.trigger(.requestTypePicker(parameterPath: parameterPath))
         }
         .disposed(by: rx.disposeBag)
 
@@ -68,10 +85,11 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
 
         return Output(
             request: $request.asDriver(onErrorJustReturn: nil),
-            selection: $selection.asDriver(onErrorJustReturn: .init()),
+            rows: topLevelRowsRelay.asDriver(),
             loadState: $loadState.asDriver(onErrorJustReturn: .idle),
             canSpecialize: $canSpecialize.asDriver(onErrorJustReturn: false),
-            runtimeObjectDisplayName: Driver.just(runtimeObject.displayName)
+            runtimeObjectDisplayName: Driver.just(runtimeObject.displayName),
+            expandRow: expandRowRelay.asSignal()
         )
     }
 
@@ -84,26 +102,67 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
         }
     }
 
-    /// Applies the candidate selected in the type-picker popover. The
-    /// coordinator calls this when handling
-    /// `SpecializationRoute.didSelectCandidate(...)`, so the VM stays
-    /// agnostic of the popover's lifecycle.
+    /// Apply the candidate the user picked in the popover. Generic candidates
+    /// trigger a lazy `specializationRequest(forCandidate:in:)` fetch and
+    /// then `expandRow` so the freshly populated inner rows are visible.
     public func applyArgumentChange(
-        parameterName: String,
+        path: [String],
         candidate: RuntimeSpecializationRequest.Candidate
     ) {
-        var newSelection = selection
-        newSelection.setArgument(.candidate(candidate), for: parameterName)
-        selection = newSelection
+        guard let row = locateRow(path: path, in: topLevelRows) else {
+            #log(.error, "Cannot locate row for path \(path, privacy: .public)")
+            return
+        }
+        row.applyCandidate(candidate)
+        publishRowsAndRefresh()
+
+        guard candidate.isGeneric else { return }
+
+        row.setLoading()
+        publishRowsAndRefresh()
+
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let innerRequest = try await documentState.runtimeEngine
+                    .specializationRequest(forCandidate: candidate.id, in: candidate.imagePath)
+                await MainActor.run {
+                    row.installInnerParameters(innerRequest.parameters)
+                    self.publishRowsAndRefresh()
+                    self.expandRowRelay.accept(row)
+                }
+            } catch {
+                #log(.error, "Failed to fetch inner specialization request: \(error, privacy: .public)")
+                await MainActor.run {
+                    row.setLoadFailed(error.localizedDescription)
+                    self.publishRowsAndRefresh()
+                    self.errorRelay.accept(error)
+                }
+            }
+        }
+    }
+
+    private func locateRow(
+        path: [String],
+        in rows: [SpecializationRowViewModel]
+    ) -> SpecializationRowViewModel? {
+        guard let head = path.first else { return nil }
+        guard let match = rows.first(where: { $0.parameter.name == head }) else { return nil }
+        if path.count == 1 { return match }
+        return locateRow(path: Array(path.dropFirst()), in: match.children)
+    }
+
+    private func publishRowsAndRefresh() {
+        topLevelRowsRelay.accept(topLevelRows)
         refreshCanSpecialize()
     }
 
     private func refreshCanSpecialize() {
-        guard case .loaded = loadState, let request else {
+        guard case .loaded = loadState else {
             canSpecialize = false
             return
         }
-        canSpecialize = request.parameters.allSatisfy { selection.hasArgument(for: $0.name) }
+        canSpecialize = !topLevelRows.isEmpty && topLevelRows.allSatisfy { $0.argument != nil }
     }
 
     private func loadRequest() async {
@@ -111,8 +170,11 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
         do {
             let req = try await documentState.runtimeEngine.specializationRequest(for: runtimeObject)
             request = req
+            topLevelRows = req.parameters.map {
+                SpecializationRowViewModel(parameterPath: [$0.name], parameter: $0)
+            }
             loadState = .loaded
-            refreshCanSpecialize()
+            publishRowsAndRefresh()
         } catch RuntimeEngine.EngineError.imageNotIndexed(let imagePath) {
             loadState = .failed(message: "Image is not indexed: \(imagePath)")
         } catch RuntimeEngine.EngineError.typeNotGeneric {
@@ -126,6 +188,15 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     }
 
     private func performSpecialize() async {
+        var arguments: [String: RuntimeSpecializationSelection.Argument] = [:]
+        for row in topLevelRows {
+            guard let argument = row.argument else {
+                #log(.error, "Row for parameter \(row.parameter.name, privacy: .public) has no argument; specialize aborted")
+                return
+            }
+            arguments[row.parameter.name] = argument
+        }
+        let selection = RuntimeSpecializationSelection(arguments: arguments)
         do {
             let validation = try await documentState.runtimeEngine.runtimePreflight(
                 for: runtimeObject,
@@ -155,6 +226,5 @@ private struct PreflightFailedError: LocalizedError {
         return "Specialization is not valid:\n\(bullets)"
     }
 }
-
 
 #endif

@@ -10,7 +10,7 @@ import RuntimeViewerApplication
 /// parent coordinator can apply the change to `SpecializationViewModel`
 /// without the popover knowing about its lifecycle.
 public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRoute> {
-    private let parameterName: String
+    private let parameterPath: [String]
 
     private let allCandidates: [RuntimeSpecializationRequest.Candidate]
 
@@ -35,12 +35,12 @@ public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRo
     }
 
     public init(
-        parameterName: String,
+        parameterPath: [String],
         candidates: [RuntimeSpecializationRequest.Candidate],
         documentState: DocumentState,
         router: any Router<SpecializationRoute>
     ) {
-        self.parameterName = parameterName
+        self.parameterPath = parameterPath
         self.allCandidates = candidates
         super.init(documentState: documentState, router: router)
         self.filteredCandidates = candidates
@@ -55,11 +55,9 @@ public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRo
 
         input.candidateClicked.emitOnNext { [weak self] candidate in
             guard let self else { return }
-            // Generic candidates require nested specialization (not supported
-            // in v1); the picker UI shows them disabled so the click should
-            // be a no-op rather than an error.
-            guard !candidate.isGeneric else { return }
-            router.trigger(.didSelectCandidate(parameterName: parameterName, candidate: candidate))
+            // Both leaf and generic candidates emit `didSelectCandidate` now;
+            // generic candidates open the nested specialization flow.
+            router.trigger(.didSelectCandidate(parameterPath: parameterPath, candidate: candidate))
         }
         .disposed(by: rx.disposeBag)
 

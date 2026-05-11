@@ -10,26 +10,16 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 
     private let headerLabel = Label()
     private let statusLabel = Label()
-    private let gridView = NSGridView().then {
-        $0.rowSpacing = 8
-        $0.columnSpacing = 12
-        $0.xPlacement = .leading
-        $0.yPlacement = .center
-    }
+    private let (scrollView, outlineView): (ScrollView, NSOutlineView) = NSOutlineView.scrollableSingleColumnOutlineView()
     private let cancelButton = PushButton(title: "Cancel", titleFont: .systemFont(ofSize: 13))
     private let specializeButton = PushButton(title: "Specialize", titleFont: .systemFont(ofSize: 13))
 
-    /// Map from parameter name → its choose button. Used by
-    /// `anchorView(forParameter:)` so the coordinator can present the
-    /// type-picker popover relative to the right per-row button, and by the
-    /// `selection` driver to refresh the button title in place.
-    private var chooseButtonsByParameterName: [String: NSButton] = [:]
-
-    /// Aggregator for "Choose Type" clicks across the dynamically rebuilt
-    /// rows. Each row's `chooseButton` accepts its parameter name into this
-    /// relay; the relay's signal is wired through `Input` so the VM sees a
-    /// single per-parameter click stream.
-    private let requestTypePickerClickedRelay = PublishRelay<String>()
+    /// Forwarded "Choose Type" clicks from every recycled `ParameterRowCellView`.
+    /// Each cell pushes its own row's `parameterPath` here; the controller
+    /// re-emits the stream through `Input.requestTypePickerClicked` so the
+    /// VM/coordinator can resolve the matching row, even when the outline
+    /// reuses cells across diffs.
+    private let chooseClickRelay = PublishRelay<[String]>()
 
     // MARK: - Lifecycle
 
@@ -39,7 +29,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         view.hierarchy {
             headerLabel
             statusLabel
-            gridView
+            scrollView
             cancelButton
             specializeButton
         }
@@ -48,7 +38,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
             make.top.leading.trailing.equalToSuperview().inset(20)
         }
 
-        gridView.snp.makeConstraints { make in
+        scrollView.snp.makeConstraints { make in
             make.top.equalTo(headerLabel.snp.bottom).offset(16)
             make.leading.trailing.equalToSuperview().inset(20)
         }
@@ -59,7 +49,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         }
 
         specializeButton.snp.makeConstraints { make in
-            make.top.greaterThanOrEqualTo(gridView.snp.bottom).offset(20)
+            make.top.greaterThanOrEqualTo(scrollView.snp.bottom).offset(20)
             make.top.greaterThanOrEqualTo(statusLabel.snp.bottom).offset(20)
             make.trailing.bottom.equalToSuperview().inset(20)
             make.width.equalTo(100)
@@ -92,13 +82,47 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
             $0.keyEquivalent = "\u{1b}"
         }
 
-        preferredContentSize = NSSize(width: 480, height: 360)
+        scrollView.do {
+            $0.autohidesScrollers = true
+            $0.hasHorizontalScroller = false
+            $0.borderType = .noBorder
+            $0.drawsBackground = false
+        }
+
+        outlineView.do {
+            $0.headerView = nil
+            $0.indentationPerLevel = 16
+            $0.style = .inset
+            $0.backgroundColor = .clear
+            $0.rowHeight = 28
+            $0.allowsEmptySelection = true
+            $0.allowsMultipleSelection = false
+        }
+
+        preferredContentSize = NSSize(width: 520, height: 360)
     }
 
     // MARK: - Anchor lookup (for coordinator-driven popover positioning)
 
-    func anchorView(forParameter parameterName: String) -> NSView? {
-        chooseButtonsByParameterName[parameterName]
+    func anchorView(forPath parameterPath: [String]) -> NSView? {
+        guard let row = locateRow(forPath: parameterPath) else { return nil }
+        let rowIndex = outlineView.row(forItem: row)
+        guard rowIndex >= 0,
+              let cellView = outlineView.view(atColumn: 0, row: rowIndex, makeIfNecessary: false) as? ParameterRowCellView
+        else { return nil }
+        return cellView.chooseButton
+    }
+
+    private func locateRow(forPath parameterPath: [String]) -> SpecializationRowViewModel? {
+        guard let viewModel else { return nil }
+        var rows = viewModel.topLevelRows
+        var matchedRow: SpecializationRowViewModel?
+        for name in parameterPath {
+            guard let next = rows.first(where: { $0.parameter.name == name }) else { return nil }
+            matchedRow = next
+            rows = next.children
+        }
+        return matchedRow
     }
 
     // MARK: - Bindings
@@ -109,7 +133,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         let input = SpecializationViewModel.Input(
             specializeClicked: specializeButton.rx.click.asSignal(),
             cancelClicked: cancelButton.rx.click.asSignal(),
-            requestTypePickerClicked: requestTypePickerClickedRelay.asSignal()
+            requestTypePickerClicked: chooseClickRelay.asSignal()
         )
         let output = viewModel.transform(input)
 
@@ -123,20 +147,26 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         let loadState = output.loadState
         loadState.map(Self.statusText).drive(statusLabel.rx.stringValue).disposed(by: rx.disposeBag)
         loadState.map(Self.isStatusHidden).drive(statusLabel.rx.isHidden).disposed(by: rx.disposeBag)
-        loadState.map(Self.isFormHidden).drive(gridView.rx.isHidden).disposed(by: rx.disposeBag)
+        loadState.map(Self.isFormHidden).drive(scrollView.rx.isHidden).disposed(by: rx.disposeBag)
         loadState.map(Self.isSpecializeHidden).drive(specializeButton.rx.isHidden).disposed(by: rx.disposeBag)
 
-        output.request.driveOnNext { [weak self] request in
-            guard let self else { return }
-            rebuildForm(for: request)
-        }
-        .disposed(by: rx.disposeBag)
-
-        output.selection.driveOnNext { [weak self] selection in
-            guard let self else { return }
-            for (parameterName, chooseButton) in chooseButtonsByParameterName {
-                chooseButton.title = Self.buttonTitle(for: selection[parameterName])
+        output.rows
+            .drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, row: SpecializationRowViewModel) -> NSView? in
+                let cellView = outlineView.box.makeView(ofClass: ParameterRowCellView.self)
+                cellView.bind(to: row)
+                if let self {
+                    cellView.clickRelay
+                        .asSignal()
+                        .emit(to: self.chooseClickRelay)
+                        .disposed(by: cellView.rx.disposeBag)
+                }
+                return cellView
             }
+            .disposed(by: rx.disposeBag)
+
+        output.expandRow.emitOnNext { [weak self] row in
+            guard let self else { return }
+            outlineView.expandItem(row, expandChildren: false)
         }
         .disposed(by: rx.disposeBag)
     }
@@ -168,54 +198,57 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         case .unsupported, .failed: return true
         }
     }
+}
 
-    private static func buttonTitle(for argument: RuntimeSpecializationSelection.Argument?) -> String {
-        switch argument {
-        case .candidate(let candidate)?:
-            return candidate.displayName
-        case .boundGeneric(let baseCandidate, _)?:
-            return baseCandidate.displayName
-        case nil:
-            return "Choose Type…"
-        }
-    }
+// MARK: - ParameterRowCellView
 
-    // MARK: - Form
+extension SpecializationViewController {
+    fileprivate final class ParameterRowCellView: TableCellView {
+        private let descriptionLabel = Label()
+        let chooseButton = PushButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
+        let clickRelay = PublishRelay<[String]>()
 
-    private func rebuildForm(for request: RuntimeSpecializationRequest?) {
-        while gridView.numberOfRows > 0 {
-            gridView.removeRow(at: 0)
-        }
-        chooseButtonsByParameterName.removeAll()
+        override func setup() {
+            super.setup()
 
-        guard let request else { return }
-
-        for parameter in request.parameters {
-            let nameLabel = Label(parameter.displayDescription).then {
-                $0.font = .systemFont(ofSize: 13)
-                $0.textColor = .controlTextColor
+            let stack = HStackView(spacing: 8) {
+                descriptionLabel
+                chooseButton
             }
-            nameLabel.setContentHuggingPriority(.required, for: .horizontal)
+            hierarchy { stack }
+            stack.snp.makeConstraints { make in
+                make.leading.trailing.equalToSuperview().inset(4)
+                make.centerY.equalToSuperview()
+            }
 
-            let chooseButton = PushButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
+            descriptionLabel.do {
+                $0.maximumNumberOfLines = 1
+                $0.lineBreakMode = .byTruncatingTail
+            }
+
+            chooseButton.setContentHuggingPriority(.required, for: .horizontal)
             chooseButton.snp.makeConstraints { make in
-                make.width.greaterThanOrEqualTo(180)
+                make.width.greaterThanOrEqualTo(160)
             }
+        }
+
+        func bind(to row: SpecializationRowViewModel) {
+            rx.disposeBag = DisposeBag()
+
+            row.$descriptionText.asDriver()
+                .drive(descriptionLabel.rx.attributedStringValue)
+                .disposed(by: rx.disposeBag)
+
+            row.$buttonTitle.asDriver()
+                .drive(chooseButton.rx.title)
+                .disposed(by: rx.disposeBag)
 
             chooseButton.rx.click
                 .asSignal()
-                .emit(with: self) { $0.requestTypePickerClickedRelay.accept(parameter.name) }
-                .disposed(by: chooseButton.rx.disposeBag)
-
-            gridView.addRow(with: [nameLabel, chooseButton])
-            chooseButtonsByParameterName[parameter.name] = chooseButton
-        }
-
-        // Columns are created lazily by `addRow(with:)` — only configure them
-        // after the first row has been added, otherwise `column(at:)` traps.
-        if gridView.numberOfColumns >= 2 {
-            gridView.column(at: 0).xPlacement = .leading
-            gridView.column(at: 1).xPlacement = .trailing
+                .emit(with: self) { cell, _ in
+                    cell.clickRelay.accept(row.parameterPath)
+                }
+                .disposed(by: rx.disposeBag)
         }
     }
 }
