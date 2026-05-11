@@ -125,7 +125,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
             guard let self, let row else { return }
             do {
                 let innerRequest = try await documentState.runtimeEngine
-                    .specializationRequest(forCandidate: candidate.id, in: candidate.imagePath)
+                    .specializationRequest(forCandidateID: candidate.id, in: candidate.imagePath)
                 if Task.isCancelled { return }
                 await MainActor.run {
                     // Belt-and-braces: a re-pick to a different candidate

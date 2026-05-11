@@ -213,6 +213,7 @@ extension SpecializationViewController {
 
             let stack = HStackView(spacing: 8) {
                 descriptionLabel
+                MaxSpacer()
                 chooseButton
             }
             hierarchy { stack }

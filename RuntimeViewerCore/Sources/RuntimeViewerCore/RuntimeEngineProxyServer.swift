@@ -178,7 +178,7 @@ public actor RuntimeEngineProxyServer {
 
         connection.setMessageHandler(name: RuntimeEngine.CommandNames.specializationRequestForCandidate.commandName) {
             [engine] (request: RuntimeEngine.SpecializationRequestForCandidateRequest) -> RuntimeSpecializationRequest in
-            try await engine.specializationRequest(forCandidate: request.candidateID, in: request.imagePath)
+            try await engine.specializationRequest(forCandidateID: request.candidateID, in: request.imagePath)
         }
 
         connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimePreflight.commandName) {

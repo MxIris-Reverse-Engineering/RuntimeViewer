@@ -110,7 +110,7 @@ extension RuntimeEngine {
     /// `makeRuntimeSpecializationRequest` so the inner request's wire shape is
     /// identical to the outer-level one.
     public func specializationRequest(
-        forCandidate candidateID: String,
+        forCandidateID candidateID: String,
         in imagePath: String
     ) async throws -> RuntimeSpecializationRequest {
         try await specializationRequest(for: .init(candidateID: candidateID, imagePath: imagePath))
