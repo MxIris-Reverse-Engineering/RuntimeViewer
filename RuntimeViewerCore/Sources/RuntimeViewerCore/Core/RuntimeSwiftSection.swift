@@ -946,16 +946,24 @@ actor RuntimeSwiftSection {
     /// stdlib — are still resolvable). The inner request is built from that
     /// definition's `typeContextDescriptorWrapper` and the inner arguments are
     /// resolved against it.
+    /// Matches MachOSwiftSection's `maxBindingDepth`. Caps our recursive
+    /// `.boundGeneric` walk so a deeply nested wire payload can not blow the
+    /// stack on the engine side. Breaches surface as the same
+    /// `boundGenericInnerFailed` diagnostic the upstream uses, with the
+    /// outer-most parameter name attached so the UI can localize.
+    private static let maxSpecializationDepth = 16
+
     private func resolveUpstreamArguments(
         _ runtimeArguments: [String: RuntimeSpecializationSelection.Argument],
-        against request: SpecializationRequest
+        against request: SpecializationRequest,
+        depth: Int = 0
     ) throws -> ResolvedUpstreamArguments {
         var result = ResolvedUpstreamArguments(arguments: [:], nodesByParameter: [:])
         for (parameterName, runtimeArgument) in runtimeArguments {
             guard let parameter = request.parameters.first(where: { $0.name == parameterName }) else {
                 throw RuntimeEngine.EngineError.specializationParameterNotFound(name: parameterName)
             }
-            let resolution = try resolveUpstreamArgument(runtimeArgument, for: parameter)
+            let resolution = try resolveUpstreamArgument(runtimeArgument, for: parameter, depth: depth)
             result.arguments[parameterName] = resolution.argument
             result.nodesByParameter[parameterName] = resolution.node
         }
@@ -964,13 +972,20 @@ actor RuntimeSwiftSection {
 
     private func resolveUpstreamArgument(
         _ runtimeArgument: RuntimeSpecializationSelection.Argument,
-        for parameter: SpecializationRequest.Parameter
+        for parameter: SpecializationRequest.Parameter,
+        depth: Int
     ) throws -> (argument: SpecializationSelection.Argument, node: Node) {
         switch runtimeArgument {
         case .candidate(let runtimeCandidate):
             let matched = try matchUpstreamCandidate(runtimeCandidate, in: parameter)
             return (.candidate(matched), matched.typeName.node)
         case .boundGeneric(let runtimeBase, let innerRuntimeArguments):
+            guard depth < Self.maxSpecializationDepth else {
+                throw RuntimeEngine.EngineError.boundGenericInnerFailed(
+                    parameterName: parameter.name,
+                    underlying: "Nested specialization depth exceeds the limit of \(Self.maxSpecializationDepth)."
+                )
+            }
             let matchedBase = try matchUpstreamCandidate(runtimeBase, in: parameter)
             guard let innerTypeDefinition = factory.indexer.allTypeDefinitions[matchedBase.typeName] else {
                 throw RuntimeEngine.EngineError.unindexedCandidate(
@@ -984,7 +999,11 @@ actor RuntimeSwiftSection {
             } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
                 throw Self.translate(error)
             }
-            let innerResolved = try resolveUpstreamArguments(innerRuntimeArguments, against: innerRequest)
+            let innerResolved = try resolveUpstreamArguments(
+                innerRuntimeArguments,
+                against: innerRequest,
+                depth: depth + 1
+            )
             let innerNodes: [Node] = innerRequest.parameters.compactMap { innerResolved.nodesByParameter[$0.name] }
             let boundNode = Self.buildBoundGenericNode(base: matchedBase, innerNodes: innerNodes)
             return (

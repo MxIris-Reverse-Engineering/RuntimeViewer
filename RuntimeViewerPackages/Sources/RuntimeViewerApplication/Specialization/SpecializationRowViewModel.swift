@@ -41,6 +41,11 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
     @Observed
     public private(set) var descriptionText: NSAttributedString
 
+    /// In-flight inner-request fetch for the current `selectedCandidate`,
+    /// captured so a fast re-pick can cancel the stale request before its
+    /// callback would otherwise splice the wrong inner parameters in.
+    private var inflightInnerFetch: Task<Void, Never>?
+
     public var isLeaf: Bool { children.isEmpty && loadState == .idle }
 
     public enum InnerLoadState: Equatable, Sendable {
@@ -93,6 +98,10 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
     /// `installInnerParameters` plumbs in fresh child rows from the inner
     /// request fetch.
     public func applyCandidate(_ candidate: RuntimeSpecializationRequest.Candidate) {
+        // Cancel any previous inner-request fetch so its late callback can
+        // not race the new pick.
+        inflightInnerFetch?.cancel()
+        inflightInnerFetch = nil
         selectedCandidate = candidate
         children = []
         loadState = .idle
@@ -101,6 +110,17 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
 
     public func setLoading() {
         loadState = .loading
+    }
+
+    /// Attach an in-flight fetch so `applyCandidate` can cancel it on a
+    /// re-pick. The task is dropped (without cancellation) once it finishes
+    /// naturally.
+    public func attachInflightInnerFetch(_ task: Task<Void, Never>) {
+        inflightInnerFetch = task
+    }
+
+    public func clearInflightInnerFetch() {
+        inflightInnerFetch = nil
     }
 
     public func setLoadFailed(_ message: String) {

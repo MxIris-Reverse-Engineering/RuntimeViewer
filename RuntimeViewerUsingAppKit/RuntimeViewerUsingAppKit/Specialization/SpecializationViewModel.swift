@@ -121,25 +121,36 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
         row.setLoading()
         publishRowsAndRefresh()
 
-        Task { [weak self] in
-            guard let self else { return }
+        let fetchTask: Task<Void, Never> = Task { [weak self, weak row] in
+            guard let self, let row else { return }
             do {
                 let innerRequest = try await documentState.runtimeEngine
                     .specializationRequest(forCandidate: candidate.id, in: candidate.imagePath)
+                if Task.isCancelled { return }
                 await MainActor.run {
+                    // Belt-and-braces: a re-pick to a different candidate
+                    // bumped `selectedCandidate.id`, in which case we ignore
+                    // the late result instead of splicing the wrong inner
+                    // parameters under the new candidate.
+                    guard row.selectedCandidate?.id == candidate.id else { return }
                     row.installInnerParameters(innerRequest.parameters)
+                    row.clearInflightInnerFetch()
                     self.publishRowsAndRefresh()
                     self.expandRowRelay.accept(row)
                 }
             } catch {
+                if Task.isCancelled { return }
                 #log(.error, "Failed to fetch inner specialization request: \(error, privacy: .public)")
                 await MainActor.run {
+                    guard row.selectedCandidate?.id == candidate.id else { return }
                     row.setLoadFailed(error.localizedDescription)
+                    row.clearInflightInnerFetch()
                     self.publishRowsAndRefresh()
                     self.errorRelay.accept(error)
                 }
             }
         }
+        row.attachInflightInnerFetch(fetchTask)
     }
 
     private func locateRow(
