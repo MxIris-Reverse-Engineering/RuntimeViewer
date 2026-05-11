@@ -82,6 +82,14 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
         if !selectedCandidate.isGeneric {
             return .candidate(selectedCandidate)
         }
+        // A generic candidate stays unbound until its inner-request fetch
+        // installs at least one child row. Without this guard the row would
+        // briefly look "bound" (a `.boundGeneric` with an empty
+        // `innerArguments` dictionary) between `applyCandidate` and
+        // `installInnerParameters`, flipping `canSpecialize` to true on the
+        // outer level just long enough for the user to commit an incomplete
+        // specialization.
+        guard !children.isEmpty else { return nil }
         var innerArguments: [String: RuntimeSpecializationSelection.Argument] = [:]
         for child in children {
             guard let childArgument = child.argument else { return nil }
