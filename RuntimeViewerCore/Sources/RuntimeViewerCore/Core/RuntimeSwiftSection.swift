@@ -755,12 +755,12 @@ actor RuntimeSwiftSection {
             switch argument {
             case .candidate(let candidate):
                 return candidate.typeName.node
-            // Non-`candidate` argument kinds (metatype / metadata / specialized)
-            // are upstream-only escape hatches not exposed via
-            // `RuntimeSpecializationSelection`; if one ever shows up here, fall
-            // back to skipping the substitution rather than printing the wrong
-            // typeName.
-            case .metatype, .metadata, .specialized:
+            // Non-`candidate` argument kinds (metatype / metadata / specialized
+            // and any future upstream additions) are upstream-only escape
+            // hatches not exposed via `RuntimeSpecializationSelection`; if one
+            // ever shows up here, fall back to skipping the substitution rather
+            // than printing the wrong typeName.
+            default:
                 return nil
             }
         }
