@@ -93,7 +93,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
         candidate: RuntimeSpecializationRequest.Candidate
     ) {
         var newSelection = selection
-        newSelection.setCandidate(candidate, for: parameterName)
+        newSelection.setArgument(.candidate(candidate), for: parameterName)
         selection = newSelection
         refreshCanSpecialize()
     }

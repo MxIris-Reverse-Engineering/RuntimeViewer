@@ -135,7 +135,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         output.selection.driveOnNext { [weak self] selection in
             guard let self else { return }
             for (parameterName, chooseButton) in chooseButtonsByParameterName {
-                chooseButton.title = selection[parameterName]?.displayName ?? "Choose Type…"
+                chooseButton.title = Self.buttonTitle(for: selection[parameterName])
             }
         }
         .disposed(by: rx.disposeBag)
@@ -166,6 +166,17 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         switch state {
         case .idle, .loading, .loaded: return false
         case .unsupported, .failed: return true
+        }
+    }
+
+    private static func buttonTitle(for argument: RuntimeSpecializationSelection.Argument?) -> String {
+        switch argument {
+        case .candidate(let candidate)?:
+            return candidate.displayName
+        case .boundGeneric(let baseCandidate, _)?:
+            return baseCandidate.displayName
+        case nil:
+            return "Choose Type…"
         }
     }
 

@@ -542,6 +542,16 @@ extension RuntimeEngine {
         case unsupportedGenericParameter(description: String)
         case specializationParameterNotFound(name: String)
         case specializationCandidateNotFound(parameterName: String, candidateDisplayName: String)
+        /// Nested specialization for a `.boundGeneric` argument failed.
+        /// `parameterName` is the outer parameter that owns the binding;
+        /// `underlying` is the inner error's `localizedDescription` so it
+        /// can cross the wire without depending on `@_spi(Support)` types.
+        case boundGenericInnerFailed(parameterName: String, underlying: String)
+        /// The user-selected candidate's defining image is not currently
+        /// indexed by the engine that received the request — typically a
+        /// cross-image candidate surfaced by the shared sub-indexer
+        /// aggregate but not loaded for inspection on this side.
+        case unindexedCandidate(displayName: String, imagePath: String)
 
         public var errorDescription: String? {
             switch self {
@@ -555,6 +565,10 @@ extension RuntimeEngine {
                 return "Specialization parameter not found: \(name)"
             case .specializationCandidateNotFound(let parameterName, let candidateDisplayName):
                 return "Candidate '\(candidateDisplayName)' is not available for parameter '\(parameterName)' in this image's index."
+            case .boundGenericInnerFailed(let parameterName, let underlying):
+                return "Inner specialization for parameter '\(parameterName)' failed: \(underlying)"
+            case .unindexedCandidate(let displayName, let imagePath):
+                return "Candidate '\(displayName)' is defined in an image that has not been indexed yet (\(imagePath)). Load the image first and retry."
             }
         }
     }

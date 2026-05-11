@@ -60,8 +60,9 @@ extension RuntimeSpecializationRequest {
         public let imagePath: String
 
         /// True when the candidate's type descriptor is itself generic.
-        /// Selecting such a candidate would require nested specialization,
-        /// which is not yet supported; the picker UI shows these disabled.
+        /// Selecting such a candidate opens a nested specialization for the
+        /// candidate's own generic parameters via
+        /// `RuntimeSpecializationSelection.Argument.boundGeneric(...)`.
         public let isGeneric: Bool
 
         public init(id: String, displayName: String, imagePath: String, isGeneric: Bool) {
@@ -75,17 +76,18 @@ extension RuntimeSpecializationRequest {
 
 // MARK: - RuntimeSpecializationSelection
 
-/// User selection mapping each generic parameter to a chosen candidate.
+/// User selection mapping each generic parameter to an argument.
 ///
-/// Only the candidate-from-list shape is exposed here — richer
-/// upstream argument kinds (`metatype` / `metadata` / `specialized`) stay
-/// inside MachOSwiftSection because they cannot be Codable / sent over the
-/// wire and are not part of the v1 user-driven flow.
+/// An argument is either a concrete candidate (`.candidate`) or a recursive
+/// nested specialization (`.boundGeneric`). Richer upstream argument kinds
+/// (`metatype` / `metadata` / `specialized`) stay inside MachOSwiftSection
+/// because they cannot be Codable / sent over the wire and are not part of
+/// the v1 user-driven flow.
 public struct RuntimeSpecializationSelection: Codable, Hashable, Sendable {
-    /// Parameter name → selected candidate.
-    public var arguments: [String: RuntimeSpecializationRequest.Candidate]
+    /// Parameter name → selected argument.
+    public var arguments: [String: Argument]
 
-    public init(arguments: [String: RuntimeSpecializationRequest.Candidate] = [:]) {
+    public init(arguments: [String: Argument] = [:]) {
         self.arguments = arguments
     }
 
@@ -93,15 +95,31 @@ public struct RuntimeSpecializationSelection: Codable, Hashable, Sendable {
         arguments[parameterName] != nil
     }
 
-    public subscript(_ parameterName: String) -> RuntimeSpecializationRequest.Candidate? {
+    public subscript(_ parameterName: String) -> Argument? {
         arguments[parameterName]
     }
 
-    public mutating func setCandidate(
-        _ candidate: RuntimeSpecializationRequest.Candidate,
+    public mutating func setArgument(
+        _ argument: Argument,
         for parameterName: String
     ) {
-        arguments[parameterName] = candidate
+        arguments[parameterName] = argument
+    }
+
+    /// A user-driven argument for a single generic parameter.
+    ///
+    /// `.candidate` binds the parameter to a concrete leaf type from the
+    /// upstream `SpecializationRequest`. `.boundGeneric` binds the parameter
+    /// to a generic candidate whose own parameters are themselves bound by
+    /// `innerArguments` — the engine recursively specializes the candidate's
+    /// descriptor and substitutes the resulting metadata into the outer
+    /// key-arguments buffer.
+    public enum Argument: Codable, Hashable, Sendable {
+        case candidate(RuntimeSpecializationRequest.Candidate)
+        case boundGeneric(
+            baseCandidate: RuntimeSpecializationRequest.Candidate,
+            innerArguments: [String: Argument]
+        )
     }
 }
 

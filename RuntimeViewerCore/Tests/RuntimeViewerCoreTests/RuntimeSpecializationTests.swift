@@ -186,57 +186,98 @@ struct RuntimeSpecializationSelectionTests {
     @Test("custom init carries arguments")
     func customInit() {
         let intCandidate = makeCandidate("Int")
-        let selection = RuntimeSpecializationSelection(arguments: ["A": intCandidate])
+        let selection = RuntimeSpecializationSelection(arguments: ["A": .candidate(intCandidate)])
         #expect(selection.arguments.count == 1)
         #expect(selection.hasArgument(for: "A") == true)
         #expect(selection.hasArgument(for: "B") == false)
-        #expect(selection["A"] == intCandidate)
+        #expect(selection["A"] == .candidate(intCandidate))
     }
 
-    @Test("setCandidate adds an argument")
-    func setCandidateAdd() {
+    @Test("setArgument adds an argument")
+    func setArgumentAdd() {
         var selection = RuntimeSpecializationSelection()
         let intCandidate = makeCandidate("Int")
-        selection.setCandidate(intCandidate, for: "A")
+        selection.setArgument(.candidate(intCandidate), for: "A")
         #expect(selection.hasArgument(for: "A"))
-        #expect(selection["A"] == intCandidate)
+        #expect(selection["A"] == .candidate(intCandidate))
     }
 
-    @Test("setCandidate replaces an existing argument")
-    func setCandidateReplace() {
+    @Test("setArgument replaces an existing argument")
+    func setArgumentReplace() {
         let intCandidate = makeCandidate("Int")
         let stringCandidate = makeCandidate("String")
-        var selection = RuntimeSpecializationSelection(arguments: ["A": intCandidate])
-        selection.setCandidate(stringCandidate, for: "A")
-        #expect(selection["A"] == stringCandidate)
+        var selection = RuntimeSpecializationSelection(arguments: ["A": .candidate(intCandidate)])
+        selection.setArgument(.candidate(stringCandidate), for: "A")
+        #expect(selection["A"] == .candidate(stringCandidate))
         #expect(selection.arguments.count == 1)
     }
 
     @Test("subscript returns nil for unknown parameter")
     func subscriptNil() {
-        let selection = RuntimeSpecializationSelection(arguments: ["A": makeCandidate("Int")])
+        let selection = RuntimeSpecializationSelection(arguments: ["A": .candidate(makeCandidate("Int"))])
         #expect(selection["B"] == nil)
     }
 
     @Test("encodes and decodes through Codable")
     func codableRoundTrip() throws {
         let original = RuntimeSpecializationSelection(arguments: [
-            "A": makeCandidate("Int"),
-            "B": makeCandidate("String"),
+            "A": .candidate(makeCandidate("Int")),
+            "B": .candidate(makeCandidate("String")),
         ])
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(RuntimeSpecializationSelection.self, from: data)
 
         #expect(decoded == original)
         #expect(decoded.arguments.count == 2)
-        #expect(decoded["A"]?.displayName == "Int")
-        #expect(decoded["B"]?.displayName == "String")
+        if case .candidate(let candidate) = decoded["A"] {
+            #expect(candidate.displayName == "Int")
+        } else {
+            Issue.record("Expected `.candidate` argument for A")
+        }
+        if case .candidate(let candidate) = decoded["B"] {
+            #expect(candidate.displayName == "String")
+        } else {
+            Issue.record("Expected `.candidate` argument for B")
+        }
+    }
+
+    @Test("nested boundGeneric arguments round-trip through Codable")
+    func nestedBoundGenericRoundTrip() throws {
+        let innerCandidate = makeCandidate("Int")
+        let outerCandidate = RuntimeSpecializationRequest.Candidate(
+            id: "id-Array",
+            displayName: "Array",
+            imagePath: "/usr/lib/libswiftCore.dylib",
+            isGeneric: true
+        )
+        let original = RuntimeSpecializationSelection(arguments: [
+            "A": .boundGeneric(
+                baseCandidate: outerCandidate,
+                innerArguments: ["A": .candidate(innerCandidate)]
+            ),
+        ])
+
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(RuntimeSpecializationSelection.self, from: data)
+
+        #expect(decoded == original)
+        guard case .boundGeneric(let baseCandidate, let innerArguments) = decoded["A"] else {
+            Issue.record("Expected `.boundGeneric` argument for A")
+            return
+        }
+        #expect(baseCandidate == outerCandidate)
+        #expect(innerArguments.count == 1)
+        if case .candidate(let candidate) = innerArguments["A"] {
+            #expect(candidate == innerCandidate)
+        } else {
+            Issue.record("Expected nested `.candidate` argument for A")
+        }
     }
 
     @Test("equal selections have equal hashes")
     func hashConsistency() {
-        let a = RuntimeSpecializationSelection(arguments: ["A": makeCandidate("Int")])
-        let b = RuntimeSpecializationSelection(arguments: ["A": makeCandidate("Int")])
+        let a = RuntimeSpecializationSelection(arguments: ["A": .candidate(makeCandidate("Int"))])
+        let b = RuntimeSpecializationSelection(arguments: ["A": .candidate(makeCandidate("Int"))])
         #expect(a == b)
         #expect(a.hashValue == b.hashValue)
     }
@@ -262,7 +303,7 @@ struct RuntimeEngineSpecializeRequestTests {
             imagePath: "/test",
             isGeneric: false
         )
-        let selection = RuntimeSpecializationSelection(arguments: ["A": candidate])
+        let selection = RuntimeSpecializationSelection(arguments: ["A": .candidate(candidate)])
         let original = RuntimeEngine.SpecializeRequest(object: object, selection: selection)
 
         let data = try JSONEncoder().encode(original)
@@ -270,7 +311,7 @@ struct RuntimeEngineSpecializeRequestTests {
 
         #expect(decoded.object == original.object)
         #expect(decoded.selection == original.selection)
-        #expect(decoded.selection["A"] == candidate)
+        #expect(decoded.selection["A"] == .candidate(candidate))
     }
 }
 
@@ -311,5 +352,27 @@ struct RuntimeEngineEngineErrorTests {
         let description = error.errorDescription ?? ""
         #expect(description.contains("A"))
         #expect(description.contains("Int"))
+    }
+
+    @Test("boundGenericInnerFailed includes outer parameter name and underlying message")
+    func boundGenericInnerFailed() {
+        let error = RuntimeEngine.EngineError.boundGenericInnerFailed(
+            parameterName: "A",
+            underlying: "missing metadata"
+        )
+        let description = error.errorDescription ?? ""
+        #expect(description.contains("A"))
+        #expect(description.contains("missing metadata"))
+    }
+
+    @Test("unindexedCandidate includes display name and image path")
+    func unindexedCandidate() {
+        let error = RuntimeEngine.EngineError.unindexedCandidate(
+            displayName: "Array",
+            imagePath: "/usr/lib/libswiftCore.dylib"
+        )
+        let description = error.errorDescription ?? ""
+        #expect(description.contains("Array"))
+        #expect(description.contains("/usr/lib/libswiftCore.dylib"))
     }
 }

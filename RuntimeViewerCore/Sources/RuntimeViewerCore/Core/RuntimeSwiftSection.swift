@@ -721,19 +721,7 @@ actor RuntimeSwiftSection {
             let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
         } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
-            // Translate the most common upstream errors so callers — including
-            // remote clients that no longer link `@_spi(Support) SwiftInterface`
-            // — can match on `RuntimeEngine.EngineError` directly.
-            switch error {
-            case .notGenericType:
-                throw RuntimeEngine.EngineError.typeNotGeneric
-            case .unsupportedGenericParameter:
-                throw RuntimeEngine.EngineError.unsupportedGenericParameter(
-                    description: error.localizedDescription
-                )
-            default:
-                throw error
-            }
+            throw Self.translate(error)
         }
     }
 
@@ -743,26 +731,21 @@ actor RuntimeSwiftSection {
     ) async throws -> RuntimeObject {
         let baseTypeDefinition = try requireGenericTypeDefinition(for: object)
         let upstreamRequest = try specializer.makeRequest(for: baseTypeDefinition.type.typeContextDescriptorWrapper)
-        let upstreamSelection = try resolveUpstreamSelection(selection, against: upstreamRequest)
-        let result = try specializer.specialize(upstreamRequest, with: upstreamSelection)
+        let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
+        let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
+        let result: SpecializationResult
+        do {
+            result = try specializer.specialize(upstreamRequest, with: upstreamSelection)
+        } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+            throw Self.translate(error)
+        }
         // Collect concrete argument typeNodes in declaration order so the
         // upstream `specialize(...)` rewrites the new TypeDefinition's typeName
         // from `Type → Structure(Box)` to `Type → BoundGenericStructure(Type → Structure(Box), TypeList(Type → Structure(Int), …))`.
         // Order must follow `upstreamRequest.parameters`, not the dictionary's
         // arbitrary key order — `BoundGenericStructure`'s TypeList is positional.
         let typeArgumentNodes: [Node] = upstreamRequest.parameters.compactMap { parameter in
-            guard let argument = upstreamSelection[parameter.name] else { return nil }
-            switch argument {
-            case .candidate(let candidate):
-                return candidate.typeName.node
-            // Non-`candidate` argument kinds (metatype / metadata / specialized
-            // and any future upstream additions) are upstream-only escape
-            // hatches not exposed via `RuntimeSpecializationSelection`; if one
-            // ever shows up here, fall back to skipping the substitution rather
-            // than printing the wrong typeName.
-            default:
-                return nil
-            }
+            resolved.nodesByParameter[parameter.name]
         }
         let specializedDefinition = try await baseTypeDefinition.specialize(
             with: result,
@@ -794,7 +777,8 @@ actor RuntimeSwiftSection {
     ) async throws -> RuntimeSpecializationValidation {
         let typeDefinition = try requireGenericTypeDefinition(for: object)
         let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
-        let upstreamSelection = try resolveUpstreamSelection(selection, against: upstreamRequest)
+        let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
+        let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
         let upstreamValidation = specializer.runtimePreflight(selection: upstreamSelection, for: upstreamRequest)
         return Self.translate(upstreamValidation)
     }
@@ -903,42 +887,144 @@ actor RuntimeSwiftSection {
         return RuntimeSpecializationRequest(parameters: parameters)
     }
 
-    /// Round-trip a Codable `RuntimeSpecializationSelection` back into the
-    /// upstream `SpecializationSelection` by re-running `makeRequest` and
-    /// matching each candidate by `(id, imagePath)`.
+    /// Result of resolving a recursive `RuntimeSpecializationSelection`
+    /// against an upstream `SpecializationRequest`. Carries both the upstream
+    /// arguments (consumed by `specializer.specialize` /
+    /// `specializer.runtimePreflight`) and the per-parameter type-argument
+    /// nodes (consumed by `TypeDefinition.specialize`'s `boundGenericTypeName`
+    /// rewrite). Bundling them keeps the inner `specializer.makeRequest` /
+    /// candidate-matching work to a single recursion.
+    private struct ResolvedUpstreamArguments {
+        var arguments: [String: SpecializationSelection.Argument]
+        var nodesByParameter: [String: Node]
+    }
+
+    /// Round-trip a Codable `RuntimeSpecializationSelection.arguments` back
+    /// into the upstream `SpecializationSelection.Argument` shape by re-running
+    /// `makeRequest` and matching each candidate by `(id, imagePath)`.
     ///
     /// Necessary because the on-the-wire selection only carries the opaque
     /// candidate identity (`mangleAsString`-derived); the actual
     /// `SpecializationRequest.Candidate` value (with `TypeName`, `Source`,
     /// etc.) is recreated on the engine that owns the indexer.
-    private func resolveUpstreamSelection(
-        _ selection: RuntimeSpecializationSelection,
+    ///
+    /// `.boundGeneric` arguments recurse: the matched candidate's
+    /// `TypeDefinition` is looked up via `factory.indexer.allTypeDefinitions`
+    /// (the shared sub-indexer aggregate, which spans every loaded image so
+    /// candidates declared in other images — `Array` / `Dictionary` from the
+    /// stdlib — are still resolvable). The inner request is built from that
+    /// definition's `typeContextDescriptorWrapper` and the inner arguments are
+    /// resolved against it.
+    private func resolveUpstreamArguments(
+        _ runtimeArguments: [String: RuntimeSpecializationSelection.Argument],
         against request: SpecializationRequest
-    ) throws -> SpecializationSelection {
-        var arguments: [String: SpecializationSelection.Argument] = [:]
-        for (parameterName, runtimeCandidate) in selection.arguments {
+    ) throws -> ResolvedUpstreamArguments {
+        var result = ResolvedUpstreamArguments(arguments: [:], nodesByParameter: [:])
+        for (parameterName, runtimeArgument) in runtimeArguments {
             guard let parameter = request.parameters.first(where: { $0.name == parameterName }) else {
                 throw RuntimeEngine.EngineError.specializationParameterNotFound(name: parameterName)
             }
-            var matched: SpecializationRequest.Candidate?
-            for upstreamCandidate in parameter.candidates {
-                guard case .image(let path) = upstreamCandidate.source,
-                      path == runtimeCandidate.imagePath else { continue }
-                let upstreamID = try mangleAsString(upstreamCandidate.typeName.node)
-                if upstreamID == runtimeCandidate.id {
-                    matched = upstreamCandidate
-                    break
-                }
-            }
-            guard let upstreamCandidate = matched else {
-                throw RuntimeEngine.EngineError.specializationCandidateNotFound(
-                    parameterName: parameterName,
-                    candidateDisplayName: runtimeCandidate.displayName
+            let resolution = try resolveUpstreamArgument(runtimeArgument, for: parameter)
+            result.arguments[parameterName] = resolution.argument
+            result.nodesByParameter[parameterName] = resolution.node
+        }
+        return result
+    }
+
+    private func resolveUpstreamArgument(
+        _ runtimeArgument: RuntimeSpecializationSelection.Argument,
+        for parameter: SpecializationRequest.Parameter
+    ) throws -> (argument: SpecializationSelection.Argument, node: Node) {
+        switch runtimeArgument {
+        case .candidate(let runtimeCandidate):
+            let matched = try matchUpstreamCandidate(runtimeCandidate, in: parameter)
+            return (.candidate(matched), matched.typeName.node)
+        case .boundGeneric(let runtimeBase, let innerRuntimeArguments):
+            let matchedBase = try matchUpstreamCandidate(runtimeBase, in: parameter)
+            guard let innerTypeDefinition = factory.indexer.allTypeDefinitions[matchedBase.typeName] else {
+                throw RuntimeEngine.EngineError.unindexedCandidate(
+                    displayName: runtimeBase.displayName,
+                    imagePath: runtimeBase.imagePath
                 )
             }
-            arguments[parameterName] = .candidate(upstreamCandidate)
+            let innerRequest: SpecializationRequest
+            do {
+                innerRequest = try specializer.makeRequest(for: innerTypeDefinition.type.typeContextDescriptorWrapper)
+            } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+                throw Self.translate(error)
+            }
+            let innerResolved = try resolveUpstreamArguments(innerRuntimeArguments, against: innerRequest)
+            let innerNodes: [Node] = innerRequest.parameters.compactMap { innerResolved.nodesByParameter[$0.name] }
+            let boundNode = Self.buildBoundGenericNode(base: matchedBase, innerNodes: innerNodes)
+            return (
+                .boundGeneric(baseCandidate: matchedBase, innerArguments: innerResolved.arguments),
+                boundNode
+            )
         }
-        return SpecializationSelection(arguments: arguments)
+    }
+
+    private func matchUpstreamCandidate(
+        _ runtimeCandidate: RuntimeSpecializationRequest.Candidate,
+        in parameter: SpecializationRequest.Parameter
+    ) throws -> SpecializationRequest.Candidate {
+        for upstreamCandidate in parameter.candidates {
+            guard case .image(let path) = upstreamCandidate.source,
+                  path == runtimeCandidate.imagePath else { continue }
+            let upstreamID = try mangleAsString(upstreamCandidate.typeName.node)
+            if upstreamID == runtimeCandidate.id {
+                return upstreamCandidate
+            }
+        }
+        throw RuntimeEngine.EngineError.specializationCandidateNotFound(
+            parameterName: parameter.name,
+            candidateDisplayName: runtimeCandidate.displayName
+        )
+    }
+
+    /// Build a `Type → BoundGenericStructure / Class / Enum(...)` node so the
+    /// outer `boundGenericTypeName` rewrite can substitute this as a nested
+    /// type argument. Mirrors the shape upstream
+    /// `TypeDefinition.boundGenericTypeName(...)` produces; the outer call
+    /// will pass our node through `normalizedArgumentNodes`, which is a no-op
+    /// when the input is already `.type`-wrapped.
+    private static func buildBoundGenericNode(
+        base: SpecializationRequest.Candidate,
+        innerNodes: [Node]
+    ) -> Node {
+        let boundKind: Node.Kind
+        switch base.typeName.kind {
+        case .struct: boundKind = .boundGenericStructure
+        case .class: boundKind = .boundGenericClass
+        case .enum: boundKind = .boundGenericEnum
+        }
+        let baseNode = wrappedAsType(base.typeName.node)
+        let normalizedInners = innerNodes.map(wrappedAsType)
+        let typeList = Node.create(kind: .typeList, children: normalizedInners)
+        let boundNode = Node.create(kind: boundKind, children: [baseNode, typeList])
+        return Node.create(kind: .type, children: [boundNode])
+    }
+
+    private static func wrappedAsType(_ node: Node) -> Node {
+        node.kind == .type ? node : Node.create(kind: .type, children: [node])
+    }
+
+    /// Translate an upstream `SpecializerError` to a wire-safe
+    /// `RuntimeEngine.EngineError` so remote clients (which no longer link
+    /// `@_spi(Support) SwiftInterface`) can pattern-match on engine cases.
+    private static func translate(_ error: GenericSpecializer<MachOImage>.SpecializerError) -> Swift.Error {
+        switch error {
+        case .notGenericType:
+            return RuntimeEngine.EngineError.typeNotGeneric
+        case .unsupportedGenericParameter:
+            return RuntimeEngine.EngineError.unsupportedGenericParameter(description: error.localizedDescription)
+        case .boundGenericInnerFailed(let parameterName, let underlying):
+            return RuntimeEngine.EngineError.boundGenericInnerFailed(
+                parameterName: parameterName,
+                underlying: (underlying as? LocalizedError)?.errorDescription ?? "\(underlying)"
+            )
+        default:
+            return error
+        }
     }
 
     /// Pre-format a parameter's constraint list into the display string the UI
