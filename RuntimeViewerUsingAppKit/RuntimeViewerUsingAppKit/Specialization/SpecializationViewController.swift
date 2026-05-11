@@ -164,6 +164,18 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
             }
             .disposed(by: rx.disposeBag)
 
+        output.reloadRow.emitOnNext { [weak self] row in
+            guard let self else { return }
+            // `outlineView.rx.nodes` uses DifferenceKit, which can not detect
+            // reference-row mutation (the same row instance lives in both the
+            // pre/post snapshots and `isContentEqual` compares an object to
+            // itself). Drive child visibility off this explicit signal so the
+            // outline view re-queries `numberOfChildrenOfItem` whenever a
+            // row's children change.
+            outlineView.reloadItem(row, reloadChildren: true)
+        }
+        .disposed(by: rx.disposeBag)
+
         output.expandRow.emitOnNext { [weak self] row in
             guard let self else { return }
             outlineView.expandItem(row, expandChildren: false)

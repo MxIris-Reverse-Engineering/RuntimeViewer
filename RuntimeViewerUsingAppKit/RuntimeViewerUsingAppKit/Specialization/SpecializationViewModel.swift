@@ -40,6 +40,14 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     /// without juggling its own bookkeeping.
     private let expandRowRelay = PublishRelay<SpecializationRowViewModel>()
 
+    /// Fires whenever a row's child list changes — `outlineView.rx.nodes`
+    /// uses DifferenceKit which can not detect mutation of a reference-typed
+    /// `SpecializationRowViewModel` instance (same instance lives in both
+    /// the source and target snapshots, so `isContentEqual` always returns
+    /// true). The VC subscribes and calls `reloadItem(_:reloadChildren:)`
+    /// to force NSOutlineView to re-query `numberOfChildrenOfItem`.
+    private let reloadRowRelay = PublishRelay<SpecializationRowViewModel>()
+
     @Observed
     public private(set) var loadState: LoadState = .idle
 
@@ -63,6 +71,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
         public let canSpecialize: Driver<Bool>
         public let runtimeObjectDisplayName: Driver<String>
         public let expandRow: Signal<SpecializationRowViewModel>
+        public let reloadRow: Signal<SpecializationRowViewModel>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -89,7 +98,8 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
             loadState: $loadState.asDriver(onErrorJustReturn: .idle),
             canSpecialize: $canSpecialize.asDriver(onErrorJustReturn: false),
             runtimeObjectDisplayName: Driver.just(runtimeObject.displayName),
-            expandRow: expandRowRelay.asSignal()
+            expandRow: expandRowRelay.asSignal(),
+            reloadRow: reloadRowRelay.asSignal()
         )
     }
 
@@ -115,6 +125,9 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
         }
         row.applyCandidate(candidate)
         publishRowsAndRefresh()
+        // `applyCandidate` clears any previously-installed children; tell the
+        // outline view to drop them visually before the new fetch starts.
+        reloadRowRelay.accept(row)
 
         guard candidate.isGeneric else { return }
 
@@ -136,6 +149,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
                     row.installInnerParameters(innerRequest.parameters)
                     row.clearInflightInnerFetch()
                     self.publishRowsAndRefresh()
+                    self.reloadRowRelay.accept(row)
                     self.expandRowRelay.accept(row)
                 }
             } catch {
