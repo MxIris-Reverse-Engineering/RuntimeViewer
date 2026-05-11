@@ -97,4 +97,38 @@ extension RuntimeEngine {
         let object: RuntimeObject
         let selection: RuntimeSpecializationSelection
     }
+
+    struct SpecializationRequestForCandidateRequest: Codable, Sendable {
+        let candidateID: String
+        let imagePath: String
+    }
+
+    /// Build an inner `RuntimeSpecializationRequest` for a generic candidate
+    /// that the user picked while constructing a `boundGeneric` argument.
+    /// Resolves the `candidateID` (`mangleAsString(typeName.node)`) back to a
+    /// `TypeDefinition` via the shared sub-indexer aggregate, then reuses
+    /// `makeRuntimeSpecializationRequest` so the inner request's wire shape is
+    /// identical to the outer-level one.
+    public func specializationRequest(
+        forCandidate candidateID: String,
+        in imagePath: String
+    ) async throws -> RuntimeSpecializationRequest {
+        try await specializationRequest(for: .init(candidateID: candidateID, imagePath: imagePath))
+    }
+
+    func specializationRequest(
+        for request: SpecializationRequestForCandidateRequest
+    ) async throws -> RuntimeSpecializationRequest {
+        try await self.request {
+            guard let swiftSection = await swiftSectionFactory.existingSection(for: request.imagePath) else {
+                throw EngineError.imageNotIndexed(imagePath: request.imagePath)
+            }
+            return try await swiftSection.specializationRequest(
+                forCandidateID: request.candidateID,
+                in: request.imagePath
+            )
+        } remote: { senderConnection in
+            try await senderConnection.sendMessage(name: .specializationRequestForCandidate, request: request)
+        }
+    }
 }

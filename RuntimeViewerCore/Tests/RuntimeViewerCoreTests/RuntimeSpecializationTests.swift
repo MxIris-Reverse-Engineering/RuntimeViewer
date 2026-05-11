@@ -315,6 +315,23 @@ struct RuntimeEngineSpecializeRequestTests {
     }
 }
 
+// MARK: - RuntimeEngine.SpecializationRequestForCandidateRequest
+
+@Suite("RuntimeEngine.SpecializationRequestForCandidateRequest")
+struct RuntimeEngineSpecializationRequestForCandidateRequestTests {
+    @Test("encodes and decodes through Codable")
+    func codableRoundTrip() throws {
+        let original = RuntimeEngine.SpecializationRequestForCandidateRequest(
+            candidateID: "$s4Test5ArrayV",
+            imagePath: "/usr/lib/libswiftCore.dylib"
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(RuntimeEngine.SpecializationRequestForCandidateRequest.self, from: data)
+        #expect(decoded.candidateID == original.candidateID)
+        #expect(decoded.imagePath == original.imagePath)
+    }
+}
+
 // MARK: - RuntimeEngine.EngineError
 
 @Suite("RuntimeEngine.EngineError")

@@ -725,6 +725,37 @@ actor RuntimeSwiftSection {
         }
     }
 
+    /// Build an inner specialization request for a candidate the user picked
+    /// to bind a generic outer parameter. `candidateID` is the mangled string
+    /// `mangleAsString(typeName.node)` carried over the wire; we reverse-look
+    /// it up in `factory.indexer.allTypeDefinitions` — the shared sub-indexer
+    /// aggregate — so cross-image candidates (`Array`, `Dictionary` from
+    /// stdlib) are resolvable from any image that triggered the outer flow.
+    /// `imagePath` only feeds the diagnostic on miss; the actual definition
+    /// might live in a different image once the aggregate is consulted.
+    func specializationRequest(
+        forCandidateID candidateID: String,
+        in imagePath: String
+    ) async throws -> RuntimeSpecializationRequest {
+        var matchedDefinition: TypeDefinition?
+        for (typeName, definition) in factory.indexer.allTypeDefinitions {
+            guard let mangled = try? await mangleAsString(typeName.node) else { continue }
+            if mangled == candidateID {
+                matchedDefinition = definition
+                break
+            }
+        }
+        guard let typeDefinition = matchedDefinition else {
+            throw RuntimeEngine.EngineError.unindexedCandidate(displayName: candidateID, imagePath: imagePath)
+        }
+        do {
+            let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+            return try makeRuntimeSpecializationRequest(from: upstreamRequest)
+        } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+            throw Self.translate(error)
+        }
+    }
+
     func specialize(
         for object: RuntimeObject,
         with selection: RuntimeSpecializationSelection

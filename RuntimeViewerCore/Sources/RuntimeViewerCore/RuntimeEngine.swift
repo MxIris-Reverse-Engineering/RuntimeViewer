@@ -68,6 +68,7 @@ public actor RuntimeEngine {
         case engineListChanged
         case objectsLoadingProgress
         case specializationRequest
+        case specializationRequestForCandidate
         case runtimePreflight
         case specialize
         case dataDidChange
@@ -333,7 +334,14 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
         setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
-        setMessageHandlerBinding(forName: .specializationRequest, of: self) { $0.specializationRequest(for:) }
+        connection?.setMessageHandler(name: CommandNames.specializationRequest.commandName) { [weak self] (object: RuntimeObject) -> RuntimeSpecializationRequest in
+            guard let self else { throw RequestError.senderConnectionIsLose }
+            return try await self.specializationRequest(for: object)
+        }
+        connection?.setMessageHandler(name: CommandNames.specializationRequestForCandidate.commandName) { [weak self] (request: SpecializationRequestForCandidateRequest) -> RuntimeSpecializationRequest in
+            guard let self else { throw RequestError.senderConnectionIsLose }
+            return try await self.specializationRequest(for: request)
+        }
         setMessageHandlerBinding(forName: .runtimePreflight, of: self) { $0.runtimePreflight(for:) }
         setMessageHandlerBinding(forName: .specialize, of: self) { $0.specialize(for:) }
         setMessageHandlerBinding(forName: .engineList) { _ -> [RemoteEngineDescriptor] in
