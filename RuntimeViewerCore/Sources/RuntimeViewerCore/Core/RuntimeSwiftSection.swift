@@ -737,11 +737,13 @@ actor RuntimeSwiftSection {
         forCandidateID candidateID: String,
         in imagePath: String
     ) async throws -> RuntimeSpecializationRequest {
+        // Walk the cross-image aggregate so candidates outside the current
+        // section's image (stdlib `Array`, `Dictionary`, …) resolve.
         var matchedDefinition: TypeDefinition?
-        for (typeName, definition) in factory.indexer.allTypeDefinitions {
+        for (typeName, entry) in factory.indexer.allAllTypeDefinitions {
             guard let mangled = try? await mangleAsString(typeName.node) else { continue }
             if mangled == candidateID {
-                matchedDefinition = definition
+                matchedDefinition = entry.value
                 break
             }
         }
@@ -987,7 +989,12 @@ actor RuntimeSwiftSection {
                 )
             }
             let matchedBase = try matchUpstreamCandidate(runtimeBase, in: parameter)
-            guard let innerTypeDefinition = factory.indexer.allTypeDefinitions[matchedBase.typeName] else {
+            // Use `allAllTypeDefinitions` (cross-sub-indexer aggregate) rather
+            // than `allTypeDefinitions` (current indexer only). Candidates can
+            // come from any indexed image — `Array` / `Dictionary` live in
+            // stdlib, never in the outer-generic's hosting image — and the
+            // upstream `resolveCandidateDescriptor` walks the same aggregate.
+            guard let innerTypeDefinition = factory.indexer.allAllTypeDefinitions[matchedBase.typeName]?.value else {
                 throw RuntimeEngine.EngineError.unindexedCandidate(
                     displayName: runtimeBase.displayName,
                     imagePath: runtimeBase.imagePath
