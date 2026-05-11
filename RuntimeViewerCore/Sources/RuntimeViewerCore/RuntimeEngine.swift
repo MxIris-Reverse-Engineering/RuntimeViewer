@@ -62,7 +62,6 @@ public actor RuntimeEngine {
         case runtimeInterfaceForRuntimeObjectInImageWithOptions
         case runtimeObjectsOfKindInImage
         case runtimeObjectsInImage
-        case reloadData
         case imageDidLoad
         case memberAddresses
         case engineList
@@ -71,6 +70,7 @@ public actor RuntimeEngine {
         case specializationRequest
         case runtimePreflight
         case specialize
+        case dataDidChange
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
@@ -143,11 +143,26 @@ public actor RuntimeEngine {
         imageNodesSubject.eraseToAnyPublisher()
     }
 
-    public nonisolated var reloadDataPublisher: some Publisher<Void, Never> {
-        reloadDataSubject.eraseToAnyPublisher()
+    /// Fine-grained data-change events. Prefer this over `reloadDataPublisher`
+    /// when the consumer can apply incremental updates (e.g. the sidebar
+    /// inserting a single specialized child rather than rebuilding its tree).
+    public nonisolated var dataChangePublisher: some Publisher<RuntimeDataChange, Never> {
+        dataChangeSubject.eraseToAnyPublisher()
     }
 
-    private nonisolated let reloadDataSubject = PassthroughSubject<Void, Never>()
+    private nonisolated let dataChangeSubject = PassthroughSubject<RuntimeDataChange, Never>()
+
+    /// Back-compat unit signal derived from `dataChangePublisher`. Fires only
+    /// for `.fullReload` events; subscribers wanting `.specializationAdded`
+    /// (or any future fine-grained change) must use `dataChangePublisher`.
+    public nonisolated var reloadDataPublisher: some Publisher<Void, Never> {
+        dataChangeSubject
+            .compactMap { change -> Void? in
+                if case .fullReload = change { return () }
+                return nil
+            }
+            .eraseToAnyPublisher()
+    }
 
     /// Publisher that emits the image path each time `loadImage(at:)` succeeds.
     ///
@@ -334,7 +349,9 @@ public actor RuntimeEngine {
         #log(.debug, "Setting up client message handlers for source: \(String(describing: self.source), privacy: .public)")
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
         setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
-        setMessageHandlerBinding(forName: .reloadData) { $0.reloadDataSubject.send() }
+        setMessageHandlerBinding(forName: .dataDidChange) { (engine: RuntimeEngine, change: RuntimeDataChange) in
+            engine.dataChangeSubject.send(change)
+        }
         setMessageHandlerBinding(forName: .imageDidLoad) { (engine: RuntimeEngine, path: String) in
             engine.imageDidLoadSubject.send(path)
         }
@@ -412,8 +429,32 @@ public actor RuntimeEngine {
             imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
             #log(.debug, "Reloaded image nodes")
         }
-        sendRemoteDataIfNeeded(isReloadImageNodes: isReloadImageNodes)
+        broadcast(.fullReload(isReloadImageNodes: isReloadImageNodes))
         #log(.info, "Data reload complete")
+    }
+
+    /// Emit a fine-grained data-change event. On the local arm the event is
+    /// pushed directly to `dataChangeSubject`. On a server engine it is also
+    /// serialized to the connected client via `.dataDidChange`; for
+    /// `.fullReload`, the auxiliary `imageList` / `imageNodes` state is
+    /// re-synced first so the client's mirrored view stays consistent.
+    func broadcast(_ change: RuntimeDataChange) {
+        Task {
+            guard let role = source.remoteRole, role.isServer, let connection else {
+                #log(.debug, "No remote connection, sending local data change \(String(describing: change), privacy: .public)")
+                dataChangeSubject.send(change)
+                return
+            }
+            #log(.debug, "Sending remote data change \(String(describing: change), privacy: .public)")
+            if case .fullReload(let isReloadImageNodes) = change {
+                try await connection.sendMessage(name: .imageList, request: imageList)
+                if isReloadImageNodes {
+                    try await connection.sendMessage(name: .imageNodes, request: imageNodes)
+                }
+            }
+            try await connection.sendMessage(name: .dataDidChange, request: change)
+            #log(.debug, "Remote data change sent successfully")
+        }
     }
 
     private func observeRuntime() async {
@@ -426,29 +467,12 @@ public actor RuntimeEngine {
         }.value
         #log(.debug, "Image nodes initialized")
 
-        sendRemoteDataIfNeeded(isReloadImageNodes: true)
+        broadcast(.fullReload(isReloadImageNodes: true))
         #log(.info, "Runtime observation started")
     }
 
     private func setImageNodes(_ imageNodes: [RuntimeImageNode]) {
         self.imageNodes = imageNodes
-    }
-
-    private func sendRemoteDataIfNeeded(isReloadImageNodes: Bool) {
-        Task {
-            guard let role = source.remoteRole, role.isServer, let connection else {
-                #log(.debug, "No remote connection, sending local reload notification")
-                reloadDataSubject.send()
-                return
-            }
-            #log(.debug, "Sending remote data to client")
-            try await connection.sendMessage(name: .imageList, request: imageList)
-            if isReloadImageNodes {
-                try await connection.sendMessage(name: .imageNodes, request: imageNodes)
-            }
-            try await connection.sendMessage(name: .reloadData)
-            #log(.debug, "Remote data sent successfully")
-        }
     }
 
     /// Forwards an `imageDidLoad` event to the connected client when this

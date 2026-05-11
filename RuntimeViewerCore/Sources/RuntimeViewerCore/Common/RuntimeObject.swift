@@ -44,6 +44,21 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     public func withImagePath(_ imagePath: String) -> RuntimeObject {
         .init(name: name, displayName: displayName, kind: kind, secondaryKind: secondaryKind, imagePath: imagePath, children: children)
     }
+
+    /// Returns a copy of this object with `child` appended to its `children`.
+    /// Used by the sidebar to splice a newly specialized type into the parent
+    /// generic without forcing a full data-source rebuild.
+    public func withAppendedChild(_ child: RuntimeObject) -> RuntimeObject {
+        .init(
+            name: name,
+            displayName: displayName,
+            kind: kind,
+            secondaryKind: secondaryKind,
+            imagePath: imagePath,
+            children: children + [child],
+            properties: properties
+        )
+    }
 }
 
 extension RuntimeObject: ComparableBuildable {

@@ -62,10 +62,11 @@ extension RuntimeEngine {
     /// `documentState.selectedRuntimeObject` to the new node) without waiting
     /// for the sidebar reload to settle.
     ///
-    /// Triggers `reloadData(isReloadImageNodes: false)` on the local arm so
-    /// the sidebar picks up the new specialized child via the standard
-    /// `objects(in:)` path; on the server arm the same reload notification
-    /// is forwarded to any connected client.
+    /// Emits a fine-grained `.specializationAdded(parent:child:)` event on
+    /// `dataChangePublisher` so subscribers (notably the sidebar) can splice
+    /// the new child into their existing tree rather than rebuilding from
+    /// scratch. On the server arm the same event is forwarded to any
+    /// connected client.
     @discardableResult
     public func specialize(
         _ object: RuntimeObject,
@@ -85,7 +86,7 @@ extension RuntimeEngine {
                 throw EngineError.imageNotIndexed(imagePath: request.object.imagePath)
             }
             let runtimeObject = try await swiftSection.specialize(for: request.object, with: request.selection)
-            reloadData(isReloadImageNodes: false)
+            broadcast(.specializationAdded(parent: request.object, child: runtimeObject))
             return runtimeObject
         } remote: { senderConnection in
             try await senderConnection.sendMessage(name: .specialize, request: request)

@@ -33,12 +33,20 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         self.imageName = imageNode.name
         super.init(documentState: documentState, router: router)
 
-        runtimeEngine.reloadDataPublisher
+        runtimeEngine.dataChangePublisher
             .asObservable()
-            .subscribeOnNext { [weak self] in
+            .subscribeOnNext { [weak self] change in
                 guard let self else { return }
-                Task {
-                    try await self.reloadData()
+                switch change {
+                case .fullReload:
+                    Task {
+                        try? await self.reloadData()
+                    }
+                case .specializationAdded(let parent, let child):
+                    guard parent.imagePath == self.imagePath else { return }
+                    Task { @MainActor in
+                        self.applySpecializationAdded(parent: parent, child: child)
+                    }
                 }
             }
             .disposed(by: rx.disposeBag)
@@ -213,6 +221,47 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             }
             self.filteredNodes = self.nodes
         }
+    }
+
+    /// Splice a newly specialized child into the existing sidebar tree without
+    /// rebuilding it from scratch. Locates `parent`'s cell viewmodel under
+    /// `nodes`, swaps its `runtimeObject` for a copy carrying the new child,
+    /// and re-emits `nodes` / `filteredNodes` so subscribers (the outline
+    /// view's `rx.nodes` adapter) pick up the structural change via nested
+    /// diff.
+    @MainActor
+    private func applySpecializationAdded(parent: RuntimeObject, child: RuntimeObject) {
+        guard let parentViewModel = locate(parent, in: nodes) else { return }
+        parentViewModel.runtimeObject = parent.withAppendedChild(child)
+        nodes = nodes
+        if isFiltering {
+            filteredNodes = FilterEngine.filter(
+                searchString,
+                items: nodes,
+                mode: appDefaults.filterMode,
+                isCaseInsensitive: isSearchCaseInsensitive
+            )
+        } else {
+            filteredNodes = nodes
+        }
+    }
+
+    /// Depth-first search through the cell viewmodel tree for the cell
+    /// wrapping `object`. Walks `viewModel.children` (i.e. the filtered
+    /// view); the `parent` of a successful specialize is always currently
+    /// visible in the sidebar so the lookup is safe even when a filter is
+    /// active.
+    private func locate(
+        _ object: RuntimeObject,
+        in viewModels: [SidebarRuntimeObjectCellViewModel]
+    ) -> SidebarRuntimeObjectCellViewModel? {
+        for viewModel in viewModels {
+            if viewModel.runtimeObject == object { return viewModel }
+            if let matchedViewModel = locate(object, in: viewModel.children) {
+                return matchedViewModel
+            }
+        }
+        return nil
     }
 
     func buildRuntimeObjects() async throws -> [RuntimeObject] {

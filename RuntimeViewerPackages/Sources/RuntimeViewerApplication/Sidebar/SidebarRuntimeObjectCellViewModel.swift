@@ -12,39 +12,73 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
 public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType, FilterableItem, @unchecked Sendable {
-    public let runtimeObject: RuntimeObject
+    /// Stable identity used by `Differentiable` and for in-place reuse during
+    /// `rebuildChildren()`. Crucially does NOT depend on `RuntimeObject.children`,
+    /// so a parent whose children change (e.g. via specialization) still
+    /// matches its previous instance.
+    public struct StableID: Hashable {
+        public let imagePath: String
+        public let name: String
+        public let kind: RuntimeObjectKind
+    }
+
+    /// Mutable so the sidebar can splice in a new specialized child via
+    /// `parentVM.runtimeObject = parent.withAppendedChild(child)` and have
+    /// the children tree rebuild itself (reusing surviving child instances)
+    /// and the displayed name/icons refresh, without rebuilding the parent
+    /// viewmodel itself.
+    public var runtimeObject: RuntimeObject {
+        didSet {
+            guard oldValue != runtimeObject else { return }
+            rebuildChildren()
+            refreshAppearance()
+        }
+    }
 
     public let forOpenQuickly: Bool
 
-    public var children: [SidebarRuntimeObjectCellViewModel] { _filteredChildren }
+    public var stableID: StableID {
+        StableID(imagePath: runtimeObject.imagePath, name: runtimeObject.name, kind: runtimeObject.kind)
+    }
+
+    public var children: [SidebarRuntimeObjectCellViewModel] {
+        get { _filteredChildren }
+        set {
+            _children = newValue
+            _filteredChildren = newValue
+        }
+    }
 
     public var isLeaf: Bool { children.isEmpty }
 
-    private lazy var _filteredChildren: [SidebarRuntimeObjectCellViewModel] = _children
+    private var _filteredChildren: [SidebarRuntimeObjectCellViewModel] = []
 
-    private lazy var _children: [SidebarRuntimeObjectCellViewModel] = {
-        let children = runtimeObject.children.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: forOpenQuickly) }
-        return children.sorted { $0.runtimeObject.displayName < $1.runtimeObject.displayName }
-    }()
+    private var _children: [SidebarRuntimeObjectCellViewModel] = []
 
-    public private(set) lazy var currentAndChildrenNames: String = {
+    /// Computed (not cached) so it always reflects the current subtree. Used
+    /// only as a filter haystack; updates are infrequent (debounced search)
+    /// so the recomputation cost is acceptable in exchange for eliminating
+    /// the lazy-cache invalidation problem when children change.
+    public var currentAndChildrenNames: String {
         let childrenNames = _children.map { $0.currentAndChildrenNames }.joined(separator: " ")
         if childrenNames.isEmpty {
             return runtimeObject.displayName
         } else {
             return "\(runtimeObject.displayName) \(childrenNames)"
         }
-    }()
+    }
 
     @Dependency(\.appDefaults)
     private var appDefaults
 
     var isCaseInsensitive: Bool = false
-    
+
     var filter: String = "" {
-        didSet {
-            _filteredChildren = FilterEngine.filter(filter, items: _children, mode: appDefaults.filterMode, isCaseInsensitive: isCaseInsensitive)
-        }
+        didSet { applyFilter() }
+    }
+
+    private func applyFilter() {
+        _filteredChildren = FilterEngine.filter(filter, items: _children, mode: appDefaults.filterMode, isCaseInsensitive: isCaseInsensitive)
     }
 
     var filterResult: FuzzyFilterResult? {
@@ -64,8 +98,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
                 let currentNSRange = NSRange(currentAndChildrenNames.integerRange(from: range))
 
-                filterResult.ranges.forEach { resultNSRange in
-                    guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { return }
+                for resultNSRange in filterResult.ranges {
+                    guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { continue }
                     name.addAttributes([
                         .foregroundColor: NSUIColor.labelColor,
                         .font: NSUIFont.systemFont(ofSize: fontSize, weight: .semibold),
@@ -83,19 +117,19 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     }
 
     private static let normalFontSize: CGFloat = 13
-    
+
     private static let openQuicklyFontSize: CGFloat = 16
-    
+
     private var fontSize: CGFloat {
         forOpenQuickly ? SidebarRuntimeObjectCellViewModel.openQuicklyFontSize : SidebarRuntimeObjectCellViewModel.normalFontSize
     }
-    
+
     @Observed
     public private(set) var primaryIcon: NSUIImage?
 
     @Observed
     public private(set) var secondaryIcon: NSUIImage?
-    
+
     @Observed
     public private(set) var tertiaryIcon: NSUIImage?
 
@@ -114,36 +148,70 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         self.runtimeObject = runtimeObject
         self.forOpenQuickly = forOpenQuickly
         super.init()
-        if forOpenQuickly {
-            self.primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind, size: 24)
-            self.secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: 24) }
-            if runtimeObject.properties.contains(.isGeneric) {
-                self.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: 24)
-            }
-        } else {
-            self.primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind)
-            self.secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0) }
-            if runtimeObject.properties.contains(.isGeneric) {
-                self.tertiaryIcon = RuntimeObjectIcon.iconForGeneric()
-            }
-        }
-        self.name = defaultAttributedName()
+        rebuildChildren()
+        refreshAppearance()
     }
 
-//    public override var hash: Int {
-//        var hasher = Hasher()
-//        hasher.combine(runtimeObject)
-//        return hasher.finalize()
-//    }
-//
-//    public override func isEqual(_ object: Any?) -> Bool {
-//        guard let object = object as? Self else { return false }
-//        return runtimeObject == object.runtimeObject
-//    }
+    /// Re-derive `_children` from `runtimeObject.children`, reusing existing
+    /// child viewmodel instances whose `StableID` matches so downstream
+    /// `Differentiable` consumers see stable identities and outlineView
+    /// state (selection/expansion) is preserved.
+    private func rebuildChildren() {
+        let recycledChildrenByStableID = Dictionary(
+            _children.map { ($0.stableID, $0) },
+            uniquingKeysWith: { firstViewModel, _ in firstViewModel }
+        )
+        let rebuiltChildren = runtimeObject.children.map { childRuntimeObject -> SidebarRuntimeObjectCellViewModel in
+            let childStableID = StableID(
+                imagePath: childRuntimeObject.imagePath,
+                name: childRuntimeObject.name,
+                kind: childRuntimeObject.kind
+            )
+            if let recycledChild = recycledChildrenByStableID[childStableID] {
+                recycledChild.runtimeObject = childRuntimeObject // recurses via didSet
+                return recycledChild
+            }
+            return Self(runtimeObject: childRuntimeObject, forOpenQuickly: forOpenQuickly)
+        }
+        .sorted { leftChild, rightChild in
+            leftChild.runtimeObject.displayName < rightChild.runtimeObject.displayName
+        }
+        _children = rebuiltChildren
+        applyFilter()
+    }
+
+    /// Recompute icons and the highlighted name. Called whenever
+    /// `runtimeObject` changes (e.g. a new specialized child arrives,
+    /// flipping the parent's `properties` bookkeeping).
+    private func refreshAppearance() {
+        let iconSize = forOpenQuickly ? 24 : RuntimeObjectIcon.defaultIconSize
+        primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize)
+        secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) }
+
+        if runtimeObject.properties.contains(.isGeneric) {
+            tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
+        }
+
+        if runtimeObject.properties.contains(.isSpecialized) {
+            tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
+        }
+
+        if let filterResult {
+            // Trigger didSet to reapply highlight ranges over the new displayName.
+            self.filterResult = filterResult
+        } else {
+            name = defaultAttributedName()
+        }
+    }
 }
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
-extension SidebarRuntimeObjectCellViewModel: Differentiable {}
+extension SidebarRuntimeObjectCellViewModel: Differentiable {
+    public var differenceIdentifier: StableID { stableID }
+    public func isContentEqual(to source: SidebarRuntimeObjectCellViewModel) -> Bool {
+        runtimeObject == source.runtimeObject
+    }
+}
 
 #endif

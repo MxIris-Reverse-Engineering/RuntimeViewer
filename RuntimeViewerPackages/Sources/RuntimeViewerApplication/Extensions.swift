@@ -88,6 +88,10 @@ enum RuntimeObjectIcon {
     static func iconForGeneric(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         return icon(text: "G", color: .teal)
     }
+    
+    static func iconForSpecialized(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+        return icon(text: "G", color: .pink)
+    }
 
     static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         let (text, color) = iconInfo(for: kind)
