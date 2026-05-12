@@ -989,20 +989,33 @@ actor RuntimeSwiftSection {
                 )
             }
             let matchedBase = try matchUpstreamCandidate(runtimeBase, in: parameter)
-            // Use `allAllTypeDefinitions` (cross-sub-indexer aggregate) rather
-            // than `allTypeDefinitions` (current indexer only). Candidates can
-            // come from any indexed image — `Array` / `Dictionary` live in
-            // stdlib, never in the outer-generic's hosting image — and the
-            // upstream `resolveCandidateDescriptor` walks the same aggregate.
-            guard let innerTypeDefinition = factory.indexer.allAllTypeDefinitions[matchedBase.typeName]?.value else {
+            // CRITICAL: inner candidates can live in a different image than
+            // the outer generic (`Array` / `Dictionary` live in stdlib, not
+            // the outer's hosting image). `self.specializer` is bound to the
+            // outer's `machO`, so calling `self.specializer.makeRequest` on
+            // an inner descriptor would parse offsets against the *wrong*
+            // Mach-O and read garbage — in practice surfaces as a multi-GB
+            // `numberOfElements` inside `TargetGenericContext.initialize` and
+            // hangs the process.
+            //
+            // Build a fresh specializer bound to the inner candidate's own
+            // image (mirrors what upstream's internal `makeInnerContext(for:)`
+            // does, but expressed here because that helper is `internal`).
+            guard let innerEntry = factory.indexer.allAllTypeDefinitions[matchedBase.typeName] else {
                 throw RuntimeEngine.EngineError.unindexedCandidate(
                     displayName: runtimeBase.displayName,
                     imagePath: runtimeBase.imagePath
                 )
             }
+            let innerSpecializer = GenericSpecializer<MachOImage>(
+                machO: innerEntry.machO,
+                conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer),
+                indexer: factory.indexer
+            )
+            innerSpecializer.maxBindingDepth = Self.maxSpecializationDepth
             let innerRequest: SpecializationRequest
             do {
-                innerRequest = try specializer.makeRequest(for: innerTypeDefinition.type.typeContextDescriptorWrapper)
+                innerRequest = try innerSpecializer.makeRequest(for: innerEntry.value.type.typeContextDescriptorWrapper)
             } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
                 throw Self.translate(error)
             }
