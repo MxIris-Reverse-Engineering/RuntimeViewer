@@ -68,11 +68,16 @@ actor RuntimeSwiftSection {
 
     private var printer: SwiftInterfacePrinter<MachOImage>
 
-    private var interfaceByObject: OrderedDictionary<RuntimeObject, RuntimeObjectInterface> = [:]
+    // Keyed by `RuntimeObjectKey` (identity without `children`) so the
+    // sidebar's `parent.withAppendedChild(child)` replacement after a
+    // user-driven specialization doesn't invalidate the cached parent
+    // mapping — otherwise the next click on the parent generic would miss
+    // both maps and throw `invalidRuntimeObject`.
+    private var interfaceByObject: OrderedDictionary<RuntimeObjectKey, RuntimeObjectInterface> = [:]
 
     private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
 
-    private var interfaceDefinitionNameByObject: [RuntimeObject: InterfaceDefinitionName] = [:]
+    private var interfaceDefinitionNameByObject: [RuntimeObjectKey: InterfaceDefinitionName] = [:]
 
     /// Lazily-constructed specializer reused for both `makeRequest(for:)`
     /// and `specialize(_:with:)`. Lives on the actor so the underlying
@@ -440,7 +445,7 @@ actor RuntimeSwiftSection {
         let protocolChildren = try extensionDefintions.flatMap { $0.protocols }.map { try makeRuntimeObject(for: $0, isChild: true) }
         let mangledName = try mangleAsString(extensionName.node)
         let runtimeObjectName = RuntimeObject(name: mangledName, displayName: extensionName.name, kind: kind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren)
-        interfaceDefinitionNameByObject[runtimeObjectName] = definitionName
+        interfaceDefinitionNameByObject[runtimeObjectName.key] = definitionName
         return runtimeObjectName
     }
 
@@ -449,10 +454,10 @@ actor RuntimeSwiftSection {
         let runtimeObjectName: RuntimeObject
         if isChild {
             runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.currentName, kind: protocolDefintion.protocolName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: [])
-            interfaceDefinitionNameByObject[runtimeObjectName] = .childProtocol(protocolDefintion.protocolName)
+            interfaceDefinitionNameByObject[runtimeObjectName.key] = .childProtocol(protocolDefintion.protocolName)
         } else {
             runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: [])
-            interfaceDefinitionNameByObject[runtimeObjectName] = .rootProtocol(protocolDefintion.protocolName)
+            interfaceDefinitionNameByObject[runtimeObjectName.key] = .rootProtocol(protocolDefintion.protocolName)
         }
         return runtimeObjectName
     }
@@ -478,23 +483,23 @@ actor RuntimeSwiftSection {
 
         let runtimeObject = RuntimeObject(name: mangledName, displayName: displayName, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: allChildren, properties: properties)
         if isSpecialized, let unspecializedTypeName {
-            interfaceDefinitionNameByObject[runtimeObject] = .specializedType(unspecialized: unspecializedTypeName, specialized: typeDefinition.typeName)
+            interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: unspecializedTypeName, specialized: typeDefinition.typeName)
         } else if isChild {
-            interfaceDefinitionNameByObject[runtimeObject] = .childType(typeDefinition.typeName)
+            interfaceDefinitionNameByObject[runtimeObject.key] = .childType(typeDefinition.typeName)
         } else {
-            interfaceDefinitionNameByObject[runtimeObject] = .rootType(typeDefinition.typeName)
+            interfaceDefinitionNameByObject[runtimeObject.key] = .rootType(typeDefinition.typeName)
         }
         return runtimeObject
     }
 
     func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating Swift interface for: \(object.displayName, privacy: .public)")
-        if let interface = interfaceByObject[object] {
+        if let interface = interfaceByObject[object.key] {
             #log(.debug, "Using cached interface")
             return interface
         }
 
-        guard let interfaceDefinitionName = interfaceDefinitionNameByObject[object] else {
+        guard let interfaceDefinitionName = interfaceDefinitionNameByObject[object.key] else {
             #log(.default, "Invalid runtime object: \(object.displayName, privacy: .public)")
             throw Error.invalidRuntimeObject
         }
@@ -570,7 +575,7 @@ actor RuntimeSwiftSection {
         }
 
         let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
-        interfaceByObject[object] = newInterface
+        interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
         return newInterface
     }
@@ -580,7 +585,7 @@ actor RuntimeSwiftSection {
         // Ensure the definition is indexed by generating the interface (uses internal cache)
         _ = try? await interface(for: object)
 
-        guard let definitionName = interfaceDefinitionNameByObject[object] else {
+        guard let definitionName = interfaceDefinitionNameByObject[object.key] else {
             #log(.debug, "No definition found for: \(object.displayName, privacy: .public)")
             return []
         }
@@ -800,7 +805,7 @@ actor RuntimeSwiftSection {
         // Force the parent generic's interface to be re-rendered next time it
         // is requested so that any consumers iterating its
         // `specializedChildren` pick up the newly registered child.
-        interfaceByObject.removeValue(forKey: object)
+        interfaceByObject.removeValue(forKey: object.key)
         return runtimeObject
     }
 
@@ -881,7 +886,7 @@ actor RuntimeSwiftSection {
     }
 
     private func requireGenericTypeDefinition(for object: RuntimeObject) throws -> TypeDefinition {
-        guard let definitionName = interfaceDefinitionNameByObject[object],
+        guard let definitionName = interfaceDefinitionNameByObject[object.key],
               let typeName = definitionName.typeName
         else {
             throw Error.invalidRuntimeObject
@@ -1140,7 +1145,7 @@ actor RuntimeSwiftSection {
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
         #log(.debug, "Getting Swift class hierarchy for: \(object.displayName, privacy: .public)")
         guard case .swift(.type(.class)) = object.kind,
-              let classDefinitionName = interfaceDefinitionNameByObject[object]?.typeName,
+              let classDefinitionName = interfaceDefinitionNameByObject[object.key]?.typeName,
               let classDefinition = indexer.allTypeDefinitions[classDefinitionName],
               case .class(let `class`) = classDefinition.type
         else {
