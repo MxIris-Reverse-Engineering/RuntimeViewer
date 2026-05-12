@@ -152,14 +152,14 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 
         output.rows
             .drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, row: SpecializationRowViewModel) -> NSView? in
+                guard let self else { return nil }
                 let cellView = outlineView.box.makeView(ofClass: ParameterRowCellView.self)
                 cellView.bind(to: row)
-                if let self {
-                    cellView.clickRelay
-                        .asSignal()
-                        .emit(to: self.chooseClickRelay)
-                        .disposed(by: cellView.rx.disposeBag)
-                }
+                cellView.clickRelay
+                    .asSignal()
+                    .emit(to: chooseClickRelay)
+                    .disposed(by: cellView.rx.disposeBag)
+
                 return cellView
             }
             .disposed(by: rx.disposeBag)
@@ -187,7 +187,8 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 
     private static func statusText(_ state: SpecializationViewModel.LoadState) -> String {
         switch state {
-        case .idle, .loading: return "Loading…"
+        case .idle,
+             .loading: return "Loading…"
         case .loaded: return ""
         case .unsupported(let reason): return reason
         case .failed(let message): return message
@@ -206,8 +207,11 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 
     private static func isSpecializeHidden(_ state: SpecializationViewModel.LoadState) -> Bool {
         switch state {
-        case .idle, .loading, .loaded: return false
-        case .unsupported, .failed: return true
+        case .idle,
+             .loading,
+             .loaded: return false
+        case .unsupported,
+             .failed: return true
         }
     }
 }
@@ -218,12 +222,14 @@ extension SpecializationViewController {
     fileprivate final class ParameterRowCellView: TableCellView {
         private let descriptionLabel = Label()
         let chooseButton = PushButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
+        private let loadingIndicator = NSProgressIndicator()
         let clickRelay = PublishRelay<[String]>()
 
         override func setup() {
             super.setup()
 
             let stack = HStackView(spacing: 8) {
+                loadingIndicator
                 descriptionLabel
                 MaxSpacer()
                 chooseButton
@@ -237,6 +243,13 @@ extension SpecializationViewController {
             descriptionLabel.do {
                 $0.maximumNumberOfLines = 1
                 $0.lineBreakMode = .byTruncatingTail
+            }
+
+            loadingIndicator.do {
+                $0.style = .spinning
+                $0.controlSize = .small
+                $0.isIndeterminate = true
+                $0.isDisplayedWhenStopped = false
             }
 
             chooseButton.setContentHuggingPriority(.required, for: .horizontal)
@@ -255,6 +268,17 @@ extension SpecializationViewController {
             row.$buttonTitle.asDriver()
                 .drive(chooseButton.rx.title)
                 .disposed(by: rx.disposeBag)
+
+            // The placeholder row has no candidate to pick — swap the
+            // "Choose Type…" button for a spinning indicator so the user
+            // sees that work is in flight while the inner specialization
+            // request resolves.
+            chooseButton.isHidden = row.isPlaceholder
+            if row.isPlaceholder {
+                loadingIndicator.startAnimation(nil)
+            } else {
+                loadingIndicator.stopAnimation(nil)
+            }
 
             chooseButton.rx.click
                 .asSignal()

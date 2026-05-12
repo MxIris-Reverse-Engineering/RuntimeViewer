@@ -131,8 +131,15 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
 
         guard candidate.isGeneric else { return }
 
+        // Splice the "Loading…" placeholder under the row *before* kicking
+        // off the async fetch and ask the outline view to re-query
+        // `numberOfChildrenOfItem` + auto-expand, so the user gets immediate
+        // visual feedback instead of an apparent no-op while the inner
+        // specialization request is in-flight.
         row.setLoading()
         publishRowsAndRefresh()
+        reloadRowRelay.accept(row)
+        expandRowRelay.accept(row)
 
         let fetchTask: Task<Void, Never> = Task { [weak self, weak row] in
             guard let self, let row else { return }

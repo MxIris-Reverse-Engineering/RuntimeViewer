@@ -61,6 +61,7 @@
 		E9935B972F448910006DB4EC /* ExportingCompletionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */; };
 		E997A7482FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */; };
 		E997A7492FB04C8C008F4C00 /* SpecializationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */; };
+		E99A85FE2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99A85FD2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift */; };
 		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */; };
@@ -285,6 +286,7 @@
 		E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewController.swift; sourceTree = "<group>"; };
 		E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationTypePickerViewModel.swift; sourceTree = "<group>"; };
 		E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationViewModel.swift; sourceTree = "<group>"; };
+		E99A85FD2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationRowViewModel.swift; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
@@ -397,6 +399,7 @@
 				E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */,
 				E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */,
 				E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */,
+				E99A85FD2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift */,
 			);
 			path = Specialization;
 			sourceTree = "<group>";
@@ -1050,6 +1053,7 @@
 				E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */,
 				E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */,
 				E9F11E182F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift in Sources */,
+				E99A85FE2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift in Sources */,
 				CB5EBCC699B082FC52857966 /* SpecializationCoordinator.swift in Sources */,
 				D9913AAAD5EC88F6427B25C1 /* SpecializationWindowController.swift in Sources */,
 				D9073E10AE2361972768175D /* SpecializationViewController.swift in Sources */,
