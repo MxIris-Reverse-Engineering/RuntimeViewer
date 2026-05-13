@@ -26,6 +26,8 @@ public final class DocumentState {
     @Observed
     public var currentSubtitle: String = ""
 
+    public private(set) lazy var appKitService = AppKitService(documentState: self)
+    
     /// Per-Document background indexing coordinator.
     ///
     /// Force-initialized on the first Document lifecycle hook
@@ -41,4 +43,12 @@ public final class DocumentState {
     /// switch — see that property's doc comment for the swap contract.
     public private(set) lazy var backgroundIndexingCoordinator =
         RuntimeBackgroundIndexingCoordinator(documentState: self)
+}
+
+public final class AppKitService {
+    public unowned let documentState: DocumentState
+    
+    init(documentState: DocumentState) {
+        self.documentState = documentState
+    }
 }
