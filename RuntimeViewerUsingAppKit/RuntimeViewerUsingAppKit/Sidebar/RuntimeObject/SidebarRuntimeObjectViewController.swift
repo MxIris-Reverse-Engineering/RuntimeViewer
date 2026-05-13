@@ -163,6 +163,20 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
         .disposed(by: rx.disposeBag)
 
+        output.reloadRow.emitOnNext { [weak self] parentViewModel in
+            guard let self else { return }
+            // `outlineView.rx.nodes` uses DifferenceKit, which can not detect
+            // mutation of a reference-typed cell viewModel (the same instance
+            // lives in both source/target snapshots, so `isContentEqual` always
+            // returns true). Drive child visibility off this explicit signal so
+            // the outline view re-queries `numberOfChildrenOfItem` whenever a
+            // specialized child is spliced into a parent. Expand the parent so
+            // the freshly-inserted child is visible without an extra click.
+            imageLoadedView.outlineView.reloadItem(parentViewModel, reloadChildren: true)
+            imageLoadedView.outlineView.expandItem(parentViewModel)
+        }
+        .disposed(by: rx.disposeBag)
+
         output.windowInitialTitles.driveOnNext { [weak self] in
             guard let self else { return }
             self.viewModel?.documentState.currentSubtitle = $0.subtitle

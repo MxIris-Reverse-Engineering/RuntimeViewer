@@ -25,6 +25,15 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @Observed public private(set) var loadingDescription: String = ""
     @Observed public private(set) var loadingItemCount: String = ""
 
+    /// Fires after a specialized child is spliced into a parent cell
+    /// viewmodel so the outline view re-queries its children. `outlineView.rx.nodes`
+    /// uses DifferenceKit, which can not detect mutation of a reference-typed
+    /// `SidebarRuntimeObjectCellViewModel` (the same instance lives in both the
+    /// pre/post array snapshots, so `isContentEqual` always returns true and the
+    /// inserted child stays invisible). Mirrors the equivalent
+    /// `reloadRow` signal in `SpecializationViewModel`.
+    private let reloadRowRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+
     public init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         let imagePath = imageNode.path
         self.runtimeEngine = documentState.runtimeEngine
@@ -84,6 +93,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let didBeginFiltering: Signal<Void>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
+        public let reloadRow: Signal<SidebarRuntimeObjectCellViewModel>
     }
 
     @MainActor
@@ -165,7 +175,8 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" },
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
             didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
-            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid()
+            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
+            reloadRow: reloadRowRelay.asSignal()
         )
     }
 
@@ -244,6 +255,13 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         } else {
             filteredNodes = nodes
         }
+        // `nodes`/`filteredNodes` re-emissions above are no-ops for the
+        // outline view (same `SidebarRuntimeObjectCellViewModel` instance in
+        // both snapshots → DifferenceKit's `isContentEqual` always true →
+        // adapter skips). Drive the visual update off this explicit signal so
+        // the VC can call `reloadItem(_:reloadChildren:)` on the mutated
+        // parent and surface the new child.
+        reloadRowRelay.accept(parentViewModel)
     }
 
     /// Depth-first search through the cell viewmodel tree for the cell
