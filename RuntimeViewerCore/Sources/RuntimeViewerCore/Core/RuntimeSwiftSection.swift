@@ -744,34 +744,19 @@ actor RuntimeSwiftSection {
     ) async throws -> RuntimeSpecializationRequest {
         // Walk the cross-image aggregate so candidates outside the current
         // section's image (stdlib `Array`, `Dictionary`, …) resolve.
-        var matchedEntry: MachOIndexedValue<MachOImage, TypeDefinition>?
+        var matchedDefinition: TypeDefinition?
         for (typeName, entry) in factory.indexer.allAllTypeDefinitions {
             guard let mangled = try? await mangleAsString(typeName.node) else { continue }
             if mangled == candidateID {
-                matchedEntry = entry
+                matchedDefinition = entry.value
                 break
             }
         }
-        guard let matchedEntry else {
+        guard let typeDefinition = matchedDefinition else {
             throw RuntimeEngine.EngineError.unindexedCandidate(displayName: candidateID, imagePath: imagePath)
         }
-        // CRITICAL: `self.specializer` is bound to *this* section's `machO`
-        // (the outer-generic's hosting image). A candidate like `Swift.Result`
-        // lives in stdlib, so parsing its descriptor with the outer
-        // specializer reads offsets against the wrong Mach-O base — the
-        // garbage that comes back surfaces as a `matchFailed at: 0`
-        // demangling error when the inner pipeline tries to demangle a name
-        // from it. Mirror the fix from `resolveUpstreamArgument`'s
-        // `.boundGeneric` branch: build a fresh specializer bound to the
-        // candidate's own image.
-        let candidateSpecializer = GenericSpecializer<MachOImage>(
-            machO: matchedEntry.machO,
-            conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer),
-            indexer: factory.indexer
-        )
-        candidateSpecializer.maxBindingDepth = Self.maxSpecializationDepth
         do {
-            let upstreamRequest = try candidateSpecializer.makeRequest(for: matchedEntry.value.type.typeContextDescriptorWrapper)
+            let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
         } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
             throw Self.translate(error)
