@@ -25,8 +25,6 @@ public final class DocumentState {
 
     @Observed
     public var currentSubtitle: String = ""
-
-    public private(set) lazy var appKitService = AppKitService(documentState: self)
     
     /// Per-Document background indexing coordinator.
     ///
@@ -41,14 +39,5 @@ public final class DocumentState {
     /// The coordinator captures `runtimeEngine` initially and rewires onto
     /// a new engine via the `$runtimeEngine` subscription on every source
     /// switch — see that property's doc comment for the swap contract.
-    public private(set) lazy var backgroundIndexingCoordinator =
-        RuntimeBackgroundIndexingCoordinator(documentState: self)
-}
-
-public final class AppKitService {
-    public unowned let documentState: DocumentState
-    
-    init(documentState: DocumentState) {
-        self.documentState = documentState
-    }
+    public private(set) lazy var backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
 }
