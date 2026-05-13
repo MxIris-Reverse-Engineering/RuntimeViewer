@@ -113,10 +113,10 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         return cellView.chooseButton
     }
 
-    private func locateRow(forPath parameterPath: [String]) -> SpecializationRowViewModel? {
+    private func locateRow(forPath parameterPath: [String]) -> SpecializationCellViewModel? {
         guard let viewModel else { return nil }
         var rows = viewModel.topLevelRows
-        var matchedRow: SpecializationRowViewModel?
+        var matchedRow: SpecializationCellViewModel?
         for name in parameterPath {
             guard let next = rows.first(where: { $0.parameter.name == name }) else { return nil }
             matchedRow = next
@@ -151,7 +151,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         loadState.map(Self.isSpecializeHidden).drive(specializeButton.rx.isHidden).disposed(by: rx.disposeBag)
 
         output.rows
-            .drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, row: SpecializationRowViewModel) -> NSView? in
+            .drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, row: SpecializationCellViewModel) -> NSView? in
                 guard let self else { return nil }
                 let cellView = outlineView.box.makeView(ofClass: ParameterRowCellView.self)
                 cellView.bind(to: row)
@@ -258,7 +258,7 @@ extension SpecializationViewController {
             }
         }
 
-        func bind(to row: SpecializationRowViewModel) {
+        func bind(to row: SpecializationCellViewModel) {
             rx.disposeBag = DisposeBag()
 
             row.$descriptionText.asDriver()

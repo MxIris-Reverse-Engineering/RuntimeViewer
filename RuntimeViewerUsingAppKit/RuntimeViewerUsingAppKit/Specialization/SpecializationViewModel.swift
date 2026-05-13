@@ -26,27 +26,27 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     /// `RuntimeSpecializationSelection` is derived at preflight / specialize
     /// time by walking each row's `argument`, so we never have to keep two
     /// states in sync.
-    public private(set) var topLevelRows: [SpecializationRowViewModel] = []
+    public private(set) var topLevelRows: [SpecializationCellViewModel] = []
 
     /// Re-emits the row array on every mutation so `outlineView.rx.nodes`
     /// can diff and pick up new child rows. `@Observed` would filter
     /// duplicate-reference array writes, which is what we *don't* want here
     /// — children of an existing row mutate without changing the top-level
     /// references.
-    private let topLevelRowsRelay = BehaviorRelay<[SpecializationRowViewModel]>(value: [])
+    private let topLevelRowsRelay = BehaviorRelay<[SpecializationCellViewModel]>(value: [])
 
     /// Fires after a generic candidate's inner parameters have been installed
     /// onto a row, so the controller can call `expandItem(_:expandChildren:)`
     /// without juggling its own bookkeeping.
-    private let expandRowRelay = PublishRelay<SpecializationRowViewModel>()
+    private let expandRowRelay = PublishRelay<SpecializationCellViewModel>()
 
     /// Fires whenever a row's child list changes — `outlineView.rx.nodes`
     /// uses DifferenceKit which can not detect mutation of a reference-typed
-    /// `SpecializationRowViewModel` instance (same instance lives in both
+    /// `SpecializationCellViewModel` instance (same instance lives in both
     /// the source and target snapshots, so `isContentEqual` always returns
     /// true). The VC subscribes and calls `reloadItem(_:reloadChildren:)`
     /// to force NSOutlineView to re-query `numberOfChildrenOfItem`.
-    private let reloadRowRelay = PublishRelay<SpecializationRowViewModel>()
+    private let reloadRowRelay = PublishRelay<SpecializationCellViewModel>()
 
     @Observed
     public private(set) var loadState: LoadState = .idle
@@ -66,12 +66,12 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
 
     public struct Output {
         public let request: Driver<RuntimeSpecializationRequest?>
-        public let rows: Driver<[SpecializationRowViewModel]>
+        public let rows: Driver<[SpecializationCellViewModel]>
         public let loadState: Driver<LoadState>
         public let canSpecialize: Driver<Bool>
         public let runtimeObjectDisplayName: Driver<String>
-        public let expandRow: Signal<SpecializationRowViewModel>
-        public let reloadRow: Signal<SpecializationRowViewModel>
+        public let expandRow: Signal<SpecializationCellViewModel>
+        public let reloadRow: Signal<SpecializationCellViewModel>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -176,8 +176,8 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
 
     private func locateRow(
         path: [String],
-        in rows: [SpecializationRowViewModel]
-    ) -> SpecializationRowViewModel? {
+        in rows: [SpecializationCellViewModel]
+    ) -> SpecializationCellViewModel? {
         guard let head = path.first else { return nil }
         guard let match = rows.first(where: { $0.parameter.name == head }) else { return nil }
         if path.count == 1 { return match }
@@ -203,7 +203,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
             let req = try await documentState.runtimeEngine.specializationRequest(for: runtimeObject)
             request = req
             topLevelRows = req.parameters.map {
-                SpecializationRowViewModel(parameterPath: [$0.name], parameter: $0)
+                SpecializationCellViewModel(parameterPath: [$0.name], parameter: $0)
             }
             loadState = .loaded
             publishRowsAndRefresh()

@@ -117,7 +117,7 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
     private func parameter(forPath path: [String]) -> RuntimeSpecializationRequest.Parameter? {
         guard let viewModel = specializationViewModel else { return nil }
         var rows = viewModel.topLevelRows
-        var matchedRow: SpecializationRowViewModel?
+        var matchedRow: SpecializationCellViewModel?
         for name in path {
             guard let next = rows.first(where: { $0.parameter.name == name }) else { return nil }
             matchedRow = next

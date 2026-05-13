@@ -22,7 +22,7 @@ import DifferenceKit
 /// (`["A"]`, `["A", "B"]`, …). It backs `Differentiable.differenceIdentifier`
 /// so DifferenceKit's diff keeps already-expanded subtrees stable across
 /// re-renders.
-public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unchecked Sendable {
+public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unchecked Sendable {
     public let parameterPath: [String]
     public let parameter: RuntimeSpecializationRequest.Parameter
 
@@ -38,7 +38,7 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
     public private(set) var selectedCandidate: RuntimeSpecializationRequest.Candidate?
 
     @Observed
-    public private(set) var children: [SpecializationRowViewModel]
+    public private(set) var children: [SpecializationCellViewModel]
 
     @Observed
     public private(set) var loadState: InnerLoadState
@@ -97,8 +97,8 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
     /// candidate while its inner specialization request is in-flight. The
     /// row is removed (replaced with real parameter rows) once
     /// `installInnerParameters` runs.
-    public static func loadingPlaceholder(parentPath: [String]) -> SpecializationRowViewModel {
-        SpecializationRowViewModel(loadingPlaceholderUnder: parentPath)
+    public static func loadingPlaceholder(parentPath: [String]) -> SpecializationCellViewModel {
+        SpecializationCellViewModel(loadingPlaceholderUnder: parentPath)
     }
 
     // MARK: - Derived wire selection
@@ -156,7 +156,7 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
     /// the real parameter rows on success; `setLoadFailed` clears it on
     /// failure.
     public func setLoading() {
-        children = [SpecializationRowViewModel.loadingPlaceholder(parentPath: parameterPath)]
+        children = [SpecializationCellViewModel.loadingPlaceholder(parentPath: parameterPath)]
         loadState = .loading
     }
 
@@ -183,7 +183,7 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
     /// `RuntimeEngine.specializationRequest(forCandidate:in:)` round-trip.
     public func installInnerParameters(_ parameters: [RuntimeSpecializationRequest.Parameter]) {
         children = parameters.map {
-            SpecializationRowViewModel(
+            SpecializationCellViewModel(
                 parameterPath: parameterPath + [$0.name],
                 parameter: $0
             )
@@ -231,10 +231,10 @@ public final class SpecializationRowViewModel: NSObject, OutlineNodeType, @unche
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
-extension SpecializationRowViewModel: Differentiable {
+extension SpecializationCellViewModel: Differentiable {
     public var differenceIdentifier: [String] { parameterPath }
 
-    public func isContentEqual(to source: SpecializationRowViewModel) -> Bool {
+    public func isContentEqual(to source: SpecializationCellViewModel) -> Bool {
         parameterPath == source.parameterPath
             && isPlaceholder == source.isPlaceholder
             && selectedCandidate == source.selectedCandidate
