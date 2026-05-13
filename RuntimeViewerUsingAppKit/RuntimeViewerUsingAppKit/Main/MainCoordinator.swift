@@ -71,8 +71,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             let viewController = BackgroundIndexingPopoverViewController()
             let viewModel = BackgroundIndexingPopoverViewModel(
                 documentState: documentState,
-                router: self,
-                coordinator: documentState.backgroundIndexingCoordinator
+                router: self
             )
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
