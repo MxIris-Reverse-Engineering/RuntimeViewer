@@ -744,22 +744,38 @@ actor RuntimeSwiftSection {
     ) async throws -> RuntimeSpecializationRequest {
         // Walk the cross-image aggregate so candidates outside the current
         // section's image (stdlib `Array`, `Dictionary`, …) resolve.
-        var matchedDefinition: TypeDefinition?
+        var matchedEntry: MachOIndexedValue<MachOImage, TypeDefinition>?
+        var matchedDisplayName: String?
         for (typeName, entry) in factory.indexer.allAllTypeDefinitions {
             guard let mangled = try? await mangleAsString(typeName.node) else { continue }
             if mangled == candidateID {
-                matchedDefinition = entry.value
+                matchedEntry = entry
+                matchedDisplayName = typeName.name
                 break
             }
         }
-        guard let typeDefinition = matchedDefinition else {
+        guard let matchedEntry, let matchedDisplayName else {
             throw RuntimeEngine.EngineError.unindexedCandidate(displayName: candidateID, imagePath: imagePath)
         }
+        // Bind the specializer to the candidate's own image. `self.specializer`
+        // is bound to *this* section's MachO, but the candidate's descriptor
+        // can live in a different image (the aggregate is cross-image), and
+        // parsing offsets against the wrong Mach-O reads garbage that the
+        // demangler later trips on at the first byte.
+        let candidateSpecializer = GenericSpecializer<MachOImage>(
+            machO: matchedEntry.machO,
+            conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer),
+            indexer: factory.indexer
+        )
+        candidateSpecializer.maxBindingDepth = Self.maxSpecializationDepth
         do {
-            let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+            let upstreamRequest = try candidateSpecializer.makeRequest(for: matchedEntry.value.type.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
         } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
             throw Self.translate(error)
+        } catch {
+            #log(.error, "Inner specialization request failed for candidate \(matchedDisplayName, privacy: .public) (image: \(matchedEntry.machO.imagePath, privacy: .public)) requested via section \(imagePath, privacy: .public): \(error, privacy: .public)")
+            throw error
         }
     }
 
