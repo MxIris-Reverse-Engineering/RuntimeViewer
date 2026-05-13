@@ -167,6 +167,13 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
                     row.setLoadFailed(error.localizedDescription)
                     row.clearInflightInnerFetch()
                     self.publishRowsAndRefresh()
+                    // `setLoadFailed` cleared `children`, but `outlineView.rx.nodes`
+                    // can not detect mutation on a reference-typed row (same
+                    // instance lives in both diff snapshots), so force the
+                    // outline view to re-query `numberOfChildrenOfItem`. Without
+                    // this the "Loading inner parameters…" placeholder stays
+                    // visible after the fetch fails.
+                    self.reloadRowRelay.accept(row)
                     self.errorRelay.accept(error)
                 }
             }
