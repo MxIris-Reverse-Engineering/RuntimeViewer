@@ -8,14 +8,14 @@ import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 
-enum RuntimeObjectIcon {
+public enum RuntimeObjectIcon {
     #if os(macOS)
-    static let defaultIconSize: CGFloat = 18
+    public static let defaultIconSize: CGFloat = 18
     #else
-    static let defaultIconSize: CGFloat = 24
+    public static let defaultIconSize: CGFloat = 24
     #endif
 
-    static let defaultIconStyle: IDEIconStyle = .simple
+    public static let defaultIconStyle: IDEIconStyle = .simple
 
     private struct IconCacheKey: Hashable {
         let text: String
@@ -61,7 +61,7 @@ enum RuntimeObjectIcon {
         }
     }
 
-    static func icon(text: String, color: IDEIconColor, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+    public static func icon(text: String, color: IDEIconColor, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         let key = IconCacheKey(
             text: text,
             color: color,
@@ -85,15 +85,15 @@ enum RuntimeObjectIcon {
         return image
     }
 
-    static func iconForGeneric(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+    public static func iconForGeneric(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         return icon(text: "G", color: .teal)
     }
     
-    static func iconForSpecialized(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+    public static func iconForSpecialized(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         return icon(text: "G", color: .pink)
     }
 
-    static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+    public static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         let (text, color) = iconInfo(for: kind)
         return icon(text: text, color: color, size: size, style: style)
     }
@@ -104,19 +104,19 @@ extension RuntimeImageLoadState: @retroactive CaseAccessible {}
 #if canImport(UIKit)
 
 extension UIColor {
-    static var labelColor: UIColor {
+    public static var labelColor: UIColor {
         .label
     }
 
-    static var secondaryLabelColor: UIColor {
+    public static var secondaryLabelColor: UIColor {
         .secondaryLabel
     }
 
-    static var tertiaryLabelColor: UIColor {
+    public static var tertiaryLabelColor: UIColor {
         .tertiaryLabel
     }
 
-    static var quaternaryLabelColor: UIColor {
+    public static var quaternaryLabelColor: UIColor {
         .quaternaryLabel
     }
 }
