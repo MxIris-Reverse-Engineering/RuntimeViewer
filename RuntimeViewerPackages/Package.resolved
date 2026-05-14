@@ -96,8 +96,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
-        "revision" : "22f92afb2520417e60a464a6a5abb88621c2b43d",
-        "version" : "0.5.3"
+        "revision" : "4288ebae7324ddef8cb084f25c84ca7941a1e276",
+        "version" : "0.5.4"
       }
     },
     {
@@ -438,8 +438,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",
       "state" : {
-        "revision" : "6675bc0ff86e61436e615df6fc5174e043e57924",
-        "version" : "1.4.1"
+        "revision" : "03cc312c2c933ed87abace34044a5dff7a3117c1",
+        "version" : "1.5.0"
       }
     },
     {
