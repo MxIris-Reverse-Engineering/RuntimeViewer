@@ -167,18 +167,18 @@ let package = Package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
                 isRelative: true,
                 isEnabled: usingLocalDependencies,
-                traits: ["AppleInternal"]
+                traits: ["AppleInternal", "FilterUI", "IDEIcons"],
             ),
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
                 isEnabled: usingLocalDependencies,
-                traits: ["AppleInternal"]
+                traits: ["AppleInternal", "FilterUI", "IDEIcons"],
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
                 from: "0.4.0",
-                traits: ["AppleInternal"]
+                traits: ["AppleInternal", "FilterUI", "IDEIcons"],
             )
         ),
 
@@ -258,10 +258,6 @@ let package = Package(
             from: "2.0.1"
         ),
         .package(
-            url: "https://github.com/MxIris-Library-Forks/ide-icons",
-            from: "0.1.3"
-        ),
-        .package(
             url: "https://github.com/gringoireDM/RxEnumKit",
             from: "2.0.0"
         ),
@@ -295,17 +291,6 @@ let package = Package(
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxUIKit",
                 from: "0.1.1"
-            )
-        ),
-        .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("filter-ui"),
-                isRelative: true,
-                isEnabled: usingLocalDependencies
-            ),
-            remote: .package(
-                url: "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
-                from: "0.1.2"
             )
         ),
         .package(
@@ -442,8 +427,6 @@ let package = Package(
                 .product(name: usingSystemUXKit ? "UXKit" : "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbols", package: "SFSymbols"),
-                .product(name: "IDEIcons", package: "ide-icons"),
-                .product(name: "FilterUI", package: "filter-ui", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "LateResponders", package: "LateResponders"),

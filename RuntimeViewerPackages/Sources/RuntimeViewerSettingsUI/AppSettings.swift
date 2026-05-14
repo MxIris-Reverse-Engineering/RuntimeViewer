@@ -1,5 +1,4 @@
 import Foundation
-import RuntimeViewerUI
 import RuntimeViewerSettings
 import SwiftUI
 import Dependencies

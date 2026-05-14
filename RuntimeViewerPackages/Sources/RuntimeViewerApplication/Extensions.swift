@@ -4,6 +4,7 @@ import AppKit
 import UIKit
 #endif
 
+import UIFoundation
 import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
