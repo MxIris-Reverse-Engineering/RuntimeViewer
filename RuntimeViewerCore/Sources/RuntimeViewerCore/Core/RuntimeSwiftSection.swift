@@ -925,11 +925,18 @@ actor RuntimeSwiftSection {
                 case .image(let path):
                     imagePath = path
                 }
+                let kind: RuntimeSpecializationRequest.Candidate.Kind
+                switch upstreamCandidate.typeName.kind {
+                case .enum: kind = .enum
+                case .struct: kind = .struct
+                case .class: kind = .class
+                }
                 return RuntimeSpecializationRequest.Candidate(
                     id: id,
                     displayName: upstreamCandidate.typeName.name,
                     imagePath: imagePath,
-                    isGeneric: upstreamCandidate.isGeneric
+                    isGeneric: upstreamCandidate.isGeneric,
+                    kind: kind
                 )
             }
             return RuntimeSpecializationRequest.Parameter(

@@ -12,12 +12,14 @@ struct RuntimeSpecializationCandidateTests {
             id: "$s4Test3IntV",
             displayName: "Int",
             imagePath: "/path/to/Test.framework/Test",
-            isGeneric: false
+            isGeneric: false,
+            kind: .struct
         )
         #expect(candidate.id == "$s4Test3IntV")
         #expect(candidate.displayName == "Int")
         #expect(candidate.imagePath == "/path/to/Test.framework/Test")
         #expect(candidate.isGeneric == false)
+        #expect(candidate.kind == .struct)
     }
 
     @Test("encodes and decodes through Codable")
@@ -26,7 +28,8 @@ struct RuntimeSpecializationCandidateTests {
             id: "$s4Test5ArrayVySiG",
             displayName: "Array<Int>",
             imagePath: "/usr/lib/libswiftCore.dylib",
-            isGeneric: true
+            isGeneric: true,
+            kind: .struct
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(RuntimeSpecializationRequest.Candidate.self, from: data)
@@ -36,27 +39,35 @@ struct RuntimeSpecializationCandidateTests {
         #expect(decoded.displayName == original.displayName)
         #expect(decoded.imagePath == original.imagePath)
         #expect(decoded.isGeneric == original.isGeneric)
+        #expect(decoded.kind == original.kind)
     }
 
     @Test("equal candidates have equal hashes")
     func hashConsistency() {
-        let a = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Int", imagePath: "/a", isGeneric: false)
-        let b = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Int", imagePath: "/a", isGeneric: false)
+        let a = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Int", imagePath: "/a", isGeneric: false, kind: .struct)
+        let b = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Int", imagePath: "/a", isGeneric: false, kind: .struct)
         #expect(a == b)
         #expect(a.hashValue == b.hashValue)
     }
 
     @Test("differing id makes candidates unequal")
     func differingIDInequality() {
-        let a = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Int", imagePath: "/a", isGeneric: false)
-        let b = RuntimeSpecializationRequest.Candidate(id: "id-2", displayName: "Int", imagePath: "/a", isGeneric: false)
+        let a = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Int", imagePath: "/a", isGeneric: false, kind: .struct)
+        let b = RuntimeSpecializationRequest.Candidate(id: "id-2", displayName: "Int", imagePath: "/a", isGeneric: false, kind: .struct)
         #expect(a != b)
     }
 
     @Test("isGeneric flag is independent of equality")
     func differingIsGenericInequality() {
-        let a = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Box", imagePath: "/a", isGeneric: false)
-        let b = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Box", imagePath: "/a", isGeneric: true)
+        let a = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Box", imagePath: "/a", isGeneric: false, kind: .struct)
+        let b = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Box", imagePath: "/a", isGeneric: true, kind: .struct)
+        #expect(a != b)
+    }
+
+    @Test("differing kind makes candidates unequal")
+    func differingKindInequality() {
+        let a = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Box", imagePath: "/a", isGeneric: false, kind: .struct)
+        let b = RuntimeSpecializationRequest.Candidate(id: "id-1", displayName: "Box", imagePath: "/a", isGeneric: false, kind: .class)
         #expect(a != b)
     }
 }
@@ -70,7 +81,8 @@ struct RuntimeSpecializationParameterTests {
             id: "$s4Test\(name.count)\(name)V",
             displayName: name,
             imagePath: "/path",
-            isGeneric: false
+            isGeneric: false,
+            kind: .struct
         )
     }
 
@@ -145,7 +157,8 @@ struct RuntimeSpecializationRequestTests {
             id: "$s4Test3IntV",
             displayName: "Int",
             imagePath: "/test",
-            isGeneric: false
+            isGeneric: false,
+            kind: .struct
         )
         let original = RuntimeSpecializationRequest(parameters: [
             RuntimeSpecializationRequest.Parameter(
@@ -171,7 +184,8 @@ struct RuntimeSpecializationSelectionTests {
             id: "id-\(name)",
             displayName: name,
             imagePath: "/path",
-            isGeneric: false
+            isGeneric: false,
+            kind: .struct
         )
     }
 
@@ -248,7 +262,8 @@ struct RuntimeSpecializationSelectionTests {
             id: "id-Array",
             displayName: "Array",
             imagePath: "/usr/lib/libswiftCore.dylib",
-            isGeneric: true
+            isGeneric: true,
+            kind: .struct
         )
         let original = RuntimeSpecializationSelection(arguments: [
             "A": .boundGeneric(
@@ -301,7 +316,8 @@ struct RuntimeEngineSpecializeRequestTests {
             id: "$s4Test3IntV",
             displayName: "Int",
             imagePath: "/test",
-            isGeneric: false
+            isGeneric: false,
+            kind: .struct
         )
         let selection = RuntimeSpecializationSelection(arguments: ["A": .candidate(candidate)])
         let original = RuntimeEngine.SpecializeRequest(object: object, selection: selection)

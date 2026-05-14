@@ -1,4 +1,5 @@
 import Foundation
+public import SwiftStdlibToolbox
 
 // MARK: - RuntimeSpecializationRequest
 
@@ -45,7 +46,7 @@ extension RuntimeSpecializationRequest {
         }
     }
 
-    public struct Candidate: Codable, Hashable, Sendable {
+    public struct Candidate: Codable, Hashable, Sendable, ComparableBuildable {
         /// Stable identity used to round-trip a selection back to the
         /// originating upstream `SpecializationRequest.Candidate` on the engine
         /// that produced this request. Treat as opaque (currently the
@@ -65,11 +66,31 @@ extension RuntimeSpecializationRequest {
         /// `RuntimeSpecializationSelection.Argument.boundGeneric(...)`.
         public let isGeneric: Bool
 
-        public init(id: String, displayName: String, imagePath: String, isGeneric: Bool) {
+        /// Underlying type-system kind (Swift `enum` / `struct` / `class`)
+        /// projected from the upstream `SpecializationRequest.Candidate`'s
+        /// `TypeName.kind`. Carries no specialization semantics — surfaced so
+        /// the type-picker UI can render the matching per-kind icon next to
+        /// the candidate's display name.
+        public let kind: Kind
+
+        public init(id: String, displayName: String, imagePath: String, isGeneric: Bool, kind: Kind) {
             self.id = id
             self.displayName = displayName
             self.imagePath = imagePath
             self.isGeneric = isGeneric
+            self.kind = kind
+        }
+
+        public enum Kind: Codable, Hashable, Sendable, Comparable {
+            case `enum`
+            case `struct`
+            case `class`
+        }
+        
+        public static let comparableDefinition = makeComparable {
+            compare(\.imagePath)
+            compare(\.kind)
+            compare(\.displayName)
         }
     }
 }
@@ -202,4 +223,3 @@ extension RuntimeSpecializationValidation {
         }
     }
 }
-
