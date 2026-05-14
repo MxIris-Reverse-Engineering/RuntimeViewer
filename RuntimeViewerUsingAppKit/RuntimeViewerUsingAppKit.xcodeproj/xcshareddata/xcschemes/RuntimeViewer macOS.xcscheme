@@ -30,10 +30,12 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:RuntimeViewerUsingAppKit.xctestplan"
-            default = "YES">
+            default = "YES"
+            reference = "container:RuntimeViewerUsingAppKit.xctestplan">
          </TestPlanReference>
       </TestPlans>
+      <Testables>
+      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
