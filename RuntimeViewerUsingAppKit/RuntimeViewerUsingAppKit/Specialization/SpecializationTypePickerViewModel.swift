@@ -12,26 +12,18 @@ import RuntimeViewerApplication
 public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRoute> {
     private let parameterPath: [String]
 
-    private let allCandidates: [RuntimeSpecializationRequest.Candidate]
+    private let allCellViewModels: [SpecializationTypePickerCellViewModel]
 
     @Observed
-    public private(set) var filteredCandidates: [RuntimeSpecializationRequest.Candidate] = []
+    public private(set) var filteredCellViewModels: [SpecializationTypePickerCellViewModel] = []
 
     public struct Input {
         public let searchString: Signal<String>
-        public let candidateClicked: Signal<RuntimeSpecializationRequest.Candidate>
-
-        public init(
-            searchString: Signal<String>,
-            candidateClicked: Signal<RuntimeSpecializationRequest.Candidate>
-        ) {
-            self.searchString = searchString
-            self.candidateClicked = candidateClicked
-        }
+        public let cellViewModelClicked: Signal<SpecializationTypePickerCellViewModel>
     }
 
     public struct Output {
-        public let filteredCandidates: Driver<[RuntimeSpecializationRequest.Candidate]>
+        public let filteredCellViewModels: Driver<[SpecializationTypePickerCellViewModel]>
     }
 
     public init(
@@ -41,9 +33,9 @@ public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRo
         router: any Router<SpecializationRoute>
     ) {
         self.parameterPath = parameterPath
-        self.allCandidates = candidates
+        self.allCellViewModels = candidates.sorted().map { SpecializationTypePickerCellViewModel(candidate: $0) }
         super.init(documentState: documentState, router: router)
-        self.filteredCandidates = candidates
+        self.filteredCellViewModels = allCellViewModels
     }
 
     public func transform(_ input: Input) -> Output {
@@ -53,28 +45,28 @@ public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRo
         }
         .disposed(by: rx.disposeBag)
 
-        input.candidateClicked.emitOnNext { [weak self] candidate in
+        input.cellViewModelClicked.emitOnNext { [weak self] cellViewModel in
             guard let self else { return }
             // Both leaf and generic candidates emit `didSelectCandidate` now;
             // generic candidates open the nested specialization flow.
-            router.trigger(.didSelectCandidate(parameterPath: parameterPath, candidate: candidate))
+            router.trigger(.didSelectCandidate(parameterPath: parameterPath, candidate: cellViewModel.candidate))
         }
         .disposed(by: rx.disposeBag)
 
         return Output(
-            filteredCandidates: $filteredCandidates.asDriver()
+            filteredCellViewModels: $filteredCellViewModels.asDriver()
         )
     }
 
     private func applySearch(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty {
-            filteredCandidates = allCandidates
+            filteredCellViewModels = allCellViewModels
             return
         }
         let lowered = trimmed.lowercased()
-        filteredCandidates = allCandidates.filter { candidate in
-            candidate.displayName.lowercased().contains(lowered)
+        filteredCellViewModels = allCellViewModels.filter { cellViewModel in
+            cellViewModel.candidate.displayName.localizedCaseInsensitiveContains(lowered)
         }
     }
 }

@@ -6,7 +6,6 @@ import RuntimeViewerArchitectures
 import SnapKit
 
 final class InspectorSwiftSpecializationViewController: UXEffectViewController<InspectorSwiftSpecializationViewModel> {
-
     // MARK: - Subviews
 
     private let headerLabel = Label()
@@ -66,6 +65,8 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         headerLabel.do {
             $0.font = .systemFont(ofSize: 13, weight: .semibold)
             $0.textColor = .controlTextColor
+            $0.stringValue = "Specializations"
+            $0.setContentHuggingPriority(.defaultLow, for: .horizontal)
         }
 
         emptyLabel.do {
@@ -96,12 +97,8 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             addSpecializationClicked: addSpecializationButton.rx.click.asSignal(),
             selectSpecializationClicked: selectSpecialization
         )
-        let output = viewModel.transform(input)
 
-        let displayName = viewModel.runtimeObjectDisplayName
-        headerLabel.stringValue = displayName.isEmpty
-            ? "Specializations"
-            : "Specializations of \(displayName)"
+        let output = viewModel.transform(input)
 
         let specializedChildren = output.specializedChildren
 

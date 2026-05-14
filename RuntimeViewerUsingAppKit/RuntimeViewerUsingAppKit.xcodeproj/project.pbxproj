@@ -61,7 +61,7 @@
 		E9935B972F448910006DB4EC /* ExportingCompletionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */; };
 		E997A7482FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */; };
 		E997A7492FB04C8C008F4C00 /* SpecializationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */; };
-		E99A85FE2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99A85FD2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift */; };
+		E9980FCE2FB5D02E00D9AEF9 /* SpecializationTypePickerCellViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9980FCD2FB5D02E00D9AEF9 /* SpecializationTypePickerCellViewModel.swift */; };
 		E99AE0BC2CBD4A840028B11E /* Document.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99AE0BB2CBD4A840028B11E /* Document.swift */; };
 		E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */; };
 		E9A8252D2C0DECE400D9A85D /* SidebarCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9A8252C2C0DECE400D9A85D /* SidebarCoordinator.swift */; };
@@ -103,6 +103,7 @@
 		E9D4706B2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */; };
 		E9E900EB2C2D0D5B00FADDCC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E900EA2C2D0D5B00FADDCC /* main.swift */; };
 		E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */; };
+		E9EE3F9E2FB573A700B540A3 /* SpecializationCellViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */; };
 		E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */; };
 		E9EEF7612E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */; };
 		E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7642E08540B008D85D1 /* ContentTextView.swift */; };
@@ -286,7 +287,7 @@
 		E9935B962F448910006DB4EC /* ExportingCompletionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewController.swift; sourceTree = "<group>"; };
 		E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationTypePickerViewModel.swift; sourceTree = "<group>"; };
 		E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationViewModel.swift; sourceTree = "<group>"; };
-		E99A85FD2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationRowViewModel.swift; sourceTree = "<group>"; };
+		E9980FCD2FB5D02E00D9AEF9 /* SpecializationTypePickerCellViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationTypePickerCellViewModel.swift; sourceTree = "<group>"; };
 		E99AE0BB2CBD4A840028B11E /* Document.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Document.swift; sourceTree = "<group>"; };
 		E99E61602C129DC2002C1A3D /* ContentTextViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextViewController.swift; sourceTree = "<group>"; };
 		E9A18BA72C2978DF00689B49 /* AppKitBridge.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AppKitBridge.swift; sourceTree = "<group>"; };
@@ -329,6 +330,7 @@
 		E9E900EA2C2D0D5B00FADDCC /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorClassViewController.swift; sourceTree = "<group>"; };
 		E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationCellViewModel.swift; sourceTree = "<group>"; };
 		E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonLoadingView.swift; sourceTree = "<group>"; };
 		E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCoordinator.swift; sourceTree = "<group>"; };
 		E9EEF7642E08540B008D85D1 /* ContentTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextView.swift; sourceTree = "<group>"; };
@@ -399,7 +401,8 @@
 				E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */,
 				E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */,
 				E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */,
-				E99A85FD2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift */,
+				E9980FCD2FB5D02E00D9AEF9 /* SpecializationTypePickerCellViewModel.swift */,
+				E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */,
 			);
 			path = Specialization;
 			sourceTree = "<group>";
@@ -1002,6 +1005,8 @@
 				E9F759422CF603DD00BE7A5F /* RuntimeObjectCellView.swift in Sources */,
 				E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
+				E9EE3F9E2FB573A700B540A3 /* SpecializationCellViewModel.swift in Sources */,
+				E9980FCE2FB5D02E00D9AEF9 /* SpecializationTypePickerCellViewModel.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,
 				E9530A3C2D9D5898008FBC7F /* SIPChecker.swift in Sources */,
 				E9D470652F134210008BF7A9 /* SidebarRootTabViewController.swift in Sources */,
@@ -1053,7 +1058,6 @@
 				E9CE07AF2C148FA00070A6E8 /* MainToolbarController.swift in Sources */,
 				E94E36C62CF84AF8006101C8 /* AttachToProcessViewController.swift in Sources */,
 				E9F11E182F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift in Sources */,
-				E99A85FE2FB34DFF00EDC1E8 /* SpecializationRowViewModel.swift in Sources */,
 				CB5EBCC699B082FC52857966 /* SpecializationCoordinator.swift in Sources */,
 				D9913AAAD5EC88F6427B25C1 /* SpecializationWindowController.swift in Sources */,
 				D9073E10AE2361972768175D /* SpecializationViewController.swift in Sources */,
