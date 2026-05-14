@@ -113,7 +113,7 @@
 		E9F11E0B2F123EEC0052B0A3 /* SidebarRootCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E0A2F123EEC0052B0A3 /* SidebarRootCoordinator.swift */; };
 		E9F11E162F12671D0052B0A3 /* TabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E152F12671D0052B0A3 /* TabViewController.swift */; };
 		E9F11E182F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */; };
-		E9F759422CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */; };
+		E9F759422CF603DD00BE7A5F /* RuntimeObjectCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -343,7 +343,7 @@
 		E9F2E9B52ED3BD2B001DCC3E /* Shared-Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Shared-Release.xcconfig"; path = ../Configurations/Shared/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Shared-Debug.xcconfig"; path = ../Configurations/Shared/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = CodeSigning.xcconfig; path = ../Configurations/CodeSigning.xcconfig; sourceTree = SOURCE_ROOT; };
-		E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCellView.swift; sourceTree = "<group>"; };
+		E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeObjectCellView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -684,7 +684,7 @@
 				E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */,
 				E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */,
 				E9A825392C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift */,
-				E9F759412CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift */,
+				E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */,
 				E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */,
 				E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */,
 			);
@@ -999,7 +999,7 @@
 				E921246F2F447BE1007481E4 /* ExportingProgressViewModel.swift in Sources */,
 				E9D470632F12A52A008BF7A9 /* SidebarRootViewController.swift in Sources */,
 				E9F11E162F12671D0052B0A3 /* TabViewController.swift in Sources */,
-				E9F759422CF603DD00BE7A5F /* SidebarRuntimeObjectCellView.swift in Sources */,
+				E9F759422CF603DD00BE7A5F /* RuntimeObjectCellView.swift in Sources */,
 				E96CF5332EC7A4A600CBC159 /* RuntimeSource+.swift in Sources */,
 				E9A8254C2C0E0EA600D9A85D /* InspectorCoordinator.swift in Sources */,
 				E9A825422C0E0B2300D9A85D /* MainWindowController.swift in Sources */,

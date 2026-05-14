@@ -84,7 +84,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     var filterResult: FuzzyFilterResult? {
         didSet {
             if let filterResult {
-                let name = NSMutableAttributedString {
+                let title = NSMutableAttributedString {
                     AText(runtimeObject.displayName)
                         .font(.systemFont(ofSize: fontSize))
                         .foregroundColor(forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor)
@@ -92,7 +92,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
                 }
 
                 guard let range = currentAndChildrenNames.ranges(of: runtimeObject.displayName).first else {
-                    self.name = name
+                    self.title = title
                     return
                 }
 
@@ -100,14 +100,14 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
                 for resultNSRange in filterResult.ranges {
                     guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { continue }
-                    name.addAttributes([
+                    title.addAttributes([
                         .foregroundColor: NSUIColor.labelColor,
                         .font: NSUIFont.systemFont(ofSize: fontSize, weight: .semibold),
                     ], range: resultNSRange)
                 }
-                self.name = name
+                self.title = title
             } else {
-                name = defaultAttributedName()
+                title = defaultAttributedTitle()
             }
         }
     }
@@ -125,7 +125,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     }
 
     @Observed
-    public private(set) var primaryIcon: NSUIImage?
+    public private(set) var primaryIcon: NSUIImage = .init()
 
     @Observed
     public private(set) var secondaryIcon: NSUIImage?
@@ -134,10 +134,13 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     public private(set) var tertiaryIcon: NSUIImage?
 
     @Observed
-    public private(set) var name: NSAttributedString = .init()
+    public private(set) var title: NSAttributedString = .init()
+
+    @Observed
+    public private(set) var subtitle: NSAttributedString?
 
     @NSAttributedStringBuilder
-    private func defaultAttributedName() -> NSAttributedString {
+    private func defaultAttributedTitle() -> NSAttributedString {
         AText(runtimeObject.displayName)
             .font(.systemFont(ofSize: fontSize))
             .foregroundColor(.labelColor)
@@ -200,7 +203,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             // Trigger didSet to reapply highlight ranges over the new displayName.
             self.filterResult = filterResult
         } else {
-            name = defaultAttributedName()
+            title = defaultAttributedTitle()
         }
     }
 }
@@ -212,6 +215,13 @@ extension SidebarRuntimeObjectCellViewModel: Differentiable {
     public func isContentEqual(to source: SidebarRuntimeObjectCellViewModel) -> Bool {
         runtimeObject == source.runtimeObject
     }
+}
+
+extension SidebarRuntimeObjectCellViewModel: RuntimeObjectCellDisplayable {
+    public var primaryIconDriver: Driver<NSUIImage> { $primaryIcon.asDriver() }
+    public var secondaryIconDriver: Driver<NSUIImage?> { $secondaryIcon.asDriver() }
+    public var tertiaryIconDriver: Driver<NSUIImage?> { $tertiaryIcon.asDriver() }
+    public var titleDriver: Driver<NSAttributedString> { $title.asDriver() }
 }
 
 #endif

@@ -117,7 +117,10 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
 extension SidebarRuntimeObjectListViewController: DSFQuickActionBarContentSource {
     func quickActionBar(_ quickActionBar: DSFQuickActionBar, viewForItem item: AnyHashable, searchTerm: String) -> NSView? {
         guard let viewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
-        let cellView = quickActionBar.dequeueView() ?? SidebarRuntimeObjectCellView(forOpenQuickly: true)
+        let cellView: RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel> = quickActionBar.dequeueView() ?? RuntimeObjectCellView().then {
+            $0.contentInsets = .init(top: 0, left: 8, bottom: 0, right: 8)
+            $0.minimumHeight = 40
+        }
         cellView.bind(to: viewModel)
         return cellView
     }
