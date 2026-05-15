@@ -243,7 +243,21 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @MainActor
     private func applySpecializationAdded(parent: RuntimeObject, child: RuntimeObject) {
         guard let parentViewModel = locate(parent, in: nodes) else { return }
-        parentViewModel.runtimeObject = parent.withAppendedChild(child)
+
+        // Append onto the cell's *current* runtimeObject (which already
+        // reflects every prior specialization spliced into this cell), not
+        // the event payload — the broadcast carries the originally selected
+        // generic, so a second specialization on the same parent would
+        // otherwise overwrite the first one's child.
+        let currentParent = parentViewModel.runtimeObject
+
+        // De-dupe: a re-broadcast (e.g. server reconnect, repeated user
+        // action) would otherwise insert the same child twice. RuntimeObjectKey
+        // ignores `children`, which is the right identity for "is this the
+        // same specialized type already attached".
+        guard !currentParent.children.contains(where: { $0.key == child.key }) else { return }
+
+        parentViewModel.runtimeObject = currentParent.withAppendedChild(child)
         nodes = nodes
         if isFiltering {
             filteredNodes = FilterEngine.filter(
