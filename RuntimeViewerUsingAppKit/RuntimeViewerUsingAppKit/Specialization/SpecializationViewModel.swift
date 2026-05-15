@@ -61,7 +61,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
         /// payload is the row's `parameterPath`. The VM forwards the path
         /// onto the coordinator, which resolves the anchor back from the VC
         /// and presents the type-picker popover.
-        public let requestTypePickerClicked: Signal<[String]>
+        public let requestTypePickerClicked: Signal<[ParameterPathSegment]>
     }
 
     public struct Output {
@@ -116,29 +116,26 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     /// trigger a lazy `specializationRequest(forCandidate:in:)` fetch and
     /// then `expandRow` so the freshly populated inner rows are visible.
     public func applyArgumentChange(
-        path: [String],
+        path: [ParameterPathSegment],
         candidate: RuntimeSpecializationRequest.Candidate
     ) {
         guard let row = locateRow(path: path, in: topLevelRows) else {
-            #log(.error, "Cannot locate row for path \(path, privacy: .public)")
+            #log(.error, "Cannot locate row for path \(String(describing: path), privacy: .public)")
             return
         }
+
+        // Coalesce the synchronous transitions (apply candidate, optionally
+        // splice the loading placeholder) into a single publish/reload pair.
+        // The previous implementation fired three publish + reload pairs back
+        // to back for a generic pick, producing visible flicker.
         row.applyCandidate(candidate)
+        if candidate.isGeneric {
+            row.setLoading()
+        }
         publishRowsAndRefresh()
-        // `applyCandidate` clears any previously-installed children; tell the
-        // outline view to drop them visually before the new fetch starts.
         reloadRowRelay.accept(row)
 
         guard candidate.isGeneric else { return }
-
-        // Splice the "Loading…" placeholder under the row *before* kicking
-        // off the async fetch and ask the outline view to re-query
-        // `numberOfChildrenOfItem` + auto-expand, so the user gets immediate
-        // visual feedback instead of an apparent no-op while the inner
-        // specialization request is in-flight.
-        row.setLoading()
-        publishRowsAndRefresh()
-        reloadRowRelay.accept(row)
         expandRowRelay.accept(row)
 
         let fetchTask: Task<Void, Never> = Task { [weak self, weak row] in
@@ -182,11 +179,15 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     }
 
     private func locateRow(
-        path: [String],
+        path: [ParameterPathSegment],
         in rows: [SpecializationCellViewModel]
     ) -> SpecializationCellViewModel? {
         guard let head = path.first else { return nil }
-        guard let match = rows.first(where: { $0.parameter.name == head }) else { return nil }
+        // Loading placeholders are leaf-only synthetic rows; they never
+        // appear as a `path.first` from the controller, but switching on
+        // intent here documents that we deliberately ignore them.
+        guard case .parameter(let name) = head else { return nil }
+        guard let match = rows.first(where: { $0.parameter.name == name }) else { return nil }
         if path.count == 1 { return match }
         return locateRow(path: Array(path.dropFirst()), in: match.children)
     }
@@ -210,7 +211,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
             let req = try await documentState.runtimeEngine.specializationRequest(for: runtimeObject)
             request = req
             topLevelRows = req.parameters.map {
-                SpecializationCellViewModel(parameterPath: [$0.name], parameter: $0)
+                SpecializationCellViewModel(parameterPath: [.parameter($0.name)], parameter: $0)
             }
             loadState = .loaded
             publishRowsAndRefresh()

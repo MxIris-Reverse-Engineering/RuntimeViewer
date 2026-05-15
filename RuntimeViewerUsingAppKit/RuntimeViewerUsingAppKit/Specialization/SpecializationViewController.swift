@@ -10,16 +10,16 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 
     private let headerLabel = Label()
     private let statusLabel = Label()
-    private let (scrollView, outlineView): (ScrollView, NSOutlineView) = NSOutlineView.scrollableSingleColumnOutlineView()
+    private let (scrollView, outlineView): (ScrollView, OutlineView) = OutlineView.scrollableSingleColumnOutlineView()
     private let cancelButton = PushButton(title: "Cancel", titleFont: .systemFont(ofSize: 13))
     private let specializeButton = PushButton(title: "Specialize", titleFont: .systemFont(ofSize: 13))
 
     /// Forwarded "Choose Type" clicks from every recycled `ParameterRowCellView`.
-    /// Each cell pushes its own row's `parameterPath` here; the controller
-    /// re-emits the stream through `Input.requestTypePickerClicked` so the
-    /// VM/coordinator can resolve the matching row, even when the outline
-    /// reuses cells across diffs.
-    private let chooseClickRelay = PublishRelay<[String]>()
+    /// Each cell forwards its row's `parameterPath` here via the signal
+    /// returned from `bind(to:)`; the controller re-emits the stream through
+    /// `Input.requestTypePickerClicked` so the VM/coordinator can resolve the
+    /// matching row, even when the outline reuses cells across diffs.
+    private let chooseClickRelay = PublishRelay<[ParameterPathSegment]>()
 
     // MARK: - Lifecycle
 
@@ -50,7 +50,6 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 
         specializeButton.snp.makeConstraints { make in
             make.top.greaterThanOrEqualTo(scrollView.snp.bottom).offset(20)
-            make.top.greaterThanOrEqualTo(statusLabel.snp.bottom).offset(20)
             make.trailing.bottom.equalToSuperview().inset(20)
             make.width.equalTo(100)
         }
@@ -92,7 +91,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         outlineView.do {
             $0.headerView = nil
             $0.indentationPerLevel = 16
-            $0.style = .inset
+            $0.style = .sourceList
             $0.backgroundColor = .clear
             $0.rowHeight = 28
             $0.allowsEmptySelection = true
@@ -104,20 +103,24 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 
     // MARK: - Anchor lookup (for coordinator-driven popover positioning)
 
-    func anchorView(forPath parameterPath: [String]) -> NSView? {
+    func anchorView(forPath parameterPath: [ParameterPathSegment]) -> NSView? {
         guard let row = locateRow(forPath: parameterPath) else { return nil }
         let rowIndex = outlineView.row(forItem: row)
         guard rowIndex >= 0,
               let cellView = outlineView.view(atColumn: 0, row: rowIndex, makeIfNecessary: false) as? ParameterRowCellView
         else { return nil }
-        return cellView.chooseButton
+        return cellView.anchorView
     }
 
-    private func locateRow(forPath parameterPath: [String]) -> SpecializationCellViewModel? {
+    private func locateRow(forPath parameterPath: [ParameterPathSegment]) -> SpecializationCellViewModel? {
         guard let viewModel else { return nil }
         var rows = viewModel.topLevelRows
         var matchedRow: SpecializationCellViewModel?
-        for name in parameterPath {
+        for segment in parameterPath {
+            // Loading placeholders never serve as an anchor target — the
+            // anchor is always a real parameter row whose Choose Type button
+            // can host the popover.
+            guard case .parameter(let name) = segment else { return nil }
             guard let next = rows.first(where: { $0.parameter.name == name }) else { return nil }
             matchedRow = next
             rows = next.children
@@ -151,15 +154,11 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         loadState.map(Self.isSpecializeHidden).drive(specializeButton.rx.isHidden).disposed(by: rx.disposeBag)
 
         output.rows
-            .drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, row: SpecializationCellViewModel) -> NSView? in
-                guard let self else { return nil }
+            .drive(outlineView.rx.nodes) { [chooseClickRelay] (outlineView: NSOutlineView, _: NSTableColumn?, row: SpecializationCellViewModel) -> NSView? in
                 let cellView = outlineView.box.makeView(ofClass: ParameterRowCellView.self)
                 cellView.bind(to: row)
-                cellView.clickRelay
-                    .asSignal()
                     .emit(to: chooseClickRelay)
                     .disposed(by: cellView.rx.disposeBag)
-
                 return cellView
             }
             .disposed(by: rx.disposeBag)
@@ -221,10 +220,9 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 extension SpecializationViewController {
     fileprivate final class ParameterRowCellView: TableCellView {
         private let descriptionLabel = Label()
-        let chooseButton = PushButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
+        private let chooseButton = PushButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
         private let loadingIndicator = NSProgressIndicator()
-        let clickRelay = PublishRelay<[String]>()
-
+        var anchorView: NSView { chooseButton }
         override func setup() {
             super.setup()
 
@@ -258,7 +256,13 @@ extension SpecializationViewController {
             }
         }
 
-        func bind(to row: SpecializationCellViewModel) {
+        /// Bind the cell to a row and return that row's "Choose Type" click
+        /// signal already tagged with the row's `parameterPath`. The caller
+        /// is expected to `emit(to:)` the controller's relay and dispose via
+        /// `cellView.rx.disposeBag`; the disposeBag is reset at the top of
+        /// `bind(to:)` so the prior row's subscriptions are dropped before
+        /// the new ones are wired up.
+        func bind(to row: SpecializationCellViewModel) -> Signal<[ParameterPathSegment]> {
             rx.disposeBag = DisposeBag()
 
             row.$descriptionText.asDriver()
@@ -280,12 +284,9 @@ extension SpecializationViewController {
                 loadingIndicator.stopAnimation(nil)
             }
 
-            chooseButton.rx.click
+            return chooseButton.rx.click
                 .asSignal()
-                .emit(with: self) { cell, _ in
-                    cell.clickRelay.accept(row.parameterPath)
-                }
-                .disposed(by: rx.disposeBag)
+                .map { row.parameterPath }
         }
     }
 }

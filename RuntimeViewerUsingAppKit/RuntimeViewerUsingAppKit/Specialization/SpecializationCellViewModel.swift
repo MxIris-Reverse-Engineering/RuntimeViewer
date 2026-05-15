@@ -9,6 +9,21 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import DifferenceKit
 
+/// One segment of a `SpecializationCellViewModel.parameterPath`.
+///
+/// `.parameter(name)` carries a real Swift generic-parameter name (e.g.
+/// `"A"`, `"Element"`), `.loadingPlaceholder` tags the synthetic
+/// "Loading inner parameters…" row spliced under a generic candidate while
+/// its inner specialization request is in flight. Modelling the placeholder
+/// as a discrete enum case (rather than a sentinel string) gives us a
+/// type-system guarantee that a real parameter name can never collide with
+/// the placeholder, and lets `locateRow` / `parameter(forPath:)` switch on
+/// intent rather than string-comparing magic constants.
+public enum ParameterPathSegment: Hashable, Sendable {
+    case parameter(String)
+    case loadingPlaceholder
+}
+
 /// Per-row backing model for the nested specialization sheet.
 ///
 /// Each row owns one generic parameter (an entry in
@@ -19,11 +34,11 @@ import DifferenceKit
 /// tree at preflight / specialize time, so the tree is the source of truth.
 ///
 /// `parameterPath` is the dotted parameter chain from the outer-most row
-/// (`["A"]`, `["A", "B"]`, …). It backs `Differentiable.differenceIdentifier`
-/// so DifferenceKit's diff keeps already-expanded subtrees stable across
-/// re-renders.
+/// (`[.parameter("A")]`, `[.parameter("A"), .parameter("B")]`, …). It backs
+/// `Differentiable.differenceIdentifier` so DifferenceKit's diff keeps
+/// already-expanded subtrees stable across re-renders.
 public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unchecked Sendable {
-    public let parameterPath: [String]
+    public let parameterPath: [ParameterPathSegment]
     public let parameter: RuntimeSpecializationRequest.Parameter
 
     /// `true` for the synthetic "Loading inner parameters…" row spliced under
@@ -63,7 +78,7 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
     }
 
     public init(
-        parameterPath: [String],
+        parameterPath: [ParameterPathSegment],
         parameter: RuntimeSpecializationRequest.Parameter
     ) {
         self.parameterPath = parameterPath
@@ -77,13 +92,13 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
         super.init()
     }
 
-    private init(loadingPlaceholderUnder parentPath: [String]) {
-        self.parameterPath = parentPath + [Self.placeholderPathSegment]
+    private init(loadingPlaceholderUnder parentPath: [ParameterPathSegment]) {
+        self.parameterPath = parentPath + [.loadingPlaceholder]
         // The synthesised parameter is never inspected — placeholders are
         // gated out by `isPlaceholder` everywhere it matters. It exists only
         // because the rest of the codebase reads `row.parameter` without
         // checking the placeholder flag first.
-        self.parameter = .init(name: Self.placeholderPathSegment, displayDescription: "", candidates: [])
+        self.parameter = .init(name: "", displayDescription: "", candidates: [])
         self.isPlaceholder = true
         self.selectedCandidate = nil
         self.children = []
@@ -97,7 +112,7 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
     /// candidate while its inner specialization request is in-flight. The
     /// row is removed (replaced with real parameter rows) once
     /// `installInnerParameters` runs.
-    public static func loadingPlaceholder(parentPath: [String]) -> SpecializationCellViewModel {
+    public static func loadingPlaceholder(parentPath: [ParameterPathSegment]) -> SpecializationCellViewModel {
         SpecializationCellViewModel(loadingPlaceholderUnder: parentPath)
     }
 
@@ -184,7 +199,7 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
     public func installInnerParameters(_ parameters: [RuntimeSpecializationRequest.Parameter]) {
         children = parameters.map {
             SpecializationCellViewModel(
-                parameterPath: parameterPath + [$0.name],
+                parameterPath: parameterPath + [.parameter($0.name)],
                 parameter: $0
             )
         }
@@ -194,13 +209,6 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
     // MARK: - Display helpers
 
     private static let defaultButtonTitle = "Choose Type…"
-
-    /// Sentinel name appended to a placeholder's `parameterPath` so it has a
-    /// stable `differenceIdentifier` (DifferenceKit recycles by path) and so
-    /// it can never collide with a real parameter name (Swift generic
-    /// parameters can not contain double underscores in their type-system
-    /// surface name).
-    fileprivate static let placeholderPathSegment = "__loading_placeholder__"
 
     private static func makeDescriptionText(for parameter: RuntimeSpecializationRequest.Parameter) -> NSAttributedString {
         let paragraphStyle = NSMutableParagraphStyle()
@@ -232,7 +240,7 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
 extension SpecializationCellViewModel: Differentiable {
-    public var differenceIdentifier: [String] { parameterPath }
+    public var differenceIdentifier: [ParameterPathSegment] { parameterPath }
 
     public func isContentEqual(to source: SpecializationCellViewModel) -> Bool {
         parameterPath == source.parameterPath

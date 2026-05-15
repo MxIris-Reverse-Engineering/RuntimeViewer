@@ -399,10 +399,10 @@
 				0FBD344C22E90BA7623E9663 /* SpecializationWindowController.swift */,
 				99D54B1B904A0B5FDFA93B2F /* SpecializationViewController.swift */,
 				E997A7472FB04C8C008F4C00 /* SpecializationViewModel.swift */,
+				E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */,
 				E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */,
 				E997A7462FB04C8C008F4C00 /* SpecializationTypePickerViewModel.swift */,
 				E9980FCD2FB5D02E00D9AEF9 /* SpecializationTypePickerCellViewModel.swift */,
-				E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */,
 			);
 			path = Specialization;
 			sourceTree = "<group>";

@@ -10,7 +10,7 @@ import RuntimeViewerApplication
 /// parent coordinator can apply the change to `SpecializationViewModel`
 /// without the popover knowing about its lifecycle.
 public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRoute> {
-    private let parameterPath: [String]
+    private let parameterPath: [ParameterPathSegment]
 
     private let allCellViewModels: [SpecializationTypePickerCellViewModel]
 
@@ -27,7 +27,7 @@ public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRo
     }
 
     public init(
-        parameterPath: [String],
+        parameterPath: [ParameterPathSegment],
         candidates: [RuntimeSpecializationRequest.Candidate],
         documentState: DocumentState,
         router: any Router<SpecializationRoute>
