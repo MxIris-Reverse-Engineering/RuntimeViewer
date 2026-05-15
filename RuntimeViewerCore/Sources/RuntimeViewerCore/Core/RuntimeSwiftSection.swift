@@ -732,29 +732,21 @@ actor RuntimeSwiftSection {
 
     /// Build an inner specialization request for a candidate the user picked
     /// to bind a generic outer parameter. `candidateID` is the mangled string
-    /// `mangleAsString(typeName.node)` carried over the wire; we reverse-look
-    /// it up in `factory.indexer.allTypeDefinitions` — the shared sub-indexer
-    /// aggregate — so cross-image candidates (`Array`, `Dictionary` from
-    /// stdlib) are resolvable from any image that triggered the outer flow.
+    /// `mangleAsString(typeName.node)` carried over the wire; we resolve it
+    /// via the factory's pre-built mangledID index (populated when each
+    /// section registers via `setupForFactory`), so cross-image candidates
+    /// (`Array`, `Dictionary` from stdlib) are resolvable in O(1) from any
+    /// image that triggered the outer flow.
     /// `imagePath` only feeds the diagnostic on miss; the actual definition
     /// might live in a different image once the aggregate is consulted.
     func specializationRequest(
         forCandidateID candidateID: String,
         in imagePath: String
     ) async throws -> RuntimeSpecializationRequest {
-        // Walk the cross-image aggregate so candidates outside the current
-        // section's image (stdlib `Array`, `Dictionary`, …) resolve.
-        var matchedEntry: MachOIndexedValue<MachOImage, TypeDefinition>?
-        var matchedDisplayName: String?
-        for (typeName, entry) in factory.indexer.allAllTypeDefinitions {
-            guard let mangled = try? await mangleAsString(typeName.node) else { continue }
-            if mangled == candidateID {
-                matchedEntry = entry
-                matchedDisplayName = typeName.name
-                break
-            }
-        }
-        guard let matchedEntry, let matchedDisplayName else {
+        guard let matched = await factory.indexedType(forCandidateID: candidateID) else {
+            // No human-readable name available on a cold-cache miss — surface
+            // the mangled ID so the diagnostic at least round-trips back to
+            // a `git grep`-able token in the binary.
             throw RuntimeEngine.EngineError.unindexedCandidate(displayName: candidateID, imagePath: imagePath)
         }
         // Bind the specializer to the candidate's own image. `self.specializer`
@@ -763,18 +755,18 @@ actor RuntimeSwiftSection {
         // parsing offsets against the wrong Mach-O reads garbage that the
         // demangler later trips on at the first byte.
         let candidateSpecializer = GenericSpecializer<MachOImage>(
-            machO: matchedEntry.machO,
+            machO: matched.entry.machO,
             conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer),
             indexer: factory.indexer
         )
         candidateSpecializer.maxBindingDepth = Self.maxSpecializationDepth
         do {
-            let upstreamRequest = try candidateSpecializer.makeRequest(for: matchedEntry.value.type.typeContextDescriptorWrapper)
+            let upstreamRequest = try candidateSpecializer.makeRequest(for: matched.entry.value.type.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
         } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
             throw Self.translate(error)
         } catch {
-            #log(.error, "Inner specialization request failed for candidate \(matchedDisplayName, privacy: .public) (image: \(matchedEntry.machO.imagePath, privacy: .public)) requested via section \(imagePath, privacy: .public): \(error, privacy: .public)")
+            #log(.error, "Inner specialization request failed for candidate \(matched.typeName.name, privacy: .public) (image: \(matched.entry.machO.imagePath, privacy: .public)) requested via section \(imagePath, privacy: .public): \(error, privacy: .public)")
             throw error
         }
     }
@@ -1183,6 +1175,21 @@ actor RuntimeSwiftSection {
     fileprivate func setupForFactory(_ factory: RuntimeSwiftSectionFactory) {
         factory.indexer.addSubIndexer(indexer)
     }
+
+    /// Build the mangledID → indexed type mapping this section contributes
+    /// to the factory's cross-image lookup table. Called once per section
+    /// immediately after registration; the factory merges the result with
+    /// first-write-wins semantics. Mangling is inherently throwing — we
+    /// silently skip nodes that fail to mangle, matching the prior loop's
+    /// `try?` behaviour.
+    fileprivate func candidateIDMapping() -> [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] {
+        var result: [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] = [:]
+        for (typeName, typeDefinition) in indexer.allTypeDefinitions {
+            guard let mangled = try? mangleAsString(typeName.node) else { continue }
+            result[mangled] = (typeName, MachOIndexedValue(machO: machO, value: typeDefinition))
+        }
+        return result
+    }
 }
 
 extension SwiftInterface.TypeName {
@@ -1290,21 +1297,51 @@ extension SemanticString {
 
 @Loggable(.private)
 actor RuntimeSwiftSectionFactory {
-    
+
+    /// Pair of (originating typeName, indexed entry) produced by
+    /// `RuntimeSwiftSection.candidateIDMapping()`. The typeName is preserved
+    /// so the eventual `EngineError.unindexedCandidate` (and any internal
+    /// logging) can surface a human-readable name even when the lookup is
+    /// driven by the opaque mangled candidate ID.
+    typealias IndexedTypeEntry = (
+        typeName: SwiftInterface.TypeName,
+        entry: MachOIndexedValue<MachOImage, TypeDefinition>
+    )
+
     let indexer: SwiftInterfaceIndexer<MachOImage>
-    
+
     private var sections: [String: RuntimeSwiftSection] = [:]
+
+    /// Cross-image mangled candidate ID → indexed type, populated as each
+    /// section registers. Replaces the prior O(n) walk over
+    /// `indexer.allAllTypeDefinitions` (which re-mangled every typeName on
+    /// every inner-request fetch) with an O(1) dictionary lookup.
+    ///
+    /// First-write-wins, mirroring `allAllTypeDefinitions`'s `result.merge(... { current, _ in current })`
+    /// merge strategy: when stdlib types appear in multiple loaded
+    /// dylibs (e.g. interposed builds), the section that registered first
+    /// owns the canonical entry.
+    private var indexedTypeByCandidateID: [String: IndexedTypeEntry] = [:]
 
     init() {
         indexer = .init(configuration: .init(), eventHandlers: [], in: .current())
     }
-    
+
     func existingSection(for imagePath: String) -> RuntimeSwiftSection? {
         sections[imagePath]
     }
 
     func hasCachedSection(for path: String) -> Bool {
         sections[path] != nil
+    }
+
+    /// O(1) lookup of the indexed type backing a `candidateID` (the mangled
+    /// string carried over the wire by `RuntimeSpecializationRequest.Candidate.id`).
+    /// Returns `nil` if the candidate's defining image has not been indexed
+    /// — typically a candidate from an image that was unloaded between
+    /// request and selection.
+    func indexedType(forCandidateID candidateID: String) -> IndexedTypeEntry? {
+        indexedTypeByCandidateID[candidateID]
     }
 
     func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
@@ -1316,16 +1353,32 @@ actor RuntimeSwiftSectionFactory {
         let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
         sections[imagePath] = section
         await section.setupForFactory(self)
+        await registerCandidateIDs(from: section)
         #log(.debug, "Swift section created and cached")
         return (false, section)
     }
 
     func removeSection(for imagePath: String) {
         sections.removeValue(forKey: imagePath)
+        // Drop any mangledID entries originating from this image so a
+        // subsequent `addSubIndexer`-driven re-register can repopulate them.
+        indexedTypeByCandidateID = indexedTypeByCandidateID.filter { _, value in
+            value.entry.machO.imagePath != imagePath
+        }
     }
 
     func removeAllSections() {
         sections.removeAll()
+        indexedTypeByCandidateID.removeAll()
+    }
+
+    private func registerCandidateIDs(from section: RuntimeSwiftSection) async {
+        let mapping = await section.candidateIDMapping()
+        for (id, value) in mapping {
+            if indexedTypeByCandidateID[id] == nil {
+                indexedTypeByCandidateID[id] = value
+            }
+        }
     }
 }
 
