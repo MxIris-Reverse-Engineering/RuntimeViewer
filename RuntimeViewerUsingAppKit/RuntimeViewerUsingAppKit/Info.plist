@@ -28,6 +28,12 @@
 		<key>com.JH.RuntimeViewerService</key>
 		<string>$(SMPrivilegedExecutable)</string>
 	</dict>
+	<key>RuntimeViewerBuildDate</key>
+	<string>$(RUNTIME_VIEWER_BUILD_DATE)</string>
+	<key>RuntimeViewerGitBranch</key>
+	<string>$(RUNTIME_VIEWER_GIT_BRANCH)</string>
+	<key>RuntimeViewerGitCommit</key>
+	<string>$(RUNTIME_VIEWER_GIT_COMMIT)</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<true/>
 	<key>SUEnableAutomaticChecks</key>

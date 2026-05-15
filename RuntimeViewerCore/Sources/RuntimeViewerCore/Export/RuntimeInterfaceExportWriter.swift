@@ -65,4 +65,14 @@ enum RuntimeInterfaceExportWriter {
 
         return result
     }
+
+    static func writeMetadata(
+        _ metadata: RuntimeInterfaceExportMetadata,
+        to directory: URL
+    ) throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let readmeURL = directory.appendingPathComponent("README.md")
+        try metadata.makeREADME().write(to: readmeURL, atomically: true, encoding: .utf8)
+    }
 }

@@ -16,6 +16,8 @@ final class ExportingConfigurationViewController: UXKitViewController<ExportingC
     private let swiftSingleFileRadio = RadioButton()
     private let swiftDirectoryRadio = RadioButton()
 
+    private let includeMetadataCheckbox = CheckboxButton()
+
     private let objcTitleLabel = Label("Objective-C:").then {
         $0.font = .systemFont(ofSize: 13, weight: .medium)
     }
@@ -44,10 +46,16 @@ final class ExportingConfigurationViewController: UXKitViewController<ExportingC
         $0.textColor = .tertiaryLabelColor
     }
 
+    private let metadataDesc = Label("Write README.md with RuntimeViewer, module, date, license, and dump option details").then {
+        $0.font = .systemFont(ofSize: 11)
+        $0.textColor = .tertiaryLabelColor
+    }
+
     private lazy var contentStack = VStackView(alignment: .leading, spacing: 16) {
         summaryLabel
         objcStack
         swiftStack
+        metadataStack
     }
 
     private lazy var objcStack = VStackView(alignment: .leading, spacing: 12) {
@@ -72,6 +80,11 @@ final class ExportingConfigurationViewController: UXKitViewController<ExportingC
             swiftDirectoryRadio
             swiftDirDesc
         }
+    }
+
+    private lazy var metadataStack = VStackView(alignment: .leading, spacing: 4) {
+        includeMetadataCheckbox
+        metadataDesc
     }
 
     override func viewDidLoad() {
@@ -102,6 +115,11 @@ final class ExportingConfigurationViewController: UXKitViewController<ExportingC
             $0.font = .systemFont(ofSize: 13)
         }
 
+        includeMetadataCheckbox.do {
+            $0.title = "Include README metadata"
+            $0.font = .systemFont(ofSize: 13)
+        }
+
         contentView.hierarchy {
             contentStack
         }
@@ -124,7 +142,8 @@ final class ExportingConfigurationViewController: UXKitViewController<ExportingC
             swiftFormatSelected: Signal.merge(
                 swiftSingleFileRadio.rx.click.asSignal().map { ExportFormat.singleFile.rawValue },
                 swiftDirectoryRadio.rx.click.asSignal().map { ExportFormat.directory.rawValue }
-            )
+            ),
+            includeMetadataSelected: includeMetadataCheckbox.rx.state.asSignal().map { $0 == .on }
         )
 
         let output = viewModel.transform(input)
@@ -133,6 +152,7 @@ final class ExportingConfigurationViewController: UXKitViewController<ExportingC
         output.objcFormat.map { $0 == .directory }.drive(objcDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .singleFile }.drive(swiftSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .directory }.drive(swiftDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
+        output.includeMetadata.drive(includeMetadataCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
 
         output.hasObjC.driveOnNext { [weak self] hasObjC in
             guard let self else { return }

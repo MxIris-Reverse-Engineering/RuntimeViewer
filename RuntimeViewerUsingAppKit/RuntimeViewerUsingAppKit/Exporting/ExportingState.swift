@@ -27,6 +27,9 @@ final class ExportingState {
     var swiftFormat: ExportFormat = .singleFile
 
     @Observed
+    var includeMetadata: Bool = true
+
+    @Observed
     var destinationURL: URL?
 
     @Observed
