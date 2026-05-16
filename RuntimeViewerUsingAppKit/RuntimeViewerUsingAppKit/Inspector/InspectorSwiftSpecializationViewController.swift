@@ -10,7 +10,7 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
 
     private let headerLabel = Label()
     private let emptyLabel = Label()
-    private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
+    private let (scrollView, tableView): (SelfSizingScrollView, SelfSizingTableView) = SelfSizingTableView.scrollableTableView()
     private let addSpecializationButton = PushButton(
         title: "+ Add Specialization",
         titleFont: .systemFont(ofSize: 13)
@@ -37,7 +37,7 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         scrollView.snp.makeConstraints { make in
             make.top.equalTo(headerLabel.snp.bottom).offset(8)
             make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
-            make.bottom.equalTo(addSpecializationButton.snp.top).offset(-8)
+//            make.bottom.lessThanOrEqualTo(addSpecializationButton.snp.top).offset(-8)
         }
 
         emptyLabel.snp.makeConstraints { make in
@@ -45,7 +45,10 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         }
 
         addSpecializationButton.snp.makeConstraints { make in
-            make.bottom.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
+            make.top.equalTo(scrollView.snp.bottom).offset(8)
+            make.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
+            make.leading.greaterThanOrEqualToSuperview()
+            make.bottom.lessThanOrEqualToSuperview()
         }
 
         tableView.do {
@@ -61,6 +64,7 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             $0.isHiddenVisualEffectView = true
             $0.autohidesScrollers = true
             $0.backgroundColor = .clear
+            $0.minimumContentSize = NSSize(width: NSView.noIntrinsicMetric, height: 80)
         }
 
         headerLabel.do {
