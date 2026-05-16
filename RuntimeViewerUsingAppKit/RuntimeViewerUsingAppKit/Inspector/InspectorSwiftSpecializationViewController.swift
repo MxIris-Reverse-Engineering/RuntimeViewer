@@ -31,12 +31,12 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         }
 
         headerLabel.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview().inset(8)
+            make.top.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
         }
 
         scrollView.snp.makeConstraints { make in
             make.top.equalTo(headerLabel.snp.bottom).offset(8)
-            make.leading.trailing.equalToSuperview().inset(8)
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
             make.bottom.equalTo(addSpecializationButton.snp.top).offset(-8)
         }
 
@@ -45,7 +45,7 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         }
 
         addSpecializationButton.snp.makeConstraints { make in
-            make.bottom.trailing.equalToSuperview().inset(8)
+            make.bottom.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
         }
 
         tableView.do {
@@ -53,24 +53,24 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             $0.headerView = nil
             $0.allowsMultipleSelection = false
             $0.allowsEmptySelection = true
-            $0.rowHeight = 28
-            $0.style = .inset
+            $0.usesAutomaticRowHeights = true
+            $0.style = .sourceList
         }
 
         scrollView.do {
+            $0.isHiddenVisualEffectView = true
             $0.autohidesScrollers = true
             $0.backgroundColor = .clear
         }
 
         headerLabel.do {
             $0.font = .systemFont(ofSize: 13, weight: .semibold)
-            $0.textColor = .controlTextColor
+            $0.textColor = .labelColor
             $0.stringValue = "Specializations"
             $0.setContentHuggingPriority(.defaultLow, for: .horizontal)
         }
 
         emptyLabel.do {
-            $0.font = .systemFont(ofSize: 13)
             $0.textColor = .secondaryLabelColor
             $0.stringValue = "No specializations yet."
             $0.isHidden = true
@@ -104,7 +104,9 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
 
         specializedChildren
             .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: InspectorSwiftSpecializationCellViewModel) -> NSView? in
-                let cellView = tableView.box.makeView(ofClass: SpecializedChildCellView.self)
+                let cellView = tableView.box.makeView(ofClass: RuntimeObjectCellView<InspectorSwiftSpecializationCellViewModel>.self) {
+                    .init(contentInsets: .init(top: 0, left: 4, bottom: 0, right: 4))
+                }
                 cellView.bind(to: cellViewModel)
                 return cellView
             }
@@ -115,36 +117,5 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             .not()
             .drive(emptyLabel.rx.isHidden)
             .disposed(by: rx.disposeBag)
-    }
-}
-
-// MARK: - SpecializedChildCellView
-
-extension InspectorSwiftSpecializationViewController {
-    private final class SpecializedChildCellView: TableCellView {
-        private let nameLabel = Label()
-
-        override func setup() {
-            super.setup()
-
-            hierarchy {
-                nameLabel
-            }
-
-            nameLabel.snp.makeConstraints { make in
-                make.leading.trailing.equalToSuperview().inset(4)
-                make.centerY.equalToSuperview()
-            }
-
-            nameLabel.do {
-                $0.maximumNumberOfLines = 1
-            }
-        }
-
-        func bind(to viewModel: InspectorSwiftSpecializationCellViewModel) {
-            rx.disposeBag = DisposeBag()
-
-            viewModel.$name.asDriver().drive(nameLabel.rx.attributedStringValue).disposed(by: rx.disposeBag)
-        }
     }
 }

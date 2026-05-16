@@ -14,9 +14,9 @@ public protocol RuntimeObjectCellDisplayable: AnyObject {
 }
 
 extension RuntimeObjectCellDisplayable {
-    public var subtitleDriver: Driver<NSAttributedString?> {
-        .just(nil)
-    }
+    public var secondaryIconDriver: Driver<NSUIImage?> { .just(nil) }
+    public var tertiaryIconDriver: Driver<NSUIImage?> { .just(nil) }
+    public var subtitleDriver: Driver<NSAttributedString?> { .just(nil) }
 }
 
 #endif
