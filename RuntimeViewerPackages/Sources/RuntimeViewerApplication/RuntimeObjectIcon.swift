@@ -89,11 +89,7 @@ public enum RuntimeObjectIcon {
     }
 
     public static func iconForSpecialized(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
-        // Use a distinct glyph (S rather than G) so the badge does not rely on
-        // colour alone — colour-blind users seeing two teal/pink "G" badges
-        // could not otherwise tell the unspecialised generic apart from a
-        // user-driven specialisation.
-        return icon(text: "S", color: .pink, size: size, style: style)
+        return icon(text: "Sp", color: .pink, size: size, style: style)
     }
 
     public static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {

@@ -35,7 +35,9 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
 
     private lazy var textStackView = VStackView(distribution: .fill, alignment: .leading, spacing: 2) {
         titleLabel
+            .contentCompressionResistance(h: .defaultLow)
         subtitleLabel
+            .contentCompressionResistance(h: .defaultLow)
     }
 
     private lazy var contentStackView = HStackView(distribution: .fill, spacing: 6) {
@@ -81,12 +83,14 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
         titleLabel.do {
             $0.alignment = .left
             $0.maximumNumberOfLines = 1
+            $0.syncStringValueToolTip = true
         }
 
         subtitleLabel.do {
             $0.alignment = .left
             $0.maximumNumberOfLines = 1
             $0.isHidden = true
+            $0.syncStringValueToolTip = true
         }
     }
 

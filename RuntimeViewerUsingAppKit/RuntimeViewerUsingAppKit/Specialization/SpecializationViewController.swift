@@ -41,6 +41,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         scrollView.snp.makeConstraints { make in
             make.top.equalTo(headerLabel.snp.bottom).offset(16)
             make.leading.trailing.equalToSuperview().inset(20)
+            make.bottom.equalTo(specializeButton.snp.top).offset(-20)
         }
 
         statusLabel.snp.makeConstraints { make in
@@ -49,7 +50,6 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         }
 
         specializeButton.snp.makeConstraints { make in
-            make.top.greaterThanOrEqualTo(scrollView.snp.bottom).offset(20)
             make.trailing.bottom.equalToSuperview().inset(20)
             make.width.equalTo(100)
         }
@@ -278,6 +278,7 @@ extension SpecializationViewController {
             // sees that work is in flight while the inner specialization
             // request resolves.
             chooseButton.isHidden = row.isPlaceholder
+            loadingIndicator.isHidden = !row.isPlaceholder
             if row.isPlaceholder {
                 loadingIndicator.startAnimation(nil)
             } else {

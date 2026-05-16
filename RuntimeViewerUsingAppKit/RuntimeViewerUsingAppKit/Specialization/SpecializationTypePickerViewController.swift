@@ -34,6 +34,7 @@ final class SpecializationTypePickerViewController: UXKitViewController<Speciali
 
         scrollView.do {
             $0.autohidesScrollers = true
+            $0.hasHorizontalScroller = false
         }
 
         tableView.do {
@@ -42,6 +43,16 @@ final class SpecializationTypePickerViewController: UXKitViewController<Speciali
             $0.allowsEmptySelection = true
             $0.usesAutomaticRowHeights = true
             $0.style = .inset
+            $0.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+            $0.tableColumns.first?.resizingMask = [.autoresizingMask]
+        }
+
+        // Force tableView width to match the scroll view's content area,
+        // otherwise cell intrinsic (driven by long title labels) would
+        // grow the column and cause horizontal overflow instead of
+        // truncation.
+        tableView.snp.makeConstraints { make in
+            make.width.equalTo(scrollView.contentView)
         }
 
         searchField.do {
