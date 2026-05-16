@@ -95,6 +95,8 @@ let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 
 var sharedSwiftSettings: [SwiftSetting] = []
 
+let UIFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar"]
+
 if usingSystemUXKit {
     sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
 }
@@ -166,19 +168,19 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
-                traits: ["AppleInternal", "FilterUI", "IDEIcons"],
+                isEnabled: true,
+                traits: UIFoundationTraits,
             ),
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
                 isEnabled: usingLocalDependencies,
-                traits: ["AppleInternal", "FilterUI", "IDEIcons"],
+                traits: UIFoundationTraits,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
                 from: "0.4.0",
-                traits: ["AppleInternal", "FilterUI", "IDEIcons"],
+                traits: UIFoundationTraits,
             )
         ),
 
@@ -359,22 +361,6 @@ let package = Package(
         ),
         .package(
             local: .package(
-                path: "../../DSFQuickActionBar",
-                isRelative: true,
-                isEnabled: usingLocalDependencies
-            ),
-            .package(
-                path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("DSFQuickActionBar"),
-                isRelative: true,
-                isEnabled: usingLocalDependencies
-            ),
-            remote: .package(
-                url: "https://github.com/MxIris-macOS-Library-Forks/DSFQuickActionBar",
-                from: "6.2.100"
-            )
-        ),
-        .package(
-            local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("SystemHUD"),
                 isRelative: true,
                 isEnabled: usingLocalDependencies
@@ -431,7 +417,6 @@ let package = Package(
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "LateResponders", package: "LateResponders"),
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "DSFQuickActionBar", package: "DSFQuickActionBar", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "SystemHUD", package: "SystemHUD", condition: .when(platforms: appkitPlatforms)),
 
             ],
