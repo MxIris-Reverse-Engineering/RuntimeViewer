@@ -57,13 +57,15 @@ public final class SpecializationTypePickerCellViewModel: NSObject, @unchecked S
             AText(candidate.displayName)
                 .foregroundColor(.labelColor)
                 .font(.systemFont(ofSize: 12))
-                .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
+                .alignment(.left)
+                .lineBreakeMode(.byTruncatingTail)
         }
         subtitle = NSAttributedString {
             AText(candidate.imagePath.lastPathComponent)
                 .foregroundColor(.secondaryLabelColor)
                 .font(.systemFont(ofSize: 10))
-                .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingMiddle })
+                .alignment(.left)
+                .lineBreakeMode(.byTruncatingTail)
         }
     }
 }

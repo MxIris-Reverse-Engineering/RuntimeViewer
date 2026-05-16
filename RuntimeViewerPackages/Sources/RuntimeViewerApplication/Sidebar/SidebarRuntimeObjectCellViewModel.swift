@@ -88,7 +88,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
                     AText(runtimeObject.displayName)
                         .font(.systemFont(ofSize: fontSize))
                         .foregroundColor(forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor)
-                        .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
+                        .alignment(.left)
+                        .lineBreakeMode(.byTruncatingTail)
                 }
 
                 guard let range = currentAndChildrenNames.ranges(of: runtimeObject.displayName).first else {
@@ -144,7 +145,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         AText(runtimeObject.displayName)
             .font(.systemFont(ofSize: fontSize))
             .foregroundColor(.labelColor)
-            .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
+            .alignment(.left)
+            .lineBreakeMode(.byTruncatingTail)
     }
 
     public init(runtimeObject: RuntimeObject, forOpenQuickly: Bool) {
