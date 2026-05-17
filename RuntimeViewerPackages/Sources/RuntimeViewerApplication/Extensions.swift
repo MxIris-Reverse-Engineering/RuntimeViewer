@@ -4,115 +4,29 @@ import AppKit
 import UIKit
 #endif
 
+import UIFoundation
 import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
-
-enum RuntimeObjectIcon {
-    #if os(macOS)
-    static let defaultIconSize: CGFloat = 18
-    #else
-    static let defaultIconSize: CGFloat = 24
-    #endif
-
-    static let defaultIconStyle: IDEIconStyle = .simple
-
-    private struct IconCacheKey: Hashable {
-        let text: String
-        let color: IDEIconColor
-        let style: IDEIconStyle
-        let size: CGFloat
-    }
-
-    private static var iconCache: [IconCacheKey: NSUIImage] = [:]
-
-    private static func iconInfo(for kind: RuntimeObjectKind) -> (text: String, color: IDEIconColor) {
-        switch kind {
-        case .c(let kind):
-            switch kind {
-            case .struct: return ("S", .green)
-            case .union: return ("U", .green)
-            }
-
-        case .objc(.type(let kind)):
-            switch kind {
-            case .class: return ("C", .yellow)
-            case .protocol: return ("Pr", .purple)
-            }
-
-        case .objc(.category(.class)):
-            return ("Ex", .yellow)
-
-        case .swift(.type(let kind)):
-            switch kind {
-            case .enum: return ("E", .blue)
-            case .struct: return ("S", .blue)
-            case .class: return ("C", .blue)
-            case .protocol: return ("Pr", .blue)
-            case .typeAlias: return ("T", .blue)
-            }
-
-        case .swift(.extension(_)),
-             .swift(.conformance(_)):
-            return ("Ex", .blue)
-
-        default:
-            return ("?", .gray)
-        }
-    }
-
-    static func icon(text: String, color: IDEIconColor, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
-        let key = IconCacheKey(
-            text: text,
-            color: color,
-            style: style,
-            size: size
-        )
-
-        if let cachedImage = Self.iconCache[key] {
-            return cachedImage
-        }
-
-        let image = IDEIcon(
-            text,
-            color: color,
-            style: style,
-            size: size
-        ).image
-
-        Self.iconCache[key] = image
-
-        return image
-    }
-
-    static func iconForGeneric(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
-        return icon(text: "G", color: .teal)
-    }
-
-    static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
-        let (text, color) = iconInfo(for: kind)
-        return icon(text: text, color: color, size: size, style: style)
-    }
-}
 
 extension RuntimeImageLoadState: @retroactive CaseAccessible {}
 
 #if canImport(UIKit)
 
 extension UIColor {
-    static var labelColor: UIColor {
+    public static var labelColor: UIColor {
         .label
     }
 
-    static var secondaryLabelColor: UIColor {
+    public static var secondaryLabelColor: UIColor {
         .secondaryLabel
     }
 
-    static var tertiaryLabelColor: UIColor {
+    public static var tertiaryLabelColor: UIColor {
         .tertiaryLabel
     }
 
-    static var quaternaryLabelColor: UIColor {
+    public static var quaternaryLabelColor: UIColor {
         .quaternaryLabel
     }
 }

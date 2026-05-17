@@ -14,17 +14,6 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     @Observed private(set) var hasAnyHistory: Bool = false
     @Observed private(set) var subtitle: String = ""
 
-    private let coordinator: RuntimeBackgroundIndexingCoordinator
-
-    init(
-        documentState: DocumentState,
-        router: any Router<MainRoute>,
-        coordinator: RuntimeBackgroundIndexingCoordinator
-    ) {
-        self.coordinator = coordinator
-        super.init(documentState: documentState, router: router)
-    }
-
     struct Input {
         let cancelBatch: Signal<RuntimeIndexingBatchID>
         let cancelAll: Signal<Void>
@@ -43,8 +32,8 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 
     func transform(_ input: Input) -> Output {
         Observable.combineLatest(
-            coordinator.batchesObservable,
-            coordinator.historyObservable
+            documentState.backgroundIndexingCoordinator.batchesObservable,
+            documentState.backgroundIndexingCoordinator.historyObservable
         )
         .map { active, history in
             (Self.renderNodes(active: active, history: history), active, history)
@@ -58,7 +47,7 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        coordinator.aggregateStateObservable
+        documentState.backgroundIndexingCoordinator.aggregateStateObservable
             .asDriver(onErrorDriveWith: .empty())
             .driveOnNext { [weak self] state in
                 guard let self else { return }
@@ -77,19 +66,19 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 
         input.cancelBatch.emitOnNext { [weak self] id in
             guard let self else { return }
-            coordinator.cancelBatch(id)
+            documentState.backgroundIndexingCoordinator.cancelBatch(id)
         }
         .disposed(by: rx.disposeBag)
 
         input.cancelAll.emitOnNext { [weak self] in
             guard let self else { return }
-            coordinator.cancelAllBatches()
+            documentState.backgroundIndexingCoordinator.cancelAllBatches()
         }
         .disposed(by: rx.disposeBag)
 
         input.clearHistory.emitOnNext { [weak self] in
             guard let self else { return }
-            coordinator.clearHistory()
+            documentState.backgroundIndexingCoordinator.clearHistory()
         }
         .disposed(by: rx.disposeBag)
 
@@ -111,8 +100,8 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     /// archived final state instead of the empty placeholder.
     func batch(for id: RuntimeIndexingBatchID) -> Driver<RuntimeIndexingBatch> {
         Observable.combineLatest(
-            coordinator.batchesObservable,
-            coordinator.historyObservable
+            documentState.backgroundIndexingCoordinator.batchesObservable,
+            documentState.backgroundIndexingCoordinator.historyObservable
         )
         .compactMap { active, history in
             active.first(where: { $0.id == id })
@@ -126,8 +115,8 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     func item(for batchID: RuntimeIndexingBatchID, itemID: String)
         -> Driver<RuntimeIndexingTaskItem> {
         Observable.combineLatest(
-            coordinator.batchesObservable,
-            coordinator.historyObservable
+            documentState.backgroundIndexingCoordinator.batchesObservable,
+            documentState.backgroundIndexingCoordinator.historyObservable
         )
         .compactMap { active, history in
             let batch = active.first(where: { $0.id == batchID })

@@ -7,7 +7,22 @@ import RuntimeViewerApplication
 typealias InspectorTransition = Transition<Void, InspectorNavigationController>
 
 final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition> {
+    protocol Delegate: AnyObject {
+        func inspectorCoordinator(
+            _ coordinator: InspectorCoordinator,
+            requestSpecializationSheetFor object: RuntimeObject
+        )
+        func inspectorCoordinator(
+            _ coordinator: InspectorCoordinator,
+            selectRuntimeObject object: RuntimeObject
+        )
+    }
+
+    weak var delegate: Delegate?
+
     let documentState: DocumentState
+
+    private var runtimeObjectCoordinators: [InspectorRuntimeObjectCoordinator] = []
 
     init(documentState: DocumentState) {
         self.documentState = documentState
@@ -17,39 +32,68 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
     override func prepareTransition(for route: InspectorRoute) -> InspectorTransition {
         switch route {
         case .placeholder:
-            let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
-            let viewController = InspectorPlaceholderViewController()
-            viewController.setupBindings(for: viewModel)
-            return .set([viewController], animated: true)
+            resetRuntimeObjectStack()
+            return .set([makePlaceholder()], animated: true)
         case .root(let inspectableObject):
-            return .set([makeTransition(for: inspectableObject)], animated: true)
+            resetRuntimeObjectStack()
+            return .set([makePresentable(for: inspectableObject)], animated: true)
         case .next(let inspectableObject):
-            return .push(makeTransition(for: inspectableObject), animated: true)
+            return .push(makePresentable(for: inspectableObject), animated: true)
         case .back:
+            runtimeObjectCoordinators.popLast()?.removeFromParent()
             return .pop(animated: true)
+        case .requestSpecializationSheet(let object):
+            delegate?.inspectorCoordinator(self, requestSpecializationSheetFor: object)
+            return .none()
+        case .selectRuntimeObject(let object):
+            delegate?.inspectorCoordinator(self, selectRuntimeObject: object)
+            return .none()
         }
     }
 
-    func makeTransition(for inspectableObject: InspectableObject) -> UXViewController {
+    private func makePresentable(for inspectableObject: InspectableObject) -> Presentable {
         switch inspectableObject {
         case .node:
-            let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
-            let viewController = InspectorPlaceholderViewController()
-            viewController.setupBindings(for: viewModel)
-            return viewController
+            return makePlaceholder()
         case .object(let runtimeObject):
-            switch runtimeObject.kind {
-            case .objc(.type(.class)), .swift(.type(.class)):
-                let viewModel = InspectorClassViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
-                let viewController = InspectorClassViewController()
-                viewController.setupBindings(for: viewModel)
-                return viewController
-            default:
-                let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
-                let viewController = InspectorPlaceholderViewController()
-                viewController.setupBindings(for: viewModel)
-                return viewController
+            guard InspectorRuntimeObjectCoordinator.canInspect(runtimeObject) else {
+                return makePlaceholder()
             }
+            let runtimeObjectCoordinator = InspectorRuntimeObjectCoordinator(
+                documentState: documentState,
+                runtimeObject: runtimeObject
+            )
+            runtimeObjectCoordinator.delegate = self
+            runtimeObjectCoordinators.append(runtimeObjectCoordinator)
+            return runtimeObjectCoordinator
         }
+    }
+
+    private func resetRuntimeObjectStack() {
+        runtimeObjectCoordinators.forEach { $0.removeFromParent() }
+        runtimeObjectCoordinators.removeAll()
+    }
+
+    private func makePlaceholder() -> UXViewController {
+        let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
+        let viewController = InspectorPlaceholderViewController()
+        viewController.setupBindings(for: viewModel)
+        return viewController
+    }
+}
+
+extension InspectorCoordinator: InspectorRuntimeObjectCoordinator.Delegate {
+    func inspectorRuntimeObjectCoordinator(
+        _ coordinator: InspectorRuntimeObjectCoordinator,
+        didRequestSpecializationSheetFor object: RuntimeObject
+    ) {
+        trigger(.requestSpecializationSheet(object))
+    }
+
+    func inspectorRuntimeObjectCoordinator(
+        _ coordinator: InspectorRuntimeObjectCoordinator,
+        didSelectRuntimeObject object: RuntimeObject
+    ) {
+        trigger(.selectRuntimeObject(object))
     }
 }

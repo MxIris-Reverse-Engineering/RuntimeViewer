@@ -15,6 +15,37 @@ open class StatefulOutlineView: OutlineView {
     private var filteringState: FilteringState = .idle
     private var isReloadingData = false
 
+    // MARK: - Expansion Autosave Configuration
+    //
+    // Manual replacement for NSOutlineView's `autosaveExpandedItems`. The
+    // built-in mechanism only attempts to restore once, at the first moment all
+    // of `autosaveName != nil` / `dataSource` responding to
+    // `itemForPersistentObject:` / `numberOfRows > 0` are simultaneously true.
+    // When the data source is installed after the initial async data load,
+    // that single restore window has already passed and the persisted state is
+    // silently ignored. This implementation keeps wire-compatible UserDefaults
+    // storage (key `"NSOutlineView Items \(name)"`, value `[String]`) while
+    // letting the caller control when to restore.
+
+    /// When non-nil, expand/collapse changes are persisted to UserDefaults under
+    /// the AppKit-compatible key `"NSOutlineView Items \(expansionAutosaveName)"`.
+    open var expansionAutosaveName: String? {
+        didSet {
+            guard oldValue != expansionAutosaveName else { return }
+            updateExpansionAutosaveObservers()
+        }
+    }
+
+    /// Converts an item into a stable String key. Return nil to skip the item.
+    open var persistentObjectForExpansion: ((Any) -> String?)?
+
+    /// Resolves a persisted String key back into an item. Return nil if the item
+    /// is not yet available (e.g. background indexing has not finished).
+    open var itemForExpansionPersistentObject: ((String) -> Any?)?
+
+    private var expansionAutosaveObservers: [NSObjectProtocol] = []
+    private var isApplyingExpansionAutosave = false
+
     open func beginFiltering() {
         guard filteringState == .idle else { return }
         saveExpansionState()
@@ -131,6 +162,83 @@ open class StatefulOutlineView: OutlineView {
             restoreExpansionState()
             restoreSelectedItem()
             filteringState = .idle
+        }
+    }
+
+    // MARK: - Expansion Autosave
+
+    private var expansionAutosaveUserDefaultsKey: String? {
+        expansionAutosaveName.map { "NSOutlineView Items \($0)" }
+    }
+
+    private func updateExpansionAutosaveObservers() {
+        for token in expansionAutosaveObservers {
+            NotificationCenter.default.removeObserver(token)
+        }
+        expansionAutosaveObservers.removeAll()
+
+        guard expansionAutosaveName != nil else { return }
+
+        let center = NotificationCenter.default
+        let didExpand = center.addObserver(
+            forName: NSOutlineView.itemDidExpandNotification,
+            object: self,
+            queue: .main
+        ) { [weak self] _ in
+            self?.persistExpansionStateIfNeeded()
+        }
+        let didCollapse = center.addObserver(
+            forName: NSOutlineView.itemDidCollapseNotification,
+            object: self,
+            queue: .main
+        ) { [weak self] _ in
+            self?.persistExpansionStateIfNeeded()
+        }
+        expansionAutosaveObservers = [didExpand, didCollapse]
+    }
+
+    private func persistExpansionStateIfNeeded() {
+        // Skip during filter-induced expand/collapse churn and during programmatic
+        // restore; only user-driven changes in the idle state should be persisted.
+        guard !isApplyingExpansionAutosave,
+              filteringState == .idle,
+              let key = expansionAutosaveUserDefaultsKey,
+              let persistentObjectForExpansion else { return }
+
+        var persistentObjects: [String] = []
+        let totalRows = numberOfRows
+        for rowIndex in 0 ..< totalRows {
+            guard let item = item(atRow: rowIndex), isItemExpanded(item) else { continue }
+            if let object = persistentObjectForExpansion(item) {
+                persistentObjects.append(object)
+            }
+        }
+        UserDefaults.standard.set(persistentObjects, forKey: key)
+    }
+
+    /// Reads the persisted expansion state and applies it. Call after data has
+    /// loaded and `itemForExpansionPersistentObject` can successfully resolve
+    /// items — for example after the background indexing pass completes.
+    open func restoreExpansionFromAutosave() {
+        guard let key = expansionAutosaveUserDefaultsKey,
+              let itemForExpansionPersistentObject,
+              let persistentObjects = UserDefaults.standard.array(forKey: key) as? [String] else {
+            return
+        }
+
+        isApplyingExpansionAutosave = true
+        defer { isApplyingExpansionAutosave = false }
+
+        for object in persistentObjects {
+            if let item = itemForExpansionPersistentObject(object) {
+                expandItem(item)
+            }
+        }
+    }
+
+    deinit {
+        for token in expansionAutosaveObservers {
+            NotificationCenter.default.removeObserver(token)
         }
     }
 }

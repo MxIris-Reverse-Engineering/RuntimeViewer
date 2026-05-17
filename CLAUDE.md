@@ -216,15 +216,28 @@ private let requestDirectorySelectionRelay = PublishRelay<Void>()
 
 **Base classes**: `AppKitViewController<VM>` (simple) or `UXKitViewController<VM>` (with contentView support).
 
-**UI events** — use `PublishRelay` at the top, fire from `@objc` actions:
-```swift
-private let cancelRelay = PublishRelay<Void>()
-private let exportRelay = PublishRelay<Void>()
+**UI events** — prefer RxAppKit / RxCocoa `rx.*` accessors over hand-rolled `PublishRelay` + `@objc` action plumbing. Wire control events straight into `Input`:
 
-@objc private func cancelClicked() {
-    cancelRelay.accept(())
-}
+```swift
+let input = MyViewModel.Input(
+    cancelClicked: cancelButton.rx.click.asSignal(),
+    exportClicked: exportButton.rx.click.asSignal(),
+    searchString: searchField.rx.stringValue.asSignal(onErrorJustReturn: "")
+)
 ```
+
+Common rx accessors to know:
+- `NSButton`: `rx.click`, `rx.state`, `rx.title`, `rx.isEnabled`
+- `NSSearchField` / `NSTextField`: `rx.stringValue`, `rx.text`
+- `NSTableView`: `rx.itemClicked()`, `rx.itemSelected()`, `rx.modelSelected()`, `rx.items`, `rx.setDelegate(_:)`
+- `NSOutlineView`: `rx.modelDoubleClicked()`, `rx.modelSelected()`, `rx.nodes`, `rx.reorderableNodes`
+- `NSView`: `rx.isHidden` and friends
+
+`PublishRelay<T>` is reserved for events that **cannot** be expressed as a control accessor:
+- Aggregating clicks from dynamically rebuilt child views (e.g., per-row buttons in a form — see `SpecializationViewController.requestTypePickerClickedRelay`).
+- One-shot events emitted by the ViewModel itself (returned to the controller via `Output`).
+
+**Avoid**: `private let xxxRelay = PublishRelay<Void>()` + `@objc func xxxClicked()` + `xxxButton.target = self; xxxButton.action = #selector(...)` for a single, statically-known control. Replace it with `xxxButton.rx.click.asSignal()`.
 
 **setupBindings pattern**:
 ```swift
@@ -352,6 +365,136 @@ For direct binding without closure logic, `.drive()` / `.bind(to:)` are fine:
 ```swift
 output.imageName.drive(label.rx.stringValue).disposed(by: rx.disposeBag)
 ```
+
+### NSTableView / NSOutlineView Rx Data Source
+
+When a table or outline displays Rx-driven data, **always** use the `rx.items` / `rx.nodes` adapter. Never hand-roll an `NSTableViewDataSource` / `NSOutlineViewDataSource` (or pair `target` / `action` with manual cell-reuse code) for data already produced by an Rx pipeline.
+
+**1. Table creation** — use the `scrollableTableView()` factory from UIFoundation:
+```swift
+private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
+```
+For multi-column tables, use `NSTableView.scrollableTableView()` and add columns yourself. `SingleColumnTableView` already installs the default column.
+
+**2. Items / nodes binding** — drive `tableView.rx.items` (or `outlineView.rx.nodes`) with the model driver and a cell-builder closure:
+```swift
+output.candidates
+    .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, candidate: Candidate) -> NSView? in
+        let cellView = tableView.box.makeView(ofClass: CandidateCellView.self)
+        cellView.configure(with: candidate)
+        return cellView
+    }
+    .disposed(by: rx.disposeBag)
+
+output.nodes
+    .drive(outlineView.rx.nodes) { (outlineView: NSOutlineView, _: NSTableColumn?, node: NodeViewModel) -> NSView? in
+        let cellView = outlineView.box.makeView(ofClass: NodeCellView.self)
+        cellView.bind(to: node)
+        return cellView
+    }
+    .disposed(by: rx.disposeBag)
+```
+
+**3. Cell reuse** — use `tableView.box.makeView(ofClass:)` / `outlineView.box.makeView(ofClass:)` (UIFoundationToolbox). It handles identifier registration, recycling, and fresh instantiation transparently. **Never** write `tableView.makeView(withIdentifier:owner:) as? NSTableCellView` casts:
+```swift
+// ✅ Good
+let cellView = tableView.box.makeView(ofClass: CandidateCellView.self)
+
+// ❌ Bad
+let cellView: NSTableCellView
+if let recycled = tableView.makeView(withIdentifier: identifier, owner: nil) as? NSTableCellView {
+    cellView = recycled
+} else {
+    cellView = NSTableCellView()
+    cellView.identifier = identifier
+    // … manual subview wiring …
+}
+```
+Pass a custom builder when the cell needs non-default initialization: `outlineView.box.makeView(ofClass: SidebarRuntimeObjectCellView.self) { .init(forOpenQuickly: false) }`.
+
+**4. Cell view definition** — declare cell views as `fileprivate final class` nested inside a controller extension, inheriting `TableCellView` (UIFoundationAppKit) so `setup()` and the auto-set identifier come for free. Use `bind(to:)` with reactive bindings (`rx.disposeBag = DisposeBag()` first to drop the previous row's bindings). Reserve `configure(with:)` only for purely-static cells with no `@Observed` properties on the cell ViewModel:
+```swift
+extension MyViewController {
+    fileprivate final class CandidateCellView: TableCellView {
+        private let nameLabel = Label()
+
+        override func setup() {
+            super.setup()
+
+            hierarchy {
+                nameLabel
+            }
+            nameLabel.snp.makeConstraints { make in
+                make.leading.trailing.equalToSuperview().inset(4)
+                make.centerY.equalToSuperview()
+            }
+            nameLabel.maximumNumberOfLines = 1
+        }
+
+        func bind(to viewModel: CandidateCellViewModel) {
+            rx.disposeBag = DisposeBag()
+
+            viewModel.$name.asDriver().drive(nameLabel.rx.attributedStringValue).disposed(by: rx.disposeBag)
+            viewModel.$icon.asDriver().drive(iconImageView.rx.image).disposed(by: rx.disposeBag)
+        }
+    }
+}
+```
+
+**5. Cell ViewModel wrapper** — wrap each row's domain model in a per-cell `XxxCellViewModel` (à la `SidebarRuntimeObjectCellViewModel`, `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`). Place it under the relevant `RuntimeViewerApplication` subfolder, declare it `public final class … : NSObject, @unchecked Sendable`, hold the underlying model as a stored `let`, and expose every piece of display state (icons, attributed names, filter results) as `@Observed public private(set) var` so the cell view can drive its UI off the projected `$property` driver in `bind(to:)`. The `Input` / `Output` of the parent `ViewModel` should traffic in `XxxCellViewModel`, not the raw model.
+
+```swift
+public final class CandidateCellViewModel: NSObject, @unchecked Sendable {
+    public let candidate: Candidate
+
+    @Observed
+    public private(set) var name: NSAttributedString
+
+    @Observed
+    public private(set) var icon: NSUIImage?
+
+    public init(candidate: Candidate) {
+        self.candidate = candidate
+        self.name = NSAttributedString {
+            AText(candidate.displayName)
+                .foregroundColor(.labelColor)
+                .font(.systemFont(ofSize: 13))
+                .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
+        }
+        self.icon = candidate.icon
+        super.init()
+    }
+}
+```
+
+**6. Differentiable conformance** — every model used by `rx.items` / `rx.nodes` must conform to `Differentiable` (DifferenceKit). Conform the **cell ViewModel**, not the raw domain type — never write `extension RuntimeObject: @retroactive Differentiable {}` on a core type, since retroactive conformances on shared models risk collisions across modules. Pick `differenceIdentifier` so it stays stable across rebuilds (typically the underlying domain object or its id), and gate the conformance behind `#if canImport(AppKit) && !targetEnvironment(macCatalyst)` like Sidebar does:
+```swift
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+extension XxxCellViewModel: Differentiable {
+    public var differenceIdentifier: RuntimeObject { runtimeObject }
+    public func isContentEqual(to source: XxxCellViewModel) -> Bool {
+        runtimeObject == source.runtimeObject
+    }
+}
+#endif
+```
+For cell ViewModels that own no extra state beyond the underlying `Hashable` domain object, an empty `extension XxxCellViewModel: Differentiable {}` is acceptable — DifferenceKit synthesizes `differenceIdentifier = self` / `isContentEqual = ==` from `Hashable + Equatable`.
+
+**7. Click / selection events** — derive from `tableView.rx.itemClicked()` / `tableView.rx.modelSelected()` / `outlineView.rx.modelDoubleClicked()` instead of `target` + `@objc` plumbing:
+```swift
+let rowClicked: Signal<Candidate> = tableView.rx
+    .itemClicked()
+    .compactMap { [weak tableView] index -> Candidate? in
+        guard let tableView,
+              index.row >= 0,
+              index.row < tableView.numberOfRows
+        else { return nil }
+        return try? tableView.rx.model(at: index.row)
+    }
+    .asSignal(onErrorSignalWith: .empty())
+```
+
+**8. Optional delegate methods** — when you need optional `NSTableViewDelegate` / `NSOutlineViewDelegate` callbacks (`shouldSelectRow`, persistence helpers, etc.), forward them via `tableView.rx.setDelegate(self)` / `outlineView.rx.setDelegate(delegate)` and implement those methods in an extension. The `rx.items` / `rx.nodes` adapter owns the data source and required-method delegate proxy and forwards optional methods through to the delegate you set.
 
 ### Closures & Self Capture
 

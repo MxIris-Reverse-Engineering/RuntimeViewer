@@ -15,8 +15,6 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
 
     private let bottomSeparatorView = NSBox()
 
-    private var dataSource: OutlineViewDataSource?
-
     private var delegate: OutlineViewDelegate?
 
     override var shouldDisplayCommonLoading: Bool {
@@ -75,7 +73,6 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
     override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
 
-        dataSource = .init(viewModel: viewModel)
         delegate = .init(viewModel: viewModel)
 
         let input = ViewModel.Input(
@@ -123,13 +120,29 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
             .first()
             .asObservable()
             .subscribeOnNext { [weak self] _ in
-                guard let self, let dataSource, let delegate else { return }
+                guard let self, let delegate else { return }
 
-                outlineView.rx.setDataSource(dataSource).disposed(by: rx.disposeBag)
                 outlineView.rx.setDelegate(delegate).disposed(by: rx.disposeBag)
-                outlineView.autosaveExpandedItems = true
                 outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
-                outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
+
+                // Manual expansion autosave: NSOutlineView's built-in
+                // `autosaveExpandedItems` only attempts the first restore at the
+                // intersection of "dataSource installed", "numberOfRows > 0" and
+                // "autosaveName set". With async data + post-index dataSource
+                // installation, that window is unreliable. StatefulOutlineView
+                // persists under the same UserDefaults key so existing data
+                // stays compatible.
+                outlineView.persistentObjectForExpansion = { [weak viewModel] item in
+                    guard let viewModel, !viewModel.isFiltering else { return nil }
+                    guard let cellViewModel = item as? SidebarRootCellViewModel else { return nil }
+                    return cellViewModel.node.parent != nil ? cellViewModel.node.absolutePath : cellViewModel.node.name
+                }
+                outlineView.itemForExpansionPersistentObject = { [weak viewModel] persistentObject in
+                    guard let viewModel, !viewModel.isFiltering else { return nil }
+                    return viewModel.allNodes[persistentObject]
+                }
+                outlineView.expansionAutosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
+                outlineView.restoreExpansionFromAutosave()
             }
             .disposed(by: rx.disposeBag)
     }
@@ -142,31 +155,6 @@ extension SidebarRootViewController {
         init(viewModel: ViewModel) {
             self.viewModel = viewModel
             super.init()
-        }
-    }
-
-    private final class OutlineViewDataSource: NSObject, NSOutlineViewDataSource {
-        private unowned let viewModel: ViewModel
-
-        init(viewModel: ViewModel) {
-            self.viewModel = viewModel
-            super.init()
-        }
-
-        func outlineView(_ outlineView: NSOutlineView, itemForPersistentObject object: Any) -> Any? {
-            guard !viewModel.isFiltering else { return nil }
-            guard let path = object as? String else {
-                return nil
-            }
-            let item = viewModel.allNodes[path]
-            return item
-        }
-
-        func outlineView(_ outlineView: NSOutlineView, persistentObjectForItem item: Any?) -> Any? {
-            guard !viewModel.isFiltering else { return nil }
-            guard let item = item as? SidebarRootCellViewModel else { return nil }
-            let returnObject = item.node.parent != nil ? item.node.absolutePath : item.node.name
-            return returnObject
         }
     }
 }

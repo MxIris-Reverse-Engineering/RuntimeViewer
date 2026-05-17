@@ -1,5 +1,5 @@
 {
-  "originHash" : "3fdd53e06571765e2b65cf3bf5203e39ef3c8fde743ea292edb370feb83f27c3",
+  "originHash" : "6d2162cc9d61084587a4a881570115e0db0e57c42f323189aa35354b75ce60bd",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -96,8 +96,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
-        "revision" : "22f92afb2520417e60a464a6a5abb88621c2b43d",
-        "version" : "0.5.3"
+        "revision" : "4288ebae7324ddef8cb084f25c84ca7941a1e276",
+        "version" : "0.5.4"
       }
     },
     {
@@ -177,8 +177,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
       "state" : {
-        "revision" : "d6d8fc4fe355c31a25eeda4b87d9e8a959d6784a",
-        "version" : "0.49.102"
+        "revision" : "fe2acea583118cad9c8ae396f6519b7ff072c92c",
+        "version" : "0.49.103"
       }
     },
     {
@@ -186,8 +186,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
       "state" : {
-        "revision" : "38661a32c597281ece378fd8edde3dc6bdb39a7a",
-        "version" : "0.7.100"
+        "revision" : "6d71be050b9131ff59e832483d54de685781c42f",
+        "version" : "0.7.101"
       }
     },
     {
@@ -438,8 +438,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",
       "state" : {
-        "revision" : "6675bc0ff86e61436e615df6fc5174e043e57924",
-        "version" : "1.4.1"
+        "revision" : "03cc312c2c933ed87abace34044a5dff7a3117c1",
+        "version" : "1.5.0"
       }
     },
     {
@@ -636,8 +636,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "d7c490fd668e26ccf82e1776ce77c32e4ca8f3e3",
-        "version" : "0.5.1"
+        "revision" : "1b915e7195038aea851abf0734790e6328a588fb",
+        "version" : "0.5.3"
       }
     },
     {

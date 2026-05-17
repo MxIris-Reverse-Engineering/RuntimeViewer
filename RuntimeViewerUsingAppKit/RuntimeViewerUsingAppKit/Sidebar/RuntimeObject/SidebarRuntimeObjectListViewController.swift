@@ -6,13 +6,13 @@ import RuntimeViewerCore
 import RuntimeViewerApplication
 
 final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewController<SidebarRuntimeObjectListViewModel> {
-    private let openQuicklyActionBar = DSFQuickActionBar()
+    private let openQuicklyActionBar = QuickActionBar()
 
     private let openQuicklyActivateRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
     private let searchStringDidChangeForOpenQuickly = PublishRelay<String>()
 
-    private var currentSearchTask: DSFQuickActionBar.SearchTask?
+    private var currentSearchTask: QuickActionBar.SearchTask?
 
     private let addToBookmarkRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
@@ -63,6 +63,20 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
             outlineView.box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
         }
         .disposed(by: rx.disposeBag)
+
+        output.selectCell.emitOnNextMainActor { [weak self] result in
+            guard let self else { return }
+            let outlineView = outlineView
+            for ancestor in result.ancestors where !outlineView.isItemExpanded(ancestor) {
+                outlineView.expandItem(ancestor)
+            }
+            let row = outlineView.row(forItem: result.cell)
+            guard row >= 0, row < outlineView.numberOfRows else { return }
+            outlineView.selectRowIndexes(.init(integer: row), byExtendingSelection: false)
+            guard !outlineView.visibleRowIndexes.contains(row) else { return }
+            outlineView.box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
+        }
+        .disposed(by: rx.disposeBag)
     }
 
     @ArrayBuilder<Selector>
@@ -100,23 +114,23 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
     }
 }
 
-extension SidebarRuntimeObjectListViewController: DSFQuickActionBarContentSource {
-    func quickActionBar(_ quickActionBar: DSFQuickActionBar, viewForItem item: AnyHashable, searchTerm: String) -> NSView? {
+extension SidebarRuntimeObjectListViewController: QuickActionBarContentSource {
+    func quickActionBar(_ quickActionBar: QuickActionBar, viewForItem item: AnyHashable, searchTerm: String) -> NSView? {
         guard let viewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
-        let cellView = quickActionBar.dequeueView() ?? SidebarRuntimeObjectCellView(forOpenQuickly: true)
+        let cellView: RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel> = quickActionBar.dequeueView() ?? RuntimeObjectCellView(contentInsets: .init(top: 0, left: 8, bottom: 0, right: 8), minimumHeight: 40)
         cellView.bind(to: viewModel)
         return cellView
     }
 
-    func quickActionBar(_ quickActionBar: DSFQuickActionBar, itemsForSearchTermTask task: DSFQuickActionBar.SearchTask) {
+    func quickActionBar(_ quickActionBar: QuickActionBar, itemsForSearchTermTask task: QuickActionBar.SearchTask) {
         currentSearchTask = task
         searchStringDidChangeForOpenQuickly.accept(task.searchTerm)
     }
 
-    func quickActionBar(_ quickActionBar: DSFQuickActionBar, didActivateItem item: AnyHashable) {
+    func quickActionBar(_ quickActionBar: QuickActionBar, didActivateItem item: AnyHashable) {
         guard let viewModel = item as? SidebarRuntimeObjectCellViewModel else { return }
         openQuicklyActivateRelay.accept(viewModel)
     }
 }
 
-extension DSFQuickActionBar: Then {}
+extension QuickActionBar: Then {}

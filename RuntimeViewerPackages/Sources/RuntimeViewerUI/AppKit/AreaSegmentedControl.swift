@@ -2,6 +2,7 @@
 
 import AppKit
 import SnapKit
+import UIFoundation
 
 open class AreaSegmentedControl: Control {
     private struct SegmentItem {
@@ -271,10 +272,6 @@ final class AreaSegmentButton: Button {
         updateVisuals()
     }
 }
-
-
-import AppKit
-import FrameworkToolbox
 
 public protocol SegmentedControl: NSControl, FrameworkToolboxCompatible, FrameworkToolboxDynamicMemberLookup, TargetActionProvider {
     var segmentCount: Int { get set }

@@ -98,11 +98,12 @@ public actor RuntimeEngineProxyServer {
         }
         do {
             try await connection.sendMessage(
-                name: RuntimeEngine.CommandNames.reloadData.commandName
+                name: RuntimeEngine.CommandNames.dataDidChange.commandName,
+                request: RuntimeDataChange.fullReload(isReloadImageNodes: true)
             )
-            #log(.info, "[PROXY \(self.identifier, privacy: .public)] sent reloadData OK")
+            #log(.info, "[PROXY \(self.identifier, privacy: .public)] sent dataDidChange(fullReload) OK")
         } catch {
-            #log(.error, "[PROXY \(self.identifier, privacy: .public)] failed to send reloadData: \(error, privacy: .public)")
+            #log(.error, "[PROXY \(self.identifier, privacy: .public)] failed to send dataDidChange: \(error, privacy: .public)")
         }
     }
 
@@ -168,6 +169,26 @@ public actor RuntimeEngineProxyServer {
         connection.setMessageHandler(name: RuntimeEngine.CommandNames.memberAddresses.commandName) {
             [engine] (request: RuntimeEngine.MemberAddressesRequest) -> [RuntimeMemberAddress] in
             try await engine.memberAddresses(for: request.object, memberName: request.memberName)
+        }
+
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.specializationRequest.commandName) {
+            [engine] (object: RuntimeObject) -> RuntimeSpecializationRequest in
+            try await engine.specializationRequest(for: object)
+        }
+
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.specializationRequestForCandidate.commandName) {
+            [engine] (request: RuntimeEngine.SpecializationRequestForCandidateRequest) -> RuntimeSpecializationRequest in
+            try await engine.specializationRequest(forCandidateID: request.candidateID, in: request.imagePath)
+        }
+
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimePreflight.commandName) {
+            [engine] (request: RuntimeEngine.SpecializeRequest) -> RuntimeSpecializationValidation in
+            try await engine.runtimePreflight(for: request.object, with: request.selection)
+        }
+
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.specialize.commandName) {
+            [engine] (request: RuntimeEngine.SpecializeRequest) -> RuntimeObject in
+            try await engine.specialize(request.object, with: request.selection)
         }
 
         #if canImport(AppKit)
@@ -247,18 +268,23 @@ public actor RuntimeEngineProxyServer {
             }
             .store(in: &subscriptions)
 
-        engine.reloadDataPublisher
-            .sink { [weak self] in
+        engine.dataChangePublisher
+            .sink { [weak self] change in
                 guard let self else { return }
-                #log(.info, "[PROXY \(id, privacy: .public)] relaying reloadData")
+                #log(.info, "[PROXY \(id, privacy: .public)] relaying dataChange \(String(describing: change), privacy: .public)")
                 Task {
-                    let imageList = await self.engine.imageList
+                    // Keep the client's `imageList` mirror current on full reloads;
+                    // other change kinds don't affect it so we skip the extra round-trip.
+                    if case .fullReload = change {
+                        let imageList = await self.engine.imageList
+                        try? await connection.sendMessage(
+                            name: RuntimeEngine.CommandNames.imageList.commandName,
+                            request: imageList
+                        )
+                    }
                     try? await connection.sendMessage(
-                        name: RuntimeEngine.CommandNames.imageList.commandName,
-                        request: imageList
-                    )
-                    try? await connection.sendMessage(
-                        name: RuntimeEngine.CommandNames.reloadData.commandName
+                        name: RuntimeEngine.CommandNames.dataDidChange.commandName,
+                        request: change
                     )
                 }
             }

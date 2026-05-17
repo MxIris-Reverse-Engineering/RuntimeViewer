@@ -71,7 +71,8 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
             AText(node.name)
                 .foregroundColor(.labelColor)
                 .font(.systemFont(ofSize: 13))
-                .paragraphStyle(NSMutableParagraphStyle().then { $0.lineBreakMode = .byTruncatingTail })
+                .alignment(.left)
+                .lineBreakeMode(.byTruncatingTail)
         }
         self.icon = node.icon
     }

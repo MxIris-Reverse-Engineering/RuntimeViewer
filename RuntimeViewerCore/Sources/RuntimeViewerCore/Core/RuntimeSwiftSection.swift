@@ -68,15 +68,35 @@ actor RuntimeSwiftSection {
 
     private var printer: SwiftInterfacePrinter<MachOImage>
 
-    private var interfaceByName: OrderedDictionary<RuntimeObject, RuntimeObjectInterface> = [:]
+    // Keyed by `RuntimeObjectKey` (identity without `children`) so the
+    // sidebar's `parent.withAppendedChild(child)` replacement after a
+    // user-driven specialization doesn't invalidate the cached parent
+    // mapping — otherwise the next click on the parent generic would miss
+    // both maps and throw `invalidRuntimeObject`.
+    private var interfaceByObject: OrderedDictionary<RuntimeObjectKey, RuntimeObjectInterface> = [:]
 
     private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
 
-    private var nameToInterfaceDefinitionName: [RuntimeObject: InterfaceDefinitionName] = [:]
+    private var interfaceDefinitionNameByObject: [RuntimeObjectKey: InterfaceDefinitionName] = [:]
+
+    /// Lazily-constructed specializer reused for both `makeRequest(for:)`
+    /// and `specialize(_:with:)`. Lives on the actor so the underlying
+    /// indexer reference is captured exactly once and the caches built by
+    /// repeated `findCandidates` invocations stay warm across user
+    /// interactions.
+    private lazy var specializer: GenericSpecializer<MachOImage> = .init(machO: machO, conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer), indexer: factory.indexer)
 
     private enum InterfaceDefinitionName {
         case rootType(SwiftInterface.TypeName)
         case childType(SwiftInterface.TypeName)
+        /// Specialized children: each carries the unspecialized parent's
+        /// `TypeName` (the lookup key into `indexer.allTypeDefinitions`)
+        /// alongside the bound `TypeName` produced by
+        /// `TypeDefinition.boundGenericTypeName(...)` (used to disambiguate
+        /// inside the parent's `specializedChildren` array, since
+        /// specialized definitions live on the parent rather than on the
+        /// indexer).
+        case specializedType(unspecialized: SwiftInterface.TypeName, specialized: SwiftInterface.TypeName)
         case rootProtocol(SwiftInterface.ProtocolName)
         case childProtocol(SwiftInterface.ProtocolName)
         case typeExtension(SwiftInterface.ExtensionName)
@@ -226,12 +246,12 @@ actor RuntimeSwiftSection {
 
         if newIndexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
             #log(.debug, "Index configuration changed, re-preparing builder")
-            nameToInterfaceDefinitionName.removeAll()
+            interfaceDefinitionNameByObject.removeAll()
         }
 
         if newPrintConfiguration != oldPrintConfiguration {
             #log(.debug, "Print configuration changed, clearing interface cache")
-            interfaceByName.removeAll()
+            interfaceByObject.removeAll()
         }
     }
 
@@ -425,7 +445,7 @@ actor RuntimeSwiftSection {
         let protocolChildren = try extensionDefintions.flatMap { $0.protocols }.map { try makeRuntimeObject(for: $0, isChild: true) }
         let mangledName = try mangleAsString(extensionName.node)
         let runtimeObjectName = RuntimeObject(name: mangledName, displayName: extensionName.name, kind: kind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren)
-        nameToInterfaceDefinitionName[runtimeObjectName] = definitionName
+        interfaceDefinitionNameByObject[runtimeObjectName.key] = definitionName
         return runtimeObjectName
     }
 
@@ -434,46 +454,68 @@ actor RuntimeSwiftSection {
         let runtimeObjectName: RuntimeObject
         if isChild {
             runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.currentName, kind: protocolDefintion.protocolName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: [])
-            nameToInterfaceDefinitionName[runtimeObjectName] = .childProtocol(protocolDefintion.protocolName)
+            interfaceDefinitionNameByObject[runtimeObjectName.key] = .childProtocol(protocolDefintion.protocolName)
         } else {
             runtimeObjectName = RuntimeObject(name: mangledName, displayName: protocolDefintion.protocolName.name, kind: protocolDefintion.protocolName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: [])
-            nameToInterfaceDefinitionName[runtimeObjectName] = .rootProtocol(protocolDefintion.protocolName)
+            interfaceDefinitionNameByObject[runtimeObjectName.key] = .rootProtocol(protocolDefintion.protocolName)
         }
         return runtimeObjectName
     }
 
-    private func makeRuntimeObject(for typeDefinition: TypeDefinition, isChild: Bool) throws -> RuntimeObject {
+    private func makeRuntimeObject(for typeDefinition: TypeDefinition, isChild: Bool, unspecializedTypeName: SwiftInterface.TypeName? = nil) throws -> RuntimeObject {
         let typeChildren = try typeDefinition.typeChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
         let protocolChildren = try typeDefinition.protocolChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
+        let specializedChildren = try typeDefinition.specializedChildren.map {
+            try makeRuntimeObject(for: $0, isChild: true, unspecializedTypeName: typeDefinition.typeName)
+        }
+        let allChildren = typeChildren + protocolChildren + specializedChildren
+
         let mangledName = try mangleAsString(typeDefinition.typeName.node)
-        let runtimeObjectName: RuntimeObject
         var properties: RuntimeObject.Properties = []
         if typeDefinition.type.contextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
             properties.insert(.isGeneric)
         }
-        if isChild {
-            runtimeObjectName = RuntimeObject(name: mangledName, displayName: typeDefinition.typeName.currentName, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren, properties: properties)
-            nameToInterfaceDefinitionName[runtimeObjectName] = .childType(typeDefinition.typeName)
-        } else {
-            runtimeObjectName = RuntimeObject(name: mangledName, displayName: typeDefinition.typeName.name, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren, properties: properties)
-            nameToInterfaceDefinitionName[runtimeObjectName] = .rootType(typeDefinition.typeName)
+        let isSpecialized = typeDefinition.isSpecialized
+        if isSpecialized {
+            properties.insert(.isSpecialized)
         }
-        return runtimeObjectName
+        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.name
+
+        let runtimeObject = RuntimeObject(name: mangledName, displayName: displayName, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: allChildren, properties: properties)
+        if isSpecialized, let unspecializedTypeName {
+            interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: unspecializedTypeName, specialized: typeDefinition.typeName)
+        } else if isChild {
+            interfaceDefinitionNameByObject[runtimeObject.key] = .childType(typeDefinition.typeName)
+        } else {
+            interfaceDefinitionNameByObject[runtimeObject.key] = .rootType(typeDefinition.typeName)
+        }
+        return runtimeObject
     }
 
     func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating Swift interface for: \(object.displayName, privacy: .public)")
-        if let interface = interfaceByName[object] {
+        if let interface = interfaceByObject[object.key] {
             #log(.debug, "Using cached interface")
             return interface
         }
 
-        guard let interfaceDefinitionName = nameToInterfaceDefinitionName[object] else {
+        guard let interfaceDefinitionName = interfaceDefinitionNameByObject[object.key] else {
             #log(.default, "Invalid runtime object: \(object.displayName, privacy: .public)")
             throw Error.invalidRuntimeObject
         }
         var newInterfaceString: SemanticString = ""
         switch interfaceDefinitionName {
+        case .specializedType(let unspecializedTypeName, let specializedTypeName):
+            // The indexer keeps `allTypeDefinitions` keyed by the
+            // unspecialized typeName; specialized children live on the
+            // parent's `specializedChildren` array (per the upstream's
+            // intentional decision to keep the indexer agnostic of
+            // user-driven specialization). Look up the parent first, then
+            // pick the specialized sibling whose bound `TypeName` matches.
+            guard let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
+                  let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName })
+            else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
         case .rootType(let rootTypeName):
             guard let typeDefinition = indexer.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObject }
             try await newInterfaceString.append(printer.printTypeDefinition(typeDefinition))
@@ -533,7 +575,7 @@ actor RuntimeSwiftSection {
         }
 
         let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
-        interfaceByName[object] = newInterface
+        interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
         return newInterface
     }
@@ -543,7 +585,7 @@ actor RuntimeSwiftSection {
         // Ensure the definition is indexed by generating the interface (uses internal cache)
         _ = try? await interface(for: object)
 
-        guard let definitionName = nameToInterfaceDefinitionName[object] else {
+        guard let definitionName = interfaceDefinitionNameByObject[object.key] else {
             #log(.debug, "No definition found for: \(object.displayName, privacy: .public)")
             return []
         }
@@ -652,6 +694,11 @@ actor RuntimeSwiftSection {
             if let typeDefinition = indexer.allTypeDefinitions[typeName] {
                 collect(from: typeDefinition)
             }
+        case .specializedType(let unspecializedTypeName, let specializedTypeName):
+            if let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
+               let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName }) {
+                collect(from: specializedDefinition)
+            }
         case .rootProtocol(let protocolName),
              .childProtocol(let protocolName):
             if let protocolDefinition = indexer.allProtocolDefinitions[protocolName] {
@@ -671,10 +718,460 @@ actor RuntimeSwiftSection {
         return result
     }
 
+    // MARK: - Generic Specialization
+
+    func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
+        do {
+            let typeDefinition = try requireGenericTypeDefinition(for: object)
+            let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+            return try makeRuntimeSpecializationRequest(from: upstreamRequest)
+        } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+            throw Self.translate(error)
+        }
+    }
+
+    /// Build an inner specialization request for a candidate the user picked
+    /// to bind a generic outer parameter. `candidateID` is the mangled string
+    /// `mangleAsString(typeName.node)` carried over the wire; we resolve it
+    /// via the factory's pre-built mangledID index (populated when each
+    /// section registers via `setupForFactory`), so cross-image candidates
+    /// (`Array`, `Dictionary` from stdlib) are resolvable in O(1) from any
+    /// image that triggered the outer flow.
+    /// `imagePath` only feeds the diagnostic on miss; the actual definition
+    /// might live in a different image once the aggregate is consulted.
+    func specializationRequest(
+        forCandidateID candidateID: String,
+        in imagePath: String
+    ) async throws -> RuntimeSpecializationRequest {
+        guard let matched = await factory.indexedType(forCandidateID: candidateID) else {
+            // No human-readable name available on a cold-cache miss — surface
+            // the mangled ID so the diagnostic at least round-trips back to
+            // a `git grep`-able token in the binary.
+            throw RuntimeEngine.EngineError.unindexedCandidate(displayName: candidateID, imagePath: imagePath)
+        }
+        // Bind the specializer to the candidate's own image. `self.specializer`
+        // is bound to *this* section's MachO, but the candidate's descriptor
+        // can live in a different image (the aggregate is cross-image), and
+        // parsing offsets against the wrong Mach-O reads garbage that the
+        // demangler later trips on at the first byte.
+        let candidateSpecializer = GenericSpecializer<MachOImage>(
+            machO: matched.entry.machO,
+            conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer),
+            indexer: factory.indexer
+        )
+        candidateSpecializer.maxBindingDepth = Self.maxSpecializationDepth
+        do {
+            let upstreamRequest = try candidateSpecializer.makeRequest(for: matched.entry.value.type.typeContextDescriptorWrapper)
+            return try makeRuntimeSpecializationRequest(from: upstreamRequest)
+        } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+            throw Self.translate(error)
+        } catch {
+            #log(.error, "Inner specialization request failed for candidate \(matched.typeName.name, privacy: .public) (image: \(matched.entry.machO.imagePath, privacy: .public)) requested via section \(imagePath, privacy: .public): \(error, privacy: .public)")
+            throw error
+        }
+    }
+
+    func specialize(
+        for object: RuntimeObject,
+        with selection: RuntimeSpecializationSelection
+    ) async throws -> RuntimeObject {
+        try Task.checkCancellation()
+        let baseTypeDefinition = try requireGenericTypeDefinition(for: object)
+        let upstreamRequest = try specializer.makeRequest(for: baseTypeDefinition.type.typeContextDescriptorWrapper)
+        let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
+        try Task.checkCancellation()
+        let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
+        let result: SpecializationResult
+        do {
+            result = try specializer.specialize(upstreamRequest, with: upstreamSelection)
+        } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+            throw Self.translate(error)
+        }
+        // Collect concrete argument typeNodes in declaration order so the
+        // upstream `specialize(...)` rewrites the new TypeDefinition's typeName
+        // from `Type → Structure(Box)` to `Type → BoundGenericStructure(Type → Structure(Box), TypeList(Type → Structure(Int), …))`.
+        // Order must follow `upstreamRequest.parameters`, not the dictionary's
+        // arbitrary key order — `BoundGenericStructure`'s TypeList is positional.
+        let typeArgumentNodes: [Node] = upstreamRequest.parameters.compactMap { parameter in
+            resolved.nodesByParameter[parameter.name]
+        }
+        let specializedDefinition = try await baseTypeDefinition.specialize(
+            with: result,
+            typeArgumentNodes: typeArgumentNodes.count == upstreamRequest.parameters.count ? typeArgumentNodes : nil,
+            in: machO
+        )
+        // After the lone suspension point — bail out before mutating section
+        // caches if the caller (UI sheet, MCP request) was cancelled while the
+        // upstream specialize was running. The specialized TypeDefinition is
+        // still appended to baseTypeDefinition.specializedChildren by upstream;
+        // skipping the registration below leaves the section's view of the
+        // world consistent (no orphan entry in interfaceDefinitionNameByObject).
+        try Task.checkCancellation()
+        // Pass the parent generic's typeName so the new runtimeObject is
+        // registered as `.specializedType(unspecialized:specialized:)`. Without
+        // it `makeRuntimeObject` would fall through to `.childType(boundName)`
+        // and `interface(for:)` would later try to look up the bound name in
+        // `indexer.allTypeDefinitions` (where only the unbound parent exists),
+        // returning `invalidRuntimeObject` and producing an empty Content view
+        // until the next reload rebuilt the registration correctly.
+        let runtimeObject = try makeRuntimeObject(
+            for: specializedDefinition,
+            isChild: true,
+            unspecializedTypeName: baseTypeDefinition.typeName
+        )
+        // Force the parent generic's interface to be re-rendered next time it
+        // is requested so that any consumers iterating its
+        // `specializedChildren` pick up the newly registered child.
+        interfaceByObject.removeValue(forKey: object.key)
+        return runtimeObject
+    }
+
+    func runtimePreflight(
+        for object: RuntimeObject,
+        with selection: RuntimeSpecializationSelection
+    ) async throws -> RuntimeSpecializationValidation {
+        try Task.checkCancellation()
+        let typeDefinition = try requireGenericTypeDefinition(for: object)
+        let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+        let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
+        try Task.checkCancellation()
+        let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
+        let upstreamValidation = specializer.runtimePreflight(selection: upstreamSelection, for: upstreamRequest)
+        return Self.translate(upstreamValidation)
+    }
+
+    private static func translate(_ validation: SpecializationValidation) -> RuntimeSpecializationValidation {
+        RuntimeSpecializationValidation(
+            isValid: validation.isValid,
+            errors: validation.errors.map(translate(_:)),
+            warnings: validation.warnings.map(translate(_:))
+        )
+    }
+
+    private static func translate(_ error: SpecializationValidation.Error) -> RuntimeSpecializationValidation.Error {
+        switch error {
+        case .missingArgument(let parameterName):
+            return .missingArgument(parameterName: parameterName)
+        case .protocolRequirementNotSatisfied(let parameterName, let protocolName, let actualType):
+            return .protocolRequirementNotSatisfied(
+                parameterName: parameterName,
+                protocolName: protocolName,
+                actualType: actualType
+            )
+        case .layoutRequirementNotSatisfied(let parameterName, let expectedLayout, let actualType):
+            return .layoutRequirementNotSatisfied(
+                parameterName: parameterName,
+                expectedLayout: String(describing: expectedLayout),
+                actualType: actualType
+            )
+        case .baseClassRequirementNotSatisfied(let parameterName, let expectedBaseClass, let actualType):
+            return .baseClassRequirementNotSatisfied(
+                parameterName: parameterName,
+                expectedBaseClass: expectedBaseClass,
+                actualType: actualType
+            )
+        case .sameTypeRequirementNotSatisfied(let parameterName, let expectedType, let actualType):
+            return .sameTypeRequirementNotSatisfied(
+                parameterName: parameterName,
+                expectedType: expectedType,
+                actualType: actualType
+            )
+        case .metadataResolutionFailed(let parameterName, let reason):
+            return .metadataResolutionFailed(parameterName: parameterName, reason: reason)
+        case .protocolDescriptorResolutionFailed(let parameterName, let protocolName, let reason):
+            return .protocolDescriptorResolutionFailed(
+                parameterName: parameterName,
+                protocolName: protocolName,
+                reason: reason
+            )
+        }
+    }
+
+    private static func translate(_ warning: SpecializationValidation.Warning) -> RuntimeSpecializationValidation.Warning {
+        switch warning {
+        case .extraArgument(let parameterName):
+            return .extraArgument(parameterName: parameterName)
+        case .associatedTypePathInSelection(let path):
+            return .associatedTypePathInSelection(path: path)
+        case .protocolNotInIndexer(let parameterName, let protocolName):
+            return .protocolNotInIndexer(parameterName: parameterName, protocolName: protocolName)
+        case .conformanceCheckFailed(let parameterName, let protocolName, let reason):
+            return .conformanceCheckFailed(parameterName: parameterName, protocolName: protocolName, reason: reason)
+        case .baseClassRequirementResolutionFailed(let parameterName, let reason):
+            return .baseClassRequirementResolutionFailed(parameterName: parameterName, reason: reason)
+        case .sameTypeRequirementResolutionSkipped(let parameterName, let reason):
+            return .sameTypeRequirementResolutionSkipped(parameterName: parameterName, reason: reason)
+        }
+    }
+
+    private func requireGenericTypeDefinition(for object: RuntimeObject) throws -> TypeDefinition {
+        guard let definitionName = interfaceDefinitionNameByObject[object.key],
+              let typeName = definitionName.typeName
+        else {
+            throw Error.invalidRuntimeObject
+        }
+        if let root = indexer.rootTypeDefinitions[typeName] { return root }
+        if let any = indexer.allTypeDefinitions[typeName] { return any }
+        throw Error.invalidRuntimeObject
+    }
+
+    /// Project the upstream `SpecializationRequest` into the public Codable
+    /// `RuntimeSpecializationRequest` that crosses the wire.
+    private func makeRuntimeSpecializationRequest(
+        from upstream: SpecializationRequest
+    ) throws -> RuntimeSpecializationRequest {
+        let parameters = try upstream.parameters.map { upstreamParameter -> RuntimeSpecializationRequest.Parameter in
+            let candidates = try upstreamParameter.candidates.map { upstreamCandidate -> RuntimeSpecializationRequest.Candidate in
+                let id = try mangleAsString(upstreamCandidate.typeName.node)
+                let imagePath: String
+                switch upstreamCandidate.source {
+                case .image(let path):
+                    imagePath = path
+                }
+                let kind: RuntimeSpecializationRequest.Candidate.Kind
+                switch upstreamCandidate.typeName.kind {
+                case .enum: kind = .enum
+                case .struct: kind = .struct
+                case .class: kind = .class
+                }
+                return RuntimeSpecializationRequest.Candidate(
+                    id: id,
+                    displayName: upstreamCandidate.typeName.name,
+                    imagePath: imagePath,
+                    isGeneric: upstreamCandidate.isGeneric,
+                    kind: kind
+                )
+            }
+            return RuntimeSpecializationRequest.Parameter(
+                name: upstreamParameter.name,
+                displayDescription: makeParameterDescription(upstreamParameter),
+                candidates: candidates
+            )
+        }
+        return RuntimeSpecializationRequest(parameters: parameters)
+    }
+
+    /// Result of resolving a recursive `RuntimeSpecializationSelection`
+    /// against an upstream `SpecializationRequest`. Carries both the upstream
+    /// arguments (consumed by `specializer.specialize` /
+    /// `specializer.runtimePreflight`) and the per-parameter type-argument
+    /// nodes (consumed by `TypeDefinition.specialize`'s `boundGenericTypeName`
+    /// rewrite). Bundling them keeps the inner `specializer.makeRequest` /
+    /// candidate-matching work to a single recursion.
+    private struct ResolvedUpstreamArguments {
+        var arguments: [String: SpecializationSelection.Argument]
+        var nodesByParameter: [String: Node]
+    }
+
+    /// Round-trip a Codable `RuntimeSpecializationSelection.arguments` back
+    /// into the upstream `SpecializationSelection.Argument` shape by re-running
+    /// `makeRequest` and matching each candidate by `(id, imagePath)`.
+    ///
+    /// Necessary because the on-the-wire selection only carries the opaque
+    /// candidate identity (`mangleAsString`-derived); the actual
+    /// `SpecializationRequest.Candidate` value (with `TypeName`, `Source`,
+    /// etc.) is recreated on the engine that owns the indexer.
+    ///
+    /// `.boundGeneric` arguments recurse: the matched candidate's
+    /// `TypeDefinition` is looked up via `factory.indexer.allTypeDefinitions`
+    /// (the shared sub-indexer aggregate, which spans every loaded image so
+    /// candidates declared in other images — `Array` / `Dictionary` from the
+    /// stdlib — are still resolvable). The inner request is built from that
+    /// definition's `typeContextDescriptorWrapper` and the inner arguments are
+    /// resolved against it.
+    /// Matches MachOSwiftSection's `maxBindingDepth`. Caps our recursive
+    /// `.boundGeneric` walk so a deeply nested wire payload can not blow the
+    /// stack on the engine side. Breaches surface as the same
+    /// `boundGenericInnerFailed` diagnostic the upstream uses, with the
+    /// outer-most parameter name attached so the UI can localize.
+    private static let maxSpecializationDepth = 16
+
+    private func resolveUpstreamArguments(
+        _ runtimeArguments: [String: RuntimeSpecializationSelection.Argument],
+        against request: SpecializationRequest,
+        depth: Int = 0
+    ) throws -> ResolvedUpstreamArguments {
+        var result = ResolvedUpstreamArguments(arguments: [:], nodesByParameter: [:])
+        for (parameterName, runtimeArgument) in runtimeArguments {
+            guard let parameter = request.parameters.first(where: { $0.name == parameterName }) else {
+                throw RuntimeEngine.EngineError.specializationParameterNotFound(name: parameterName)
+            }
+            let resolution = try resolveUpstreamArgument(runtimeArgument, for: parameter, depth: depth)
+            result.arguments[parameterName] = resolution.argument
+            result.nodesByParameter[parameterName] = resolution.node
+        }
+        return result
+    }
+
+    private func resolveUpstreamArgument(
+        _ runtimeArgument: RuntimeSpecializationSelection.Argument,
+        for parameter: SpecializationRequest.Parameter,
+        depth: Int
+    ) throws -> (argument: SpecializationSelection.Argument, node: Node) {
+        switch runtimeArgument {
+        case .candidate(let runtimeCandidate):
+            let matched = try matchUpstreamCandidate(runtimeCandidate, in: parameter)
+            return (.candidate(matched), matched.typeName.node)
+        case .boundGeneric(let runtimeBase, let innerRuntimeArguments):
+            guard depth < Self.maxSpecializationDepth else {
+                throw RuntimeEngine.EngineError.boundGenericInnerFailed(
+                    parameterName: parameter.name,
+                    underlying: "Nested specialization depth exceeds the limit of \(Self.maxSpecializationDepth)."
+                )
+            }
+            let matchedBase = try matchUpstreamCandidate(runtimeBase, in: parameter)
+            // CRITICAL: inner candidates can live in a different image than
+            // the outer generic (`Array` / `Dictionary` live in stdlib, not
+            // the outer's hosting image). `self.specializer` is bound to the
+            // outer's `machO`, so calling `self.specializer.makeRequest` on
+            // an inner descriptor would parse offsets against the *wrong*
+            // Mach-O and read garbage — in practice surfaces as a multi-GB
+            // `numberOfElements` inside `TargetGenericContext.initialize` and
+            // hangs the process.
+            //
+            // Build a fresh specializer bound to the inner candidate's own
+            // image (mirrors what upstream's internal `makeInnerContext(for:)`
+            // does, but expressed here because that helper is `internal`).
+            guard let innerEntry = factory.indexer.allAllTypeDefinitions[matchedBase.typeName] else {
+                throw RuntimeEngine.EngineError.unindexedCandidate(
+                    displayName: runtimeBase.displayName,
+                    imagePath: runtimeBase.imagePath
+                )
+            }
+            let innerSpecializer = GenericSpecializer<MachOImage>(
+                machO: innerEntry.machO,
+                conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer),
+                indexer: factory.indexer
+            )
+            innerSpecializer.maxBindingDepth = Self.maxSpecializationDepth
+            let innerRequest: SpecializationRequest
+            do {
+                innerRequest = try innerSpecializer.makeRequest(for: innerEntry.value.type.typeContextDescriptorWrapper)
+            } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
+                throw Self.translate(error)
+            }
+            let innerResolved = try resolveUpstreamArguments(
+                innerRuntimeArguments,
+                against: innerRequest,
+                depth: depth + 1
+            )
+            let innerNodes: [Node] = innerRequest.parameters.compactMap { innerResolved.nodesByParameter[$0.name] }
+            let boundNode = Self.buildBoundGenericNode(base: matchedBase, innerNodes: innerNodes)
+            return (
+                .boundGeneric(baseCandidate: matchedBase, innerArguments: innerResolved.arguments),
+                boundNode
+            )
+        }
+    }
+
+    private func matchUpstreamCandidate(
+        _ runtimeCandidate: RuntimeSpecializationRequest.Candidate,
+        in parameter: SpecializationRequest.Parameter
+    ) throws -> SpecializationRequest.Candidate {
+        for upstreamCandidate in parameter.candidates {
+            guard case .image(let path) = upstreamCandidate.source,
+                  path == runtimeCandidate.imagePath else { continue }
+            let upstreamID = try mangleAsString(upstreamCandidate.typeName.node)
+            if upstreamID == runtimeCandidate.id {
+                return upstreamCandidate
+            }
+        }
+        throw RuntimeEngine.EngineError.specializationCandidateNotFound(
+            parameterName: parameter.name,
+            candidateDisplayName: runtimeCandidate.displayName
+        )
+    }
+
+    /// Build a `Type → BoundGenericStructure / Class / Enum(...)` node so the
+    /// outer `boundGenericTypeName` rewrite can substitute this as a nested
+    /// type argument. Mirrors the shape upstream
+    /// `TypeDefinition.boundGenericTypeName(...)` produces; the outer call
+    /// will pass our node through `normalizedArgumentNodes`, which is a no-op
+    /// when the input is already `.type`-wrapped.
+    private static func buildBoundGenericNode(
+        base: SpecializationRequest.Candidate,
+        innerNodes: [Node]
+    ) -> Node {
+        let boundKind: Node.Kind
+        switch base.typeName.kind {
+        case .struct: boundKind = .boundGenericStructure
+        case .class: boundKind = .boundGenericClass
+        case .enum: boundKind = .boundGenericEnum
+        }
+        let baseNode = wrappedAsType(base.typeName.node)
+        let normalizedInners = innerNodes.map(wrappedAsType)
+        let typeList = Node.create(kind: .typeList, children: normalizedInners)
+        let boundNode = Node.create(kind: boundKind, children: [baseNode, typeList])
+        return Node.create(kind: .type, children: [boundNode])
+    }
+
+    private static func wrappedAsType(_ node: Node) -> Node {
+        node.kind == .type ? node : Node.create(kind: .type, children: [node])
+    }
+
+    /// Translate an upstream `SpecializerError` to a wire-safe
+    /// `RuntimeEngine.EngineError` so remote clients (which no longer link
+    /// `@_spi(Support) SwiftInterface`) can pattern-match on engine cases.
+    private static func translate(_ error: GenericSpecializer<MachOImage>.SpecializerError) -> Swift.Error {
+        switch error {
+        case .notGenericType:
+            return RuntimeEngine.EngineError.typeNotGeneric
+        case .unsupportedGenericParameter:
+            return RuntimeEngine.EngineError.unsupportedGenericParameter(description: error.localizedDescription)
+        case .boundGenericInnerFailed(let parameterName, let underlying):
+            return RuntimeEngine.EngineError.boundGenericInnerFailed(
+                parameterName: parameterName,
+                underlying: (underlying as? LocalizedError)?.errorDescription ?? "\(underlying)"
+            )
+        default:
+            return error
+        }
+    }
+
+    /// Pre-format a parameter's constraint list into the display string the UI
+    /// renders verbatim (e.g. `A : Hashable & Equatable where A == Foo`).
+    /// Engine-side so the view layer never needs to walk
+    /// `SpecializationRequest.Requirement`.
+    ///
+    /// Conformance-style constraints (`.protocol`, `.layout`, `.baseClass`)
+    /// are joined after `:` with `&`. `SpecializationRequest` lowers a
+    /// declared `<A: P1 & P2>` into individual `.protocol` requirements, so
+    /// each token here always corresponds to a single conforming type.
+    /// `.sameType` cannot be expressed in the `:`-prefix form, so it is
+    /// rendered as a trailing `where A == T` clause.
+    private func makeParameterDescription(_ parameter: SpecializationRequest.Parameter) -> String {
+        var conformanceTokens: [String] = []
+        var sameTypeTargets: [String] = []
+        for requirement in parameter.requirements {
+            switch requirement {
+            case .protocol(let info):
+                conformanceTokens.append(info.protocolName.name)
+            case .layout(let kind):
+                switch kind {
+                case .class:
+                    conformanceTokens.append("AnyObject")
+                }
+            case .baseClass(let demangledTypeNode, _):
+                conformanceTokens.append(demangledTypeNode.print(using: .interfaceTypeBuilderOnly))
+            case .sameType(let demangledTypeNode, _):
+                sameTypeTargets.append(demangledTypeNode.print(using: .interfaceTypeBuilderOnly))
+            }
+        }
+        var description = parameter.name
+        if !conformanceTokens.isEmpty {
+            description += " : \(conformanceTokens.joined(separator: " & "))"
+        }
+        if !sameTypeTargets.isEmpty {
+            let whereClauses = sameTypeTargets.map { "\(parameter.name) == \($0)" }
+            description += " where \(whereClauses.joined(separator: ", "))"
+        }
+        return description
+    }
+
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
         #log(.debug, "Getting Swift class hierarchy for: \(object.displayName, privacy: .public)")
         guard case .swift(.type(.class)) = object.kind,
-              let classDefinitionName = nameToInterfaceDefinitionName[object]?.typeName,
+              let classDefinitionName = interfaceDefinitionNameByObject[object.key]?.typeName,
               let classDefinition = indexer.allTypeDefinitions[classDefinitionName],
               case .class(let `class`) = classDefinition.type
         else {
@@ -684,6 +1181,25 @@ actor RuntimeSwiftSection {
         let hierarchy = try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
         #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
         return hierarchy
+    }
+    
+    fileprivate func setupForFactory(_ factory: RuntimeSwiftSectionFactory) {
+        factory.indexer.addSubIndexer(indexer)
+    }
+
+    /// Build the mangledID → indexed type mapping this section contributes
+    /// to the factory's cross-image lookup table. Called once per section
+    /// immediately after registration; the factory merges the result with
+    /// first-write-wins semantics. Mangling is inherently throwing — we
+    /// silently skip nodes that fail to mangle, matching the prior loop's
+    /// `try?` behaviour.
+    fileprivate func candidateIDMapping() -> [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] {
+        var result: [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] = [:]
+        for (typeName, typeDefinition) in indexer.allTypeDefinitions {
+            guard let mangled = try? mangleAsString(typeName.node) else { continue }
+            result[mangled] = (typeName, MachOIndexedValue(machO: machO, value: typeDefinition))
+        }
+        return result
     }
 }
 
@@ -792,7 +1308,35 @@ extension SemanticString {
 
 @Loggable(.private)
 actor RuntimeSwiftSectionFactory {
+
+    /// Pair of (originating typeName, indexed entry) produced by
+    /// `RuntimeSwiftSection.candidateIDMapping()`. The typeName is preserved
+    /// so the eventual `EngineError.unindexedCandidate` (and any internal
+    /// logging) can surface a human-readable name even when the lookup is
+    /// driven by the opaque mangled candidate ID.
+    typealias IndexedTypeEntry = (
+        typeName: SwiftInterface.TypeName,
+        entry: MachOIndexedValue<MachOImage, TypeDefinition>
+    )
+
+    let indexer: SwiftInterfaceIndexer<MachOImage>
+
     private var sections: [String: RuntimeSwiftSection] = [:]
+
+    /// Cross-image mangled candidate ID → indexed type, populated as each
+    /// section registers. Replaces the prior O(n) walk over
+    /// `indexer.allAllTypeDefinitions` (which re-mangled every typeName on
+    /// every inner-request fetch) with an O(1) dictionary lookup.
+    ///
+    /// First-write-wins, mirroring `allAllTypeDefinitions`'s `result.merge(... { current, _ in current })`
+    /// merge strategy: when stdlib types appear in multiple loaded
+    /// dylibs (e.g. interposed builds), the section that registered first
+    /// owns the canonical entry.
+    private var indexedTypeByCandidateID: [String: IndexedTypeEntry] = [:]
+
+    init() {
+        indexer = .init(configuration: .init(), eventHandlers: [], in: .current())
+    }
 
     func existingSection(for imagePath: String) -> RuntimeSwiftSection? {
         sections[imagePath]
@@ -800,6 +1344,15 @@ actor RuntimeSwiftSectionFactory {
 
     func hasCachedSection(for path: String) -> Bool {
         sections[path] != nil
+    }
+
+    /// O(1) lookup of the indexed type backing a `candidateID` (the mangled
+    /// string carried over the wire by `RuntimeSpecializationRequest.Candidate.id`).
+    /// Returns `nil` if the candidate's defining image has not been indexed
+    /// — typically a candidate from an image that was unloaded between
+    /// request and selection.
+    func indexedType(forCandidateID candidateID: String) -> IndexedTypeEntry? {
+        indexedTypeByCandidateID[candidateID]
     }
 
     func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
@@ -810,16 +1363,33 @@ actor RuntimeSwiftSectionFactory {
         #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
         let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
         sections[imagePath] = section
+        await section.setupForFactory(self)
+        await registerCandidateIDs(from: section)
         #log(.debug, "Swift section created and cached")
         return (false, section)
     }
 
     func removeSection(for imagePath: String) {
         sections.removeValue(forKey: imagePath)
+        // Drop any mangledID entries originating from this image so a
+        // subsequent `addSubIndexer`-driven re-register can repopulate them.
+        indexedTypeByCandidateID = indexedTypeByCandidateID.filter { _, value in
+            value.entry.machO.imagePath != imagePath
+        }
     }
 
     func removeAllSections() {
         sections.removeAll()
+        indexedTypeByCandidateID.removeAll()
+    }
+
+    private func registerCandidateIDs(from section: RuntimeSwiftSection) async {
+        let mapping = await section.candidateIDMapping()
+        for (id, value) in mapping {
+            if indexedTypeByCandidateID[id] == nil {
+                indexedTypeByCandidateID[id] = value
+            }
+        }
     }
 }
 

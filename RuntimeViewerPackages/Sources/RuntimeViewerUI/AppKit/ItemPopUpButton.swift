@@ -22,7 +22,7 @@ public final class ItemPopUpButton<Item: CaseIterable & CustomStringConvertible 
         pullsDown = true
         preferredEdge = .minY
         isBordered = false
-        popUpButtonCell?.arrowPosition = .noArrow
+        box.popUpButtonCell?.arrowPosition = .noArrow
         addItem(withTitle: "")
         item(at: 0)?.do {
             $0.image = icon

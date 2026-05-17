@@ -102,6 +102,93 @@ struct RuntimeObjectTests {
         #expect(newObject.imagePath != object.imagePath)
     }
 
+    // MARK: - withAppendedChild
+
+    @Test("withAppendedChild appends a single child onto an empty children array")
+    func withAppendedChildOnEmpty() {
+        let parent = RuntimeObject(name: "Box", displayName: "Box", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let child = RuntimeObject(name: "BoxOfInt", displayName: "BoxOfInt", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let updated = parent.withAppendedChild(child)
+        #expect(updated.children.count == 1)
+        #expect(updated.children[0] == child)
+    }
+
+    @Test("withAppendedChild accumulates when applied iteratively")
+    func withAppendedChildAccumulates() {
+        // Regression for the sidebar splice that previously appended every
+        // specialized child onto the *original* parent payload, dropping any
+        // earlier specializations. Re-binding through `withAppendedChild`
+        // walks the latest object on each step, so two iterative appends
+        // must yield two children.
+        let parent = RuntimeObject(name: "Box", displayName: "Box", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let child1 = RuntimeObject(name: "BoxOfInt", displayName: "BoxOfInt", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let child2 = RuntimeObject(name: "BoxOfString", displayName: "BoxOfString", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let firstStep = parent.withAppendedChild(child1)
+        let secondStep = firstStep.withAppendedChild(child2)
+        #expect(secondStep.children.count == 2)
+        #expect(secondStep.children[0] == child1)
+        #expect(secondStep.children[1] == child2)
+    }
+
+    @Test("withAppendedChild preserves properties bitfield")
+    func withAppendedChildPreservesProperties() {
+        let parent = RuntimeObject(
+            name: "Box",
+            displayName: "Box",
+            kind: .swift(.type(.struct)),
+            secondaryKind: nil,
+            imagePath: "/p",
+            children: [],
+            properties: [.isGeneric]
+        )
+        let child = RuntimeObject(name: "BoxOfInt", displayName: "BoxOfInt", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [], properties: [.isSpecialized])
+        let updated = parent.withAppendedChild(child)
+        #expect(updated.properties.contains(.isGeneric))
+        #expect(updated.children[0].properties.contains(.isSpecialized))
+    }
+
+    // MARK: - RuntimeObjectKey
+
+    @Test("RuntimeObjectKey ignores children differences")
+    func runtimeObjectKeyIgnoresChildren() {
+        // The sidebar splice relies on `RuntimeObjectKey` staying stable
+        // across `withAppendedChild` so the cell viewmodel can be located
+        // before *and* after a child has been spliced in. Bake that
+        // invariant into the test suite.
+        let bare = RuntimeObject(name: "Box", displayName: "Box", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let child = RuntimeObject(name: "BoxOfInt", displayName: "BoxOfInt", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let withChild = bare.withAppendedChild(child)
+        #expect(bare.key == withChild.key)
+    }
+
+    @Test("RuntimeObjectKey distinguishes by imagePath / name / kind")
+    func runtimeObjectKeyDiscriminates() {
+        let a = RuntimeObject(name: "Box", displayName: "Box", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let differentImage = RuntimeObject(name: "Box", displayName: "Box", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/q", children: [])
+        let differentName = RuntimeObject(name: "BoxOfInt", displayName: "Box", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let differentKind = RuntimeObject(name: "Box", displayName: "Box", kind: .swift(.type(.class)), secondaryKind: nil, imagePath: "/p", children: [])
+
+        #expect(a.key != differentImage.key)
+        #expect(a.key != differentName.key)
+        #expect(a.key != differentKind.key)
+    }
+
+    @Test("RuntimeObjectKey-keyed Set acts as a dedup oracle for accumulated children")
+    func runtimeObjectKeyDedup() {
+        // Mirrors the sidebar's de-dup guard:
+        //   guard !currentParent.children.contains(where: { $0.key == child.key }) else { return }
+        // A re-broadcast event must not insert the same specialized child
+        // twice — the test asserts that walking by key catches the dup.
+        let parent = RuntimeObject(name: "Box", displayName: "Box", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        let child = RuntimeObject(name: "BoxOfInt", displayName: "BoxOfInt", kind: .swift(.type(.struct)), secondaryKind: nil, imagePath: "/p", children: [])
+        var current = parent.withAppendedChild(child)
+        // Simulate a duplicate broadcast: skip when key already present.
+        if !current.children.contains(where: { $0.key == child.key }) {
+            current = current.withAppendedChild(child)
+        }
+        #expect(current.children.count == 1)
+    }
+
     // MARK: - Equatable
 
     @Test("objects with same properties are equal")
