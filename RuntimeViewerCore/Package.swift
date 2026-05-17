@@ -128,8 +128,14 @@ let package = Package(
             from: "1.1.0"
         ),
         .package(
+            // Floor bumped to 0.5.4: UIFoundation 0.8.1's ToolbarItem calls
+            // `@AvailableMutating()` with no default-value argument, which only
+            // compiles starting at FrameworkToolbox 0.5.4 (the tag where the
+            // macro declaration became `_ defaultValue: Any? = nil`). Older
+            // tags require an explicit `Any` and SwiftPM's `from: "0.4.0"`
+            // range was legally letting CI resolve down to 0.5.3.
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
-            from: "0.4.0"
+            from: "0.5.4"
         ),
         .package(
             url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
