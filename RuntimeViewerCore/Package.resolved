@@ -1,5 +1,5 @@
 {
-  "originHash" : "559e3422e65f895209b7bc59f592f199a4ce355371a1a367f971bf06b56fc6fd",
+  "originHash" : "9c10b3899ebc5783f2f2fb70175773dade23b1053e9fb4a40136e61698af4724",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -78,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "8ef8bdc2e9391f1291fa9d94ed67f12253b1ae49",
-        "version" : "0.11.0"
+        "revision" : "8b34efb02340298e3a2cee69541f99a8e701a719",
+        "version" : "0.12.0-beta.1"
       }
     },
     {
@@ -125,15 +125,6 @@
       "state" : {
         "revision" : "47ddc958a3962f9bb0fe08de1c8f39723e472228",
         "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "sparkle",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sparkle-project/Sparkle",
-      "state" : {
-        "revision" : "066e75a8b3e99962685d6a90cdd5293ebffd9261",
-        "version" : "2.9.1"
       }
     },
     {
@@ -240,8 +231,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "b1c84b6b76e41d83d4a8b3d107ce19fd7fe2d135",
-        "version" : "0.3.0"
+        "revision" : "85a3242fe3773bab2245cf7bf5c9e18abd88d069",
+        "version" : "0.4.0"
       }
     },
     {
