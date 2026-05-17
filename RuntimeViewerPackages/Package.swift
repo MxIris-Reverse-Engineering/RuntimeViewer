@@ -150,22 +150,6 @@ let package = Package(
             path: "../RuntimeViewerCore"
         ),
         .package(
-            local: .package(
-                path: "../../MachOSwiftSection",
-                isRelative: true,
-                isEnabled: usingLocalDependencies
-            ),
-            remote: .package(
-                // Pinned `exact:` because the floor crosses a prerelease (-beta.1)
-                // boundary — SwiftPM's `from:` resolution skips prereleases, so
-                // a plain `from: "0.12.0-beta.1"` would silently resolve to the
-                // latest stable (0.11.0) instead. Bump to a non-prerelease
-                // `from:` when RuntimeViewer ships 2.1.0 stable.
-                url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                exact: "0.12.0-beta.1"
-            )
-        ),
-        .package(
             url: "https://github.com/ChimeHQ/Rearrange.git",
             from: "2.0.0"
         ),
