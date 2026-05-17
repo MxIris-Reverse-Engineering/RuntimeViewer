@@ -775,9 +775,11 @@ actor RuntimeSwiftSection {
         for object: RuntimeObject,
         with selection: RuntimeSpecializationSelection
     ) async throws -> RuntimeObject {
+        try Task.checkCancellation()
         let baseTypeDefinition = try requireGenericTypeDefinition(for: object)
         let upstreamRequest = try specializer.makeRequest(for: baseTypeDefinition.type.typeContextDescriptorWrapper)
         let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
+        try Task.checkCancellation()
         let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
         let result: SpecializationResult
         do {
@@ -798,6 +800,13 @@ actor RuntimeSwiftSection {
             typeArgumentNodes: typeArgumentNodes.count == upstreamRequest.parameters.count ? typeArgumentNodes : nil,
             in: machO
         )
+        // After the lone suspension point — bail out before mutating section
+        // caches if the caller (UI sheet, MCP request) was cancelled while the
+        // upstream specialize was running. The specialized TypeDefinition is
+        // still appended to baseTypeDefinition.specializedChildren by upstream;
+        // skipping the registration below leaves the section's view of the
+        // world consistent (no orphan entry in interfaceDefinitionNameByObject).
+        try Task.checkCancellation()
         // Pass the parent generic's typeName so the new runtimeObject is
         // registered as `.specializedType(unspecialized:specialized:)`. Without
         // it `makeRuntimeObject` would fall through to `.childType(boundName)`
@@ -821,9 +830,11 @@ actor RuntimeSwiftSection {
         for object: RuntimeObject,
         with selection: RuntimeSpecializationSelection
     ) async throws -> RuntimeSpecializationValidation {
+        try Task.checkCancellation()
         let typeDefinition = try requireGenericTypeDefinition(for: object)
         let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
         let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
+        try Task.checkCancellation()
         let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
         let upstreamValidation = specializer.runtimePreflight(selection: upstreamSelection, for: upstreamRequest)
         return Self.translate(upstreamValidation)

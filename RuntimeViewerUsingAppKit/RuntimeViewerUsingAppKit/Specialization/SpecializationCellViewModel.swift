@@ -186,6 +186,18 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
         inflightInnerFetch = nil
     }
 
+    /// Cancel this row's in-flight inner-request fetch and recurse into
+    /// every child row. Called from the parent VM on sheet dismissal so a
+    /// half-pending nested request can't outlive the sheet and write into
+    /// the engine's section caches.
+    public func cancelInflightRecursively() {
+        inflightInnerFetch?.cancel()
+        inflightInnerFetch = nil
+        for child in children {
+            child.cancelInflightRecursively()
+        }
+    }
+
     public func setLoadFailed(_ message: String) {
         // Drop the loading placeholder; the failure surface is the row's
         // own state, not a synthetic child row.

@@ -48,6 +48,18 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     /// to force NSOutlineView to re-query `numberOfChildrenOfItem`.
     private let reloadRowRelay = PublishRelay<SpecializationCellViewModel>()
 
+    /// Tracks the in-flight `loadRequest()` started in `init` so it can be
+    /// cancelled if the sheet is dismissed before the engine returns. Without
+    /// this the engine still mutates `interfaceDefinitionNameByObject` for a
+    /// document the user has already walked away from.
+    private var loadRequestTask: Task<Void, Never>?
+
+    /// Tracks the in-flight `performSpecialize()` task. A new specialize click
+    /// cancels the previous one (defensive — UI normally disables the button
+    /// while running), and `cancel`/`deinit` cancel it so a slow upstream
+    /// specialize doesn't outlive the sheet.
+    private var specializeTask: Task<Void, Never>?
+
     @Observed
     public private(set) var loadState: LoadState = .idle
 
@@ -83,14 +95,26 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
 
         input.specializeClicked.emitOnNext { [weak self] in
             guard let self else { return }
-            Task { [weak self] in
+            specializeTask?.cancel()
+            specializeTask = Task { [weak self] in
                 guard let self else { return }
                 await performSpecialize()
             }
         }
         .disposed(by: rx.disposeBag)
 
-        input.cancelClicked.emit(to: router.rx.trigger(.cancel)).disposed(by: rx.disposeBag)
+        input.cancelClicked.emitOnNext { [weak self] in
+            guard let self else { return }
+            // Cancel in-flight work synchronously before triggering dismissal
+            // so the engine's specialize / specializationRequest paths see
+            // `Task.isCancelled` at their next checkCancellation boundary
+            // instead of completing and writing into
+            // `interfaceDefinitionNameByObject` for a sheet the user has
+            // already dismissed.
+            cancelInflightWork()
+            router.trigger(.cancel)
+        }
+        .disposed(by: rx.disposeBag)
 
         return Output(
             request: $request.asDriver(onErrorJustReturn: nil),
@@ -106,9 +130,29 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     public init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<SpecializationRoute>) {
         self.runtimeObject = runtimeObject
         super.init(documentState: documentState, router: router)
-        Task { [weak self] in
+        loadRequestTask = Task { [weak self] in
             guard let self else { return }
             await loadRequest()
+        }
+    }
+
+    deinit {
+        loadRequestTask?.cancel()
+        specializeTask?.cancel()
+        for row in topLevelRows {
+            row.cancelInflightRecursively()
+        }
+    }
+
+    /// Cancel every Task this VM holds onto plus every row's in-flight inner
+    /// fetch. Called from the cancel route and from `deinit` so an outstanding
+    /// engine call cannot continue mutating section caches after the sheet
+    /// has closed.
+    private func cancelInflightWork() {
+        loadRequestTask?.cancel()
+        specializeTask?.cancel()
+        for row in topLevelRows {
+            row.cancelInflightRecursively()
         }
     }
 
@@ -242,6 +286,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
                 for: runtimeObject,
                 with: selection
             )
+            try Task.checkCancellation()
             guard validation.isValid else {
                 errorRelay.accept(PreflightFailedError(errors: validation.errors))
                 return
@@ -250,7 +295,10 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
                 runtimeObject,
                 with: selection
             )
+            try Task.checkCancellation()
             router.trigger(.specializeCompleted(specialized))
+        } catch is CancellationError {
+            // Sheet was dismissed mid-flight; swallow silently — no UI to update.
         } catch {
             #log(.error, "specialize failed: \(error, privacy: .public)")
             errorRelay.accept(error)
