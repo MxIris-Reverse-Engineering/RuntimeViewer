@@ -69,7 +69,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         let listCellRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, SidebarRuntimeObjectCellViewModel> { cell, indexPath, viewModel in
             var content = cell.defaultContentConfiguration()
             content.textProperties.allowsDefaultTighteningForTruncation = false
-            content.attributedText = viewModel.name
+            content.attributedText = viewModel.title
             content.image = viewModel.primaryIcon
 
             cell.contentConfiguration = content

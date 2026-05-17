@@ -167,14 +167,16 @@ let package = Package(
                 traits: UIFoundationTraits,
             ),
             remote: .package(
-                // Floor bumped to 0.8.0: older tags only declared a subset of
+                // Floor bumped to 0.8.2: older tags only declared a subset of
                 // UIFoundationTraits (0.4.0 only has AppleInternal; 0.7.3 lacks
                 // QuickActionBar / NSAttributedStringBuilder). 0.8.0 is the
-                // first tag that declares the full set we enable here, so any
-                // floor below it makes SwiftPM legally pick a tag that rejects
-                // the requested traits at resolution time.
+                // first tag that declares the full set we enable here. 0.8.2
+                // gates AppKit/Carbon-only sources behind platform conditionals
+                // so the iOS Simulator build can compile UIFoundationAppKit
+                // and UIFoundationAppleInternal* without hitting `Module
+                // 'Carbon' not found` / non-Optional `UIFont.familyName`.
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.8.0",
+                from: "0.8.2",
                 traits: UIFoundationTraits,
             )
         ),
