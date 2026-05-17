@@ -1,5 +1,5 @@
 {
-  "originHash" : "6d2162cc9d61084587a4a881570115e0db0e57c42f323189aa35354b75ce60bd",
+  "originHash" : "7e4d14cc282339dbc98a6ca4a44dcfc90e457de23df52cf79ba0c3988b1b2935",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -56,39 +56,12 @@
       }
     },
     {
-      "identity" : "dsfappearancemanager",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/dagronf/DSFAppearanceManager",
-      "state" : {
-        "revision" : "e9add5fdf05fe50950d105c77963b7373ddb5ad4",
-        "version" : "3.5.1"
-      }
-    },
-    {
-      "identity" : "dsfquickactionbar",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-macOS-Library-Forks/DSFQuickActionBar",
-      "state" : {
-        "revision" : "ae07ffcd50bedd418b46d096f4785f7c3bc96e3e",
-        "version" : "6.2.102"
-      }
-    },
-    {
       "identity" : "enumkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/gringoireDM/EnumKit.git",
       "state" : {
         "revision" : "ae639dfac5c7116abb64c5f62124915f627140e4",
         "version" : "1.1.3"
-      }
-    },
-    {
-      "identity" : "filter-ui",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-macOS-Library-Forks/filter-ui",
-      "state" : {
-        "revision" : "0d7d6d0fe5e478d7a70f6b1b014998b96e2b171e",
-        "version" : "0.1.2"
       }
     },
     {
@@ -107,15 +80,6 @@
       "state" : {
         "revision" : "1a88d6807a174ebb90e2a04e2071944e006847ef",
         "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "ide-icons",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/ide-icons",
-      "state" : {
-        "revision" : "d262688aecaf1cdab961b2a504566ae5f71c29d1",
-        "version" : "0.1.3"
       }
     },
     {
@@ -195,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "8ef8bdc2e9391f1291fa9d94ed67f12253b1ae49",
-        "version" : "0.11.0"
+        "revision" : "8b34efb02340298e3a2cee69541f99a8e701a719",
+        "version" : "0.12.0-beta.1"
       }
     },
     {
@@ -483,8 +447,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "b1c84b6b76e41d83d4a8b3d107ce19fd7fe2d135",
-        "version" : "0.3.0"
+        "revision" : "85a3242fe3773bab2245cf7bf5c9e18abd88d069",
+        "version" : "0.4.0"
       }
     },
     {
@@ -629,15 +593,6 @@
       "state" : {
         "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
         "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "uifoundation",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/UIFoundation",
-      "state" : {
-        "revision" : "1b915e7195038aea851abf0734790e6328a588fb",
-        "version" : "0.5.3"
       }
     },
     {
