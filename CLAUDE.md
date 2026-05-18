@@ -496,6 +496,42 @@ let rowClicked: Signal<Candidate> = tableView.rx
 
 **8. Optional delegate methods** — when you need optional `NSTableViewDelegate` / `NSOutlineViewDelegate` callbacks (`shouldSelectRow`, persistence helpers, etc.), forward them via `tableView.rx.setDelegate(self)` / `outlineView.rx.setDelegate(delegate)` and implement those methods in an extension. The `rx.items` / `rx.nodes` adapter owns the data source and required-method delegate proxy and forwards optional methods through to the delegate you set.
 
+**9. Lazy Cell ViewModel for large data sets** — for data sets where eager per-row `cellViewModel` allocation dominates main-thread time (N >= ~1k rows, popovers/pickers over global type/symbol indexes, etc.), drive `rx.items` / `rx.nodes` with `DifferentiableBox<Model>` (from `RuntimeViewerArchitectures`) instead of a `[XxxCellViewModel]`, and construct the cellViewModel lazily inside the cell builder closure. The wrapper is a value-type box that adapts any `Hashable` domain model to DifferenceKit's `Differentiable` protocol so the driver array carries cheap identity elements rather than fully-built cellViewModels.
+
+**Eligibility decision tree** — pick lazy mode iff **all three** are true; otherwise stay on the eager 1:1 cellViewModel pattern above:
+
+1. The cellViewModel's state is *fully determined at init time* from the model alone — no `@Observed` properties that mutate after init, no Rx pipelines fed by external sources, no `Task { … }` async loading inside the cellVM.
+2. The data set is large enough that eager construction is visible in Instruments (typically N >= 1k, confirmed by a signpost baseline).
+3. There is no per-row UI state that cannot be derived from the model (expanded/collapsed flag, multi-select checkmark, drag-preview metadata). If you need such state, build a local `struct` conforming to `Differentiable` directly — do NOT add mutable fields onto `DifferentiableBox`.
+
+Sidebar / Inspector cellViewModels (e.g. `SidebarRuntimeObjectCellViewModel`, `InspectorSwiftSpecializationCellViewModel`) own filter-aware attributed names or async metadata loading, so they must stay eager — lazy reconstruction would drop their subscription identity. The `SpecializationTypePicker` popover is the canonical lazy case (10k+ candidates when a generic parameter has no constraint).
+
+```swift
+// ViewModel — driver element is a value-type identity box, not the cellViewModel
+typealias CandidateBox = DifferentiableBox<RuntimeSpecializationRequest.Candidate>
+
+@Observed
+public private(set) var filteredRows: [CandidateBox] = []
+
+public init(candidates: [RuntimeSpecializationRequest.Candidate], ...) {
+    self.allRows = candidates.sorted().map(CandidateBox.init)
+    super.init(...)
+    self.filteredRows = allRows
+}
+
+// ViewController — cellViewModel built lazily, only for cells the table renders
+output.filteredRows
+    .drive(tableView.rx.items) { (tableView, _, _, row: CandidateBox) -> NSView? in
+        let cellView = tableView.box.makeView(ofClass: SomeCellView.self)
+        let cellViewModel = SpecializationTypePickerCellViewModel(candidate: row.model)
+        cellView.bind(to: cellViewModel)
+        return cellView
+    }
+    .disposed(by: rx.disposeBag)
+```
+
+`DifferentiableBox<Model>.differenceIdentifier == model`, so DifferenceKit treats two boxes as the same row iff their underlying models are `==`. Pick `Model`'s `Equatable` carefully — equality fields should be a stable domain primary key, not include presentation-only data, otherwise the diff will spuriously trigger updates. `DifferentiableBox` itself is fully `Hashable` even on UIKit / Catalyst; the `Differentiable` conformance is gated behind `#if canImport(AppKit) && !targetEnvironment(macCatalyst)`.
+
 ### Closures & Self Capture
 
 **Always** use `guard let self else { return }` (NOT `strongSelf`, NOT `if let self`):

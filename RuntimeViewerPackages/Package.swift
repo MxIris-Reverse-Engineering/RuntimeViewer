@@ -487,6 +487,11 @@ let package = Package(
         ),
 
         .testTarget(
+            name: "RuntimeViewerArchitecturesTests",
+            dependencies: ["RuntimeViewerArchitectures"]
+        ),
+
+        .testTarget(
             name: "RuntimeViewerSettingsTests",
             dependencies: ["RuntimeViewerSettings"]
         ),
