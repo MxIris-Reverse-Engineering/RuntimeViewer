@@ -195,9 +195,49 @@ update_packages() {
         -skipPackagePluginValidation -skipMacroValidation
 }
 
+# Resolve the generate_appcast binary. Prefer PATH (CI installs Sparkle there);
+# fall back to the Sparkle SPM binary artifact that Xcode already downloads into
+# DerivedData, so local devs don't need a separate Sparkle install.
+resolve_generate_appcast() {
+    if command -v generate_appcast >/dev/null 2>&1; then
+        command -v generate_appcast
+        return
+    fi
+    local workspace_name="${WORKSPACE%.xcworkspace}"
+    workspace_name="${workspace_name##*/}"
+    local candidate
+    candidate=$(ls -dt "$HOME/Library/Developer/Xcode/DerivedData/${workspace_name}-"*/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast 2>/dev/null | head -1)
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+        echo "$candidate"
+        return
+    fi
+    fail "generate_appcast not found on PATH or under DerivedData/${workspace_name}-*/SourcePackages/artifacts/sparkle. Install Sparkle (brew install --cask sparkle) or run xcodebuild -resolvePackageDependencies first."
+}
+
+# Catch version drift early: --version-tag vX.Y.Z[-beta.N] must agree with the
+# MARKETING_VERSION baked into project.pbxproj. Otherwise the archive self-reports
+# the old version and the generated appcast advertises a download whose internal
+# shortVersionString never bumps — Sparkle then never offers the update. Skipped
+# when no tag is given (local debug builds).
+verify_marketing_version() {
+    [[ -z "$VERSION_TAG" ]] && return 0
+    local expected="${VERSION_TAG#v}"
+    expected="${expected%%-*}"
+    local actual
+    actual=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration "$CONFIGURATION" -showBuildSettings 2>/dev/null \
+        | awk -F' = ' '$1 ~ /^[[:space:]]*MARKETING_VERSION$/ { print $2; exit }')
+    [[ -n "$actual" ]] || fail "could not read MARKETING_VERSION from scheme '$SCHEME'; run --update-packages or verify the workspace path."
+    if [[ "$actual" != "$expected" ]]; then
+        fail "MARKETING_VERSION ($actual) does not match --version-tag ($VERSION_TAG, expected $expected). Bump MARKETING_VERSION in project.pbxproj before re-running."
+    fi
+    log "MARKETING_VERSION ok: $actual matches $VERSION_TAG"
+}
+
 if $UPDATE_PACKAGES; then
     update_packages
 fi
+
+verify_marketing_version
 
 GIT_COMMIT="$(git rev-parse --short=12 HEAD 2>/dev/null || true)"
 GIT_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null || true)"
@@ -327,8 +367,9 @@ if $UPDATE_APPCAST; then
         GENERATE_APPCAST_ARGS+=(--channel beta)
     fi
 
-    log "Running generate_appcast"
-    run generate_appcast "${GENERATE_APPCAST_ARGS[@]}"
+    GENERATE_APPCAST_BIN="$(resolve_generate_appcast)"
+    log "Running generate_appcast ($GENERATE_APPCAST_BIN)"
+    run "$GENERATE_APPCAST_BIN" "${GENERATE_APPCAST_ARGS[@]}"
 
     if ! $KEEP_INTERMEDIATE; then
         run rm -rf "$STAGING"
