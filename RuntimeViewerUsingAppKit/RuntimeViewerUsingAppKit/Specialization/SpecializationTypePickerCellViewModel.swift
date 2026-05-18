@@ -86,13 +86,11 @@ extension RuntimeSpecializationRequest.Candidate.Kind {
 
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
-extension SpecializationTypePickerCellViewModel: Differentiable {
-    public var differenceIdentifier: RuntimeSpecializationRequest.Candidate { candidate }
-    public func isContentEqual(to source: SpecializationTypePickerCellViewModel) -> Bool {
-        candidate == source.candidate
-    }
-}
-
+// `Differentiable` conformance intentionally omitted: row identity is
+// owned by `CandidateBox` (= `DifferentiableBox<RuntimeSpecializationRequest.Candidate>`),
+// not by this cellViewModel. The cellViewModel is constructed lazily inside
+// the table's `rx.items` builder closure per render and never participates
+// in the DifferenceKit diff. See CLAUDE.md §9 for the rationale.
 extension SpecializationTypePickerCellViewModel: RuntimeObjectCellDisplayable {
     public var primaryIconDriver: Driver<NSUIImage> { $primaryIcon.asDriver() }
     public var secondaryIconDriver: Driver<NSUIImage?> { $secondaryIcon.asDriver() }

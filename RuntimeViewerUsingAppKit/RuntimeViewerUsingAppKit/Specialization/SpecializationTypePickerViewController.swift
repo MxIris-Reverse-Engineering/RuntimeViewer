@@ -69,9 +69,9 @@ final class SpecializationTypePickerViewController: UXKitViewController<Speciali
     override func setupBindings(for viewModel: SpecializationTypePickerViewModel) {
         super.setupBindings(for: viewModel)
 
-        let cellViewModelClicked: Signal<SpecializationTypePickerCellViewModel> = tableView.rx
+        let rowClicked: Signal<CandidateBox> = tableView.rx
             .itemClicked()
-            .compactMap { [weak tableView] index -> SpecializationTypePickerCellViewModel? in
+            .compactMap { [weak tableView] index -> CandidateBox? in
                 guard let tableView,
                       index.row >= 0,
                       index.row < tableView.numberOfRows
@@ -82,13 +82,19 @@ final class SpecializationTypePickerViewController: UXKitViewController<Speciali
 
         let input = SpecializationTypePickerViewModel.Input(
             searchString: searchField.rx.stringValue.asSignal(onErrorJustReturn: ""),
-            cellViewModelClicked: cellViewModelClicked
+            rowClicked: rowClicked
         )
         let output = viewModel.transform(input)
 
-        output.filteredCellViewModels
-            .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: SpecializationTypePickerCellViewModel) -> NSView? in
+        // Lazy cellViewModel: built inside the cell builder closure so
+        // popover open does not pay 10k×~50µs construction cost when an
+        // unconstrained generic parameter brings in the full image type
+        // universe. See CLAUDE.md §9 "Lazy Cell ViewModel for large data
+        // sets" and `Documentations/Plans/specialization-typepicker-perf-r2.md`.
+        output.filteredRows
+            .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, row: CandidateBox) -> NSView? in
                 let cellView = tableView.box.makeView(ofClass: RuntimeObjectCellView<SpecializationTypePickerCellViewModel>.self) { .init(contentInsets: .init(top: 4, left: 4, bottom: 4, right: 4)) }
+                let cellViewModel = SpecializationTypePickerCellViewModel(candidate: row.model)
                 cellView.bind(to: cellViewModel)
                 return cellView
             }
