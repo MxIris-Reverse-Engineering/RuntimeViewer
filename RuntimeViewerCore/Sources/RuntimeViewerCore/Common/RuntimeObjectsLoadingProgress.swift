@@ -16,6 +16,9 @@ public struct RuntimeObjectsLoadingProgress: Sendable, Codable {
         case indexingSwiftConformances
         case indexingSwiftExtensions
         case buildingObjects
+        case indexingObjCSubclasses
+        case indexingObjCConformances
+        case indexingSwiftSubclasses
     }
 
     public let phase: Phase
@@ -55,6 +58,9 @@ extension RuntimeObjectsLoadingProgress.Phase {
         case .indexingSwiftConformances: return "Indexing Swift conformances..."
         case .indexingSwiftExtensions: return "Indexing Swift extensions..."
         case .buildingObjects: return "Building objects..."
+        case .indexingObjCSubclasses: return "Indexing Objective-C subclasses..."
+        case .indexingObjCConformances: return "Indexing Objective-C conformances..."
+        case .indexingSwiftSubclasses: return "Indexing Swift subclasses..."
         }
     }
 
@@ -73,6 +79,16 @@ extension RuntimeObjectsLoadingProgress.Phase {
         case .indexingSwiftProtocols:        return (0.78, 0.83)
         case .indexingSwiftConformances:     return (0.83, 0.88)
         case .indexingSwiftExtensions:       return (0.88, 0.90)
+        // These three phases overlap the primary loading phases — they
+        // are emitted as one-shot markers from the same loops that drive
+        // `.loadingObjCClasses` / `.loadingObjCCategories` /
+        // `.indexingSwiftExtensions`, so the UI surfaces the label
+        // ("Indexing Swift subclasses...") at the same point in the
+        // progress bar that the main phase already covers. They are
+        // intentionally NOT part of the contiguous main timeline.
+        case .indexingObjCSubclasses:        return (0.07, 0.12)
+        case .indexingObjCConformances:      return (0.40, 0.45)
+        case .indexingSwiftSubclasses:       return (0.89, 0.90)
         case .buildingObjects:              return (0.90, 1.00)
         }
     }

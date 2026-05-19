@@ -51,6 +51,14 @@ actor RuntimeObjCSection {
 
     private let factory: RuntimeObjCSectionFactory
 
+    /// Per-image indexer for class-inheritance and protocol-adoption
+    /// relationships. `nonisolated let` so the engine and the factory's
+    /// aggregate can read its query methods without an actor hop —
+    /// `RuntimeObjCInterfaceIndexer` is `Sendable` and protects its own
+    /// state with `@Mutex`, mirroring the `SwiftInterfaceIndexer` reference
+    /// pattern used by `RuntimeSwiftSection`.
+    nonisolated let objcIndexer: RuntimeObjCInterfaceIndexer = RuntimeObjCInterfaceIndexer()
+
     private var classes: [String: ObjCClassGroup] = [:]
 
     private var protocols: [String: ObjCProtocolGroup] = [:]
@@ -193,6 +201,19 @@ actor RuntimeObjCSection {
 
         let objcClasses: [any ObjCClassProtocol] = machO.objc.classes64.orEmpty + machO.objc.classes32.orEmpty + machO.objc.nonLazyClasses64.orEmpty + machO.objc.nonLazyClasses32.orEmpty
 
+        // One-shot progress marker so the loading indicator can surface
+        // "Indexing Objective-C subclasses…" before the per-class loop
+        // starts pushing `.loadingObjCClasses` updates. Inheritance and
+        // protocol-adoption indexing happens inline below — every class in
+        // `__objc_classlist` (including Swift-derived ones via the same
+        // record format) is fed to `objcIndexer` as we walk the list.
+        progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
+            phase: .indexingObjCSubclasses,
+            itemDescription: "",
+            currentCount: 0,
+            totalCount: objcClasses.count
+        )))
+
         for objcClass in objcClasses {
             let objcClassGroup: ObjCClassGroup = (objcClass, infoWithSuperclasses(class: objcClass, in: machO))
             guard let objcClassInfo = objcClassGroup.info.first else { continue }
@@ -203,6 +224,20 @@ actor RuntimeObjCSection {
                 currentCount: classByName.count,
                 totalCount: objcClasses.count
             )))
+
+            // Feed `objcIndexer`. We pass the already-extracted class info —
+            // `superClassName` is resolved through MachO's bind/rebase
+            // walking by `infoWithSuperclasses`, so we don't need to redo
+            // that work here. `isSwiftStable` comes off the raw class_t
+            // record itself, exactly matching the field used by
+            // `allObjects()` to mark bridged classes' `secondaryKind`.
+            objcIndexer.indexClass(
+                className: objcClassInfo.name,
+                superClassName: objcClassInfo.superClassName,
+                adoptedProtocolNames: objcClassInfo.protocols.map(\.name),
+                imagePath: imagePath,
+                isSwiftStable: objcClass.isSwiftStable
+            )
 
             let objcName = ObjCName.class(objcClassInfo.name)
 
@@ -241,6 +276,16 @@ actor RuntimeObjCSection {
         objcCategories.append(contentsOf: machO.objc.categories2_64.orEmpty)
         objcCategories.append(contentsOf: machO.objc.categories2_32.orEmpty)
 
+        // One-shot marker that conformance indexing starts; each category
+        // extends the conformer set of its target class for every protocol
+        // the category adopts.
+        progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
+            phase: .indexingObjCConformances,
+            itemDescription: "",
+            currentCount: 0,
+            totalCount: objcCategories.count
+        )))
+
         for objcCategory in objcCategories {
             guard let objcCategoryInfo = objcCategory.info(in: machO) else { continue }
             categoryByName[objcCategoryInfo.uniqueName] = (objcCategory, objcCategoryInfo)
@@ -253,6 +298,25 @@ actor RuntimeObjCSection {
             let objcName = ObjCName.category(objcCategoryInfo.uniqueName)
             setObjCTypeFromProperties(objcCategoryInfo.properties + objcCategoryInfo.classProperties, forName: objcName)
             setObjCTypeFromMethods(objcCategoryInfo.methods + objcCategoryInfo.classMethods, forName: objcName)
+
+            // Feed category data to `objcIndexer`. The target class' Swift
+            // stable flag is read from the already-resolved class record so
+            // category adoptions on bridged classes (e.g. NSError extending
+            // Swift error protocols) carry `isSwiftStable == true` and
+            // surface as Swift `RuntimeObject` at query time.
+            let targetClassName = objcCategoryInfo.className
+            let targetIsSwiftStable: Bool
+            if let (_, targetClass) = objcCategory.class(in: machO) {
+                targetIsSwiftStable = targetClass.isSwiftStable
+            } else {
+                targetIsSwiftStable = false
+            }
+            objcIndexer.indexCategory(
+                targetClassName: targetClassName,
+                targetIsSwiftStable: targetIsSwiftStable,
+                adoptedProtocolNames: objcCategoryInfo.protocols.map(\.name),
+                imagePath: imagePath
+            )
         }
 
         classes = classByName
@@ -680,6 +744,38 @@ actor RuntimeObjCSection {
         return result
     }
 
+    /// Materialize an Objective-C class `RuntimeObject` for a known class
+    /// name within this image. Mirrors the shape `allObjects()` emits
+    /// (including `secondaryKind == .swift(.type(.class))` for bridged
+    /// classes), so relationship rows render identically to the sidebar's
+    /// regular ObjC class entries. Returns `nil` when the class is not in
+    /// this section.
+    func makeRuntimeObject(forClassName className: String) -> RuntimeObject? {
+        guard let classGroup = classes[className] else { return nil }
+        return RuntimeObject(
+            name: className,
+            displayName: className,
+            kind: .objc(.type(.class)),
+            secondaryKind: classGroup.objcClass.isSwiftStable ? .swift(.type(.class)) : nil,
+            imagePath: imagePath,
+            children: []
+        )
+    }
+
+    /// Materialize an Objective-C protocol `RuntimeObject`. Used by the
+    /// engine to surface the *target* of an ObjC-protocol-conformers query.
+    func makeRuntimeObject(forProtocolName protocolName: String) -> RuntimeObject? {
+        guard protocols[protocolName] != nil else { return nil }
+        return RuntimeObject(
+            name: protocolName,
+            displayName: protocolName,
+            kind: .objc(.type(.protocol)),
+            secondaryKind: nil,
+            imagePath: imagePath,
+            children: []
+        )
+    }
+
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
         #log(.debug, "Getting class hierarchy for: \(object.name, privacy: .public)")
         guard case .objc(.type(.class)) = object.kind,
@@ -698,6 +794,12 @@ actor RuntimeObjCSection {
 actor RuntimeObjCSectionFactory {
     private var sections: [String: RuntimeObjCSection] = [:]
 
+    /// Aggregate Objective-C interface indexer. Each per-image
+    /// `RuntimeObjCSection.objcIndexer` is registered as a sub-indexer when
+    /// the section is created, so queries against this aggregate fan out
+    /// across all loaded ObjC sections. Mirrors `RuntimeSwiftSectionFactory.indexer`.
+    public let objcInterfaceIndexer: RuntimeObjCInterfaceIndexer = RuntimeObjCInterfaceIndexer()
+
     func existingSection(for imagePath: String) -> RuntimeObjCSection? {
         sections[imagePath]
     }
@@ -714,6 +816,7 @@ actor RuntimeObjCSectionFactory {
         #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
         let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
         sections[imagePath] = section
+        objcInterfaceIndexer.addSubIndexer(section.objcIndexer)
         #log(.debug, "ObjC section created and cached")
         return (false, section)
     }
@@ -734,6 +837,7 @@ actor RuntimeObjCSectionFactory {
             #log(.debug, "Creating ObjC section from MachO: \(machO.imagePath, privacy: .public)")
             let objcSection = try await RuntimeObjCSection(machO: machO, factory: self)
             sections[machO.imagePath] = objcSection
+            objcInterfaceIndexer.addSubIndexer(objcSection.objcIndexer)
             return objcSection
         } catch {
             #log(.error, "Failed to create ObjC section: \(error, privacy: .public)")

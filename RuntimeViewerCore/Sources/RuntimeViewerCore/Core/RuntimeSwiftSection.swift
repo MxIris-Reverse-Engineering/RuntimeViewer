@@ -64,9 +64,29 @@ actor RuntimeSwiftSection {
 
     private let factory: RuntimeSwiftSectionFactory
 
-    private var indexer: SwiftInterfaceIndexer<MachOImage>
+    /// `internal` so `RuntimeEngine.makeRuntimeObject` and
+    /// `relationships(for:)` can look up `allTypeDefinitions` /
+    /// `allConformingTypesByProtocolName` to materialize cross-image
+    /// references without a section-level helper for every kind. Promoted
+    /// from `private` as per the Relationships design ADR W1.
+    var indexer: SwiftInterfaceIndexer<MachOImage>
 
     private var printer: SwiftInterfacePrinter<MachOImage>
+
+    /// Eager reverse-lookup table: a superclass's mangled type-name string
+    /// (the same canonical form produced by `mangleAsString(typeName.node)`)
+    /// -> the mangled type-name strings of every direct Swift subclass in
+    /// this image. Built once at `init()` end, after `indexer.prepare()`
+    /// completes; never mutated afterwards. Querying uses
+    /// `subclasses(of:)`. Insertion order is preserved per superclass via
+    /// `OrderedSet`, so result ordering across queries is stable.
+    private var subclassesBySuperclassMangledName: [String: OrderedSet<String>] = [:]
+
+    /// `mangleAsString(typeName.node)` -> the originating `TypeName`,
+    /// populated alongside `subclassesBySuperclassMangledName` so the engine
+    /// can materialize a Swift `RuntimeObject` from a mangled key in
+    /// `O(1)` instead of re-scanning `indexer.allTypeDefinitions`.
+    private var typeNameByMangledName: [String: SwiftInterface.TypeName] = [:]
 
     // Keyed by `RuntimeObjectKey` (identity without `children`) so the
     // sidebar's `parent.withAppendedChild(child)` replacement after a
@@ -215,6 +235,45 @@ actor RuntimeSwiftSection {
         self.indexer = .init(configuration: .init(showCImportedTypes: false), eventHandlers: eventHandlers, in: machO)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
         try await indexer.prepare()
+        // Eager: build the `superclass mangled name -> direct subclass mangled
+        // names` reverse table now. The cost is `O(N)` over
+        // `indexer.allTypeDefinitions` and is paid once per image-section
+        // construction, regardless of whether the user ever opens the
+        // Relationships tab. Subsequent `subclasses(of:)` queries become
+        // `O(matches)` dictionary lookups against this table.
+        progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
+            phase: .indexingSwiftSubclasses,
+            itemDescription: "",
+            currentCount: 0,
+            totalCount: indexer.allTypeDefinitions.count
+        )))
+        for (typeName, typeDefinition) in indexer.allTypeDefinitions {
+            // Record `mangledName -> TypeName` for every type, regardless of
+            // whether it's a class. The engine's `makeRuntimeObject` helper
+            // walks this map to recover the kind/displayName for both
+            // subclass results (always classes) and protocol conformer
+            // results (any nominal kind).
+            //
+            // `mangleAsString` has sync + async overloads; in this `async`
+            // initializer the compiler picks the async one, hence `await`.
+            // `try?` flattens the nested Optional per SE-0230, so the
+            // resulting binding is `String`, not `String?`.
+            guard let childKey = try? await mangleAsString(typeName.node) else { continue }
+            typeNameByMangledName[childKey] = typeName
+
+            guard case .class(let classWrapper) = typeDefinition.type else { continue }
+            let classDescriptor = classWrapper.descriptor
+            guard let superclassMangled = try? classDescriptor.superclassTypeMangledName(in: machO)
+            else { continue }
+            // Round-trip through demangle + remangle so the superclass key
+            // sits in the same canonical string space as the child key
+            // (`mangleAsString(typeName.node)`), which the engine method
+            // also uses to derive the lookup key from a target Swift class.
+            guard let superclassNode = try? MetadataReader.demangleType(for: superclassMangled, in: machO),
+                  let superclassKey = try? await mangleAsString(superclassNode)
+            else { continue }
+            subclassesBySuperclassMangledName[superclassKey, default: []].append(childKey)
+        }
         #log(.info, "Swift section initialized successfully")
     }
 
@@ -1187,6 +1246,90 @@ actor RuntimeSwiftSection {
         factory.indexer.addSubIndexer(indexer)
     }
 
+    /// Direct Swift subclasses of the type whose mangled name is `superclassMangledName`,
+    /// expressed as their mangled type-name strings. Limited to subclasses defined in
+    /// this section's image; cross-image union is the engine method's responsibility.
+    func subclasses(of superclassMangledName: String) -> [String] {
+        subclassesBySuperclassMangledName[superclassMangledName]?.elements ?? []
+    }
+
+    /// All Swift conforming types of the given protocol within this image,
+    /// expressed as mangled type-name strings (the same canonical form used
+    /// throughout the relationships pipeline). Backed by
+    /// `SwiftInterfaceIndexer.conformingTypesByProtocolName`, which is
+    /// populated incrementally during `indexer.prepare()` from
+    /// `currentStorage.protocolConformances`. The engine method unions
+    /// per-image results across `loadedImagePaths`.
+    func conformingTypes(of protocolName: String) -> [String] {
+        guard let conformers = indexer.conformingTypesByProtocolName.first(where: { $0.key.name == protocolName })?.value else { return [] }
+        return conformers.compactMap { try? mangleAsString($0.node) }
+    }
+
+    /// Materialize a Swift `RuntimeObject` for a type whose mangled name
+    /// is known. Returns `nil` when the mangled key does not map to any
+    /// type definition in this section (e.g. it lives in a different image).
+    /// Mirrors the construction `_objects(in:)` performs for the same type,
+    /// so callers can render relationship results in the same shape as the
+    /// sidebar's other Swift entries.
+    func makeRuntimeObject(forMangledTypeName mangledName: String) -> RuntimeObject? {
+        guard let typeName = typeNameByMangledName[mangledName],
+              let typeDefinition = indexer.allTypeDefinitions[typeName]
+        else { return nil }
+        var properties: RuntimeObject.Properties = []
+        if typeDefinition.type.contextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
+            properties.insert(.isGeneric)
+        }
+        let isSpecialized = typeDefinition.isSpecialized
+        if isSpecialized {
+            properties.insert(.isSpecialized)
+        }
+        let displayName = isSpecialized
+            ? typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric))
+            : typeName.name
+        return RuntimeObject(
+            name: mangledName,
+            displayName: displayName,
+            kind: typeName.runtimeObjectKind,
+            secondaryKind: nil,
+            imagePath: imagePath,
+            children: [],
+            properties: properties
+        )
+    }
+
+    /// Materialize a Swift protocol `RuntimeObject` whose demangled name
+    /// matches `protocolName`. Used by the engine to render the *target*
+    /// of a Swift-protocol-conformers query alongside its conformer rows.
+    /// Returns `nil` when no protocol with that name is indexed locally.
+    func makeRuntimeObjectForProtocol(named protocolName: String) -> RuntimeObject? {
+        for (name, _) in indexer.allProtocolDefinitions where name.name == protocolName {
+            guard let mangled = try? mangleAsString(name.node) else { continue }
+            return RuntimeObject(
+                name: mangled,
+                displayName: name.name,
+                kind: .swift(.type(.protocol)),
+                secondaryKind: nil,
+                imagePath: imagePath,
+                children: []
+            )
+        }
+        return nil
+    }
+
+    /// Lookup mangled type name for a Swift class `RuntimeObject` already in
+    /// this section. The engine uses this to derive the subclass-reverse-table
+    /// key from a target object's `name` (which for Swift classes is *already*
+    /// the mangled string — this exists for symmetry with the protocol path
+    /// and to keep all section -> mangled translation in one place).
+    func mangledTypeName(forName name: String) -> String? {
+        // The engine passes `object.name`, which for Swift `RuntimeObject`s
+        // is already a mangled string produced by `mangleAsString`. We round-trip
+        // through `typeNameByMangledName` to confirm it corresponds to a known
+        // type in this image; an unknown name (e.g. from a different image)
+        // returns nil so the caller can skip.
+        typeNameByMangledName[name] != nil ? name : nil
+    }
+
     /// Build the mangledID → indexed type mapping this section contributes
     /// to the factory's cross-image lookup table. Called once per section
     /// immediately after registration; the factory merges the result with
@@ -1204,7 +1347,7 @@ actor RuntimeSwiftSection {
 }
 
 extension SwiftInterface.TypeName {
-    fileprivate var runtimeObjectKind: RuntimeObjectKind {
+    var runtimeObjectKind: RuntimeObjectKind {
         switch kind {
         case .enum:
             return .swift(.type(.enum))
