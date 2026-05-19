@@ -4,6 +4,8 @@ import RuntimeViewerCoreObjC
 public import Foundation
 public import Combine
 public import RuntimeViewerCommunication
+import Demangling
+import OrderedCollections
 
 // public import Version
 
@@ -56,6 +58,7 @@ public actor RuntimeEngine {
         case loadImageForBackgroundIndexing
         case patchImagePathForDyld
         case runtimeObjectHierarchy
+        case runtimeRelationshipsForObject
         case runtimeObjectInfo
         case imageNameOfClassName
         case observeRuntime
@@ -333,6 +336,7 @@ public actor RuntimeEngine {
         }
         setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
+        setMessageHandlerBinding(forName: .runtimeRelationshipsForObject, of: self) { $0.relationships(for:) }
         setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
         connection?.setMessageHandler(name: CommandNames.specializationRequest.commandName) { [weak self] (object: RuntimeObject) -> RuntimeSpecializationRequest in
             guard let self else { throw RequestError.senderConnectionIsLose }
@@ -735,6 +739,143 @@ extension RuntimeEngine {
         } remote: {
             return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: object)
         }
+    }
+
+    /// Cross-image relationships for an inspectable target:
+    ///   - For classes: every direct subclass across all indexed images.
+    ///   - For protocols: every conforming class across all indexed images.
+    ///
+    /// Returns `.empty` for kinds outside `{.objc(.type(.class)),
+    /// .objc(.type(.protocol)), .swift(.type(.class)), .swift(.type(.protocol))}`
+    /// (no throw). For supported kinds the result is the per-image union
+    /// across `loadedImagePaths`, gated by `isImageIndexed(path:)` so an
+    /// image that has been loaded but not indexed contributes nothing.
+    ///
+    /// The target object's `imagePath` is the *defining* image. Conformers
+    /// and subclasses may live in *any* indexed image, so we iterate
+    /// `loadedImagePaths` and union per-image results. Do not restrict to
+    /// `object.imagePath` — that would miss cross-image conformers.
+    public func relationships(for object: RuntimeObject) async throws -> RuntimeRelationships {
+        try await request { () -> RuntimeRelationships in
+            let isObjCClass = object.kind == .objc(.type(.class))
+            let isObjCProtocol = object.kind == .objc(.type(.protocol))
+            let isSwiftClass = object.kind == .swift(.type(.class))
+            let isSwiftProtocol = object.kind == .swift(.type(.protocol))
+            guard isObjCClass || isObjCProtocol || isSwiftClass || isSwiftProtocol else {
+                return RuntimeRelationships.empty
+            }
+            let wantsSubclasses = isObjCClass || isSwiftClass
+            let wantsConformers = isObjCProtocol || isSwiftProtocol
+
+            // No synthetic ObjC<->Swift name bridging.
+            //
+            // For ObjC class/protocol targets, `object.name` is the raw ObjC
+            // class/protocol name (the same string used as the key in
+            // `RuntimeObjCSection.classes`/`.protocols` and as the
+            // `superclassByClassName` key in `RuntimeObjCInterfaceIndexer`).
+            //
+            // For Swift class targets, `object.name` is the mangled string
+            // produced by `mangleAsString(typeName.node)`, which is the
+            // same key space `subclassesBySuperclassMangledName` uses (we
+            // round-trip superclass mangling through demangle + remangle
+            // when building the table).
+            //
+            // Swift-derived ObjC subclasses are captured by the ObjC arm
+            // through `__objc_classlist` (every `class Foo: NSObject`
+            // emits a `class_t` record), so when both `objcKey` and
+            // `swiftMangledKey` are set we skip the Swift arm to avoid
+            // double-counting.
+            let objcKey: String? = (isObjCClass || isObjCProtocol) ? object.name : nil
+            let swiftMangledKey: String? = isSwiftClass ? object.name : nil
+
+            var subclasses: OrderedSet<RuntimeObject> = []
+            var conformers: OrderedSet<RuntimeObject> = []
+
+            for imagePath in loadedImagePaths {
+                guard (try? await isImageIndexed(path: imagePath)) == true else { continue }
+
+                if wantsSubclasses {
+                    if let objcKey {
+                        if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
+                            for reference in objcSection.objcIndexer.subclasses(of: objcKey) {
+                                if let runtimeObject = await materializeRelationshipReference(reference) {
+                                    subclasses.append(runtimeObject)
+                                }
+                            }
+                        }
+                    }
+                    if let swiftMangledKey {
+                        if let swiftSection = await swiftSectionFactory.existingSection(for: imagePath) {
+                            for childMangled in await swiftSection.subclasses(of: swiftMangledKey) {
+                                if let runtimeObject = await swiftSection.makeRuntimeObject(forMangledTypeName: childMangled) {
+                                    subclasses.append(runtimeObject)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if wantsConformers {
+                    if isObjCProtocol {
+                        if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
+                            for reference in objcSection.objcIndexer.conformingClasses(toProtocol: object.name) {
+                                if let runtimeObject = await materializeRelationshipReference(reference) {
+                                    conformers.append(runtimeObject)
+                                }
+                            }
+                        }
+                    }
+                    if isSwiftProtocol {
+                        if let swiftSection = await swiftSectionFactory.existingSection(for: imagePath) {
+                            // Swift protocols are stored in the indexer under their demangled name
+                            // (e.g. "Foundation.LocalizedError"); RuntimeObject.displayName carries
+                            // exactly that string.
+                            for mangled in await swiftSection.conformingTypes(of: object.displayName) {
+                                if let runtimeObject = await swiftSection.makeRuntimeObject(forMangledTypeName: mangled) {
+                                    conformers.append(runtimeObject)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let sortedSubclasses = Array(subclasses).sorted { lhs, rhs in
+                lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
+            let sortedConformers = Array(conformers).sorted { lhs, rhs in
+                lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
+            return RuntimeRelationships(subclasses: sortedSubclasses, conformingTypes: sortedConformers)
+        } remote: {
+            return try await $0.sendMessage(name: .runtimeRelationshipsForObject, request: object)
+        }
+    }
+
+    /// Materialize a per-image `ObjCClassReference` into the `RuntimeObject`
+    /// the relationships query should surface. Bridged classes
+    /// (`isSwiftStable == true`) are materialized as Swift `RuntimeObject`s
+    /// (`kind == .swift(.type(.class))`) per AC6, by demangling the raw
+    /// ObjC class name (`_TtC<n>module<m>name` form) and looking the
+    /// corresponding Swift type definition up in the same image's Swift
+    /// section. When that lookup fails (e.g. an `@objc(customName)` class
+    /// whose raw name isn't a Swift mangling), the entry is dropped rather
+    /// than fall back to `.objc(.type(.class))`.
+    private func materializeRelationshipReference(_ reference: ObjCClassReference) async -> RuntimeObject? {
+        if reference.isSwiftStable {
+            // `demangleAsNode` / `mangleAsString` each ship a sync and an async
+            // overload; the compiler picks the async one inside this `async`
+            // context, so the `try?` needs an `await` for the implicit choice.
+            if let node = try? await demangleAsNode(reference.className, isType: false),
+               let swiftMangled = try? await mangleAsString(node),
+               let swiftSection = await swiftSectionFactory.existingSection(for: reference.imagePath),
+               let runtimeObject = await swiftSection.makeRuntimeObject(forMangledTypeName: swiftMangled) {
+                return runtimeObject
+            }
+            return nil
+        }
+        guard let objcSection = await objcSectionFactory.existingSection(for: reference.imagePath) else { return nil }
+        return await objcSection.makeRuntimeObject(forClassName: reference.className)
     }
 
     struct MemberAddressesRequest: Codable {

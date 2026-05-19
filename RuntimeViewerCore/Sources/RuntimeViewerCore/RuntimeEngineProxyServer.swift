@@ -151,6 +151,11 @@ public actor RuntimeEngineProxyServer {
             try await engine.hierarchy(for: object)
         }
 
+        connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimeRelationshipsForObject.commandName) {
+            [engine] (object: RuntimeObject) -> RuntimeRelationships in
+            try await engine.relationships(for: object)
+        }
+
         connection.setMessageHandler(name: RuntimeEngine.CommandNames.loadImage.commandName) {
             [engine] (path: String) in
             try await engine.loadImage(at: path)
