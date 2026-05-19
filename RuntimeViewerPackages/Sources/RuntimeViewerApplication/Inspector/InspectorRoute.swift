@@ -30,6 +30,7 @@ public enum InspectorRoute: Routable {
 public enum InspectorRuntimeObjectRoute: Routable {
     case initial
     case classHierarchy
+    case relationships
     case specialization
     /// Forwarded up to `InspectorCoordinator` so it can re-trigger
     /// `InspectorRoute.requestSpecializationSheet` on itself, which
