@@ -73,12 +73,12 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         }
 
         specializeButton.do {
-            $0.keyEquivalent = "\r"
+            $0.role = .primary
             $0.isEnabled = false
         }
 
         cancelButton.do {
-            $0.keyEquivalent = "\u{1b}"
+            $0.role = .cancel
         }
 
         scrollView.do {

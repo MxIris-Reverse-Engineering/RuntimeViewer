@@ -16,7 +16,7 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
     public let runtimeObject: RuntimeObject
 
     @Observed
-    public private(set) var primaryIcon: NSUIImage = .init()
+    public private(set) var primaryIcon: NSUIImage
 
     @Observed
     public private(set) var secondaryIcon: NSUIImage?
@@ -25,14 +25,14 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
     public private(set) var tertiaryIcon: NSUIImage?
 
     @Observed
-    public private(set) var title: NSAttributedString = .init()
+    public private(set) var title: NSAttributedString
 
     @Observed
     public private(set) var subtitle: NSAttributedString?
 
     public init(runtimeObject: RuntimeObject) {
         self.runtimeObject = runtimeObject
-        super.init()
+        
         let iconSize = RuntimeObjectIcon.defaultIconSize
         primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize)
         secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) }
@@ -45,7 +45,7 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
         title = NSAttributedString {
             AText(runtimeObject.displayName)
                 .foregroundColor(.labelColor)
-                .font(.systemFont(ofSize: 13))
+                .font(.systemFont(ofSize: 12))
                 .alignment(.left)
                 .lineBreakeMode(.byTruncatingTail)
         }
@@ -54,11 +54,12 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
             subtitle = NSAttributedString {
                 AText(imageName)
                     .foregroundColor(.secondaryLabelColor)
-                    .font(.systemFont(ofSize: 11))
+                    .font(.systemFont(ofSize: 10))
                     .alignment(.left)
                     .lineBreakeMode(.byTruncatingTail)
             }
         }
+        super.init()
     }
 }
 
