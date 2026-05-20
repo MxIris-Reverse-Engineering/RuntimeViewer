@@ -145,6 +145,13 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
                 outlineView.restoreExpansionFromAutosave()
             }
             .disposed(by: rx.disposeBag)
+        
+        output.expandItem
+            .emitOnNextMainActor { [weak self] viewModel in
+                guard let self else { return }
+                outlineView.expandItem(viewModel, expandChildren: true)
+            }
+            .disposed(by: rx.disposeBag)
     }
 }
 

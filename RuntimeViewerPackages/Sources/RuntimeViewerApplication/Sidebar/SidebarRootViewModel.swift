@@ -91,6 +91,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         public let didBeginFiltering: Signal<Void>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
+        public let expandItem: Signal<SidebarRootCellViewModel>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -146,7 +147,8 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
             nodesIndexed: nodesIndexed,
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
             didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
-            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid()
+            didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
+            expandItem: input.clickedNode.filter { !$0.isLeaf }.asSignal(),
         )
     }
 }
