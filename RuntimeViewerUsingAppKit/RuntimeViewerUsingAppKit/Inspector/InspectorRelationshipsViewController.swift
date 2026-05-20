@@ -28,7 +28,7 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
         scrollView.snp.makeConstraints { make in
             make.top.equalTo(headerLabel.snp.bottom).offset(8)
             make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
-            make.bottom.lessThanOrEqualToSuperview()
+            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide)
         }
 
         emptyLabel.snp.makeConstraints { make in
@@ -50,7 +50,14 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
             $0.isHiddenVisualEffectView = true
             $0.autohidesScrollers = true
             $0.backgroundColor = .clear
+            // The inspector container chain (NSTabView -> navigation controller
+            // -> split item) sizes itself to content, so an external
+            // `lessThanOrEqualTo` constraint cannot cap the scroll view -- its
+            // anchor moves down with the content. `maximumContentSize` is the
+            // only reliable cap: it clamps `intrinsicContentSize` at the source,
+            // after which the table scrolls internally beyond this height.
             $0.minimumContentSize = NSSize(width: NSView.noIntrinsicMetric, height: 80)
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         }
 
         headerLabel.do {
