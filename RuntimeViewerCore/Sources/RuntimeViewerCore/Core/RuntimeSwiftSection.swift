@@ -1390,6 +1390,14 @@ actor RuntimeSwiftSectionFactory {
         sections[path] != nil
     }
 
+    /// Every image path with a cached `RuntimeSwiftSection` — the canonical
+    /// (dyld-patched) keys under which `section(for:)` registered them.
+    /// See `RuntimeObjCSectionFactory.cachedImagePaths`; the resolver
+    /// intersects the two to obtain every fully-indexed image.
+    var cachedImagePaths: Set<String> {
+        Set(sections.keys)
+    }
+
     /// O(1) lookup of the indexed type backing a `candidateID` (the mangled
     /// string carried over the wire by `RuntimeSpecializationRequest.Candidate.id`).
     /// Returns `nil` if the candidate's defining image has not been indexed

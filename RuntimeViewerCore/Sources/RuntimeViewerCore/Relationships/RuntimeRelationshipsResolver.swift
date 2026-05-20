@@ -31,14 +31,19 @@ actor RuntimeRelationshipsResolver {
     /// Returns `.empty` for kinds outside `{.objc(.type(.class)),
     /// .objc(.type(.protocol)), .swift(.type(.class)), .swift(.type(.protocol))}`
     /// (no throw). For supported kinds the result is the per-image union
-    /// across `loadedImagePaths`, gated by `isImageIndexed(path:)` so an
-    /// image that has been loaded but not indexed contributes nothing.
+    /// over `indexedImagePaths()` — every image with both an ObjC and a
+    /// Swift section cached — so an image that has been loaded but not
+    /// fully indexed contributes nothing.
     ///
     /// The target object's `imagePath` is the *defining* image. Conformers
-    /// and subclasses may live in *any* indexed image, so we iterate
-    /// `loadedImagePaths` and union per-image results. Do not restrict to
+    /// and subclasses may live in *any* indexed image, so we iterate every
+    /// indexed image and union per-image results. Do not restrict to
     /// `object.imagePath` — that would miss cross-image conformers.
-    func relationships(for object: RuntimeObject, in loadedImagePaths: Set<String>) async -> RuntimeRelationships {
+    ///
+    /// The indexed-image set is derived from the section factories (see
+    /// `indexedImagePaths()`), so the caller no longer threads the engine's
+    /// `loadedImagePaths` through.
+    func relationships(for object: RuntimeObject) async -> RuntimeRelationships {
         let isObjCClass = object.kind == .objc(.type(.class))
         let isObjCProtocol = object.kind == .objc(.type(.protocol))
         let isSwiftClass = object.kind == .swift(.type(.class))
@@ -73,9 +78,7 @@ actor RuntimeRelationshipsResolver {
         var subclasses: OrderedSet<RuntimeObject> = []
         var conformers: OrderedSet<RuntimeObject> = []
 
-        for imagePath in loadedImagePaths {
-            guard await isImageIndexed(path: imagePath) else { continue }
-
+        for imagePath in await indexedImagePaths() {
             if wantsSubclasses {
                 if let objcKey {
                     if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
@@ -131,15 +134,22 @@ actor RuntimeRelationshipsResolver {
         return RuntimeRelationships(subclasses: sortedSubclasses, conformingTypes: sortedConformers)
     }
 
-    /// Whether `path`'s image has both an ObjC and a Swift section cached.
-    /// Computed directly from the two factories — the same predicate
-    /// `RuntimeEngine.isImageIndexed(path:)` evaluates on its local arm —
-    /// so the resolver does not need to call back into the engine.
-    private func isImageIndexed(path: String) async -> Bool {
-        let normalized = DyldUtilities.patchImagePathForDyld(path)
-        let hasObjC = await objcSectionFactory.hasCachedSection(for: normalized)
-        let hasSwift = await swiftSectionFactory.hasCachedSection(for: normalized)
-        return hasObjC && hasSwift
+    /// Every image path with *both* an ObjC and a Swift section cached —
+    /// the indexed-image universe a relationships query unions over. This
+    /// is the set form of the per-path predicate
+    /// `RuntimeEngine.isImageIndexed(path:)` evaluates: an image counts as
+    /// indexed only once both sections exist.
+    ///
+    /// Both factories key their caches by the dyld-canonical path (every
+    /// `section(for:)` call site patches the path first), so the two key
+    /// sets intersect directly with no further normalization. Deriving the
+    /// set here is what lets `relationships(for:)` drop its
+    /// `loadedImagePaths` parameter — the resolver no longer depends on the
+    /// engine to enumerate loaded images.
+    private func indexedImagePaths() async -> Set<String> {
+        let objcImagePaths = await objcSectionFactory.cachedImagePaths
+        let swiftImagePaths = await swiftSectionFactory.cachedImagePaths
+        return objcImagePaths.intersection(swiftImagePaths)
     }
 
     /// Materialize a per-image `ObjCClassReference` into the `RuntimeObject`
