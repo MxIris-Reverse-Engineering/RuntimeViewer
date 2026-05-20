@@ -750,13 +750,13 @@ extension RuntimeEngine {
     /// subclass (for classes) or conforming type (for protocols), unioned
     /// across all indexed images.
     ///
-    /// The cross-image union itself lives in `RuntimeRelationshipsResolver`;
-    /// this method keeps only the thin local/remote dispatch. The local arm
-    /// hands the resolver the engine's `loadedImagePaths`; the remote arm
-    /// forwards the query to the connected server.
+    /// The cross-image union itself lives in `RuntimeRelationshipsResolver`,
+    /// which derives the indexed-image set straight from the section
+    /// factories; this method keeps only the thin local/remote dispatch.
+    /// The remote arm forwards the query to the connected server.
     public func relationships(for object: RuntimeObject) async throws -> RuntimeRelationships {
         try await request {
-            await relationshipsResolver.relationships(for: object, in: loadedImagePaths)
+            await relationshipsResolver.relationships(for: object)
         } remote: {
             return try await $0.sendMessage(name: .runtimeRelationshipsForObject, request: object)
         }

@@ -522,8 +522,8 @@ actor RuntimeObjCSectionFactory {
     /// it), so it is constructed against the current process image as a
     /// placeholder — mirroring `RuntimeSwiftSectionFactory`'s aggregate,
     /// which is likewise built `in: .current()`.
-    public let objcInterfaceIndexer: RuntimeObjCInterfaceIndexer
-
+    let objcInterfaceIndexer: RuntimeObjCInterfaceIndexer
+    
     init() {
         let currentMachO = MachOImage.current()
         objcInterfaceIndexer = RuntimeObjCInterfaceIndexer(machO: currentMachO, imagePath: currentMachO.imagePath)
@@ -535,6 +535,15 @@ actor RuntimeObjCSectionFactory {
 
     func hasCachedSection(for path: String) -> Bool {
         sections[path] != nil
+    }
+
+    /// Every image path with a cached `RuntimeObjCSection` — the canonical
+    /// (dyld-patched) keys under which `section(for:)` registered them.
+    /// `RuntimeRelationshipsResolver` intersects this with the Swift
+    /// factory's set to obtain the indexed-image universe for a query, so
+    /// it no longer needs the engine to thread `loadedImagePaths` in.
+    var cachedImagePaths: Set<String> {
+        Set(sections.keys)
     }
 
     func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeObjCSection) {
