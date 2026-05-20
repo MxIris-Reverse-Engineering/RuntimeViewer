@@ -107,11 +107,11 @@ final class ExportingViewController: XiblessViewController<NSView> {
 
         
         nextButton.do {
-            $0.keyEquivalent = "\r"
+            $0.role = .primary
         }
 
         cancelButton.do {
-            $0.keyEquivalent = "\u{1b}"
+            $0.role = .cancel
         }
         
         preferredContentSize = NSSize(width: 745, height: 450)
