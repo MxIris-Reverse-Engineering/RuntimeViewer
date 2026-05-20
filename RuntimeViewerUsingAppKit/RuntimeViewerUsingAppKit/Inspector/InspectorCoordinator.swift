@@ -42,12 +42,6 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
         case .back:
             runtimeObjectCoordinators.popLast()?.removeFromParent()
             return .pop(animated: true)
-        case .requestSpecializationSheet(let object):
-            delegate?.inspectorCoordinator(self, requestSpecializationSheetFor: object)
-            return .none()
-        case .selectRuntimeObject(let object):
-            delegate?.inspectorCoordinator(self, selectRuntimeObject: object)
-            return .none()
         }
     }
 
@@ -87,13 +81,14 @@ extension InspectorCoordinator: InspectorRuntimeObjectCoordinator.Delegate {
         _ coordinator: InspectorRuntimeObjectCoordinator,
         didRequestSpecializationSheetFor object: RuntimeObject
     ) {
-        trigger(.requestSpecializationSheet(object))
+        delegate?.inspectorCoordinator(self, requestSpecializationSheetFor: object)
     }
 
     func inspectorRuntimeObjectCoordinator(
         _ coordinator: InspectorRuntimeObjectCoordinator,
         didSelectRuntimeObject object: RuntimeObject
     ) {
-        trigger(.selectRuntimeObject(object))
+        delegate?.inspectorCoordinator(self, selectRuntimeObject: object)
+        trigger(.next(.object(object)))
     }
 }
