@@ -163,7 +163,7 @@ let package = Package(
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
+                isEnabled: true,
                 traits: UIFoundationTraits,
             ),
             remote: .package(
