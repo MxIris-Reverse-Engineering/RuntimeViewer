@@ -33,7 +33,7 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
     public init(runtimeObject: RuntimeObject) {
         self.runtimeObject = runtimeObject
         
-        let iconSize = RuntimeObjectIcon.defaultIconSize
+        let iconSize: CGFloat = 20
         primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize)
         secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) }
         if runtimeObject.properties.contains(.isGeneric) {

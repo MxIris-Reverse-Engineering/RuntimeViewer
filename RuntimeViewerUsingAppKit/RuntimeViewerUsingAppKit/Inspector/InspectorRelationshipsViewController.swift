@@ -7,7 +7,9 @@ import SnapKit
 
 final class InspectorRelationshipsViewController: UXEffectViewController<InspectorRelationshipsViewModel> {
     private let headerLabel = Label()
+    
     private let emptyLabel = Label()
+    
     private let (scrollView, tableView): (SelfSizingScrollView, SelfSizingTableView) = SelfSizingTableView.scrollableTableView()
 
     override var contentViewUsingSafeArea: Bool { true }
@@ -50,13 +52,7 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
             $0.isHiddenVisualEffectView = true
             $0.autohidesScrollers = true
             $0.backgroundColor = .clear
-            // The inspector container chain (NSTabView -> navigation controller
-            // -> split item) sizes itself to content, so an external
-            // `lessThanOrEqualTo` constraint cannot cap the scroll view -- its
-            // anchor moves down with the content. `maximumContentSize` is the
-            // only reliable cap: it clamps `intrinsicContentSize` at the source,
-            // after which the table scrolls internally beyond this height.
-            $0.minimumContentSize = NSSize(width: NSView.noIntrinsicMetric, height: 80)
+            $0.minimumContentSize.height = 80
             $0.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         }
 
@@ -64,6 +60,7 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
             $0.font = .systemFont(ofSize: 13, weight: .semibold)
             $0.textColor = .labelColor
             $0.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
 
         emptyLabel.do {
@@ -104,7 +101,7 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
 
         output.sectionTitle.drive(headerLabel.rx.stringValue).disposed(by: rx.disposeBag)
         output.emptyMessage.drive(emptyLabel.rx.stringValue).disposed(by: rx.disposeBag)
-        output.isEmpty.map { !$0 }.drive(emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
+        output.isEmpty.not().drive(emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
         output.isEmpty.drive(scrollView.rx.isHidden).disposed(by: rx.disposeBag)
     }
 }
