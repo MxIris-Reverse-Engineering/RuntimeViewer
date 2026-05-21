@@ -9,19 +9,11 @@ import UIFoundation
 /// `lessThanOrEqualTo` constraint) caps the size. Once the document exceeds
 /// the cap, the built-in scrollers take over.
 open class SelfSizingScrollView: ScrollView {
-    public var minimumContentSize: NSSize = NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric) {
-        didSet {
-            guard oldValue != minimumContentSize else { return }
-            invalidateIntrinsicContentSize()
-        }
-    }
+    @ViewInvalidating(.intrinsicContentSize)
+    public var minimumContentSize = NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
 
-    public var maximumContentSize: NSSize = NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric) {
-        didSet {
-            guard oldValue != maximumContentSize else { return }
-            invalidateIntrinsicContentSize()
-        }
-    }
+    @ViewInvalidating(.intrinsicContentSize)
+    public var maximumContentSize = NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
 
     open override var intrinsicContentSize: NSSize {
         guard let documentView else { return super.intrinsicContentSize }
