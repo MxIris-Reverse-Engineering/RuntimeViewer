@@ -7,6 +7,7 @@ import MemberwiseInit
 
 @Loggable(.private)
 public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeObjectRoute> {
+    public let runtimeObject: RuntimeObject
 
     @Observed
     public private(set) var rows: [InspectorRelationshipsCellViewModel] = []
@@ -19,8 +20,6 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
 
     @Observed
     public private(set) var emptyMessage: String = ""
-
-    private let runtimeObject: RuntimeObject
 
     @MemberwiseInit(.public)
     public struct Input {
@@ -65,9 +64,11 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
                 let result = try await documentState.runtimeEngine.relationships(for: target)
                 let payload: [RuntimeObject]
                 switch kind {
-                case .objc(.type(.class)), .swift(.type(.class)):
+                case .objc(.type(.class)),
+                     .swift(.type(.class)):
                     payload = result.subclasses
-                case .objc(.type(.protocol)), .swift(.type(.protocol)):
+                case .objc(.type(.protocol)),
+                     .swift(.type(.protocol)):
                     payload = result.conformingTypes
                 default:
                     payload = []
@@ -87,9 +88,11 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
 
     private static func sectionTitle(for kind: RuntimeObjectKind) -> String {
         switch kind {
-        case .objc(.type(.class)), .swift(.type(.class)):
+        case .objc(.type(.class)),
+             .swift(.type(.class)):
             return "Subclasses"
-        case .objc(.type(.protocol)), .swift(.type(.protocol)):
+        case .objc(.type(.protocol)),
+             .swift(.type(.protocol)):
             return "Conforming Types"
         default:
             return ""

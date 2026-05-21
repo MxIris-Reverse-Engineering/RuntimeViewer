@@ -37,7 +37,6 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         scrollView.snp.makeConstraints { make in
             make.top.equalTo(headerLabel.snp.bottom).offset(8)
             make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
-//            make.bottom.lessThanOrEqualTo(addSpecializationButton.snp.top).offset(-8)
         }
 
         emptyLabel.snp.makeConstraints { make in
@@ -48,7 +47,7 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             make.top.equalTo(scrollView.snp.bottom).offset(8)
             make.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
             make.leading.greaterThanOrEqualToSuperview()
-            make.bottom.lessThanOrEqualToSuperview()
+            make.bottom.lessThanOrEqualToSuperview().offset(-8)
         }
 
         tableView.do {
@@ -64,7 +63,8 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             $0.isHiddenVisualEffectView = true
             $0.autohidesScrollers = true
             $0.backgroundColor = .clear
-            $0.minimumContentSize = NSSize(width: NSView.noIntrinsicMetric, height: 80)
+            $0.minimumContentSize.height = 80
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         }
 
         headerLabel.do {
