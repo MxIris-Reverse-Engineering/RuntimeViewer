@@ -118,7 +118,11 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
         input.runtimeObjectClickedForOpenQuickly
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
+                #if os(macOS)
+                documentState.selectionStack = [viewModel.runtimeObject]
+                #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
+                #endif
             }
             .disposed(by: rx.disposeBag)
 

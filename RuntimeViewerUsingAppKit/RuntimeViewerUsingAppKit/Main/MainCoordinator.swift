@@ -35,27 +35,15 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             contentCoordinator.removeFromParent()
             inspectorCoordinator.removeFromParent()
             sidebarCoordinator = SidebarCoordinator(documentState: documentState)
-            sidebarCoordinator.delegate = self
             contentCoordinator = ContentCoordinator(documentState: documentState)
-            contentCoordinator.delegate = self
             inspectorCoordinator = InspectorCoordinator(documentState: documentState)
             inspectorCoordinator.delegate = self
-            viewModel.completeTransition = sidebarCoordinator.rx.didCompleteTransition()
             windowController.setupBindings(for: viewModel)
             return .multiple(
                 .show(windowController.splitViewController),
                 .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator),
-                .route(on: sidebarCoordinator, to: .root),
-                .route(on: contentCoordinator, to: .placeholder),
-                .route(on: inspectorCoordinator, to: .placeholder)
+                .route(on: sidebarCoordinator, to: .root)
             )
-        case .select(let runtimeObject):
-            sidebarCoordinator.programmaticallySelectObject(runtimeObject)
-            return .none()
-        case .sidebarBack:
-            return .route(on: sidebarCoordinator, to: .back)
-        case .contentBack:
-            return .route(on: contentCoordinator, to: .back)
         case .generationOptions(let sender):
             let viewController = GenerationOptionsViewController()
             let viewModel = GenerationOptionsViewModel(documentState: documentState, router: self)
@@ -75,8 +63,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             )
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
-        case .loadFramework:
-            return .none()
         case .attachToProcess:
             let viewController = AttachToProcessViewController()
             let viewModel = AttachToProcessViewModel(documentState: documentState, router: self)
@@ -118,67 +104,15 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         }
     }
 
-    private func updateContentStackDepth() {
-        let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
-        viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
-    }
 }
 
-// MARK: - Sidebar / Content / Inspector / Specialization delegate plumbing
-
-extension MainCoordinator: SidebarCoordinator.Delegate {
-    func sidebarCoordinator(
-        _ coordinator: SidebarCoordinator,
-        didSelectObject runtimeObject: RuntimeObject
-    ) {
-        documentState.selectedRuntimeObject = runtimeObject
-        contentCoordinator.trigger(.root(runtimeObject))
-    }
-
-    func sidebarCoordinator(
-        _ coordinator: SidebarCoordinator,
-        didClickImageNode imageNode: RuntimeImageNode
-    ) {
-        documentState.currentImageNode = imageNode
-    }
-
-    func sidebarCoordinatorDidGoBack(_ coordinator: SidebarCoordinator) {
-        documentState.currentImageNode = nil
-        documentState.selectedRuntimeObject = nil
-        contentCoordinator.trigger(.placeholder)
-    }
-}
-
-extension MainCoordinator: ContentCoordinator.Delegate {
-    func contentCoordinatorDidShowPlaceholder(_ coordinator: ContentCoordinator) {
-        updateContentStackDepth()
-        documentState.selectedRuntimeObject = nil
-        inspectorCoordinator.trigger(.placeholder)
-    }
-
-    func contentCoordinator(
-        _ coordinator: ContentCoordinator,
-        didShowRoot runtimeObject: RuntimeObject
-    ) {
-        updateContentStackDepth()
-        documentState.selectedRuntimeObject = runtimeObject
-        inspectorCoordinator.trigger(.root(.object(runtimeObject)))
-    }
-
-    func contentCoordinator(
-        _ coordinator: ContentCoordinator,
-        didShowNext runtimeObject: RuntimeObject
-    ) {
-        updateContentStackDepth()
-        documentState.selectedRuntimeObject = runtimeObject
-        inspectorCoordinator.trigger(.next(.object(runtimeObject)))
-    }
-
-    func contentCoordinatorDidGoBack(_ coordinator: ContentCoordinator) {
-        updateContentStackDepth()
-        inspectorCoordinator.trigger(.back)
-    }
-}
+// MARK: - Cross-scope sheet requests
+//
+// These two delegates exist because both events open a sheet that is owned
+// by `MainCoordinator` (not by the originating sub-coordinator) — that's a
+// scope crossing `documentState` cannot model. Pure state-driven UI updates
+// (sidebar, content, inspector navigation) live entirely in `documentState`
+// subscriptions inside each sub-coordinator and do not need delegates.
 
 extension MainCoordinator: InspectorCoordinator.Delegate {
     func inspectorCoordinator(
@@ -187,13 +121,6 @@ extension MainCoordinator: InspectorCoordinator.Delegate {
     ) {
         contextTrigger(.beginSpecializationSheet(object))
     }
-
-    func inspectorCoordinator(
-        _: InspectorCoordinator,
-        selectRuntimeObject object: RuntimeObject
-    ) {
-        contentCoordinator.trigger(.next(object))
-    }
 }
 
 extension MainCoordinator: SpecializationCoordinator.Delegate {
@@ -201,6 +128,6 @@ extension MainCoordinator: SpecializationCoordinator.Delegate {
         _: SpecializationCoordinator,
         didProduce specialized: RuntimeObject
     ) {
-        contextTrigger(.select(specialized))
+        documentState.selectionStack = [specialized]
     }
 }

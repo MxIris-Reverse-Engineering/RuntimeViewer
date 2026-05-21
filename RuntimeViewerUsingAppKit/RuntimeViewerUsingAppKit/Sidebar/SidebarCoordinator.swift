@@ -7,21 +7,9 @@ import RuntimeViewerApplication
 typealias SidebarTransition = Transition<Void, SidebarNavigationController>
 
 final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition> {
-    protocol Delegate: AnyObject {
-        func sidebarCoordinator(
-            _ coordinator: SidebarCoordinator,
-            didSelectObject object: RuntimeObject
-        )
-        func sidebarCoordinator(
-            _ coordinator: SidebarCoordinator,
-            didClickImageNode imageNode: RuntimeImageNode
-        )
-        func sidebarCoordinatorDidGoBack(_ coordinator: SidebarCoordinator)
-    }
-
-    weak var delegate: Delegate?
-
     let documentState: DocumentState
+
+    private let disposeBag = DisposeBag()
 
     private var rootCoordinator: SidebarRootCoordinator?
 
@@ -30,10 +18,27 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
-    }
 
-    func programmaticallySelectObject(_ object: RuntimeObject) {
-        runtimeObjectCoordinator?.programmaticallySelectObject(object)
+        documentState.$currentImageNode
+            .asObservable()
+            .scan((previous: nil as RuntimeImageNode??, current: documentState.currentImageNode)) { state, next in
+                (previous: state.current, current: next)
+            }
+            .subscribeOnNext { [weak self] state in
+                guard let self else { return }
+                applyImageNodeChange(previousLayer: state.previous, current: state.current)
+            }
+            .disposed(by: disposeBag)
+
+        documentState.$selectionStack
+            .asObservable()
+            .map { $0.first }
+            .distinctUntilChanged()
+            .subscribeOnNext { [weak self] rootSelection in
+                guard let self, let rootSelection else { return }
+                runtimeObjectCoordinator?.programmaticallySelectObject(rootSelection)
+            }
+            .disposed(by: disposeBag)
     }
 
     override func prepareTransition(for route: SidebarRoute) -> SidebarTransition {
@@ -41,57 +46,38 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
         case .root:
             rootCoordinator?.removeFromParent()
             let rootCoordinator = SidebarRootCoordinator(documentState: documentState)
-            rootCoordinator.delegate = self
             self.rootCoordinator = rootCoordinator
             return .set([rootCoordinator], animated: false)
         case .clickedNode(let imageNode):
             runtimeObjectCoordinator?.removeFromParent()
             let runtimeObjectCoordinator = SidebarRuntimeObjectCoordinator(documentState: documentState, imageNode: imageNode)
-            runtimeObjectCoordinator.delegate = self
             self.runtimeObjectCoordinator = runtimeObjectCoordinator
             return .push(runtimeObjectCoordinator, animated: true)
         case .back:
             return .pop(animated: true)
-        case .selectedObject:
-            // Programmatic selection enters via `programmaticallySelectObject(_)` which
-            // routes through the sub-coordinator directly. Forwarding here would create
-            // a feedback loop (sub-coord delegate → SidebarCoord.trigger(.selectedObject)
-            // → forward to sub-coord → delegate again …). The trigger is preserved only
-            // to keep `MainViewModel.completeTransition` (Sidebar didCompleteTransition)
-            // emitting `.selectedObject`.
-            return .none()
-        case .selectedNode:
+        case .selectedObject, .selectedNode:
+            // macOS uses `documentState.selectionStack` and `currentImageNode`
+            // directly; the cross-platform `SidebarRoute` carries these cases
+            // for iOS only.
             return .none()
         }
     }
 
-    override func completeTransition(for route: SidebarRoute) {
-        super.completeTransition(for: route)
-        switch route {
-        case .back:
-            delegate?.sidebarCoordinatorDidGoBack(self)
-        case .root, .clickedNode, .selectedObject, .selectedNode:
-            break
+    private func applyImageNodeChange(previousLayer: RuntimeImageNode??, current: RuntimeImageNode?) {
+        guard let previous = previousLayer else {
+            if let current {
+                trigger(.clickedNode(current))
+            }
+            return
         }
-    }
-}
-
-extension SidebarCoordinator: SidebarRootCoordinator.Delegate {
-    func rootCoordinator(
-        _ coordinator: SidebarRootCoordinator,
-        didClickImageNode imageNode: RuntimeImageNode
-    ) {
-        delegate?.sidebarCoordinator(self, didClickImageNode: imageNode)
-        trigger(.clickedNode(imageNode))
-    }
-}
-
-extension SidebarCoordinator: SidebarRuntimeObjectCoordinator.Delegate {
-    func runtimeObjectCoordinator(
-        _ coordinator: SidebarRuntimeObjectCoordinator,
-        didSelectObject object: RuntimeObject
-    ) {
-        delegate?.sidebarCoordinator(self, didSelectObject: object)
-        trigger(.selectedObject(object))
+        if previous == current { return }
+        if previous == nil, let current {
+            trigger(.clickedNode(current))
+        } else if previous != nil, current == nil {
+            trigger(.back)
+        } else if let next = current {
+            trigger(.back)
+            trigger(.clickedNode(next))
+        }
     }
 }

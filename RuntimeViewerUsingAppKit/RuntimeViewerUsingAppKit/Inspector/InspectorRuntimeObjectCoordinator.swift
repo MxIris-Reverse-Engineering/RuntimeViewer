@@ -12,10 +12,6 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
             _ coordinator: InspectorRuntimeObjectCoordinator,
             didRequestSpecializationSheetFor object: RuntimeObject
         )
-        func inspectorRuntimeObjectCoordinator(
-            _ coordinator: InspectorRuntimeObjectCoordinator,
-            didSelectRuntimeObject object: RuntimeObject
-        )
     }
 
     weak var delegate: Delegate?
@@ -48,9 +44,6 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
             return .select(index: index)
         case .requestSpecializationSheet(let object):
             delegate?.inspectorRuntimeObjectCoordinator(self, didRequestSpecializationSheetFor: object)
-            return .none()
-        case .selectRuntimeObject(let object):
-            delegate?.inspectorRuntimeObjectCoordinator(self, didSelectRuntimeObject: object)
             return .none()
         }
     }

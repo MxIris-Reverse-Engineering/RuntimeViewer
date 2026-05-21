@@ -17,8 +17,25 @@ public final class DocumentState {
     @Observed
     public var runtimeEngine: RuntimeEngine = .local
 
+    /// Navigation stack of runtime objects currently under inspection.
+    ///
+    /// - Empty: nothing selected (Content / Inspector show placeholder).
+    /// - One element: root inspection of that object.
+    /// - Multiple elements: user drilled into related objects from the Inspector
+    ///   relationships tab. The last element is the active selection;
+    ///   preceding elements are ancestors on the back stack.
+    ///
+    /// All UI panes (Sidebar visual selection, Content navigation stack,
+    /// Inspector navigation stack) derive their state from this single
+    /// source. Mutations enter through ViewModels / Coordinators that own
+    /// user input (Sidebar row click, Inspector relationship click, Content
+    /// back button, etc.).
     @Observed
-    public var selectedRuntimeObject: RuntimeObject?
+    public var selectionStack: [RuntimeObject] = []
+
+    /// Read-only derived view of `selectionStack.last`. Mutations go through
+    /// explicit `selectionStack` operations (push / pop / reset / append).
+    public var selectedRuntimeObject: RuntimeObject? { selectionStack.last }
 
     @Observed
     public var currentImageNode: RuntimeImageNode?

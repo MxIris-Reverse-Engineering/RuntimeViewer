@@ -7,15 +7,6 @@ import RuntimeViewerArchitectures
 typealias SidebarRuntimeObjectTransition = Transition<Void, SidebarRuntimeObjectTabViewController>
 
 final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjectRoute, SidebarRuntimeObjectTransition> {
-    protocol Delegate: AnyObject {
-        func runtimeObjectCoordinator(
-            _ coordinator: SidebarRuntimeObjectCoordinator,
-            didSelectObject object: RuntimeObject
-        )
-    }
-
-    weak var delegate: Delegate?
-
     let documentState: DocumentState
 
     let imageNode: RuntimeImageNode
@@ -28,8 +19,13 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
         super.init(rootViewController: .init(), initialRoute: .initial)
     }
 
+    /// Drives the visual selection in the underlying list — independent of
+    /// `documentState.selectionStack`, which is the data-level source of truth.
+    /// Called by `SidebarCoordinator` whenever the root selection changes
+    /// (sidebar row click is idempotent; specialization completion uses it
+    /// to scroll-to-and-highlight the newly produced object).
     func programmaticallySelectObject(_ object: RuntimeObject) {
-        trigger(.selectedObject(object))
+        listViewModel?.selectRuntimeObject(object)
     }
 
     override func prepareTransition(for route: SidebarRuntimeObjectRoute) -> SidebarRuntimeObjectTransition {
@@ -52,11 +48,6 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
             return .select(index: 0)
         case .bookmarks:
             return .select(index: 1)
-        case .selectedObject(let object):
-            listViewModel?.selectRuntimeObject(object)
-            delegate?.runtimeObjectCoordinator(self, didSelectObject: object)
-            return .none()
         }
     }
-
 }

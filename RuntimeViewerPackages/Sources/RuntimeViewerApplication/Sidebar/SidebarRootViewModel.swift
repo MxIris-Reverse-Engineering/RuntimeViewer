@@ -100,7 +100,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
 
             if viewModel.node.isLeaf {
                 #if os(macOS)
-                self.router.trigger(.image(viewModel.node))
+                documentState.currentImageNode = viewModel.node
                 #else
                 self.router.trigger(.clickedNode(viewModel.node))
                 #endif
