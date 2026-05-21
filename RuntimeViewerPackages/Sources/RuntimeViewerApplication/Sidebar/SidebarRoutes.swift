@@ -20,7 +20,6 @@ public enum SidebarRootRoute: Routable {
     case initial
     case directory
     case bookmarks
-    case image(RuntimeImageNode)
 }
 @AssociatedValue(.public)
 @CaseCheckable(.public)
@@ -28,7 +27,6 @@ public enum SidebarRuntimeObjectRoute: Routable {
     case initial
     case objects
     case bookmarks
-    case selectedObject(RuntimeObject)
 }
 #else
 public typealias SidebarRootRoute = SidebarRoute

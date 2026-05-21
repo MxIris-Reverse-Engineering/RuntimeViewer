@@ -31,7 +31,7 @@ public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRun
 
         input.selectSpecializationClicked.emitOnNext { [weak self] cellViewModel in
             guard let self else { return }
-            router.trigger(.selectRuntimeObject(cellViewModel.runtimeObject))
+            documentState.selectionStack.append(cellViewModel.runtimeObject)
         }
         .disposed(by: rx.disposeBag)
 
