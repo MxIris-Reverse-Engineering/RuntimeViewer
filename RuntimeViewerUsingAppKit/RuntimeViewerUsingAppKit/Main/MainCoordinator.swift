@@ -143,7 +143,10 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         case .selectAtRoot(let object):
             contentCoordinator.contextTrigger(.root(object))
             inspectorCoordinator.contextTrigger(.root(.object(object)))
-            sidebarCoordinator.programmaticallySelect(object)
+            // Sidebar visual sync is handled inside
+            // `SidebarRuntimeObjectListViewModel` by observing
+            // `documentState.$selectionStack` directly — no coordinator
+            // routing is needed for a pure UI scroll-and-highlight.
         case .drillInto(let object):
             contentCoordinator.contextTrigger(.next(object))
             inspectorCoordinator.contextTrigger(.next(.object(object)))
