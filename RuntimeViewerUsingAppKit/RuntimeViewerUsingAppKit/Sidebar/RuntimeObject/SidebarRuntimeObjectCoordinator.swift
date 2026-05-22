@@ -20,11 +20,12 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
     }
 
     /// Drives the visual selection in the underlying list — independent of
-    /// `documentState.selectionStack`, which is the data-level source of truth.
-    /// Called by `SidebarCoordinator` whenever the root selection changes
-    /// (sidebar row click is idempotent; specialization completion uses it
-    /// to scroll-to-and-highlight the newly produced object).
-    func programmaticallySelectObject(_ object: RuntimeObject) {
+    /// `DocumentState.selectionStack`, which is the data-level source of
+    /// truth. Called by `SidebarCoordinator.programmaticallySelect(_:)`
+    /// during the `.selectAtRoot` intent fan-out (sidebar row click is
+    /// idempotent; specialization completion uses it to scroll-to-and-
+    /// highlight the newly produced object).
+    func programmaticallySelect(_ object: RuntimeObject) {
         listViewModel?.selectRuntimeObject(object)
     }
 

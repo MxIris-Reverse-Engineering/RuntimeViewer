@@ -119,7 +119,7 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 #if os(macOS)
-                documentState.selectionStack = [viewModel.runtimeObject]
+                documentState.selectionRouter.trigger(.selectAtRoot(viewModel.runtimeObject))
                 #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
                 #endif
