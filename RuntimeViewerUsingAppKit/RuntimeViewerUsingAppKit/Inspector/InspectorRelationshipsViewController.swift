@@ -8,7 +8,7 @@ import SnapKit
 final class InspectorRelationshipsViewController: UXEffectViewController<InspectorRelationshipsViewModel> {
     private let headerLabel = Label()
     
-    private let emptyLabel = Label()
+    private let emptyLabel = Label(wrappingLabelWithString: "")
     
     private let (scrollView, tableView): (SelfSizingScrollView, SelfSizingTableView) = SelfSizingTableView.scrollableTableView()
 
@@ -66,7 +66,6 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
         emptyLabel.do {
             $0.textColor = .secondaryLabelColor
             $0.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            $0.maximumNumberOfLines = 0
             $0.alignment = .center
             $0.isHidden = true
         }
