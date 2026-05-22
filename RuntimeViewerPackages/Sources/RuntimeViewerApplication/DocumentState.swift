@@ -17,13 +17,13 @@ public final class DocumentState {
     /// and rewires its pumps onto the new engine's `backgroundIndexingManager`,
     /// cancelling the old engine's in-flight document batches as it goes.
     @Observed
-    public private(set) var runtimeEngine: RuntimeEngine = .local
+    public fileprivate(set) var runtimeEngine: RuntimeEngine = .local
 
     /// Currently inspected runtime image. `nil` when the sidebar is at the
     /// image-picker root. Read-only externally: mutated only via the
     /// `.switchImage` route.
     @Observed
-    public private(set) var currentImageNode: RuntimeImageNode?
+    public fileprivate(set) var currentImageNode: RuntimeImageNode?
 
     /// Navigation stack of runtime objects currently under inspection.
     ///
@@ -37,7 +37,7 @@ public final class DocumentState {
     /// which dispatches a typed `SelectionRoute` and emits to
     /// `routeSignal` after the state update has been applied.
     @Observed
-    public private(set) var selectionStack: [RuntimeObject] = []
+    public fileprivate(set) var selectionStack: [RuntimeObject] = []
 
     /// Top of `selectionStack` — the object currently shown by content /
     /// inspector. Mutations go through explicit selection routes
@@ -50,40 +50,15 @@ public final class DocumentState {
     /// applies the state mutation synchronously, then emits to
     /// `routeSignal` so scene-level subscribers (`MainCoordinator`) can
     /// fan out to their child coordinators.
-    public private(set) lazy var selectionRouter: any Router<SelectionRoute> = SelectionRouter(documentState: self)
+    public var selectionRouter: any Router<SelectionRoute> { _selectionRouter }
 
     /// Hot stream of selection routes. Emits **after** the corresponding
     /// state update on this `DocumentState` has been applied, so subscribers
     /// observe the post-mutation snapshot when handling a route. Hot —
     /// new subscribers do not see past routes.
-    public var routeSignal: Signal<SelectionRoute> { routeRelay.asSignal() }
-
-    private let routeRelay = PublishRelay<SelectionRoute>()
-
-    fileprivate func apply(_ route: SelectionRoute) {
-        switch route {
-        case .switchEngine(let engine):
-            if runtimeEngine === engine, currentImageNode == nil, selectionStack.isEmpty { return }
-            runtimeEngine = engine
-            currentImageNode = nil
-            selectionStack = []
-        case .switchImage(let node):
-            if currentImageNode == node, selectionStack.isEmpty { return }
-            currentImageNode = node
-            selectionStack = []
-        case .selectAtRoot(let object):
-            selectionStack = [object]
-        case .drillInto(let object):
-            selectionStack.append(object)
-        case .pop:
-            guard !selectionStack.isEmpty else { return }
-            selectionStack.removeLast()
-        case .clear:
-            guard !selectionStack.isEmpty else { return }
-            selectionStack = []
-        }
-        routeRelay.accept(route)
-    }
+    public var routeSignal: Signal<SelectionRoute> { _selectionRouter.routeRelay.asSignal() }
+    
+    private lazy var _selectionRouter = SelectionRouter(documentState: self)
 
     @Observed
     public var currentSubtitle: String = ""
@@ -107,8 +82,10 @@ public final class DocumentState {
 private final class SelectionRouter: Router {
     typealias Route = SelectionRoute
 
-    private unowned let documentState: DocumentState
-
+    unowned let documentState: DocumentState
+    
+    let routeRelay = PublishRelay<SelectionRoute>()
+    
     init(documentState: DocumentState) {
         self.documentState = documentState
     }
@@ -118,7 +95,28 @@ private final class SelectionRouter: Router {
         with options: TransitionOptions,
         completion: ContextPresentationHandler?
     ) {
-        documentState.apply(route)
+        switch route {
+        case .switchEngine(let engine):
+            if documentState.runtimeEngine === engine, documentState.currentImageNode == nil, documentState.selectionStack.isEmpty { return }
+            documentState.runtimeEngine = engine
+            documentState.currentImageNode = nil
+            documentState.selectionStack = []
+        case .switchImage(let node):
+            if documentState.currentImageNode == node, documentState.selectionStack.isEmpty { return }
+            documentState.currentImageNode = node
+            documentState.selectionStack = []
+        case .selectAtRoot(let object):
+            documentState.selectionStack = [object]
+        case .drillInto(let object):
+            documentState.selectionStack.append(object)
+        case .pop:
+            guard !documentState.selectionStack.isEmpty else { return }
+            documentState.selectionStack.removeLast()
+        case .clear:
+            guard !documentState.selectionStack.isEmpty else { return }
+            documentState.selectionStack = []
+        }
+        routeRelay.accept(route)
         completion?(EmptyRouteTransitionContext.shared)
     }
 }
