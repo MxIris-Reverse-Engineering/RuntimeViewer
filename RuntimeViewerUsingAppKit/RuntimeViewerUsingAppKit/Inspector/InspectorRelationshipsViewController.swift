@@ -65,6 +65,8 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
 
         emptyLabel.do {
             $0.textColor = .secondaryLabelColor
+            $0.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            $0.maximumNumberOfLines = 0
             $0.alignment = .center
             $0.isHidden = true
         }
