@@ -18,16 +18,6 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
     }
 
-    /// Drives the visual selection in the underlying runtime object list.
-    /// Idempotent if the sidebar is at the root level (no list mounted).
-    /// Called by `MainCoordinator` while fanning out a `.selectAtRoot`
-    /// intent so root selection changes originating outside the sidebar
-    /// (specialization completion, future deep-link, etc.) still
-    /// scroll-and-highlight the matching row.
-    func programmaticallySelect(_ object: RuntimeObject) {
-        runtimeObjectCoordinator?.programmaticallySelect(object)
-    }
-
     override func prepareTransition(for route: SidebarRoute) -> SidebarTransition {
         switch route {
         case .root:
@@ -48,9 +38,10 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
             runtimeObjectCoordinator = nil
             return .pop(animated: true)
         case .selectedObject, .selectedNode:
-            // macOS uses `SelectionRoute.selectAtRoot` / `.switchImage`
-            // directly; the cross-platform `SidebarRoute` carries these
-            // cases for iOS only.
+            // iOS-only cases; on macOS the runtime-object list scrolls to
+            // and highlights the root selection by observing
+            // `documentState.$selectionStack` directly, and image switches
+            // flow through `SelectionRoute.switchImage`.
             return .none()
         }
     }
