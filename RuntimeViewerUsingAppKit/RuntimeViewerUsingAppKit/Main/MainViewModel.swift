@@ -113,7 +113,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             }
         }.disposed(by: rx.disposeBag)
 
-        
+
 
 //        input.installHelperClick.emitOnNext { [weak self] in
 //            guard let self else { return }
@@ -152,16 +152,13 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         input.sidebarBackClick.emitOnNext { [weak self] in
             guard let self else { return }
-            documentState.currentImageNode = nil
-            documentState.selectionStack = []
+            documentState.selectionRouter.trigger(.switchImage(nil))
         }
         .disposed(by: rx.disposeBag)
 
         input.contentBackClick.emitOnNext { [weak self] in
             guard let self else { return }
-            if !documentState.selectionStack.isEmpty {
-                documentState.selectionStack.removeLast()
-            }
+            documentState.selectionRouter.trigger(.pop)
         }
         .disposed(by: rx.disposeBag)
 
