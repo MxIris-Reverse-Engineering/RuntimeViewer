@@ -75,6 +75,7 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
 
     override func reloadData() async throws {
         try await super.reloadData()
+        try Task.checkCancellation()
 
         await MainActor.run {
             self.searchStringForOpenQuickly = ""
