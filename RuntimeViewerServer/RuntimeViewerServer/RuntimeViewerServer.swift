@@ -10,6 +10,7 @@ import LaunchServicesPrivate
 
 #if os(macOS)
 import SwiftyXPC
+import HelperCommunication
 #endif
 
 #if canImport(UIKit)

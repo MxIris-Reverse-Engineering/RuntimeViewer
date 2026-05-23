@@ -4,35 +4,6 @@ import Testing
 import Foundation
 import RuntimeViewerCommunication
 
-// MARK: - PingRequest Tests
-
-@Suite("PingRequest")
-struct PingRequestTests {
-    @Test("Identifier")
-    func identifier() {
-        #expect(PingRequest.identifier == "com.JH.RuntimeViewerService.Ping")
-    }
-
-    @Test("Initialization")
-    func initialization() {
-        let request = PingRequest()
-        _ = request  // Ensure it can be constructed
-    }
-
-    @Test("Response type is VoidResponse")
-    func responseType() {
-        let _: PingRequest.Response = VoidResponse()
-    }
-
-    @Test("Codable round-trip")
-    func codable() throws {
-        let original = PingRequest()
-        let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(PingRequest.self, from: data)
-        _ = decoded
-    }
-}
-
 // MARK: - FileOperation Tests
 
 @Suite("FileOperation")
@@ -294,7 +265,6 @@ struct RequestIdentifierTests {
     @Test("All request identifiers are unique")
     func uniqueIdentifiers() {
         let identifiers: [String] = [
-            PingRequest.identifier,
             FileOperationRequest.identifier,
             InjectApplicationRequest.identifier,
             OpenApplicationRequest.identifier,
@@ -308,7 +278,6 @@ struct RequestIdentifierTests {
     @Test("All request identifiers have correct prefix")
     func identifierPrefix() {
         let identifiers: [String] = [
-            PingRequest.identifier,
             FileOperationRequest.identifier,
             InjectApplicationRequest.identifier,
             OpenApplicationRequest.identifier,

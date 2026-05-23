@@ -60,7 +60,7 @@ let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 let package = Package(
     name: "RuntimeViewerCore",
     platforms: [
-        .macOS(.v10_15), .iOS(.v13), .macCatalyst(.v13), .watchOS(.v6), .tvOS(.v13), .visionOS(.v1),
+        .macOS(.v11), .iOS(.v13), .macCatalyst(.v14), .watchOS(.v6), .tvOS(.v13), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -142,6 +142,17 @@ let package = Package(
             from: "0.5.100"
         ),
         .package(
+            local: .package(
+                path: "../../../../Personal/Library/macOS/swift-helper-service",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-macOS-Library/swift-helper-service",
+                branch: "main"
+            )
+        ),
+        .package(
             url: "https://github.com/gohanlon/swift-memberwise-init-macro",
             from: "0.6.0"
         ),
@@ -192,6 +203,8 @@ let package = Package(
             name: "RuntimeViewerCommunication",
             dependencies: [
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperPeer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Asynchrone", package: "Asynchrone"),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),

@@ -3,6 +3,7 @@
 import Foundation
 import FoundationToolbox
 import Combine
+import HelperCommunication
 @preconcurrency public import SwiftyXPC
 
 // MARK: - XPCListenerEndpointProviding
@@ -99,7 +100,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
         self.identifier = identifier
         #log(.info, "Creating XPC connection with identifier: \(identifier.rawValue, privacy: .public)")
         let listener = try SwiftyXPC.XPCListener(type: .anonymous, codeSigningRequirement: nil)
-        listener.setMessageHandler(requestType: PingRequest.self) { connection, request in
+        listener.setMessageHandler(requestType: HelperCommunication.PingRequest.self) { connection, request in
             return .empty
         }
         self.listener = listener
@@ -123,7 +124,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
     private static func connectToMachService() async throws -> SwiftyXPC.XPCConnection {
         let serviceConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
         serviceConnection.activate()
-        try await serviceConnection.sendMessage(request: PingRequest())
+        try await serviceConnection.pingHelperTool()
         #log(.info, "Ping mach service successfully")
         return serviceConnection
     }
@@ -267,7 +268,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
     override init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         try await super.init(identifier: identifier, modifier: modifier)
         #log(.info, "XPC client registering endpoint for identifier: \(identifier.rawValue, privacy: .public)")
-        try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
+        try await serviceConnection.registerEndpoint(listener.endpoint, machServiceName: RuntimeViewerMachServiceName, identifier: identifier.rawValue)
         #log(.info, "XPC client endpoint registered, waiting for server launch...")
 
         listener.setMessageHandler(name: CommandIdentifiers.serverLaunched) { [weak self] (_: XPCConnection, endpoint: SwiftyXPC.XPCEndpoint) in
@@ -279,7 +280,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
                 guard let self else { return }
                 handleClientOrServerConnectionError(connection: $0, error: $1)
             }
-            _ = try await connection.sendMessage(request: PingRequest())
+            _ = try await connection.pingHelperTool()
             self.connection = connection
             self.stateSubject.send(.connected)
             #log(.info, "XPC client connected to server successfully (ping OK)")
@@ -305,7 +306,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
             guard let self else { return }
             handleClientOrServerConnectionError(connection: $0, error: $1)
         }
-        _ = try await serverConnection.sendMessage(request: PingRequest())
+        _ = try await serverConnection.pingHelperTool()
         #log(.info, "XPC client sending ClientReconnected to server with own listener endpoint...")
         try await serverConnection.sendMessage(name: CommandIdentifiers.clientReconnected, request: listener.endpoint)
         self.connection = serverConnection
@@ -340,16 +341,16 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
     override init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         try await super.init(identifier: identifier, modifier: modifier)
         #log(.info, "XPC server fetching client endpoint for identifier: \(identifier.rawValue, privacy: .public)")
-        let response = try await serviceConnection.sendMessage(request: FetchEndpointRequest(identifier: identifier.rawValue))
+        let clientEndpoint = try await serviceConnection.fetchEndpoint(machServiceName: RuntimeViewerMachServiceName, identifier: identifier.rawValue)
         #log(.info, "XPC server establishing direct connection to client...")
-        let connection = try XPCConnection(type: .remoteServiceFromEndpoint(response.endpoint))
+        let connection = try XPCConnection(type: .remoteServiceFromEndpoint(clientEndpoint))
         connection.activate()
         connection.errorHandler = { [weak self] in
             guard let self else { return }
             handleClientOrServerConnectionError(connection: $0, error: $1)
         }
         #log(.info, "XPC server registering own endpoint...")
-        try await serviceConnection.sendMessage(request: RegisterEndpointRequest(identifier: identifier.rawValue, endpoint: listener.endpoint))
+        try await serviceConnection.registerEndpoint(listener.endpoint, machServiceName: RuntimeViewerMachServiceName, identifier: identifier.rawValue)
         #log(.info, "XPC server sending serverLaunched signal to client...")
         try await connection.sendMessage(name: CommandIdentifiers.serverLaunched, request: listener.endpoint)
         self.connection = connection
@@ -367,26 +368,11 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
                 guard let self else { return }
                 handleClientOrServerConnectionError(connection: $0, error: $1)
             }
-            _ = try await newConnection.sendMessage(request: PingRequest())
+            _ = try await newConnection.pingHelperTool()
             self.connection?.cancel()
             self.connection = newConnection
             self.stateSubject.send(.connected)
             #log(.info, "XPC server reconnected to new client successfully (ping OK)")
-        }
-    }
-}
-
-extension SwiftyXPC.XPCConnection {
-    @discardableResult
-    public func sendMessage<Request: RuntimeRequest>(request: Request) async throws -> Request.Response {
-        try await sendMessage(name: type(of: request).identifier, request: request)
-    }
-}
-
-extension SwiftyXPC.XPCListener {
-    public func setMessageHandler<Request: RuntimeRequest>(requestType: Request.Type = Request.self, handler: @escaping (XPCConnection, Request) async throws -> Request.Response) {
-        setMessageHandler(name: requestType.identifier) { (connection: XPCConnection, request: Request) -> Request.Response in
-            try await handler(connection, request)
         }
     }
 }
