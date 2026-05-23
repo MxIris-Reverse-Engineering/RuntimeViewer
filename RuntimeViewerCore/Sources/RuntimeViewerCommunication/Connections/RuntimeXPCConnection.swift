@@ -180,6 +180,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
         )
         await super.init(identifier: identifier, peer: peer)
         try await modifier?(self)
+        try await peer.activate()
     }
 
     /// Creates a client connection by directly connecting to a known server endpoint.
@@ -195,6 +196,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
         )
         await super.init(identifier: identifier, peer: peer)
         try await modifier?(self)
+        try await peer.activate()
     }
 }
 
@@ -217,6 +219,7 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
         )
         await super.init(identifier: identifier, peer: peer)
         try await modifier?(self)
+        try await peer.activate()
     }
 }
 
