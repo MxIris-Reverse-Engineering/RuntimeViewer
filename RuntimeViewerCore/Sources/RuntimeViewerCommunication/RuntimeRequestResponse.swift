@@ -21,9 +21,7 @@ public let RuntimeViewerServiceVersion: String = "1.1.0"
 /// `HelperPeerClient` / `HelperPeerServer`. The `RuntimeResponse: Codable & Sendable`
 /// constraint is what lets the inherited `associatedtype Response: Codable & Sendable`
 /// from `HelperCommunication.Request` be satisfied.
-public protocol RuntimeRequest: HelperCommunication.Request {
-    associatedtype Response: RuntimeResponse
-}
+public protocol RuntimeRequest: HelperCommunication.Request where Response: RuntimeResponse {}
 
 #else
 
@@ -38,7 +36,7 @@ public protocol RuntimeRequest: Codable, Sendable {
 public protocol RuntimeResponse: Codable, Sendable {}
 
 public struct VoidResponse: RuntimeResponse {
-    public init() {}
+    private init() {}
 
     public static let empty: VoidResponse = .init()
 }
