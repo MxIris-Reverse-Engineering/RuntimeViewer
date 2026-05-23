@@ -3,17 +3,27 @@
 import Foundation
 import FoundationToolbox
 import SwiftyXPC
+import HelperCommunication
+import HelperClient
 import RuntimeViewerCommunication
-import Synchronization
 import Dependencies
 import ServiceManagement
 
-/// Client for injecting code into running applications via the helper service.
+/// Thin wrapper that routes injection / framework-install / injected-endpoint registry
+/// RPCs through the shared lib `HelperClient` owned by `HelperServiceManager`.
 @Loggable
 public final class RuntimeInjectClient: @unchecked Sendable {
-    public static let shared = RuntimeInjectClient()
+    public enum Error: LocalizedError {
+        case serverFrameworkNotFound
+        public var errorDescription: String? {
+            switch self {
+            case .serverFrameworkNotFound:
+                return "Server framework not found."
+            }
+        }
+    }
 
-    private let connectionLock = Synchronization.Mutex<XPCConnection?>(nil)
+    public static let shared = RuntimeInjectClient()
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
 
@@ -31,74 +41,37 @@ public final class RuntimeInjectClient: @unchecked Sendable {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if helperServiceManager.status == .enabled {
-                    reconnect()
+                    await reconnect()
                 }
                 observeStatusChange()
             }
         }
     }
 
-    /// Invalidates the current connection and establishes a new one.
-    public func reconnect() {
-        invalidateConnection()
-        do {
-            _ = try connectionIfNeeded()
-            #log(.info,"Successfully reconnected to helper service")
-        } catch {
-            #log(.error,"Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
-        }
+    public func reconnect() async {
+        await helperServiceManager.reconnect()
     }
 
-    /// Invalidates the current connection without reconnecting.
-    public func invalidateConnection() {
-        connectionLock.withLock { connection in
-            connection?.cancel()
-            connection = nil
-        }
-    }
+    public let serverFrameworkDestinationURL = URL(fileURLWithPath: "/Library/Frameworks/RuntimeViewerServer.framework")
 
     public var isInstalledServerFramework: Bool {
         FileManager.default.fileExists(atPath: serverFrameworkDestinationURL.path)
     }
 
-    public let serverFrameworkDestinationURL = URL(fileURLWithPath: "/Library/Frameworks/RuntimeViewerServer.framework")
-
     public var serverFrameworkSourceURL: URL? {
         Bundle.main.url(forResource: "RuntimeViewerServer", withExtension: "framework")
     }
 
-    private func connectionIfNeeded() throws -> XPCConnection {
-        try connectionLock.withLock { connection in
-            if let currentConnection = connection {
-                return currentConnection
-            }
-
-            let newConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
-            newConnection.errorHandler = { [weak self] _, error in
-                #log(.error,"XPC connection error: \(error.localizedDescription, privacy: .public)")
-                self?.connectionLock.withLock { conn in
-                    conn = nil
-                }
-            }
-            newConnection.activate()
-            connection = newConnection
-            return newConnection
-        }
-    }
+    // MARK: - Injection
 
     public func injectApplication(pid: pid_t, dylibURL: URL) async throws {
-        try await connectionIfNeeded().sendMessage(request: InjectApplicationRequest(pid: pid, dylibURL: dylibURL))
+        try await helperServiceManager.ensureConnectedToTool()
+        try await helperServiceManager.helperClient.sendToTool(
+            request: InjectApplicationRequest(pid: pid, dylibURL: dylibURL)
+        )
     }
 
-    public enum Error: LocalizedError {
-        case serverFrameworkNotFound
-        public var errorDescription: String? {
-            switch self {
-            case .serverFrameworkNotFound:
-                return "Server framework not found."
-            }
-        }
-    }
+    // MARK: - Framework install
 
     public func installServerFrameworkIfNeeded() async throws {
         try await installServerFramework()
@@ -108,30 +81,43 @@ public final class RuntimeInjectClient: @unchecked Sendable {
         guard let serverFrameworkSourceURL else {
             throw Error.serverFrameworkNotFound
         }
-        try await connectionIfNeeded().sendMessage(request: FileOperationRequest(operation: .copy(from: serverFrameworkSourceURL, to: serverFrameworkDestinationURL)))
+        try await helperServiceManager.ensureConnectedToTool()
+        try await helperServiceManager.helperClient.sendToTool(
+            request: FileOperationRequest(operation: .copy(from: serverFrameworkSourceURL, to: serverFrameworkDestinationURL))
+        )
     }
 
     // MARK: - Injected Endpoint Registry
 
-    /// Registers an injected app's XPC endpoint with the Mach Service daemon.
+    /// Registers an injected app's XPC endpoint with the daemon's
+    /// `InjectedEndpointRegistryService`.
     public func registerInjectedEndpoint(pid: pid_t, appName: String, bundleIdentifier: String, endpoint: SwiftyXPC.XPCEndpoint) async throws {
-        try await connectionIfNeeded().sendMessage(request: RegisterInjectedEndpointRequest(
-            pid: pid,
-            appName: appName,
-            bundleIdentifier: bundleIdentifier,
-            endpoint: endpoint
-        ))
+        try await helperServiceManager.ensureConnectedToTool()
+        try await helperServiceManager.helperClient.sendToTool(
+            request: RegisterInjectedEndpointRequest(
+                pid: pid,
+                appName: appName,
+                bundleIdentifier: bundleIdentifier,
+                endpoint: endpoint
+            )
+        )
     }
 
-    /// Fetches all registered injected app endpoints from the Mach Service daemon.
+    /// Fetches all registered injected app endpoints from the daemon.
     public func fetchAllInjectedEndpoints() async throws -> [InjectedEndpointInfo] {
-        let response: FetchAllInjectedEndpointsRequest.Response = try await connectionIfNeeded().sendMessage(request: FetchAllInjectedEndpointsRequest())
+        try await helperServiceManager.ensureConnectedToTool()
+        let response: FetchAllInjectedEndpointsRequest.Response = try await helperServiceManager.helperClient.sendToTool(
+            request: FetchAllInjectedEndpointsRequest()
+        )
         return response.endpoints
     }
 
-    /// Removes an injected app's endpoint from the Mach Service daemon.
+    /// Removes an injected app's endpoint from the daemon.
     public func removeInjectedEndpoint(pid: pid_t) async throws {
-        try await connectionIfNeeded().sendMessage(request: RemoveInjectedEndpointRequest(pid: pid))
+        try await helperServiceManager.ensureConnectedToTool()
+        try await helperServiceManager.helperClient.sendToTool(
+            request: RemoveInjectedEndpointRequest(pid: pid)
+        )
     }
 }
 

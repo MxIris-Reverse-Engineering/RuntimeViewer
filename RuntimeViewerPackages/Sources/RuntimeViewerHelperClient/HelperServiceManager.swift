@@ -8,10 +8,13 @@ import RuntimeViewerServiceHelper
 import HelperCommunication
 import HelperClient
 import RuntimeViewerCommunication
-import Synchronization
 import Dependencies
 
 /// Manages the helper service lifecycle including registration, unregistration, and XPC connections.
+///
+/// Connection management is delegated to lib `HelperClient` (actor), and daemon install/unregister
+/// flow to lib `SMAppServiceDaemonInstaller` (actor). This class keeps only the Observable status
+/// shell so the Settings UI keeps reacting to `status` / `message` / `legacyMessage` changes.
 @Loggable
 @Observable
 @MainActor
@@ -24,8 +27,10 @@ public final class HelperServiceManager {
 
     #if DEBUG
     public static let helperServiceDaemon = SMAppService.daemon(plistName: "dev.mxiris.runtimeviewer.service.plist")
+    private static let helperServicePlistName = "dev.mxiris.runtimeviewer.service.plist"
     #else
     public static let helperServiceDaemon = SMAppService.daemon(plistName: "com.mxiris.runtimeviewer.service.plist")
+    private static let helperServicePlistName = "com.mxiris.runtimeviewer.service.plist"
     #endif
 
     // MARK: - Observable State
@@ -52,49 +57,54 @@ public final class HelperServiceManager {
         status == .enabled
     }
 
-    // MARK: - XPC Connection
+    // MARK: - Lib delegates
+
+    /// Shared lib `HelperClient` actor used by `HelperServiceManager`,
+    /// `RuntimeHelperClient`, and `RuntimeInjectClient`. All daemon-bound business RPCs
+    /// route through this single instance so there's only one XPC connection to the tool
+    /// at a time.
+    @ObservationIgnored
+    public let helperClient = HelperClient()
 
     @ObservationIgnored
-    private let connectionLock = Synchronization.Mutex<XPCConnection?>(nil)
+    private let installer: SMAppServiceDaemonInstaller
 
-    private init() {}
+    @ObservationIgnored
+    private var hasConnectedToTool: Bool = false
 
-    /// Invalidates the current connection and establishes a new one.
-    public func reconnect() {
-        invalidateConnection()
+    private init() {
+        self.installer = SMAppServiceDaemonInstaller(plistName: Self.helperServicePlistName)
+    }
+
+    // MARK: - Connection (lazy)
+
+    /// Ensures the shared `helperClient` has an active tool connection. Idempotent — once
+    /// connected, subsequent calls are no-ops until `invalidateConnection()` resets the flag.
+    public func ensureConnectedToTool() async throws {
+        if hasConnectedToTool { return }
+        try await helperClient.connectToTool(
+            machServiceName: RuntimeViewerMachServiceName,
+            isPrivilegedHelperTool: true
+        )
+        hasConnectedToTool = true
+    }
+
+    /// Reconnect by clearing the connect flag and re-running `connectToTool`. The lib
+    /// actor overrides its internal connection in place, so the previous XPC channel
+    /// is dropped automatically.
+    public func reconnect() async {
+        hasConnectedToTool = false
         do {
-            _ = try connectionIfNeeded()
-            #log(.info,"Successfully reconnected to helper service")
+            try await ensureConnectedToTool()
+            #log(.info, "Successfully reconnected to helper service")
         } catch {
-            #log(.error,"Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
+            #log(.error, "Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    /// Invalidates the current connection without reconnecting.
+    /// Marks the connection as invalid; the next `ensureConnectedToTool()` will re-open it.
     public func invalidateConnection() {
-        connectionLock.withLock { connection in
-            connection?.cancel()
-            connection = nil
-        }
-    }
-
-    private func connectionIfNeeded() throws -> XPCConnection {
-        try connectionLock.withLock { connection in
-            if let currentConnection = connection {
-                return currentConnection
-            }
-
-            let newConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
-            newConnection.errorHandler = { [weak self] _, error in
-                #log(.error,"XPC connection error: \(error.localizedDescription, privacy: .public)")
-                self?.connectionLock.withLock { conn in
-                    conn = nil
-                }
-            }
-            newConnection.activate()
-            connection = newConnection
-            return newConnection
-        }
+        hasConnectedToTool = false
     }
 
     // MARK: - Status Management
@@ -133,12 +143,11 @@ public final class HelperServiceManager {
         defer { isLoading = false }
 
         var occurredError: NSError?
-        let daemon = Self.helperServiceDaemon
-        let previousStatus = daemon.status
+        let previousStatus = Self.helperServiceDaemon.status
 
         switch action {
         case .install:
-            switch daemon.status {
+            switch Self.helperServiceDaemon.status {
             case .requiresApproval:
                 message = "Registered but requires enabling in System Settings > Login Items."
                 SMAppService.openSystemSettingsLoginItems()
@@ -146,8 +155,8 @@ public final class HelperServiceManager {
                 message = "Service is already enabled."
             default:
                 do {
-                    try daemon.register()
-                    if daemon.status == .requiresApproval {
+                    try await installer.register()
+                    if Self.helperServiceDaemon.status == .requiresApproval {
                         SMAppService.openSystemSettingsLoginItems()
                     }
                 } catch let nsError as NSError {
@@ -163,7 +172,7 @@ public final class HelperServiceManager {
 
         case .uninstall:
             do {
-                try await daemon.unregister()
+                try await installer.unregister()
             } catch let nsError as NSError {
                 occurredError = nsError
             }
@@ -173,7 +182,7 @@ public final class HelperServiceManager {
         }
 
         updateStatusMessages(occurredError: occurredError)
-        status = daemon.status
+        status = Self.helperServiceDaemon.status
         logStatusChangeIfNeeded(previousStatus: previousStatus)
     }
 
@@ -192,8 +201,7 @@ public final class HelperServiceManager {
                 message = "Operation failed: \(nsError.localizedDescription)"
             }
         } else {
-            let daemon = Self.helperServiceDaemon
-            switch daemon.status {
+            switch Self.helperServiceDaemon.status {
             case .notRegistered:
                 message = "Service hasn't been registered. You may register it now."
             case .enabled:
@@ -203,7 +211,7 @@ public final class HelperServiceManager {
             case .notFound:
                 message = "Service is not installed."
             @unknown default:
-                message = "Unknown service status (\(daemon.status))."
+                message = "Unknown service status (\(Self.helperServiceDaemon.status))."
             }
         }
     }
@@ -211,7 +219,7 @@ public final class HelperServiceManager {
     private func logStatusChangeIfNeeded(previousStatus: SMAppService.Status) {
         let currentStatus = Self.helperServiceDaemon.status
         if currentStatus == .enabled && previousStatus != .enabled {
-            #log(.info,"Helper service became enabled")
+            #log(.info, "Helper service became enabled")
         }
     }
 
@@ -231,8 +239,8 @@ public final class HelperServiceManager {
             try? LegacyHelperTool.uninstall(withServiceName: "com.JH.RuntimeViewerService")
 
             // Step 2: Delete the legacy plist file via new helper service (requires root)
-            let connection = try connectionIfNeeded()
-            try await connection.sendMessage(request: FileOperationRequest(operation: .remove(url: Self.legacyPlistFileURL)))
+            try await ensureConnectedToTool()
+            try await helperClient.sendToTool(request: FileOperationRequest(operation: .remove(url: Self.legacyPlistFileURL)))
 
             checkLegacyServiceStatus()
             if !isLegacyServiceInstalled {
@@ -263,21 +271,16 @@ public final class HelperServiceManager {
 
     /// Checks whether the running helper service version matches the app's expected version.
     ///
-    /// If the versions differ and the service is currently enabled, this method automatically
-    /// uninstalls and reinstalls the service. The caller should prompt the user to restart.
-    ///
-    /// Error handling is narrow on purpose: only an explicit `unexpectedMessage` from the XPC
-    /// peer (meaning the running helper binary does not recognize `FetchServiceVersionRequest`
-    /// and therefore predates the version check feature) is treated as "outdated". Every other
-    /// error — connection refused, connection interrupted, connection invalid, transient XPC
-    /// hiccups on cold start — returns `.versionQueryFailed` and leaves the daemon untouched,
-    /// so a transient glitch at launch no longer triggers an unwanted unregister/reinstall cycle.
+    /// Delegates the version query to lib `HelperClient.fetchToolVersion()` and the
+    /// `unexpectedMessage`-vs-transient classification to
+    /// `XPCConnection.Error.indicatesOutdatedPeer`. Install/unregister go through lib
+    /// `SMAppServiceDaemonInstaller`. On mismatch + service enabled, the daemon is
+    /// unregistered, paused briefly, and re-registered so the new binary picks up.
     public func checkServiceVersionAndReinstallIfNeeded() async -> ServiceVersionCheckResult {
         let serviceVersion: String?
         do {
-            let connection = try connectionIfNeeded()
-            let response: HelperCommunication.FetchVersionRequest.Response = try await connection.sendMessage(request: HelperCommunication.FetchVersionRequest())
-            serviceVersion = response.version
+            try await ensureConnectedToTool()
+            serviceVersion = try await helperClient.fetchToolVersion()
         } catch {
             if Self.errorIndicatesOutdatedBinary(error) {
                 #log(.info, "Fetch version failed with 'unhandled message' error — treating as outdated binary: \(error.localizedDescription, privacy: .public)")
@@ -299,16 +302,15 @@ public final class HelperServiceManager {
             #log(.info, "Service does not support version query, treating as outdated")
         }
 
-        let daemon = Self.helperServiceDaemon
-        guard daemon.status == .enabled else {
-            #log(.info, "Service is not enabled (status: \(String(describing: daemon.status), privacy: .public)), cannot reinstall automatically")
+        guard Self.helperServiceDaemon.status == .enabled else {
+            #log(.info, "Service is not enabled (status: \(String(describing: Self.helperServiceDaemon.status), privacy: .public)), cannot reinstall automatically")
             return .mismatchButNotEnabled
         }
 
         // Uninstall the outdated service
+        invalidateConnection()
         do {
-            invalidateConnection()
-            try await daemon.unregister()
+            try await installer.unregister()
             #log(.info, "Successfully unregistered outdated service")
         } catch {
             #log(.error, "Failed to unregister service: \(error.localizedDescription, privacy: .public)")
@@ -322,16 +324,16 @@ public final class HelperServiceManager {
 
         // Reinstall the service
         do {
-            try daemon.register()
+            try await installer.register()
             #log(.info, "Successfully re-registered service")
         } catch {
             #log(.error, "Failed to re-register service: \(error.localizedDescription, privacy: .public)")
-            status = daemon.status
+            status = Self.helperServiceDaemon.status
             updateStatusMessages(occurredError: error as NSError)
             return .reinstallFailed(error)
         }
 
-        status = daemon.status
+        status = Self.helperServiceDaemon.status
         updateStatusMessages(occurredError: nil)
         return .reinstalled
     }
@@ -351,8 +353,8 @@ public final class HelperServiceManager {
 
     /// Sends a file operation request to the helper service.
     public func performFileOperation(_ operation: FileOperation) async throws {
-        let connection = try connectionIfNeeded()
-        try await connection.sendMessage(request: FileOperationRequest(operation: operation))
+        try await ensureConnectedToTool()
+        try await helperClient.sendToTool(request: FileOperationRequest(operation: operation))
     }
 }
 
