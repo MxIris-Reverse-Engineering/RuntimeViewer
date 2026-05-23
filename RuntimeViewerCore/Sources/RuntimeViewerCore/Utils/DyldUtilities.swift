@@ -90,23 +90,45 @@ package enum DyldUtilities {
 
     /// Resolves a filesystem path to its loaded `MachOImage`.
     ///
-    /// For the main executable's path, returns `MachOImage.current()` rather
-    /// than performing a basename lookup. In Debug builds Xcode emits the
-    /// product as a thin stub at `Contents/MacOS/<Name>` plus a sibling
-    /// `<Name>.debug.dylib` that holds the real code; `MachOImage(name:)`
-    /// strips both extensions and matches by basename, so it picks the stub
-    /// (loaded first at dyld index 0) and the caller never sees the actual
-    /// dependency graph or sections. `MachOImage.current(_:)` resolves via
-    /// `#dsohandle` of the calling code, so it always returns the image that
-    /// actually contains our compiled symbols (the `.debug.dylib` in Debug,
-    /// the main executable in statically linked Release).
+    /// Three lookup tiers, in order:
     ///
-    /// Uses `mainExecutablePath()` (which goes through `_NSGetExecutablePath`)
-    /// for the main-executable check rather than `imageNames().first`, since
-    /// the latter returns Xcode's injected `libLogRedirect.dylib` under
-    /// `DYLD_INSERT_LIBRARIES` and would skip the `MachOImage.current()`
-    /// branch for the actual host binary path.
+    /// 1. **Exact dyld path match.** Walks every image dyld currently has
+    ///    loaded and returns the one whose registered path equals `path`
+    ///    byte-for-byte. This is the correct answer for the injected-server
+    ///    case: when this code is dlopen'd into a foreign process,
+    ///    `#dsohandle` lands inside `RuntimeViewerServer.framework`, so
+    ///    `MachOImage.current()` would return the framework itself instead of
+    ///    the target's main binary. dyld's own image registry doesn't lie.
+    ///
+    /// 2. **Host Debug stub fallback.** In Debug builds Xcode emits the
+    ///    product as a thin stub at `Contents/MacOS/<Name>` plus a sibling
+    ///    `<Name>.debug.dylib` that holds the real code. The stub's path
+    ///    matches `mainExecutablePath()` but the stub is nearly empty — all
+    ///    sections, classes, and dependencies live in the `.debug.dylib`.
+    ///    `#dsohandle` of code linked into the main binary lands in the
+    ///    `.debug.dylib` here, so `MachOImage.current()` returns the useful
+    ///    image. This branch only runs when tier 1 missed (the stub path
+    ///    isn't in dyld's registry because dyld registered the
+    ///    `.debug.dylib` path instead) AND the requested path actually is
+    ///    the main executable, so it can't accidentally fire for an
+    ///    injected-server scenario.
+    ///
+    /// 3. **Basename match.** Last-resort fuzzy lookup for callers that pass
+    ///    a path whose exact spelling doesn't match dyld's registered form
+    ///    (e.g. symlink-resolved vs. raw, or a bare framework name).
+    ///
+    /// `mainExecutablePath()` is intentionally not used as the tier-1 trigger
+    /// — `_NSGetExecutablePath` is unreliable under `DYLD_INSERT_LIBRARIES`
+    /// and the exact-match walk handles every non-stub case without needing
+    /// to know which path is "the main one".
     package static func machOImage(forPath path: String) -> MachOImage? {
+        for index in 0..<_dyld_image_count() {
+            guard let cName = _dyld_get_image_name(index),
+                  let header = _dyld_get_image_header(index) else { continue }
+            if String(cString: cName) == path {
+                return MachOImage(ptr: header)
+            }
+        }
         if path == mainExecutablePath() {
             return MachOImage.current()
         }
