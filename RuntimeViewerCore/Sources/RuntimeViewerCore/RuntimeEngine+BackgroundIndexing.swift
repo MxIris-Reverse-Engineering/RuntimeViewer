@@ -89,13 +89,29 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
                     mainExecutablePath: mainExecutablePath
                 )
                 // LC_LOAD_WEAK_DYLIB: dyld silently skips at runtime when the
-                // target isn't on disk (e.g. Xcode embeds
-                // `libswiftCompatibilitySpan.dylib` only for older deployment
-                // targets). Mirror that here — surfacing it as `.failed("path
-                // unresolved")` floods the popover with red ✗ rows for a
-                // miss the runtime explicitly tolerates.
-                if resolvedPath == nil, dependency.type == .weakLoad {
-                    return nil
+                // target isn't loadable. Two ways this manifests:
+                //  1. install name doesn't resolve to anything on disk (e.g.
+                //     Xcode omits the embed for newer deployment targets) —
+                //     `resolvedPath == nil`.
+                //  2. install name resolves to an embedded copy but dyld uses
+                //     the dyld-shared-cache version instead (e.g. Xcode embeds
+                //     `libswiftCompatibilitySpan.dylib` whose install name is
+                //     `/usr/lib/swift/...`; on hosts where the shared cache
+                //     already ships it, the bundle copy is never loaded as a
+                //     separate image). The on-disk file exists, but
+                //     `machOImage(forPath:)` returns nil because no matching
+                //     image is loaded — `expandDependencyGraph` would then
+                //     mark it `.failed("cannot open MachOImage")`.
+                // Surfacing either as `.failed` floods the popover with red ✗
+                // rows for misses the runtime explicitly tolerates.
+                if dependency.type == .weakLoad {
+                    if resolvedPath == nil {
+                        return nil
+                    }
+                    if let resolvedPath,
+                       DyldUtilities.machOImage(forPath: resolvedPath) == nil {
+                        return nil
+                    }
                 }
                 return (installName, resolvedPath)
             }
