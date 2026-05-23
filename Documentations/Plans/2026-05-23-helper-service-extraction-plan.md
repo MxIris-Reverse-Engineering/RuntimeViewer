@@ -1,6 +1,6 @@
 # Helper Service Extraction Implementation Plan
 
-**Goal:** 把 `RuntimeViewerService` daemon 单类 + `RuntimeViewerHelperClient` 三个单例 + `RuntimeViewerCommunication` 内的 daemon 通信 Request 整合进相邻库 `swift-helper-service`,并把该库以薄包装方式集成回 RuntimeViewer。`RuntimeXPCConnection` 保留为 `RuntimeConnection` 协议的 adapter,内部委托给 lib 新的 `BrokeredPeerClient` / `BrokeredPeerServer`。
+**Goal:** 把 `RuntimeViewerService` daemon 单类 + `RuntimeViewerHelperClient` 三个单例 + `RuntimeViewerCommunication` 内的 daemon 通信 Request 整合进相邻库 `swift-helper-service`,并把该库以薄包装方式集成回 RuntimeViewer。`RuntimeXPCConnection` 保留为 `RuntimeConnection` 协议的 adapter,内部委托给 lib 新的 `HelperPeerClient` / `HelperPeerServer`。
 
 **Architecture:** 详见 design doc。lib 收纳"SMAppService.daemon 安装、broker 注册表、broker peer 反向连+reconnect、版本对账"通用骨架;业务逻辑(`OpenApplication`、`InjectedEndpoint` PID 监控、注入、文件操作)继续留在本仓,实现成 `HelperService` 由 lib `HelperServer` 装配。
 
@@ -100,10 +100,10 @@
   - `func cancel() async`
 - [ ] **Step 0.7.3**:`swift build` 通过。
 
-### Task 0.8 — 实现 `BrokeredPeerClient` actor
+### Task 0.8 — 实现 `HelperPeerClient` actor
 
 **Files:**
-- Create: `Sources/HelperPeer/BrokeredPeerClient.swift`
+- Create: `Sources/HelperPeer/HelperPeerClient.swift`
 
 设计要点:
 - 持有 `listener: SwiftyXPC.XPCListener`(anonymous)、`serviceConnection: SwiftyXPC.XPCConnection`、`peerConnection: SwiftyXPC.XPCConnection?`(可变,reconnect 时替换)、`services: [HelperService]`、`stateContinuation`。
@@ -115,13 +115,13 @@
 - [ ] **Step 0.8.2**:初次握手 `init(machServiceName:isPrivilegedHelperTool:identifier:services:)`。
 - [ ] **Step 0.8.3**:reconnect `init(machServiceName:isPrivilegedHelperTool:identifier:serverEndpoint:services:)`。
 - [ ] **Step 0.8.4**:`PeerConnection` 协议方法实现(`send` / `setMessageHandler` / `cancel` / `listenerEndpoint`)。
-- [ ] **Step 0.8.5**:`HelperHandler` 适配 — `BrokeredPeerClient` 内部对 `services` 调 `setupHandler(_:)` 时,传给 service 的 handler 实例需要能挂到 listener。复用 `HelperServer.swift` 中 `extension SwiftyXPC.XPCListener: HelperHandler` 这个 extension(目前 internal),提升为 `package extension` 放到 HelperPeer 也可访问。或者:在 HelperPeer 内复制一份相同的 extension(简单干净,不交叉依赖)。
+- [ ] **Step 0.8.5**:`HelperHandler` 适配 — `HelperPeerClient` 内部对 `services` 调 `setupHandler(_:)` 时,传给 service 的 handler 实例需要能挂到 listener。复用 `HelperServer.swift` 中 `extension SwiftyXPC.XPCListener: HelperHandler` 这个 extension(目前 internal),提升为 `package extension` 放到 HelperPeer 也可访问。或者:在 HelperPeer 内复制一份相同的 extension(简单干净,不交叉依赖)。
 - [ ] **Step 0.8.6**:`swift build --target HelperPeer` 通过。
 
-### Task 0.9 — 实现 `BrokeredPeerServer` actor
+### Task 0.9 — 实现 `HelperPeerServer` actor
 
 **Files:**
-- Create: `Sources/HelperPeer/BrokeredPeerServer.swift`
+- Create: `Sources/HelperPeer/HelperPeerServer.swift`
 
 设计要点:
 - 持有 `listener` + `serviceConnection` + `peerConnection: SwiftyXPC.XPCConnection?`(可变,被 ClientReconnected 替换)+ `services` + stateContinuation + `identifier: String` + `machServiceName: String`。
@@ -171,16 +171,16 @@
 ### Task 0.13 — `HelperPeerTests` 集成测试
 
 **Files:**
-- Modify: `Sources/HelperPeer/BrokeredPeerClient.swift`(加测试用 init,`@_spi(Testing)`)
-- Modify: `Sources/HelperPeer/BrokeredPeerServer.swift`(同上)
+- Modify: `Sources/HelperPeer/HelperPeerClient.swift`(加测试用 init,`@_spi(Testing)`)
+- Modify: `Sources/HelperPeer/HelperPeerServer.swift`(同上)
 - Create: `Tests/HelperPeerTests/HandshakeTests.swift`
 - Create: `Tests/HelperPeerTests/ReconnectTests.swift`
 - Create: `Tests/HelperPeerTests/BidirectionalRPCTests.swift`
 - Create: `Tests/HelperPeerTests/StateStreamTests.swift`
 
-- [ ] **Step 0.13.1**:在 `BrokeredPeerClient` / `BrokeredPeerServer` 加 `@_spi(Testing) public init(toolEndpoint: SwiftyXPC.XPCEndpoint, identifier: String, services: [HelperService] = []) async throws`(以及 reconnect 变体)。实现走 `XPCConnection(type: .remoteServiceFromEndpoint(toolEndpoint))` 替代 mach service 连接;其它握手流程一致。
-- [ ] **Step 0.13.2**:`HandshakeTests` — `TC-1 初次握手`:起 `InProcessBroker`,起 `BrokeredPeerServer(toolEndpoint:identifier:services:[FakeService])`,起 `BrokeredPeerClient(toolEndpoint:identifier:services:[])`,断言双方 state 序列经过 `.connecting → .connected`,client 通过 `send(FakeRequest())` 调用,server `FakeService` handler 收到并返回。
-- [ ] **Step 0.13.3**:`ReconnectTests` — `TC-2 reconnect by endpoint`:基于 TC-1 拓展,client `cancel()`,新起 `BrokeredPeerClient(toolEndpoint:identifier:serverEndpoint:server.listenerEndpoint, services:[])`,断言 server 收到 `ClientReconnectedNotification`、内部 peer connection 替换,业务 RPC 继续可用。
+- [ ] **Step 0.13.1**:在 `HelperPeerClient` / `HelperPeerServer` 加 `@_spi(Testing) public init(toolEndpoint: SwiftyXPC.XPCEndpoint, identifier: String, services: [HelperService] = []) async throws`(以及 reconnect 变体)。实现走 `XPCConnection(type: .remoteServiceFromEndpoint(toolEndpoint))` 替代 mach service 连接;其它握手流程一致。
+- [ ] **Step 0.13.2**:`HandshakeTests` — `TC-1 初次握手`:起 `InProcessBroker`,起 `HelperPeerServer(toolEndpoint:identifier:services:[FakeService])`,起 `HelperPeerClient(toolEndpoint:identifier:services:[])`,断言双方 state 序列经过 `.connecting → .connected`,client 通过 `send(FakeRequest())` 调用,server `FakeService` handler 收到并返回。
+- [ ] **Step 0.13.3**:`ReconnectTests` — `TC-2 reconnect by endpoint`:基于 TC-1 拓展,client `cancel()`,新起 `HelperPeerClient(toolEndpoint:identifier:serverEndpoint:server.listenerEndpoint, services:[])`,断言 server 收到 `ClientReconnectedNotification`、内部 peer connection 替换,业务 RPC 继续可用。
 - [ ] **Step 0.13.4**:`BidirectionalRPCTests` — `TC-3`:client 和 server 各挂一个 `HelperService`,互相 `send`,断言双向 RPC 全部成功。
 - [ ] **Step 0.13.5**:`StateStreamTests` — `TC-4` `cancel()` 之后 state stream `.cancelled` 然后 finish,后续 `send` 抛错;`TC-5` broker `shutdown()` 后双方 state 转 `.disconnected(_)`(error case 不强断言具体类型,只断言 case 是 `disconnected`)。
 - [ ] **Step 0.13.6**:`swift test 2>&1 | xcsift` 全绿。
@@ -202,7 +202,7 @@
 
 ## Phase 1 — `RuntimeViewerCommunication` 协议合并 + adapter 重构
 
-> Repo: 本仓。本 Phase 结束后 `RuntimeViewerCore` + `RuntimeViewerPackages` 全工作区编译通过,业务逻辑暂时仍走 `RuntimeViewerService` 单类 daemon(等 Phase 2 拆),只是 RuntimeXPCConnection 内部已经换成 `BrokeredPeerClient/Server`。
+> Repo: 本仓。本 Phase 结束后 `RuntimeViewerCore` + `RuntimeViewerPackages` 全工作区编译通过,业务逻辑暂时仍走 `RuntimeViewerService` 单类 daemon(等 Phase 2 拆),只是 RuntimeXPCConnection 内部已经换成 `HelperPeerClient/Server`。
 
 ### Task 1.1 — `RuntimeViewerCore` Package.swift 加 lib 依赖
 
@@ -246,7 +246,7 @@
 - [ ] **Step 1.4.1**:删 `extension SwiftyXPC.XPCConnection.sendMessage<Request: RuntimeRequest>(request:)` 和 `extension SwiftyXPC.XPCListener.setMessageHandler<Request: RuntimeRequest>(requestType:handler:)`。lib 已提为 public,且 `RuntimeRequest: HelperCommunication.Request`,自动兼容。
 - [ ] **Step 1.4.2**:`swift build` 此时会因 RuntimeXPCConnection L102 / L124 / L270 / L308 / L343 / L352 / L370 各处引用已删除的 `PingRequest`/`RegisterEndpointRequest`/`FetchEndpointRequest` 而报错。继续 Task 1.5 一并修。
 
-### Task 1.5 — `RuntimeXPCConnection` 重写为 BrokeredPeer adapter
+### Task 1.5 — `RuntimeXPCConnection` 重写为 HelperPeer adapter
 
 **Files:**
 - Modify: `RuntimeViewerCore/Sources/RuntimeViewerCommunication/Connections/RuntimeXPCConnection.swift`
@@ -258,11 +258,11 @@
 - `sendMessage<Request: RuntimeRequest>(request:)` 转发 `peer.send(request)`。
 - `setMessageHandler<Request: RuntimeRequest>(requestType:handler:)` 转发 `await peer.setMessageHandler(requestType, handler: handler)`。
 - `stop()` 转发 `await peer.cancel(); stateBridgeTask.cancel()`。
-- untyped `sendMessage(name:)` / `setMessageHandler(name:)` 几个重载:先 grep 实际 callers,确认能否全部去掉。若有少量保留需求(如 `serverLaunched` / `clientConnected` / `clientReconnected` 之类信令),由于这部分握手已由 lib `BrokeredPeer*` 接管,**`CommandIdentifiers` 枚举可以全部删除**;若是业务 RPC,需在该 PR 内补 RuntimeRequest 包装。
+- untyped `sendMessage(name:)` / `setMessageHandler(name:)` 几个重载:先 grep 实际 callers,确认能否全部去掉。若有少量保留需求(如 `serverLaunched` / `clientConnected` / `clientReconnected` 之类信令),由于这部分握手已由 lib `HelperPeer*` 接管,**`CommandIdentifiers` 枚举可以全部删除**;若是业务 RPC,需在该 PR 内补 RuntimeRequest 包装。
 
 - [ ] **Step 1.5.1**:`rg -n 'RuntimeXPCConnection.*sendMessage\(name:'`、`rg -n 'CommandIdentifiers\.'`、`rg -n 'setMessageHandler\(name:'` — 在本仓全部 callers 排查,产出文件级 caller 清单(写入下一个 sub-step 的 description)。
 - [ ] **Step 1.5.2**:根据 caller 清单决定 untyped 接口的处理方式(删除 / 保留 / 类型化包装)。
-- [ ] **Step 1.5.3**:重写 `RuntimeXPCConnection` base class 与两个子类 `RuntimeXPCClientConnection` / `RuntimeXPCServerConnection`,init 内部分别构造 `BrokeredPeerClient`(两个 init,对应初次握手与已知 endpoint reconnect)与 `BrokeredPeerServer`。
+- [ ] **Step 1.5.3**:重写 `RuntimeXPCConnection` base class 与两个子类 `RuntimeXPCClientConnection` / `RuntimeXPCServerConnection`,init 内部分别构造 `HelperPeerClient`(两个 init,对应初次握手与已知 endpoint reconnect)与 `HelperPeerServer`。
 - [ ] **Step 1.5.4**:删除 `CommandIdentifiers` 枚举(若 1.5.2 确认无残留 caller)。
 - [ ] **Step 1.5.5**:`XPCListenerEndpointProviding` 协议保留:`var xpcListenerEndpoint: SwiftyXPC.XPCEndpoint { get }`,实现改为 async wrapper(用 `Task { await peer.listenerEndpoint }` 同步阻塞拿一次,或者改协议为 async — 倾向改协议;具体决策在 Step 实施时按 caller 改动量评估)。
 - [ ] **Step 1.5.6**:`swift build` 通过。
@@ -291,7 +291,7 @@
 ### Task 1.8 — Commit Phase 1 改动
 
 - [ ] **Step 1.8.1**:`xcodebuild -workspace ../MxIris-Reverse-Engineering.xcworkspace -scheme "RuntimeViewer macOS" -configuration Debug -destination 'generic/platform=macOS' build 2>&1 | xcsift` 全绿。
-- [ ] **Step 1.8.2**:commit 信息:`refactor(communication): adopt swift-helper-service Request and BrokeredPeer abstractions`。
+- [ ] **Step 1.8.2**:commit 信息:`refactor(communication): adopt swift-helper-service Request and HelperPeer abstractions`。
 
 ---
 
@@ -443,8 +443,8 @@
 
 ### Task 5.3 — 注入与 inject endpoint 注册表
 
-- [ ] **Step 5.3.1**:主 app 通过 helper 注入到目标 app → 目标 app 内 `RuntimeXPCServerConnection`(adapter)启动 `BrokeredPeerServer` → broker handshake 完成 → 目标 app `InjectClient.registerInjectedEndpoint(pid:, appName:, bundleIdentifier:, endpoint:)` 写入 daemon `InjectedEndpointRegistryService`。
-- [ ] **Step 5.3.2**:重启主 app → `fetchAllInjectedEndpoints` 返回上次注入的 endpoint → host 用 `BrokeredPeerClient(serverEndpoint:)` 直接 reconnect → 目标 app 收 `ClientReconnectedNotification` 替换 peer connection → state 变 `.connected` → 业务通信 OK。
+- [ ] **Step 5.3.1**:主 app 通过 helper 注入到目标 app → 目标 app 内 `RuntimeXPCServerConnection`(adapter)启动 `HelperPeerServer` → broker handshake 完成 → 目标 app `InjectClient.registerInjectedEndpoint(pid:, appName:, bundleIdentifier:, endpoint:)` 写入 daemon `InjectedEndpointRegistryService`。
+- [ ] **Step 5.3.2**:重启主 app → `fetchAllInjectedEndpoints` 返回上次注入的 endpoint → host 用 `HelperPeerClient(serverEndpoint:)` 直接 reconnect → 目标 app 收 `ClientReconnectedNotification` 替换 peer connection → state 变 `.connected` → 业务通信 OK。
 
 ### Task 5.4 — 文件操作 / framework 安装
 
@@ -478,7 +478,7 @@
 ## Phase 完成度自检清单
 
 - [ ] Phase 0 完成:lib `swift build && swift test 2>&1 | xcsift` 全绿(含 `HelperCommunicationTests` + `HelperPeerTests`),`HelperPeer` module 可用,RuntimeViewer 未被触动。
-- [ ] Phase 1 完成:工作区编译通过,`RuntimeRequest: HelperCommunication.Request` 协议合并落地,`RuntimeXPCConnection` adapter 内部跑 BrokeredPeer,`RuntimeViewerCommunicationTests`(含新增 `RuntimeRequestProtocolMergeTests`)全绿。`RuntimeViewerService.swift` 单类此时仍存在(还未触动 daemon),但 Communication 这边已经能和 lib 协议互通。
+- [ ] Phase 1 完成:工作区编译通过,`RuntimeRequest: HelperCommunication.Request` 协议合并落地,`RuntimeXPCConnection` adapter 内部跑 HelperPeer,`RuntimeViewerCommunicationTests`(含新增 `RuntimeRequestProtocolMergeTests`)全绿。`RuntimeViewerService.swift` 单类此时仍存在(还未触动 daemon),但 Communication 这边已经能和 lib 协议互通。
 - [ ] Phase 2 完成:daemon 二进制由 HelperServer + services 装配,版本号 1.1.0,功能等价。工作区构建全绿。
 - [ ] Phase 3 完成:client 单例瘦身,SMAppService.daemon 安装走 lib,版本对账走 lib。工作区构建全绿。
 - [ ] Phase 4 完成:Catalyst helper 走 lib HelperServer(.plain)。工作区构建全绿。

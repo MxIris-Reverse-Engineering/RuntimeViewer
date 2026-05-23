@@ -4,7 +4,6 @@ import Testing
 import Foundation
 import HelperCommunication
 import RuntimeViewerCommunication
-import SwiftyXPC
 
 // MARK: - RuntimeRequest <-> HelperCommunication.Request protocol merge
 
@@ -12,7 +11,7 @@ import SwiftyXPC
 struct RuntimeRequestProtocolMergeTests {
     /// Compile-time assertion: every `RuntimeRequest` automatically satisfies
     /// `HelperCommunication.Request`, so business requests can be mounted onto a lib
-    /// `HelperService` / `BrokeredPeerClient` / `BrokeredPeerServer` without adapters.
+    /// `HelperService` / `HelperPeerClient` / `HelperPeerServer` without adapters.
     @Test("Business RuntimeRequest satisfies HelperCommunication.Request")
     func businessRequestsConformToLibRequest() {
         let _: any HelperCommunication.Request = OpenApplicationRequest(

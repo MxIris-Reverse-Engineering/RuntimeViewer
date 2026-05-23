@@ -18,7 +18,7 @@ public let RuntimeViewerServiceVersion: String = "1.1.0"
 
 /// On macOS, `RuntimeRequest` is a refinement of `HelperCommunication.Request` so that any
 /// daemon-bound business request can be mounted directly onto a lib `HelperService` /
-/// `BrokeredPeerClient` / `BrokeredPeerServer`. The `RuntimeResponse: Codable & Sendable`
+/// `HelperPeerClient` / `HelperPeerServer`. The `RuntimeResponse: Codable & Sendable`
 /// constraint is what lets the inherited `associatedtype Response: Codable & Sendable`
 /// from `HelperCommunication.Request` be satisfied.
 public protocol RuntimeRequest: HelperCommunication.Request {
