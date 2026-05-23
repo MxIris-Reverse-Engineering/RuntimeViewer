@@ -1,6 +1,5 @@
 import AppKit
 import UIFoundation
-import NSAttributedStringBuilder
 
 extension CheckboxButton {
     convenience init(title: String, titleFont: NSFont? = nil, titleColor: NSColor? = nil, titleSpacing: CGFloat = 5.0) {
