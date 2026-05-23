@@ -21,14 +21,10 @@ struct IndexingSettingsView: View {
             }
 
             Section {
-                Stepper(value: $indexing.backgroundMode.depth, in: 1...5) {
-                    LabeledContent("Depth", value: "\(indexing.backgroundMode.depth)")
-                }
+                Stepper("Depth", value: $indexing.backgroundMode.depth.asDouble, in: 1...5, format: .number.precision(.fractionLength(0)))
                 .disabled(!indexing.backgroundMode.isEnabled)
 
-                Stepper(value: $indexing.backgroundMode.maxConcurrency, in: 1...Self.maxConcurrencyUpperBound) {
-                    LabeledContent("Max Concurrent Tasks", value: "\(indexing.backgroundMode.maxConcurrency)")
-                }
+                Stepper("Max Concurrent Tasks", value: $indexing.backgroundMode.maxConcurrency.asDouble, in: 1...Self.maxConcurrencyUpperBound.double, format: .number.precision(.fractionLength(0)))
                 .disabled(!indexing.backgroundMode.isEnabled)
             } footer: {
                 Text("Depth controls how many levels of dependencies to index starting from each root image. Max concurrent tasks limits how many images are indexed in parallel; higher values finish faster but use more CPU.")
