@@ -25,7 +25,7 @@
 1. **lib 收纳通用骨架**:SMAppService.daemon 安装方式、helper 版本对账协议、broker peer 反向连接 + reconnect 信令握手,这些是任何特权 helper + 跨进程业务通信场景都会用到的。
 2. **业务专属逻辑留在本仓**:`OpenApplication` + NSWorkspace 进程终止跟踪、被注入端点 PID 监控注册表、legacy plist `SMJobRemove` 等仅 RuntimeViewer 有的需求继续放在本仓内。
 3. **业务 Request identifier 保留 `com.JH.RuntimeViewerService.*` 命名空间**,避免引入"为了走 lib 改 identifier"的多余兼容性负担(daemon 二进制本身因为重构必须重装,这部分代价无可避免)。
-4. **保留 `RuntimeXPCConnection` 作为 `RuntimeConnection` 协议的薄 adapter**,内部委托给 lib 新的 `BrokeredPeerClient` / `BrokeredPeerServer`。上层(`RuntimeEngine` / `RuntimeCommunicator`)对 connection 的使用方式不变。
+4. **保留 `RuntimeXPCConnection` 作为 `RuntimeConnection` 协议的薄 adapter**,内部委托给 lib 新的 `HelperPeerClient` / `HelperPeerServer`。上层(`RuntimeEngine` / `RuntimeCommunicator`)对 connection 的使用方式不变。
 5. **lib 不对外暴露不必要的内部 Request 类型**(`FetchEndpointRequest` / `RegisterEndpointRequest` / `ListServerInfosRequest` / `MainService` / `HelperTool` 维持 `package`),改为通过 public 行为方法间接调用。
 6. **lib 不与任何 UI 框架绑定**:状态发布使用 `AsyncStream`,不引入 `Combine` / `Observation` 依赖。RuntimeViewer 在 adapter 内部把 stream 桥接到 Combine。
 
@@ -34,7 +34,7 @@
 **In scope**
 
 - lib 新增 `HelperPeer` module + `SMAppServiceDaemonInstaller` + `FetchVersionRequest` + 4 个 broker 行为扩展 + `package → public` 提升。
-- RuntimeViewerCommunication 把 `RuntimeRequest` 合并到 lib `Request` 之下;删除被 lib 覆盖的 4 个 Request 文件;`RuntimeXPCConnection.swift` 改为 BrokeredPeer 的 adapter。
+- RuntimeViewerCommunication 把 `RuntimeRequest` 合并到 lib `Request` 之下;删除被 lib 覆盖的 4 个 Request 文件;`RuntimeXPCConnection.swift` 改为 HelperPeer 的 adapter。
 - `RuntimeViewerService` target:拆解单一 final class 为多个 `HelperService` 实现 + 改写 daemon `main.swift`。
 - `RuntimeViewerHelperClient` target:`HelperServiceManager` 委托 lib 安装/版本对账,`RuntimeHelperClient`/`RuntimeInjectClient` 降级为薄包装,删自管连接锁。
 - `RuntimeViewerCatalystHelper` 内 broker 注册代码改用 `HelperServer(serverType: .plain(...))`。
@@ -110,7 +110,7 @@ MainService (pkg, endpoint registry)
 - lib 收纳"特权 helper 安装、broker 注册表、broker peer 反向连接 + reconnect、版本对账"这一整层 IPC 骨架。
 - RuntimeViewer 把业务请求保留在自己仓内,所有 daemon-side handler 实现成 `HelperService`;所有 client-side 单例改成对 lib `HelperClient` 的薄包装。
 - `RuntimeRequest` 升格为 `HelperCommunication.Request` 的子协议,Connection 链路上(`RuntimeXPCConnection` 业务 RPC、`RuntimeNetwork/LocalSocket/Stdio/DirectTCP` 等)的现有用法全部继续工作,daemon 通信请求由于继承链自动满足 lib 协议,可以直接被 lib HelperService 挂载。
-- `RuntimeXPCConnection` 不删:它继续是 `RuntimeConnection` 的实现,内部把 broker 与业务握手委托给 lib 的 `BrokeredPeerClient` / `BrokeredPeerServer`。
+- `RuntimeXPCConnection` 不删:它继续是 `RuntimeConnection` 的实现,内部把 broker 与业务握手委托给 lib 的 `HelperPeerClient` / `HelperPeerServer`。
 
 ### lib 新增 / 改动
 
@@ -141,8 +141,8 @@ public protocol PeerConnection: Actor, Sendable {
     var listenerEndpoint: SwiftyXPC.XPCEndpoint { get async }
 }
 
-// HelperPeer/BrokeredPeerClient.swift
-public actor BrokeredPeerClient: PeerConnection {
+// HelperPeer/HelperPeerClient.swift
+public actor HelperPeerClient: PeerConnection {
     /// 初次握手流程:open anonymous listener → connect tool → ping → register own endpoint → 等 server 发 ServerLaunched 反向连过来。
     public init(
         machServiceName: String,
@@ -161,8 +161,8 @@ public actor BrokeredPeerClient: PeerConnection {
     ) async throws
 }
 
-// HelperPeer/BrokeredPeerServer.swift
-public actor BrokeredPeerServer: PeerConnection {
+// HelperPeer/HelperPeerServer.swift
+public actor HelperPeerServer: PeerConnection {
     /// open anonymous listener → connect tool → ping → fetch client endpoint → 主动连 client → 发 ServerLaunched(自己的 endpoint)
     /// → register 自己 endpoint(用于 host 重启时直接 reconnect)→ 注册 ClientReconnected handler。
     public init(
@@ -277,8 +277,8 @@ public struct VoidResponse: RuntimeResponse {           // 保留(给 Connection
 #### B. 删除被 lib 覆盖的 Request 文件
 
 - `Requests/PingRequest.swift` — daemon 链路与 Connection peer 链路均改用 `HelperCommunication.PingRequest`。
-- `Requests/FetchEndpointRequest.swift` — 由 lib `BrokeredPeerServer` 内部发起,host/server 都不直接发。
-- `Requests/RegisterEndpointRequest.swift` — 同上,由 `BrokeredPeerClient` 内部发起。
+- `Requests/FetchEndpointRequest.swift` — 由 lib `HelperPeerServer` 内部发起,host/server 都不直接发。
+- `Requests/RegisterEndpointRequest.swift` — 同上,由 `HelperPeerClient` 内部发起。
 - `Requests/FetchServiceVersionRequest.swift` — 改用 lib 新 `FetchVersionRequest`。
 
 #### C. 保留的 Request 文件(不动)
@@ -314,7 +314,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
 
 final class RuntimeXPCClientConnection: RuntimeXPCConnection {
     init(identifier:, modifier:) async throws {
-        let client = try await BrokeredPeerClient(
+        let client = try await HelperPeerClient(
             machServiceName: RuntimeViewerMachServiceName,
             isPrivilegedHelperTool: true,
             identifier: identifier.rawValue,
@@ -324,14 +324,14 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection {
         // modifier(self) 注册业务 handler 等
     }
     init(identifier:, serverEndpoint:, modifier:) async throws {
-        let client = try await BrokeredPeerClient(... serverEndpoint: serverEndpoint ...)
+        let client = try await HelperPeerClient(... serverEndpoint: serverEndpoint ...)
         super.init(identifier: identifier, peer: client)
     }
 }
 
 final class RuntimeXPCServerConnection: RuntimeXPCConnection {
     override init(identifier:, modifier:) async throws {
-        let server = try await BrokeredPeerServer(...)
+        let server = try await HelperPeerServer(...)
         super.init(identifier: identifier, peer: server)
     }
 }
@@ -447,14 +447,14 @@ lib 当前**没有 `Tests/` target**,本次新增。`Package.swift` 加 `.testTa
 
 **`HelperPeerTests`(集成)**
 
-覆盖目标:`BrokeredPeerClient` / `BrokeredPeerServer` 的握手 + reconnect + state stream + 业务 RPC handler。
+覆盖目标:`HelperPeerClient` / `HelperPeerServer` 的握手 + reconnect + state stream + 业务 RPC handler。
 
-测试基础设施:由于 mach service 需要 plist 注册,test 环境跑不动,采用**in-process anonymous broker**:测试用 `XPCListener(type: .anonymous)` + 内置 MainService 行为(register / fetch / list)起一个 broker,把它的 endpoint 注入到 `BrokeredPeerClient` / `BrokeredPeerServer` 的 init —— 这意味着 lib 需要在 `BrokeredPeerClient` / `BrokeredPeerServer` 上额外提供一组**测试用 init**,接受 `toolEndpoint: SwiftyXPC.XPCEndpoint` 代替 `machServiceName: String + isPrivilegedHelperTool: Bool`,在 internal/`@testable` 可见性下使用。
+测试基础设施:由于 mach service 需要 plist 注册,test 环境跑不动,采用**in-process anonymous broker**:测试用 `XPCListener(type: .anonymous)` + 内置 MainService 行为(register / fetch / list)起一个 broker,把它的 endpoint 注入到 `HelperPeerClient` / `HelperPeerServer` 的 init —— 这意味着 lib 需要在 `HelperPeerClient` / `HelperPeerServer` 上额外提供一组**测试用 init**,接受 `toolEndpoint: SwiftyXPC.XPCEndpoint` 代替 `machServiceName: String + isPrivilegedHelperTool: Bool`,在 internal/`@testable` 可见性下使用。
 
 测试用例:
 
-- **TC-1 初次握手**:起 in-process broker,起 `BrokeredPeerClient`,起 `BrokeredPeerServer`,断言双方 state 序列 `.connecting → .connected`;client 通过 `send(...)` 发自定义业务 Request,server 端 `HelperService.setupHandler` 注册的 handler 收到并响应。
-- **TC-2 reconnect by endpoint**:在 TC-1 基础上,client `cancel()`,新起一个 `BrokeredPeerClient(... serverEndpoint: server.listenerEndpoint, ...)` 直接 reconnect,断言:server 端 `ClientReconnectedNotification` handler 被触发、peer connection 替换、state 重新到 `.connected`、业务 RPC 继续可用。
+- **TC-1 初次握手**:起 in-process broker,起 `HelperPeerClient`,起 `HelperPeerServer`,断言双方 state 序列 `.connecting → .connected`;client 通过 `send(...)` 发自定义业务 Request,server 端 `HelperService.setupHandler` 注册的 handler 收到并响应。
+- **TC-2 reconnect by endpoint**:在 TC-1 基础上,client `cancel()`,新起一个 `HelperPeerClient(... serverEndpoint: server.listenerEndpoint, ...)` 直接 reconnect,断言:server 端 `ClientReconnectedNotification` handler 被触发、peer connection 替换、state 重新到 `.connected`、业务 RPC 继续可用。
 - **TC-3 双向业务 RPC**:client 和 server 各挂一个自定义 Request handler(via `services: [HelperService]`),互相发送,断言双向均成功(覆盖"既是 client 又是 server"的反向 RPC)。
 - **TC-4 state stream cancel**:`cancel()` 之后 state stream 推 `.cancelled` 然后 finish,后续 `send(...)` 抛错。
 - **TC-5 broker 失活**:broker `cancel()` 之后 client/server `send(...)` 抛 XPC 连接错误,state 转 `.disconnected(_)`。
@@ -505,7 +505,7 @@ lib 当前**没有 `Tests/` target**,本次新增。`Package.swift` 加 `.testTa
 4. **`PeerConnection` 上的 raw `sendMessage(name:)` 入口**:`RuntimeXPCConnection` 当前对外暴露多个 untyped `sendMessage(name:)` / `setMessageHandler(name:)` 重载。Plan 阶段先 grep 实际 callers,确认是否都能改成类型化 Request;若有少量保留需求,在 `PeerConnection` 上以 `package` extension 暴露给 adapter,不进入 lib 公开 API。
 5. **SMAppService.daemon 状态变化检测**:`SMAppService.Status` 没有 KVO/notification,需要靠主动 refresh。lib `SMAppServiceDaemonInstaller.statusStream` 通过 register/unregister 操作前后显式刷新 + 调用方主动 `refresh()` 推送,而不是 polling。RuntimeViewer 的 `HelperServiceManager` 已经是按需 refresh 的模式,迁移成本低。
 6. **`Synchronization.Mutex`(macOS 15+)**:RuntimeViewer 当前用,lib 不用(actor 已经线性化访问)。`HelperServiceManager` 改造后不再需要这个依赖,可以删除相关 `import Synchronization`。
-7. **测试可见性**:`BrokeredPeerClient` / `BrokeredPeerServer` 测试用 `init(toolEndpoint:)` 走 `@_spi(Testing)` 或 `internal + @testable`,不进入 public API。
+7. **测试可见性**:`HelperPeerClient` / `HelperPeerServer` 测试用 `init(toolEndpoint:)` 走 `@_spi(Testing)` 或 `internal + @testable`,不进入 public API。
 8. **`@Loggable` macro**:RuntimeViewer 各处使用 `@Loggable` / `#log(.info,...)` 风格(`FoundationToolbox` 提供)。lib 端只用 `OSLog.Logger`,迁移 daemon 代码到 lib 时把 `@Loggable` 替换为标准 `Logger`,但 RuntimeViewer 仓内的 service 文件保留 `@Loggable` 风格不变。
 
 ## 验收标准

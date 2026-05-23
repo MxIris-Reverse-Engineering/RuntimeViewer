@@ -195,7 +195,7 @@ public actor RuntimeEngine {
     /// Set after `connect()` succeeds for XPC-based connections (macOS only).
     /// Used by injected apps to register their endpoint with the Mach Service
     /// for Host reconnection. Stored as `any Sendable` to avoid platform-specific
-    /// types in the actor interface; cast to `SwiftyXPC.XPCEndpoint` on macOS.
+    /// types in the actor interface; cast to `HelperPeerEndpoint` on macOS.
     public private(set) var xpcListenerEndpoint: (any Sendable)?
 
     /// Coordinator for background indexing batches that load and index images

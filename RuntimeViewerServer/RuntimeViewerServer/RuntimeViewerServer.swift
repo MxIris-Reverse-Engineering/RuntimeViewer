@@ -9,8 +9,8 @@ import LaunchServicesPrivate
 #endif
 
 #if os(macOS)
-import SwiftyXPC
 import HelperCommunication
+import HelperClient
 #endif
 
 #if canImport(UIKit)
@@ -89,16 +89,18 @@ private enum RuntimeViewerServer {
 
     #if os(macOS)
     private static func registerInjectedEndpoint() async {
-        guard let endpoint = await runtimeEngine?.xpcListenerEndpoint as? SwiftyXPC.XPCEndpoint else {
+        guard let endpoint = await runtimeEngine?.xpcListenerEndpoint as? HelperPeerEndpoint else {
             #log(.error, "Failed to get XPC listener endpoint for registration")
             return
         }
 
         do {
-            let connection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
-            connection.activate()
-            defer { connection.cancel() }
-            try await connection.sendMessage(request: RegisterInjectedEndpointRequest(
+            let helperClient = HelperClient()
+            try await helperClient.connectToTool(
+                machServiceName: RuntimeViewerMachServiceName,
+                isPrivilegedHelperTool: true
+            )
+            try await helperClient.sendToTool(request: RegisterInjectedEndpointRequest(
                 pid: ProcessInfo.processInfo.processIdentifier,
                 appName: processName,
                 bundleIdentifier: Bundle.main.bundleIdentifier ?? "",

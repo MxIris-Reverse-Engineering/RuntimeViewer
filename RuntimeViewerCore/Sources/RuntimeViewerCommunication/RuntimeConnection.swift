@@ -1,5 +1,8 @@
 public import Foundation
 public import Combine
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+public import HelperCommunication
+#endif
 
 /// Protocol defining the unified interface for all runtime communication channels.
 ///

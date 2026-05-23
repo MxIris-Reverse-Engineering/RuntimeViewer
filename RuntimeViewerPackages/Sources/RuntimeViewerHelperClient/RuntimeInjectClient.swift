@@ -2,7 +2,7 @@
 
 import Foundation
 import FoundationToolbox
-import SwiftyXPC
+import HelperCommunication
 import HelperCommunication
 import HelperClient
 import RuntimeViewerCommunication
@@ -91,7 +91,7 @@ public final class RuntimeInjectClient: @unchecked Sendable {
 
     /// Registers an injected app's XPC endpoint with the daemon's
     /// `InjectedEndpointRegistryService`.
-    public func registerInjectedEndpoint(pid: pid_t, appName: String, bundleIdentifier: String, endpoint: SwiftyXPC.XPCEndpoint) async throws {
+    public func registerInjectedEndpoint(pid: pid_t, appName: String, bundleIdentifier: String, endpoint: HelperPeerEndpoint) async throws {
         try await helperServiceManager.ensureConnectedToTool()
         try await helperServiceManager.helperClient.sendToTool(
             request: RegisterInjectedEndpointRequest(

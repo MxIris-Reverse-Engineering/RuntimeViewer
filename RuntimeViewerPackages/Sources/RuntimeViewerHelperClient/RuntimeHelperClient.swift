@@ -2,7 +2,6 @@
 
 import Foundation
 import FoundationToolbox
-import SwiftyXPC
 import HelperCommunication
 import HelperClient
 import RuntimeViewerCommunication

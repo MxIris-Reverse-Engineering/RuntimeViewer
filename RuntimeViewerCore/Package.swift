@@ -60,7 +60,7 @@ let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 let package = Package(
     name: "RuntimeViewerCore",
     platforms: [
-        .macOS(.v11), .iOS(.v13), .macCatalyst(.v14), .watchOS(.v6), .tvOS(.v13), .visionOS(.v1),
+        .macOS(.v10_15), .iOS(.v13), .macCatalyst(.v13), .watchOS(.v6), .tvOS(.v13), .visionOS(.v1),
     ],
     products: [
         .library(
@@ -205,6 +205,7 @@ let package = Package(
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperPeer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Asynchrone", package: "Asynchrone"),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),

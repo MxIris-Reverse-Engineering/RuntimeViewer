@@ -2,7 +2,6 @@
 
 import Foundation
 import FoundationToolbox
-import SwiftyXPC
 import ServiceManagement
 import RuntimeViewerServiceHelper
 import HelperCommunication
@@ -273,7 +272,7 @@ public final class HelperServiceManager {
     ///
     /// Delegates the version query to lib `HelperClient.fetchToolVersion()` and the
     /// `unexpectedMessage`-vs-transient classification to
-    /// `XPCConnection.Error.indicatesOutdatedPeer`. Install/unregister go through lib
+    /// `HelperClient.errorIndicatesOutdatedPeer(_:)`. Install/unregister go through lib
     /// `SMAppServiceDaemonInstaller`. On mismatch + service enabled, the daemon is
     /// unregistered, paused briefly, and re-registered so the new binary picks up.
     public func checkServiceVersionAndReinstallIfNeeded() async -> ServiceVersionCheckResult {
@@ -343,10 +342,10 @@ public final class HelperServiceManager {
     /// error — connection refused, interrupted, invalid, generic XPC failure — is treated as
     /// transient and must NOT trigger an automatic reinstall.
     ///
-    /// Delegates to `XPCConnection.Error.indicatesOutdatedPeer` so the discriminator stays in
+    /// Delegates to `HelperClient.errorIndicatesOutdatedPeer(_:)` so the discriminator stays in
     /// lock-step with the shared lib implementation.
     private static func errorIndicatesOutdatedBinary(_ error: any Error) -> Bool {
-        (error as? XPCConnection.Error)?.indicatesOutdatedPeer ?? false
+        HelperClient.errorIndicatesOutdatedPeer(error)
     }
 
     // MARK: - XPC Operations
