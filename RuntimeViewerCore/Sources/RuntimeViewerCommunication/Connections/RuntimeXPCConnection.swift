@@ -172,6 +172,13 @@ extension RuntimeXPCConnection: XPCListenerEndpointProviding {
 ///   listener, direct-connects to the server endpoint, and sends
 ///   `ClientReconnected` so the server swaps its peer connection.
 final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendable {
+    // IMPORTANT: the order `init lib peer → super.init → modifier → peer.activate()`
+    // is load-bearing. The modifier wires business message handlers onto the
+    // peer's listener; `peer.activate()` then activates the listener and
+    // registers the endpoint with the broker, so the server can only reach
+    // us once handlers are in place. Collapsing the handshake into the lib
+    // peer's init races against handler installation — see Catalyst connection
+    // regression fixed by the two-phase split.
     init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         let peer = try await HelperPeerClient(
             machServiceName: RuntimeViewerMachServiceName,
@@ -211,6 +218,13 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
 /// handler is installed on the listener so subsequent host reconnects swap
 /// the peer connection in place.
 final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendable {
+    // IMPORTANT: the modifier MUST run before `peer.activate()`. The modifier
+    // installs the engine's server-side handlers (imageList, loadImage,
+    // runtimeObjectsInImage, …) on the peer's listener; `peer.activate()`
+    // then sends `ServerLaunchedNotification` to the host. If the lib peer
+    // sent ServerLaunched inside its own init, the host would start firing
+    // business requests before this side's handlers existed — code-injection
+    // regression fixed by the two-phase split.
     init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
         let peer = try await HelperPeerServer(
             machServiceName: RuntimeViewerMachServiceName,

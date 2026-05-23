@@ -138,10 +138,6 @@ let package = Package(
             from: "0.5.4"
         ),
         .package(
-            url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-            from: "0.5.100"
-        ),
-        .package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/swift-helper-service",
                 isRelative: true,
@@ -202,7 +198,6 @@ let package = Package(
         .target(
             name: "RuntimeViewerCommunication",
             dependencies: [
-                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperPeer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
