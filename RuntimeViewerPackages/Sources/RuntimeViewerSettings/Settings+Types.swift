@@ -18,7 +18,14 @@ extension Settings {
     public struct General {
         @Default(Settings.Appearances.system)
         public var appearance: Settings.Appearances
-        
+
+        /// Caps the recursion of `expandItem(_:expandChildren: true)` on
+        /// double-click. Without a cap, double-clicking a root with a deep
+        /// subtree (e.g. the dyld shared cache) freezes the main thread while
+        /// AppKit walks every descendant.
+        @Default(3)
+        public var sidebarMaxExpansionDepth: Int
+
         public static let `default` = Self()
     }
 

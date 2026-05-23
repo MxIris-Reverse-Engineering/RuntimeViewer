@@ -91,7 +91,7 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         public let didBeginFiltering: Signal<Void>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
-        public let expandItem: Signal<SidebarRootCellViewModel>
+        public let toggleExpansion: Signal<(item: SidebarRootCellViewModel, maxDepth: Int)>
     }
 
     public func transform(_ input: Input) -> Output {
@@ -148,7 +148,13 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
             didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
             didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
-            expandItem: input.clickedNode.filter { !$0.isLeaf }.asSignal(),
+            toggleExpansion: input.clickedNode
+                .filter { !$0.isLeaf }
+                .compactMap { [weak self] item -> (item: SidebarRootCellViewModel, maxDepth: Int)? in
+                    guard let self else { return nil }
+                    return (item, settings.general.sidebarMaxExpansionDepth)
+                }
+                .asSignal(onErrorSignalWith: .empty()),
         )
     }
 }
