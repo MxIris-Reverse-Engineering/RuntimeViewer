@@ -470,6 +470,8 @@ let package = Package(
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperService", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperServer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
 
