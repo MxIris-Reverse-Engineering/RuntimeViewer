@@ -318,6 +318,17 @@ let package = Package(
         ),
         .package(
             local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-helper-service"),
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-macOS-Library/swift-helper-service",
+                branch: "main"
+            )
+        ),
+        .package(
+            local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
                 isRelative: true,
                 isEnabled: usingLocalDependencies
@@ -463,6 +474,7 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
 
@@ -477,6 +489,8 @@ let package = Package(
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
             ]
         ),
         .target(

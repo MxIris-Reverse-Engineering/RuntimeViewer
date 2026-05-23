@@ -5,6 +5,8 @@ import FoundationToolbox
 import SwiftyXPC
 import ServiceManagement
 import RuntimeViewerServiceHelper
+import HelperCommunication
+import HelperClient
 import RuntimeViewerCommunication
 import Synchronization
 import Dependencies
@@ -274,7 +276,7 @@ public final class HelperServiceManager {
         let serviceVersion: String?
         do {
             let connection = try connectionIfNeeded()
-            let response: FetchServiceVersionRequest.Response = try await connection.sendMessage(request: FetchServiceVersionRequest())
+            let response: HelperCommunication.FetchVersionRequest.Response = try await connection.sendMessage(request: HelperCommunication.FetchVersionRequest())
             serviceVersion = response.version
         } catch {
             if Self.errorIndicatesOutdatedBinary(error) {
@@ -338,11 +340,11 @@ public final class HelperServiceManager {
     /// recognize the version query message (i.e. predates the version check feature). Every other
     /// error — connection refused, interrupted, invalid, generic XPC failure — is treated as
     /// transient and must NOT trigger an automatic reinstall.
+    ///
+    /// Delegates to `XPCConnection.Error.indicatesOutdatedPeer` so the discriminator stays in
+    /// lock-step with the shared lib implementation.
     private static func errorIndicatesOutdatedBinary(_ error: any Error) -> Bool {
-        if let connectionError = error as? XPCConnection.Error, case .unexpectedMessage = connectionError {
-            return true
-        }
-        return false
+        (error as? XPCConnection.Error)?.indicatesOutdatedPeer ?? false
     }
 
     // MARK: - XPC Operations

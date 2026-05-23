@@ -4,6 +4,7 @@ import AppKit
 import FoundationToolbox
 import SwiftyXPC
 import MachInjector
+import HelperCommunication
 import RuntimeViewerCommunication
 
 /// Privileged helper daemon running as a Mach service.
@@ -45,11 +46,11 @@ public final class RuntimeViewerService {
         listener.activate()
     }
 
-    private func ping(_ connection: XPCConnection, request: PingRequest) async throws -> PingRequest.Response {
+    private func ping(_ connection: XPCConnection, request: HelperCommunication.PingRequest) async throws -> HelperCommunication.PingRequest.Response {
         return .empty
     }
 
-    private func fetchServiceVersion(_ connection: XPCConnection, request: FetchServiceVersionRequest) async throws -> FetchServiceVersionRequest.Response {
+    private func fetchServiceVersion(_ connection: XPCConnection, request: HelperCommunication.FetchVersionRequest) async throws -> HelperCommunication.FetchVersionRequest.Response {
         return .init(version: RuntimeViewerServiceVersion)
     }
 
