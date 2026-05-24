@@ -11,16 +11,16 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
     @Observed public private(set) var filteredNodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var isFilteringForOpenQuickly: Bool = false
 
+    /// Latest non-nil root object the document is inspecting, waiting to
+    /// be resolved to a concrete cell once it appears in `nodes`. Driven
+    /// by `documentState.$selectionStack` (see `transform`) — never by an
+    /// external imperative call.
     private let pendingSelectRelay = PublishRelay<RuntimeObject>()
 
     override var isSorted: Bool { true }
 
     public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         super.init(imageNode: imageNode, documentState: documentState, router: router)
-    }
-
-    public func selectRuntimeObject(_ object: RuntimeObject) {
-        pendingSelectRelay.accept(object)
     }
 
     public static func findCell(
@@ -119,8 +119,25 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
         input.runtimeObjectClickedForOpenQuickly
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
+                #if os(macOS)
+                documentState.selectionRouter.trigger(.selectAtRoot(viewModel.runtimeObject))
+                #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
+                #endif
             }
+            .disposed(by: rx.disposeBag)
+
+        // Visual selection follows whatever the document is currently
+        // inspecting at its root. The sidebar row click path already
+        // dispatched `.selectAtRoot` through `documentState.selectionRouter`,
+        // so observing `selectionStack` covers both that case (idempotent
+        // re-select on the already-highlighted row) and the specialization-
+        // completion case (new root object that has not yet been clicked).
+        documentState.$selectionStack
+            .asObservable()
+            .compactMap { $0.first }
+            .distinctUntilChanged()
+            .bind(to: pendingSelectRelay)
             .disposed(by: rx.disposeBag)
 
         let pendingResolved: Signal<CellLookup> = pendingSelectRelay
