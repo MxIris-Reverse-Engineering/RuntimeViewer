@@ -107,7 +107,7 @@ private final class SelectionRouter: Router {
             documentState.selectionStack = []
         case .selectAtRoot(let object):
             documentState.selectionStack = [object]
-        case .drillInto(let object):
+        case .push(let object):
             documentState.selectionStack.append(object)
         case .pop:
             guard !documentState.selectionStack.isEmpty else { return }

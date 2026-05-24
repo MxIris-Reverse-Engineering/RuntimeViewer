@@ -31,7 +31,7 @@ public enum SelectionRoute: Routable {
     case switchEngine(RuntimeEngine)
     case switchImage(RuntimeImageNode?)
     case selectAtRoot(RuntimeObject)
-    case drillInto(RuntimeObject)
+    case push(RuntimeObject)
     case pop
     case clear
 }

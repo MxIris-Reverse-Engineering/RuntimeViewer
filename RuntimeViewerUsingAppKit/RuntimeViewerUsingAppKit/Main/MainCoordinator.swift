@@ -147,7 +147,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // `SidebarRuntimeObjectListViewModel` by observing
             // `documentState.$selectionStack` directly — no coordinator
             // routing is needed for a pure UI scroll-and-highlight.
-        case .drillInto(let object):
+        case .push(let object):
             contentCoordinator.contextTrigger(.next(object))
             inspectorCoordinator.contextTrigger(.next(.object(object)))
         case .pop:
