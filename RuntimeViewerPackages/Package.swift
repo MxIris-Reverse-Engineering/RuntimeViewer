@@ -312,11 +312,11 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-helper-service"),
                 isRelative: true,
-                isEnabled: true
+                isEnabled: usingLocalDependencies
             ),
             remote: .package(
-                url: "https://github.com/MxIris-macOS-Library/swift-helper-service",
-                branch: "main"
+                url: "https://github.com/Mx-Iris/swift-helper-service",
+                from: "0.1.2"
             )
         ),
         .package(
@@ -332,7 +332,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
-                from: "0.2.0"
+                from: "0.3.3"
             )
         ),
         .package(
