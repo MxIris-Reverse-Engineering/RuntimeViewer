@@ -34,6 +34,18 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     /// `reloadRow` signal in `SpecializationViewModel`.
     private let reloadRowRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
+    /// Currently-running reload task. `scheduleReload` cancels this before
+    /// starting a new one, so trigger sources that fire concurrently (init,
+    /// `.fullReload` broadcasts, bookmark mutations) never end up with two
+    /// `reloadData()` invocations racing to write `loadState` / `nodes` /
+    /// `filteredNodes`. `nil` whenever no reload is in flight.
+    private var currentReloadTask: Task<Void, Never>?
+
+    /// Monotonic token so each scheduled reload can recognize whether it is
+    /// still the most recent one when it finishes (to decide whether to
+    /// clear `currentReloadTask` or leave the successor in place).
+    private var currentReloadGeneration: Int = 0
+
     public init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         let imagePath = imageNode.path
         self.runtimeEngine = documentState.runtimeEngine
@@ -45,27 +57,59 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         runtimeEngine.dataChangePublisher
             .asObservable()
             .subscribeOnNext { [weak self] change in
-                guard let self else { return }
-                switch change {
-                case .fullReload:
-                    Task {
-                        try? await self.reloadData()
-                    }
-                case .specializationAdded(let parent, let child):
-                    guard parent.imagePath == self.imagePath else { return }
-                    Task { @MainActor in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    switch change {
+                    case .fullReload:
+                        // Skip if a reload is already in-flight on this
+                        // image. Concrete scenario: the user double-clicks
+                        // into an image that the background indexer was
+                        // already processing. The init reload (kicked off
+                        // synchronously below) and the batch-completion
+                        // broadcast (delivered when the background batch
+                        // wraps up) would otherwise both run `reloadData`,
+                        // and whichever finished second would clobber the
+                        // first one's `nodes` / `filteredNodes` / `loadState`
+                        // with a freshly-allocated batch of cell viewmodels,
+                        // wiping the user's selection and flashing the
+                        // loading UI. The in-flight reload already reads
+                        // from the same section factory cache the
+                        // background pass populated, so dropping this
+                        // broadcast is information-preserving.
+                        guard self.currentReloadTask == nil else { return }
+                        self.scheduleReload()
+                    case .specializationAdded(let parent, let child):
+                        guard parent.imagePath == self.imagePath else { return }
                         self.applySpecializationAdded(parent: parent, child: child)
                     }
                 }
             }
             .disposed(by: rx.disposeBag)
 
-        Task {
+        scheduleReload()
+    }
+
+    /// Single entry point for kicking off a reload. Cancels the currently
+    /// running task before launching a new one, then bumps the generation
+    /// counter so cancelled tasks can detect that they have been superseded
+    /// and bail out before publishing partial results to the UI.
+    func scheduleReload() {
+        currentReloadTask?.cancel()
+        currentReloadGeneration &+= 1
+        let myGeneration = currentReloadGeneration
+        currentReloadTask = Task { @MainActor [weak self] in
+            guard let self else { return }
             do {
-                try await reloadData()
+                try await self.reloadData()
+            } catch is CancellationError {
+                // Superseded by a newer reload — leave UI publishing to
+                // the winner.
             } catch {
                 self.loadState = .loadError(error)
                 #log(.error, "\(error)")
+            }
+            if self.currentReloadGeneration == myGeneration {
+                self.currentReloadTask = nil
             }
         }
     }
@@ -181,15 +225,23 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     }
 
     func reloadData() async throws {
+        // `MainActor.run` blocks are not natural cancellation points (they
+        // run synchronously once they reach the main actor), so explicit
+        // checks fence each UI write — a task that has been cancelled by
+        // `scheduleReload` must throw before publishing partial results
+        // that the successor task would otherwise re-publish on top of.
+        try Task.checkCancellation()
         let imageLoadState: RuntimeImageLoadState = try await runtimeEngine.isImageLoaded(path: imagePath) ? .loaded : .notLoaded
 
         if case .notLoaded = imageLoadState {
+            try Task.checkCancellation()
             await MainActor.run {
                 self.loadState = .notLoaded
             }
             return
         }
 
+        try Task.checkCancellation()
         await MainActor.run {
             self.loadState = .loading
             self.loadingProgress = 0
@@ -199,6 +251,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
         var runtimeObjects: [RuntimeObject] = []
         for try await event in buildRuntimeObjectsStream() {
+            try Task.checkCancellation()
             switch event {
             case .progress(let progress):
                 await MainActor.run {
@@ -215,12 +268,14 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             }
         }
 
+        try Task.checkCancellation()
         await MainActor.run {
             self.loadingProgress = 0.95
             self.loadingDescription = "Building list..."
             self.loadingItemCount = "\(runtimeObjects.count) objects"
         }
 
+        try Task.checkCancellation()
         await MainActor.run {
             self.loadState = .loaded
             self.loadingProgress = 1.0
