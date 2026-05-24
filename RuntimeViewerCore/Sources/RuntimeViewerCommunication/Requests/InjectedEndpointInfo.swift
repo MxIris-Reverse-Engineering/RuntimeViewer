@@ -1,7 +1,7 @@
 #if os(macOS)
 
 public import Foundation
-public import SwiftyXPC
+public import HelperCommunication
 
 /// Metadata for an injected app's registered XPC endpoint.
 ///
@@ -18,9 +18,9 @@ public struct InjectedEndpointInfo: Codable, Sendable {
     public let bundleIdentifier: String
 
     /// The XPC listener endpoint of the injected app's runtime engine server.
-    public let endpoint: SwiftyXPC.XPCEndpoint
+    public let endpoint: HelperPeerEndpoint
 
-    public init(pid: pid_t, appName: String, bundleIdentifier: String, endpoint: SwiftyXPC.XPCEndpoint) {
+    public init(pid: pid_t, appName: String, bundleIdentifier: String, endpoint: HelperPeerEndpoint) {
         self.pid = pid
         self.appName = appName
         self.bundleIdentifier = bundleIdentifier

@@ -1,5 +1,5 @@
 {
-  "originHash" : "9c10b3899ebc5783f2f2fb70175773dade23b1053e9fb4a40136e61698af4724",
+  "originHash" : "8c77d31e12e67ef5b00bf22170bd43d9cfbeefb79276a06b4355b9a02d64147c",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
       "state" : {
-        "revision" : "4288ebae7324ddef8cb084f25c84ca7941a1e276",
-        "version" : "0.5.4"
+        "revision" : "4ab712e98990bb3a44a5ef160bd0b0c3f03ace08",
+        "version" : "0.5.5"
       }
     },
     {
@@ -53,6 +53,15 @@
       "state" : {
         "revision" : "ee6dbcf2f13176c005337b37ba88431d40458a2b",
         "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "machinjector",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
+      "state" : {
+        "branch" : "main",
+        "revision" : "26c6e80b487a554782e5aa07a418dc6ed7f66f4d"
       }
     },
     {
@@ -195,8 +204,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",
       "state" : {
-        "revision" : "03cc312c2c933ed87abace34044a5dff7a3117c1",
-        "version" : "1.5.0"
+        "revision" : "fea17c02d767f46b23070fdfdacc28a03a39232a",
+        "version" : "1.5.1"
       }
     },
     {
@@ -339,8 +348,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "revision" : "d56672e7939ae929e94d4ea66da3fc527a69724e",
-        "version" : "0.5.100"
+        "branch" : "main",
+        "revision" : "24224400130aa5c6d6c670d32814094386242baa"
       }
     },
     {
