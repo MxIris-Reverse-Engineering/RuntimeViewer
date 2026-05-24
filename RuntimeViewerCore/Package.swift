@@ -106,11 +106,6 @@ let package = Package(
                 isEnabled: usingLocalDependencies
             ),
             remote: .package(
-                // Pinned `exact:` because the floor crosses a prerelease (-beta.1)
-                // boundary — SwiftPM's `from:` resolution skips prereleases, so
-                // a plain `from: "0.12.0-beta.1"` would silently resolve to the
-                // latest stable (0.11.0) instead. Bump to a non-prerelease
-                // `from:` when RuntimeViewer ships 2.1.0 stable.
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
                 exact: "0.12.0-beta.1"
             )
@@ -128,18 +123,19 @@ let package = Package(
             from: "1.1.0"
         ),
         .package(
-            // Floor bumped to 0.5.4: UIFoundation 0.8.1's ToolbarItem calls
-            // `@AvailableMutating()` with no default-value argument, which only
-            // compiles starting at FrameworkToolbox 0.5.4 (the tag where the
-            // macro declaration became `_ defaultValue: Any? = nil`). Older
-            // tags require an explicit `Any` and SwiftPM's `from: "0.4.0"`
-            // range was legally letting CI resolve down to 0.5.3.
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
-            from: "0.5.4"
+            from: "0.5.5",
         ),
         .package(
-            url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
-            from: "0.5.100"
+            local: .package(
+                path: "../../../../Personal/Library/macOS/swift-helper-service",
+                isRelative: true,
+                isEnabled: true
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-macOS-Library/swift-helper-service",
+                from: "0.1.0"
+            ),
         ),
         .package(
             url: "https://github.com/gohanlon/swift-memberwise-init-macro",
@@ -191,7 +187,9 @@ let package = Package(
         .target(
             name: "RuntimeViewerCommunication",
             dependencies: [
-                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperPeer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Asynchrone", package: "Asynchrone"),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),

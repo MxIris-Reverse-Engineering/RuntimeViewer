@@ -2,13 +2,17 @@
 
 import Foundation
 import FoundationToolbox
-import SwiftyXPC
+import HelperCommunication
+import HelperClient
 import RuntimeViewerCommunication
-import Synchronization
 import Dependencies
 import ServiceManagement
 
-/// Client for communicating with the RuntimeViewer helper service.
+/// Thin wrapper that routes Catalyst-launch RPCs through the shared lib `HelperClient`
+/// owned by `HelperServiceManager`. Connection lifecycle / version reconcile lives in
+/// `HelperServiceManager`; this type is kept only so the `@Dependency` injection point
+/// `runtimeHelperClient` and its narrow business surface (`launchMacCatalystHelper`)
+/// stay stable for callers.
 @Loggable
 public final class RuntimeHelperClient: @unchecked Sendable {
     public enum Error: LocalizedError {
@@ -23,8 +27,6 @@ public final class RuntimeHelperClient: @unchecked Sendable {
     }
 
     public static let shared = RuntimeHelperClient()
-
-    private let connectionLock = Synchronization.Mutex<XPCConnection?>(nil)
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
 
@@ -42,54 +44,25 @@ public final class RuntimeHelperClient: @unchecked Sendable {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if helperServiceManager.status == .enabled {
-                    reconnect()
+                    await reconnect()
                 }
                 observeStatusChange()
             }
         }
     }
 
-    /// Invalidates the current connection and establishes a new one.
-    public func reconnect() {
-        invalidateConnection()
-        do {
-            _ = try connectionIfNeeded()
-            #log(.info,"Successfully reconnected to helper service")
-        } catch {
-            #log(.error,"Failed to reconnect to helper service: \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    /// Invalidates the current connection without reconnecting.
-    public func invalidateConnection() {
-        connectionLock.withLock { connection in
-            connection?.cancel()
-            connection = nil
-        }
-    }
-
-    private func connectionIfNeeded() throws -> XPCConnection {
-        try connectionLock.withLock { connection in
-            if let currentConnection = connection {
-                return currentConnection
-            }
-
-            let newConnection = try XPCConnection(type: .remoteMachService(serviceName: RuntimeViewerMachServiceName, isPrivilegedHelperTool: true))
-            newConnection.errorHandler = { [weak self] _, error in
-                #log(.error,"XPC connection error: \(error.localizedDescription, privacy: .public)")
-                self?.connectionLock.withLock { conn in
-                    conn = nil
-                }
-            }
-            newConnection.activate()
-            connection = newConnection
-            return newConnection
-        }
+    /// Invalidates the current connection and re-establishes it through
+    /// `HelperServiceManager`'s shared lib `HelperClient`.
+    public func reconnect() async {
+        await helperServiceManager.reconnect()
     }
 
     public func launchMacCatalystHelper() async throws {
         let callerPID = ProcessInfo.processInfo.processIdentifier
-        try await connectionIfNeeded().sendMessage(request: OpenApplicationRequest(url: RuntimeViewerCatalystHelperLauncher.helperURL, callerPID: callerPID))
+        try await helperServiceManager.ensureConnectedToTool()
+        try await helperServiceManager.helperClient.sendToTool(
+            request: OpenApplicationRequest(url: RuntimeViewerCatalystHelperLauncher.helperURL, callerPID: callerPID)
+        )
     }
 }
 
@@ -97,7 +70,6 @@ enum RuntimeViewerCatalystHelperLauncher {
     static let appName = "RuntimeViewerCatalystHelper"
     static let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents").appendingPathComponent("Applications").appendingPathComponent("\(appName).app")
 }
-
 
 // MARK: - Dependencies
 

@@ -2,7 +2,7 @@ public import Foundation
 public import FoundationToolbox
 
 #if os(macOS)
-@preconcurrency import SwiftyXPC
+import HelperCommunication
 #endif
 
 public enum RuntimeCommunicatorError: Error, LocalizedError, Sendable {
@@ -73,7 +73,7 @@ public final class RuntimeCommunicator {
                 #log(.info, "XPC server connection established")
                 return connection
             } else {
-                if let xpcServerEndpoint = xpcServerEndpoint as? SwiftyXPC.XPCEndpoint {
+                if let xpcServerEndpoint = xpcServerEndpoint as? HelperPeerEndpoint {
                     #log(.debug, "Creating XPC client connection (direct reconnect) with identifier: \(String(describing: identifier), privacy: .public)")
                     let connection = try await RuntimeXPCClientConnection(identifier: identifier, serverEndpoint: xpcServerEndpoint, modifier: modifier)
                     #log(.info, "XPC client direct reconnection established")

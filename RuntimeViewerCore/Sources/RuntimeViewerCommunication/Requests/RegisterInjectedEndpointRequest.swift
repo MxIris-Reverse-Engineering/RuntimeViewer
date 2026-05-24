@@ -1,7 +1,7 @@
 #if os(macOS)
 
 public import Foundation
-public import SwiftyXPC
+public import HelperCommunication
 
 /// Registers an injected app's XPC endpoint with the Mach Service daemon.
 ///
@@ -15,9 +15,9 @@ public struct RegisterInjectedEndpointRequest: Codable, RuntimeRequest {
     public let pid: pid_t
     public let appName: String
     public let bundleIdentifier: String
-    public let endpoint: SwiftyXPC.XPCEndpoint
+    public let endpoint: HelperPeerEndpoint
 
-    public init(pid: pid_t, appName: String, bundleIdentifier: String, endpoint: SwiftyXPC.XPCEndpoint) {
+    public init(pid: pid_t, appName: String, bundleIdentifier: String, endpoint: HelperPeerEndpoint) {
         self.pid = pid
         self.appName = appName
         self.bundleIdentifier = bundleIdentifier

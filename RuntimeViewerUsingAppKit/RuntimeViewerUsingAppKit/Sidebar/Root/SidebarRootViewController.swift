@@ -15,8 +15,6 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
 
     private let bottomSeparatorView = NSBox()
 
-    private var delegate: OutlineViewDelegate?
-
     override var shouldDisplayCommonLoading: Bool {
         true
     }
@@ -73,8 +71,6 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
     override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
 
-        delegate = .init(viewModel: viewModel)
-
         let input = ViewModel.Input(
             clickedNode: outlineView.rx.modelDoubleClicked().asSignal(),
             selectedNode: outlineView.rx.modelSelected().asSignal(),
@@ -120,9 +116,8 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
             .first()
             .asObservable()
             .subscribeOnNext { [weak self] _ in
-                guard let self, let delegate else { return }
-
-                outlineView.rx.setDelegate(delegate).disposed(by: rx.disposeBag)
+                guard let self else { return }
+                
                 outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
 
                 // Manual expansion autosave: NSOutlineView's built-in
@@ -145,16 +140,16 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
                 outlineView.restoreExpansionFromAutosave()
             }
             .disposed(by: rx.disposeBag)
-    }
-}
-
-extension SidebarRootViewController {
-    private final class OutlineViewDelegate: NSObject, NSOutlineViewDelegate {
-        private unowned let viewModel: ViewModel
-
-        init(viewModel: ViewModel) {
-            self.viewModel = viewModel
-            super.init()
-        }
+        
+        output.toggleExpansion
+            .emitOnNextMainActor { [weak self] item, maxDepth in
+                guard let self else { return }
+                if outlineView.isItemExpanded(item) {
+                    outlineView.collapseItem(item)
+                } else {
+                    outlineView.expandItem(item, toDepth: maxDepth)
+                }
+            }
+            .disposed(by: rx.disposeBag)
     }
 }

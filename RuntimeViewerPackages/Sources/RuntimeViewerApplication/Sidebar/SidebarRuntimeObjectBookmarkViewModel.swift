@@ -12,13 +12,8 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
         appDefaults.$objectBookmarksBySourceAndImagePath
             .asObservable()
             .subscribeOnNext { [weak self] _ in
-                guard let self else { return }
-                Task {
-                    do {
-                        try await self.reloadData()
-                    } catch {
-                        await MainActor.run { self.errorRelay.accept(error) }
-                    }
+                Task { @MainActor [weak self] in
+                    self?.scheduleReload()
                 }
             }
             .disposed(by: rx.disposeBag)
