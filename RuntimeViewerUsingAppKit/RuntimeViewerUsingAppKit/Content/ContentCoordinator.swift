@@ -7,21 +7,6 @@ import RuntimeViewerApplication
 typealias ContentTransition = Transition<Void, ContentNavigationController>
 
 final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
-    protocol Delegate: AnyObject {
-        func contentCoordinatorDidShowPlaceholder(_ coordinator: ContentCoordinator)
-        func contentCoordinator(
-            _ coordinator: ContentCoordinator,
-            didShowRoot runtimeObject: RuntimeObject
-        )
-        func contentCoordinator(
-            _ coordinator: ContentCoordinator,
-            didShowNext runtimeObject: RuntimeObject
-        )
-        func contentCoordinatorDidGoBack(_ coordinator: ContentCoordinator)
-    }
-
-    weak var delegate: Delegate?
-
     let documentState: DocumentState
 
     init(documentState: DocumentState) {
@@ -38,33 +23,19 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
             contentPlaceholderViewController.loadViewIfNeeded()
             return .set([contentPlaceholderViewController], animated: true)
         case .root(let runtimeObject):
-            let contentTextViewController = ContentTextViewController()
-            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
-            contentTextViewController.setupBindings(for: contentTextViewModel)
-            contentTextViewController.loadViewIfNeeded()
-            return .set([contentTextViewController], animated: true)
+            return .set([makeTextViewController(for: runtimeObject)], animated: true)
         case .next(let runtimeObject):
-            let contentTextViewController = ContentTextViewController()
-            let contentTextViewModel = ContentTextViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
-            contentTextViewController.setupBindings(for: contentTextViewModel)
-            contentTextViewController.loadViewIfNeeded()
-            return .push(contentTextViewController, animated: true)
+            return .push(makeTextViewController(for: runtimeObject), animated: true)
         case .back:
             return .pop(animated: true)
         }
     }
 
-    override func completeTransition(for route: ContentRoute) {
-        super.completeTransition(for: route)
-        switch route {
-        case .placeholder:
-            delegate?.contentCoordinatorDidShowPlaceholder(self)
-        case .root(let runtimeObject):
-            delegate?.contentCoordinator(self, didShowRoot: runtimeObject)
-        case .next(let runtimeObject):
-            delegate?.contentCoordinator(self, didShowNext: runtimeObject)
-        case .back:
-            delegate?.contentCoordinatorDidGoBack(self)
-        }
+    private func makeTextViewController(for runtimeObject: RuntimeObject) -> ContentTextViewController {
+        let viewController = ContentTextViewController()
+        let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+        viewController.setupBindings(for: viewModel)
+        viewController.loadViewIfNeeded()
+        return viewController
     }
 }

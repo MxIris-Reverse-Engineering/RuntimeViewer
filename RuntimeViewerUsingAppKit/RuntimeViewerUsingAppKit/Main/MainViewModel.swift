@@ -68,17 +68,6 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
-    var completeTransition: Observable<SidebarRoute>? {
-        didSet {
-            completeTransitionDisposable?.dispose()
-            completeTransitionDisposable = completeTransition?.map { if case .selectedObject(let runtimeObject) = $0 { runtimeObject } else { nil } }.bind(to: $selectedRuntimeObject)
-        }
-    }
-
-    var completeTransitionDisposable: Disposable?
-
-    let isContentStackDepthGreaterThanOne = BehaviorRelay<Bool>(value: false)
-
     @Observed private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
 
     private var cachedSelectedEngineName: String = RuntimeEngine.local.source.description
@@ -103,9 +92,6 @@ final class MainViewModel: ViewModel<MainRoute> {
         }
     }
 
-    @Observed
-    var selectedRuntimeObject: RuntimeObject?
-
     private let requestRestartConfirmationRelay = PublishRelay<Void>()
 
     func transform(_ input: Input) -> Output {
@@ -127,7 +113,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             }
         }.disposed(by: rx.disposeBag)
 
-        
+
 
 //        input.installHelperClick.emitOnNext { [weak self] in
 //            guard let self else { return }
@@ -164,9 +150,17 @@ final class MainViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        input.sidebarBackClick.emit(to: router.rx.trigger(.sidebarBack)).disposed(by: rx.disposeBag)
+        input.sidebarBackClick.emitOnNext { [weak self] in
+            guard let self else { return }
+            documentState.selectionRouter.trigger(.switchImage(nil))
+        }
+        .disposed(by: rx.disposeBag)
 
-        input.contentBackClick.emit(to: router.rx.trigger(.contentBack)).disposed(by: rx.disposeBag)
+        input.contentBackClick.emitOnNext { [weak self] in
+            guard let self else { return }
+            documentState.selectionRouter.trigger(.pop)
+        }
+        .disposed(by: rx.disposeBag)
 
         input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
 
@@ -174,13 +168,17 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         input.backgroundIndexingClick.emit(with: self) { $0.router.trigger(.backgroundIndexing(sender: $1)) }.disposed(by: rx.disposeBag)
 
+        let selectedRuntimeObjectSignal = documentState.$selectionStack
+            .asSignal(onErrorSignalWith: .empty())
+            .map(\.last)
+
         let requestSaveLocation = input.saveClick
-            .withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete())
+            .withLatestFrom(selectedRuntimeObjectSignal)
             .filterNil()
             .map { (name: $0.displayName, type: $0.contentType) }
 
         input.saveLocationSelected
-            .withLatestFrom($selectedRuntimeObject.asSignalOnErrorJustComplete()) { saveLocation, selectedRuntimeObject in
+            .withLatestFrom(selectedRuntimeObjectSignal) { saveLocation, selectedRuntimeObject in
                 selectedRuntimeObject.map { (saveLocation, $0) }
             }
             .filterNil()
@@ -206,30 +204,32 @@ final class MainViewModel: ViewModel<MainRoute> {
             owner.selectedEngineIdentifier = identifier
         }.disposed(by: rx.disposeBag)
 
-        let sharingServiceData = completeTransition?.map { [weak self] router -> [SharingData] in
-            guard let self, case .selectedObject(let runtimeObjectType) = router else { return [] }
-            
-            let item = NSItemProvider()
-            
-            item.registerDataRepresentation(forTypeIdentifier: runtimeObjectType.contentType.identifier, visibility: .all) { [weak self] completion in
-                guard let self else {
-                    completion(nil, nil)
+        let sharingServiceData = documentState.$selectionStack
+            .asObservable()
+            .map { [weak self] stack -> [SharingData] in
+                guard let self, let runtimeObjectType = stack.last else { return [] }
+
+                let item = NSItemProvider()
+
+                item.registerDataRepresentation(forTypeIdentifier: runtimeObjectType.contentType.identifier, visibility: .all) { [weak self] completion in
+                    guard let self else {
+                        completion(nil, nil)
+                        return nil
+                    }
+                    Task { [weak self] in
+                        guard let self else { return }
+                        do {
+                            let semanticString = try await documentState.runtimeEngine.interface(for: runtimeObjectType, options: self.appDefaults.options)?.interfaceString
+                            completion(semanticString?.string.data(using: .utf8), nil)
+                        } catch {
+                            completion(nil, error)
+                        }
+                    }
                     return nil
                 }
-                Task { [weak self] in
-                    guard let self else { return }
-                    do {
-                        let semanticString = try await documentState.runtimeEngine.interface(for: runtimeObjectType, options: self.appDefaults.options)?.interfaceString
-                        completion(semanticString?.string.data(using: .utf8), nil)
-                    } catch {
-                        completion(nil, error)
-                    }
-                }
-                return nil
+
+                return [SharingData(provider: item, title: runtimeObjectType.displayName, iconType: runtimeObjectType.kind)]
             }
-            
-            return [SharingData(provider: item, title: runtimeObjectType.displayName, iconType: runtimeObjectType.kind)]
-        }
 
         let switchSourceState = Driver.combineLatest(
             runtimeEngineManager.rx.runtimeEngineSections,
@@ -261,18 +261,10 @@ final class MainViewModel: ViewModel<MainRoute> {
         }
 
         return Output(
-            sharingServiceData: sharingServiceData ?? .empty(),
-            isSavable: $selectedRuntimeObject.asDriver().map { $0 != nil },
-            isSidebarBackHidden: completeTransition?.map {
-                if $0.isClickedNode || $0.isSelectedObject {
-                    false
-                } else {
-                    true
-                }
-            }.asDriver(onErrorJustReturn: true) ?? .just(true),
-            isContentBackHidden: isContentStackDepthGreaterThanOne.map {
-                !$0
-            }.asDriver(onErrorJustReturn: true),
+            sharingServiceData: sharingServiceData,
+            isSavable: documentState.$selectionStack.asDriver().map { !$0.isEmpty },
+            isSidebarBackHidden: documentState.$currentImageNode.asDriver().map { $0 == nil },
+            isContentBackHidden: documentState.$selectionStack.asDriver().map { $0.count <= 1 },
             runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
             switchSourceState: switchSourceState,
             requestFrameworkSelection: requestFrameworkSelection,

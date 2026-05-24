@@ -7,14 +7,13 @@ import RuntimeViewerApplication
 typealias InspectorTransition = Transition<Void, InspectorNavigationController>
 
 final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTransition> {
+    /// Only request that genuinely escapes Inspector scope (opens a sheet
+    /// owned by MainCoordinator). All other inter-pane navigation flows
+    /// through `documentState.selectionRouter`.
     protocol Delegate: AnyObject {
         func inspectorCoordinator(
             _ coordinator: InspectorCoordinator,
             requestSpecializationSheetFor object: RuntimeObject
-        )
-        func inspectorCoordinator(
-            _ coordinator: InspectorCoordinator,
-            selectRuntimeObject object: RuntimeObject
         )
     }
 
@@ -22,7 +21,11 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
 
     let documentState: DocumentState
 
-    private var runtimeObjectCoordinators: [InspectorRuntimeObjectCoordinator] = []
+    /// Parallel array to the inspector navigation stack. `nil` entries
+    /// correspond to placeholder pages (non-inspectable rows). Maintained
+    /// directly by `prepareTransition` — there is no longer a separate
+    /// selection-state subscription doing diff inference.
+    private var runtimeObjectCoordinators: [InspectorRuntimeObjectCoordinator?] = []
 
     init(documentState: DocumentState) {
         self.documentState = documentState
@@ -40,7 +43,9 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
         case .next(let inspectableObject):
             return .push(makePresentable(for: inspectableObject), animated: true)
         case .back:
-            runtimeObjectCoordinators.popLast()?.removeFromParent()
+            if let popped = runtimeObjectCoordinators.popLast() {
+                popped?.removeFromParent()
+            }
             return .pop(animated: true)
         }
     }
@@ -48,9 +53,11 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
     private func makePresentable(for inspectableObject: InspectableObject) -> Presentable {
         switch inspectableObject {
         case .node:
+            runtimeObjectCoordinators.append(nil)
             return makePlaceholder()
         case .object(let runtimeObject):
             guard InspectorRuntimeObjectCoordinator.canInspect(runtimeObject) else {
+                runtimeObjectCoordinators.append(nil)
                 return makePlaceholder()
             }
             let runtimeObjectCoordinator = InspectorRuntimeObjectCoordinator(
@@ -64,7 +71,9 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
     }
 
     private func resetRuntimeObjectStack() {
-        runtimeObjectCoordinators.forEach { $0.removeFromParent() }
+        for runtimeObjectCoordinator in runtimeObjectCoordinators {
+            runtimeObjectCoordinator?.removeFromParent()
+        }
         runtimeObjectCoordinators.removeAll()
     }
 
@@ -82,13 +91,5 @@ extension InspectorCoordinator: InspectorRuntimeObjectCoordinator.Delegate {
         didRequestSpecializationSheetFor object: RuntimeObject
     ) {
         delegate?.inspectorCoordinator(self, requestSpecializationSheetFor: object)
-    }
-
-    func inspectorRuntimeObjectCoordinator(
-        _ coordinator: InspectorRuntimeObjectCoordinator,
-        didSelectRuntimeObject object: RuntimeObject
-    ) {
-        delegate?.inspectorCoordinator(self, selectRuntimeObject: object)
-        trigger(.next(.object(object)))
     }
 }

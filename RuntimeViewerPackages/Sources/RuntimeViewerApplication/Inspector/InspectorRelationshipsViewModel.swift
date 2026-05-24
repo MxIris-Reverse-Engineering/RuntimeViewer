@@ -43,7 +43,7 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
     public func transform(_ input: Input) -> Output {
         input.selectRelationshipClicked.emitOnNext { [weak self] cellViewModel in
             guard let self else { return }
-            router.trigger(.selectRuntimeObject(cellViewModel.runtimeObject))
+            documentState.selectionRouter.trigger(.drillInto(cellViewModel.runtimeObject))
         }
         .disposed(by: rx.disposeBag)
 

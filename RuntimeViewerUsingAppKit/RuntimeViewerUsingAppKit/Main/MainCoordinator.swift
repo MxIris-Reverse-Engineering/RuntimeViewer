@@ -21,6 +21,14 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
 
     private(set) lazy var lateResponderRegistry = LateResponderRegistry()
 
+    /// Subscription to `documentState.routeSignal`. Renewed on every
+    /// engine switch (`.main` case) because the fan-out captures the
+    /// currently-installed sub-coordinators by reference; tearing down the
+    /// old subscription before the silent state reset prevents stale
+    /// `.placeholder` / `.back` transitions from being queued on
+    /// soon-to-be-discarded coordinators.
+    private var routeDisposeBag = DisposeBag()
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowController: .init(documentState: documentState), initialRoute: .main(.local))
@@ -29,33 +37,33 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
     override func prepareTransition(for route: MainRoute) -> MainTransition {
         switch route {
         case .main(let runtimeEngine):
-            documentState.runtimeEngine = runtimeEngine
-            documentState.currentImageNode = nil
+            // Drop the previous subscription FIRST so the upcoming
+            // `.switchEngine` reset emits with no listener, leaving the
+            // dying sub-coordinators untouched.
+            routeDisposeBag = DisposeBag()
+            documentState.selectionRouter.trigger(.switchEngine(runtimeEngine))
+
             sidebarCoordinator.removeFromParent()
             contentCoordinator.removeFromParent()
             inspectorCoordinator.removeFromParent()
             sidebarCoordinator = SidebarCoordinator(documentState: documentState)
-            sidebarCoordinator.delegate = self
             contentCoordinator = ContentCoordinator(documentState: documentState)
-            contentCoordinator.delegate = self
             inspectorCoordinator = InspectorCoordinator(documentState: documentState)
             inspectorCoordinator.delegate = self
-            viewModel.completeTransition = sidebarCoordinator.rx.didCompleteTransition()
             windowController.setupBindings(for: viewModel)
+
+            // Subscribe with the fresh sub-coordinators in place.
+            documentState.routeSignal
+                .emit(with: self) { $0.fanOut($1) }
+                .disposed(by: routeDisposeBag)
+
             return .multiple(
                 .show(windowController.splitViewController),
                 .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator),
                 .route(on: sidebarCoordinator, to: .root),
                 .route(on: contentCoordinator, to: .placeholder),
-                .route(on: inspectorCoordinator, to: .placeholder)
+                .route(on: inspectorCoordinator, to: .placeholder),
             )
-        case .select(let runtimeObject):
-            sidebarCoordinator.programmaticallySelectObject(runtimeObject)
-            return .none()
-        case .sidebarBack:
-            return .route(on: sidebarCoordinator, to: .back)
-        case .contentBack:
-            return .route(on: contentCoordinator, to: .back)
         case .generationOptions(let sender):
             let viewController = GenerationOptionsViewController()
             let viewModel = GenerationOptionsViewModel(documentState: documentState, router: self)
@@ -75,8 +83,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             )
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
-        case .loadFramework:
-            return .none()
         case .attachToProcess:
             let viewController = AttachToProcessViewController()
             let viewModel = AttachToProcessViewModel(documentState: documentState, router: self)
@@ -118,67 +124,61 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
         }
     }
 
-    private func updateContentStackDepth() {
-        let hasBackStack = contentCoordinator.rootViewController.viewControllers.count >= 2
-        viewModel.isContentStackDepthGreaterThanOne.accept(hasBackStack)
+    // MARK: - Route fan-out
+    //
+    // Receives each `SelectionRoute` after `DocumentState` has applied its
+    // state mutation, and translates it into typed routes on the three
+    // sub-coordinators. This is the only place that knows how a route
+    // affects each pane.
+
+    private func fanOut(_ route: SelectionRoute) {
+        switch route {
+        case .switchEngine:
+            // `.switchEngine` is exclusively triggered from the `.main`
+            // route handler above, which tears down the subscription
+            // before triggering. Reaching this branch means a contract
+            // violation — log once, take no action (the handler is the
+            // only path that can correctly rebuild the sub-coordinators).
+            assertionFailure(".switchEngine fired with an active route subscriber; engine switches must go through MainRoute.main")
+        case .selectAtRoot(let object):
+            contentCoordinator.contextTrigger(.root(object))
+            inspectorCoordinator.contextTrigger(.root(.object(object)))
+            // Sidebar visual sync is handled inside
+            // `SidebarRuntimeObjectListViewModel` by observing
+            // `documentState.$selectionStack` directly — no coordinator
+            // routing is needed for a pure UI scroll-and-highlight.
+        case .drillInto(let object):
+            contentCoordinator.contextTrigger(.next(object))
+            inspectorCoordinator.contextTrigger(.next(.object(object)))
+        case .pop:
+            if documentState.selectionStack.isEmpty {
+                contentCoordinator.contextTrigger(.placeholder)
+                inspectorCoordinator.contextTrigger(.placeholder)
+            } else {
+                contentCoordinator.contextTrigger(.back)
+                inspectorCoordinator.contextTrigger(.back)
+            }
+        case .clear:
+            contentCoordinator.contextTrigger(.placeholder)
+            inspectorCoordinator.contextTrigger(.placeholder)
+        case .switchImage(let node):
+            contentCoordinator.contextTrigger(.placeholder)
+            inspectorCoordinator.contextTrigger(.placeholder)
+            if let node {
+                sidebarCoordinator.contextTrigger(.clickedNode(node))
+            } else {
+                sidebarCoordinator.contextTrigger(.back)
+            }
+        }
     }
 }
 
-// MARK: - Sidebar / Content / Inspector / Specialization delegate plumbing
-
-extension MainCoordinator: SidebarCoordinator.Delegate {
-    func sidebarCoordinator(
-        _ coordinator: SidebarCoordinator,
-        didSelectObject runtimeObject: RuntimeObject
-    ) {
-        documentState.selectedRuntimeObject = runtimeObject
-        contentCoordinator.trigger(.root(runtimeObject))
-    }
-
-    func sidebarCoordinator(
-        _ coordinator: SidebarCoordinator,
-        didClickImageNode imageNode: RuntimeImageNode
-    ) {
-        documentState.currentImageNode = imageNode
-    }
-
-    func sidebarCoordinatorDidGoBack(_ coordinator: SidebarCoordinator) {
-        documentState.currentImageNode = nil
-        documentState.selectedRuntimeObject = nil
-        contentCoordinator.trigger(.placeholder)
-    }
-}
-
-extension MainCoordinator: ContentCoordinator.Delegate {
-    func contentCoordinatorDidShowPlaceholder(_ coordinator: ContentCoordinator) {
-        updateContentStackDepth()
-        documentState.selectedRuntimeObject = nil
-        inspectorCoordinator.trigger(.placeholder)
-    }
-
-    func contentCoordinator(
-        _ coordinator: ContentCoordinator,
-        didShowRoot runtimeObject: RuntimeObject
-    ) {
-        updateContentStackDepth()
-        documentState.selectedRuntimeObject = runtimeObject
-        inspectorCoordinator.trigger(.root(.object(runtimeObject)))
-    }
-
-    func contentCoordinator(
-        _ coordinator: ContentCoordinator,
-        didShowNext runtimeObject: RuntimeObject
-    ) {
-        updateContentStackDepth()
-        documentState.selectedRuntimeObject = runtimeObject
-        inspectorCoordinator.trigger(.next(.object(runtimeObject)))
-    }
-
-    func contentCoordinatorDidGoBack(_ coordinator: ContentCoordinator) {
-        updateContentStackDepth()
-        inspectorCoordinator.trigger(.back)
-    }
-}
+// MARK: - Cross-scope sheet requests
+//
+// These two delegates exist because both events open a sheet that is owned
+// by `MainCoordinator` (not by the originating sub-coordinator) — that's a
+// scope crossing the selection route vocabulary intentionally does not
+// model. All cross-pane navigation flows through `documentState.selectionRouter`.
 
 extension MainCoordinator: InspectorCoordinator.Delegate {
     func inspectorCoordinator(
@@ -187,13 +187,6 @@ extension MainCoordinator: InspectorCoordinator.Delegate {
     ) {
         contextTrigger(.beginSpecializationSheet(object))
     }
-
-    func inspectorCoordinator(
-        _: InspectorCoordinator,
-        selectRuntimeObject object: RuntimeObject
-    ) {
-        contentCoordinator.trigger(.next(object))
-    }
 }
 
 extension MainCoordinator: SpecializationCoordinator.Delegate {
@@ -201,6 +194,6 @@ extension MainCoordinator: SpecializationCoordinator.Delegate {
         _: SpecializationCoordinator,
         didProduce specialized: RuntimeObject
     ) {
-        contextTrigger(.select(specialized))
+        documentState.selectionRouter.trigger(.selectAtRoot(specialized))
     }
 }

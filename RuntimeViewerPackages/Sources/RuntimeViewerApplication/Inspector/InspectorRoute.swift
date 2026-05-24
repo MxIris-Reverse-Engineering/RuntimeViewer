@@ -29,9 +29,6 @@ public enum InspectorRuntimeObjectRoute: Routable {
     /// `InspectorRoute.requestSpecializationSheet` on itself, which
     /// `MainCoordinator` already listens for.
     case requestSpecializationSheet(RuntimeObject)
-    /// Forwarded up to `InspectorCoordinator` so it can re-trigger
-    /// `InspectorRoute.selectRuntimeObject` on itself.
-    case selectRuntimeObject(RuntimeObject)
 }
 #else
 public typealias InspectorRuntimeObjectRoute = InspectorRoute
