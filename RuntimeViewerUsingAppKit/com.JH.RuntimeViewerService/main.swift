@@ -1,3 +1,3 @@
 import RuntimeViewerService
 
-RuntimeViewerServiceEntry.runDaemon()
+try await RuntimeViewerService.run()
