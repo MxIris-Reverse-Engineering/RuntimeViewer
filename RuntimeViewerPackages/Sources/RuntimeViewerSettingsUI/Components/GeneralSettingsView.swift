@@ -17,7 +17,33 @@ struct GeneralSettingsView: View {
                     Text("Appearance")
                 }
             }
+
+            Section {
+                LabeledContent("Sidebar Max Expansion Depth") {
+                    Stepper(
+                        "",
+                        value: $settings.sidebarMaxExpansionDepth.asDouble,
+                        in: 1...20,
+                        step: 1,
+                        format: .number.precision(.fractionLength(0))
+                    )
+                    .labelsHidden()
+                }
+            } header: {
+                Text("Sidebar")
+            } footer: {
+                Text("Limits how deep a double-click recursively expands a node in the sidebar. Higher values expand more, but may briefly freeze the main thread on very large subtrees (e.g. the dyld shared cache root).")
+            }
         }
+    }
+}
+
+extension Binding where Value: BinaryInteger {
+    var asDouble: Binding<Double> {
+        Binding<Double>(
+            get: { Double(self.wrappedValue) },
+            set: { self.wrappedValue = Value($0.rounded()) }
+        )
     }
 }
 

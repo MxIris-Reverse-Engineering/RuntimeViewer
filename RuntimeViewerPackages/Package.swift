@@ -95,7 +95,7 @@ let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let UIFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar"]
+let UIFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder"]
 
 if usingSystemUXKit {
     sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
@@ -163,7 +163,7 @@ let package = Package(
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
+                isEnabled: true,
                 traits: UIFoundationTraits,
             ),
             remote: .package(
@@ -243,10 +243,6 @@ let package = Package(
                 url: "https://github.com/OpenUXKit/OpenUXKit",
                 branch: "main"
             )
-        ),
-        .package(
-            url: "https://github.com/MxIris-Library-Forks/NSAttributedStringBuilder",
-            from: "0.4.2"
         ),
         .package(
             url: "https://github.com/Mx-Iris/SFSymbols",
@@ -415,7 +411,6 @@ let package = Package(
                 .product(name: "UIFoundationToolbox", package: "UIFoundation"),
                 .product(name: "SnapKit", package: "SnapKit"),
                 .product(name: usingSystemUXKit ? "UXKit" : "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "NSAttributedStringBuilder", package: "NSAttributedStringBuilder"),
                 .product(name: "SFSymbols", package: "SFSymbols"),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
