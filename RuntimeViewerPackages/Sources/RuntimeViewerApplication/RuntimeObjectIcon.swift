@@ -40,7 +40,7 @@ public enum RuntimeObjectIcon {
             }
 
         case .objc(.category(.class)):
-            return ("Ex", .yellow)
+            return ("Ex", .orange)
 
         case .swift(.type(let kind)):
             switch kind {

@@ -4,6 +4,8 @@ import RuntimeViewerCoreObjC
 public import Foundation
 public import Combine
 public import RuntimeViewerCommunication
+import Demangling
+import OrderedCollections
 
 // public import Version
 
@@ -56,6 +58,7 @@ public actor RuntimeEngine {
         case loadImageForBackgroundIndexing
         case patchImagePathForDyld
         case runtimeObjectHierarchy
+        case runtimeRelationshipsForObject
         case runtimeObjectInfo
         case imageNameOfClassName
         case observeRuntime
@@ -186,6 +189,10 @@ public actor RuntimeEngine {
 
     let swiftSectionFactory: RuntimeSwiftSectionFactory
 
+    /// Cross-image relationship resolver. Owns the `relationships(for:)`
+    /// computation so this engine file carries only the dispatch wrapper.
+    let relationshipsResolver: RuntimeRelationshipsResolver
+
     private let communicator = RuntimeCommunicator()
 
     /// The connection to the sender or receiver
@@ -222,6 +229,7 @@ public actor RuntimeEngine {
         self.pushesRuntimeData = pushesRuntimeData
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
+        self.relationshipsResolver = .init(objcSectionFactory: objcSectionFactory, swiftSectionFactory: swiftSectionFactory)
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
@@ -333,6 +341,7 @@ public actor RuntimeEngine {
         }
         setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
         setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
+        setMessageHandlerBinding(forName: .runtimeRelationshipsForObject, of: self) { $0.relationships(for:) }
         setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
         connection?.setMessageHandler(name: CommandNames.specializationRequest.commandName) { [weak self] (object: RuntimeObject) -> RuntimeSpecializationRequest in
             guard let self else { throw RequestError.senderConnectionIsLose }
@@ -734,6 +743,22 @@ extension RuntimeEngine {
             }
         } remote: {
             return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: object)
+        }
+    }
+
+    /// Cross-image relationships for an inspectable target: every direct
+    /// subclass (for classes) or conforming type (for protocols), unioned
+    /// across all indexed images.
+    ///
+    /// The cross-image union itself lives in `RuntimeRelationshipsResolver`,
+    /// which derives the indexed-image set straight from the section
+    /// factories; this method keeps only the thin local/remote dispatch.
+    /// The remote arm forwards the query to the connected server.
+    public func relationships(for object: RuntimeObject) async throws -> RuntimeRelationships {
+        try await request {
+            await relationshipsResolver.relationships(for: object)
+        } remote: {
+            return try await $0.sendMessage(name: .runtimeRelationshipsForObject, request: object)
         }
     }
 

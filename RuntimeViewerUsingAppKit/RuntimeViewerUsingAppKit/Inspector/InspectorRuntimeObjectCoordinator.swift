@@ -40,6 +40,9 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
         case .classHierarchy:
             guard let index = tabConfiguration.classHierarchyIndex else { return .none() }
             return .select(index: index)
+        case .relationships:
+            guard let index = tabConfiguration.relationshipsIndex else { return .none() }
+            return .select(index: index)
         case .specialization:
             guard let index = tabConfiguration.specializationIndex else { return .none() }
             return .select(index: index)
@@ -62,6 +65,18 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
                 TabViewItem(
                     normalSymbol: .init(systemName: .squareStack3dUp),
                     selectedSymbol: .init(systemName: .squareStack3dUpFill),
+                    viewController: viewController
+                )
+            )
+        }
+        if tabConfiguration.needsRelationships {
+            let viewController = InspectorRelationshipsViewController()
+            let viewModel = InspectorRelationshipsViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+            viewController.setupBindings(for: viewModel)
+            tabViewItems.append(
+                TabViewItem(
+                    normalSymbol: .init(systemName: .arrowTriangle2Circlepath),
+                    selectedSymbol: .init(systemName: .arrowTriangle2Circlepath),
                     viewController: viewController
                 )
             )
@@ -91,23 +106,42 @@ extension InspectorRuntimeObjectCoordinator {
 extension InspectorRuntimeObjectCoordinator {
     fileprivate struct TabConfiguration {
         let needsClassHierarchy: Bool
+        let needsRelationships: Bool
         let needsSpecialization: Bool
 
-        var hasAnyTab: Bool { needsClassHierarchy || needsSpecialization }
+        var hasAnyTab: Bool { needsClassHierarchy || needsRelationships || needsSpecialization }
 
         var classHierarchyIndex: Int? {
             needsClassHierarchy ? 0 : nil
         }
 
-        var specializationIndex: Int? {
-            guard needsSpecialization else { return nil }
+        var relationshipsIndex: Int? {
+            guard needsRelationships else { return nil }
             return needsClassHierarchy ? 1 : 0
         }
 
+        var specializationIndex: Int? {
+            guard needsSpecialization else { return nil }
+            var index = 0
+            if needsClassHierarchy { index += 1 }
+            if needsRelationships { index += 1 }
+            return index
+        }
+
         static func compute(for runtimeObject: RuntimeObject) -> TabConfiguration {
+            let needsRelationships: Bool
+            switch runtimeObject.kind {
+            case .objc(.type(.class)), .objc(.type(.protocol)),
+                 .swift(.type(.class)), .swift(.type(.protocol)):
+                needsRelationships = true
+            default:
+                needsRelationships = false
+            }
             switch runtimeObject.kind {
             case .objc(.type(.class)):
-                return .init(needsClassHierarchy: true, needsSpecialization: false)
+                return .init(needsClassHierarchy: true, needsRelationships: needsRelationships, needsSpecialization: false)
+            case .objc(.type(.protocol)):
+                return .init(needsClassHierarchy: false, needsRelationships: needsRelationships, needsSpecialization: false)
             case .swift(.type):
                 let isClass: Bool
                 if case .swift(.type(.class)) = runtimeObject.kind {
@@ -119,10 +153,11 @@ extension InspectorRuntimeObjectCoordinator {
                 let isSpecialized = runtimeObject.properties.contains(.isSpecialized)
                 return .init(
                     needsClassHierarchy: isClass,
+                    needsRelationships: needsRelationships,
                     needsSpecialization: isGeneric && !isSpecialized
                 )
             default:
-                return .init(needsClassHierarchy: false, needsSpecialization: false)
+                return .init(needsClassHierarchy: false, needsRelationships: false, needsSpecialization: false)
             }
         }
     }

@@ -192,7 +192,7 @@ extension MainCoordinator: InspectorCoordinator.Delegate {
         _: InspectorCoordinator,
         selectRuntimeObject object: RuntimeObject
     ) {
-        contextTrigger(.select(object))
+        contentCoordinator.trigger(.next(object))
     }
 }
 

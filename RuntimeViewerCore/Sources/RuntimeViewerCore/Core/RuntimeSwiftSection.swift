@@ -18,33 +18,34 @@ public struct SwiftGenerationOptions: Sendable, Equatable {
         case byCategory
         case byOffset
     }
+
     @Default(true)
     public var printStrippedSymbolicItem: Bool
-    
+
     @Default(false)
     public var printFieldOffset: Bool
-    
+
     @Default(false)
     public var printExpandedFieldOffset: Bool
-    
+
     @Default(false)
     public var printVTableOffset: Bool
-    
+
     @Default(false)
     public var printPWTOffset: Bool
-    
+
     @Default(false)
     public var printMemberAddress: Bool
-    
+
     @Default(false)
     public var printTypeLayout: Bool
-    
+
     @Default(false)
     public var printEnumLayout: Bool
-    
+
     @Default(false)
     public var synthesizeOpaqueType: Bool
-    
+
     @Default(MemberSortOrder.byCategory)
     public var memberSortOrder: MemberSortOrder
 
@@ -64,9 +65,18 @@ actor RuntimeSwiftSection {
 
     private let factory: RuntimeSwiftSectionFactory
 
-    private var indexer: SwiftInterfaceIndexer<MachOImage>
+    /// Per-image Swift interface index — the Swift counterpart of
+    /// `RuntimeObjCSection.objcIndexer`. Interface generation reads
+    /// upstream-indexer properties (`allTypeDefinitions`, `rootTypeDefinitions`,
+    /// …) straight off it via `RuntimeSwiftInterfaceIndexer`'s
+    /// `@dynamicMemberLookup`; relationship indexing is encapsulated inside it.
+    ///
+    /// `nonisolated let` so `RuntimeRelationshipsResolver` can call its query
+    /// methods without an actor hop — `RuntimeSwiftInterfaceIndexer` is
+    /// `Sendable` and guards its own state.
+    nonisolated let indexer: RuntimeSwiftInterfaceIndexer
 
-    private var printer: SwiftInterfacePrinter<MachOImage>
+    private let printer: SwiftInterfacePrinter<MachOImage>
 
     // Keyed by `RuntimeObjectKey` (identity without `children`) so the
     // sidebar's `parent.withAppendedChild(child)` replacement after a
@@ -84,7 +94,7 @@ actor RuntimeSwiftSection {
     /// indexer reference is captured exactly once and the caches built by
     /// repeated `findCandidates` invocations stay warm across user
     /// interactions.
-    private lazy var specializer: GenericSpecializer<MachOImage> = .init(machO: machO, conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer), indexer: factory.indexer)
+    private lazy var specializer: GenericSpecializer<MachOImage> = .init(machO: machO, conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream), indexer: factory.indexer.upstream)
 
     private enum InterfaceDefinitionName {
         case rootType(SwiftInterface.TypeName)
@@ -116,91 +126,6 @@ actor RuntimeSwiftSection {
         }
     }
 
-    private final class ProgressEventHandler: SwiftInterfaceEvents.Handler, Sendable {
-        let continuation: LoadingEventContinuation
-
-        @Mutex
-        private var phaseStates: [RuntimeObjectsLoadingProgress.Phase: (currentCount: Int, totalCount: Int)] = [:]
-
-        init(continuation: LoadingEventContinuation) {
-            self.continuation = continuation
-        }
-
-        func handle(event: SwiftInterfaceEvents.Payload) {
-            switch event {
-            case .extractionStarted(let section):
-                if let phase = extractionPhase(for: section) {
-                    yieldProgress(phase: phase, itemDescription: "", currentCount: 0, totalCount: 0)
-                }
-
-            case .typeIndexingStarted(let totalTypes):
-                phaseStates[.indexingSwiftTypes] = (0, totalTypes)
-            case .typeProcessed(let context):
-                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: context.typeName)
-            case .typeProcessingFailed:
-                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: "")
-            case .typeProcessingSkippedCImported:
-                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: "")
-
-            case .protocolIndexingStarted(let totalProtocols):
-                phaseStates[.indexingSwiftProtocols] = (0, totalProtocols)
-            case .protocolProcessed(let context):
-                incrementAndYield(phase: .indexingSwiftProtocols, itemDescription: context.protocolName)
-            case .protocolProcessingFailed:
-                incrementAndYield(phase: .indexingSwiftProtocols, itemDescription: "")
-
-            case .conformanceIndexingStarted(let input):
-                phaseStates[.indexingSwiftConformances] = (0, input.totalConformances)
-            case .conformanceFound(let context):
-                incrementAndYield(phase: .indexingSwiftConformances, itemDescription: "\(context.typeName): \(context.protocolName)")
-            case .conformanceProcessingFailed:
-                incrementAndYield(phase: .indexingSwiftConformances, itemDescription: "")
-
-            case .extensionIndexingStarted:
-                phaseStates[.indexingSwiftExtensions] = (0, 0)
-            case .extensionCreated(let context):
-                incrementAndYield(phase: .indexingSwiftExtensions, itemDescription: context.targetName)
-            case .extensionCreationFailed:
-                incrementAndYield(phase: .indexingSwiftExtensions, itemDescription: "")
-
-            case .symbolIndexProgress(let currentCount, let totalCount):
-                yieldProgress(phase: .preparingSymbolIndex, itemDescription: "", currentCount: currentCount, totalCount: totalCount)
-
-            default:
-                break
-            }
-        }
-
-        private func extractionPhase(for section: SwiftInterfaceEvents.Section) -> RuntimeObjectsLoadingProgress.Phase? {
-            switch section {
-            case .swiftTypes: return .extractingSwiftTypes
-            case .swiftProtocols: return .extractingSwiftProtocols
-            case .protocolConformances: return .extractingSwiftConformances
-            case .associatedTypes: return .extractingSwiftAssociatedTypes
-            case .symbolIndex: return .preparingSymbolIndex
-            }
-        }
-
-        private func incrementAndYield(phase: RuntimeObjectsLoadingProgress.Phase, itemDescription: String) {
-            let state = _phaseStates.withLock { dictionary in
-                var current = dictionary[phase] ?? (0, 0)
-                current.currentCount += 1
-                dictionary[phase] = current
-                return current
-            }
-            yieldProgress(phase: phase, itemDescription: itemDescription, currentCount: state.currentCount, totalCount: state.totalCount)
-        }
-
-        private func yieldProgress(phase: RuntimeObjectsLoadingProgress.Phase, itemDescription: String, currentCount: Int, totalCount: Int) {
-            continuation.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
-                phase: phase,
-                itemDescription: itemDescription,
-                currentCount: currentCount,
-                totalCount: totalCount
-            )))
-        }
-    }
-
     init(imagePath: String, factory: RuntimeSwiftSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing Swift section for image: \(imagePath, privacy: .public)")
         guard let machO = DyldUtilities.machOImage(forPath: imagePath) else {
@@ -212,222 +137,22 @@ actor RuntimeSwiftSection {
         self.machO = machO
         #log(.debug, "Creating Swift Interface Components")
         let eventHandlers: [SwiftInterfaceEvents.Handler] = progressContinuation.map { [ProgressEventHandler(continuation: $0)] } ?? []
-        self.indexer = .init(configuration: .init(showCImportedTypes: false), eventHandlers: eventHandlers, in: machO)
+        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, eventHandlers: eventHandlers)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
-        try await indexer.prepare()
+        // `prepare()` runs the upstream extraction and then builds the
+        // relationship reverse tables — that work now lives in
+        // `RuntimeSwiftInterfaceIndexer`, not inline here.
+        try await indexer.prepare(progressContinuation: progressContinuation)
+        _ = try await allObjects()
         #log(.info, "Swift section initialized successfully")
-    }
-
-    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration) async throws {
-        #log(.debug, "Updating Swift section configuration")
-
-        let oldIndexConfiguration = indexer.configuration
-        let newIndexConfiguration = SwiftInterfaceIndexConfiguration(showCImportedTypes: false)
-        try await indexer.updateConfiguration(newIndexConfiguration)
-
-        let oldPrintConfiguration = printer.configuration
-
-        let transformerChanged = transformer != lastTransformerConfiguration
-        lastTransformerConfiguration = transformer
-
-        let newPrintConfiguration = buildPrintConfiguration(
-            from: options,
-            oldConfiguration: oldPrintConfiguration,
-            transformer: transformer,
-            transformerChanged: transformerChanged
-        )
-        printer.updateConfiguration(newPrintConfiguration)
-
-        if options.synthesizeOpaqueType {
-            printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
-        } else {
-            printer.removeAllTypeNameResolvers()
-        }
-
-        if newIndexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
-            #log(.debug, "Index configuration changed, re-preparing builder")
-            interfaceDefinitionNameByObject.removeAll()
-        }
-
-        if newPrintConfiguration != oldPrintConfiguration {
-            #log(.debug, "Print configuration changed, clearing interface cache")
-            interfaceByObject.removeAll()
-        }
-    }
-
-    // MARK: - Print Configuration Building
-
-    private func buildPrintConfiguration(
-        from options: SwiftGenerationOptions,
-        oldConfiguration: SwiftInterfacePrintConfiguration,
-        transformer: Transformer.SwiftConfiguration,
-        transformerChanged: Bool
-    ) -> SwiftInterfacePrintConfiguration {
-        var fieldOffsetTransformer: FieldOffsetTransformer? = oldConfiguration.fieldOffsetTransformer
-        var vtableOffsetTransformer: VTableOffsetTransformer? = oldConfiguration.vtableOffsetTransformer
-        var memberAddressTransformer: MemberAddressTransformer? = oldConfiguration.memberAddressTransformer
-        var typeLayoutTransformer: TypeLayoutTransformer? = oldConfiguration.typeLayoutTransformer
-        var enumLayoutTransformer: EnumLayoutTransformer? = oldConfiguration.enumLayoutTransformer
-        var enumLayoutCaseTransformer: EnumLayoutCaseTransformer? = oldConfiguration.enumLayoutCaseTransformer
-
-        if transformerChanged {
-            vtableOffsetTransformer = buildVTableOffsetTransformer(from: transformer)
-            memberAddressTransformer = buildMemberAddressTransformer(from: transformer)
-            fieldOffsetTransformer = buildFieldOffsetTransformer(from: transformer)
-            typeLayoutTransformer = buildTypeLayoutTransformer(from: transformer)
-            (enumLayoutTransformer, enumLayoutCaseTransformer) = buildEnumLayoutTransformers(from: transformer)
-        }
-
-        let swiftInterfaceMemberSortOrder: SwiftInterfaceMemberSortOrder = switch options.memberSortOrder {
-        case .byCategory: .byCategory
-        case .byOffset: .byOffset
-        }
-
-        return SwiftInterfacePrintConfiguration(
-            printStrippedSymbolicItem: options.printStrippedSymbolicItem,
-            printFieldOffset: options.printFieldOffset,
-            printExpandedFieldOffsets: options.printExpandedFieldOffset,
-            printMemberAddress: options.printMemberAddress,
-            printVTableOffset: options.printVTableOffset,
-            printPWTOffset: options.printPWTOffset,
-            memberSortOrder: swiftInterfaceMemberSortOrder,
-            printTypeLayout: options.printTypeLayout,
-            printEnumLayout: options.printEnumLayout,
-            memberAddressTransformer: memberAddressTransformer,
-            vtableOffsetTransformer: vtableOffsetTransformer,
-            fieldOffsetTransformer: fieldOffsetTransformer,
-            typeLayoutTransformer: typeLayoutTransformer,
-            enumLayoutTransformer: enumLayoutTransformer,
-            enumLayoutCaseTransformer: enumLayoutCaseTransformer
-        )
-    }
-
-    // MARK: - Transformer Builders
-
-    private func buildVTableOffsetTransformer(from transformer: Transformer.SwiftConfiguration) -> VTableOffsetTransformer? {
-        guard transformer.swiftVTableOffset.isEnabled else { return nil }
-        let module = transformer.swiftVTableOffset
-        return VTableOffsetTransformer { input in
-            let result = module.transform(.init(slotOffset: input.slotOffset, label: input.label))
-            return Comment(result).asSemanticString()
-        }
-    }
-
-    private func buildMemberAddressTransformer(from transformer: Transformer.SwiftConfiguration) -> MemberAddressTransformer? {
-        guard transformer.swiftMemberAddress.isEnabled else { return nil }
-        let module = transformer.swiftMemberAddress
-        return MemberAddressTransformer { offset in
-            let result = module.transform(.init(offset: offset))
-            return Comment(result).asSemanticString()
-        }
-    }
-
-    private func buildFieldOffsetTransformer(from transformer: Transformer.SwiftConfiguration) -> FieldOffsetTransformer? {
-        guard transformer.swiftFieldOffset.isEnabled else { return nil }
-        let module = transformer.swiftFieldOffset
-        return FieldOffsetTransformer { input in
-            let result = module.transform(.init(startOffset: input.startOffset, endOffset: input.endOffset))
-            return Comment(result).asSemanticString()
-        }
-    }
-
-    private func buildTypeLayoutTransformer(from transformer: Transformer.SwiftConfiguration) -> TypeLayoutTransformer? {
-        guard transformer.swiftTypeLayout.isEnabled else { return nil }
-        let module = transformer.swiftTypeLayout
-        return TypeLayoutTransformer { typeLayout in
-            let input = Transformer.SwiftTypeLayout.Input(
-                size: Int(typeLayout.size),
-                stride: Int(typeLayout.stride),
-                alignment: Int(typeLayout.flags.alignment),
-                extraInhabitantCount: Int(typeLayout.extraInhabitantCount),
-                isPOD: typeLayout.flags.isPOD,
-                isInlineStorage: typeLayout.flags.isInlineStorage,
-                isBitwiseTakable: typeLayout.flags.isBitwiseTakable,
-                isBitwiseBorrowable: typeLayout.flags.isBitwiseBorrowable,
-                isCopyable: typeLayout.flags.isCopyable,
-                hasEnumWitnesses: typeLayout.flags.hasEnumWitnesses,
-                isIncomplete: typeLayout.flags.isIncomplete
-            )
-            let result = module.transform(input)
-            return Comment(result).asSemanticString()
-        }
-    }
-
-    private func buildEnumLayoutTransformers(from transformer: Transformer.SwiftConfiguration) -> (EnumLayoutTransformer?, EnumLayoutCaseTransformer?) {
-        guard transformer.swiftEnumLayout.isEnabled else { return (nil, nil) }
-        let module = transformer.swiftEnumLayout
-
-        let layoutTransformer = EnumLayoutTransformer { layoutResult in
-            let payloadCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Payload") }.count
-            let emptyCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Empty") }.count
-            let input = Transformer.SwiftEnumLayout.Input(
-                strategy: layoutResult.strategyDescription,
-                bitsNeededForTag: layoutResult.bitsNeededForTag,
-                bitsAvailableForPayload: layoutResult.bitsAvailableForPayload,
-                numTags: layoutResult.numTags,
-                totalCases: layoutResult.cases.count,
-                payloadCaseCount: payloadCaseCount,
-                emptyCaseCount: emptyCaseCount,
-                tagRegionRange: layoutResult.tagRegion.map { "\($0.range)" } ?? "N/A",
-                tagRegionBitCount: layoutResult.tagRegion?.bitCount ?? 0,
-                tagRegionBytesHex: layoutResult.tagRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A",
-                payloadRegionRange: layoutResult.payloadRegion.map { "\($0.range)" } ?? "N/A",
-                payloadRegionBitCount: layoutResult.payloadRegion?.bitCount ?? 0,
-                payloadRegionBytesHex: layoutResult.payloadRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A"
-            )
-            let result = module.transform(input)
-            return InlineComment(result).asSemanticString()
-        }
-
-        let caseTransformer = EnumLayoutCaseTransformer { input in
-            let caseProjection = input.caseProjection
-            let indentation = input.indentation
-            let caseType: String = caseProjection.caseName.hasPrefix("Payload") ? "Payload" : "Empty"
-            let memoryChangesDetail = caseProjection.memoryChanges
-                .sorted(by: { $0.key < $1.key })
-                .map { "[\($0.key)]=0x\(String(format: "%02X", $0.value))" }
-                .joined(separator: ", ")
-            let caseInput = Transformer.SwiftEnumLayout.CaseInput(
-                caseIndex: caseProjection.caseIndex,
-                caseName: caseProjection.caseName,
-                tagValue: caseProjection.tagValue,
-                payloadValue: caseProjection.payloadValue,
-                tagHex: String(format: "0x%02X", caseProjection.tagValue),
-                payloadHex: String(format: "0x%02X", caseProjection.payloadValue),
-                tagValueBinary: "0b\(String(caseProjection.tagValue, radix: 2))",
-                payloadValueBinary: "0b\(String(caseProjection.payloadValue, radix: 2))",
-                caseType: caseType,
-                memoryChangeCount: caseProjection.memoryChanges.count,
-                memoryChangesDetail: memoryChangesDetail
-            )
-            let header = module.transformCase(caseInput)
-            let indentStr = String(repeating: "    ", count: indentation)
-            var output = ""
-            for line in header.split(separator: "\n", omittingEmptySubsequences: false) {
-                output += "\(indentStr)// \(line)\n"
-            }
-            if caseProjection.memoryChanges.isEmpty {
-                output += "\(indentStr)// (No bits set / Zero)\n"
-            } else {
-                for offset in caseProjection.memoryChanges.keys.sorted() {
-                    let byteValue = caseProjection.memoryChanges[offset]!
-                    let offsetInput = Transformer.SwiftEnumLayout.MemoryOffsetInput(
-                        offset: offset,
-                        value: byteValue
-                    )
-                    let formattedOffset = module.transformMemoryOffset(offsetInput)
-                    output += "\(indentStr)// \(formattedOffset)\n"
-                }
-            }
-            return AtomicComponent(string: output, type: .comment).asSemanticString()
-        }
-
-        return (layoutTransformer, caseTransformer)
     }
 
     // MARK: - Object Enumeration
 
+    private var allObjectsCache: [RuntimeObject]?
+
     func allObjects() async throws -> [RuntimeObject] {
+        if let allObjectsCache { return allObjectsCache }
         #log(.debug, "Getting all Swift objects")
         let rootTypeName = try indexer.rootTypeDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
         let rootProtocolName = try indexer.rootProtocolDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
@@ -437,6 +162,7 @@ actor RuntimeSwiftSection {
         let conformanceExtensionName = try indexer.conformanceExtensionDefinitions.filter { $0.key.typeName.map { indexer.allTypeDefinitions[$0] == nil } ?? false }.map { try makeRuntimeObject(for: $0.value, extensionName: $0.key, kind: $0.key.runtimeObjectKindOfSwiftConformance, definitionName: .conformance($0.key)) }
         let allObjects = rootTypeName + rootProtocolName + typeExtensionName + protocolExtensionName + typeAliasExtensionName + conformanceExtensionName
         #log(.debug, "Found \(allObjects.count, privacy: .public) Swift objects: \(rootTypeName.count, privacy: .public) types, \(rootProtocolName.count, privacy: .public) protocols, \(typeExtensionName.count, privacy: .public) type extensions")
+        allObjectsCache = allObjects
         return allObjects
     }
 
@@ -492,6 +218,12 @@ actor RuntimeSwiftSection {
         return runtimeObject
     }
 
+    fileprivate func setupForFactory(_ factory: RuntimeSwiftSectionFactory) {
+        factory.indexer.addSubIndexer(indexer)
+    }
+}
+
+extension RuntimeSwiftSection {
     func interface(for object: RuntimeObject) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating Swift interface for: \(object.displayName, privacy: .public)")
         if let interface = interfaceByObject[object.key] {
@@ -579,7 +311,26 @@ actor RuntimeSwiftSection {
         #log(.debug, "Interface generated and cached")
         return newInterface
     }
+}
 
+extension RuntimeSwiftSection {
+    func classHierarchy(for object: RuntimeObject) async throws -> [String] {
+        #log(.debug, "Getting Swift class hierarchy for: \(object.displayName, privacy: .public)")
+        guard case .swift(.type(.class)) = object.kind,
+              let classDefinitionName = interfaceDefinitionNameByObject[object.key]?.typeName,
+              let classDefinition = indexer.allTypeDefinitions[classDefinitionName],
+              case .class(let `class`) = classDefinition.type
+        else {
+            #log(.debug, "No class hierarchy found")
+            return []
+        }
+        let hierarchy = try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
+        #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
+        return hierarchy
+    }
+}
+
+extension RuntimeSwiftSection {
     func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
         #log(.debug, "Getting member addresses for: \(object.displayName, privacy: .public)")
         // Ensure the definition is indexed by generating the interface (uses internal cache)
@@ -717,7 +468,58 @@ actor RuntimeSwiftSection {
         #log(.debug, "Found \(result.count, privacy: .public) member addresses")
         return result
     }
+}
 
+extension RuntimeSwiftSection {
+    /// Materialize a Swift `RuntimeObject` for a type whose mangled name
+    /// is known. Returns `nil` when the mangled key does not map to any
+    /// type definition in this section (e.g. it lives in a different image).
+    /// Mirrors the construction `_objects(in:)` performs for the same type,
+    /// so callers can render relationship results in the same shape as the
+    /// sidebar's other Swift entries.
+    func makeRuntimeObject(forMangledTypeName mangledName: String) -> RuntimeObject? {
+        guard let typeName = indexer.typeName(forMangledName: mangledName),
+              let typeDefinition = indexer.allTypeDefinitions[typeName]
+        else { return nil }
+        var properties: RuntimeObject.Properties = []
+        if typeDefinition.type.contextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
+            properties.insert(.isGeneric)
+        }
+        let isSpecialized = typeDefinition.isSpecialized
+        if isSpecialized {
+            properties.insert(.isSpecialized)
+        }
+        let displayName = isSpecialized
+            ? typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric))
+            : typeName.name
+        return RuntimeObject(
+            name: mangledName,
+            displayName: displayName,
+            kind: typeName.runtimeObjectKind,
+            secondaryKind: nil,
+            imagePath: imagePath,
+            children: [],
+            properties: properties
+        )
+    }
+
+    /// Build the mangledID → indexed type mapping this section contributes
+    /// to the factory's cross-image lookup table. Called once per section
+    /// immediately after registration; the factory merges the result with
+    /// first-write-wins semantics. Mangling is inherently throwing — we
+    /// silently skip nodes that fail to mangle, matching the prior loop's
+    /// `try?` behaviour.
+    fileprivate func candidateIDMapping() -> [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] {
+        var result: [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] = [:]
+        for (typeName, typeDefinition) in indexer.allTypeDefinitions {
+            guard let mangled = try? mangleAsString(typeName.node) else { continue }
+            result[mangled] = (typeName, MachOIndexedValue(machO: machO, value: typeDefinition))
+        }
+        return result
+    }
+}
+
+extension RuntimeSwiftSection {
     // MARK: - Generic Specialization
 
     func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
@@ -756,8 +558,8 @@ actor RuntimeSwiftSection {
         // demangler later trips on at the first byte.
         let candidateSpecializer = GenericSpecializer<MachOImage>(
             machO: matched.entry.machO,
-            conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer),
-            indexer: factory.indexer
+            conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream),
+            indexer: factory.indexer.upstream
         )
         candidateSpecializer.maxBindingDepth = Self.maxSpecializationDepth
         do {
@@ -1040,8 +842,8 @@ actor RuntimeSwiftSection {
             }
             let innerSpecializer = GenericSpecializer<MachOImage>(
                 machO: innerEntry.machO,
-                conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer),
-                indexer: factory.indexer
+                conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream),
+                indexer: factory.indexer.upstream
             )
             innerSpecializer.maxBindingDepth = Self.maxSpecializationDepth
             let innerRequest: SpecializationRequest
@@ -1167,44 +969,300 @@ actor RuntimeSwiftSection {
         }
         return description
     }
+}
 
-    func classHierarchy(for object: RuntimeObject) async throws -> [String] {
-        #log(.debug, "Getting Swift class hierarchy for: \(object.displayName, privacy: .public)")
-        guard case .swift(.type(.class)) = object.kind,
-              let classDefinitionName = interfaceDefinitionNameByObject[object.key]?.typeName,
-              let classDefinition = indexer.allTypeDefinitions[classDefinitionName],
-              case .class(let `class`) = classDefinition.type
-        else {
-            #log(.debug, "No class hierarchy found")
-            return []
+extension RuntimeSwiftSection {
+    func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration) async throws {
+        #log(.debug, "Updating Swift section configuration")
+
+        let oldIndexConfiguration = indexer.configuration
+        let newIndexConfiguration = SwiftInterfaceIndexConfiguration(showCImportedTypes: false)
+        try await indexer.updateConfiguration(newIndexConfiguration)
+
+        let oldPrintConfiguration = printer.configuration
+
+        let transformerChanged = transformer != lastTransformerConfiguration
+        lastTransformerConfiguration = transformer
+
+        let newPrintConfiguration = buildPrintConfiguration(
+            from: options,
+            oldConfiguration: oldPrintConfiguration,
+            transformer: transformer,
+            transformerChanged: transformerChanged
+        )
+        printer.updateConfiguration(newPrintConfiguration)
+
+        if options.synthesizeOpaqueType {
+            printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
+        } else {
+            printer.removeAllTypeNameResolvers()
         }
-        let hierarchy = try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
-        #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
-        return hierarchy
-    }
-    
-    fileprivate func setupForFactory(_ factory: RuntimeSwiftSectionFactory) {
-        factory.indexer.addSubIndexer(indexer)
+
+        if newIndexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
+            #log(.debug, "Index configuration changed, re-preparing builder")
+            interfaceDefinitionNameByObject.removeAll()
+        }
+
+        if newPrintConfiguration != oldPrintConfiguration {
+            #log(.debug, "Print configuration changed, clearing interface cache")
+            interfaceByObject.removeAll()
+        }
     }
 
-    /// Build the mangledID → indexed type mapping this section contributes
-    /// to the factory's cross-image lookup table. Called once per section
-    /// immediately after registration; the factory merges the result with
-    /// first-write-wins semantics. Mangling is inherently throwing — we
-    /// silently skip nodes that fail to mangle, matching the prior loop's
-    /// `try?` behaviour.
-    fileprivate func candidateIDMapping() -> [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] {
-        var result: [String: RuntimeSwiftSectionFactory.IndexedTypeEntry] = [:]
-        for (typeName, typeDefinition) in indexer.allTypeDefinitions {
-            guard let mangled = try? mangleAsString(typeName.node) else { continue }
-            result[mangled] = (typeName, MachOIndexedValue(machO: machO, value: typeDefinition))
+    // MARK: - Print Configuration Building
+
+    private func buildPrintConfiguration(
+        from options: SwiftGenerationOptions,
+        oldConfiguration: SwiftInterfacePrintConfiguration,
+        transformer: Transformer.SwiftConfiguration,
+        transformerChanged: Bool
+    ) -> SwiftInterfacePrintConfiguration {
+        var fieldOffsetTransformer: FieldOffsetTransformer? = oldConfiguration.fieldOffsetTransformer
+        var vtableOffsetTransformer: VTableOffsetTransformer? = oldConfiguration.vtableOffsetTransformer
+        var memberAddressTransformer: MemberAddressTransformer? = oldConfiguration.memberAddressTransformer
+        var typeLayoutTransformer: TypeLayoutTransformer? = oldConfiguration.typeLayoutTransformer
+        var enumLayoutTransformer: EnumLayoutTransformer? = oldConfiguration.enumLayoutTransformer
+        var enumLayoutCaseTransformer: EnumLayoutCaseTransformer? = oldConfiguration.enumLayoutCaseTransformer
+
+        if transformerChanged {
+            vtableOffsetTransformer = buildVTableOffsetTransformer(from: transformer)
+            memberAddressTransformer = buildMemberAddressTransformer(from: transformer)
+            fieldOffsetTransformer = buildFieldOffsetTransformer(from: transformer)
+            typeLayoutTransformer = buildTypeLayoutTransformer(from: transformer)
+            (enumLayoutTransformer, enumLayoutCaseTransformer) = buildEnumLayoutTransformers(from: transformer)
         }
-        return result
+
+        let swiftInterfaceMemberSortOrder: SwiftInterfaceMemberSortOrder = switch options.memberSortOrder {
+        case .byCategory: .byCategory
+        case .byOffset: .byOffset
+        }
+
+        return SwiftInterfacePrintConfiguration(
+            printStrippedSymbolicItem: options.printStrippedSymbolicItem,
+            printFieldOffset: options.printFieldOffset,
+            printExpandedFieldOffsets: options.printExpandedFieldOffset,
+            printMemberAddress: options.printMemberAddress,
+            printVTableOffset: options.printVTableOffset,
+            printPWTOffset: options.printPWTOffset,
+            memberSortOrder: swiftInterfaceMemberSortOrder,
+            printTypeLayout: options.printTypeLayout,
+            printEnumLayout: options.printEnumLayout,
+            memberAddressTransformer: memberAddressTransformer,
+            vtableOffsetTransformer: vtableOffsetTransformer,
+            fieldOffsetTransformer: fieldOffsetTransformer,
+            typeLayoutTransformer: typeLayoutTransformer,
+            enumLayoutTransformer: enumLayoutTransformer,
+            enumLayoutCaseTransformer: enumLayoutCaseTransformer
+        )
+    }
+
+    // MARK: - Transformer Builders
+
+    private func buildVTableOffsetTransformer(from transformer: Transformer.SwiftConfiguration) -> VTableOffsetTransformer? {
+        guard transformer.swiftVTableOffset.isEnabled else { return nil }
+        let module = transformer.swiftVTableOffset
+        return VTableOffsetTransformer { input in
+            let result = module.transform(.init(slotOffset: input.slotOffset, label: input.label))
+            return Comment(result).asSemanticString()
+        }
+    }
+
+    private func buildMemberAddressTransformer(from transformer: Transformer.SwiftConfiguration) -> MemberAddressTransformer? {
+        guard transformer.swiftMemberAddress.isEnabled else { return nil }
+        let module = transformer.swiftMemberAddress
+        return MemberAddressTransformer { offset in
+            let result = module.transform(.init(offset: offset))
+            return Comment(result).asSemanticString()
+        }
+    }
+
+    private func buildFieldOffsetTransformer(from transformer: Transformer.SwiftConfiguration) -> FieldOffsetTransformer? {
+        guard transformer.swiftFieldOffset.isEnabled else { return nil }
+        let module = transformer.swiftFieldOffset
+        return FieldOffsetTransformer { input in
+            let result = module.transform(.init(startOffset: input.startOffset, endOffset: input.endOffset))
+            return Comment(result).asSemanticString()
+        }
+    }
+
+    private func buildTypeLayoutTransformer(from transformer: Transformer.SwiftConfiguration) -> TypeLayoutTransformer? {
+        guard transformer.swiftTypeLayout.isEnabled else { return nil }
+        let module = transformer.swiftTypeLayout
+        return TypeLayoutTransformer { typeLayout in
+            let input = Transformer.SwiftTypeLayout.Input(
+                size: Int(typeLayout.size),
+                stride: Int(typeLayout.stride),
+                alignment: Int(typeLayout.flags.alignment),
+                extraInhabitantCount: Int(typeLayout.extraInhabitantCount),
+                isPOD: typeLayout.flags.isPOD,
+                isInlineStorage: typeLayout.flags.isInlineStorage,
+                isBitwiseTakable: typeLayout.flags.isBitwiseTakable,
+                isBitwiseBorrowable: typeLayout.flags.isBitwiseBorrowable,
+                isCopyable: typeLayout.flags.isCopyable,
+                hasEnumWitnesses: typeLayout.flags.hasEnumWitnesses,
+                isIncomplete: typeLayout.flags.isIncomplete
+            )
+            let result = module.transform(input)
+            return Comment(result).asSemanticString()
+        }
+    }
+
+    private func buildEnumLayoutTransformers(from transformer: Transformer.SwiftConfiguration) -> (EnumLayoutTransformer?, EnumLayoutCaseTransformer?) {
+        guard transformer.swiftEnumLayout.isEnabled else { return (nil, nil) }
+        let module = transformer.swiftEnumLayout
+
+        let layoutTransformer = EnumLayoutTransformer { layoutResult in
+            let payloadCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Payload") }.count
+            let emptyCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Empty") }.count
+            let input = Transformer.SwiftEnumLayout.Input(
+                strategy: layoutResult.strategyDescription,
+                bitsNeededForTag: layoutResult.bitsNeededForTag,
+                bitsAvailableForPayload: layoutResult.bitsAvailableForPayload,
+                numTags: layoutResult.numTags,
+                totalCases: layoutResult.cases.count,
+                payloadCaseCount: payloadCaseCount,
+                emptyCaseCount: emptyCaseCount,
+                tagRegionRange: layoutResult.tagRegion.map { "\($0.range)" } ?? "N/A",
+                tagRegionBitCount: layoutResult.tagRegion?.bitCount ?? 0,
+                tagRegionBytesHex: layoutResult.tagRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A",
+                payloadRegionRange: layoutResult.payloadRegion.map { "\($0.range)" } ?? "N/A",
+                payloadRegionBitCount: layoutResult.payloadRegion?.bitCount ?? 0,
+                payloadRegionBytesHex: layoutResult.payloadRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A"
+            )
+            let result = module.transform(input)
+            return InlineComment(result).asSemanticString()
+        }
+
+        let caseTransformer = EnumLayoutCaseTransformer { input in
+            let caseProjection = input.caseProjection
+            let indentation = input.indentation
+            let caseType: String = caseProjection.caseName.hasPrefix("Payload") ? "Payload" : "Empty"
+            let memoryChangesDetail = caseProjection.memoryChanges
+                .sorted(by: { $0.key < $1.key })
+                .map { "[\($0.key)]=0x\(String(format: "%02X", $0.value))" }
+                .joined(separator: ", ")
+            let caseInput = Transformer.SwiftEnumLayout.CaseInput(
+                caseIndex: caseProjection.caseIndex,
+                caseName: caseProjection.caseName,
+                tagValue: caseProjection.tagValue,
+                payloadValue: caseProjection.payloadValue,
+                tagHex: String(format: "0x%02X", caseProjection.tagValue),
+                payloadHex: String(format: "0x%02X", caseProjection.payloadValue),
+                tagValueBinary: "0b\(String(caseProjection.tagValue, radix: 2))",
+                payloadValueBinary: "0b\(String(caseProjection.payloadValue, radix: 2))",
+                caseType: caseType,
+                memoryChangeCount: caseProjection.memoryChanges.count,
+                memoryChangesDetail: memoryChangesDetail
+            )
+            let header = module.transformCase(caseInput)
+            let indentStr = String(repeating: "    ", count: indentation)
+            var output = ""
+            for line in header.split(separator: "\n", omittingEmptySubsequences: false) {
+                output += "\(indentStr)// \(line)\n"
+            }
+            if caseProjection.memoryChanges.isEmpty {
+                output += "\(indentStr)// (No bits set / Zero)\n"
+            } else {
+                for offset in caseProjection.memoryChanges.keys.sorted() {
+                    let byteValue = caseProjection.memoryChanges[offset]!
+                    let offsetInput = Transformer.SwiftEnumLayout.MemoryOffsetInput(
+                        offset: offset,
+                        value: byteValue
+                    )
+                    let formattedOffset = module.transformMemoryOffset(offsetInput)
+                    output += "\(indentStr)// \(formattedOffset)\n"
+                }
+            }
+            return AtomicComponent(string: output, type: .comment).asSemanticString()
+        }
+
+        return (layoutTransformer, caseTransformer)
+    }
+}
+
+extension RuntimeSwiftSection {
+    private final class ProgressEventHandler: SwiftInterfaceEvents.Handler, Sendable {
+        let continuation: LoadingEventContinuation
+
+        @Mutex
+        private var phaseStates: [RuntimeObjectsLoadingProgress.Phase: (currentCount: Int, totalCount: Int)] = [:]
+
+        init(continuation: LoadingEventContinuation) {
+            self.continuation = continuation
+        }
+
+        func handle(event: SwiftInterfaceEvents.Payload) {
+            switch event {
+            case .extractionStarted(let section):
+                if let phase = extractionPhase(for: section) {
+                    yieldProgress(phase: phase, itemDescription: "", currentCount: 0, totalCount: 0)
+                }
+            case .typeIndexingStarted(let totalTypes):
+                phaseStates[.indexingSwiftTypes] = (0, totalTypes)
+            case .typeProcessed(let context):
+                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: context.typeName)
+            case .typeProcessingFailed:
+                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: "")
+            case .typeProcessingSkippedCImported:
+                incrementAndYield(phase: .indexingSwiftTypes, itemDescription: "")
+            case .protocolIndexingStarted(let totalProtocols):
+                phaseStates[.indexingSwiftProtocols] = (0, totalProtocols)
+            case .protocolProcessed(let context):
+                incrementAndYield(phase: .indexingSwiftProtocols, itemDescription: context.protocolName)
+            case .protocolProcessingFailed:
+                incrementAndYield(phase: .indexingSwiftProtocols, itemDescription: "")
+            case .conformanceIndexingStarted(let input):
+                phaseStates[.indexingSwiftConformances] = (0, input.totalConformances)
+            case .conformanceFound(let context):
+                incrementAndYield(phase: .indexingSwiftConformances, itemDescription: "\(context.typeName): \(context.protocolName)")
+            case .conformanceProcessingFailed:
+                incrementAndYield(phase: .indexingSwiftConformances, itemDescription: "")
+            case .extensionIndexingStarted:
+                phaseStates[.indexingSwiftExtensions] = (0, 0)
+            case .extensionCreated(let context):
+                incrementAndYield(phase: .indexingSwiftExtensions, itemDescription: context.targetName)
+            case .extensionCreationFailed:
+                incrementAndYield(phase: .indexingSwiftExtensions, itemDescription: "")
+            case .symbolIndexProgress(let currentCount, let totalCount):
+                yieldProgress(phase: .preparingSymbolIndex, itemDescription: "", currentCount: currentCount, totalCount: totalCount)
+            default:
+                break
+            }
+        }
+
+        private func extractionPhase(for section: SwiftInterfaceEvents.Section) -> RuntimeObjectsLoadingProgress.Phase? {
+            switch section {
+            case .swiftTypes: return .extractingSwiftTypes
+            case .swiftProtocols: return .extractingSwiftProtocols
+            case .protocolConformances: return .extractingSwiftConformances
+            case .associatedTypes: return .extractingSwiftAssociatedTypes
+            case .symbolIndex: return .preparingSymbolIndex
+            }
+        }
+
+        private func incrementAndYield(phase: RuntimeObjectsLoadingProgress.Phase, itemDescription: String) {
+            let state = _phaseStates.withLock { dictionary in
+                var current = dictionary[phase] ?? (0, 0)
+                current.currentCount += 1
+                dictionary[phase] = current
+                return current
+            }
+            yieldProgress(phase: phase, itemDescription: itemDescription, currentCount: state.currentCount, totalCount: state.totalCount)
+        }
+
+        private func yieldProgress(phase: RuntimeObjectsLoadingProgress.Phase, itemDescription: String, currentCount: Int, totalCount: Int) {
+            continuation.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
+                phase: phase,
+                itemDescription: itemDescription,
+                currentCount: currentCount,
+                totalCount: totalCount
+            )))
+        }
     }
 }
 
 extension SwiftInterface.TypeName {
-    fileprivate var runtimeObjectKind: RuntimeObjectKind {
+    var runtimeObjectKind: RuntimeObjectKind {
         switch kind {
         case .enum:
             return .swift(.type(.enum))
@@ -1308,7 +1366,6 @@ extension SemanticString {
 
 @Loggable(.private)
 actor RuntimeSwiftSectionFactory {
-
     /// Pair of (originating typeName, indexed entry) produced by
     /// `RuntimeSwiftSection.candidateIDMapping()`. The typeName is preserved
     /// so the eventual `EngineError.unindexedCandidate` (and any internal
@@ -1319,7 +1376,7 @@ actor RuntimeSwiftSectionFactory {
         entry: MachOIndexedValue<MachOImage, TypeDefinition>
     )
 
-    let indexer: SwiftInterfaceIndexer<MachOImage>
+    let indexer: RuntimeSwiftInterfaceIndexer
 
     private var sections: [String: RuntimeSwiftSection] = [:]
 
@@ -1335,7 +1392,7 @@ actor RuntimeSwiftSectionFactory {
     private var indexedTypeByCandidateID: [String: IndexedTypeEntry] = [:]
 
     init() {
-        indexer = .init(configuration: .init(), eventHandlers: [], in: .current())
+        self.indexer = RuntimeSwiftInterfaceIndexer(machO: .current())
     }
 
     func existingSection(for imagePath: String) -> RuntimeSwiftSection? {
@@ -1344,6 +1401,14 @@ actor RuntimeSwiftSectionFactory {
 
     func hasCachedSection(for path: String) -> Bool {
         sections[path] != nil
+    }
+
+    /// Every image path with a cached `RuntimeSwiftSection` — the canonical
+    /// (dyld-patched) keys under which `section(for:)` registered them.
+    /// See `RuntimeObjCSectionFactory.cachedImagePaths`; the resolver
+    /// intersects the two to obtain every fully-indexed image.
+    var cachedImagePaths: Set<String> {
+        Set(sections.keys)
     }
 
     /// O(1) lookup of the indexed type backing a `candidateID` (the mangled

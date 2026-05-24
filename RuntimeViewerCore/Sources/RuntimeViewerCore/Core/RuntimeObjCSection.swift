@@ -51,62 +51,19 @@ actor RuntimeObjCSection {
 
     private let factory: RuntimeObjCSectionFactory
 
-    private var classes: [String: ObjCClassGroup] = [:]
-
-    private var protocols: [String: ObjCProtocolGroup] = [:]
-
-    private var categories: [String: ObjCCategoryGroup] = [:]
-
-    private var classInfoCache: [String: ObjCClassInfo] = [:]
-
-    private var structs: [String: CStructOrUnion] = [:]
-
-    private var unions: [String: CStructOrUnion] = [:]
-
-    private typealias ObjCClassGroup = (objcClass: any ObjCClassProtocol, info: [ObjCClassInfo])
-
-    private typealias ObjCProtocolGroup = (objcProtocol: any ObjCProtocolProtocol, info: ObjCProtocolInfo)
-
-    private typealias ObjCCategoryGroup = (objcCategory: any ObjCCategoryProtocol, info: ObjCCategoryInfo)
-
-    private enum ObjCName: Hashable {
-        case `class`(String)
-        case `protocol`(String)
-        case category(String)
-    }
-
-    private struct CStructOrUnion: Hashable {
-        let name: String
-
-        let fields: [ObjCField]
-
-        var hasBitFieldOnly: Bool {
-            fields.allSatisfy { $0.bitWidth != nil }
-        }
-
-        var numberOfHasNameFields: Int {
-            fields.count { $0.name != nil }
-        }
-
-        @SemanticStringBuilder
-        func semanticString(isStruct: Bool, context: ObjCDumpContext) -> SemanticString {
-            Keyword(isStruct ? "struct" : "union")
-            Space()
-            TypeName(kind: .other, name)
-            Joined {
-                MemberList(level: 1) {
-                    for (index, field) in fields.enumerated() {
-                        field.semanticString(fallbackName: "x\(index)", level: 1, context: context)
-                    }
-                }
-            } prefix: {
-                " {"
-            } suffix: {
-                Indent(level: 0)
-                "}"
-            }
-        }
-    }
+    /// Per-image Objective-C interface index: the parsed data store for
+    /// this image (classes, protocols, categories, C struct/union
+    /// definitions) plus the inheritance / protocol-adoption reverse
+    /// tables. Constructed in `init` with this image's `MachOImage` and
+    /// populated by `objcIndexer.prepare()`; afterwards this section only
+    /// *reads* it back to translate into `RuntimeViewerCore` domain types
+    /// (`RuntimeObject`, `RuntimeObjectInterface`, `RuntimeMemberAddress`).
+    ///
+    /// `nonisolated let` so `RuntimeRelationshipsResolver` and the factory's
+    /// aggregate can read its query methods without an actor hop —
+    /// `RuntimeObjCInterfaceIndexer` is `Sendable` and protects its own
+    /// state with `@Mutex`.
+    nonisolated let objcIndexer: RuntimeObjCInterfaceIndexer
 
     init(imagePath: String, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
@@ -117,7 +74,8 @@ actor RuntimeObjCSection {
         self.machO = machO
         self.imagePath = imagePath
         self.factory = factory
-        try await prepare(progressContinuation: progressContinuation)
+        self.objcIndexer = RuntimeObjCInterfaceIndexer(machO: machO, imagePath: imagePath)
+        try await objcIndexer.prepare(progressContinuation: progressContinuation)
     }
 
     init(machO: MachOImage, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
@@ -125,208 +83,32 @@ actor RuntimeObjCSection {
         self.machO = machO
         self.imagePath = machO.imagePath
         self.factory = factory
-        try await prepare(progressContinuation: progressContinuation)
-    }
-
-    private func prepare(progressContinuation: LoadingEventContinuation? = nil) async throws {
-        #log(.debug, "Preparing ObjC section data")
-        var classByName: [String: ObjCClassGroup] = [:]
-        var protocolByName: [String: ObjCProtocolGroup] = [:]
-        var categoryByName: [String: ObjCCategoryGroup] = [:]
-        var structsByName: [String: CStructOrUnion] = [:]
-        var unionsByName: [String: CStructOrUnion] = [:]
-
-        func setObjCType(_ type: ObjCType, forName objcName: ObjCName) {
-            switch type {
-            case .struct(let name, let fields):
-                if let name {
-                    let newStruct = CStructOrUnion(name: name, fields: fields ?? [])
-                    guard !newStruct.hasBitFieldOnly else { return }
-                    if let existStruct = structsByName[name] {
-                        if existStruct.numberOfHasNameFields < newStruct.numberOfHasNameFields {
-                            structsByName[name] = newStruct
-                        }
-                    } else {
-                        structsByName[name] = newStruct
-                    }
-                }
-            case .union(let name, let fields):
-                if let name {
-                    let newUnion = CStructOrUnion(name: name, fields: fields ?? [])
-                    guard !newUnion.hasBitFieldOnly else { return }
-                    if let existUnion = unionsByName[name] {
-                        if existUnion.numberOfHasNameFields < newUnion.numberOfHasNameFields {
-                            unionsByName[name] = newUnion
-                        }
-                    } else {
-                        unionsByName[name] = newUnion
-                    }
-                }
-            default:
-                break
-            }
-        }
-
-        func setObjCTypeFromMethods(_ methods: [ObjCMethodInfo], forName objcName: ObjCName) {
-            for method in methods {
-                if let returnType = method.returnType {
-                    setObjCType(returnType, forName: objcName)
-                }
-
-                if let argumentInfos = method.argumentInfos {
-                    for argumentInfo in argumentInfos {
-                        setObjCType(argumentInfo.type, forName: objcName)
-                    }
-                }
-            }
-        }
-
-        func setObjCTypeFromProperties(_ properties: [ObjCPropertyInfo], forName objcName: ObjCName) {
-            for property in properties {
-                for attribute in property.attributes {
-                    if let type = attribute.type {
-                        setObjCType(type, forName: objcName)
-                    }
-                }
-            }
-        }
-
-        let objcClasses: [any ObjCClassProtocol] = machO.objc.classes64.orEmpty + machO.objc.classes32.orEmpty + machO.objc.nonLazyClasses64.orEmpty + machO.objc.nonLazyClasses32.orEmpty
-
-        for objcClass in objcClasses {
-            let objcClassGroup: ObjCClassGroup = (objcClass, infoWithSuperclasses(class: objcClass, in: machO))
-            guard let objcClassInfo = objcClassGroup.info.first else { continue }
-            classByName[objcClassInfo.name] = objcClassGroup
-            progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
-                phase: .loadingObjCClasses,
-                itemDescription: objcClassInfo.name,
-                currentCount: classByName.count,
-                totalCount: objcClasses.count
-            )))
-
-            let objcName = ObjCName.class(objcClassInfo.name)
-
-            for ivar in objcClassInfo.ivars {
-                if let type = ivar.type {
-                    setObjCType(type, forName: objcName)
-                }
-            }
-
-            setObjCTypeFromProperties(objcClassInfo.properties + objcClassInfo.classProperties, forName: objcName)
-            setObjCTypeFromMethods(objcClassInfo.methods + objcClassInfo.classMethods, forName: objcName)
-        }
-
-        let objcProtocols: [any ObjCProtocolProtocol] = machO.objc.protocols64.orEmpty + machO.objc.protocols32.orEmpty
-
-        for objcProtocol in objcProtocols {
-            guard let objcProtocolInfo = objcProtocol.info(in: machO) else { continue }
-            protocolByName[objcProtocolInfo.name] = (objcProtocol, objcProtocolInfo)
-            progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
-                phase: .loadingObjCProtocols,
-                itemDescription: objcProtocolInfo.name,
-                currentCount: protocolByName.count,
-                totalCount: objcProtocols.count
-            )))
-            let objcName = ObjCName.protocol(objcProtocolInfo.name)
-            setObjCTypeFromProperties(objcProtocolInfo.properties + objcProtocolInfo.classProperties, forName: objcName)
-            setObjCTypeFromMethods(objcProtocolInfo.methods + objcProtocolInfo.classMethods, forName: objcName)
-        }
-
-        var objcCategories: [any ObjCCategoryProtocol] = []
-
-        objcCategories.append(contentsOf: machO.objc.categories64.orEmpty)
-        objcCategories.append(contentsOf: machO.objc.categories32.orEmpty)
-        objcCategories.append(contentsOf: machO.objc.nonLazyCategories64.orEmpty)
-        objcCategories.append(contentsOf: machO.objc.nonLazyCategories32.orEmpty)
-        objcCategories.append(contentsOf: machO.objc.categories2_64.orEmpty)
-        objcCategories.append(contentsOf: machO.objc.categories2_32.orEmpty)
-
-        for objcCategory in objcCategories {
-            guard let objcCategoryInfo = objcCategory.info(in: machO) else { continue }
-            categoryByName[objcCategoryInfo.uniqueName] = (objcCategory, objcCategoryInfo)
-            progressContinuation?.yield(RuntimeObjectsLoadingEvent.progress(RuntimeObjectsLoadingProgress(
-                phase: .loadingObjCCategories,
-                itemDescription: objcCategoryInfo.uniqueName,
-                currentCount: categoryByName.count,
-                totalCount: objcCategories.count
-            )))
-            let objcName = ObjCName.category(objcCategoryInfo.uniqueName)
-            setObjCTypeFromProperties(objcCategoryInfo.properties + objcCategoryInfo.classProperties, forName: objcName)
-            setObjCTypeFromMethods(objcCategoryInfo.methods + objcCategoryInfo.classMethods, forName: objcName)
-        }
-
-        classes = classByName
-        protocols = protocolByName
-        categories = categoryByName
-        structs = structsByName
-        unions = unionsByName
-        #log(.info, "ObjC section prepared: \(classByName.count, privacy: .public) classes, \(protocolByName.count, privacy: .public) protocols, \(categoryByName.count, privacy: .public) categories, \(structsByName.count, privacy: .public) structs, \(unionsByName.count, privacy: .public) unions")
-    }
-
-    private func infoWithSuperclasses<Class: ObjCClassProtocol>(class cls: Class, in machO: MachOImage) -> [ObjCClassInfo] {
-        guard let className = cls.name(in: machO) else { return [] }
-
-        var currentInfo: ObjCClassInfo?
-
-        if let cacheInfo = classInfoCache[className] {
-            currentInfo = cacheInfo
-        } else {
-            let info = cls.info(in: machO)
-            currentInfo = info
-            classInfoCache[className] = info
-        }
-
-        guard let currentInfo else { return [] }
-
-        var resultInfos: [ObjCClassInfo] = [currentInfo]
-
-        var machOAndSuperclass = cls.superClass(in: machO) // else { return resultInfos }
-
-        while let currentMachOAndSuperclass = machOAndSuperclass {
-            let currentMachO = currentMachOAndSuperclass.0
-            let currentSuperclass = currentMachOAndSuperclass.1
-
-            machOAndSuperclass = currentSuperclass.superClass(in: currentMachO)
-
-            guard let superClassName = currentSuperclass.name(in: currentMachO) else { continue }
-
-            var superclassInfo: ObjCClassInfo?
-            if let cacheInfo = classInfoCache[superClassName] {
-                superclassInfo = cacheInfo
-            } else {
-                let info = currentSuperclass.info(in: currentMachO)
-                superclassInfo = info
-                classInfoCache[superClassName] = info
-            }
-            if let superclassInfo {
-                resultInfos.append(superclassInfo)
-            }
-        }
-
-        return resultInfos
+        self.objcIndexer = RuntimeObjCInterfaceIndexer(machO: machO, imagePath: machO.imagePath)
+        try await objcIndexer.prepare(progressContinuation: progressContinuation)
     }
 
     func allObjects() async throws -> [RuntimeObject] {
         #log(.debug, "Getting all ObjC objects")
         var results: [RuntimeObject] = []
 
-        for structName in structs.keys {
+        for structName in objcIndexer.structNames {
             results.append(.init(name: structName, displayName: structName, kind: .c(.struct), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
-        for unionName in unions.keys {
+        for unionName in objcIndexer.unionNames {
             results.append(.init(name: unionName, displayName: unionName, kind: .c(.union), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
-        for (className, objcClassGroup) in classes {
-            results.append(.init(name: className, displayName: className, kind: .objc(.type(.class)), secondaryKind: objcClassGroup.objcClass.isSwiftStable ? .swift(.type(.class)) : nil, imagePath: imagePath, children: []))
+        for className in objcIndexer.classNames {
+            let isSwiftStable = objcIndexer.classGroup(forName: className)?.objcClass.isSwiftStable ?? false
+            results.append(.init(name: className, displayName: className, kind: .objc(.type(.class)), secondaryKind: isSwiftStable ? .swift(.type(.class)) : nil, imagePath: imagePath, children: []))
         }
 
-        for proto in protocols.keys {
+        for proto in objcIndexer.protocolNames {
             results.append(.init(name: proto, displayName: proto, kind: .objc(.type(.protocol)), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
-        for category in categories.keys {
+        for category in objcIndexer.categoryNames {
             results.append(.init(name: category, displayName: category, kind: .objc(.category(.class)), secondaryKind: nil, imagePath: imagePath, children: []))
         }
 
@@ -342,16 +124,16 @@ actor RuntimeObjCSection {
         let objcDumpContext = ObjCDumpContext(machO: machO, options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
             guard let name else { return true }
             if isStruct {
-                return self.structs[name] == nil
+                return !self.objcIndexer.containsStruct(named: name)
             } else {
-                return self.unions[name] == nil
+                return !self.objcIndexer.containsUnion(named: name)
             }
         }
         objcDumpContext.ivarOffsetTransformer = ivarOffsetTransformer
 
         switch name.kind {
         case .objc(.type(.class)):
-            if let classGroup = classes[name.name], let currentClassInfo = classGroup.info.first {
+            if let classGroup = objcIndexer.classGroup(forName: name.name), let currentClassInfo = classGroup.info.first {
                 let superclassInfos = classGroup.info.dropFirst()
                 var finalClassInfo = classGroup.info.first
                 var needsStripClassProperties: Set<String> = []
@@ -463,7 +245,7 @@ actor RuntimeObjCSection {
                 }
             }
         case .objc(.type(.protocol)):
-            if let currentProtocolInfo = protocols[name.name]?.info {
+            if let currentProtocolInfo = objcIndexer.protocolGroup(forName: name.name)?.info {
                 var finalProtocolInfo = currentProtocolInfo
 
                 var needsStripClassProperties: Set<String> = []
@@ -543,7 +325,7 @@ actor RuntimeObjCSection {
                 return .init(object: name, interfaceString: finalProtocolInfo.semanticString(using: objcDumpContext))
             }
         case .objc(.category(.class)):
-            if let categoryInfo = categories[name.name]?.info {
+            if let categoryInfo = objcIndexer.categoryGroup(forName: name.name)?.info {
                 if options.addPropertyAccessorAddressComments {
                     for method in categoryInfo.methods where method.imp != 0 {
                         objcDumpContext.methodIMPs[method.name] = method.imp
@@ -555,11 +337,11 @@ actor RuntimeObjCSection {
                 return .init(object: name, interfaceString: categoryInfo.semanticString(using: objcDumpContext))
             }
         case .c(.struct):
-            if let interfaceString = structs[name.name]?.semanticString(isStruct: true, context: objcDumpContext) {
+            if let interfaceString = objcIndexer.structSemanticString(forName: name.name, context: objcDumpContext) {
                 return .init(object: name, interfaceString: interfaceString)
             }
         case .c(.union):
-            if let interfaceString = unions[name.name]?.semanticString(isStruct: false, context: objcDumpContext) {
+            if let interfaceString = objcIndexer.unionSemanticString(forName: name.name, context: objcDumpContext) {
                 return .init(object: name, interfaceString: interfaceString)
             }
         default:
@@ -645,7 +427,7 @@ actor RuntimeObjCSection {
 
         switch name.kind {
         case .objc(.type(.class)):
-            if let classGroup = classes[name.name], let classInfo = classGroup.info.first {
+            if let classGroup = objcIndexer.classGroup(forName: name.name), let classInfo = classGroup.info.first {
                 result.append(contentsOf: collectMethods(classInfo.methods + classInfo.classMethods, typeName: classInfo.name))
                 result.append(contentsOf: collectPropertyAccessors(
                     properties: classInfo.properties + classInfo.classProperties,
@@ -654,7 +436,7 @@ actor RuntimeObjCSection {
                 ))
             }
         case .objc(.type(.protocol)):
-            if let protocolInfo = protocols[name.name]?.info {
+            if let protocolInfo = objcIndexer.protocolGroup(forName: name.name)?.info {
                 let allMethods = protocolInfo.methods + protocolInfo.classMethods + protocolInfo.optionalMethods + protocolInfo.optionalClassMethods
                 result.append(contentsOf: collectMethods(allMethods, typeName: protocolInfo.name))
                 result.append(contentsOf: collectPropertyAccessors(
@@ -664,7 +446,7 @@ actor RuntimeObjCSection {
                 ))
             }
         case .objc(.category(.class)):
-            if let categoryInfo = categories[name.name]?.info {
+            if let categoryInfo = objcIndexer.categoryGroup(forName: name.name)?.info {
                 result.append(contentsOf: collectMethods(categoryInfo.methods + categoryInfo.classMethods, typeName: categoryInfo.uniqueName))
                 result.append(contentsOf: collectPropertyAccessors(
                     properties: categoryInfo.properties + categoryInfo.classProperties,
@@ -680,10 +462,42 @@ actor RuntimeObjCSection {
         return result
     }
 
+    /// Materialize an Objective-C class `RuntimeObject` for a known class
+    /// name within this image. Mirrors the shape `allObjects()` emits
+    /// (including `secondaryKind == .swift(.type(.class))` for bridged
+    /// classes), so relationship rows render identically to the sidebar's
+    /// regular ObjC class entries. Returns `nil` when the class is not in
+    /// this section.
+    func makeRuntimeObject(forClassName className: String) -> RuntimeObject? {
+        guard let classGroup = objcIndexer.classGroup(forName: className) else { return nil }
+        return RuntimeObject(
+            name: className,
+            displayName: className,
+            kind: .objc(.type(.class)),
+            secondaryKind: classGroup.objcClass.isSwiftStable ? .swift(.type(.class)) : nil,
+            imagePath: imagePath,
+            children: []
+        )
+    }
+
+    /// Materialize an Objective-C protocol `RuntimeObject`. Used by the
+    /// engine to surface the *target* of an ObjC-protocol-conformers query.
+    func makeRuntimeObject(forProtocolName protocolName: String) -> RuntimeObject? {
+        guard objcIndexer.protocolGroup(forName: protocolName) != nil else { return nil }
+        return RuntimeObject(
+            name: protocolName,
+            displayName: protocolName,
+            kind: .objc(.type(.protocol)),
+            secondaryKind: nil,
+            imagePath: imagePath,
+            children: []
+        )
+    }
+
     func classHierarchy(for object: RuntimeObject) async throws -> [String] {
         #log(.debug, "Getting class hierarchy for: \(object.name, privacy: .public)")
         guard case .objc(.type(.class)) = object.kind,
-              let classGroups = classes[object.name]
+              let classGroups = objcIndexer.classGroup(forName: object.name)
         else {
             #log(.debug, "No class hierarchy found")
             return []
@@ -698,12 +512,38 @@ actor RuntimeObjCSection {
 actor RuntimeObjCSectionFactory {
     private var sections: [String: RuntimeObjCSection] = [:]
 
+    /// Aggregate Objective-C interface indexer. Each per-image
+    /// `RuntimeObjCSection.objcIndexer` is registered as a sub-indexer when
+    /// the section is created, so queries against this aggregate fan out
+    /// across all loaded ObjC sections. Mirrors `RuntimeSwiftSectionFactory.indexer`.
+    ///
+    /// `RuntimeObjCInterfaceIndexer` binds a `MachOImage` at `init`; this
+    /// aggregate never parses one of its own (`prepare()` is never called on
+    /// it), so it is constructed against the current process image as a
+    /// placeholder — mirroring `RuntimeSwiftSectionFactory`'s aggregate,
+    /// which is likewise built `in: .current()`.
+    let objcInterfaceIndexer: RuntimeObjCInterfaceIndexer
+    
+    init() {
+        let currentMachO = MachOImage.current()
+        objcInterfaceIndexer = RuntimeObjCInterfaceIndexer(machO: currentMachO, imagePath: currentMachO.imagePath)
+    }
+
     func existingSection(for imagePath: String) -> RuntimeObjCSection? {
         sections[imagePath]
     }
 
     func hasCachedSection(for path: String) -> Bool {
         sections[path] != nil
+    }
+
+    /// Every image path with a cached `RuntimeObjCSection` — the canonical
+    /// (dyld-patched) keys under which `section(for:)` registered them.
+    /// `RuntimeRelationshipsResolver` intersects this with the Swift
+    /// factory's set to obtain the indexed-image universe for a query, so
+    /// it no longer needs the engine to thread `loadedImagePaths` in.
+    var cachedImagePaths: Set<String> {
+        Set(sections.keys)
     }
 
     func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeObjCSection) {
@@ -714,6 +554,7 @@ actor RuntimeObjCSectionFactory {
         #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
         let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
         sections[imagePath] = section
+        objcInterfaceIndexer.addSubIndexer(section.objcIndexer)
         #log(.debug, "ObjC section created and cached")
         return (false, section)
     }
@@ -734,6 +575,7 @@ actor RuntimeObjCSectionFactory {
             #log(.debug, "Creating ObjC section from MachO: \(machO.imagePath, privacy: .public)")
             let objcSection = try await RuntimeObjCSection(machO: machO, factory: self)
             sections[machO.imagePath] = objcSection
+            objcInterfaceIndexer.addSubIndexer(objcSection.objcIndexer)
             return objcSection
         } catch {
             #log(.error, "Failed to create ObjC section: \(error, privacy: .public)")

@@ -5,20 +5,14 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import SnapKit
 
-final class InspectorSwiftSpecializationViewController: UXEffectViewController<InspectorSwiftSpecializationViewModel> {
-    // MARK: - Subviews
-
+final class InspectorRelationshipsViewController: UXEffectViewController<InspectorRelationshipsViewModel> {
     private let headerLabel = Label()
-    private let emptyLabel = Label()
+    
+    private let emptyLabel = Label(wrappingLabelWithString: "")
+    
     private let (scrollView, tableView): (SelfSizingScrollView, SelfSizingTableView) = SelfSizingTableView.scrollableTableView()
-    private let addSpecializationButton = PushButton(
-        title: "+ Add Specialization",
-        titleFont: .systemFont(ofSize: 13)
-    )
 
     override var contentViewUsingSafeArea: Bool { true }
-
-    // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -27,7 +21,6 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             headerLabel
             scrollView
             emptyLabel
-            addSpecializationButton
         }
 
         headerLabel.snp.makeConstraints { make in
@@ -37,17 +30,13 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         scrollView.snp.makeConstraints { make in
             make.top.equalTo(headerLabel.snp.bottom).offset(8)
             make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
+            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide)
         }
 
         emptyLabel.snp.makeConstraints { make in
             make.center.equalTo(scrollView)
-        }
-
-        addSpecializationButton.snp.makeConstraints { make in
-            make.top.equalTo(scrollView.snp.bottom).offset(8)
-            make.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
-            make.leading.greaterThanOrEqualToSuperview()
-            make.bottom.lessThanOrEqualToSuperview().offset(-8)
+            make.leading.greaterThanOrEqualToSuperview().offset(16)
+            make.trailing.lessThanOrEqualToSuperview().offset(-16)
         }
 
         tableView.do {
@@ -70,25 +59,24 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
         headerLabel.do {
             $0.font = .systemFont(ofSize: 13, weight: .semibold)
             $0.textColor = .labelColor
-            $0.stringValue = "Specializations"
             $0.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
 
         emptyLabel.do {
             $0.textColor = .secondaryLabelColor
-            $0.stringValue = "No specializations yet."
+            $0.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            $0.alignment = .center
             $0.isHidden = true
         }
     }
 
-    // MARK: - Bindings
-
-    override func setupBindings(for viewModel: InspectorSwiftSpecializationViewModel) {
+    override func setupBindings(for viewModel: InspectorRelationshipsViewModel) {
         super.setupBindings(for: viewModel)
 
-        let selectSpecialization: Signal<InspectorSwiftSpecializationCellViewModel> = tableView.rx
+        let selectRelationship: Signal<InspectorRelationshipsCellViewModel> = tableView.rx
             .itemClicked()
-            .compactMap { [weak tableView] index -> InspectorSwiftSpecializationCellViewModel? in
+            .compactMap { [weak tableView] index -> InspectorRelationshipsCellViewModel? in
                 guard let tableView,
                       index.row >= 0,
                       index.row < tableView.numberOfRows
@@ -97,18 +85,14 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             }
             .asSignal(onErrorSignalWith: .empty())
 
-        let input = InspectorSwiftSpecializationViewModel.Input(
-            addSpecializationClicked: addSpecializationButton.rx.click.asSignal(),
-            selectSpecializationClicked: selectSpecialization
+        let input = InspectorRelationshipsViewModel.Input(
+            selectRelationshipClicked: selectRelationship
         )
-
         let output = viewModel.transform(input)
 
-        let specializedChildren = output.specializedChildren
-
-        specializedChildren
-            .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: InspectorSwiftSpecializationCellViewModel) -> NSView? in
-                let cellView = tableView.box.makeView(ofClass: RuntimeObjectCellView<InspectorSwiftSpecializationCellViewModel>.self) {
+        output.rows
+            .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: InspectorRelationshipsCellViewModel) -> NSView? in
+                let cellView = tableView.box.makeView(ofClass: RuntimeObjectCellView<InspectorRelationshipsCellViewModel>.self) {
                     .init(contentInsets: .init(top: 0, left: 4, bottom: 0, right: 4))
                 }
                 cellView.bind(to: cellViewModel)
@@ -116,10 +100,9 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             }
             .disposed(by: rx.disposeBag)
 
-        specializedChildren
-            .map(\.isEmpty)
-            .not()
-            .drive(emptyLabel.rx.isHidden)
-            .disposed(by: rx.disposeBag)
+        output.sectionTitle.drive(headerLabel.rx.stringValue).disposed(by: rx.disposeBag)
+        output.emptyMessage.drive(emptyLabel.rx.stringValue).disposed(by: rx.disposeBag)
+        output.isEmpty.not().drive(emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
+        output.isEmpty.drive(scrollView.rx.isHidden).disposed(by: rx.disposeBag)
     }
 }

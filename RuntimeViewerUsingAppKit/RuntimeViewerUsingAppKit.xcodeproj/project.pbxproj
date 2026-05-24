@@ -11,6 +11,7 @@
 		8FC7CF2AD73A74EC8D81C0CB /* InspectorRuntimeObjectTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D57DB6E4F581069CBA /* InspectorRuntimeObjectTabViewController.swift */; };
 		8FC7CF2BD73A74EC8D81C0CB /* InspectorSwiftSpecializationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D67DB6E4F581069CBA /* InspectorSwiftSpecializationViewController.swift */; };
 		8FC7CF2CD73A74EC8D81C0CB /* InspectorRuntimeObjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D77DB6E4F581069CBA /* InspectorRuntimeObjectCoordinator.swift */; };
+		8FC7CF2DD73A74EC8D81C0CB /* InspectorRelationshipsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D87DB6E4F581069CBA /* InspectorRelationshipsViewController.swift */; };
 		9677438C01BDD12085C27522 /* SpecializationTypePickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */; };
 		CB5EBCC699B082FC52857966 /* SpecializationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EC4339B0319BDED6270B85F /* SpecializationCoordinator.swift */; };
 		D9073E10AE2361972768175D /* SpecializationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D54B1B904A0B5FDFA93B2F /* SpecializationViewController.swift */; };
@@ -246,6 +247,7 @@
 		E923F0D57DB6E4F581069CBA /* InspectorRuntimeObjectTabViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InspectorRuntimeObjectTabViewController.swift; sourceTree = "<group>"; };
 		E923F0D67DB6E4F581069CBA /* InspectorSwiftSpecializationViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InspectorSwiftSpecializationViewController.swift; sourceTree = "<group>"; };
 		E923F0D77DB6E4F581069CBA /* InspectorRuntimeObjectCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InspectorRuntimeObjectCoordinator.swift; sourceTree = "<group>"; };
+		E923F0D87DB6E4F581069CBA /* InspectorRelationshipsViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InspectorRelationshipsViewController.swift; sourceTree = "<group>"; };
 		E927C22D2E9444F300084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		E942ACBE2C28865100A2F3D3 /* MainRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainRoute.swift; sourceTree = "<group>"; };
 		E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RuntimeViewer-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -640,6 +642,7 @@
 				E9EEF7682E085426008D85D1 /* InspectorClassHierarchyView.swift */,
 				E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */,
 				E923F0D67DB6E4F581069CBA /* InspectorSwiftSpecializationViewController.swift */,
+				E923F0D87DB6E4F581069CBA /* InspectorRelationshipsViewController.swift */,
 			);
 			path = Inspector;
 			sourceTree = "<group>";
@@ -1069,6 +1072,7 @@
 				8FC7CF2AD73A74EC8D81C0CB /* InspectorRuntimeObjectTabViewController.swift in Sources */,
 				8FC7CF2BD73A74EC8D81C0CB /* InspectorSwiftSpecializationViewController.swift in Sources */,
 				8FC7CF2CD73A74EC8D81C0CB /* InspectorRuntimeObjectCoordinator.swift in Sources */,
+				8FC7CF2DD73A74EC8D81C0CB /* InspectorRelationshipsViewController.swift in Sources */,
 			);
 		};
 		E947C3632C2A4D0400296B2E /* Sources */ = {

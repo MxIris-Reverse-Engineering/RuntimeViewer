@@ -51,12 +51,15 @@ open class SelfSizingTableView: SingleColumnTableView {
         guard rowCount > 0 else {
             return NSSize(width: NSView.noIntrinsicMetric, height: 0)
         }
-        var totalHeight: CGFloat = 0
-        for rowIndex in 0..<rowCount {
-            totalHeight += rect(ofRow: rowIndex).height
-        }
-        totalHeight += intercellSpacing.height * CGFloat(max(rowCount - 1, 0))
-        return NSSize(width: NSView.noIntrinsicMetric, height: totalHeight)
+        // `rect(ofRow:)` is expressed in the table view's own coordinate space,
+        // so the first row's `minY` already encodes the top inset reserved by
+        // `.inset` / `.sourceList` styles, and the last row's `maxY` already
+        // folds in every row height plus the intercell spacing between rows.
+        // The table reserves a symmetric bottom inset, so mirror the top inset
+        // below the last row to obtain the full content height.
+        let topInset = rect(ofRow: 0).minY
+        let contentMaxY = rect(ofRow: rowCount - 1).maxY
+        return NSSize(width: NSView.noIntrinsicMetric, height: contentMaxY + topInset)
     }
 
     open override func invalidateIntrinsicContentSize() {
