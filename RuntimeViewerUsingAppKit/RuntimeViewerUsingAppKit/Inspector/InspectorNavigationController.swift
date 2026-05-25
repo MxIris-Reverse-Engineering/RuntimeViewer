@@ -3,6 +3,4 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class InspectorNavigationController: UXKitNavigationController {
-    override var shouldUseNoAnimationTransition: Bool { true }
-}
+final class InspectorNavigationController: UXKitNavigationController {}

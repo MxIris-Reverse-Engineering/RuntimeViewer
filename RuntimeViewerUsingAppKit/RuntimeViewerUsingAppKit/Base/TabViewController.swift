@@ -27,7 +27,13 @@ class TabViewController: UXViewController {
 
     private let tabView = NSTabView()
 
-    
+    /// Invoked when the user changes the active tab by tapping the
+    /// segmented control. Programmatic selection (e.g. `set` / `select`
+    /// transitions, autosave restore) does **not** trigger this callback,
+    /// so callers can use it to persist "last user-selected tab" state
+    /// without false positives during view setup.
+    var onUserSelectIndex: ((Int) -> Void)?
+
     var autosaveName: String? {
         didSet {
             guard let autosaveName else { return }
@@ -37,7 +43,7 @@ class TabViewController: UXViewController {
             segmentedControl.selectedSegment = index
         }
     }
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -69,16 +75,32 @@ class TabViewController: UXViewController {
 //        segmentedControl.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         segmentedControl.controlSize = .large
         segmentedControl.selectedSegment = 0
-        segmentedControl.target = tabView
-        segmentedControl.action = #selector(tabView.takeSelectedTabViewItemFromSender(_:))
+        segmentedControl.target = self
+        segmentedControl.action = #selector(handleSegmentedControlAction(_:))
 
         tabView.tabViewType = .noTabsNoBorder
         tabView.tabPosition = .none
         tabView.tabViewBorderType = .none
     }
 
+    @objc private func handleSegmentedControlAction(_ sender: Any) {
+        let index = segmentedControl.selectedSegment
+        guard index >= 0, index < tabView.numberOfTabViewItems else { return }
+        tabView.selectTabViewItem(at: index)
+        if let autosaveName {
+            UserDefaults.standard.set(index, forKey: autosaveName)
+        }
+        onUserSelectIndex?(index)
+    }
+
     var selectedTabViewItemIndex: Int {
-        set { tabView.selectTabViewItem(at: newValue) }
+        set {
+            guard newValue >= 0, newValue < tabView.numberOfTabViewItems else { return }
+            tabView.selectTabViewItem(at: newValue)
+            if newValue < segmentedControl.segmentCount {
+                segmentedControl.selectedSegment = newValue
+            }
+        }
         get { tabView.selectedTabViewItem.map { tabView.indexOfTabViewItem($0) } ?? NSNotFound }
     }
 
@@ -116,15 +138,18 @@ extension Transition where ViewController: TabViewController {
         }
     }
 
-    static func set(_ tabViewItems: [TabViewItem]) -> Self {
+    static func set(_ tabViewItems: [TabViewItem], initialIndex: Int = 0) -> Self {
         Self(presentables: tabViewItems.map(\.viewController)) { windowController, viewController, options, completion in
-            guard let viewController = viewController ?? ((windowController as? NSWindowController)?.contentViewController as? ViewController) else {
+            DispatchQueue.main.async {
+                guard let viewController = viewController ?? ((windowController as? NSWindowController)?.contentViewController as? ViewController) else {
+                    completion?()
+                    return
+                }
+                viewController.removeAllTabViewItems()
+                viewController.setTabViewItems(tabViewItems)
+                viewController.selectedTabViewItemIndex = initialIndex
                 completion?()
-                return
             }
-            viewController.removeAllTabViewItems()
-            viewController.setTabViewItems(tabViewItems)
-            completion?()
         }
     }
 }

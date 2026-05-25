@@ -7,10 +7,24 @@ import RuntimeViewerArchitectures
 typealias InspectorRuntimeObjectTransition = Transition<Void, InspectorRuntimeObjectTabViewController>
 
 final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeObjectRoute, InspectorRuntimeObjectTransition> {
+    /// Identifies an inspector tab independently of its display order, so
+    /// the user's "last selected tab" can be restored across RuntimeObject
+    /// switches even when the new object's `TabConfiguration` produces a
+    /// different ordering or omits some tabs entirely.
+    enum TabKind {
+        case classHierarchy
+        case relationships
+        case specialization
+    }
+
     protocol Delegate: AnyObject {
         func inspectorRuntimeObjectCoordinator(
             _ coordinator: InspectorRuntimeObjectCoordinator,
             didRequestSpecializationSheetFor object: RuntimeObject
+        )
+        func inspectorRuntimeObjectCoordinator(
+            _ coordinator: InspectorRuntimeObjectCoordinator,
+            didSelectTab tabKind: TabKind
         )
     }
 
@@ -22,17 +36,28 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
 
     private let tabConfiguration: TabConfiguration
 
-    init(documentState: DocumentState, runtimeObject: RuntimeObject) {
+    private let preferredTabKind: TabKind?
+
+    init(documentState: DocumentState, runtimeObject: RuntimeObject, preferredTabKind: TabKind? = nil) {
         self.documentState = documentState
         self.runtimeObject = runtimeObject
         self.tabConfiguration = .compute(for: runtimeObject)
+        self.preferredTabKind = preferredTabKind
         super.init(rootViewController: .init(), initialRoute: .initial)
+        let configuration = tabConfiguration
+        rootViewController.onUserSelectIndex = { [weak self] index in
+            guard let self else { return }
+            guard let tabKind = configuration.tabKind(at: index) else { return }
+            delegate?.inspectorRuntimeObjectCoordinator(self, didSelectTab: tabKind)
+        }
     }
 
     override func prepareTransition(for route: InspectorRuntimeObjectRoute) -> InspectorRuntimeObjectTransition {
         switch route {
         case .initial:
-            return .set(makeTabViewItems())
+            let items = makeTabViewItems()
+            let initialIndex = preferredTabKind.flatMap { tabConfiguration.index(for: $0) } ?? 0
+            return .set(items, initialIndex: initialIndex)
         case .classHierarchy:
             guard let index = tabConfiguration.classHierarchyIndex else { return .none() }
             return .select(index: index)
@@ -119,6 +144,23 @@ extension InspectorRuntimeObjectCoordinator {
             if needsClassHierarchy { index += 1 }
             if needsRelationships { index += 1 }
             return index
+        }
+
+        func index(for tabKind: TabKind) -> Int? {
+            switch tabKind {
+            case .classHierarchy: return classHierarchyIndex
+            case .relationships: return relationshipsIndex
+            case .specialization: return specializationIndex
+            }
+        }
+
+        func tabKind(at index: Int) -> TabKind? {
+            var orderedTabKinds: [TabKind] = []
+            if needsClassHierarchy { orderedTabKinds.append(.classHierarchy) }
+            if needsRelationships { orderedTabKinds.append(.relationships) }
+            if needsSpecialization { orderedTabKinds.append(.specialization) }
+            guard index >= 0, index < orderedTabKinds.count else { return nil }
+            return orderedTabKinds[index]
         }
 
         static func compute(for runtimeObject: RuntimeObject) -> TabConfiguration {

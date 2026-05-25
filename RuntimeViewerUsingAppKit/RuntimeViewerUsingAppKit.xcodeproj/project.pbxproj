@@ -55,6 +55,7 @@
 		E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D92D9AF7E5005A573C /* RuntimeViewerService */; };
 		E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */ = {isa = PBXBuildFile; productRef = E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */; };
 		E9862AD52F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9862AD42F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift */; };
+		E98A78AF2FC4363A00E09C8F /* LightBackButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98A78AE2FC4363A00E09C8F /* LightBackButton.swift */; };
 		E98BEF542F1CBE180041DB20 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E98BEF532F1CBE180041DB20 /* RuntimeViewerService */; };
 		E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */; };
@@ -285,6 +286,7 @@
 		E97B1C952EC9AE5D00FF5375 /* RuntimeViewerDebugger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RuntimeViewerDebugger.h; sourceTree = "<group>"; };
 		E97B1C962EC9AE5D00FF5375 /* RuntimeViewerDebugger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RuntimeViewerDebugger.m; sourceTree = "<group>"; };
 		E9862AD42F377E9C00139991 /* AppMCPBridgeDocumentProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMCPBridgeDocumentProvider.swift; sourceTree = "<group>"; };
+		E98A78AE2FC4363A00E09C8F /* LightBackButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightBackButton.swift; sourceTree = "<group>"; };
 		E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = ../RuntimeViewerServer/RuntimeViewerServer.xcodeproj; sourceTree = SOURCE_ROOT; };
 		E9935B912F44886A006DB4EC /* ExportingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCoordinator.swift; sourceTree = "<group>"; };
 		E9935B942F448900006DB4EC /* ExportingCompletionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportingCompletionViewModel.swift; sourceTree = "<group>"; };
@@ -590,6 +592,7 @@
 				E9A825452C0E0B4900D9A85D /* ViewControllers.swift */,
 				E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */,
 				E9F11E152F12671D0052B0A3 /* TabViewController.swift */,
+				E98A78AE2FC4363A00E09C8F /* LightBackButton.swift */,
 			);
 			path = Base;
 			sourceTree = "<group>";
@@ -1047,6 +1050,7 @@
 				E99E61612C129DC2002C1A3D /* ContentTextViewController.swift in Sources */,
 				E9D4706B2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift in Sources */,
 				E9EEF7612E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift in Sources */,
+				E98A78AF2FC4363A00E09C8F /* LightBackButton.swift in Sources */,
 				E9F0A57E2C305C01001C36FB /* GenerationOptionsViewController.swift in Sources */,
 				E92124642F447AE1007481E4 /* ExportingState.swift in Sources */,
 				E9A825582C0E202600D9A85D /* MainViewModel.swift in Sources */,
@@ -1181,7 +1185,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_CACHING = NO;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
@@ -1210,7 +1214,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -1249,7 +1253,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_CACHING = NO;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
@@ -1271,7 +1275,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 			};
 			name = Release;
 		};
@@ -1521,7 +1525,7 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COMPILATION_CACHE_ENABLE_CACHING = YES;
+				COMPILATION_CACHE_ENABLE_CACHING = NO;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
@@ -1550,7 +1554,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_ENABLE_EXPLICIT_MODULES = YES;
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = "Debug-arm64e";

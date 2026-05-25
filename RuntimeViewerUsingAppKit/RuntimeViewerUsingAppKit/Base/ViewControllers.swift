@@ -173,58 +173,35 @@ open class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController 
 
 
 open class UXKitNavigationController: UXNavigationController {
-    
-    open var shouldUseNoAnimationTransition: Bool { false }
-    
+
+    /// When `true`, every pushed/set view controller has its `navigationItem.hidesBackButton`
+    /// forced to `true`. This skips the `_UXNavigationItemContainerView` SwiftUI layout
+    /// pass that UXKit otherwise triggers for the auto-inserted back button on every push,
+    /// which on macOS 26 is the dominant cost in the transition critical path.
+    /// Subclasses that need the back button to remain in the item container can opt out.
+    open var automaticallyHidesBackButton: Bool { true }
+
     open override func viewDidLoad() {
         super.viewDidLoad()
 
         isToolbarHidden = true
         isNavigationBarHidden = true
-        delegate = self
-    }
-}
-
-extension UXKitNavigationController: UXNavigationControllerDelegate {
-    public func navigationController(_ navigationController: UXNavigationController, animationControllerFor operation: UXNavigationController.Operation, from fromViewController: UXViewController, to toViewController: UXViewController) -> (any UXViewControllerAnimatedTransitioning)? {
-        guard shouldUseNoAnimationTransition else { return nil }
-        return UXKitNoAnimationTransition.shared
-    }
-}
-
-private final class UXKitNoAnimationTransition: NSObject, UXViewControllerAnimatedTransitioning {
-
-    private override init() {}
-    
-    static let shared = UXKitNoAnimationTransition()
-    
-    func transitionDuration(using transitionContext: UXViewControllerContextTransitioning?) -> TimeInterval {
-        return 0
+        interactivePopGestureRecognizer?.isEnabled = false
     }
 
-    func animateTransition(using transitionContext: UXViewControllerContextTransitioning) {
-        let containerView = transitionContext.containerView
-        
-        guard let toVC = transitionContext.viewController(forKey: .to) else {
-            transitionContext.completeTransition(false)
-            return
+    open override func pushViewController(_ viewController: UXViewController, animated: Bool) {
+        if automaticallyHidesBackButton {
+            viewController.navigationItem?.hidesBackButton = true
         }
-        
-        let toView = toVC.view
-        
-        let finalFrame = transitionContext.finalFrame(for: toVC)
-        if finalFrame != .zero {
-            toView.frame = finalFrame
+        super.pushViewController(viewController, animated: animated)
+    }
+
+    open override func setViewControllers(_ viewControllers: [UXViewController], animated: Bool) {
+        if automaticallyHidesBackButton {
+            for viewController in viewControllers {
+                viewController.navigationItem?.hidesBackButton = true
+            }
         }
-        
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        
-        containerView.addSubview(toView)
-        toView.layoutSubtreeIfNeeded()
-        
-        CATransaction.commit()
-        
-        transitionContext.completeTransition(!transitionContext.transitionWasCancelled)
+        super.setViewControllers(viewControllers, animated: animated)
     }
 }

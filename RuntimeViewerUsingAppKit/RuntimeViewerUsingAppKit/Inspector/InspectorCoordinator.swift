@@ -27,6 +27,14 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
     /// selection-state subscription doing diff inference.
     private var runtimeObjectCoordinators: [InspectorRuntimeObjectCoordinator?] = []
 
+    /// Last tab the user explicitly selected in any inspector page during
+    /// this document's lifetime. Reused as the preferred tab when building
+    /// a new `InspectorRuntimeObjectCoordinator` so the inspector keeps the
+    /// user's choice across RuntimeObject switches; falls back to the first
+    /// available tab when the new object's `TabConfiguration` does not
+    /// expose this kind.
+    private var lastSelectedTabKind: InspectorRuntimeObjectCoordinator.TabKind?
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
@@ -36,17 +44,17 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
         switch route {
         case .placeholder:
             resetRuntimeObjectStack()
-            return .set([makePlaceholder()], animated: true)
+            return .set([makePlaceholder()], animated: false)
         case .root(let inspectableObject):
             resetRuntimeObjectStack()
-            return .set([makePresentable(for: inspectableObject)], animated: true)
+            return .set([makePresentable(for: inspectableObject)], animated: false)
         case .next(let inspectableObject):
-            return .push(makePresentable(for: inspectableObject), animated: true)
+            return .push(makePresentable(for: inspectableObject), animated: false)
         case .back:
             if let popped = runtimeObjectCoordinators.popLast() {
                 popped?.removeFromParent()
             }
-            return .pop(animated: true)
+            return .pop(animated: false)
         }
     }
 
@@ -62,7 +70,8 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
             }
             let runtimeObjectCoordinator = InspectorRuntimeObjectCoordinator(
                 documentState: documentState,
-                runtimeObject: runtimeObject
+                runtimeObject: runtimeObject,
+                preferredTabKind: lastSelectedTabKind
             )
             runtimeObjectCoordinator.delegate = self
             runtimeObjectCoordinators.append(runtimeObjectCoordinator)
@@ -91,5 +100,12 @@ extension InspectorCoordinator: InspectorRuntimeObjectCoordinator.Delegate {
         didRequestSpecializationSheetFor object: RuntimeObject
     ) {
         delegate?.inspectorCoordinator(self, requestSpecializationSheetFor: object)
+    }
+
+    func inspectorRuntimeObjectCoordinator(
+        _ coordinator: InspectorRuntimeObjectCoordinator,
+        didSelectTab tabKind: InspectorRuntimeObjectCoordinator.TabKind
+    ) {
+        lastSelectedTabKind = tabKind
     }
 }
