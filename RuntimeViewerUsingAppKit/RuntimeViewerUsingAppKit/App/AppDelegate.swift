@@ -28,7 +28,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = Self.launchDate
 
         NSToolbarItemViewerOverflowFix.install()
-        configureUXKitBehavior()
 
         observe { [weak self] in
             guard let self else { return }
@@ -46,23 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UpdaterService.shared.start()
         installDebugMenu()
         checkHelperServiceVersion()
-    }
-
-    /// Override OpenUXKit's default behavior to avoid the two SwiftUI / layout
-    /// hotspots that Time Profiler traces have shown during inspector pushes
-    /// on macOS 26:
-    /// - Substitute the back button with an `NSButton`-based implementation
-    ///   so navbar pushes don't trigger `NSSegmentedControl`'s SwiftUI sizing
-    ///   pass.
-    /// - Disable the synchronous `-[NSWindow recalculateKeyViewLoop]` UXKit
-    ///   normally fires from each transition completion handler. We never
-    ///   need programmatic Tab focus immediately after a push (the navigation
-    ///   bar is hidden and the surfaces are mouse-driven), so the global
-    ///   key-view recalculation it forces — which walks the entire window
-    ///   tree calling `layoutSubtreeIfNeeded` — is pure overhead here.
-    private func configureUXKitBehavior() {
-        UXKitBehavior.shared.backButtonClass = LightBackButton.self
-        UXKitBehavior.shared.recalculatesKeyViewLoopAfterTransition = false
     }
 
     private func installDebugMenu() {

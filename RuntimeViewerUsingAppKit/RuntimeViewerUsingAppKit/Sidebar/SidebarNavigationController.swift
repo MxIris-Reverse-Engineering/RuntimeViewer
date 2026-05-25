@@ -2,14 +2,12 @@ import AppKit
 import RuntimeViewerUI
 
 final class SidebarNavigationController: UXKitNavigationController, UXNavigationControllerDelegate {
-    override var automaticallyHidesBackButton: Bool { false }
-    
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         delegate = self
     }
-    
+
     func navigationController(_ navigationController: UXNavigationController, willShow viewController: UXViewController) {
         if #available(macOS 26.0, *) {
             guard let coordinator = navigationController.transitionCoordinator,
