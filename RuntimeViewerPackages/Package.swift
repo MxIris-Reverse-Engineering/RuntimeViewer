@@ -89,7 +89,7 @@ let appkitPlatforms: [Platform] = [.macOS]
 
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
-let usingSystemUXKit = envEnable("USING_SYSTEM_UXKIT", default: false)
+let usingSystemUXKit = envEnable("USING_SYSTEM_UXKIT", default: true)
 
 let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 
@@ -194,7 +194,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
+                isEnabled: true,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
@@ -206,7 +206,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("UXKitCoordinator"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
+                isEnabled: true,
             ),
             .package(
                 path: "../../UXKitCoordinator",
