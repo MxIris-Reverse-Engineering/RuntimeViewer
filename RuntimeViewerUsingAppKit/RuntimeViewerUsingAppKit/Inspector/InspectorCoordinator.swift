@@ -21,76 +21,85 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
 
     let documentState: DocumentState
 
-    /// Parallel array to the inspector navigation stack. `nil` entries
-    /// correspond to placeholder pages (non-inspectable rows). Maintained
-    /// directly by `prepareTransition` — there is no longer a separate
-    /// selection-state subscription doing diff inference.
-    private var runtimeObjectCoordinators: [InspectorRuntimeObjectCoordinator?] = []
+    /// Which child VC the navigation is currently showing. We only `set` the
+    /// navigation stack when this changes; switching the active
+    /// `RuntimeObject` within the `.runtimeObject` scene reuses the existing
+    /// `InspectorRuntimeObjectCoordinator` and just rebuilds its tab items.
+    /// This avoids the UXKit push transition flash on every selection.
+    private enum Scene {
+        case initial
+        case placeholder
+        case runtimeObject
+    }
+
+    private var currentScene: Scene = .initial
 
     /// Last tab the user explicitly selected in any inspector page during
-    /// this document's lifetime. Reused as the preferred tab when building
-    /// a new `InspectorRuntimeObjectCoordinator` so the inspector keeps the
-    /// user's choice across RuntimeObject switches; falls back to the first
+    /// this document's lifetime. Reused as the preferred tab on the next
+    /// `update(for:preferredTabKind:)` so the inspector keeps the user's
+    /// choice across RuntimeObject switches; falls back to the first
     /// available tab when the new object's `TabConfiguration` does not
     /// expose this kind.
     private var lastSelectedTabKind: InspectorRuntimeObjectCoordinator.TabKind?
 
+    private lazy var placeholderViewController: InspectorPlaceholderViewController = {
+        let viewController = InspectorPlaceholderViewController()
+        let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
+        viewController.setupBindings(for: viewModel)
+        viewController.loadViewIfNeeded()
+        return viewController
+    }()
+
+    private lazy var runtimeObjectCoordinator: InspectorRuntimeObjectCoordinator = {
+        let coordinator = InspectorRuntimeObjectCoordinator(documentState: documentState)
+        coordinator.delegate = self
+        addChild(coordinator)
+        return coordinator
+    }()
+
     init(documentState: DocumentState) {
         self.documentState = documentState
-        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
+        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
     }
 
     override func prepareTransition(for route: InspectorRoute) -> InspectorTransition {
         switch route {
         case .placeholder:
-            resetRuntimeObjectStack()
-            return .set([makePlaceholder()], animated: false)
-        case .root(let inspectableObject):
-            resetRuntimeObjectStack()
-            return .set([makePresentable(for: inspectableObject)], animated: false)
-        case .next(let inspectableObject):
-            return .push(makePresentable(for: inspectableObject), animated: false)
+            return enterPlaceholderScene()
+        case .root(let inspectableObject), .next(let inspectableObject):
+            return enter(for: inspectableObject)
         case .back:
-            if let popped = runtimeObjectCoordinators.popLast() {
-                popped?.removeFromParent()
+            if let last = documentState.selectionStack.last {
+                return enter(for: .object(last))
+            } else {
+                return enterPlaceholderScene()
             }
-            return .pop(animated: false)
         }
     }
 
-    private func makePresentable(for inspectableObject: InspectableObject) -> Presentable {
+    private func enter(for inspectableObject: InspectableObject) -> InspectorTransition {
         switch inspectableObject {
         case .node:
-            runtimeObjectCoordinators.append(nil)
-            return makePlaceholder()
+            return enterPlaceholderScene()
         case .object(let runtimeObject):
             guard InspectorRuntimeObjectCoordinator.canInspect(runtimeObject) else {
-                runtimeObjectCoordinators.append(nil)
-                return makePlaceholder()
+                return enterPlaceholderScene()
             }
-            let runtimeObjectCoordinator = InspectorRuntimeObjectCoordinator(
-                documentState: documentState,
-                runtimeObject: runtimeObject,
-                preferredTabKind: lastSelectedTabKind
-            )
-            runtimeObjectCoordinator.delegate = self
-            runtimeObjectCoordinators.append(runtimeObjectCoordinator)
-            return runtimeObjectCoordinator
+            return enterRuntimeObjectScene(for: runtimeObject)
         }
     }
 
-    private func resetRuntimeObjectStack() {
-        for runtimeObjectCoordinator in runtimeObjectCoordinators {
-            runtimeObjectCoordinator?.removeFromParent()
-        }
-        runtimeObjectCoordinators.removeAll()
+    private func enterPlaceholderScene() -> InspectorTransition {
+        guard currentScene != .placeholder else { return .none() }
+        currentScene = .placeholder
+        return .set([placeholderViewController], animated: false)
     }
 
-    private func makePlaceholder() -> UXViewController {
-        let viewModel = InspectorPlaceholderViewModel(documentState: documentState, router: self)
-        let viewController = InspectorPlaceholderViewController()
-        viewController.setupBindings(for: viewModel)
-        return viewController
+    private func enterRuntimeObjectScene(for runtimeObject: RuntimeObject) -> InspectorTransition {
+        runtimeObjectCoordinator.update(for: runtimeObject, preferredTabKind: lastSelectedTabKind)
+        guard currentScene != .runtimeObject else { return .none() }
+        currentScene = .runtimeObject
+        return .set([runtimeObjectCoordinator], animated: false)
     }
 }
 

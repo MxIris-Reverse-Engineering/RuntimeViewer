@@ -140,16 +140,14 @@ extension Transition where ViewController: TabViewController {
 
     static func set(_ tabViewItems: [TabViewItem], initialIndex: Int = 0) -> Self {
         Self(presentables: tabViewItems.map(\.viewController)) { windowController, viewController, options, completion in
-            DispatchQueue.main.async {
-                guard let viewController = viewController ?? ((windowController as? NSWindowController)?.contentViewController as? ViewController) else {
-                    completion?()
-                    return
-                }
-                viewController.removeAllTabViewItems()
-                viewController.setTabViewItems(tabViewItems)
-                viewController.selectedTabViewItemIndex = initialIndex
+            guard let viewController = viewController ?? ((windowController as? NSWindowController)?.contentViewController as? ViewController) else {
                 completion?()
+                return
             }
+            viewController.removeAllTabViewItems()
+            viewController.setTabViewItems(tabViewItems)
+            viewController.selectedTabViewItemIndex = initialIndex
+            completion?()
         }
     }
 }

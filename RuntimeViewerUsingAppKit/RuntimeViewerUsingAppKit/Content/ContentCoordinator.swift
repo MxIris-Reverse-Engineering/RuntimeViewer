@@ -7,35 +7,70 @@ import RuntimeViewerApplication
 typealias ContentTransition = Transition<Void, ContentNavigationController>
 
 final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition> {
+    /// Which child VC the navigation is currently showing. We only `set` the
+    /// navigation stack when this changes; switching the active
+    /// `RuntimeObject` within the `.text` scene reuses the existing
+    /// `ContentTextViewController` and just rebinds it to a fresh
+    /// `ContentTextViewModel`. This avoids the UXKit push transition flash on
+    /// every sidebar selection.
+    private enum Scene {
+        case initial
+        case placeholder
+        case text
+    }
+
     let documentState: DocumentState
+
+    private var currentScene: Scene = .initial
+
+    private lazy var placeholderViewController: ContentPlaceholderViewController = {
+        let viewController = ContentPlaceholderViewController()
+        let viewModel = ContentPlaceholderViewModel(documentState: documentState, router: self)
+        viewController.setupBindings(for: viewModel)
+        viewController.loadViewIfNeeded()
+        return viewController
+    }()
+
+    private lazy var textViewController: ContentTextViewController = ContentTextViewController()
 
     init(documentState: DocumentState) {
         self.documentState = documentState
-        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: nil)
+        super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
     }
 
     override func prepareTransition(for route: ContentRoute) -> ContentTransition {
         switch route {
         case .placeholder:
-            let contentPlaceholderViewController = ContentPlaceholderViewController()
-            let contentPlaceholderViewModel = ContentPlaceholderViewModel(documentState: documentState, router: self)
-            contentPlaceholderViewController.setupBindings(for: contentPlaceholderViewModel)
-            contentPlaceholderViewController.loadViewIfNeeded()
-            return .set([contentPlaceholderViewController], animated: false)
+            return enterPlaceholderScene()
         case .root(let runtimeObject):
-            return .set([makeTextViewController(for: runtimeObject)], animated: false)
+            return enterTextScene(for: runtimeObject)
         case .next(let runtimeObject):
-            return .push(makeTextViewController(for: runtimeObject), animated: false)
+            return enterTextScene(for: runtimeObject)
         case .back:
-            return .pop(animated: false)
+            if let last = documentState.selectionStack.last {
+                return enterTextScene(for: last)
+            } else {
+                return enterPlaceholderScene()
+            }
         }
     }
 
-    private func makeTextViewController(for runtimeObject: RuntimeObject) -> ContentTextViewController {
-        let viewController = ContentTextViewController()
+    private func enterPlaceholderScene() -> ContentTransition {
+        guard currentScene != .placeholder else { return .none() }
+        currentScene = .placeholder
+        return .set([placeholderViewController], animated: false)
+    }
+
+    private func enterTextScene(for runtimeObject: RuntimeObject) -> ContentTransition {
+        rebindTextViewController(for: runtimeObject)
+        guard currentScene != .text else { return .none() }
+        currentScene = .text
+        return .set([textViewController], animated: false)
+    }
+
+    private func rebindTextViewController(for runtimeObject: RuntimeObject) {
         let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
-        viewController.setupBindings(for: viewModel)
-        viewController.loadViewIfNeeded()
-        return viewController
+        textViewController.setupBindings(for: viewModel)
+        textViewController.loadViewIfNeeded()
     }
 }
