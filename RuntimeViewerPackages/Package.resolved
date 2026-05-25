@@ -1,5 +1,5 @@
 {
-  "originHash" : "633ca9104510d84a20dad8f65db20e0ebba7639c61ec8d9c2a308d877036d028",
+  "originHash" : "d7c1361dbc1c84c0606e9aad887ddaa5e04ab364b43c12a068b54f830bb9095d",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "branch" : "main",
-        "revision" : "26c6e80b487a554782e5aa07a418dc6ed7f66f4d"
+        "revision" : "138ed60c926868968bdb965ae2709f8dced2ee2d",
+        "version" : "0.3.0"
       }
     },
     {
@@ -213,8 +213,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
       "state" : {
-        "revision" : "5ff991e2b32445cebce2514fbc428594dfa092cd",
-        "version" : "0.3.2"
+        "revision" : "8c64a39bbcbe96b7758afd0e2e0a9f3d82f7305a",
+        "version" : "0.3.3"
       }
     },
     {
@@ -479,6 +479,15 @@
       }
     },
     {
+      "identity" : "swift-helper-service",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/swift-helper-service",
+      "state" : {
+        "revision" : "f544d0b4a063b716aeb56a89a661c508c9de34fb",
+        "version" : "0.1.2"
+      }
+    },
+    {
       "identity" : "swift-literal-type-inference",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-literal-type-inference.git",
@@ -573,8 +582,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "branch" : "main",
-        "revision" : "24224400130aa5c6d6c670d32814094386242baa"
+        "revision" : "456b212834f2032312af1ea5f98d214cbaca5a2c",
+        "version" : "0.5.102"
       }
     },
     {

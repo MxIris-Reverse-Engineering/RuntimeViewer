@@ -89,7 +89,7 @@ let appkitPlatforms: [Platform] = [.macOS]
 
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
-let usingSystemUXKit = envEnable("USING_SYSTEM_UXKIT", default: true)
+let usingSystemUXKit = envEnable("USING_SYSTEM_UXKIT", default: false)
 
 let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 
@@ -109,49 +109,49 @@ let package = Package(
     products: [
         .library(
             name: "RuntimeViewerUI",
-            targets: ["RuntimeViewerUI"]
+            targets: ["RuntimeViewerUI"],
         ),
         .library(
             name: "RuntimeViewerArchitectures",
-            targets: ["RuntimeViewerArchitectures"]
+            targets: ["RuntimeViewerArchitectures"],
         ),
         .library(
             name: "RuntimeViewerApplication",
-            targets: ["RuntimeViewerApplication"]
+            targets: ["RuntimeViewerApplication"],
         ),
         .library(
             name: "RuntimeViewerService",
-            targets: ["RuntimeViewerService"]
+            targets: ["RuntimeViewerService"],
         ),
         .library(
             name: "RuntimeViewerServiceHelper",
-            targets: ["RuntimeViewerServiceHelper"]
+            targets: ["RuntimeViewerServiceHelper"],
         ),
         .library(
             name: "RuntimeViewerHelperClient",
-            targets: ["RuntimeViewerHelperClient"]
+            targets: ["RuntimeViewerHelperClient"],
         ),
         .library(
             name: "RuntimeViewerSettings",
-            targets: ["RuntimeViewerSettings"]
+            targets: ["RuntimeViewerSettings"],
         ),
         .library(
             name: "RuntimeViewerSettingsUI",
-            targets: ["RuntimeViewerSettingsUI"]
+            targets: ["RuntimeViewerSettingsUI"],
         ),
         .library(
             name: "RuntimeViewerCatalystExtensions",
-            targets: ["RuntimeViewerCatalystExtensions"]
+            targets: ["RuntimeViewerCatalystExtensions"],
         ),
 
     ],
     dependencies: [
         .package(
-            path: "../RuntimeViewerCore"
+            path: "../RuntimeViewerCore",
         ),
         .package(
             url: "https://github.com/ChimeHQ/Rearrange.git",
-            from: "2.0.0"
+            from: "2.0.0",
         ),
         .package(
             local: .package(
@@ -167,216 +167,227 @@ let package = Package(
                 traits: UIFoundationTraits,
             ),
             remote: .package(
-                // Floor bumped to 0.8.2: older tags only declared a subset of
-                // UIFoundationTraits (0.4.0 only has AppleInternal; 0.7.3 lacks
-                // QuickActionBar / NSAttributedStringBuilder). 0.8.0 is the
-                // first tag that declares the full set we enable here. 0.8.2
-                // gates AppKit/Carbon-only sources behind platform conditionals
-                // so the iOS Simulator build can compile UIFoundationAppKit
-                // and UIFoundationAppleInternal* without hitting `Module
-                // 'Carbon' not found` / non-Optional `UIFont.familyName`.
                 url: "https://github.com/Mx-Iris/UIFoundation",
                 from: "0.8.2",
                 traits: UIFoundationTraits,
-            )
+            ),
         ),
 
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("XCoordinator"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../XCoordinator",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Library-Forks/XCoordinator",
-                from: "3.0.0-beta"
-            )
+                from: "3.0.0-beta",
+            ),
         ),
 
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
-                from: "0.4.1"
-            )
+                from: "0.4.1",
+            ),
         ),
+
         .package(
-            url: "https://github.com/OpenUXKit/UXKitCoordinator",
-            branch: "main"
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("UXKitCoordinator"),
+                isRelative: true,
+                isEnabled: usingLocalDependencies,
+            ),
+            .package(
+                path: "../../UXKitCoordinator",
+                isRelative: true,
+                isEnabled: true,
+            ),
+            remote: .package(
+                url: "https://github.com/OpenUXKit/UXKitCoordinator",
+                branch: "main",
+            ),
         ),
+
         .package(
             url: "https://github.com/SnapKit/SnapKit",
-            from: "5.0.0"
+            from: "5.0.0",
         ),
         .package(
             url: "https://github.com/ReactiveX/RxSwift",
-            from: "6.0.0"
+            from: "6.0.0",
         ),
 
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("RxSwiftPlus"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
-                from: "0.2.2"
-            )
+                from: "0.2.2",
+            ),
         ),
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("OpenUXKit"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: true,
+            ),
+            .package(
+                path: "../../OpenUXKit",
+                isRelative: true,
+                isEnabled: true,
             ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/OpenUXKit",
-                branch: "main"
-            )
+                branch: "main",
+            ),
         ),
         .package(
             url: "https://github.com/Mx-Iris/SFSymbols",
-            from: "0.2.0"
+            from: "0.2.0",
         ),
         .package(
             url: "https://github.com/CombineCommunity/RxCombine",
-            from: "2.0.1"
+            from: "2.0.1",
         ),
         .package(
             url: "https://github.com/gringoireDM/RxEnumKit",
-            from: "2.0.0"
+            from: "2.0.0",
         ),
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RxAppKit"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../RxAppKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
-                from: "0.3.0"
-            )
+                from: "0.3.0",
+            ),
         ),
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryIOSDirectory.libraryPath("RxUIKit"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../RxUIKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxUIKit",
-                from: "0.1.1"
-            )
+                from: "0.1.1",
+            ),
         ),
         .package(
             url: "https://github.com/TrGiLong/RxConcurrency",
-            from: "0.1.1"
+            from: "0.1.1",
         ),
         .package(
             local: .package(
                 path: "../../MachInjector",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("MachInjector"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
-                from: "0.1.0"
-            )
+                from: "0.1.0",
+            ),
         ),
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-helper-service"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.1.2"
-            )
+                from: "0.1.2",
+            ),
         ),
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../RunningApplicationKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
-                from: "0.3.3"
-            )
+                from: "0.3.3",
+            ),
         ),
         .package(
             url: "https://github.com/gohanlon/swift-memberwise-init-macro",
-            from: "0.6.0"
+            from: "0.6.0",
         ),
         .package(
             url: "https://github.com/pointfreeco/swift-dependencies",
-            from: "1.9.4"
+            from: "1.9.4",
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/LateResponders",
-            from: "1.1.0"
+            from: "1.1.0",
         ),
         .package(
             url: "https://github.com/ukushu/Ifrit",
-            from: "3.0.0"
+            from: "3.0.0",
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/fuzzy-search",
-            from: "0.1.0"
+            from: "0.1.0",
         ),
         .package(
             url: "https://github.com/sindresorhus/KeyboardShortcuts",
-            from: "2.4.0"
+            from: "2.4.0",
         ),
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("SystemHUD"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/SystemHUD",
-                from: "0.1.0"
-            )
+                from: "0.1.0",
+            ),
         ),
         .package(
             url: "https://github.com/pointfreeco/swift-navigation",
-            from: "2.7.0"
+            from: "2.7.0",
         ),
         .package(
             url: "https://github.com/siteline/swiftui-introspect",
-            from: "26.0.0"
+            from: "26.0.0",
         ),
 
     ],
@@ -401,7 +412,7 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "SwiftNavigation", package: "swift-navigation"),
             ],
-            swiftSettings: sharedSwiftSettings
+            swiftSettings: sharedSwiftSettings,
         ),
 
         .target(
@@ -419,7 +430,7 @@ let package = Package(
                 .product(name: "SystemHUD", package: "SystemHUD", condition: .when(platforms: appkitPlatforms)),
 
             ],
-            swiftSettings: sharedSwiftSettings
+            swiftSettings: sharedSwiftSettings,
         ),
 
         .target(
@@ -427,7 +438,7 @@ let package = Package(
             dependencies: [
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
-            ]
+            ],
         ),
 
         .target(
@@ -440,7 +451,7 @@ let package = Package(
             ],
             resources: [
                 .process("Resources"),
-            ]
+            ],
         ),
 
         .target(
@@ -456,7 +467,7 @@ let package = Package(
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),
                 .product(name: "FuzzySearch", package: "fuzzy-search"),
-            ]
+            ],
         ),
 
         .target(
@@ -467,11 +478,11 @@ let package = Package(
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperService", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperServer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-            ]
+            ],
         ),
 
         .target(
-            name: "RuntimeViewerServiceHelper"
+            name: "RuntimeViewerServiceHelper",
         ),
 
         .target(
@@ -482,23 +493,23 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
-            ]
+            ],
         ),
         .target(
             name: "RuntimeViewerCatalystExtensions",
             dependencies: [
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
-            ]
+            ],
         ),
 
         .testTarget(
             name: "RuntimeViewerArchitecturesTests",
-            dependencies: ["RuntimeViewerArchitectures"]
+            dependencies: ["RuntimeViewerArchitectures"],
         ),
 
         .testTarget(
             name: "RuntimeViewerSettingsTests",
-            dependencies: ["RuntimeViewerSettings"]
+            dependencies: ["RuntimeViewerSettings"],
         ),
 
         .testTarget(
@@ -506,11 +517,11 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerApplication",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
-            ]
+            ],
         ),
 
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v5],
 )
 
 extension SwiftSetting {

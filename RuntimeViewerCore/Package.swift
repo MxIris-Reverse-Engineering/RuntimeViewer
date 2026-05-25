@@ -65,15 +65,15 @@ let package = Package(
     products: [
         .library(
             name: "RuntimeViewerCore",
-            targets: ["RuntimeViewerCore"]
+            targets: ["RuntimeViewerCore"],
         ),
         .library(
             name: "RuntimeViewerCommunication",
-            targets: ["RuntimeViewerCommunication"]
+            targets: ["RuntimeViewerCommunication"],
         ),
         .library(
             name: "RuntimeViewerUtilities",
-            targets: ["RuntimeViewerUtilities"]
+            targets: ["RuntimeViewerUtilities"],
         ),
     ],
     dependencies: [
@@ -81,46 +81,46 @@ let package = Package(
             local: .package(
                 path: "../../MachOKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
-                from: "0.49.100"
-            )
+                from: "0.49.100",
+            ),
         ),
         .package(
             local: .package(
                 path: "../../MachOObjCSection",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
-                from: "0.6.101"
-            )
+                from: "0.6.101",
+            ),
         ),
         .package(
             local: .package(
                 path: "../../MachOSwiftSection",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                exact: "0.12.0-beta.1"
-            )
+                exact: "0.12.0-beta.1",
+            ),
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/Asynchrone",
-            from: "0.23.0-fork"
+            from: "0.23.0-fork",
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/Semaphore",
-            from: "0.1.0"
+            from: "0.1.0",
         ),
         .package(
             url: "https://github.com/apple/swift-collections",
-            from: "1.1.0"
+            from: "1.1.0",
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
@@ -130,32 +130,32 @@ let package = Package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/swift-helper-service",
                 isRelative: true,
-                isEnabled: usingLocalDependencies
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.1.2"
+                from: "0.1.2",
             ),
         ),
         .package(
             url: "https://github.com/gohanlon/swift-memberwise-init-macro",
-            from: "0.6.0"
+            from: "0.6.0",
         ),
         .package(
             url: "https://github.com/mxcl/Version",
-            from: "2.2.0"
+            from: "2.2.0",
         ),
         .package(
             url: "https://github.com/SwiftyLab/MetaCodable",
-            from: "1.6.0"
+            from: "1.6.0",
         ),
         .package(
             url: "https://github.com/p-x9/swift-mobile-gestalt",
-            from: "0.4.0"
+            from: "0.4.0",
         ),
         .package(
             url: "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate",
-            from: "0.1.0"
+            from: "0.1.0",
         ),
 //        .package(
 //            url: "https://github.com/CheekyGhost-Labs/OSLogClient",
@@ -164,7 +164,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "RuntimeViewerCoreObjC"
+            name: "RuntimeViewerCoreObjC",
         ),
         .target(
             name: "RuntimeViewerCore",
@@ -182,7 +182,7 @@ let package = Package(
             swiftSettings: [
                 .internalImportsByDefault,
                 .immutableWeakCaptures,
-            ]
+            ],
         ),
         .target(
             name: "RuntimeViewerCommunication",
@@ -199,30 +199,30 @@ let package = Package(
             swiftSettings: [
                 .internalImportsByDefault,
                 .immutableWeakCaptures,
-            ]
+            ],
         ),
         .target(
             name: "RuntimeViewerUtilities",
             dependencies: [
                 .product(name: "SMobileGestalt", package: "swift-mobile-gestalt"),
                 .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
-            ]
+            ],
         ),
         .testTarget(
             name: "RuntimeViewerCoreTests",
             dependencies: [
                 "RuntimeViewerCore",
                 "RuntimeViewerCommunication",
-            ]
+            ],
         ),
         .testTarget(
             name: "RuntimeViewerCommunicationTests",
             dependencies: [
                 "RuntimeViewerCommunication",
-            ]
+            ],
         ),
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v5],
 )
 
 extension SwiftSetting {
