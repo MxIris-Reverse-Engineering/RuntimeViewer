@@ -11,19 +11,35 @@ import SnapKit
 /// row's view model flips `isLoading` while the type-picker payload (sort +
 /// box construction) runs on a background queue, so the user sees inline
 /// feedback on the button itself instead of a main-thread freeze.
-final class LoadingButton: PushButton {
-    private let spinner = NSProgressIndicator()
-    private var titleBeforeLoading: NSAttributedString?
+open class LoadingButton: PushButton {
+    private struct ButtonConfiguration {
+        let attributedTitle: NSAttributedString
+        let attributedAlternateTitle: NSAttributedString
+        let image: NSImage?
+        let alternateImage: NSImage?
 
-    var isLoading: Bool = false {
+        static let empty = ButtonConfiguration(attributedTitle: .init(), attributedAlternateTitle: .init(), image: nil, alternateImage: nil)
+    }
+
+    private let spinner = NSProgressIndicator()
+
+    private var beforeButtonConfiguration: ButtonConfiguration = .empty
+
+    public var isLoading: Bool = false {
         didSet {
             guard isLoading != oldValue else { return }
-            applyLoadingState()
+            applyLoadingState(isLoading)
         }
     }
 
-    override func setup() {
+    open override func setup() {
         super.setup()
+
+        addSubview(spinner)
+
+        spinner.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+        }
 
         spinner.do {
             $0.style = .spinning
@@ -32,24 +48,33 @@ final class LoadingButton: PushButton {
             $0.isDisplayedWhenStopped = false
             $0.isHidden = true
         }
-        addSubview(spinner)
-        spinner.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-        }
     }
 
-    private func applyLoadingState() {
+    private func makeButtonConfiguration() -> ButtonConfiguration {
+        ButtonConfiguration(
+            attributedTitle: attributedTitle,
+            attributedAlternateTitle: attributedAlternateTitle,
+            image: image,
+            alternateImage: alternateImage,
+        )
+    }
+
+    private func applyButtonConfiguration(_ configuration: ButtonConfiguration) {
+        attributedTitle = configuration.attributedTitle
+        attributedAlternateTitle = configuration.attributedAlternateTitle
+        image = configuration.image
+        alternateImage = configuration.alternateImage
+    }
+
+    private func applyLoadingState(_ isLoading: Bool) {
         if isLoading {
-            titleBeforeLoading = attributedTitle
-            attributedTitle = NSAttributedString()
+            beforeButtonConfiguration = makeButtonConfiguration()
+            applyButtonConfiguration(.empty)
             isEnabled = false
             spinner.isHidden = false
             spinner.startAnimation(nil)
         } else {
-            if let titleBeforeLoading {
-                attributedTitle = titleBeforeLoading
-            }
-            titleBeforeLoading = nil
+            applyButtonConfiguration(beforeButtonConfiguration)
             isEnabled = true
             spinner.stopAnimation(nil)
             spinner.isHidden = true
