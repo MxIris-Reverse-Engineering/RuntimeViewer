@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import MachOKit
 @testable import RuntimeViewerCore
 
 @Suite("DyldUtilities.patchImagePathForDyld")
@@ -85,5 +86,39 @@ struct DyldUtilitiesMainExecutablePathTests {
         // main executable itself), so a vanilla file existence check applies.
         #expect(FileManager.default.fileExists(atPath: path),
                 "test runner exe should exist on disk: \(path)")
+    }
+}
+
+/// Guards against regressing the Debug-stub redirect documented on
+/// `DyldUtilities.machOImage(forPath:)`. The dependency count is the smoking
+/// gun: a Debug stub links only `@rpath/<name>.debug.dylib` +
+/// `/usr/lib/libSystem.B.dylib`, while the real `.debug.dylib` pulls in
+/// XCTest, Foundation, and the rest of the test runtime — historically
+/// dozens of entries.
+///
+/// Note: CLI `swift test` runs against `swiftpm-testing-helper`, which is a
+/// single-binary Release-style runner with no sibling `.debug.dylib`. The
+/// assertion is meaningful only when invoked via `xcodebuild test` (or from
+/// inside Xcode), where the test bundle's host *is* a Debug stub. Outside
+/// that environment the test silently no-ops rather than fail spuriously.
+@Suite("DyldUtilities.machOImage(forPath:) for the main executable")
+struct DyldUtilitiesMachOImageMainExecutableTests {
+    @Test("redirects Debug stub to the sibling .debug.dylib when present")
+    func redirectsDebugStub() throws {
+        let mainPath = DyldUtilities.mainExecutablePath()
+        let debugDylibPath = mainPath + ".debug.dylib"
+
+        // Skip on Release-style runners (e.g. swiftpm-testing-helper).
+        guard FileManager.default.fileExists(atPath: debugDylibPath) else { return }
+
+        let image = try #require(DyldUtilities.machOImage(forPath: mainPath),
+                                 "machOImage(forPath:) returned nil for the host main executable")
+
+        // Stub has 2 LC_LOAD_DYLIB entries; the real .debug.dylib has many.
+        // Pin the lower bound generously so we only fail when the regression
+        // (returning the stub) actually reappears.
+        let dependencyCount = Array(image.dependencies).count
+        #expect(dependencyCount > 5,
+                "expected redirect to .debug.dylib (lots of dependencies), got the stub instead (\(dependencyCount) deps)")
     }
 }

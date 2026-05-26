@@ -88,23 +88,34 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
                     rpaths: mergedRpaths,
                     mainExecutablePath: mainExecutablePath
                 )
-                // LC_LOAD_WEAK_DYLIB: dyld silently skips at runtime when the
-                // target isn't loadable. Two ways this manifests:
-                //  1. install name doesn't resolve to anything on disk (e.g.
-                //     Xcode omits the embed for newer deployment targets) —
-                //     `resolvedPath == nil`.
-                //  2. install name resolves to an embedded copy but dyld uses
-                //     the dyld-shared-cache version instead (e.g. Xcode embeds
-                //     `libswiftCompatibilitySpan.dylib` whose install name is
-                //     `/usr/lib/swift/...`; on hosts where the shared cache
-                //     already ships it, the bundle copy is never loaded as a
-                //     separate image). The on-disk file exists, but
-                //     `machOImage(forPath:)` returns nil because no matching
-                //     image is loaded — `expandDependencyGraph` would then
-                //     mark it `.failed("cannot open MachOImage")`.
-                // Surfacing either as `.failed` floods the popover with red ✗
-                // rows for misses the runtime explicitly tolerates.
-                if dependency.type == .weakLoad {
+                // Two link modes where dyld is allowed to never produce a
+                // loaded image at BFS time:
+                //
+                //  • LC_LOAD_WEAK_DYLIB — dyld silently skips when the target
+                //    isn't loadable. Two manifestations: (1) install name
+                //    doesn't resolve to anything on disk (e.g. Xcode omits
+                //    the embed for newer deployment targets); (2) install
+                //    name resolves to an embedded copy but dyld uses the
+                //    shared-cache version instead (e.g. Xcode embeds
+                //    `libswiftCompatibilitySpan.dylib` whose install name is
+                //    `/usr/lib/swift/...`; on hosts where the shared cache
+                //    already ships it, the bundle copy is never loaded as a
+                //    separate image).
+                //
+                //  • DYLIB_USE_DELAYED_INIT — dyld postpones loading until
+                //    the first symbol access (e.g. Foundation's delay-init
+                //    edge to `/usr/lib/libcmark-gfm.dylib`). At BFS time the
+                //    image is on disk / in the shared cache but not yet
+                //    registered, so `machOImage(forPath:)` returns nil.
+                //
+                // In both cases `expandDependencyGraph`'s `canOpenImage`
+                // check would mark the node `.failed("cannot open MachOImage")`,
+                // flooding the popover with red ✗ rows for misses the runtime
+                // explicitly tolerates. Drop them from the dependency list
+                // instead.
+                let isShadowable = dependency.type == .weakLoad
+                    || dependency.useFlags.contains(.delayed_init)
+                if isShadowable {
                     if resolvedPath == nil {
                         return nil
                     }
