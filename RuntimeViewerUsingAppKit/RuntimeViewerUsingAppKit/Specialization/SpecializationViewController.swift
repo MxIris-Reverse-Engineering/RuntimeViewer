@@ -180,6 +180,8 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
             outlineView.expandItem(row, expandChildren: false)
         }
         .disposed(by: rx.disposeBag)
+        
+        outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
     }
 
     // MARK: - Load state helpers
@@ -215,10 +217,16 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
     }
 }
 
+extension SpecializationViewController: NSOutlineViewDelegate {
+    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+        false
+    }
+}
+
 // MARK: - ParameterRowCellView
 
 extension SpecializationViewController {
-    fileprivate final class ParameterRowCellView: TableCellView {
+    private final class ParameterRowCellView: TableCellView {
         private let descriptionLabel = Label()
         private let chooseButton = LoadingButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
         private let loadingIndicator = NSProgressIndicator()
