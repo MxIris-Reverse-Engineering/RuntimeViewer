@@ -169,21 +169,4 @@ struct RuntimeRequestResponseTests {
     func machServiceName() {
         #expect(!RuntimeViewerMachServiceName.isEmpty)
     }
-
-    @Test("VoidResponse can be created")
-    func voidResponse() {
-        let response = VoidResponse()
-        let empty = VoidResponse.empty
-        // Just verifying they can be created
-        _ = response
-        _ = empty
-    }
-
-    @Test("VoidResponse is Codable")
-    func voidResponseCodable() throws {
-        let original = VoidResponse.empty
-        let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(VoidResponse.self, from: data)
-        _ = decoded
-    }
 }

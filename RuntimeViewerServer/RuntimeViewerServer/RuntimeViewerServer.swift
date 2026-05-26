@@ -11,6 +11,7 @@ import LaunchServicesPrivate
 #if os(macOS)
 import HelperCommunication
 import HelperClient
+import InjectedEndpointRegistryServiceInterface
 #endif
 
 #if canImport(UIKit)

@@ -4,8 +4,33 @@
 import PackageDescription
 import Foundation
 
+let localEnvironment: [String: String] = {
+    let localEnvironmentFilePath = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent(".package.env")
+        .path
+    guard FileManager.default.fileExists(atPath: localEnvironmentFilePath),
+          let contents = try? String(contentsOfFile: localEnvironmentFilePath, encoding: .utf8)
+    else {
+        return [:]
+    }
+    var environment: [String: String] = [:]
+    for line in contents.components(separatedBy: .newlines) {
+        let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+        if trimmedLine.isEmpty || trimmedLine.hasPrefix("#") {
+            continue
+        }
+        let parts = trimmedLine.split(separator: "=", maxSplits: 1)
+        guard parts.count == 2 else { continue }
+        let key = parts[0].trimmingCharacters(in: .whitespaces)
+        let value = parts[1].trimmingCharacters(in: .whitespaces)
+        environment[key] = value
+    }
+    return environment
+}()
+
 func envEnable(_ key: String, default defaultValue: Bool = false) -> Bool {
-    let value = Context.environment[key]
+    let value = localEnvironment[key] ?? Context.environment[key]
     guard let value else {
         return defaultValue
     }
@@ -84,7 +109,7 @@ let package = Package(
                 isEnabled: usingLocalDependencies,
             ),
             remote: .package(
-                url: "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
+                url: "https://github.com/MxIris-Reverse-Engineering/MachOKit",
                 from: "0.49.100",
             ),
         ),
@@ -95,7 +120,7 @@ let package = Package(
                 isEnabled: usingLocalDependencies,
             ),
             remote: .package(
-                url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
+                url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
                 from: "0.6.101",
             ),
         ),
@@ -123,12 +148,17 @@ let package = Package(
             from: "1.1.0",
         ),
         .package(
-            url: "https://github.com/Mx-Iris/FrameworkToolbox.git",
+            url: "https://github.com/Mx-Iris/FrameworkToolbox",
             from: "0.5.5",
         ),
         .package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/swift-helper-service",
+                isRelative: true,
+                isEnabled: usingLocalDependencies,
+            ),
+            .package(
+                path: "../../swift-helper-service",
                 isRelative: true,
                 isEnabled: usingLocalDependencies,
             ),
@@ -190,6 +220,10 @@ let package = Package(
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperPeer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "ApplicationsServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "FilesServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectionServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Asynchrone", package: "Asynchrone"),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),

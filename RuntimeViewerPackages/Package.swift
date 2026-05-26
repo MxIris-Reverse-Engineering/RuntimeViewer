@@ -4,8 +4,33 @@
 import PackageDescription
 import Foundation
 
+let localEnvironment: [String: String] = {
+    let localEnvironmentFilePath = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent(".package.env")
+        .path
+    guard FileManager.default.fileExists(atPath: localEnvironmentFilePath),
+          let contents = try? String(contentsOfFile: localEnvironmentFilePath, encoding: .utf8)
+    else {
+        return [:]
+    }
+    var environment: [String: String] = [:]
+    for line in contents.components(separatedBy: .newlines) {
+        let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+        if trimmedLine.isEmpty || trimmedLine.hasPrefix("#") {
+            continue
+        }
+        let parts = trimmedLine.split(separator: "=", maxSplits: 1)
+        guard parts.count == 2 else { continue }
+        let key = parts[0].trimmingCharacters(in: .whitespaces)
+        let value = parts[1].trimmingCharacters(in: .whitespaces)
+        environment[key] = value
+    }
+    return environment
+}()
+
 func envEnable(_ key: String, default defaultValue: Bool = false) -> Bool {
-    let value = Context.environment[key]
+    let value = localEnvironment[key] ?? Context.environment[key]
     guard let value else {
         return defaultValue
     }
@@ -149,21 +174,18 @@ let package = Package(
         .package(
             path: "../RuntimeViewerCore",
         ),
-        .package(
-            url: "https://github.com/ChimeHQ/Rearrange.git",
-            from: "2.0.0",
-        ),
+        
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: usingLocalDependencies,
                 traits: UIFoundationTraits,
             ),
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: usingLocalDependencies,
                 traits: UIFoundationTraits,
             ),
             remote: .package(
@@ -194,7 +216,12 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: usingLocalDependencies,
+            ),
+            .package(
+                path: "../../CocoaCoordinator",
+                isRelative: true,
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
@@ -206,26 +233,17 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("UXKitCoordinator"),
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../UXKitCoordinator",
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/UXKitCoordinator",
                 branch: "main",
             ),
-        ),
-
-        .package(
-            url: "https://github.com/SnapKit/SnapKit",
-            from: "5.0.0",
-        ),
-        .package(
-            url: "https://github.com/ReactiveX/RxSwift",
-            from: "6.0.0",
         ),
 
         .package(
@@ -239,50 +257,41 @@ let package = Package(
                 from: "0.2.2",
             ),
         ),
+        
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("OpenUXKit"),
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../OpenUXKit",
                 isRelative: true,
-                isEnabled: true,
+                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/OpenUXKit",
                 branch: "main",
             ),
         ),
-        .package(
-            url: "https://github.com/Mx-Iris/SFSymbols",
-            from: "0.2.0",
-        ),
-        .package(
-            url: "https://github.com/CombineCommunity/RxCombine",
-            from: "2.0.1",
-        ),
-        .package(
-            url: "https://github.com/gringoireDM/RxEnumKit",
-            from: "2.0.0",
-        ),
+
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RxAppKit"),
                 isRelative: true,
                 isEnabled: usingLocalDependencies,
             ),
-            .package(
-                path: "../../RxAppKit",
-                isRelative: true,
-                isEnabled: usingLocalDependencies,
-            ),
+//            .package(
+//                path: "../../RxAppKit",
+//                isRelative: true,
+//                isEnabled: usingLocalDependencies,
+//            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
                 from: "0.3.0",
             ),
         ),
+        
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryIOSDirectory.libraryPath("RxUIKit"),
@@ -299,29 +308,15 @@ let package = Package(
                 from: "0.1.1",
             ),
         ),
-        .package(
-            url: "https://github.com/TrGiLong/RxConcurrency",
-            from: "0.1.1",
-        ),
+
         .package(
             local: .package(
-                path: "../../MachInjector",
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-helper-service"),
                 isRelative: true,
                 isEnabled: usingLocalDependencies,
             ),
             .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("MachInjector"),
-                isRelative: true,
-                isEnabled: usingLocalDependencies,
-            ),
-            remote: .package(
-                url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
-                from: "0.1.0",
-            ),
-        ),
-        .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-helper-service"),
+                path: "../../swift-helper-service",
                 isRelative: true,
                 isEnabled: usingLocalDependencies,
             ),
@@ -330,6 +325,7 @@ let package = Package(
                 from: "0.1.2",
             ),
         ),
+        
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
@@ -346,30 +342,7 @@ let package = Package(
                 from: "0.3.3",
             ),
         ),
-        .package(
-            url: "https://github.com/gohanlon/swift-memberwise-init-macro",
-            from: "0.6.0",
-        ),
-        .package(
-            url: "https://github.com/pointfreeco/swift-dependencies",
-            from: "1.9.4",
-        ),
-        .package(
-            url: "https://github.com/MxIris-Library-Forks/LateResponders",
-            from: "1.1.0",
-        ),
-        .package(
-            url: "https://github.com/ukushu/Ifrit",
-            from: "3.0.0",
-        ),
-        .package(
-            url: "https://github.com/MxIris-Library-Forks/fuzzy-search",
-            from: "0.1.0",
-        ),
-        .package(
-            url: "https://github.com/sindresorhus/KeyboardShortcuts",
-            from: "2.4.0",
-        ),
+
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("SystemHUD"),
@@ -381,13 +354,80 @@ let package = Package(
                 from: "0.1.0",
             ),
         ),
+
         .package(
-            url: "https://github.com/pointfreeco/swift-navigation",
-            from: "2.7.0",
+            url: "https://github.com/SnapKit/SnapKit",
+            from: "5.0.0",
         ),
+        
+        .package(
+            url: "https://github.com/ReactiveX/RxSwift",
+            from: "6.0.0",
+        ),
+        
+        .package(
+            url: "https://github.com/Mx-Iris/SFSymbols",
+            from: "0.2.0",
+        ),
+        
+        .package(
+            url: "https://github.com/CombineCommunity/RxCombine",
+            from: "2.0.1",
+        ),
+        
+        .package(
+            url: "https://github.com/gringoireDM/RxEnumKit",
+            from: "2.0.0",
+        ),
+        
+        .package(
+            url: "https://github.com/TrGiLong/RxConcurrency",
+            from: "0.1.1",
+        ),
+        
+        .package(
+            url: "https://github.com/gohanlon/swift-memberwise-init-macro",
+            from: "0.6.0",
+        ),
+        
+        .package(
+            url: "https://github.com/pointfreeco/swift-dependencies",
+            from: "1.9.4",
+        ),
+        
+        .package(
+            url: "https://github.com/MxIris-Library-Forks/LateResponders",
+            from: "1.1.0",
+        ),
+        
+        .package(
+            url: "https://github.com/ukushu/Ifrit",
+            from: "3.0.0",
+        ),
+        
+        .package(
+            url: "https://github.com/MxIris-Library-Forks/fuzzy-search",
+            from: "0.1.0",
+        ),
+        
+        .package(
+            url: "https://github.com/sindresorhus/KeyboardShortcuts",
+            from: "2.4.0",
+        ),
+        
+        .package(
+            url: "https://github.com/MxIris-Library-Forks/swift-navigation",
+            from: "2.8.100",
+        ),
+        
         .package(
             url: "https://github.com/siteline/swiftui-introspect",
             from: "26.0.0",
+        ),
+
+        .package(
+            url: "https://github.com/ChimeHQ/Rearrange",
+            from: "2.0.0",
         ),
 
     ],
@@ -474,10 +514,13 @@ let package = Package(
             name: "RuntimeViewerService",
             dependencies: [
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
-                .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperService", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperServer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "ApplicationsServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "FilesServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectionServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectedEndpointRegistryServiceImplementation", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
 
@@ -493,6 +536,10 @@ let package = Package(
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "ApplicationsServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "FilesServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectionServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
         .target(

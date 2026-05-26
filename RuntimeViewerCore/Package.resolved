@@ -1,5 +1,5 @@
 {
-  "originHash" : "ba867b39bd41dd9ac85a1e2867fd2ba0dd10948cdb5535fd0d22922f9dc45fdf",
+  "originHash" : "ba6c41a4750f97271f03e2502227aa324dbbbbebf505309fc479b44d05101a4e",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -40,7 +40,7 @@
     {
       "identity" : "frameworktoolbox",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
+      "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
         "revision" : "4ab712e98990bb3a44a5ef160bd0b0c3f03ace08",
         "version" : "0.5.5"
@@ -60,35 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "branch" : "main",
-        "revision" : "26c6e80b487a554782e5aa07a418dc6ed7f66f4d"
-      }
-    },
-    {
-      "identity" : "machokit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit.git",
-      "state" : {
-        "revision" : "fe2acea583118cad9c8ae396f6519b7ff072c92c",
-        "version" : "0.49.103"
-      }
-    },
-    {
-      "identity" : "machoobjcsection",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
-      "state" : {
-        "revision" : "6d71be050b9131ff59e832483d54de685781c42f",
-        "version" : "0.7.101"
-      }
-    },
-    {
-      "identity" : "machoswiftsection",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-      "state" : {
-        "revision" : "8b34efb02340298e3a2cee69541f99a8e701a719",
-        "version" : "0.12.0-beta.1"
+        "revision" : "138ed60c926868968bdb965ae2709f8dced2ee2d",
+        "version" : "0.3.0"
       }
     },
     {
@@ -150,8 +123,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-argument-parser",
       "state" : {
-        "revision" : "626b5b7b2f45e1b0b1c6f4a309296d1d21d7311b",
-        "version" : "1.7.1"
+        "revision" : "5e0406d68a4937f21ae5f670b8f89dad1d156a1c",
+        "version" : "1.8.0"
       }
     },
     {
@@ -236,15 +209,6 @@
       }
     },
     {
-      "identity" : "swift-demangling",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
-      "state" : {
-        "revision" : "85a3242fe3773bab2245cf7bf5c9e18abd88d069",
-        "version" : "0.4.0"
-      }
-    },
-    {
       "identity" : "swift-dependencies",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
@@ -326,15 +290,6 @@
       }
     },
     {
-      "identity" : "swift-semantic-string",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
-      "state" : {
-        "revision" : "1c3438861ea6dbba0856ab02071d683914468e82",
-        "version" : "0.1.1"
-      }
-    },
-    {
       "identity" : "swift-syntax",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax.git",
@@ -348,8 +303,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "branch" : "main",
-        "revision" : "24224400130aa5c6d6c670d32814094386242baa"
+        "revision" : "456b212834f2032312af1ea5f98d214cbaca5a2c",
+        "version" : "0.5.102"
       }
     },
     {

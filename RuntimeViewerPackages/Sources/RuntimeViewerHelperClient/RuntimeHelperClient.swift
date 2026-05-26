@@ -4,6 +4,7 @@ import Foundation
 import FoundationToolbox
 import HelperCommunication
 import HelperClient
+import ApplicationsServiceInterface
 import RuntimeViewerCommunication
 import Dependencies
 import ServiceManagement
