@@ -1,5 +1,5 @@
 import Foundation
-public import SwiftStdlibToolbox
+import SwiftStdlibToolbox
 
 // MARK: - RuntimeSpecializationRequest
 
