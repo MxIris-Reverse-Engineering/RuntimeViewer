@@ -16,7 +16,10 @@ import RuntimeViewerApplication
 public enum SpecializationRoute: Routable {
     case cancel
     case dismiss
-    case requestTypePicker(parameterPath: [ParameterPathSegment])
+    /// Triggered by `SpecializationViewModel` after the type-picker payload
+    /// (sorted + boxed candidates) has been prepared on a background queue,
+    /// so the popover-open path on the main thread is constant-time.
+    case showTypePicker(parameterPath: [ParameterPathSegment], rows: [CandidateBox])
     case didSelectCandidate(parameterPath: [ParameterPathSegment], candidate: RuntimeSpecializationRequest.Candidate)
     case specializeCompleted(RuntimeObject)
 }
@@ -68,8 +71,8 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
         case .specializeCompleted(let specialized):
             delegate?.specializationCoordinator(self, didProduce: specialized)
             return finishSheet()
-        case .requestTypePicker(let parameterPath):
-            return showTypePicker(for: parameterPath)
+        case .showTypePicker(let parameterPath, let rows):
+            return showTypePicker(for: parameterPath, rows: rows)
         case .didSelectCandidate(let parameterPath, let candidate):
             specializationViewModel?.applyArgumentChange(path: parameterPath, candidate: candidate)
             return .dismiss()
@@ -96,14 +99,15 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
         return .endSheetOnTop()
     }
 
-    private func showTypePicker(for parameterPath: [ParameterPathSegment]) -> SpecializationTransition {
-        guard let parameter = parameter(forPath: parameterPath),
-              let anchor = specializationViewController?.anchorView(forPath: parameterPath)
-        else {
+    private func showTypePicker(
+        for parameterPath: [ParameterPathSegment],
+        rows: [CandidateBox]
+    ) -> SpecializationTransition {
+        guard let anchor = specializationViewController?.anchorView(forPath: parameterPath) else {
             #log(.error, "Cannot resolve type picker anchor for path \(String(describing: parameterPath), privacy: .public)")
             return .none()
         }
-        let pickerViewController = makeTypePicker(parameterPath: parameterPath, parameter: parameter)
+        let pickerViewController = makeTypePicker(parameterPath: parameterPath, rows: rows)
         return .present(
             pickerViewController,
             mode: .asPopover(
@@ -115,28 +119,13 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
         )
     }
 
-    private func parameter(forPath path: [ParameterPathSegment]) -> RuntimeSpecializationRequest.Parameter? {
-        guard let viewModel = specializationViewModel else { return nil }
-        var rows = viewModel.topLevelRows
-        var matchedRow: SpecializationCellViewModel?
-        for segment in path {
-            // Loading placeholders are leaf-only synthetic rows the picker
-            // never anchors against; treat any encounter as a lookup miss.
-            guard case .parameter(let name) = segment else { return nil }
-            guard let next = rows.first(where: { $0.parameter.name == name }) else { return nil }
-            matchedRow = next
-            rows = next.children
-        }
-        return matchedRow?.parameter
-    }
-
     private func makeTypePicker(
         parameterPath: [ParameterPathSegment],
-        parameter: RuntimeSpecializationRequest.Parameter
+        rows: [CandidateBox]
     ) -> SpecializationTypePickerViewController {
         let viewModel = SpecializationTypePickerViewModel(
             parameterPath: parameterPath,
-            candidates: parameter.candidates,
+            rows: rows,
             documentState: documentState,
             router: self
         )

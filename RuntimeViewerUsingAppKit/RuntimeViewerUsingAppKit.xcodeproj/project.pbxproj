@@ -107,6 +107,7 @@
 		E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */; };
 		E9EE3F9E2FB573A700B540A3 /* SpecializationCellViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */; };
 		E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */; };
+		E9DC0F0B2E8D000000000002 /* LoadingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9DC0F0A2E8D000000000001 /* LoadingButton.swift */; };
 		E9EEF7612E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */; };
 		E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7642E08540B008D85D1 /* ContentTextView.swift */; };
 		E9EEF7672E085420008D85D1 /* InspectorDisclosureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */; };
@@ -336,6 +337,7 @@
 		E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationCellViewModel.swift; sourceTree = "<group>"; };
 		E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonLoadingView.swift; sourceTree = "<group>"; };
+		E9DC0F0A2E8D000000000001 /* LoadingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingButton.swift; sourceTree = "<group>"; };
 		E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCoordinator.swift; sourceTree = "<group>"; };
 		E9EEF7642E08540B008D85D1 /* ContentTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextView.swift; sourceTree = "<group>"; };
 		E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorDisclosureView.swift; sourceTree = "<group>"; };
@@ -589,6 +591,7 @@
 			children = (
 				E9A825452C0E0B4900D9A85D /* ViewControllers.swift */,
 				E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */,
+				E9DC0F0A2E8D000000000001 /* LoadingButton.swift */,
 				E9F11E152F12671D0052B0A3 /* TabViewController.swift */,
 			);
 			path = Base;
@@ -1058,6 +1061,7 @@
 				E9D470692F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift in Sources */,
 				E9A825542C0E0FBD00D9A85D /* SidebarNavigationController.swift in Sources */,
 				E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */,
+				E9DC0F0B2E8D000000000002 /* LoadingButton.swift in Sources */,
 				E9A825442C0E0B2800D9A85D /* MainSplitViewController.swift in Sources */,
 				E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */,
 				E9A8254A2C0E0E9F00D9A85D /* ContentCoordinator.swift in Sources */,

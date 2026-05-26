@@ -64,6 +64,14 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
     @Observed
     public private(set) var descriptionText: NSAttributedString
 
+    /// True while the row's type-picker payload (sort + box construction)
+    /// is being built on a background queue. The cell view drives the
+    /// "Choose Type…" `LoadingButton`'s `isLoading` off this so the user
+    /// sees inline feedback on the button instead of a main-thread freeze
+    /// during popover preparation.
+    @Observed
+    public private(set) var isPreparingPicker: Bool = false
+
     /// In-flight inner-request fetch for the current `selectedCandidate`,
     /// captured so a fast re-pick can cancel the stale request before its
     /// callback would otherwise splice the wrong inner parameters in.
@@ -196,6 +204,10 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
         for child in children {
             child.cancelInflightRecursively()
         }
+    }
+
+    public func setPreparingPicker(_ preparing: Bool) {
+        isPreparingPicker = preparing
     }
 
     public func setLoadFailed(_ message: String) {

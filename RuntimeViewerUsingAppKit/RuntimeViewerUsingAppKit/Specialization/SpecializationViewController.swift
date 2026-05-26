@@ -220,7 +220,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 extension SpecializationViewController {
     fileprivate final class ParameterRowCellView: TableCellView {
         private let descriptionLabel = Label()
-        private let chooseButton = PushButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
+        private let chooseButton = LoadingButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
         private let loadingIndicator = NSProgressIndicator()
         var anchorView: NSView { chooseButton }
         override func setup() {
@@ -271,6 +271,12 @@ extension SpecializationViewController {
 
             row.$buttonTitle.asDriver()
                 .drive(chooseButton.rx.title)
+                .disposed(by: rx.disposeBag)
+
+            row.$isPreparingPicker.asDriver()
+                .driveOnNext { [chooseButton] preparing in
+                    chooseButton.isLoading = preparing
+                }
                 .disposed(by: rx.disposeBag)
 
             // The placeholder row has no candidate to pick — swap the

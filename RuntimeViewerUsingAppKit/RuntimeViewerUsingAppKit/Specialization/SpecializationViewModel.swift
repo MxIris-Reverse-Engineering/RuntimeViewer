@@ -87,11 +87,53 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     }
 
     public func transform(_ input: Input) -> Output {
-        input.requestTypePickerClicked.emitOnNext { [weak self] parameterPath in
-            guard let self else { return }
-            router.trigger(.requestTypePicker(parameterPath: parameterPath))
-        }
-        .disposed(by: rx.disposeBag)
+        // Sort + diff-box construction of the type-picker payload runs on a
+        // userInitiated queue so the popover-open path on the main thread is
+        // constant-time. While the queue is busy, the row's
+        // `isPreparingPicker` flips the cell's "Choose Type…" `LoadingButton`
+        // into spinner mode for inline feedback. `flatMapLatest` discards an
+        // in-flight prep if the user clicks a different row before the first
+        // finishes — the strict `[weak row]` reference in `.do(...)` makes
+        // sure the discarded row's loading state is still cleared.
+        input.requestTypePickerClicked
+            .asObservable()
+            .flatMapLatest { [weak self] parameterPath -> Observable<(path: [ParameterPathSegment], rows: [CandidateBox])> in
+                guard let self,
+                      let row = locateRow(path: parameterPath, in: topLevelRows)
+                else { return .empty() }
+                let candidates = row.parameter.candidates
+                row.setPreparingPicker(true)
+                return Single<[CandidateBox]>.create { single in
+                    let sortedIndices = Array(candidates.indices).sorted { lhs, rhs in
+                        let leftCandidate = candidates[lhs]
+                        let rightCandidate = candidates[rhs]
+                        if leftCandidate.imagePath != rightCandidate.imagePath {
+                            return leftCandidate.imagePath < rightCandidate.imagePath
+                        }
+                        if leftCandidate.kind != rightCandidate.kind {
+                            return leftCandidate.kind < rightCandidate.kind
+                        }
+                        return leftCandidate.displayName < rightCandidate.displayName
+                    }
+                    let boxes = sortedIndices.map { CandidateBox(candidates[$0]) }
+                    single(.success(boxes))
+                    return Disposables.create()
+                }
+                .subscribe(on: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
+                .asObservable()
+                .observe(on: MainScheduler.instance)
+                .map { (path: parameterPath, rows: $0) }
+                .do(
+                    onCompleted: { [weak row] in row?.setPreparingPicker(false) },
+                    onDispose: { [weak row] in row?.setPreparingPicker(false) }
+                )
+            }
+            .asSignal(onErrorSignalWith: .empty())
+            .emitOnNext { [weak self] payload in
+                guard let self else { return }
+                router.trigger(.showTypePicker(parameterPath: payload.path, rows: payload.rows))
+            }
+            .disposed(by: rx.disposeBag)
 
         input.specializeClicked.emitOnNext { [weak self] in
             guard let self else { return }

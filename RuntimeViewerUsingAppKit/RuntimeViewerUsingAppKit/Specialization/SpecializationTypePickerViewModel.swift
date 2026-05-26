@@ -54,21 +54,24 @@ public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRo
 
     public init(
         parameterPath: [ParameterPathSegment],
-        candidates: [RuntimeSpecializationRequest.Candidate],
+        rows: [CandidateBox],
         documentState: DocumentState,
         router: any Router<SpecializationRoute>
     ) {
         let openInterval = Self.signposter.beginInterval(
             "typePicker.viewModelInit",
             id: Self.signposter.makeSignpostID(),
-            "candidates: \(candidates.count, privacy: .public)"
+            "rows: \(rows.count, privacy: .public)"
         )
         defer { Self.signposter.endInterval("typePicker.viewModelInit", openInterval) }
 
         self.parameterPath = parameterPath
-        self.allRows = candidates.sorted().map(CandidateBox.init)
+        // Rows are pre-sorted and pre-boxed by `SpecializationViewModel` on a
+        // background queue before this route fires, so popover-open on the
+        // main thread is O(1).
+        self.allRows = rows
         super.init(documentState: documentState, router: router)
-        self.filteredRows = allRows
+        self.filteredRows = rows
     }
 
     public func transform(_ input: Input) -> Output {
