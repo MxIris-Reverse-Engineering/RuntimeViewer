@@ -110,7 +110,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit",
-                from: "0.49.100",
+                from: "0.50.100",
             ),
         ),
         .package(
