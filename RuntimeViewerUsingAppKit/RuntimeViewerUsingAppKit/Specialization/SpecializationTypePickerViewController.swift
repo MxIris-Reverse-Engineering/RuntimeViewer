@@ -47,18 +47,11 @@ final class SpecializationTypePickerViewController: UXKitViewController<Speciali
             $0.tableColumns.first?.resizingMask = [.autoresizingMask]
         }
 
-        // Force tableView width to match the scroll view's content area,
-        // otherwise cell intrinsic (driven by long title labels) would
-        // grow the column and cause horizontal overflow instead of
-        // truncation.
-        tableView.snp.makeConstraints { make in
-            make.width.equalTo(scrollView.contentView)
-        }
-
         searchField.do {
             $0.sendsWholeSearchString = false
             $0.sendsSearchStringImmediately = true
             $0.placeholderString = "Search types…"
+            $0.refusesFirstResponder = true
         }
 
         preferredContentSize = NSSize(width: 320, height: 320)
