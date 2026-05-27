@@ -1,6 +1,6 @@
 import Foundation
 import Security
-import SMobileGestalt
+import SwiftMobileGestalt
 
 public enum DeviceIdentifier {
     /// Returns the device's UniqueDeviceID (UDID) from MobileGestalt.

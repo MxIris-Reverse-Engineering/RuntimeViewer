@@ -180,8 +180,8 @@ let package = Package(
             from: "1.6.0",
         ),
         .package(
-            url: "https://github.com/p-x9/swift-mobile-gestalt",
-            from: "0.4.0",
+            url: "https://github.com/MxIris-Library-Forks/swift-mobile-gestalt",
+            from: "0.5.0",
         ),
         .package(
             url: "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate",
@@ -239,7 +239,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerUtilities",
             dependencies: [
-                .product(name: "SMobileGestalt", package: "swift-mobile-gestalt"),
+                .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
                 .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
             ],
         ),
