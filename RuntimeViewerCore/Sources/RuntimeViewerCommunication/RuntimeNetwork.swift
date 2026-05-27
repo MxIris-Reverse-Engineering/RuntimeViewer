@@ -145,9 +145,9 @@ public enum RuntimeNetworkBonjour {
         var txtRecord = NWTXTRecord()
         txtRecord[instanceIDKey] = localInstanceID
         txtRecord[hostNameKey] = await resolvedHostName()
-        txtRecord[modelIDKey] = DeviceMetadata.current.modelIdentifier
-        txtRecord[osVersionKey] = DeviceMetadata.current.osVersion
-        if DeviceMetadata.current.isSimulator {
+        txtRecord[modelIDKey] = RuntimeDeviceMetadata.current.modelIdentifier
+        txtRecord[osVersionKey] = RuntimeDeviceMetadata.current.osVersion
+        if RuntimeDeviceMetadata.current.isSimulator {
             txtRecord[isSimulatorKey] = "1"
         }
         return NWListener.Service(name: name, type: type, txtRecord: txtRecord)
@@ -163,12 +163,12 @@ public enum RuntimeNetworkBonjour {
         return record[hostNameKey]
     }
 
-    static func deviceMetadata(from metadata: NWBrowser.Result.Metadata) -> DeviceMetadata? {
+    static func deviceMetadata(from metadata: NWBrowser.Result.Metadata) -> RuntimeDeviceMetadata? {
         guard case .bonjour(let record) = metadata else { return nil }
         guard let modelID = record[modelIDKey],
               let osVersion = record[osVersionKey] else { return nil }
         let isSimulator = record[isSimulatorKey] == "1"
-        return DeviceMetadata(modelIdentifier: modelID, osVersion: osVersion, isSimulator: isSimulator)
+        return RuntimeDeviceMetadata(modelIdentifier: modelID, osVersion: osVersion, isSimulator: isSimulator)
     }
 }
 
@@ -176,11 +176,11 @@ public struct RuntimeNetworkEndpoint: Sendable, Hashable {
     public let name: String
     public let instanceID: String?
     public let hostName: String?
-    public let deviceMetadata: DeviceMetadata?
+    public let deviceMetadata: RuntimeDeviceMetadata?
 
     let endpoint: NWEndpoint
 
-    init(name: String, instanceID: String? = nil, hostName: String? = nil, deviceMetadata: DeviceMetadata? = nil, endpoint: NWEndpoint) {
+    init(name: String, instanceID: String? = nil, hostName: String? = nil, deviceMetadata: RuntimeDeviceMetadata? = nil, endpoint: NWEndpoint) {
         self.name = name
         self.instanceID = instanceID
         self.hostName = hostName

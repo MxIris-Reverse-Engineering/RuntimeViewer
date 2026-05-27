@@ -229,6 +229,7 @@ let package = Package(
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "Version", package: "Version"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
+                .product(name: "MetaCodable", package: "MetaCodable"),
             ],
             swiftSettings: [
                 .internalImportsByDefault,

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct DeviceMetadata: Codable, Hashable, Sendable {
+public struct RuntimeDeviceMetadata: Codable, Hashable, Sendable {
     public let modelIdentifier: String
     public let osVersion: String
     public let isSimulator: Bool
@@ -19,8 +19,8 @@ public struct DeviceMetadata: Codable, Hashable, Sendable {
     }
 }
 
-extension DeviceMetadata {
-    public static let current: DeviceMetadata = {
+extension RuntimeDeviceMetadata {
+    public static let current: RuntimeDeviceMetadata = {
         let modelIdentifier = _readModelIdentifier()
         let osVersion = _formatOSVersion()
         let isSimulator: Bool
@@ -29,7 +29,7 @@ extension DeviceMetadata {
         #else
         isSimulator = false
         #endif
-        return DeviceMetadata(
+        return RuntimeDeviceMetadata(
             modelIdentifier: modelIdentifier,
             osVersion: osVersion,
             isSimulator: isSimulator

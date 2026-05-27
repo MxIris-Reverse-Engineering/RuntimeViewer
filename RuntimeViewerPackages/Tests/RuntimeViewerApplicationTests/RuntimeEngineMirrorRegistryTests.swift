@@ -18,8 +18,8 @@ struct RuntimeEngineMirrorRegistryTests {
         host: String = "127.0.0.1",
         port: UInt16 = 0,
         iconData: Data? = nil
-    ) -> RemoteEngineDescriptor {
-        RemoteEngineDescriptor(
+    ) -> RuntimeRemoteEngineDescriptor {
+        RuntimeRemoteEngineDescriptor(
             engineID: engineID,
             source: .directTCP(name: engineID, host: host, port: port, role: .server),
             hostName: hostName,
@@ -30,7 +30,7 @@ struct RuntimeEngineMirrorRegistryTests {
         )
     }
 
-    private nonisolated func makeEngine(for descriptor: RemoteEngineDescriptor) -> RuntimeEngine {
+    private nonisolated func makeEngine(for descriptor: RuntimeRemoteEngineDescriptor) -> RuntimeEngine {
         RuntimeEngine(
             source: .directTCP(
                 name: descriptor.source.description,
@@ -38,7 +38,7 @@ struct RuntimeEngineMirrorRegistryTests {
                 port: descriptor.directTCPPort,
                 role: .client
             ),
-            hostInfo: HostInfo(
+            hostInfo: RuntimeHostInfo(
                 hostID: descriptor.originChain.first ?? "",
                 hostName: descriptor.hostName
             ),
@@ -385,7 +385,7 @@ struct RuntimeEngineMirrorRegistryTests {
                 // Push the full set, then drop half, then push full again — all on
                 // independent detached tasks that race for the main actor.
                 for variant in 0..<3 {
-                    let payload: [RemoteEngineDescriptor] = {
+                    let payload: [RuntimeRemoteEngineDescriptor] = {
                         switch variant {
                         case 0: return descriptors
                         case 1: return Array(descriptors.prefix(descriptorsPerSource / 2))
@@ -406,7 +406,7 @@ struct RuntimeEngineMirrorRegistryTests {
                                             port: descriptor.directTCPPort,
                                             role: .client
                                         ),
-                                        hostInfo: HostInfo(
+                                        hostInfo: RuntimeHostInfo(
                                             hostID: descriptor.originChain.first ?? "",
                                             hostName: descriptor.hostName
                                         ),

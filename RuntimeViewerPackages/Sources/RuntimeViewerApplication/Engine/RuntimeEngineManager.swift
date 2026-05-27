@@ -232,7 +232,7 @@ public final class RuntimeEngineManager {
         knownBonjourEndpointNames.insert(endpoint.name)
 
         do {
-            let remoteHostInfo = HostInfo(
+            let remoteHostInfo = RuntimeHostInfo(
                 hostID: endpoint.instanceID ?? endpoint.name,
                 hostName: endpoint.hostName ?? endpoint.name,
                 metadata: endpoint.deviceMetadata ?? .current
@@ -626,10 +626,10 @@ public final class RuntimeEngineManager {
 
     // MARK: - Engine Sharing (Server-Side)
 
-    func buildEngineDescriptors() async -> [RemoteEngineDescriptor] {
+    func buildEngineDescriptors() async -> [RuntimeRemoteEngineDescriptor] {
         #log(.debug,"[EngineMirroring] buildEngineDescriptors called, runtimeEngines count: \(self.runtimeEngines.count, privacy: .public), proxyServers count: \(self.proxyServers.count, privacy: .public)")
         #log(.debug,"[EngineMirroring] proxyServer keys: \(Array(self.proxyServers.keys).joined(separator: ", "), privacy: .public)")
-        var descriptors: [RemoteEngineDescriptor] = []
+        var descriptors: [RuntimeRemoteEngineDescriptor] = []
         for engine in runtimeEngines {
             let isBonjourServer = engine === bonjourServerEngine
             let localID = engine.source.identifier
@@ -643,7 +643,7 @@ public final class RuntimeEngineManager {
             let chainWithSelf = engine.originChain + [RuntimeNetworkBonjour.localInstanceID]
             let proxyHost = await proxy.host
             let proxyPort = await proxy.port
-            let descriptor = RemoteEngineDescriptor(
+            let descriptor = RuntimeRemoteEngineDescriptor(
                 engineID: globalID,
                 source: engine.source,
                 hostName: engine.hostInfo.hostName,
@@ -760,7 +760,7 @@ public final class RuntimeEngineManager {
     /// can be exercised by unit tests without spinning up the full network stack.
     private let mirrorRegistry = RuntimeEngineMirrorRegistry()
 
-    func handleEngineListChanged(_ descriptors: [RemoteEngineDescriptor], from engine: RuntimeEngine) {
+    func handleEngineListChanged(_ descriptors: [RuntimeRemoteEngineDescriptor], from engine: RuntimeEngine) {
         let sourceHostID = engine.hostInfo.hostID
         #log(.debug,"[EngineMirroring] handleEngineListChanged called with \(descriptors.count, privacy: .public) descriptors from source=\(sourceHostID, privacy: .public) (\(engine.source.description, privacy: .public))")
 
@@ -780,7 +780,7 @@ public final class RuntimeEngineManager {
                         port: descriptor.directTCPPort,
                         role: .client
                     ),
-                    hostInfo: HostInfo(
+                    hostInfo: RuntimeHostInfo(
                         hostID: descriptor.originChain.first ?? "",
                         hostName: descriptor.hostName,
                         metadata: descriptor.metadata

@@ -1,11 +1,11 @@
 import Foundation
 
-public struct HostInfo: Codable, Hashable, Sendable {
+public struct RuntimeHostInfo: Codable, Hashable, Sendable {
     public let hostID: String
     public let hostName: String
-    public let metadata: DeviceMetadata
+    public let metadata: RuntimeDeviceMetadata
 
-    public init(hostID: String, hostName: String, metadata: DeviceMetadata = .current) {
+    public init(hostID: String, hostName: String, metadata: RuntimeDeviceMetadata = .current) {
         self.hostID = hostID
         self.hostName = hostName
         self.metadata = metadata
@@ -15,6 +15,6 @@ public struct HostInfo: Codable, Hashable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         hostID = try container.decode(String.self, forKey: .hostID)
         hostName = try container.decode(String.self, forKey: .hostName)
-        metadata = try container.decodeIfPresent(DeviceMetadata.self, forKey: .metadata) ?? .current
+        metadata = try container.decodeIfPresent(RuntimeDeviceMetadata.self, forKey: .metadata) ?? .current
     }
 }

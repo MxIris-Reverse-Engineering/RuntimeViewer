@@ -2,15 +2,15 @@ import Testing
 import Foundation
 import RuntimeViewerCommunication
 
-// MARK: - DeviceMetadata Tests
+// MARK: - RuntimeDeviceMetadata Tests
 
-@Suite("DeviceMetadata")
+@Suite("RuntimeDeviceMetadata")
 struct DeviceMetadataTests {
     // MARK: - Initialization
 
     @Test("Initialization with all properties")
     func initialization() {
-        let metadata = DeviceMetadata(
+        let metadata = RuntimeDeviceMetadata(
             modelIdentifier: "MacBookPro18,1",
             osVersion: "macOS 15.0.0",
             isSimulator: false,
@@ -24,7 +24,7 @@ struct DeviceMetadataTests {
 
     @Test("Default parameter values")
     func defaultParameters() {
-        let metadata = DeviceMetadata(
+        let metadata = RuntimeDeviceMetadata(
             modelIdentifier: "iPhone15,2",
             osVersion: "iOS 18.0.0"
         )
@@ -34,7 +34,7 @@ struct DeviceMetadataTests {
 
     @Test("Simulator device")
     func simulatorDevice() {
-        let metadata = DeviceMetadata(
+        let metadata = RuntimeDeviceMetadata(
             modelIdentifier: "iPhone15,2",
             osVersion: "iOS 18.0.0",
             isSimulator: true
@@ -46,7 +46,7 @@ struct DeviceMetadataTests {
 
     @Test("Current metadata has non-empty values")
     func currentMetadata() {
-        let current = DeviceMetadata.current
+        let current = RuntimeDeviceMetadata.current
         #expect(!current.modelIdentifier.isEmpty)
         #expect(!current.osVersion.isEmpty)
         #expect(current.osVersion.contains("macOS"))
@@ -56,14 +56,14 @@ struct DeviceMetadataTests {
 
     @Test("Codable round-trip")
     func codable() throws {
-        let original = DeviceMetadata(
+        let original = RuntimeDeviceMetadata(
             modelIdentifier: "MacBookPro18,1",
             osVersion: "macOS 15.0.0",
             isSimulator: false,
             additionalInfo: ["buildNumber": "24A5289g"]
         )
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(DeviceMetadata.self, from: data)
+        let decoded = try JSONDecoder().decode(RuntimeDeviceMetadata.self, from: data)
         #expect(decoded == original)
     }
 
@@ -72,7 +72,7 @@ struct DeviceMetadataTests {
         let json = """
         {"modelIdentifier": "Test", "osVersion": "macOS 15.0.0"}
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(DeviceMetadata.self, from: json)
+        let decoded = try JSONDecoder().decode(RuntimeDeviceMetadata.self, from: json)
         #expect(decoded.modelIdentifier == "Test")
         #expect(decoded.osVersion == "macOS 15.0.0")
         #expect(decoded.isSimulator == false)
@@ -84,7 +84,7 @@ struct DeviceMetadataTests {
         let json = """
         {"modelIdentifier": "iPhone15,2", "osVersion": "iOS 18.0.0", "isSimulator": true, "additionalInfo": {}}
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(DeviceMetadata.self, from: json)
+        let decoded = try JSONDecoder().decode(RuntimeDeviceMetadata.self, from: json)
         #expect(decoded.isSimulator == true)
     }
 
@@ -92,20 +92,20 @@ struct DeviceMetadataTests {
 
     @Test("Equatable")
     func equatable() {
-        let metadataA = DeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 15.0.0")
-        let metadataB = DeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 15.0.0")
-        let metadataC = DeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 14.0.0")
+        let metadataA = RuntimeDeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 15.0.0")
+        let metadataB = RuntimeDeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 15.0.0")
+        let metadataC = RuntimeDeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 14.0.0")
         #expect(metadataA == metadataB)
         #expect(metadataA != metadataC)
     }
 
     @Test("Hashable")
     func hashable() {
-        let metadataA = DeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 15.0.0")
-        let metadataB = DeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 15.0.0")
+        let metadataA = RuntimeDeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 15.0.0")
+        let metadataB = RuntimeDeviceMetadata(modelIdentifier: "MacPro1,1", osVersion: "macOS 15.0.0")
         #expect(metadataA.hashValue == metadataB.hashValue)
 
-        var metadataSet: Set<DeviceMetadata> = []
+        var metadataSet: Set<RuntimeDeviceMetadata> = []
         metadataSet.insert(metadataA)
         metadataSet.insert(metadataB)
         #expect(metadataSet.count == 1)
@@ -113,23 +113,23 @@ struct DeviceMetadataTests {
 
     @Test("AdditionalInfo mutability")
     func additionalInfoMutability() {
-        var metadata = DeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0")
+        var metadata = RuntimeDeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0")
         #expect(metadata.additionalInfo.isEmpty)
         metadata.additionalInfo["key"] = "value"
         #expect(metadata.additionalInfo["key"] == "value")
     }
 }
 
-// MARK: - HostInfo Tests
+// MARK: - RuntimeHostInfo Tests
 
-@Suite("HostInfo")
+@Suite("RuntimeHostInfo")
 struct HostInfoTests {
     // MARK: - Initialization
 
     @Test("Initialization with all properties")
     func initialization() {
-        let metadata = DeviceMetadata(modelIdentifier: "MacBookPro18,1", osVersion: "macOS 15.0.0")
-        let hostInfo = HostInfo(hostID: "host-123", hostName: "MyMac", metadata: metadata)
+        let metadata = RuntimeDeviceMetadata(modelIdentifier: "MacBookPro18,1", osVersion: "macOS 15.0.0")
+        let hostInfo = RuntimeHostInfo(hostID: "host-123", hostName: "MyMac", metadata: metadata)
         #expect(hostInfo.hostID == "host-123")
         #expect(hostInfo.hostName == "MyMac")
         #expect(hostInfo.metadata == metadata)
@@ -137,18 +137,18 @@ struct HostInfoTests {
 
     @Test("Default metadata parameter")
     func defaultMetadata() {
-        let hostInfo = HostInfo(hostID: "host-123", hostName: "MyMac")
-        #expect(hostInfo.metadata == DeviceMetadata.current)
+        let hostInfo = RuntimeHostInfo(hostID: "host-123", hostName: "MyMac")
+        #expect(hostInfo.metadata == RuntimeDeviceMetadata.current)
     }
 
     // MARK: - Codable
 
     @Test("Codable round-trip")
     func codable() throws {
-        let metadata = DeviceMetadata(modelIdentifier: "MacBookPro18,1", osVersion: "macOS 15.0.0")
-        let original = HostInfo(hostID: "host-123", hostName: "MyMac", metadata: metadata)
+        let metadata = RuntimeDeviceMetadata(modelIdentifier: "MacBookPro18,1", osVersion: "macOS 15.0.0")
+        let original = RuntimeHostInfo(hostID: "host-123", hostName: "MyMac", metadata: metadata)
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(HostInfo.self, from: data)
+        let decoded = try JSONDecoder().decode(RuntimeHostInfo.self, from: data)
         #expect(decoded == original)
     }
 
@@ -157,49 +157,49 @@ struct HostInfoTests {
         let json = """
         {"hostID": "host-456", "hostName": "TestHost"}
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(HostInfo.self, from: json)
+        let decoded = try JSONDecoder().decode(RuntimeHostInfo.self, from: json)
         #expect(decoded.hostID == "host-456")
         #expect(decoded.hostName == "TestHost")
-        #expect(decoded.metadata == DeviceMetadata.current)
+        #expect(decoded.metadata == RuntimeDeviceMetadata.current)
     }
 
     // MARK: - Hashable / Equatable
 
     @Test("Equatable")
     func equatable() {
-        let metadata = DeviceMetadata(modelIdentifier: "MacBookPro18,1", osVersion: "macOS 15.0.0")
-        let hostInfoA = HostInfo(hostID: "host-123", hostName: "MyMac", metadata: metadata)
-        let hostInfoB = HostInfo(hostID: "host-123", hostName: "MyMac", metadata: metadata)
-        let hostInfoC = HostInfo(hostID: "host-456", hostName: "OtherMac", metadata: metadata)
+        let metadata = RuntimeDeviceMetadata(modelIdentifier: "MacBookPro18,1", osVersion: "macOS 15.0.0")
+        let hostInfoA = RuntimeHostInfo(hostID: "host-123", hostName: "MyMac", metadata: metadata)
+        let hostInfoB = RuntimeHostInfo(hostID: "host-123", hostName: "MyMac", metadata: metadata)
+        let hostInfoC = RuntimeHostInfo(hostID: "host-456", hostName: "OtherMac", metadata: metadata)
         #expect(hostInfoA == hostInfoB)
         #expect(hostInfoA != hostInfoC)
     }
 
     @Test("Hashable")
     func hashable() {
-        let metadata = DeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0")
-        let hostInfoA = HostInfo(hostID: "id-1", hostName: "Host", metadata: metadata)
-        let hostInfoB = HostInfo(hostID: "id-1", hostName: "Host", metadata: metadata)
-        var hostInfoSet: Set<HostInfo> = []
+        let metadata = RuntimeDeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0")
+        let hostInfoA = RuntimeHostInfo(hostID: "id-1", hostName: "Host", metadata: metadata)
+        let hostInfoB = RuntimeHostInfo(hostID: "id-1", hostName: "Host", metadata: metadata)
+        var hostInfoSet: Set<RuntimeHostInfo> = []
         hostInfoSet.insert(hostInfoA)
         hostInfoSet.insert(hostInfoB)
         #expect(hostInfoSet.count == 1)
     }
 }
 
-// MARK: - RemoteEngineDescriptor Tests
+// MARK: - RuntimeRemoteEngineDescriptor Tests
 
-@Suite("RemoteEngineDescriptor")
+@Suite("RuntimeRemoteEngineDescriptor")
 struct RemoteEngineDescriptorTests {
     // MARK: - Initialization
 
     @Test("Initialization with all properties")
     func initialization() {
-        let metadata = DeviceMetadata(modelIdentifier: "iPhone15,2", osVersion: "iOS 18.0.0")
+        let metadata = RuntimeDeviceMetadata(modelIdentifier: "iPhone15,2", osVersion: "iOS 18.0.0")
         let source = RuntimeSource.remote(name: "TestDevice", identifier: "dev-123", role: .server)
         let iconData = Data([0x89, 0x50, 0x4E, 0x47])
 
-        let descriptor = RemoteEngineDescriptor(
+        let descriptor = RuntimeRemoteEngineDescriptor(
             engineID: "engine-1",
             source: source,
             hostName: "TestDevice",
@@ -222,7 +222,7 @@ struct RemoteEngineDescriptorTests {
     @Test("Default metadata and nil iconData")
     func defaultParameters() {
         let source = RuntimeSource.local
-        let descriptor = RemoteEngineDescriptor(
+        let descriptor = RuntimeRemoteEngineDescriptor(
             engineID: "engine-1",
             source: source,
             hostName: "MyMac",
@@ -230,14 +230,14 @@ struct RemoteEngineDescriptorTests {
             directTCPHost: "127.0.0.1",
             directTCPPort: 8080
         )
-        #expect(descriptor.metadata == DeviceMetadata.current)
+        #expect(descriptor.metadata == RuntimeDeviceMetadata.current)
         #expect(descriptor.iconData == nil)
     }
 
     @Test("Empty origin chain")
     func emptyOriginChain() {
         let source = RuntimeSource.local
-        let descriptor = RemoteEngineDescriptor(
+        let descriptor = RuntimeRemoteEngineDescriptor(
             engineID: "engine-1",
             source: source,
             hostName: "Host",
@@ -252,9 +252,9 @@ struct RemoteEngineDescriptorTests {
 
     @Test("Codable round-trip")
     func codable() throws {
-        let metadata = DeviceMetadata(modelIdentifier: "iPhone15,2", osVersion: "iOS 18.0.0")
+        let metadata = RuntimeDeviceMetadata(modelIdentifier: "iPhone15,2", osVersion: "iOS 18.0.0")
         let source = RuntimeSource.bonjour(name: "MyPhone", identifier: "phone-1", role: .client)
-        let original = RemoteEngineDescriptor(
+        let original = RuntimeRemoteEngineDescriptor(
             engineID: "engine-42",
             source: source,
             hostName: "MyPhone",
@@ -265,25 +265,25 @@ struct RemoteEngineDescriptorTests {
             iconData: Data([0x01, 0x02, 0x03])
         )
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(RemoteEngineDescriptor.self, from: data)
+        let decoded = try JSONDecoder().decode(RuntimeRemoteEngineDescriptor.self, from: data)
         #expect(decoded == original)
     }
 
     @Test("Codable round-trip with nil iconData")
     func codableNilIcon() throws {
         let source = RuntimeSource.local
-        let original = RemoteEngineDescriptor(
+        let original = RuntimeRemoteEngineDescriptor(
             engineID: "engine-1",
             source: source,
             hostName: "Host",
             originChain: [],
             directTCPHost: "localhost",
             directTCPPort: 8080,
-            metadata: DeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0"),
+            metadata: RuntimeDeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0"),
             iconData: nil
         )
         let data = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(RemoteEngineDescriptor.self, from: data)
+        let decoded = try JSONDecoder().decode(RuntimeRemoteEngineDescriptor.self, from: data)
         #expect(decoded.iconData == nil)
     }
 
@@ -299,9 +299,9 @@ struct RemoteEngineDescriptorTests {
             "directTCPPort": 8080
         }
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(RemoteEngineDescriptor.self, from: json)
+        let decoded = try JSONDecoder().decode(RuntimeRemoteEngineDescriptor.self, from: json)
         #expect(decoded.engineID == "engine-1")
-        #expect(decoded.metadata == DeviceMetadata.current)
+        #expect(decoded.metadata == RuntimeDeviceMetadata.current)
         #expect(decoded.iconData == nil)
     }
 
@@ -309,17 +309,17 @@ struct RemoteEngineDescriptorTests {
 
     @Test("Equatable")
     func equatable() {
-        let metadata = DeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0")
+        let metadata = RuntimeDeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0")
         let source = RuntimeSource.local
-        let descriptorA = RemoteEngineDescriptor(
+        let descriptorA = RuntimeRemoteEngineDescriptor(
             engineID: "e-1", source: source, hostName: "H", originChain: [],
             directTCPHost: "localhost", directTCPPort: 8080, metadata: metadata
         )
-        let descriptorB = RemoteEngineDescriptor(
+        let descriptorB = RuntimeRemoteEngineDescriptor(
             engineID: "e-1", source: source, hostName: "H", originChain: [],
             directTCPHost: "localhost", directTCPPort: 8080, metadata: metadata
         )
-        let descriptorC = RemoteEngineDescriptor(
+        let descriptorC = RuntimeRemoteEngineDescriptor(
             engineID: "e-2", source: source, hostName: "H", originChain: [],
             directTCPHost: "localhost", directTCPPort: 8080, metadata: metadata
         )
@@ -329,17 +329,17 @@ struct RemoteEngineDescriptorTests {
 
     @Test("Hashable")
     func hashable() {
-        let metadata = DeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0")
+        let metadata = RuntimeDeviceMetadata(modelIdentifier: "Test", osVersion: "macOS 15.0.0")
         let source = RuntimeSource.local
-        let descriptorA = RemoteEngineDescriptor(
+        let descriptorA = RuntimeRemoteEngineDescriptor(
             engineID: "e-1", source: source, hostName: "H", originChain: [],
             directTCPHost: "localhost", directTCPPort: 8080, metadata: metadata
         )
-        let descriptorB = RemoteEngineDescriptor(
+        let descriptorB = RuntimeRemoteEngineDescriptor(
             engineID: "e-1", source: source, hostName: "H", originChain: [],
             directTCPHost: "localhost", directTCPPort: 8080, metadata: metadata
         )
-        var descriptorSet: Set<RemoteEngineDescriptor> = []
+        var descriptorSet: Set<RuntimeRemoteEngineDescriptor> = []
         descriptorSet.insert(descriptorA)
         descriptorSet.insert(descriptorB)
         #expect(descriptorSet.count == 1)

@@ -90,17 +90,17 @@ public actor RuntimeEngine {
     }()
 
     /// Callback for serving engine list requests. Set by RuntimeEngineManager.
-    public static var engineListProvider: (() async -> [RemoteEngineDescriptor])?
+    public static var engineListProvider: (() async -> [RuntimeRemoteEngineDescriptor])?
 
     /// Callback for handling engine list change notifications. Set by RuntimeEngineManager.
-    public static var engineListChangedHandler: (([RemoteEngineDescriptor], RuntimeEngine) async -> Void)?
+    public static var engineListChangedHandler: (([RuntimeRemoteEngineDescriptor], RuntimeEngine) async -> Void)?
 
     /// Globally unique identifier for this engine instance.
     public nonisolated let engineID: String
 
     public nonisolated let source: RuntimeSource
 
-    public nonisolated let hostInfo: HostInfo
+    public nonisolated let hostInfo: RuntimeHostInfo
 
     public nonisolated let originChain: [String]
 
@@ -215,7 +215,7 @@ public actor RuntimeEngine {
     public init(
         source: RuntimeSource,
         engineID: String = UUID().uuidString,
-        hostInfo: HostInfo = HostInfo(
+        hostInfo: RuntimeHostInfo = RuntimeHostInfo(
             hostID: RuntimeNetworkBonjour.localInstanceID,
             hostName: RuntimeNetworkBonjour.localHostName
         ),
@@ -353,7 +353,7 @@ public actor RuntimeEngine {
         }
         setMessageHandlerBinding(forName: .runtimePreflight, of: self) { $0.runtimePreflight(for:) }
         setMessageHandlerBinding(forName: .specialize, of: self) { $0.specialize(for:) }
-        setMessageHandlerBinding(forName: .engineList) { _ -> [RemoteEngineDescriptor] in
+        setMessageHandlerBinding(forName: .engineList) { _ -> [RuntimeRemoteEngineDescriptor] in
             #log(.debug, "[EngineMirroring] engineList handler called, provider set: \(RuntimeEngine.engineListProvider != nil, privacy: .public)")
             let result = await RuntimeEngine.engineListProvider?() ?? []
             #log(.debug, "[EngineMirroring] engineList handler returning \(result.count, privacy: .public) descriptors")
@@ -373,7 +373,7 @@ public actor RuntimeEngine {
             engine.imageDidLoadSubject.send(path)
         }
         setMessageHandlerBinding(forName: .objectsLoadingProgress) { $0.objectsLoadingProgressSubject.send($1) }
-        setMessageHandlerBinding(forName: .engineListChanged) { (engine: RuntimeEngine, descriptors: [RemoteEngineDescriptor]) in
+        setMessageHandlerBinding(forName: .engineListChanged) { (engine: RuntimeEngine, descriptors: [RuntimeRemoteEngineDescriptor]) in
             #log(.debug, "[EngineMirroring] engineListChanged received: \(descriptors.count, privacy: .public) descriptors, handler set: \(RuntimeEngine.engineListChangedHandler != nil, privacy: .public)")
             await RuntimeEngine.engineListChangedHandler?(descriptors, engine)
         }
@@ -794,7 +794,7 @@ extension RuntimeEngine {
     /// or never replies. The default `timeout` of 5 s lets the caller fall through to the
     /// "treat as direct engine" branch instead of hanging forever on a flaky link
     /// (e.g. AWDL between iPhone and Mac).
-    public func requestEngineList(timeout: TimeInterval = 5) async throws -> [RemoteEngineDescriptor] {
+    public func requestEngineList(timeout: TimeInterval = 5) async throws -> [RuntimeRemoteEngineDescriptor] {
         try await request {
             []
         } remote: {
@@ -802,7 +802,7 @@ extension RuntimeEngine {
         }
     }
 
-    public func pushEngineListChanged(_ descriptors: [RemoteEngineDescriptor]) async throws {
+    public func pushEngineListChanged(_ descriptors: [RuntimeRemoteEngineDescriptor]) async throws {
         let hasConnection = self.connection != nil
         let isServer = self.source.remoteRole?.isServer == true
         guard let connection, isServer else {

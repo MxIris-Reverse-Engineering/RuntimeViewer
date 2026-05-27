@@ -15,7 +15,7 @@ import RuntimeViewerCommunication
 @MainActor
 public final class RuntimeEngineMirrorRegistry {
 
-    public typealias EngineFactory = (RemoteEngineDescriptor) -> RuntimeEngine
+    public typealias EngineFactory = (RuntimeRemoteEngineDescriptor) -> RuntimeEngine
 
     /// Mirrored engine instances keyed by descriptor `engineID`.
     public private(set) var engines: OrderedDictionary<String, RuntimeEngine> = [:]
@@ -49,7 +49,7 @@ public final class RuntimeEngineMirrorRegistry {
         }
 
         public struct Addition: Equatable {
-            public let descriptor: RemoteEngineDescriptor
+            public let descriptor: RuntimeRemoteEngineDescriptor
             public let engine: RuntimeEngine
             public static func == (lhs: Addition, rhs: Addition) -> Bool {
                 lhs.descriptor.engineID == rhs.descriptor.engineID && lhs.engine === rhs.engine
@@ -67,7 +67,7 @@ public final class RuntimeEngineMirrorRegistry {
     /// 4. Add new engines (first-come-first-served — skip if engineID already owned).
     @discardableResult
     public func reconcile(
-        descriptors: [RemoteEngineDescriptor],
+        descriptors: [RuntimeRemoteEngineDescriptor],
         fromHostID sourceHostID: String,
         localInstanceID: String,
         engineFactory: EngineFactory
