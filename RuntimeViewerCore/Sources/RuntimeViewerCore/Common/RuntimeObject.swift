@@ -6,7 +6,6 @@ public import SwiftStdlibToolbox
 @Equatable
 @MemberwiseInit(.public)
 public struct RuntimeObject: Hashable, Identifiable, Sendable {
-
     public struct Properties: OptionSet, Codable, Hashable, Sendable {
         public let rawValue: Int
 
@@ -40,7 +39,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     public var id: RuntimeObject { self }
 
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
-    
+
     public func withImagePath(_ imagePath: String) -> RuntimeObject {
         .init(name: name, displayName: displayName, kind: kind, secondaryKind: secondaryKind, imagePath: imagePath, children: children)
     }
@@ -56,13 +55,13 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
             secondaryKind: secondaryKind,
             imagePath: imagePath,
             children: children + [child],
-            properties: properties
+            properties: properties,
         )
     }
 }
 
 extension RuntimeObject: ComparableBuildable {
-    public static let comparableDefinition = makeComparable {
+    public static var comparableDefinition: some ComparisonStep<Self> {
         compare(\.imagePath)
         compare(\.kind)
         compare(\.displayName)

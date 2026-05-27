@@ -1,5 +1,5 @@
 import Foundation
-import SwiftStdlibToolbox
+public import SwiftStdlibToolbox
 
 // MARK: - RuntimeSpecializationRequest
 
@@ -86,8 +86,8 @@ extension RuntimeSpecializationRequest {
             case `struct`
             case `class`
         }
-        
-        public static let comparableDefinition = makeComparable {
+
+        public static var comparableDefinition: some ComparisonStep<Self> {
             compare(\.imagePath)
             compare(\.kind)
             compare(\.displayName)
@@ -122,7 +122,7 @@ public struct RuntimeSpecializationSelection: Codable, Hashable, Sendable {
 
     public mutating func setArgument(
         _ argument: Argument,
-        for parameterName: String
+        for parameterName: String,
     ) {
         arguments[parameterName] = argument
     }
@@ -139,7 +139,7 @@ public struct RuntimeSpecializationSelection: Codable, Hashable, Sendable {
         case candidate(RuntimeSpecializationRequest.Candidate)
         case boundGeneric(
             baseCandidate: RuntimeSpecializationRequest.Candidate,
-            innerArguments: [String: Argument]
+            innerArguments: [String: Argument],
         )
     }
 }

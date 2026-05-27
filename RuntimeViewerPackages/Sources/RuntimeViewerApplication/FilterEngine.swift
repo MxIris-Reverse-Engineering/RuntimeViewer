@@ -6,7 +6,7 @@ import FuzzySearch
 public enum FilterMode: Int, CaseIterable, Codable, CustomStringConvertible {
     case fuzzySearch
     case ifrit
-    
+
     public var description: String {
         switch self {
         case .fuzzySearch:
@@ -92,7 +92,7 @@ protocol FuzzyFilterResult {
 @dynamicMemberLookup
 struct FuzzySrchResultWrapper: ComparableBuildable {
     let wrappedValue: FuzzySrchResult
-    
+
     init(_ wrappedValue: FuzzySrchResult) {
         self.wrappedValue = wrappedValue
     }
@@ -105,7 +105,7 @@ struct FuzzySrchResultWrapper: ComparableBuildable {
         wrappedValue[keyPath: keyPath]
     }
 
-    static var comparableDefinition: ComparableDefinition<FuzzySrchResultWrapper> = makeComparable {
+    static var comparableDefinition: some ComparisonStep<Self> {
         compare(\.wrappedValue.diffScore)
         compare(\.resultsScore)
     }
