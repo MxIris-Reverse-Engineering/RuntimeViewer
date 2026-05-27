@@ -95,6 +95,10 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             guard let exportingCoordinator = ExportingCoordinator(documentState: documentState) else { return .none() }
             addChild(exportingCoordinator)
             return .beginSheet(exportingCoordinator)
+        case .exportMultipleImages:
+            let batchExportingCoordinator = BatchExportingCoordinator(documentState: documentState)
+            addChild(batchExportingCoordinator)
+            return .beginSheet(batchExportingCoordinator)
         case .beginSpecializationSheet(let object):
             let specializationCoordinator = SpecializationCoordinator(
                 documentState: documentState,

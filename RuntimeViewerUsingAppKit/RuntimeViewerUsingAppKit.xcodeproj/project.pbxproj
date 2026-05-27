@@ -118,6 +118,19 @@
 		E9F11E162F12671D0052B0A3 /* TabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E152F12671D0052B0A3 /* TabViewController.swift */; };
 		E9F11E182F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */; };
 		E9F759422CF603DD00BE7A5F /* RuntimeObjectCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */; };
+		D16A49532E755901A1D32E5F /* BatchExportingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFA5EB1BB7210538B942D40 /* BatchExportingState.swift */; };
+		620FD421F830F882232BCBCD /* BatchExportingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0809C7E1B5879399F4AD5CFD /* BatchExportingCoordinator.swift */; };
+		A2519448E7F7FA797E155C73 /* BatchExportingImageSelectionCellViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 061FB631FA9AEDDF6ED4549F /* BatchExportingImageSelectionCellViewModel.swift */; };
+		84FE4364758FE65EA7D5E9A7 /* BatchExportingImageSelectionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A94DAF52736C3A88802C38 /* BatchExportingImageSelectionViewModel.swift */; };
+		9CA80CE73BB3CFC59ED54FA9 /* BatchExportingImageSelectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDE868F82139B514DD706D1 /* BatchExportingImageSelectionViewController.swift */; };
+		0C554F36A5732FDAF8C0A3F1 /* BatchExportingConfigurationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC848E755B855C64A7FFF5E8 /* BatchExportingConfigurationViewModel.swift */; };
+		8FF2C3F9302864D9F3404E35 /* BatchExportingConfigurationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7366E572547581647D1A395 /* BatchExportingConfigurationViewController.swift */; };
+		69943AEB856963F21AEA89C4 /* BatchExportingProgressViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF5295BA547818A41EC080DA /* BatchExportingProgressViewModel.swift */; };
+		F43FDB3F17E51666B7FDF810 /* BatchExportingProgressViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71878BCA0F09ADE6484478B0 /* BatchExportingProgressViewController.swift */; };
+		12D07EA725AFECCD93E61DD7 /* BatchExportingCompletionRowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C83BCFA7DEDB3FD171EB6C6 /* BatchExportingCompletionRowViewModel.swift */; };
+		A9F67D4F08F37DE09A9772C2 /* BatchExportingCompletionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96DBB7C902543EF2B169FC99 /* BatchExportingCompletionViewModel.swift */; };
+		D9593A7A868FB627B0966159 /* BatchExportingCompletionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35D4C6E546DAF4CAF7E7AA37 /* BatchExportingCompletionViewController.swift */; };
+		5A6BBD9C254FFE24540D71F9 /* BatchExportingProgressRowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8249F8BA66937D5C7CCFB2BE /* BatchExportingProgressRowViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -352,6 +365,19 @@
 		E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Shared-Debug.xcconfig"; path = ../Configurations/Shared/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = CodeSigning.xcconfig; path = ../Configurations/CodeSigning.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeObjectCellView.swift; sourceTree = "<group>"; };
+		5FFA5EB1BB7210538B942D40 /* BatchExportingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingState.swift; sourceTree = "<group>"; };
+		0809C7E1B5879399F4AD5CFD /* BatchExportingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingCoordinator.swift; sourceTree = "<group>"; };
+		061FB631FA9AEDDF6ED4549F /* BatchExportingImageSelectionCellViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingImageSelectionCellViewModel.swift; sourceTree = "<group>"; };
+		65A94DAF52736C3A88802C38 /* BatchExportingImageSelectionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingImageSelectionViewModel.swift; sourceTree = "<group>"; };
+		EDDE868F82139B514DD706D1 /* BatchExportingImageSelectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingImageSelectionViewController.swift; sourceTree = "<group>"; };
+		CC848E755B855C64A7FFF5E8 /* BatchExportingConfigurationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingConfigurationViewModel.swift; sourceTree = "<group>"; };
+		C7366E572547581647D1A395 /* BatchExportingConfigurationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingConfigurationViewController.swift; sourceTree = "<group>"; };
+		DF5295BA547818A41EC080DA /* BatchExportingProgressViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingProgressViewModel.swift; sourceTree = "<group>"; };
+		71878BCA0F09ADE6484478B0 /* BatchExportingProgressViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingProgressViewController.swift; sourceTree = "<group>"; };
+		4C83BCFA7DEDB3FD171EB6C6 /* BatchExportingCompletionRowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingCompletionRowViewModel.swift; sourceTree = "<group>"; };
+		96DBB7C902543EF2B169FC99 /* BatchExportingCompletionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingCompletionViewModel.swift; sourceTree = "<group>"; };
+		35D4C6E546DAF4CAF7E7AA37 /* BatchExportingCompletionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingCompletionViewController.swift; sourceTree = "<group>"; };
+		8249F8BA66937D5C7CCFB2BE /* BatchExportingProgressRowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingProgressRowViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -429,6 +455,26 @@
 			path = Exporting;
 			sourceTree = "<group>";
 		};
+		9B20F5E805C0E15B32D5F771 /* BatchExporting */ = {
+			isa = PBXGroup;
+			children = (
+				5FFA5EB1BB7210538B942D40 /* BatchExportingState.swift */,
+				0809C7E1B5879399F4AD5CFD /* BatchExportingCoordinator.swift */,
+				061FB631FA9AEDDF6ED4549F /* BatchExportingImageSelectionCellViewModel.swift */,
+				65A94DAF52736C3A88802C38 /* BatchExportingImageSelectionViewModel.swift */,
+				EDDE868F82139B514DD706D1 /* BatchExportingImageSelectionViewController.swift */,
+				CC848E755B855C64A7FFF5E8 /* BatchExportingConfigurationViewModel.swift */,
+				C7366E572547581647D1A395 /* BatchExportingConfigurationViewController.swift */,
+				DF5295BA547818A41EC080DA /* BatchExportingProgressViewModel.swift */,
+				71878BCA0F09ADE6484478B0 /* BatchExportingProgressViewController.swift */,
+				4C83BCFA7DEDB3FD171EB6C6 /* BatchExportingCompletionRowViewModel.swift */,
+				96DBB7C902543EF2B169FC99 /* BatchExportingCompletionViewModel.swift */,
+				35D4C6E546DAF4CAF7E7AA37 /* BatchExportingCompletionViewController.swift */,
+				8249F8BA66937D5C7CCFB2BE /* BatchExportingProgressRowViewModel.swift */,
+			);
+			path = BatchExporting;
+			sourceTree = "<group>";
+		};
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
@@ -478,6 +524,7 @@
 				E9A9D8032F5F254800A10DD3 /* MCP */,
 				E9BD1A142FA000050000ABCD /* BackgroundIndexing */,
 				E92CB2E52F41E7560091450B /* Exporting */,
+				9B20F5E805C0E15B32D5F771 /* BatchExporting */,
 				BD36D2C74648FEB09A3B7E81 /* Specialization */,
 				E9CE07BF2C14981D0070A6E8 /* Utils */,
 				E94E36C72CF87BBC006101C8 /* Resources */,
@@ -1077,6 +1124,19 @@
 				8FC7CF2BD73A74EC8D81C0CB /* InspectorSwiftSpecializationViewController.swift in Sources */,
 				8FC7CF2CD73A74EC8D81C0CB /* InspectorRuntimeObjectCoordinator.swift in Sources */,
 				8FC7CF2DD73A74EC8D81C0CB /* InspectorRelationshipsViewController.swift in Sources */,
+				D16A49532E755901A1D32E5F /* BatchExportingState.swift in Sources */,
+				620FD421F830F882232BCBCD /* BatchExportingCoordinator.swift in Sources */,
+				A2519448E7F7FA797E155C73 /* BatchExportingImageSelectionCellViewModel.swift in Sources */,
+				84FE4364758FE65EA7D5E9A7 /* BatchExportingImageSelectionViewModel.swift in Sources */,
+				9CA80CE73BB3CFC59ED54FA9 /* BatchExportingImageSelectionViewController.swift in Sources */,
+				0C554F36A5732FDAF8C0A3F1 /* BatchExportingConfigurationViewModel.swift in Sources */,
+				8FF2C3F9302864D9F3404E35 /* BatchExportingConfigurationViewController.swift in Sources */,
+				69943AEB856963F21AEA89C4 /* BatchExportingProgressViewModel.swift in Sources */,
+				F43FDB3F17E51666B7FDF810 /* BatchExportingProgressViewController.swift in Sources */,
+				12D07EA725AFECCD93E61DD7 /* BatchExportingCompletionRowViewModel.swift in Sources */,
+				A9F67D4F08F37DE09A9772C2 /* BatchExportingCompletionViewModel.swift in Sources */,
+				D9593A7A868FB627B0966159 /* BatchExportingCompletionViewController.swift in Sources */,
+				5A6BBD9C254FFE24540D71F9 /* BatchExportingProgressRowViewModel.swift in Sources */,
 			);
 		};
 		E947C3632C2A4D0400296B2E /* Sources */ = {

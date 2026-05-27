@@ -231,10 +231,16 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         viewModel?.router.trigger(.exportInterfaces)
     }
 
+    @IBAction func exportMultipleImages(_ sender: Any?) {
+        viewModel?.router.trigger(.exportMultipleImages)
+    }
+
     override func responds(to aSelector: Selector!) -> Bool {
         switch aSelector {
         case #selector(exportInterface(_:)):
             return documentState.currentImageNode != nil
+        case #selector(exportMultipleImages(_:)):
+            return true
         default:
             return super.responds(to: aSelector)
         }

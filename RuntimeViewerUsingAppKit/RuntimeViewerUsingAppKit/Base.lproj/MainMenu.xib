@@ -111,6 +111,12 @@
                                     <action selector="exportInterface:" target="-1" id="2R7-oW-otZ"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Export Multiple Images…" secondaryImage="square.and.arrow.up.on.square" catalog="system" keyEquivalent="E" id="7Dd-Q9-2Hk">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="exportMultipleImages:" target="-1" id="3S7-oW-pYZ"/>
+                                </connections>
+                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>
