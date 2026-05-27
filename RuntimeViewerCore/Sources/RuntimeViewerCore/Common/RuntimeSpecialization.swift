@@ -46,7 +46,7 @@ extension RuntimeSpecializationRequest {
         }
     }
 
-    public struct Candidate: Codable, Hashable, Sendable, Comparable {
+    public struct Candidate: Codable, Hashable, Sendable, ComparableBuildable {
         /// Stable identity used to round-trip a selection back to the
         /// originating upstream `SpecializationRequest.Candidate` on the engine
         /// that produced this request. Treat as opaque (currently the
@@ -86,17 +86,11 @@ extension RuntimeSpecializationRequest {
             case `struct`
             case `class`
         }
-
-        // Hand-rolled to avoid ComparableBuildable's per-call KeyPath
-        // reflection (~282 ms when sorting ~10k candidates in the type picker).
-        public static func < (lhs: Self, rhs: Self) -> Bool {
-            if lhs.imagePath != rhs.imagePath {
-                return lhs.imagePath < rhs.imagePath
-            }
-            if lhs.kind != rhs.kind {
-                return lhs.kind < rhs.kind
-            }
-            return lhs.displayName < rhs.displayName
+        
+        public static let comparableDefinition = makeComparable {
+            compare(\.imagePath)
+            compare(\.kind)
+            compare(\.displayName)
         }
     }
 }
