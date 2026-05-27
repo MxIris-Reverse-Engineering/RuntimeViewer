@@ -107,7 +107,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         guard let row = locateRow(forPath: parameterPath) else { return nil }
         let rowIndex = outlineView.row(forItem: row)
         guard rowIndex >= 0,
-              let cellView = outlineView.view(atColumn: 0, row: rowIndex, makeIfNecessary: false) as? ParameterRowCellView
+              let cellView = outlineView.view(atColumn: 0, row: rowIndex, makeIfNecessary: false) as? ParameterCellView
         else { return nil }
         return cellView.anchorView
     }
@@ -155,7 +155,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
 
         output.rows
             .drive(outlineView.rx.nodes) { [chooseClickRelay] (outlineView: NSOutlineView, _: NSTableColumn?, row: SpecializationCellViewModel) -> NSView? in
-                let cellView = outlineView.box.makeView(ofClass: ParameterRowCellView.self)
+                let cellView = outlineView.box.makeView(ofClass: ParameterCellView.self)
                 cellView.bind(to: row)
                     .emit(to: chooseClickRelay)
                     .disposed(by: cellView.rx.disposeBag)
@@ -226,7 +226,7 @@ extension SpecializationViewController: NSOutlineViewDelegate {
 // MARK: - ParameterRowCellView
 
 extension SpecializationViewController {
-    private final class ParameterRowCellView: TableCellView {
+    private final class ParameterCellView: TableCellView {
         private let descriptionLabel = Label()
         private let chooseButton = LoadingButton(title: "Choose Type…", titleFont: .systemFont(ofSize: 13))
         private let loadingIndicator = NSProgressIndicator()

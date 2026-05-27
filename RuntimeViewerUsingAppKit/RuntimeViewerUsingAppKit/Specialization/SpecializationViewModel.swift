@@ -104,19 +104,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
                 let candidates = row.parameter.candidates
                 row.setPreparingPicker(true)
                 return Single<[CandidateBox]>.create { single in
-                    let sortedIndices = Array(candidates.indices).sorted { lhs, rhs in
-                        let leftCandidate = candidates[lhs]
-                        let rightCandidate = candidates[rhs]
-                        if leftCandidate.imagePath != rightCandidate.imagePath {
-                            return leftCandidate.imagePath < rightCandidate.imagePath
-                        }
-                        if leftCandidate.kind != rightCandidate.kind {
-                            return leftCandidate.kind < rightCandidate.kind
-                        }
-                        return leftCandidate.displayName < rightCandidate.displayName
-                    }
-                    let boxes = sortedIndices.map { CandidateBox(candidates[$0]) }
-                    single(.success(boxes))
+                    single(.success(candidates.sorted().map { .init($0) }))
                     return Disposables.create()
                 }
                 .subscribe(on: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
