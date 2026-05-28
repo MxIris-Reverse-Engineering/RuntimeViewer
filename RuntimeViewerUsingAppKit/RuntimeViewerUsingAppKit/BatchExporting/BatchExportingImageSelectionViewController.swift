@@ -68,6 +68,7 @@ final class BatchExportingImageSelectionViewController: UXKitViewController<Batc
             $0.usesAutomaticRowHeights = true
             $0.allowsMultipleSelection = false
             $0.allowsEmptySelection = true
+            $0.selectionHighlightStyle = .none
         }
 
         summaryLabel.do {
@@ -160,7 +161,7 @@ extension BatchExportingImageSelectionViewController {
             }
 
             contentStack.snp.makeConstraints { make in
-                make.edges.equalToSuperview()
+                make.edges.equalToSuperview().inset(4)
             }
         }
 
