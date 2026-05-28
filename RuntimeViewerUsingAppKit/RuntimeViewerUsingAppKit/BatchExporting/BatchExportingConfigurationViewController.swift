@@ -6,8 +6,6 @@ import RuntimeViewerUI
 
 final class BatchExportingConfigurationViewController: UXKitViewController<BatchExportingConfigurationViewModel>, ExportingStepViewController {
 
-    override var shouldDisplayCommonLoading: Bool { true }
-
     private let summaryLabel = Label()
 
     private let objcSingleFileRadio = RadioButton()
@@ -152,18 +150,6 @@ final class BatchExportingConfigurationViewController: UXKitViewController<Batch
         output.swiftFormat.map { $0 == .singleFile }.drive(swiftSingleFileRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.swiftFormat.map { $0 == .directory }.drive(swiftDirectoryRadio.rx.isCheck).disposed(by: rx.disposeBag)
         output.includeMetadata.drive(includeMetadataCheckbox.rx.isCheck).disposed(by: rx.disposeBag)
-
-        output.hasObjC.driveOnNext { [weak self] hasObjC in
-            guard let self else { return }
-            objcStack.isHidden = !hasObjC
-        }
-        .disposed(by: rx.disposeBag)
-
-        output.hasSwift.driveOnNext { [weak self] hasSwift in
-            guard let self else { return }
-            swiftStack.isHidden = !hasSwift
-        }
-        .disposed(by: rx.disposeBag)
 
         output.summary.drive(summaryLabel.rx.stringValue).disposed(by: rx.disposeBag)
     }

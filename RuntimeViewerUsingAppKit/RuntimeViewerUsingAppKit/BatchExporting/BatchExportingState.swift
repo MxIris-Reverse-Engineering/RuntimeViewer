@@ -106,9 +106,6 @@ final class BatchExportingState {
     var searchString: String = ""
 
     @Observed
-    var objectsByImage: [String: [RuntimeObject]] = [:]
-
-    @Observed
     var objcFormat: ExportFormat = .directory
 
     @Observed
