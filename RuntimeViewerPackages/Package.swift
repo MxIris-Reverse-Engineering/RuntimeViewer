@@ -179,7 +179,7 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
+                isEnabled: true,
                 traits: UIFoundationTraits,
             ),
             .package(
