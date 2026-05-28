@@ -51,7 +51,7 @@ final class SpecializationTypePickerViewController: UXKitViewController<Speciali
             $0.sendsWholeSearchString = false
             $0.sendsSearchStringImmediately = true
             $0.placeholderString = "Search types…"
-            $0.refusesFirstResponder = true
+            $0.focusRingType = .none
         }
 
         preferredContentSize = NSSize(width: 320, height: 320)
