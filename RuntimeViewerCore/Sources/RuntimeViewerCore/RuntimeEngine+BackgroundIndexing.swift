@@ -4,26 +4,24 @@ import MachOKit
 
 extension RuntimeEngine {
     public func isImageIndexed(path: String) async throws -> Bool {
-        try await request {
-            let normalized = DyldUtilities.patchImagePathForDyld(path)
-            let hasObjC = await objcSectionFactory.hasCachedSection(for: normalized)
-            let hasSwift = await swiftSectionFactory.hasCachedSection(for: normalized)
-            return hasObjC && hasSwift
-        } remote: { senderConnection in
-            try await senderConnection.sendMessage(name: .isImageIndexed, request: path)
-        }
+        try await dispatch(IsImageIndexedRequest(path: path))
+    }
+
+    func _isImageIndexed(path: String) async -> Bool {
+        let normalized = DyldUtilities.patchImagePathForDyld(path)
+        let hasObjC = await objcSectionFactory.hasCachedSection(for: normalized)
+        let hasSwift = await swiftSectionFactory.hasCachedSection(for: normalized)
+        return hasObjC && hasSwift
     }
 
     /// Path of the target process's main executable.
+    ///
+    /// `imageNames().first` is unreliable under `DYLD_INSERT_LIBRARIES`
+    /// (Xcode injects `libLogRedirect.dylib` at index 0 during debug runs).
+    /// `_NSGetExecutablePath` (wrapped by `DyldUtilities.mainExecutablePath`)
+    /// always returns the host binary.
     public func mainExecutablePath() async throws -> String {
-        try await request {
-            // `imageNames().first` is unreliable under `DYLD_INSERT_LIBRARIES`
-            // (Xcode injects `libLogRedirect.dylib` at index 0 during debug
-            // runs). `_NSGetExecutablePath` always returns the host binary.
-            DyldUtilities.mainExecutablePath()
-        } remote: { senderConnection in
-            try await senderConnection.sendMessage(name: .mainExecutablePath)
-        }
+        try await dispatch(MainExecutablePathRequest())
     }
 
     /// Like `loadImage(at:)` but does **not** call `reloadData()` and does
@@ -35,18 +33,18 @@ extension RuntimeEngine {
     /// `RuntimeBackgroundIndexingCoordinator`'s image-loaded pump and
     /// recursively spawn a fresh batch for every image we just indexed.
     public func loadImageForBackgroundIndexing(at path: String) async throws {
-        try await request {
-            // Mirror loadImage(at:) byte-for-byte sans reloadData. See loadImage
-            // for the canonicalization rationale.
-            let canonical = DyldUtilities.patchImagePathForDyld(path)
-            try DyldUtilities.loadImage(at: canonical)
-            _ = try await objcSectionFactory.section(for: canonical)
-            _ = try await swiftSectionFactory.section(for: canonical)
-            loadedImagePaths.insert(canonical)
-        } remote: { senderConnection in
-            try await senderConnection.sendMessage(
-                name: .loadImageForBackgroundIndexing, request: path)
-        }
+        _ = try await dispatch(LoadImageForBackgroundIndexingRequest(path: path))
+    }
+
+    /// Local implementation of `loadImageForBackgroundIndexing(at:)`. Mirrors
+    /// `_loadImage(at:)` byte-for-byte sans `reloadData` / `imageDidLoad`
+    /// emission. See `_loadImage(at:)` for the canonicalization rationale.
+    func _loadImageForBackgroundIndexing(at path: String) async throws {
+        let canonical = DyldUtilities.patchImagePathForDyld(path)
+        try DyldUtilities.loadImage(at: canonical)
+        _ = try await objcSectionFactory.section(for: canonical)
+        _ = try await swiftSectionFactory.section(for: canonical)
+        loadedImagePaths.insert(canonical)
     }
 }
 
