@@ -4,17 +4,37 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 
 final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
+    struct Summary: Equatable {
+        let hasFailures: Bool
+        let headerTitle: String
+        let headerSubtitle: String
+        let interfacesValue: String
+        let imagesValue: String
+        let objcSwiftValue: String
+        let durationValue: String
+
+        static let empty = Summary(
+            hasFailures: false,
+            headerTitle: "Export Complete",
+            headerSubtitle: "",
+            interfacesValue: "—",
+            imagesValue: "—",
+            objcSwiftValue: "—",
+            durationValue: "—"
+        )
+    }
+
     struct Input {
         let refresh: Signal<Void>
         let showInFinderClick: Signal<Void>
     }
 
     struct Output {
-        let summaryText: Driver<String>
+        let summary: Driver<Summary>
         let rows: Driver<[BatchExportingCompletionRowViewModel]>
     }
 
-    @Observed private(set) var summaryText: String = ""
+    @Observed private(set) var summary: Summary = .empty
 
     private let exportingState: BatchExportingState
 
@@ -29,7 +49,7 @@ final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
             .compactMap { $0 }
             .subscribeOnNext { [weak self] result in
                 guard let self else { return }
-                summaryText = Self.makeSummary(from: result)
+                summary = Self.makeSummary(result: result, destinationURL: exportingState.destinationURL)
             }
             .disposed(by: rx.disposeBag)
 
@@ -51,30 +71,71 @@ final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
         }
 
         return Output(
-            summaryText: $summaryText.asDriver(),
+            summary: $summary.asDriver(),
             rows: rows
         )
     }
 
     private func refreshFromState() {
         if let result = exportingState.aggregatedResult {
-            summaryText = Self.makeSummary(from: result)
+            summary = Self.makeSummary(result: result, destinationURL: exportingState.destinationURL)
         }
     }
 
-    private static func makeSummary(from result: BatchExportingAggregatedResult) -> String {
+    private static let integerFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter
+    }()
+
+    private static func formatInteger(_ value: Int) -> String {
+        integerFormatter.string(from: NSNumber(value: value)) ?? "\(value)"
+    }
+
+    private static func makeSummary(result: BatchExportingAggregatedResult, destinationURL: URL?) -> Summary {
         let totalImages = result.imagesSucceeded + result.imagesFailed
+        let totalInterfaces = result.interfacesSucceeded + result.interfacesFailed
+        let hasFailures = result.imagesFailed > 0 || result.interfacesFailed > 0
         let imagesWord = totalImages == 1 ? "image" : "images"
-        var lines: [String] = []
-        if result.imagesFailed > 0 {
-            lines.append("\(totalImages) \(imagesWord) processed · \(result.imagesSucceeded) succeeded · \(result.imagesFailed) failed")
+        let headerTitle = hasFailures ? "Export Completed with Errors" : "Export Complete"
+        let destinationText = destinationURL.map { "Exported to \(tildeAbbreviated($0.path))" } ?? "Export finished"
+        let headerSubtitle: String
+        if hasFailures {
+            headerSubtitle = "\(result.imagesSucceeded) of \(totalImages) \(imagesWord) succeeded · \(destinationText)"
         } else {
-            lines.append("\(totalImages) \(imagesWord) exported successfully")
+            headerSubtitle = "\(totalImages) \(imagesWord) · \(destinationText)"
         }
-        lines.append("\(result.interfacesSucceeded) interface\(result.interfacesSucceeded == 1 ? "" : "s") generated\(result.interfacesFailed > 0 ? " · \(result.interfacesFailed) failed" : "")")
-        lines.append("ObjC: \(result.totalObjcCount) · Swift: \(result.totalSwiftCount)")
-        lines.append(String(format: "Duration: %.1fs", result.totalDuration))
-        return lines.joined(separator: "\n")
+
+        let interfacesValue: String
+        if result.interfacesFailed > 0 {
+            interfacesValue = "\(formatInteger(result.interfacesSucceeded)) / \(formatInteger(totalInterfaces))"
+        } else {
+            interfacesValue = formatInteger(result.interfacesSucceeded)
+        }
+
+        let imagesValue: String
+        if result.imagesFailed > 0 {
+            imagesValue = "\(result.imagesSucceeded) / \(totalImages)"
+        } else {
+            imagesValue = "\(totalImages)"
+        }
+
+        let objcSwiftValue = "\(formatInteger(result.totalObjcCount)) · \(formatInteger(result.totalSwiftCount))"
+        let durationValue = String(format: "%.1f s", result.totalDuration)
+
+        return Summary(
+            hasFailures: hasFailures,
+            headerTitle: headerTitle,
+            headerSubtitle: headerSubtitle,
+            interfacesValue: interfacesValue,
+            imagesValue: imagesValue,
+            objcSwiftValue: objcSwiftValue,
+            durationValue: durationValue
+        )
+    }
+
+    private static func tildeAbbreviated(_ path: String) -> String {
+        (path as NSString).abbreviatingWithTildeInPath
     }
 }
 
