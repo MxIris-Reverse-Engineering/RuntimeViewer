@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerUI
 
-final class BatchExportingProgressViewController: AppKitViewController<BatchExportingProgressViewModel>, ExportingStepViewController {
+final class BatchExportingProgressViewController: UXKitViewController<BatchExportingProgressViewModel>, ExportingStepViewController {
     private let titleLabel = Label().then {
         $0.font = .systemFont(ofSize: 14, weight: .semibold)
         $0.textColor = .controlTextColor
@@ -28,7 +28,7 @@ final class BatchExportingProgressViewController: AppKitViewController<BatchExpo
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             titleLabel
             progressLabel
             overallProgressBar
@@ -96,7 +96,7 @@ final class BatchExportingProgressViewController: AppKitViewController<BatchExpo
 }
 
 extension BatchExportingProgressViewController {
-    fileprivate final class CellView: TableCellView {
+    private final class CellView: TableCellView {
         private let statusIcon = ImageView().then {
             $0.imageScaling = .scaleProportionallyUpOrDown
         }

@@ -5,7 +5,7 @@ import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
 import RuntimeViewerSettingsUI
 
-final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopoverViewModel<MainRoute>> {
+final class MCPStatusPopoverViewController: UXKitViewController<MCPStatusPopoverViewModel<MainRoute>> {
     // MARK: - Views
 
     private let statusCircle = ImageView()
@@ -52,7 +52,7 @@ final class MCPStatusPopoverViewController: AppKitViewController<MCPStatusPopove
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             contentStack
         }
 

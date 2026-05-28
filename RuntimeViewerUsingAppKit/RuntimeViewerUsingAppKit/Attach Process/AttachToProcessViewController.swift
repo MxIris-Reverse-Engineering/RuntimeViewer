@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-final class AttachToProcessViewController: AppKitViewController<AttachToProcessViewModel> {
+final class AttachToProcessViewController: UXKitViewController<AttachToProcessViewModel> {
     private let pickerViewController: RunningPickerTabViewController
 
     private let attachRelay = PublishRelay<any RunningItem>()
@@ -21,7 +21,7 @@ final class AttachToProcessViewController: AppKitViewController<AttachToProcessV
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             pickerViewController
         }
 

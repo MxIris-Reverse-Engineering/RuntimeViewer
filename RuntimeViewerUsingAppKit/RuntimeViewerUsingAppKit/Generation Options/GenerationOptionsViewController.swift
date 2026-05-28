@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCore
 
-final class GenerationOptionsViewController: AppKitViewController<GenerationOptionsViewModel<MainRoute>> {
+final class GenerationOptionsViewController: UXKitViewController<GenerationOptionsViewModel<MainRoute>> {
     private enum OptionItem {
         case checkbox(title: String, keyPath: OptionKeyPath)
         case segmentedControl(title: String, labels: [String], selectedIndex: (RuntimeObjectInterface.GenerationOptions) -> Int, mutation: (Int) -> OptionsMutation)
@@ -76,7 +76,7 @@ final class GenerationOptionsViewController: AppKitViewController<GenerationOpti
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             stackView
         }
 

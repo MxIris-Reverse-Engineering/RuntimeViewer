@@ -3,7 +3,7 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerUI
 
-final class BatchExportingCompletionViewController: AppKitViewController<BatchExportingCompletionViewModel>, ExportingStepViewController {
+final class BatchExportingCompletionViewController: UXKitViewController<BatchExportingCompletionViewModel>, ExportingStepViewController {
     private let checkmarkImageView = NSImageView().then {
         $0.image = .symbol(systemName: .checkmarkCircleFill)
         $0.symbolConfiguration = .init(pointSize: 40, weight: .regular)
@@ -38,7 +38,7 @@ final class BatchExportingCompletionViewController: AppKitViewController<BatchEx
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             headerStack
             scrollView
         }
@@ -92,7 +92,7 @@ final class BatchExportingCompletionViewController: AppKitViewController<BatchEx
 }
 
 extension BatchExportingCompletionViewController {
-    fileprivate final class CellView: TableCellView {
+    private final class CellView: TableCellView {
         private let nameLabel = Label().then {
             $0.font = .systemFont(ofSize: 13, weight: .medium)
             $0.textColor = .labelColor

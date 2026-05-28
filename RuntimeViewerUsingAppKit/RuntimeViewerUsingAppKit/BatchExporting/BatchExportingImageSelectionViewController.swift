@@ -4,40 +4,38 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerUI
 
-final class BatchExportingImageSelectionViewController: AppKitViewController<BatchExportingImageSelectionViewModel>, ExportingStepViewController {
-    private let filterSearchField = FilterSearchField()
+final class BatchExportingImageSelectionViewController: UXKitViewController<BatchExportingImageSelectionViewModel>, ExportingStepViewController {
+    private let searchField = SearchField()
 
     private let selectAllButton = PushButton(title: "Select All", titleFont: .systemFont(ofSize: 13))
 
     private let deselectAllButton = PushButton(title: "Deselect All", titleFont: .systemFont(ofSize: 13))
 
-    private let summaryLabel = Label().then {
-        $0.font = .systemFont(ofSize: 12)
-        $0.textColor = .secondaryLabelColor
-        $0.alignment = .right
-    }
+    private let summaryLabel = Label()
 
     private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
 
     private let toggleImageRelay = PublishRelay<BatchExportingImage>()
 
+    override var contentInsets: NSDirectionalEdgeInsets { .init(top: 16, leading: 16, bottom: 16, trailing: 16) }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
-            filterSearchField
+        contentView.hierarchy {
+            searchField
             selectAllButton
             deselectAllButton
             summaryLabel
             scrollView
         }
 
-        filterSearchField.snp.makeConstraints { make in
+        searchField.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
         }
 
         selectAllButton.snp.makeConstraints { make in
-            make.top.equalTo(filterSearchField.snp.bottom).offset(8)
+            make.top.equalTo(searchField.snp.bottom).offset(8)
             make.leading.equalToSuperview()
         }
 
@@ -57,19 +55,25 @@ final class BatchExportingImageSelectionViewController: AppKitViewController<Bat
             make.leading.trailing.bottom.equalToSuperview()
         }
 
+        searchField.do {
+            $0.focusRingType = .none
+        }
+
         scrollView.do {
-            $0.hasVerticalScroller = true
-            $0.borderType = .lineBorder
             $0.autohidesScrollers = true
         }
 
         tableView.do {
             $0.headerView = nil
-            $0.rowHeight = 22
-            $0.gridStyleMask = []
-            $0.intercellSpacing = NSSize(width: 0, height: 0)
+            $0.usesAutomaticRowHeights = true
             $0.allowsMultipleSelection = false
             $0.allowsEmptySelection = true
+        }
+
+        summaryLabel.do {
+            $0.font = .systemFont(ofSize: 12)
+            $0.textColor = .secondaryLabelColor
+            $0.alignment = .right
         }
     }
 
@@ -77,10 +81,10 @@ final class BatchExportingImageSelectionViewController: AppKitViewController<Bat
         super.setupBindings(for: viewModel)
 
         let input = BatchExportingImageSelectionViewModel.Input(
-            searchString: filterSearchField.rx.stringValue.asSignal(onErrorJustReturn: ""),
+            searchString: searchField.rx.stringValue.asSignal(onErrorJustReturn: ""),
             selectAllClicked: selectAllButton.rx.click.asSignal(),
             deselectAllClicked: deselectAllButton.rx.click.asSignal(),
-            toggleImage: toggleImageRelay.asSignal()
+            toggleImage: toggleImageRelay.asSignal(),
         )
 
         let output = viewModel.transform(input)
@@ -102,10 +106,8 @@ final class BatchExportingImageSelectionViewController: AppKitViewController<Bat
 }
 
 extension BatchExportingImageSelectionViewController {
-    fileprivate final class CellView: TableCellView {
-        private let checkbox = NSButton().then {
-            $0.setButtonType(.switch)
-            $0.title = ""
+    private final class CellView: TableCellView {
+        private let checkbox = CheckboxButton(title: "").then {
             $0.font = .systemFont(ofSize: 13)
         }
 
@@ -115,10 +117,32 @@ extension BatchExportingImageSelectionViewController {
             $0.lineBreakMode = .byTruncatingTail
         }
 
+        private let pathLabel = Label().then {
+            $0.font = .systemFont(ofSize: 11)
+            $0.textColor = .secondaryLabelColor
+            $0.lineBreakMode = .byTruncatingMiddle
+        }
+
         private let groupLabel = Label().then {
             $0.font = .systemFont(ofSize: 11)
             $0.textColor = .tertiaryLabelColor
             $0.alignment = .right
+        }
+
+        private lazy var textStack = VStackView(alignment: .leading, spacing: 2) {
+            nameLabel
+                .contentHugging(h: .defaultLow)
+                .contentCompressionResistance(h: .defaultLow)
+            pathLabel
+                .contentHugging(h: .defaultLow)
+                .contentCompressionResistance(h: .defaultLow)
+        }
+
+        private lazy var contentStack = HStackView(spacing: 6) {
+            checkbox
+            textStack
+            MaxSpacer()
+            groupLabel
         }
 
         private var image: BatchExportingImage?
@@ -132,30 +156,12 @@ extension BatchExportingImageSelectionViewController {
             checkbox.action = #selector(checkboxClicked)
 
             hierarchy {
-                checkbox
-                nameLabel
-                groupLabel
+                contentStack
             }
 
-            checkbox.snp.makeConstraints { make in
-                make.leading.equalToSuperview().inset(8)
-                make.centerY.equalToSuperview()
+            contentStack.snp.makeConstraints { make in
+                make.edges.equalToSuperview()
             }
-
-            nameLabel.snp.makeConstraints { make in
-                make.leading.equalTo(checkbox.snp.trailing).offset(6)
-                make.centerY.equalToSuperview()
-            }
-
-            groupLabel.snp.makeConstraints { make in
-                make.leading.greaterThanOrEqualTo(nameLabel.snp.trailing).offset(12)
-                make.trailing.equalToSuperview().inset(8)
-                make.centerY.equalToSuperview()
-            }
-
-            nameLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            groupLabel.setContentHuggingPriority(.required, for: .horizontal)
         }
 
         func configure(with cellViewModel: BatchExportingImageSelectionCellViewModel, onToggle: @escaping (BatchExportingImage) -> Void) {
@@ -163,6 +169,7 @@ extension BatchExportingImageSelectionViewController {
             self.onToggle = onToggle
             checkbox.state = cellViewModel.isSelected ? .on : .off
             nameLabel.stringValue = cellViewModel.image.name
+            pathLabel.stringValue = cellViewModel.image.path
             groupLabel.stringValue = cellViewModel.image.group
         }
 
