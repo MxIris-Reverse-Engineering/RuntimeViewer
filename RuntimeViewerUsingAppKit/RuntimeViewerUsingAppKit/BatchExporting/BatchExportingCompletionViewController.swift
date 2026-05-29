@@ -209,7 +209,7 @@ extension BatchExportingCompletionViewController {
 }
 
 extension BatchExportingCompletionViewController {
-    private final class CellView: TableCellView {
+    private final class CellView: LayerBackedTableCellView {
         private let statusIcon = ImageView().then {
             $0.imageScaling = .scaleProportionallyUpOrDown
         }
@@ -229,8 +229,6 @@ extension BatchExportingCompletionViewController {
 
         override func setup() {
             super.setup()
-
-            wantsLayer = true
 
             hierarchy {
                 statusIcon
@@ -273,14 +271,14 @@ extension BatchExportingCompletionViewController {
                 detailLabel.stringValue = parts.joined(separator: " · ")
                 detailLabel.textColor = .secondaryLabelColor
                 toolTip = nil
-                layer?.backgroundColor = NSColor.clear.cgColor
+                backgroundColor = NSColor.clear
             case .failure(let description):
                 statusIcon.image = .symbol(systemName: .xmarkCircleFill)
                 statusIcon.contentTintColor = .systemRed
                 detailLabel.stringValue = "Failed"
                 detailLabel.textColor = .systemRed
                 toolTip = description
-                layer?.backgroundColor = NSColor(light: .systemRed.withAlphaComponent(0.08), dark: .systemRed.withAlphaComponent(0.16)).cgColor
+                backgroundColor = NSColor(light: .systemRed.withAlphaComponent(0.08), dark: .systemRed.withAlphaComponent(0.16))
             }
         }
     }
