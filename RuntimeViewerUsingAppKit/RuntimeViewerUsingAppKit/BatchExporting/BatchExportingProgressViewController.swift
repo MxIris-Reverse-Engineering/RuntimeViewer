@@ -76,7 +76,7 @@ final class BatchExportingProgressViewController: UXKitViewController<BatchExpor
         super.setupBindings(for: viewModel)
 
         let input = BatchExportingProgressViewModel.Input(
-            startExport: rx.viewDidAppear.asSignal()
+            startExport: rx.viewDidAppear.asSignal(),
         )
 
         let output = viewModel.transform(input)
@@ -120,6 +120,8 @@ extension BatchExportingProgressViewController {
             $0.maxValue = 1
             $0.controlSize = .small
         }
+        
+        private var isSymbolEffectRunning = false
 
         override func setup() {
             super.setup()
@@ -165,7 +167,7 @@ extension BatchExportingProgressViewController {
             Driver.combineLatest(
                 rowViewModel.$status.asDriver(),
                 rowViewModel.$progress.asDriver(),
-                rowViewModel.$currentObjectText.asDriver()
+                rowViewModel.$currentObjectText.asDriver(),
             )
             .driveOnNext { [weak self] status, progress, currentObject in
                 guard let self else { return }
@@ -177,7 +179,7 @@ extension BatchExportingProgressViewController {
         private func applyState(
             status: BatchExportingProgressRowViewModel.Status,
             progress: Double,
-            currentObject: String
+            currentObject: String,
         ) {
             switch status {
             case .queued:
@@ -188,20 +190,25 @@ extension BatchExportingProgressViewController {
                 detailLabel.isHidden = false
                 progressBar.isHidden = true
             case .running:
-                statusIcon.image = .symbol(systemName: .arrowtriangleRightFill)
-                statusIcon.contentTintColor = .systemBlue
                 progressBar.doubleValue = progress
                 progressBar.isHidden = false
                 detailLabel.isHidden = true
+                if !isSymbolEffectRunning {
+                    statusIcon.image = .symbol(systemName: .arrowTriangle2Circlepath)
+                    statusIcon.contentTintColor = .systemBlue
+                    statusIcon.addSymbolEffect(.rotate, options: .repeat(.periodic))
+                    isSymbolEffectRunning = true
+                }
+                return
             case .succeeded(let result):
                 statusIcon.image = .symbol(systemName: .checkmarkCircleFill)
                 statusIcon.contentTintColor = .systemGreen
-                let parts: [String] = [
+                let parts: [String?] = [
                     "\(result.succeeded) succeeded",
                     result.failed > 0 ? "\(result.failed) failed" : nil,
                     String(format: "%.1fs", result.totalDuration),
-                ].compactMap { $0 }
-                detailLabel.stringValue = parts.joined(separator: " · ")
+                ]
+                detailLabel.stringValue = parts.compactMap(\.self).joined(separator: " · ")
                 detailLabel.textColor = .secondaryLabelColor
                 detailLabel.isHidden = false
                 progressBar.isHidden = true
@@ -212,6 +219,10 @@ extension BatchExportingProgressViewController {
                 detailLabel.textColor = .systemRed
                 detailLabel.isHidden = false
                 progressBar.isHidden = true
+            }
+            if isSymbolEffectRunning {
+                statusIcon.removeAllSymbolEffects()
+                isSymbolEffectRunning = false
             }
         }
     }

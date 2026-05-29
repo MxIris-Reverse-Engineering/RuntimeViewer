@@ -441,11 +441,7 @@ extension BackgroundIndexingPopoverViewController {
     }
 
     private final class ItemCellView: TableCellView {
-        /// Raw NSImageView (not the project's ImageView wrapper): the wrapper
-        /// sets `wantsUpdateLayer = true`, which flattens the image into
-        /// `layer.contents` and destroys the per-part sublayer hierarchy that
-        /// SF Symbol effects (`.rotate`, `.bounce`, etc.) depend on.
-        private let iconImageView = NSImageView().then {
+        private let iconImageView = ImageView().then {
             $0.imageScaling = .scaleProportionallyDown
         }
 
@@ -494,7 +490,7 @@ extension BackgroundIndexingPopoverViewController {
             // effect before deciding whether to attach a fresh one.
             iconImageView.removeAllSymbolEffects()
             if case .running = item.state {
-                iconImageView.addSymbolEffect(.rotate, options: .repeating)
+                iconImageView.addSymbolEffect(.rotate, options: .repeat(.periodic))
             }
 
             let nameSource = item.resolvedPath ?? item.id
