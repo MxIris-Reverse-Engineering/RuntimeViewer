@@ -2,11 +2,6 @@ import AppKit
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
-import SwiftUI
-
-private enum ExportingAppStorageKeys {
-    static let includeMetadata = "Exporting.includeMetadata"
-}
 
 final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     struct Input {
@@ -28,8 +23,14 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
 
     let exportingState: ExportingState
 
-    @AppStorage(ExportingAppStorageKeys.includeMetadata)
-    private var storedIncludeMetadata: Bool = true
+    @UserDefault(key: ExportingDefaultsKey.objcFormat, defaultValue: .directory)
+    private var storedObjcFormat: ExportFormat
+
+    @UserDefault(key: ExportingDefaultsKey.swiftFormat, defaultValue: .singleFile)
+    private var storedSwiftFormat: ExportFormat
+
+    @UserDefault(key: ExportingDefaultsKey.includeMetadata, defaultValue: true)
+    private var storedIncludeMetadata: Bool
 
     @Observed private(set) var isLoading: Bool = true
 
@@ -40,6 +41,8 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     init(exportingState: ExportingState, documentState: DocumentState, router: any Router<ExportingRoute>) {
         self.exportingState = exportingState
         super.init(documentState: documentState, router: router)
+        exportingState.objcFormat = storedObjcFormat
+        exportingState.swiftFormat = storedSwiftFormat
         exportingState.includeMetadata = storedIncludeMetadata
         loadObjects()
     }
@@ -60,13 +63,17 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     func transform(_ input: Input) -> Output {
         input.objcFormatSelected.emitOnNext { [weak self] index in
             guard let self else { return }
-            exportingState.objcFormat = ExportFormat(rawValue: index) ?? .singleFile
+            let format = ExportFormat(rawValue: index) ?? .singleFile
+            storedObjcFormat = format
+            exportingState.objcFormat = format
         }
         .disposed(by: rx.disposeBag)
 
         input.swiftFormatSelected.emitOnNext { [weak self] index in
             guard let self else { return }
-            exportingState.swiftFormat = ExportFormat(rawValue: index) ?? .singleFile
+            let format = ExportFormat(rawValue: index) ?? .singleFile
+            storedSwiftFormat = format
+            exportingState.swiftFormat = format
         }
         .disposed(by: rx.disposeBag)
 
