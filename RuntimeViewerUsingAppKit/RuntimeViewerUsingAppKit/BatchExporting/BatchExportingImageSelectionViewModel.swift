@@ -60,22 +60,17 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        let filteredDriver = Driver
+        let cellViewModels = Driver
             .combineLatest(
                 exportingState.$availableImages.asDriver(),
                 exportingState.$searchString.asDriver()
             )
-            .map { [weak self] availableImages, searchString -> [BatchExportingImage] in
-                self?.filteredImages(availableImages: availableImages, searchString: searchString) ?? []
-            }
-
-        let cellViewModels = Driver
-            .combineLatest(filteredDriver, exportingState.$selectedImagePaths.asDriver())
-            .map { filtered, selectedPaths -> [BatchExportingImageSelectionCellViewModel] in
-                filtered.map {
+            .map { [weak self] availableImages, searchString -> [BatchExportingImageSelectionCellViewModel] in
+                guard let self else { return [] }
+                return self.filteredImages(availableImages: availableImages, searchString: searchString).map {
                     BatchExportingImageSelectionCellViewModel(
                         image: $0,
-                        isSelected: selectedPaths.contains($0.path)
+                        isSelected: self.exportingState.selectedImagePaths.contains($0.path)
                     )
                 }
             }
