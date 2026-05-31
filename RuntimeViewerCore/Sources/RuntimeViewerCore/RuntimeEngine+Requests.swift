@@ -16,7 +16,7 @@ extension RuntimeEngine {
         let path: String
         static var commandName: String { CommandNames.isImageIndexed.commandName }
         func perform(on engine: RuntimeEngine) async throws -> Bool {
-            try await engine._isImageIndexed(path: path)
+            await engine._isImageIndexed(path: path)
         }
     }
 

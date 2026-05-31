@@ -338,9 +338,15 @@ public actor RuntimeEngine {
         // Server-only override: progress-bearing variant of
         // `runtimeObjectsInImage`. Re-registering after the shared handler is
         // intentional — the last `setMessageHandler` wins.
-        connection.setMessageHandler(name: CommandNames.runtimeObjectsInImage.commandName) { [weak self] (imagePath: String) -> [RuntimeObject] in
+        //
+        // The payload MUST stay `ObjectsInImageRequest` to match the wire form
+        // the client's `dispatch(ObjectsInImageRequest:)` and
+        // `_remoteObjectsWithProgress` both send, as well as the shared handler
+        // this overrides. Decoding it as a bare `String` here would fail every
+        // structured `objects(in:)` request with NSCocoaErrorDomain 4864.
+        connection.setMessageHandler(name: CommandNames.runtimeObjectsInImage.commandName) { [weak self] (request: ObjectsInImageRequest) -> [RuntimeObject] in
             guard let self else { throw RequestError.senderConnectionIsLose }
-            return try await self._serverObjectsWithProgress(in: imagePath)
+            return try await self._serverObjectsWithProgress(in: request.image)
         }
 
         // Server-only: manager-layer engine list lookup. Not part of the
@@ -705,7 +711,11 @@ extension RuntimeEngine {
             continuation.yield(RuntimeObjectsLoadingEvent.progress(progress))
         }
         defer { cancellable.cancel() }
-        return try await connection.sendMessage(name: .runtimeObjectsInImage, request: image)
+        // Send the structured `ObjectsInImageRequest` (not a bare `String`) so the
+        // wire form matches the server's `runtimeObjectsInImage` handler, which
+        // decodes `ObjectsInImageRequest`. Keeping these symmetric is what lets
+        // both `objects(in:)` and `objectsWithProgress(in:)` hit the same server arm.
+        return try await connection.sendMessage(name: .runtimeObjectsInImage, request: ObjectsInImageRequest(image: image))
     }
 
     public func hierarchy(for object: RuntimeObject) async throws -> [String] {
