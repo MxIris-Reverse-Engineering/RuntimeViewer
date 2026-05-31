@@ -168,10 +168,11 @@ extension BatchExportingProgressViewController {
                 rowViewModel.$status.asDriver(),
                 rowViewModel.$progress.asDriver(),
                 rowViewModel.$currentObjectText.asDriver(),
+                rowViewModel.$objectFailures.asDriver(),
             )
-            .driveOnNext { [weak self] status, progress, currentObject in
+            .driveOnNext { [weak self] status, progress, currentObject, objectFailures in
                 guard let self else { return }
-                applyState(status: status, progress: progress, currentObject: currentObject)
+                applyState(status: status, progress: progress, currentObject: currentObject, objectFailures: objectFailures)
             }
             .disposed(by: rx.disposeBag)
         }
@@ -180,7 +181,9 @@ extension BatchExportingProgressViewController {
             status: BatchExportingProgressRowViewModel.Status,
             progress: Double,
             currentObject: String,
+            objectFailures: [BatchExportingObjectFailure],
         ) {
+            toolTip = objectFailures.exportFailureTooltip
             switch status {
             case .queued:
                 statusIcon.image = .symbol(systemName: .circle)
@@ -201,15 +204,20 @@ extension BatchExportingProgressViewController {
                 }
                 return
             case .succeeded(let result):
-                statusIcon.image = .symbol(systemName: .checkmarkCircleFill)
-                statusIcon.contentTintColor = .systemGreen
+                if result.failed > 0 {
+                    statusIcon.image = .symbol(systemName: .exclamationmarkTriangleFill)
+                    statusIcon.contentTintColor = .systemOrange
+                } else {
+                    statusIcon.image = .symbol(systemName: .checkmarkCircleFill)
+                    statusIcon.contentTintColor = .systemGreen
+                }
                 let parts: [String?] = [
                     "\(result.succeeded) succeeded",
                     result.failed > 0 ? "\(result.failed) failed" : nil,
                     String(format: "%.1fs", result.totalDuration),
                 ]
                 detailLabel.stringValue = parts.compactMap(\.self).joined(separator: " · ")
-                detailLabel.textColor = .secondaryLabelColor
+                detailLabel.textColor = result.failed > 0 ? .systemOrange : .secondaryLabelColor
                 detailLabel.isHidden = false
                 progressBar.isHidden = true
             case .failed(let description):

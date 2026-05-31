@@ -261,17 +261,25 @@ extension BatchExportingCompletionViewController {
             nameLabel.stringValue = outcome.image.name
             switch outcome.outcome {
             case .success(let result):
-                statusIcon.image = .symbol(systemName: .checkmarkCircleFill)
-                statusIcon.contentTintColor = .systemGreen
                 var parts: [String] = ["\(result.succeeded) interfaces"]
                 if result.failed > 0 {
                     parts.append("\(result.failed) failed")
                 }
                 parts.append(String(format: "%.1fs", result.totalDuration))
                 detailLabel.stringValue = parts.joined(separator: " · ")
-                detailLabel.textColor = .secondaryLabelColor
-                toolTip = nil
-                backgroundColor = NSColor.clear
+                if result.failed > 0 {
+                    statusIcon.image = .symbol(systemName: .exclamationmarkTriangleFill)
+                    statusIcon.contentTintColor = .systemOrange
+                    detailLabel.textColor = .systemOrange
+                    toolTip = outcome.objectFailures.exportFailureTooltip
+                    backgroundColor = NSColor(light: .systemOrange.withAlphaComponent(0.08), dark: .systemOrange.withAlphaComponent(0.16))
+                } else {
+                    statusIcon.image = .symbol(systemName: .checkmarkCircleFill)
+                    statusIcon.contentTintColor = .systemGreen
+                    detailLabel.textColor = .secondaryLabelColor
+                    toolTip = nil
+                    backgroundColor = NSColor.clear
+                }
             case .failure(let description):
                 statusIcon.image = .symbol(systemName: .xmarkCircleFill)
                 statusIcon.contentTintColor = .systemRed

@@ -15,9 +15,42 @@ struct BatchExportingImage: Hashable, Sendable {
     let group: String
 }
 
+/// A single object whose interface failed to export, kept so the per-image row
+/// can surface *which* objects failed and *why* instead of only a failure count.
+struct BatchExportingObjectFailure: Sendable, Hashable {
+    let objectName: String
+    let errorDescription: String
+}
+
+extension Collection where Element == BatchExportingObjectFailure {
+    /// Multi-line tooltip listing each failed object and its reason, or `nil`
+    /// when nothing failed. Capped so a pathological image doesn't build a
+    /// thousand-line tooltip.
+    var exportFailureTooltip: String? {
+        guard !isEmpty else { return nil }
+        let total = count
+        let header = total == 1 ? "1 interface failed:" : "\(total) interfaces failed:"
+        var lines = [header] + prefix(50).map { "• \($0.objectName) — \($0.errorDescription)" }
+        if total > 50 {
+            lines.append("…and \(total - 50) more")
+        }
+        return lines.joined(separator: "\n")
+    }
+}
+
 struct BatchExportingPerImageOutcome: Sendable {
     let image: BatchExportingImage
     let outcome: Outcome
+    /// Per-object interface failures collected from the export reporter. Empty
+    /// when the whole image failed up front (that error lives in `.failure`),
+    /// or when every object exported cleanly.
+    let objectFailures: [BatchExportingObjectFailure]
+
+    init(image: BatchExportingImage, outcome: Outcome, objectFailures: [BatchExportingObjectFailure] = []) {
+        self.image = image
+        self.outcome = outcome
+        self.objectFailures = objectFailures
+    }
 
     enum Outcome: Sendable {
         case success(RuntimeInterfaceExportResult)

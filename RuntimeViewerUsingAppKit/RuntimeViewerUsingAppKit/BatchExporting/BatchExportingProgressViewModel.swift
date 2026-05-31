@@ -43,7 +43,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
             titleText: $titleText.asDriver(),
             progressText: $progressText.asDriver(),
             overallProgress: $overallProgress.asDriver(),
-            rows: exportingState.$progressRowViewModels.asDriver()
+            rows: exportingState.$progressRowViewModels.asDriver(),
         )
     }
 
@@ -90,7 +90,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
             await withTaskGroup(of: BatchExportingPerImageOutcome.self) { group in
                 var iterator = rowViewModels.makeIterator()
 
-                for _ in 0..<concurrency {
+                for _ in 0 ..< concurrency {
                     guard let rowViewModel = iterator.next() else { break }
                     group.addTask { @MainActor in
                         await Self.exportOne(
@@ -100,7 +100,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                             swiftFormat: swiftFormat,
                             includeMetadata: includeMetadata,
                             generationOptions: generationOptions,
-                            runtimeEngine: runtimeEngine
+                            runtimeEngine: runtimeEngine,
                         )
                     }
                 }
@@ -128,7 +128,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                                 swiftFormat: swiftFormat,
                                 includeMetadata: includeMetadata,
                                 generationOptions: generationOptions,
-                                runtimeEngine: runtimeEngine
+                                runtimeEngine: runtimeEngine,
                             )
                         }
                     }
@@ -150,9 +150,20 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
         swiftFormat: ExportFormat,
         includeMetadata: Bool,
         generationOptions: RuntimeObjectInterface.GenerationOptions,
-        runtimeEngine: RuntimeEngine
+        runtimeEngine: RuntimeEngine,
     ) async -> BatchExportingPerImageOutcome {
         let image = rowViewModel.image
+
+        do {
+            if try await !runtimeEngine.isImageLoaded(path: image.path) {
+                try await runtimeEngine.loadImage(at: image.path)
+            }
+        } catch {
+            let description = error.localizedDescription
+            rowViewModel.markFailed(description)
+            return .init(image: image, outcome: .failure(errorDescription: description))
+        }
+
         rowViewModel.markRunning()
 
         let sanitizedName = sanitize(image.name)
@@ -172,12 +183,13 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
             objcFormat: objcFormat,
             swiftFormat: swiftFormat,
             generationOptions: generationOptions,
-            includeMetadata: includeMetadata
+            includeMetadata: includeMetadata,
         )
 
         let reporter = RuntimeInterfaceExportReporter()
-        let eventsTask: Task<RuntimeInterfaceExportResult?, Never> = Task { @MainActor in
+        let eventsTask: Task<(result: RuntimeInterfaceExportResult?, failures: [BatchExportingObjectFailure]), Never> = Task { @MainActor in
             var capturedResult: RuntimeInterfaceExportResult?
+            var objectFailures: [BatchExportingObjectFailure] = []
             for await event in reporter.events {
                 switch event {
                 case .phaseStarted(let phase):
@@ -192,7 +204,14 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                 case .objectStarted(let object, let current, let totalObjects):
                     rowViewModel.updateProgress(
                         Double(current - 1) / Double(totalObjects),
-                        currentObject: "\(object.displayName) (\(current)/\(totalObjects))"
+                        currentObject: "\(object.displayName) (\(current)/\(totalObjects))",
+                    )
+                case .objectFailed(let object, let error):
+                    objectFailures.append(
+                        BatchExportingObjectFailure(
+                            objectName: object.displayName,
+                            errorDescription: error.localizedDescription,
+                        )
                     )
                 case .completed(let result):
                     capturedResult = result
@@ -200,15 +219,15 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                     break
                 }
             }
-            return capturedResult
+            return (capturedResult, objectFailures)
         }
 
         do {
             try await runtimeEngine.exportInterfaces(with: configuration, reporter: reporter)
             let captured = await eventsTask.value
-            if let result = captured {
-                rowViewModel.markSucceeded(result)
-                return .init(image: image, outcome: .success(result))
+            if let result = captured.result {
+                rowViewModel.markSucceeded(result, objectFailures: captured.failures)
+                return .init(image: image, outcome: .success(result), objectFailures: captured.failures)
             } else {
                 let description = "No completion event received"
                 rowViewModel.markFailed(description)

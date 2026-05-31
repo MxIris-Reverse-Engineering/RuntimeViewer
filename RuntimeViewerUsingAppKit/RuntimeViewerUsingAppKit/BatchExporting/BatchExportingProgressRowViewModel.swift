@@ -21,6 +21,11 @@ final class BatchExportingProgressRowViewModel: NSObject, @unchecked Sendable {
     @Observed
     private(set) var currentObjectText: String = ""
 
+    /// Objects whose interface failed during this image's export. Surfaced in the
+    /// row tooltip so a partially-failed (but still "succeeded") image isn't silent.
+    @Observed
+    private(set) var objectFailures: [BatchExportingObjectFailure] = []
+
     init(image: BatchExportingImage) {
         self.image = image
     }
@@ -40,7 +45,8 @@ final class BatchExportingProgressRowViewModel: NSObject, @unchecked Sendable {
         currentObjectText = currentObject
     }
 
-    func markSucceeded(_ result: RuntimeInterfaceExportResult) {
+    func markSucceeded(_ result: RuntimeInterfaceExportResult, objectFailures: [BatchExportingObjectFailure] = []) {
+        self.objectFailures = objectFailures
         status = .succeeded(result)
         progress = 1
         currentObjectText = ""
