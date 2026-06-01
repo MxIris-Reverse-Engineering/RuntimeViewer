@@ -120,7 +120,7 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 #if os(macOS)
-                documentState.selectionRouter.trigger(.selectAtRoot(viewModel.runtimeObject))
+                documentState.selectionRouter.trigger(.push(viewModel.runtimeObject))
                 #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
                 #endif
@@ -128,17 +128,24 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
             .disposed(by: rx.disposeBag)
 
         // Visual selection follows whatever the document is currently
-        // inspecting at its root. The sidebar row click path already
-        // dispatched `.selectAtRoot` through `documentState.selectionRouter`,
-        // so observing `selectionStack` covers both that case (idempotent
-        // re-select on the already-highlighted row) and the specialization-
-        // completion case (new root object that has not yet been clicked).
-        documentState.$selectionStack
-            .asObservable()
-            .compactMap { $0.first }
-            .distinctUntilChanged()
-            .bind(to: pendingSelectRelay)
-            .disposed(by: rx.disposeBag)
+        // inspecting at the cursor. The sidebar row click path pushes
+        // onto the history (selectionRouter `.push`), and toolbar
+        // previous/next move the cursor without mutating the stack —
+        // both end up as a new `selectedRuntimeObject` value here, so
+        // tracking the cursor covers the sidebar click, the
+        // specialization-completion `.selectAtRoot`, and toolbar
+        // navigation in one place.
+        Observable.combineLatest(
+            documentState.$selectionStack.asObservable(),
+            documentState.$selectionIndex.asObservable()
+        )
+        .compactMap { stack, index -> RuntimeObject? in
+            guard index >= 0, index < stack.count else { return nil }
+            return stack[index]
+        }
+        .distinctUntilChanged()
+        .bind(to: pendingSelectRelay)
+        .disposed(by: rx.disposeBag)
 
         let pendingResolved: Signal<CellLookup> = pendingSelectRelay
             .asObservable()

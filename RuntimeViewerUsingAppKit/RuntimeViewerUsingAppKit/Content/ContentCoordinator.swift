@@ -47,8 +47,8 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         case .next(let runtimeObject):
             return enterTextScene(for: runtimeObject)
         case .back:
-            if let last = documentState.selectionStack.last {
-                return enterTextScene(for: last)
+            if let selected = documentState.selectedRuntimeObject {
+                return enterTextScene(for: selected)
             } else {
                 return enterPlaceholderScene()
             }

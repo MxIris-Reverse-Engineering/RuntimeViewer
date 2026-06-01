@@ -25,13 +25,21 @@ public final class DocumentState {
     @Observed
     public fileprivate(set) var currentImageNode: RuntimeImageNode?
 
-    /// Navigation stack of runtime objects currently under inspection.
+    /// Navigation history of runtime objects under inspection. Behaves like
+    /// a browser history list — `selectionIndex` is the cursor pointing at
+    /// the currently shown element; `.pop` / `.forward` only move the
+    /// cursor and leave the rest of the history in place so the user can
+    /// step back and forth.
     ///
     /// - Empty: nothing selected (content / inspector show placeholder).
-    /// - One element: root inspection of that object.
-    /// - Multiple elements: user drilled into related objects from the
-    ///   inspector relationships tab. The last element is the active
-    ///   selection; preceding elements are ancestors on the back stack.
+    /// - One element: cursor sits on the single entry (`.previous` /
+    ///   `.forward` both no-ops).
+    /// - Multiple elements with cursor mid-stack: the user navigated back
+    ///   into earlier history and can still go forward to a later entry.
+    ///
+    /// `.push` from the cursor mid-stack truncates the forward portion
+    /// first (browser-style) so a new branch overwrites the abandoned
+    /// future.
     ///
     /// Read-only externally: every mutation goes through `selectionRouter`,
     /// which dispatches a typed `SelectionRoute` and emits to
@@ -39,10 +47,27 @@ public final class DocumentState {
     @Observed
     public fileprivate(set) var selectionStack: [RuntimeObject] = []
 
-    /// Top of `selectionStack` — the object currently shown by content /
-    /// inspector. Mutations go through explicit selection routes
-    /// (`selectAtRoot`, `drillInto`, `pop`, `clear`).
-    public var selectedRuntimeObject: RuntimeObject? { selectionStack.last }
+    /// Cursor into `selectionStack`. `-1` when the stack is empty;
+    /// otherwise an index in `0..<selectionStack.count`. The element it
+    /// points at is the active selection shown by content / inspector.
+    @Observed
+    public fileprivate(set) var selectionIndex: Int = -1
+
+    /// Element at `selectionIndex` in `selectionStack`. `nil` when the
+    /// stack is empty. Mutations go through explicit selection routes
+    /// (`selectAtRoot`, `push`, `pop`, `forward`, `clear`).
+    public var selectedRuntimeObject: RuntimeObject? {
+        guard selectionIndex >= 0, selectionIndex < selectionStack.count else { return nil }
+        return selectionStack[selectionIndex]
+    }
+
+    /// True when `.pop` (previous) would move the cursor to an earlier
+    /// history entry. Drives toolbar previous-button enablement.
+    public var canGoPrevious: Bool { selectionIndex > 0 }
+
+    /// True when `.forward` (next) would move the cursor to a later
+    /// history entry. Drives toolbar next-button enablement.
+    public var canGoNext: Bool { selectionIndex < selectionStack.count - 1 }
 
     /// Mutation surface for every observable state on this `DocumentState`.
     /// View models trigger routes on this router
@@ -101,20 +126,45 @@ private final class SelectionRouter: Router {
             documentState.runtimeEngine = engine
             documentState.currentImageNode = nil
             documentState.selectionStack = []
+            documentState.selectionIndex = -1
         case .switchImage(let node):
             if documentState.currentImageNode == node, documentState.selectionStack.isEmpty { return }
             documentState.currentImageNode = node
             documentState.selectionStack = []
+            documentState.selectionIndex = -1
         case .selectAtRoot(let object):
             documentState.selectionStack = [object]
+            documentState.selectionIndex = 0
         case .push(let object):
+            // Browser-style push: drop any forward history before
+            // branching, so `.forward` after this never replays an entry
+            // the user just abandoned.
+            if documentState.selectionIndex < documentState.selectionStack.count - 1 {
+                documentState.selectionStack = Array(documentState.selectionStack.prefix(documentState.selectionIndex + 1))
+            }
             documentState.selectionStack.append(object)
+            documentState.selectionIndex = documentState.selectionStack.count - 1
         case .pop:
             guard !documentState.selectionStack.isEmpty else { return }
             documentState.selectionStack.removeLast()
+            // Clamp cursor back into the new bounds — if it was sitting
+            // on the entry we just removed (or beyond), step it to the
+            // new last; otherwise leave it where it was.
+            if documentState.selectionStack.isEmpty {
+                documentState.selectionIndex = -1
+            } else if documentState.selectionIndex >= documentState.selectionStack.count {
+                documentState.selectionIndex = documentState.selectionStack.count - 1
+            }
+        case .backward:
+            guard documentState.selectionIndex > 0 else { return }
+            documentState.selectionIndex -= 1
+        case .forward:
+            guard documentState.selectionIndex < documentState.selectionStack.count - 1 else { return }
+            documentState.selectionIndex += 1
         case .clear:
             guard !documentState.selectionStack.isEmpty else { return }
             documentState.selectionStack = []
+            documentState.selectionIndex = -1
         }
         routeRelay.accept(route)
         completion?(EmptyRouteTransitionContext.shared)

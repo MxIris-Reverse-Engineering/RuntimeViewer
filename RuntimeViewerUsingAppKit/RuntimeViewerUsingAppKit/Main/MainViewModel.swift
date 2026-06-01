@@ -39,7 +39,8 @@ struct SwitchSourceState: Equatable {
 final class MainViewModel: ViewModel<MainRoute> {
     struct Input {
         let sidebarBackClick: Signal<Void>
-        let contentBackClick: Signal<Void>
+        let navigationPreviousClick: Signal<Void>
+        let navigationNextClick: Signal<Void>
         let saveClick: Signal<Void>
         let switchSource: Signal<String?>
         let generationOptionsClick: Signal<NSView>
@@ -58,7 +59,9 @@ final class MainViewModel: ViewModel<MainRoute> {
         let sharingServiceData: Observable<[SharingData]>
         let isSavable: Driver<Bool>
         let isSidebarBackHidden: Driver<Bool>
-        let isContentBackHidden: Driver<Bool>
+        let isNavigationHidden: Driver<Bool>
+        let canGoPrevious: Driver<Bool>
+        let canGoNext: Driver<Bool>
         let runtimeEngineSections: Driver<[RuntimeEngineSection]>
         let switchSourceState: Driver<SwitchSourceState>
         let requestFrameworkSelection: Signal<Void>
@@ -156,9 +159,15 @@ final class MainViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        input.contentBackClick.emitOnNext { [weak self] in
+        input.navigationPreviousClick.emitOnNext { [weak self] in
             guard let self else { return }
-            documentState.selectionRouter.trigger(.pop)
+            documentState.selectionRouter.trigger(.backward)
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.navigationNextClick.emitOnNext { [weak self] in
+            guard let self else { return }
+            documentState.selectionRouter.trigger(.forward)
         }
         .disposed(by: rx.disposeBag)
 
@@ -168,9 +177,16 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         input.backgroundIndexingClick.emit(with: self) { $0.router.trigger(.backgroundIndexing(sender: $1)) }.disposed(by: rx.disposeBag)
 
-        let selectedRuntimeObjectSignal = documentState.$selectionStack
+        let selectedRuntimeObjectObservable: Observable<RuntimeObject?> = Observable.combineLatest(
+            documentState.$selectionStack.asObservable(),
+            documentState.$selectionIndex.asObservable()
+        ).map { stack, index in
+            guard index >= 0, index < stack.count else { return nil }
+            return stack[index]
+        }
+
+        let selectedRuntimeObjectSignal = selectedRuntimeObjectObservable
             .asSignal(onErrorSignalWith: .empty())
-            .map(\.last)
 
         let requestSaveLocation = input.saveClick
             .withLatestFrom(selectedRuntimeObjectSignal)
@@ -204,10 +220,9 @@ final class MainViewModel: ViewModel<MainRoute> {
             owner.selectedEngineIdentifier = identifier
         }.disposed(by: rx.disposeBag)
 
-        let sharingServiceData = documentState.$selectionStack
-            .asObservable()
-            .map { [weak self] stack -> [SharingData] in
-                guard let self, let runtimeObjectType = stack.last else { return [] }
+        let sharingServiceData = selectedRuntimeObjectObservable
+            .map { [weak self] selected -> [SharingData] in
+                guard let self, let runtimeObjectType = selected else { return [] }
 
                 let item = NSItemProvider()
 
@@ -264,7 +279,14 @@ final class MainViewModel: ViewModel<MainRoute> {
             sharingServiceData: sharingServiceData,
             isSavable: documentState.$selectionStack.asDriver().map { !$0.isEmpty },
             isSidebarBackHidden: documentState.$currentImageNode.asDriver().map { $0 == nil },
-            isContentBackHidden: documentState.$selectionStack.asDriver().map { $0.count <= 1 },
+            isNavigationHidden: documentState.$selectionStack.asDriver().map { $0.isEmpty },
+            canGoPrevious: documentState.$selectionIndex.asDriver().map { $0 > 0 },
+            canGoNext: Driver.combineLatest(
+                documentState.$selectionStack.asDriver(),
+                documentState.$selectionIndex.asDriver()
+            ).map { stack, index in
+                index < stack.count - 1
+            },
             runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
             switchSourceState: switchSourceState,
             requestFrameworkSelection: requestFrameworkSelection,

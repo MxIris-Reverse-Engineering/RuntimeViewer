@@ -99,7 +99,8 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
-            contentBackClick: toolbarController.contentBackItem.button.rx.click.asSignal(),
+            navigationPreviousClick: toolbarController.navigationItem.segmentedControl.rx.selectedSegment.asSignal().filter { $0 == 0 }.mapToVoid(),
+            navigationNextClick: toolbarController.navigationItem.segmentedControl.rx.selectedSegment.asSignal().filter { $0 == 1 }.mapToVoid(),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
             switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemRepresentedObject(String.self).asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
@@ -149,7 +150,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         output.isSidebarBackHidden.drive(toolbarController.sidebarBackItem.rx.isHidden).disposed(by: rx.disposeBag)
 
-        output.isContentBackHidden.drive(toolbarController.contentBackItem.rx.isHidden).disposed(by: rx.disposeBag)
+        output.isNavigationHidden.drive(toolbarController.navigationItem.rx.isHidden).disposed(by: rx.disposeBag)
+
+        output.canGoPrevious.drive(toolbarController.navigationItem.segmentedControl.rx.enabledForSegment(at: 0)).disposed(by: rx.disposeBag)
+
+        output.canGoNext.drive(toolbarController.navigationItem.segmentedControl.rx.enabledForSegment(at: 1)).disposed(by: rx.disposeBag)
 
         // Bind menu content + selection from sections and switchSourceState
         Driver.combineLatest(output.runtimeEngineSections, output.switchSourceState)
