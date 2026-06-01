@@ -640,6 +640,7 @@
 				E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */,
 				E9DC0F0A2E8D000000000001 /* LoadingButton.swift */,
 				E9F11E152F12671D0052B0A3 /* TabViewController.swift */,
+				E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */,
 			);
 			path = Base;
 			sourceTree = "<group>";
@@ -743,7 +744,6 @@
 				E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */,
 				E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */,
 				E9A825392C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift */,
-				E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */,
 				E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */,
 				E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */,
 			);
