@@ -63,7 +63,7 @@ final class GenerationOptionsViewController: UXKitViewController<GenerationOptio
 
     private let generationOptionsLabel = Label("Generation Options")
 
-    private lazy var stackView = VStackView(alignment: .left, spacing: 10) {
+    private lazy var stackView = VStackView(alignment: .leading, spacing: 10) {
         generationOptionsLabel
     }
 

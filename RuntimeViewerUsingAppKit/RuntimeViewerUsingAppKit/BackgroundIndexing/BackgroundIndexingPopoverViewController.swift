@@ -88,7 +88,7 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         }
         buttonStack.alignment = .centerY
 
-        let emptyDisabledStack = VStackView(alignment: .centerX, spacing: 8) {
+        let emptyDisabledStack = VStackView(alignment: .center, spacing: 8) {
             emptyDisabledView
             openSettingsButton
         }
@@ -266,7 +266,7 @@ extension BackgroundIndexingPopoverViewController {
             countLabel.setContentHuggingPriority(.required, for: .horizontal)
             countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-            let stack = HStackView(alignment: .centerY, spacing: 6) {
+            let stack = HStackView(alignment: .center, spacing: 6) {
                 titleLabel
                 countLabel
             }
@@ -332,7 +332,7 @@ extension BackgroundIndexingPopoverViewController {
             cancelButton.setContentHuggingPriority(.required, for: .horizontal)
             cancelButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-            let topRow = HStackView(alignment: .centerY, spacing: 6) {
+            let topRow = HStackView(alignment: .center, spacing: 6) {
                 titleLabel
                 countLabel
                 cancelButton
@@ -455,7 +455,7 @@ extension BackgroundIndexingPopoverViewController {
             titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
             titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-            let stack = HStackView(alignment: .centerY, spacing: 6) {
+            let stack = HStackView(alignment: .center, spacing: 6) {
                 iconImageView
                 titleLabel
             }

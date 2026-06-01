@@ -252,7 +252,7 @@ extension SidebarRuntimeObjectViewController {
         override init(frame frameRect: CGRect) {
             super.init(frame: frameRect)
 
-            let contentStack = VStackView(alignment: .vStackCenter, spacing: 8) {
+            let contentStack = VStackView(alignment: .center, spacing: 8) {
                 progressIndicator
                 descriptionLabel
                 countLabel
@@ -297,7 +297,7 @@ extension SidebarRuntimeObjectViewController {
 
         let loadImageButton = PushButton()
 
-        lazy var contentView = VStackView(alignment: .vStackCenter, spacing: 10) {
+        lazy var contentView = VStackView(alignment: .center, spacing: 10) {
             titleLabel
                 .gravity(.center)
             loadImageButton
