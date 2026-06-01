@@ -77,6 +77,8 @@ struct MxIrisStudioWorkspace: RawRepresentable, ExpressibleByStringLiteral, Cust
     }
 }
 
+let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
+
 extension Package.Dependency {
     enum LocalSearchPath {
         case package(path: String, isRelative: Bool, isEnabled: Bool = usingLocalDependencies, traits: Set<PackageDescription.Package.Dependency.Trait> = [.defaults])
@@ -115,8 +117,6 @@ let appkitPlatforms: [Platform] = [.macOS]
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
 let usingSystemUXKit = envEnable("USING_SYSTEM_UXKIT", default: true)
-
-let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 
 var sharedSwiftSettings: [SwiftSetting] = []
 

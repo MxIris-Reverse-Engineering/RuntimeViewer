@@ -43,9 +43,11 @@ func envEnable(_ key: String, default defaultValue: Bool = false) -> Bool {
     }
 }
 
+let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
+
 extension Package.Dependency {
     enum LocalSearchPath {
-        case package(path: String, isRelative: Bool, isEnabled: Bool)
+        case package(path: String, isRelative: Bool, isEnabled: Bool = usingLocalDependencies, traits: Set<PackageDescription.Package.Dependency.Trait> = [.defaults])
     }
 
     static func package(local localSearchPaths: LocalSearchPath..., remote: Package.Dependency) -> Package.Dependency {
@@ -59,7 +61,7 @@ extension Package.Dependency {
         }
         for local in localSearchPaths {
             switch local {
-            case .package(let path, let isRelative, let isEnabled):
+            case .package(let path, let isRelative, let isEnabled, let traits):
                 guard isEnabled else { continue }
                 let url = if isRelative {
                     URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: #filePath))
@@ -68,7 +70,7 @@ extension Package.Dependency {
                 }
 
                 if FileManager.default.fileExists(atPath: url.path) {
-                    return .package(path: url.path)
+                    return .package(path: url.path, traits: traits)
                 }
             }
         }
@@ -79,8 +81,6 @@ extension Package.Dependency {
 let appkitPlatforms: [Platform] = [.macOS]
 
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS, .macCatalyst, .watchOS]
-
-let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 
 let package = Package(
     name: "RuntimeViewerCore",
@@ -106,7 +106,6 @@ let package = Package(
             local: .package(
                 path: "../../MachOKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit",
@@ -117,7 +116,6 @@ let package = Package(
             local: .package(
                 path: "../../MachOObjCSection",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
@@ -128,7 +126,6 @@ let package = Package(
             local: .package(
                 path: "../../MachOSwiftSection",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
@@ -155,12 +152,10 @@ let package = Package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/swift-helper-service",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../swift-helper-service",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
