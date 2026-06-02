@@ -1,5 +1,5 @@
 {
-  "originHash" : "0ba59ea63535f5eda5614c3aa8cb2ea9271e026121bc98e0307ea26c80655a6b",
+  "originHash" : "a70fed552de3c09c9c85131ec1d7121b0378afadc84481088a35a4fee87aefbd",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "5b558bade955658e5c90ee06e7dca06043b39641",
-        "version" : "0.7.0"
+        "revision" : "b82281eb8a6ffcb312941c3d06584182837f4ca9",
+        "version" : "0.7.1"
       }
     },
     {
@@ -148,10 +148,10 @@
     {
       "identity" : "machoobjcsection",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection.git",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
-        "revision" : "6d71be050b9131ff59e832483d54de685781c42f",
-        "version" : "0.7.101"
+        "revision" : "ed06cc3708517c6fa6047ca9e17fee53d3f3bf3c",
+        "version" : "0.7.102"
       }
     },
     {
@@ -159,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "8b34efb02340298e3a2cee69541f99a8e701a719",
-        "version" : "0.12.0-beta.1"
+        "revision" : "ece412d7986a1a847b198ff8e2457f17bb34dbab",
+        "version" : "0.12.0-beta.2"
       }
     },
     {
@@ -222,8 +222,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RxAppKit",
       "state" : {
-        "revision" : "e4ea5c272acdc4f1c220bcc0a44d79cebf1ed98b",
-        "version" : "0.3.1"
+        "revision" : "8194bca7c33b10f40d63894cf827890850390f04",
+        "version" : "0.4.0"
       }
     },
     {
@@ -285,8 +285,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Library-Forks/Semaphore",
       "state" : {
-        "revision" : "2543679282aa6f6c8ecf2138acd613ed20790bc2",
-        "version" : "0.1.0"
+        "revision" : "e6a244dec033ed1033878d5da5911a3ba2489701",
+        "version" : "0.1.1"
       }
     },
     {
@@ -294,8 +294,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/SFSymbols",
       "state" : {
-        "revision" : "98c7f4a22419d8034a058a8bfaec7cba4e53dcca",
-        "version" : "0.2.0"
+        "revision" : "373b919278adc197759ebcc2018956cacff1cc57",
+        "version" : "0.3.0"
       }
     },
     {
@@ -321,8 +321,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-DeveloperTool/swift-apinotes",
       "state" : {
-        "revision" : "2fe208c1824f053c04778c5dad2a6fe93d8ab3bf",
-        "version" : "0.1.0"
+        "revision" : "e762ac739f71adf83ed2e05f40211c96cd91f6c5",
+        "version" : "0.2.0"
       }
     },
     {
@@ -375,8 +375,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-DeveloperTool/swift-clang",
       "state" : {
-        "revision" : "f92a834ed33249612d9ef30a41d8254d32a7602a",
-        "version" : "0.2.0"
+        "revision" : "89195b5191f6678da7e782cec24f2cbc8d75cf79",
+        "version" : "0.3.0"
       }
     },
     {
@@ -438,8 +438,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "85a3242fe3773bab2245cf7bf5c9e18abd88d069",
-        "version" : "0.4.0"
+        "revision" : "f165282b354bd2fdeeb3b48a54cf173b25a3bb7b",
+        "version" : "0.4.1"
       }
     },
     {
@@ -456,8 +456,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-dyld-private",
       "state" : {
-        "revision" : "2f5ce94df9b1356d3c75793a659bf22f35bc8699",
-        "version" : "1.2.0"
+        "revision" : "e9b255ed123e0ff5bb998d11639b993196159214",
+        "version" : "1.2.1"
       }
     },
     {
@@ -535,10 +535,10 @@
     {
       "identity" : "swift-objc-dump",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-objc-dump.git",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-objc-dump",
       "state" : {
-        "revision" : "4206040acd64db453c5c28c1539b98fa5befa8fc",
-        "version" : "0.8.100"
+        "revision" : "641d257d60385b231a608ab8c4ecdf31348c779e",
+        "version" : "0.8.101"
       }
     },
     {
@@ -602,6 +602,15 @@
       "state" : {
         "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
         "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "uifoundation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/UIFoundation",
+      "state" : {
+        "revision" : "d821c32ff9efa9aa13506c12457ea0d430110a20",
+        "version" : "0.10.0"
       }
     },
     {
