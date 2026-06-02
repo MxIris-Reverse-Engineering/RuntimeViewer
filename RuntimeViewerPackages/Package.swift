@@ -79,7 +79,7 @@ struct MxIrisStudioWorkspace: RawRepresentable, ExpressibleByStringLiteral, Cust
 
 extension Package.Dependency {
     enum LocalSearchPath {
-        case package(path: String, isRelative: Bool, isEnabled: Bool, traits: Set<PackageDescription.Package.Dependency.Trait> = [.defaults])
+        case package(path: String, isRelative: Bool, isEnabled: Bool = usingLocalDependencies, traits: Set<PackageDescription.Package.Dependency.Trait> = [.defaults])
     }
 
     static func package(local localSearchPaths: LocalSearchPath..., remote: Package.Dependency) -> Package.Dependency {
@@ -179,13 +179,11 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
                 isRelative: true,
-                isEnabled: true,
                 traits: UIFoundationTraits,
             ),
             .package(
                 path: "../../UIFoundation",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
                 traits: UIFoundationTraits,
             ),
             remote: .package(
@@ -199,12 +197,10 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("XCoordinator"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../XCoordinator",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Library-Forks/XCoordinator",
@@ -216,12 +212,10 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../CocoaCoordinator",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
@@ -233,12 +227,10 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("UXKitCoordinator"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../UXKitCoordinator",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/UXKitCoordinator",
@@ -250,7 +242,6 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("RxSwiftPlus"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
@@ -262,12 +253,10 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("OpenUXKit"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../OpenUXKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/OpenUXKit",
@@ -279,13 +268,11 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RxAppKit"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
-//            .package(
-//                path: "../../RxAppKit",
-//                isRelative: true,
-//                isEnabled: usingLocalDependencies,
-//            ),
+            .package(
+                path: "../../RxAppKit",
+                isRelative: true,
+            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
                 from: "0.3.0",
@@ -296,12 +283,10 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryIOSDirectory.libraryPath("RxUIKit"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../RxUIKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxUIKit",
@@ -313,12 +298,10 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("swift-helper-service"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../swift-helper-service",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
@@ -330,12 +313,10 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../RunningApplicationKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
@@ -347,7 +328,6 @@ let package = Package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("SystemHUD"),
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/SystemHUD",
