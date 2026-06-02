@@ -128,7 +128,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         let output = viewModel.transform(input)
 
-        output.runtimeObjects.drive(isReorderable ? imageLoadedView.outlineView.rx.reorderableNodes : imageLoadedView.outlineView.rx.nodes) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarRuntimeObjectCellViewModel) -> NSView? in
+        output.runtimeObjects.drive(imageLoadedView.outlineView.rx.nodes(options: isReorderable ? [.reorderable] : [])) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarRuntimeObjectCellViewModel) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel>.self)
             cellView.bind(to: viewModel)
             return cellView
