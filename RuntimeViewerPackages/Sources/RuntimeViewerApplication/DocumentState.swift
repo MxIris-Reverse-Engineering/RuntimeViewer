@@ -2,6 +2,9 @@ import Foundation
 import Observation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 public final class DocumentState {
@@ -75,7 +78,7 @@ public final class DocumentState {
     /// applies the state mutation synchronously, then emits to
     /// `routeSignal` so scene-level subscribers (`MainCoordinator`) can
     /// fan out to their child coordinators.
-    public var selectionRouter: SelectionRouter { _selectionRouter }
+    public var selectionRouter: any Router<SelectionRoute> { _selectionRouter }
 
     /// Hot stream of selection routes. Emits **after** the corresponding
     /// state update on this `DocumentState` has been applied, so subscribers
@@ -104,24 +107,34 @@ public final class DocumentState {
     public private(set) lazy var backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
 }
 
-/// Routes selection-state mutations on a `DocumentState`.
-///
-/// Standalone type rather than a `Router` conformance — `CocoaCoordinator.Router`
-/// and `XCoordinator.Router` disagree on their `ContextPresentationHandler`
-/// (`TransitionContext` vs `TransitionProtocol`), and this router exists purely
-/// to mutate state and emit a route — it never performs a UI transition, so
-/// the coordinator-framework machinery is unnecessary.
-@MainActor
-public final class SelectionRouter {
-    fileprivate unowned let documentState: DocumentState
+private final class SelectionRouter: Router {
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+    typealias Route = SelectionRoute
+    #else
+    typealias RouteType = SelectionRoute
+    #endif
 
-    fileprivate let routeRelay = PublishRelay<SelectionRoute>()
+    unowned let documentState: DocumentState
 
-    fileprivate init(documentState: DocumentState) {
+    let routeRelay = PublishRelay<SelectionRoute>()
+
+    init(documentState: DocumentState) {
         self.documentState = documentState
     }
 
-    public func trigger(_ route: SelectionRoute) {
+    #if canImport(UIKit) && !targetEnvironment(macCatalyst) && !os(macOS)
+    // XCoordinator's `Router` extends `Presentable`. `SelectionRouter` does
+    // not own a view controller — it exists solely to mutate state and emit
+    // routes — so the Presentable surface is a deliberate no-op.
+    var viewController: UIViewController! { nil }
+    func router<R: Route>(for route: R) -> (any Router<R>)? { nil }
+    #endif
+
+    func contextTrigger(
+        _ route: SelectionRoute,
+        with options: TransitionOptions,
+        completion: ContextPresentationHandler?
+    ) {
         switch route {
         case .switchEngine(let engine):
             if documentState.runtimeEngine === engine, documentState.currentImageNode == nil, documentState.selectionStack.isEmpty { return }
@@ -169,5 +182,27 @@ public final class SelectionRouter {
             documentState.selectionIndex = -1
         }
         routeRelay.accept(route)
+        completion?(EmptyRouteTransitionContext.shared)
     }
 }
+
+#if canImport(AppKit) && !targetEnvironment(macCatalyst)
+private struct EmptyRouteTransitionContext: TransitionContext {
+    static let shared = EmptyRouteTransitionContext()
+    var presentables: [any Presentable] { [] }
+}
+#elseif canImport(UIKit)
+private struct EmptyRouteTransitionContext: TransitionProtocol {
+    typealias RootViewController = UIViewController
+    static let shared = EmptyRouteTransitionContext()
+
+    var presentables: [Presentable] { [] }
+    var animation: TransitionAnimation? { nil }
+
+    func perform(on rootViewController: UIViewController, with options: TransitionOptions, completion: PresentationHandler?) {
+        completion?()
+    }
+
+    static func multiple(_ transitions: [EmptyRouteTransitionContext]) -> EmptyRouteTransitionContext { .shared }
+}
+#endif
