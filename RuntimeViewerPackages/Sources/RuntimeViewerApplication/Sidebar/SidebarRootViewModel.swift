@@ -151,8 +151,13 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
             toggleExpansion: input.clickedNode
                 .filter { !$0.isLeaf }
                 .compactMap { [weak self] item -> (item: SidebarRootCellViewModel, maxDepth: Int)? in
+                    #if canImport(RuntimeViewerSettings)
                     guard let self else { return nil }
                     return (item, settings.general.sidebarMaxExpansionDepth)
+                    #else
+                    _ = self
+                    return (item, .max)
+                    #endif
                 }
                 .asSignal(onErrorSignalWith: .empty()),
         )

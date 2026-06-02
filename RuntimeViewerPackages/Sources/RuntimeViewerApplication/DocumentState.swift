@@ -69,6 +69,7 @@ public final class DocumentState {
     /// history entry. Drives toolbar next-button enablement.
     public var canGoNext: Bool { selectionIndex < selectionStack.count - 1 }
 
+    #if os(macOS)
     /// Mutation surface for every observable state on this `DocumentState`.
     /// View models trigger routes on this router
     /// (`documentState.selectionRouter.trigger(.drillInto(x))`). The router
@@ -82,8 +83,9 @@ public final class DocumentState {
     /// observe the post-mutation snapshot when handling a route. Hot —
     /// new subscribers do not see past routes.
     public var routeSignal: Signal<SelectionRoute> { _selectionRouter.routeRelay.asSignal() }
-    
+
     private lazy var _selectionRouter = SelectionRouter(documentState: self)
+    #endif
 
     @Observed
     public var currentSubtitle: String = ""
@@ -104,13 +106,14 @@ public final class DocumentState {
     public private(set) lazy var backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
 }
 
+#if os(macOS)
 private final class SelectionRouter: Router {
     typealias Route = SelectionRoute
 
     unowned let documentState: DocumentState
-    
+
     let routeRelay = PublishRelay<SelectionRoute>()
-    
+
     init(documentState: DocumentState) {
         self.documentState = documentState
     }
@@ -175,3 +178,4 @@ private struct EmptyRouteTransitionContext: TransitionContext {
     static let shared = EmptyRouteTransitionContext()
     var presentables: [any Presentable] { [] }
 }
+#endif

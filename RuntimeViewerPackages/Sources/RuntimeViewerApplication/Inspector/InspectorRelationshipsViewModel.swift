@@ -42,8 +42,13 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
 
     public func transform(_ input: Input) -> Output {
         input.selectRelationshipClicked.emitOnNext { [weak self] cellViewModel in
+            #if os(macOS)
             guard let self else { return }
             documentState.selectionRouter.trigger(.push(cellViewModel.runtimeObject))
+            #else
+            _ = self
+            _ = cellViewModel
+            #endif
         }
         .disposed(by: rx.disposeBag)
 
