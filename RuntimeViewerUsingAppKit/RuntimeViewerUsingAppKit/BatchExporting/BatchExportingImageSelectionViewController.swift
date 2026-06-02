@@ -15,7 +15,7 @@ final class BatchExportingImageSelectionViewController: UXKitViewController<Batc
 
     private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = SingleColumnTableView.scrollableTableView()
 
-    private let toggleImageRelay = PublishRelay<BatchExportingImage>()
+    private let toggleImageRelay = PublishRelay<BatchExportingImageSelectionCellViewModel>()
 
     override var contentInsets: NSDirectionalEdgeInsets { .init(top: 16, leading: 16, bottom: 16, trailing: 16) }
     
@@ -95,8 +95,8 @@ final class BatchExportingImageSelectionViewController: UXKitViewController<Batc
         output.cellViewModels
             .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: BatchExportingImageSelectionCellViewModel) -> NSView? in
                 let cellView = tableView.box.makeView(ofClass: CellView.self)
-                cellView.configure(with: cellViewModel) { image in
-                    toggleImageRelay.accept(image)
+                cellView.bind(to: cellViewModel) { cellViewModel in
+                    toggleImageRelay.accept(cellViewModel)
                 }
                 return cellView
             }
@@ -146,9 +146,9 @@ extension BatchExportingImageSelectionViewController {
             groupLabel
         }
 
-        private var image: BatchExportingImage?
+        private var cellViewModel: BatchExportingImageSelectionCellViewModel?
 
-        private var onToggle: ((BatchExportingImage) -> Void)?
+        private var onToggle: ((BatchExportingImageSelectionCellViewModel) -> Void)?
 
         override func setup() {
             super.setup()
@@ -165,18 +165,23 @@ extension BatchExportingImageSelectionViewController {
             }
         }
 
-        func configure(with cellViewModel: BatchExportingImageSelectionCellViewModel, onToggle: @escaping (BatchExportingImage) -> Void) {
-            image = cellViewModel.image
+        func bind(to cellViewModel: BatchExportingImageSelectionCellViewModel, onToggle: @escaping (BatchExportingImageSelectionCellViewModel) -> Void) {
+            rx.disposeBag = DisposeBag()
+            self.cellViewModel = cellViewModel
             self.onToggle = onToggle
-            checkbox.state = cellViewModel.isSelected ? .on : .off
             nameLabel.stringValue = cellViewModel.image.name
             pathLabel.stringValue = cellViewModel.image.path
             groupLabel.stringValue = cellViewModel.image.group
+
+            cellViewModel.$isSelected
+                .map { $0 ? NSControl.StateValue.on : .off }
+                .bind(to: checkbox.rx.state)
+                .disposed(by: rx.disposeBag)
         }
 
         @objc private func checkboxClicked() {
-            guard let image else { return }
-            onToggle?(image)
+            guard let cellViewModel else { return }
+            onToggle?(cellViewModel)
         }
     }
 }

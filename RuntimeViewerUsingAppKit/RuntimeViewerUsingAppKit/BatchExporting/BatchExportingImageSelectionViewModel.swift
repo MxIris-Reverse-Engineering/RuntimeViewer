@@ -8,7 +8,7 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
         let searchString: Signal<String>
         let selectAllClicked: Signal<Void>
         let deselectAllClicked: Signal<Void>
-        let toggleImage: Signal<BatchExportingImage>
+        let toggleImage: Signal<BatchExportingImageSelectionCellViewModel>
     }
 
     struct Output {
@@ -50,12 +50,13 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
         }
         .disposed(by: rx.disposeBag)
 
-        input.toggleImage.emitOnNext { [weak self] image in
+        input.toggleImage.emitOnNext { [weak self] cellViewModel in
             guard let self else { return }
-            if exportingState.selectedImagePaths.contains(image.path) {
-                exportingState.selectedImagePaths.remove(image.path)
+            let path = cellViewModel.image.path
+            if exportingState.selectedImagePaths.contains(path) {
+                exportingState.selectedImagePaths.remove(path)
             } else {
-                exportingState.selectedImagePaths.insert(image.path)
+                exportingState.selectedImagePaths.insert(path)
             }
         }
         .disposed(by: rx.disposeBag)
@@ -67,11 +68,12 @@ final class BatchExportingImageSelectionViewModel: ViewModel<ExportingRoute> {
             )
             .map { [weak self] availableImages, searchString -> [BatchExportingImageSelectionCellViewModel] in
                 guard let self else { return [] }
-                return self.filteredImages(availableImages: availableImages, searchString: searchString).map {
-                    BatchExportingImageSelectionCellViewModel(
-                        image: $0,
-                        isSelected: self.exportingState.selectedImagePaths.contains($0.path)
-                    )
+                return self.filteredImages(availableImages: availableImages, searchString: searchString).map { image in
+                    let isSelected = self.exportingState.$selectedImagePaths
+                        .asObservable()
+                        .map { [path = image.path] in $0.contains(path) }
+                        .distinctUntilChanged()
+                    return BatchExportingImageSelectionCellViewModel(image: image, isSelected: isSelected)
                 }
             }
 
