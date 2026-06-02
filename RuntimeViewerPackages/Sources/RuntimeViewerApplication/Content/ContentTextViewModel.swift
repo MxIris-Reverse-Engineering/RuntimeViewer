@@ -98,9 +98,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             }
             .emit(with: self) { target, interface in
                 if let interface {
-                    #if os(macOS)
                     target.documentState.selectionRouter.trigger(.push(interface.object))
-                    #endif
                 } else {
                     runtimeObjectNotFoundRelay.accept(())
                 }

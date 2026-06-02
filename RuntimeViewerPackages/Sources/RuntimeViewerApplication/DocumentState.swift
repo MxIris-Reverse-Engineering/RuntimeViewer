@@ -69,14 +69,13 @@ public final class DocumentState {
     /// history entry. Drives toolbar next-button enablement.
     public var canGoNext: Bool { selectionIndex < selectionStack.count - 1 }
 
-    #if os(macOS)
     /// Mutation surface for every observable state on this `DocumentState`.
     /// View models trigger routes on this router
-    /// (`documentState.selectionRouter.trigger(.drillInto(x))`). The router
+    /// (`documentState.selectionRouter.trigger(.push(x))`). The router
     /// applies the state mutation synchronously, then emits to
     /// `routeSignal` so scene-level subscribers (`MainCoordinator`) can
     /// fan out to their child coordinators.
-    public var selectionRouter: any Router<SelectionRoute> { _selectionRouter }
+    public var selectionRouter: SelectionRouter { _selectionRouter }
 
     /// Hot stream of selection routes. Emits **after** the corresponding
     /// state update on this `DocumentState` has been applied, so subscribers
@@ -85,7 +84,6 @@ public final class DocumentState {
     public var routeSignal: Signal<SelectionRoute> { _selectionRouter.routeRelay.asSignal() }
 
     private lazy var _selectionRouter = SelectionRouter(documentState: self)
-    #endif
 
     @Observed
     public var currentSubtitle: String = ""
@@ -106,23 +104,24 @@ public final class DocumentState {
     public private(set) lazy var backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
 }
 
-#if os(macOS)
-private final class SelectionRouter: Router {
-    typealias Route = SelectionRoute
+/// Routes selection-state mutations on a `DocumentState`.
+///
+/// Standalone type rather than a `Router` conformance — `CocoaCoordinator.Router`
+/// and `XCoordinator.Router` disagree on their `ContextPresentationHandler`
+/// (`TransitionContext` vs `TransitionProtocol`), and this router exists purely
+/// to mutate state and emit a route — it never performs a UI transition, so
+/// the coordinator-framework machinery is unnecessary.
+@MainActor
+public final class SelectionRouter {
+    fileprivate unowned let documentState: DocumentState
 
-    unowned let documentState: DocumentState
+    fileprivate let routeRelay = PublishRelay<SelectionRoute>()
 
-    let routeRelay = PublishRelay<SelectionRoute>()
-
-    init(documentState: DocumentState) {
+    fileprivate init(documentState: DocumentState) {
         self.documentState = documentState
     }
 
-    func contextTrigger(
-        _ route: SelectionRoute,
-        with options: TransitionOptions,
-        completion: ContextPresentationHandler?
-    ) {
+    public func trigger(_ route: SelectionRoute) {
         switch route {
         case .switchEngine(let engine):
             if documentState.runtimeEngine === engine, documentState.currentImageNode == nil, documentState.selectionStack.isEmpty { return }
@@ -170,12 +169,5 @@ private final class SelectionRouter: Router {
             documentState.selectionIndex = -1
         }
         routeRelay.accept(route)
-        completion?(EmptyRouteTransitionContext.shared)
     }
 }
-
-private struct EmptyRouteTransitionContext: TransitionContext {
-    static let shared = EmptyRouteTransitionContext()
-    var presentables: [any Presentable] { [] }
-}
-#endif

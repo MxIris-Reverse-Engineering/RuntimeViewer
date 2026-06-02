@@ -17,7 +17,6 @@ public enum InspectorRoute: Routable {
     case back
 }
 
-#if os(macOS)
 @AssociatedValue(.public)
 @CaseCheckable(.public)
 public enum InspectorRuntimeObjectRoute: Routable {
@@ -30,6 +29,3 @@ public enum InspectorRuntimeObjectRoute: Routable {
     /// `MainCoordinator` already listens for.
     case requestSpecializationSheet(RuntimeObject)
 }
-#else
-public typealias InspectorRuntimeObjectRoute = InspectorRoute
-#endif

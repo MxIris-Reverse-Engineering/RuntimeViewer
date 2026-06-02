@@ -5,7 +5,6 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
-#if os(macOS)
 @Loggable(.private)
 public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRuntimeObjectRoute> {
     @Observed
@@ -52,4 +51,3 @@ public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRun
         super.init(documentState: documentState, router: router)
     }
 }
-#endif

@@ -479,7 +479,7 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerUI",
                 "RuntimeViewerArchitectures",
-                .target(name: "RuntimeViewerSettings", condition: .when(platforms: appkitPlatforms)),
+                "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerSettingsUI", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
