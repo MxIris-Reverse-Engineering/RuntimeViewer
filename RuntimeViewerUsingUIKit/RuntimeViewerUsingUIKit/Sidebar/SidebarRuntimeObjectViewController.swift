@@ -195,7 +195,7 @@ extension SidebarRuntimeObjectViewController {
 
         let loadImageButton = UIButton(type: .system)
 
-        lazy var contentView = VStackView(alignment: .vStackCenter, spacing: 10) {
+        lazy var contentView = VStackView(alignment: .center, spacing: 10) {
             titleLabel
             loadImageButton
         }
