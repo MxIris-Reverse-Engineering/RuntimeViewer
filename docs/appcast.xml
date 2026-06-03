@@ -12,6 +12,15 @@
         <language>en</language>
         <item>
             <title>2.1.0</title>
+            <pubDate>Wed, 03 Jun 2026 16:43:47 +0000</pubDate>
+            <sparkle:channel>beta</sparkle:channel>
+            <sparkle:version>20260603.16.05</sparkle:version>
+            <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/download/v2.1.0-beta.3/RuntimeViewer-macOS.zip" length="52700397" type="application/octet-stream" sparkle:edSignature="7JevmVpKb9T/u6riUJKBPTjRh7eLH6cVAQeaeoHNHubk9yxOZQOaQfIVxJhZFjEbM1Y2kT3iQNkcXfu/dlwHAw=="/>
+        </item>
+        <item>
+            <title>2.1.0</title>
             <pubDate>Mon, 18 May 2026 10:04:51 +0800</pubDate>
             <sparkle:channel>beta</sparkle:channel>
             <sparkle:version>20260518.09.47</sparkle:version>
