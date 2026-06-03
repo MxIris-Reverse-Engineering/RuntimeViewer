@@ -422,7 +422,12 @@ if $COMMIT_PUSH; then
         cp docs/appcast.xml "$tmp_appcast"
         run git fetch origin main
         APPCAST_BRANCH="appcast-for-$VERSION_TAG"
-        run git checkout -B "$APPCAST_BRANCH" origin/main
+        # Archive runs `xcodebuild -resolvePackageDependencies`, which mutates
+        # the workspace's Package.resolved. Those changes do NOT belong in the
+        # appcast PR and would otherwise block `git checkout` with a "local
+        # changes would be overwritten" abort. docs/appcast.xml is safely in
+        # $tmp_appcast and gets re-applied below, so a forced checkout is fine.
+        run git checkout -f -B "$APPCAST_BRANCH" origin/main
         cp "$tmp_appcast" docs/appcast.xml
         rm -f "$tmp_appcast"
         if git diff --quiet docs/appcast.xml; then
