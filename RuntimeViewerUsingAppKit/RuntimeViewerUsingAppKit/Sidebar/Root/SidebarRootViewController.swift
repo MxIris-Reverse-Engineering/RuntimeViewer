@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewController<ViewModel> {
+class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewController<ViewModel>, NSOutlineViewDelegate {
     var isReorderable: Bool {
         false
     }
@@ -151,5 +151,12 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
                 }
             }
             .disposed(by: rx.disposeBag)
+        
+        outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
+    }
+    
+    func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
+        guard let cellViewModel = item as? SidebarRootCellViewModel else { return nil }
+        return cellViewModel.name.string
     }
 }
