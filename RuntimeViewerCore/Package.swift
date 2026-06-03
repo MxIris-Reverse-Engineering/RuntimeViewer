@@ -119,7 +119,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
-                from: "0.6.101",
+                from: "0.7.102",
             ),
         ),
         .package(
@@ -134,19 +134,19 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/Asynchrone",
-            from: "0.23.0-fork",
+            from: "0.23.0-fork.1",
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/Semaphore",
-            from: "0.1.0",
+            from: "0.1.1",
         ),
         .package(
             url: "https://github.com/apple/swift-collections",
-            from: "1.1.0",
+            from: "1.5.1",
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox",
-            from: "0.5.5",
+            from: "0.7.1",
         ),
         .package(
             local: .package(
@@ -159,7 +159,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.1.2",
+                from: "0.1.3",
             ),
         ),
         .package(
@@ -168,7 +168,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/mxcl/Version",
-            from: "2.2.0",
+            from: "2.2.1",
         ),
         .package(
             url: "https://github.com/SwiftyLab/MetaCodable",

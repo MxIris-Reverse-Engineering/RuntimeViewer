@@ -188,7 +188,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.8.2",
+                from: "0.10.0",
                 traits: UIFoundationTraits,
             ),
         ),
@@ -204,7 +204,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Library-Forks/XCoordinator",
-                from: "3.0.0-beta",
+                from: "3.0.0-beta.1",
             ),
         ),
 
@@ -245,7 +245,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
-                from: "0.2.2",
+                from: "0.2.3",
             ),
         ),
         
@@ -275,7 +275,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
-                from: "0.3.0",
+                from: "0.4.0",
             ),
         ),
         
@@ -305,7 +305,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.1.2",
+                from: "0.1.3",
             ),
         ),
         
@@ -337,17 +337,17 @@ let package = Package(
 
         .package(
             url: "https://github.com/SnapKit/SnapKit",
-            from: "5.0.0",
-        ),
-        
-        .package(
-            url: "https://github.com/ReactiveX/RxSwift",
             from: "6.0.0",
         ),
         
         .package(
+            url: "https://github.com/ReactiveX/RxSwift",
+            from: "6.10.2",
+        ),
+        
+        .package(
             url: "https://github.com/Mx-Iris/SFSymbols",
-            from: "0.2.0",
+            from: "0.3.0",
         ),
         
         .package(
@@ -372,7 +372,7 @@ let package = Package(
         
         .package(
             url: "https://github.com/pointfreeco/swift-dependencies",
-            from: "1.9.4",
+            from: "1.12.0",
         ),
         
         .package(
@@ -382,7 +382,7 @@ let package = Package(
         
         .package(
             url: "https://github.com/ukushu/Ifrit",
-            from: "3.0.0",
+            from: "4.0.0",
         ),
         
         .package(
@@ -402,12 +402,12 @@ let package = Package(
         
         .package(
             url: "https://github.com/siteline/swiftui-introspect",
-            from: "26.0.0",
+            from: "26.0.1",
         ),
 
         .package(
             url: "https://github.com/ChimeHQ/Rearrange",
-            from: "2.0.0",
+            from: "2.1.1",
         ),
 
     ],

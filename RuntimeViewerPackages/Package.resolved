@@ -1,5 +1,5 @@
 {
-  "originHash" : "a34be8fb0f116226a71d77f2010368841123cc2ddfc739e6fec9aa0cdcbd27b1",
+  "originHash" : "092d8eb5d636d09a0e45564cde60c0e0ff18e41fcf705fcd7fc5ff35eb4cb43a",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -87,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ukushu/Ifrit",
       "state" : {
-        "revision" : "9b9556e14cee24ad16b19d0eb099283cf79a7d94",
-        "version" : "3.0.0"
+        "revision" : "7c889a67bad90c5efefa56889b2d61bfbb831473",
+        "version" : "4.0.0"
       }
     },
     {
@@ -303,8 +303,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SnapKit/SnapKit",
       "state" : {
-        "revision" : "2842e6e84e82eb9a8dac0100ca90d9444b0307f4",
-        "version" : "5.7.1"
+        "revision" : "e27a338a03a5f388de759da63f9baf7988ed9e00",
+        "version" : "6.0.0"
       }
     },
     {
