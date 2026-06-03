@@ -66,6 +66,18 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     private let connection: NWConnection
     private let messageChannel = RuntimeMessageChannel()
 
+    /// Buffered hand-off between `RuntimeMessageChannel.onMessageReceived` (which
+    /// fires synchronously on the connection's dispatch queue, inside the hot
+    /// `processReceivedData` loop) and the long-lived consumer task. The
+    /// callback only enqueues into this stream — it never creates a per-message
+    /// Task — so a batched receive carrying many small frames (heartbeats,
+    /// acks, batch-export chunks) doesn't accumulate `swift_task_create` stack
+    /// frames on the dispatch-queue thread, which previously overflowed the
+    /// worker-thread stack (commit f2b6324).
+    private let incomingMessageStream: AsyncStream<Data>
+    private let incomingMessageContinuation: AsyncStream<Data>.Continuation
+    private var incomingMessageTask: Task<Void, Never>?
+
     private var isStarted = false
     private var waitingTimeoutWork: DispatchWorkItem?
     private let queue = DispatchQueue(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeNetworkConnection")
@@ -89,6 +101,10 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         parameters.includePeerToPeer = true
         parameters.serviceClass = .responsiveData
 
+        let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+        self.incomingMessageStream = stream
+        self.incomingMessageContinuation = continuation
+
         self.connection = NWConnection(to: endpoint, using: parameters)
         try start()
     }
@@ -98,6 +114,11 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     /// - Parameter connection: The accepted connection from NWListener.
     init(connection: NWConnection) throws {
         #log(.info, "Creating incoming connection: \(connection.debugDescription, privacy: .public)")
+
+        let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+        self.incomingMessageStream = stream
+        self.incomingMessageContinuation = continuation
+
         self.connection = connection
         try start()
     }
@@ -124,6 +145,8 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         waitingTimeoutWork = nil
         connection.stateUpdateHandler = nil
         connection.cancel()
+        incomingMessageContinuation.finish()
+        incomingMessageTask = nil
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: nil))
 
@@ -138,6 +161,8 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         waitingTimeoutWork = nil
         connection.stateUpdateHandler = nil
         connection.cancel()
+        incomingMessageContinuation.finish()
+        incomingMessageTask = nil
         messageChannel.finishReceiving()
         stateSubject.send(.disconnected(error: error))
 
@@ -210,9 +235,26 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     }
 
     private func observeIncomingMessages() {
-        messageChannel.onMessageReceived = { [weak self] data in
+        // The message-channel callback fires inside `processReceivedData`'s
+        // synchronous for-loop on the connection's dispatch queue. Keep the
+        // callback work to a single non-blocking `yield`; never spawn a Task
+        // here — Swift Concurrency's task-inlining on the dispatch-queue
+        // thread would otherwise accumulate ~10 stack frames per message and
+        // overflow on a burst of small frames.
+        messageChannel.onMessageReceived = { [continuation = incomingMessageContinuation] data in
+            continuation.yield(data)
+        }
+
+        // One long-lived consumer drains the buffered stream serially. The
+        // `AsyncStream` buffers everything yielded before this task actually
+        // reaches the `for await`, so we don't lose any early messages — that
+        // was the race the original f2b6324 commit tried to fix when it
+        // (wrongly) swapped the for-await loop for per-message Tasks.
+        incomingMessageTask = Task { [weak self] in
             guard let self else { return }
-            Task { await self.handleReceivedMessage(data) }
+            for await data in self.incomingMessageStream {
+                await self.handleReceivedMessage(data)
+            }
         }
     }
 

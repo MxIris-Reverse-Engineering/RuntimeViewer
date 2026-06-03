@@ -211,7 +211,6 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
 
     /// Processes the receiving buffer and extracts complete messages.
     private func processReceivedData() {
-        let hasContinuation = receivedDataContinuation != nil
         var extractedMessages: [Data] = []
         var remainingBufferSize = 0
 
@@ -234,13 +233,28 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
             remainingBufferSize = buffer.count
         }
 
+        // Snapshot both `@Mutex`-backed values into locals BEFORE the hot loop.
+        //
+        // Each `@Mutex`-generated property exposes a `_modify` coroutine
+        // accessor. Inside a hot for-loop on a dispatch-queue worker thread,
+        // every `receivedDataContinuation?.yield(...)` / `onMessageReceived?(...)`
+        // call enters that coroutine, and the per-iteration coroutine frames
+        // accumulate on the caller's stack instead of fully unwinding —
+        // a burst of ~50 small frames overflows the worker stack with
+        // 13_000+ frames. Reading once through the plain `get` accessor (which
+        // is `withLock { $0 }` and returns the value by copy) sidesteps the
+        // `_modify` path entirely; the for-loop then only touches local vars.
+        let continuation = receivedDataContinuation
+        let callback = onMessageReceived
+        let hasContinuation = continuation != nil
+
         if extractedMessages.isEmpty {
             #log(.debug, "[MessageChannel] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
         }
         for messageData in extractedMessages {
             #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
-            receivedDataContinuation?.yield(messageData)
-            onMessageReceived?(messageData)
+            continuation?.yield(messageData)
+            callback?(messageData)
         }
     }
 
