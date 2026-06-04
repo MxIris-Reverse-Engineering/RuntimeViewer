@@ -275,7 +275,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
-                from: "0.4.0",
+                from: "0.5.0",
             ),
         ),
         
@@ -372,7 +372,7 @@ let package = Package(
         
         .package(
             url: "https://github.com/pointfreeco/swift-dependencies",
-            from: "1.12.0",
+            from: "1.13.0",
         ),
         
         .package(
