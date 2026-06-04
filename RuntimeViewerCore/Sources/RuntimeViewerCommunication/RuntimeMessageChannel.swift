@@ -12,23 +12,23 @@ import Asynchrone
 ///
 /// - Note: Uses `@unchecked Sendable` because the stored metatypes (`requestType`, `responseType`)
 ///   are immutable and inherently thread-safe, but `any Codable.Type` doesn't conform to `Sendable`.
-final class RuntimeMessageHandler: Sendable {
+final class RuntimeMessageHandler: @unchecked Sendable {
     typealias RawHandler = @Sendable (Data) async throws -> Data
 
     /// The wrapped handler that processes raw Data.
     let closure: RawHandler
 
     /// The type of the request this handler expects.
-    let requestType: (Codable & Sendable).Type
+    let requestType: any Codable.Type
 
     /// The type of the response this handler returns.
-    let responseType: (Codable & Sendable).Type
+    let responseType: any Codable.Type
 
     /// Creates a message handler with typed request and response.
     ///
     /// - Parameter closure: The handler closure that receives a typed request
     ///   and returns a typed response.
-    init<Request: Codable & Sendable, Response: Codable & Sendable>(closure: @escaping @Sendable (Request) async throws -> Response) {
+    init<Request: Codable, Response: Codable>(closure: @escaping @Sendable (Request) async throws -> Response) {
         self.requestType = Request.self
         self.responseType = Response.self
 
@@ -95,38 +95,32 @@ extension RuntimeMessageProtocol {
 /// })
 /// ```
 @Loggable
-final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
+final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Unique identifier for this channel.
     let id = UUID()
 
     /// Called when a complete message is received.
     /// - Note: This callback is called from a locked context; avoid long-running operations.
-    @Mutex
     var onMessageReceived: (@Sendable (Data) -> Void)?
 
     /// Message handlers keyed by message identifier.
-    @Mutex
-    private var messageHandlers: [String: RuntimeMessageHandler] = [:]
+    private let messageHandlers = Mutex<[String: RuntimeMessageHandler]>([:])
 
     /// In-flight request bookkeeping keyed by request identifier. The entry holds both
     /// the awaited continuation and the optional timeout `Task` so the success and
     /// writer-error paths can cancel the timer before it fires — without that, an
     /// orphaned timer from a finished request can wake later and incorrectly time out
     /// a *different* request that happened to be registered under the same identifier.
-    @Mutex
-    private var pendingRequests: [String: PendingRequest] = [:]
+    private let pendingRequests = Mutex<[String: PendingRequest]>([:])
 
     /// Buffer for incoming data.
-    @Mutex
-    private var receivingData: Data = .init()
+    private let receivingData = Mutex<Data>(Data())
 
     /// Stream for received messages.
-    @Mutex
     private var receivedDataStream: SharedAsyncSequence<AsyncThrowingStream<Data, Error>>?
 
     /// Continuation for yielding received messages.
-    @Mutex
-    private var receivedDataContinuation: AsyncThrowingStream<Data, Error>.Continuation?
+    private let receivedDataContinuation = Mutex<AsyncThrowingStream<Data, Error>.Continuation?>(nil)
 
     /// Semaphore for serializing send operations.
     private let sendSemaphore = AsyncSemaphore(value: 1)
@@ -141,7 +135,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
     private func setupStreams() {
         let (stream, continuation) = AsyncThrowingStream<Data, Error>.makeStream()
         self.receivedDataStream = stream.shared()
-        self.receivedDataContinuation = continuation
+        self.receivedDataContinuation.withLock { $0 = continuation }
     }
 
     // MARK: - Handler Registration
@@ -171,7 +165,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
 
     /// Registers a handler for messages with both request payload and response.
     func setMessageHandler<Request: Codable, Response: Codable>(name: String, handler: @escaping @Sendable (Request) async throws -> Response) {
-        _messageHandlers.withLock { $0[name] = RuntimeMessageHandler(closure: handler) }
+        messageHandlers.withLock { $0[name] = RuntimeMessageHandler(closure: handler) }
         #log(.debug, "Registered message handler for: \(name, privacy: .public)")
     }
 
@@ -182,7 +176,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
 
     /// Returns the handler for the given message identifier.
     func handler(for identifier: String) -> RuntimeMessageHandler? {
-        _messageHandlers.withLock { $0[identifier] }
+        messageHandlers.withLock { $0[identifier] }
     }
 
     /// Checks if there's a pending request waiting for a response with the given identifier.
@@ -192,7 +186,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
     ///   - data: The response data to deliver.
     /// - Returns: `true` if the data was delivered to a pending request, `false` otherwise.
     func deliverToPendingRequest(identifier: String, data: Data) -> Bool {
-        guard let pending = _pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) else {
+        guard let pending = pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) else {
             return false
         }
         #log(.debug, "Delivered response to pending request: \(identifier, privacy: .public)")
@@ -205,7 +199,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
 
     /// Appends data to the receiving buffer and processes complete messages.
     func appendReceivedData(_ data: Data) {
-        _receivingData.withLock { $0.append(data) }
+        receivingData.withLock { $0.append(data) }
         processReceivedData()
     }
 
@@ -214,7 +208,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
         var extractedMessages: [Data] = []
         var remainingBufferSize = 0
 
-        _receivingData.withLock { buffer in
+        receivingData.withLock { buffer in
             while true {
                 guard let endRange = buffer.range(of: Self.endMarkerData) else {
                     break
@@ -233,18 +227,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
             remainingBufferSize = buffer.count
         }
 
-        // Snapshot both `@Mutex`-backed values into locals BEFORE the hot loop.
-        //
-        // Each `@Mutex`-generated property exposes a `_modify` coroutine
-        // accessor. Inside a hot for-loop on a dispatch-queue worker thread,
-        // every `receivedDataContinuation?.yield(...)` / `onMessageReceived?(...)`
-        // call enters that coroutine, and the per-iteration coroutine frames
-        // accumulate on the caller's stack instead of fully unwinding —
-        // a burst of ~50 small frames overflows the worker stack with
-        // 13_000+ frames. Reading once through the plain `get` accessor (which
-        // is `withLock { $0 }` and returns the value by copy) sidesteps the
-        // `_modify` path entirely; the for-loop then only touches local vars.
-        let continuation = receivedDataContinuation
+        let continuation = receivedDataContinuation.withLock { $0 }
         let callback = onMessageReceived
         let hasContinuation = continuation != nil
 
@@ -270,7 +253,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
         } else {
             #log(.info, "finishReceiving: stream closed normally")
         }
-        _receivedDataContinuation.withLock { continuation in
+        receivedDataContinuation.withLock { continuation in
             if let error {
                 continuation?.finish(throwing: error)
             } else {
@@ -281,7 +264,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
 
         // Drain any pending requests that were waiting for a response on the now-dead channel
         // and resume each with an error so the `await` in `sendRequest` unblocks.
-        let drainedRequests: [PendingRequest] = _pendingRequests.withLock { pending in
+        let drainedRequests: [PendingRequest] = pendingRequests.withLock { pending in
             let values = Array(pending.values)
             pending.removeAll()
             return values
@@ -298,7 +281,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
 
     /// Returns the current size of the receiving buffer.
     var receivingBufferSize: Int {
-        _receivingData.withLock { $0.count }
+        receivingData.withLock { $0.count }
     }
 
     // MARK: - Sending Data
@@ -344,7 +327,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
         // Register pending request before sending
         let responseData: Data = try await withCheckedThrowingContinuation { continuation in
             let pending = PendingRequest(continuation: continuation)
-            _pendingRequests.withLock { $0[requestData.identifier] = pending }
+            pendingRequests.withLock { $0[requestData.identifier] = pending }
 
             // Spawn the timeout task before the writer task so the entry is fully wired
             // up — including its cancel handle — before any code path that resolves the
@@ -355,7 +338,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
                 let timeoutTask = Task {
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
                     if Task.isCancelled { return }
-                    if let pending = self._pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) {
+                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) {
                         #log(.error, "Request \(identifier, privacy: .public) timed out after \(timeout, privacy: .public)s")
                         pending.continuation.resume(throwing: RuntimeMessageChannelError.requestTimeout)
                     }
@@ -368,7 +351,7 @@ final class RuntimeMessageChannel: Sendable, RuntimeMessageProtocol {
                     try await writer(dataToSend)
                 } catch {
                     // Remove pending request and resume with error
-                    if let pending = self._pendingRequests.withLock({ $0.removeValue(forKey: requestData.identifier) }) {
+                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: requestData.identifier) }) {
                         #log(.error, "Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
                         pending.cancelTimeoutTask()
                         pending.continuation.resume(throwing: error)
