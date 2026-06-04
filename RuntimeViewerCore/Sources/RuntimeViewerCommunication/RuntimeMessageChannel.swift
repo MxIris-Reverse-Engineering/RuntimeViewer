@@ -227,17 +227,14 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
             remainingBufferSize = buffer.count
         }
 
-        let continuation = receivedDataContinuation.withLock { $0 }
-        let callback = onMessageReceived
-        let hasContinuation = continuation != nil
-
+        let hasContinuation = receivedDataContinuation.withLock { $0 != nil }
         if extractedMessages.isEmpty {
             #log(.debug, "[MessageChannel] processReceivedData: no end marker found (buffer=\(remainingBufferSize, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
         }
         for messageData in extractedMessages {
             #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
-            continuation?.yield(messageData)
-            callback?(messageData)
+            receivedDataContinuation.withLock { $0?.yield(messageData) }
+            onMessageReceived?(messageData)
         }
     }
 
