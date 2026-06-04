@@ -60,15 +60,7 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
     private var eventPumpTask: Task<Void, Never>?
     private var imageLoadedPumpTask: Task<Void, Never>?
-    /// Pump that re-runs `startAlwaysIndexBatches()` after every fullReload.
-    /// Required because remote engines (XPC / Bonjour) populate `imageList`
-    /// asynchronously: the first `documentDidOpen` may see an empty list and
-    /// resolve every imageName-only identifier to nil. Once the server's
-    /// fullReload broadcast lands and the client's `imageList` is set, this
-    /// pump retries. Manager dedup keeps already-running batches unique.
-    private var reloadDataPumpTask: Task<Void, Never>?
     private var lastKnownIsEnabled: Bool = false
-    private var lastKnownAlwaysIndexIdentifiers: [String] = []
 
     public init(documentState: DocumentState) {
         self.documentState = documentState
@@ -76,7 +68,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
         startEventPump()
         #if canImport(RuntimeViewerSettings)
         startImageLoadedPump()
-        startReloadDataPump()
         bootstrapSettingsObservation()
         #endif
         bootstrapEngineObservation()
@@ -85,7 +76,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
     deinit {
         eventPumpTask?.cancel()
         imageLoadedPumpTask?.cancel()
-        reloadDataPumpTask?.cancel()
     }
 
     // MARK: - Public observables for UI
@@ -260,10 +250,8 @@ public final class RuntimeBackgroundIndexingCoordinator {
         //    them ends the loops cleanly.
         eventPumpTask?.cancel()
         imageLoadedPumpTask?.cancel()
-        reloadDataPumpTask?.cancel()
         eventPumpTask = nil
         imageLoadedPumpTask = nil
-        reloadDataPumpTask = nil
 
         // 2) Cancel **all** in-flight batches on the old manager — not just
         //    the ones in `documentBatchIDs`. A `startBatch` Task that
@@ -296,10 +284,8 @@ public final class RuntimeBackgroundIndexingCoordinator {
         startEventPump()
         #if canImport(RuntimeViewerSettings)
         startImageLoadedPump()
-        startReloadDataPump()
         // If the feature is enabled, treat the swap like a fresh document
         // open — the new engine's main executable should be indexed.
-        // `documentDidOpen()` also triggers the always-index list.
         documentDidOpen()
         #endif
     }
@@ -309,7 +295,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
 extension RuntimeBackgroundIndexingCoordinator {
     public func documentDidOpen() {
         startMainExecutableBatch(reason: .appLaunch)
-        startAlwaysIndexBatches()
     }
 
     /// Shared logic for "index the main executable" batches. Both the document
@@ -394,93 +379,13 @@ extension RuntimeBackgroundIndexingCoordinator {
         self.staging.insertDocumentBatchID(id)
     }
 
-    // MARK: - Always-index list
-
-    /// Reads `Settings.Indexing.alwaysIndexIdentifiers` and starts one batch
-    /// per resolvable identifier. Identifiers that don't resolve to a path
-    /// in the engine's `imageList` are silently skipped — they're recorded
-    /// in `lastKnownAlwaysIndexIdentifiers` as still-pending so the next
-    /// fullReload retry can pick them up.
-    ///
-    /// The Manager dedups by `rootImagePath`, so re-entry on the same path
-    /// is a cheap no-op that returns the existing batch id — making this
-    /// method safe to call from multiple triggers (documentDidOpen, fullReload,
-    /// settings change, engine swap).
-    private func startAlwaysIndexBatches() {
-        let identifiers = currentAlwaysIndexIdentifiers()
-        guard !identifiers.isEmpty else { return }
-        Task { [weak self, engine] in
-            guard let self else { return }
-            let settings = self.currentBackgroundIndexingSettings()
-            guard settings.isEnabled else { return }
-            // `engine.imageList` is `actor`-isolated; one hop fetches the
-            // snapshot we'll use to resolve every identifier this round.
-            // Remote engines populate `imageList` asynchronously via the
-            // `imageList` message handler, so an early call here may see
-            // `[]` — `startReloadDataPump` retries after fullReload.
-            let imageList = await engine.imageList
-            for identifier in identifiers {
-                guard let resolvedPath = resolveAlwaysIndexIdentifier(identifier, in: imageList) else { continue }
-                let id = await engine.backgroundIndexingManager.startBatch(
-                    rootImagePath: resolvedPath,
-                    depth: settings.depth,
-                    maxConcurrency: settings.maxConcurrency,
-                    reason: .alwaysIndex(identifier: identifier))
-                guard self.engine === engine else { return }
-                self.staging.insertDocumentBatchID(id)
-            }
-        }
-    }
-
-    /// Maps a user-supplied identifier to a path that exists in `imageList`.
-    /// - Full imagePath (leading `/`): looked up verbatim against `imageList`
-    ///   (which is already the patched form returned by `DyldUtilities.imageNames`).
-    /// - imageName (no leading `/`): matched against `lastPathComponent` of
-    ///   each entry. Strict equality — `Foundation` won't match `CoreFoundation`.
-    /// Returns nil when no entry matches; caller should silent-skip.
-    private nonisolated func resolveAlwaysIndexIdentifier(
-        _ identifier: String,
-        in imageList: [String]
-    ) -> String? {
-        let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        if trimmed.hasPrefix("/") {
-            return imageList.contains(trimmed) ? trimmed : nil
-        } else {
-            return imageList.first { ($0 as NSString).lastPathComponent == trimmed }
-        }
-    }
-
-    /// Pump that listens for `engine.reloadDataPublisher` and retries
-    /// `startAlwaysIndexBatches()` after each fullReload. Required so remote
-    /// engines whose `imageList` arrives asynchronously can still resolve
-    /// imageName identifiers once the list lands. Manager dedup keeps
-    /// already-running batches unique across retries.
-    private func startReloadDataPump() {
-        reloadDataPumpTask = Task { [weak self, engine] in
-            guard let self else { return }
-            for await _ in engine.reloadDataPublisher.values {
-                await MainActor.run {
-                    guard self.engine === engine else { return }
-                    self.startAlwaysIndexBatches()
-                }
-            }
-        }
-    }
-
     private func currentBackgroundIndexingSettings() -> Settings.Indexing.BackgroundMode {
         @Dependency(\.settings) var settings
         return settings.indexing.backgroundMode
     }
 
-    private func currentAlwaysIndexIdentifiers() -> [String] {
-        @Dependency(\.settings) var settings
-        return settings.indexing.alwaysIndexIdentifiers
-    }
-
     private func bootstrapSettingsObservation() {
         self.lastKnownIsEnabled = currentBackgroundIndexingSettings().isEnabled
-        self.lastKnownAlwaysIndexIdentifiers = currentAlwaysIndexIdentifiers()
         self.subscribeToSettings()
     }
 
@@ -490,9 +395,6 @@ extension RuntimeBackgroundIndexingCoordinator {
             _ = snapshot.isEnabled
             _ = snapshot.depth
             _ = snapshot.maxConcurrency
-            // Track always-index identifiers too so the observation re-fires
-            // when the user adds / edits / removes a row in Settings UI.
-            _ = currentAlwaysIndexIdentifiers()
         } onChange: { [weak self] in
             // onChange fires off the main actor synchronously after any mutation.
             // Hop back to MainActor to (a) handle the change and (b) re-register.
@@ -511,29 +413,12 @@ extension RuntimeBackgroundIndexingCoordinator {
         if !wasEnabled && latest.isEnabled {
             // Scenario E: off→on. Use `.settingsEnabled` so the popover's
             // title-by-reason mapping shows "Settings enabled" instead of
-            // the misleading "App launch indexing". Also re-trigger the
-            // always-index list since this is effectively a fresh start.
+            // the misleading "App launch indexing".
             startMainExecutableBatch(reason: .settingsEnabled)
-            startAlwaysIndexBatches()
         } else if wasEnabled && !latest.isEnabled {
             Task { [engine] in
                 await engine.backgroundIndexingManager.cancelAllBatches()
             }
-        }
-
-        // Identifier list changes: trigger always-index when content actually
-        // changed and the feature is enabled. Adding / editing entries kicks
-        // off batches for the new content; removing entries is silent —
-        // already-running batches keep running unless the user cancels them
-        // from the popover.
-        let latestIdentifiers = currentAlwaysIndexIdentifiers()
-        let identifiersChanged = latestIdentifiers != lastKnownAlwaysIndexIdentifiers
-        lastKnownAlwaysIndexIdentifiers = latestIdentifiers
-        // Skip when off→on already fired startAlwaysIndexBatches above to
-        // avoid a duplicate (Manager dedup would no-op the second call, but
-        // skipping the redundant Task hop is cleaner).
-        if identifiersChanged, latest.isEnabled, wasEnabled {
-            startAlwaysIndexBatches()
         }
         // depth / maxConcurrency changes: intentional no-op; next startBatch picks
         // up the new values.
