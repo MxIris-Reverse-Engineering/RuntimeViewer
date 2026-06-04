@@ -94,6 +94,17 @@ extension Settings {
         @Default(BackgroundMode.default)
         public var backgroundMode: BackgroundMode
 
+        /// User-configured "always-index" list. Each entry is either a full
+        /// imagePath (leading `/`) matched verbatim against the engine's
+        /// `imageList`, or an imageName matched against the last path
+        /// component of any loaded image. Entries that don't resolve to a
+        /// loaded image are silently skipped (no-op, not marked failed).
+        ///
+        /// Lives at `Indexing` scope rather than inside `BackgroundMode` so
+        /// users can edit it even when background indexing is disabled.
+        @Default([])
+        public var alwaysIndexIdentifiers: [String]
+
         public static let `default` = Self()
     }
 }

@@ -329,6 +329,45 @@ import Testing
         await manager.cancelBatch(firstId)
     }
 
+    /// `.alwaysIndex(identifier:)` carries the raw user-supplied string through
+    /// the manager untouched so the popover can render it verbatim. This guards
+    /// against accidental normalization (e.g. resolving the identifier to its
+    /// path and stuffing that into the reason).
+    @Test func alwaysIndexReasonRoundTripsThroughEvents() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        engine.program(path: "/System/Library/Frameworks/Foundation.framework/Foundation",
+                       .init(isIndexed: true))   // short-circuit immediately
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        let events = manager.events
+        let consumer = Task { () -> [RuntimeIndexingBatchReason] in
+            var reasons: [RuntimeIndexingBatchReason] = []
+            for await event in events {
+                switch event {
+                case .batchStarted(let batch):
+                    reasons.append(batch.reason)
+                case .batchFinished(let batch):
+                    reasons.append(batch.reason)
+                    return reasons
+                case .batchCancelled(let batch):
+                    reasons.append(batch.reason)
+                    return reasons
+                default:
+                    break
+                }
+            }
+            return reasons
+        }
+
+        _ = await manager.startBatch(
+            rootImagePath: "/System/Library/Frameworks/Foundation.framework/Foundation",
+            depth: 0, maxConcurrency: 1,
+            reason: .alwaysIndex(identifier: "Foundation"))
+        let reasons = await consumer.value
+        #expect(reasons == [.alwaysIndex(identifier: "Foundation"),
+                            .alwaysIndex(identifier: "Foundation")])
+    }
+
     /// After a batch finishes, the same root may be re-batched (e.g. another
     /// dlopen of an unloaded dep). Dedup must NOT bind to historical batches.
     @Test func startBatchAllowsNewBatchAfterPreviousFinishedForSameRoot() async {

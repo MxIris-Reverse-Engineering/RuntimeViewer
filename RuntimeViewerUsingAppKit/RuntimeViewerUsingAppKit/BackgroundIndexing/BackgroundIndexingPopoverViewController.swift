@@ -436,6 +436,8 @@ extension BackgroundIndexingPopoverViewController {
                 return "Settings enabled"
             case .manual:
                 return "Manual indexing"
+            case .alwaysIndex(let identifier):
+                return "Always: \(identifier)"
             }
         }
     }
