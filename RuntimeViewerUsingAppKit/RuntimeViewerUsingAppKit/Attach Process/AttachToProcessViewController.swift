@@ -5,6 +5,9 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
 final class AttachToProcessViewController: UXKitViewController<AttachToProcessViewModel> {
+    
+    static let shared = AttachToProcessViewController()
+    
     private let pickerViewController: RunningPickerTabViewController
 
     private let attachRelay = PublishRelay<any RunningItem>()
@@ -12,9 +15,22 @@ final class AttachToProcessViewController: UXKitViewController<AttachToProcessVi
     private let cancelRelay = PublishRelay<Void>()
 
     override init(viewModel: AttachToProcessViewModel? = nil) {
-        let applicationConfiguration = RunningPickerTabViewController.ApplicationConfiguration(title: "Attach To Process", description: "Select a running application to attach to", cancelButtonTitle: "Cancel", confirmButtonTitle: "Attach")
-        let processConfiguration = RunningPickerTabViewController.ProcessConfiguration(title: "Attach To Process", description: "Select a running application to attach to", cancelButtonTitle: "Cancel", confirmButtonTitle: "Attach")
-        self.pickerViewController = RunningPickerTabViewController(applicationConfiguration: applicationConfiguration, processConfiguration: processConfiguration)
+        let applicationConfiguration = RunningPickerTabViewController.ApplicationConfiguration(
+            title: "Attach To Application",
+            description: "Select a running application to attach to",
+            cancelButtonTitle: "Cancel",
+            confirmButtonTitle: "Attach"
+        )
+        let processConfiguration = RunningPickerTabViewController.ProcessConfiguration(
+            title: "Attach To Process",
+            description: "Select a running process to attach to",
+            cancelButtonTitle: "Cancel",
+            confirmButtonTitle: "Attach"
+        )
+        self.pickerViewController = RunningPickerTabViewController(
+            applicationConfiguration: applicationConfiguration,
+            processConfiguration: processConfiguration
+        )
         super.init(viewModel: viewModel)
     }
 
