@@ -1,10 +1,11 @@
 import AppKit
+import Carbon
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerApplication
 
-class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewModel>: UXKitViewController<ViewModel> {
+class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewModel>: UXKitViewController<ViewModel>, NSOutlineViewDelegate {
     var isReorderable: Bool {
         false
     }
@@ -114,8 +115,30 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
 
+        // Mouse click and arrow-key navigation are explicit user intents — load
+        // immediately. Anything else (type-select character input, programmatic
+        // selection) is treated as "still searching" and goes through debounce
+        // so we only load the final landing row.
+        let arrowKeyCodes = [kVK_LeftArrow, kVK_RightArrow, kVK_DownArrow, kVK_UpArrow]
+        let isExplicitSelection: (NSEvent?) -> Bool = { event in
+            guard let event else { return false }
+            switch event.type {
+            case .leftMouseUp:
+                return true
+            case .keyDown:
+                return arrowKeyCodes.contains(.init(event.keyCode))
+            default:
+                return false
+            }
+        }
         let input = ViewModel.Input(
-            runtimeObjectClicked: imageLoadedView.outlineView.rx.modelSelected().asSignal(),
+            runtimeObjectClicked: .merge(
+                imageLoadedView.outlineView.rx.modelSelectedFilteringCurrentEvent(isExplicitSelection).asSignal(),
+                imageLoadedView.outlineView.rx
+                    .modelSelectedFilteringCurrentEvent { !isExplicitSelection($0) }
+                    .asSignal()
+                    .debounce(.milliseconds(800)),
+            ),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
@@ -201,8 +224,15 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         output.loadingItemCount.drive(imageLoadingView.countLabel.rx.stringValue)
             .disposed(by: rx.disposeBag)
 
+        outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
+        
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
         outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
+    }
+    
+    func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
+        guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
+        return cellViewModel.title.string
     }
 }
 
