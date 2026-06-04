@@ -65,10 +65,21 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// asynchronously: the first `documentDidOpen` may see an empty list and
     /// resolve every imageName-only identifier to nil. Once the server's
     /// fullReload broadcast lands and the client's `imageList` is set, this
-    /// pump retries. Manager dedup keeps already-running batches unique.
+    /// pump retries. `dispatchedAlwaysIndexIdentifiers` gates re-entry so
+    /// the pump idles for identifiers that have already produced a batch
+    /// this engine session — otherwise every batch finish → `reloadData` →
+    /// pump → empty-batch-start → finish → loop would spin forever.
     private var reloadDataPumpTask: Task<Void, Never>?
     private var lastKnownIsEnabled: Bool = false
-    private var lastKnownAlwaysIndexIdentifiers: [String] = []
+    #if canImport(RuntimeViewerSettings)
+    private var lastKnownAlwaysIndexEntries: [Settings.Indexing.AlwaysIndexEntry] = []
+    /// Identifiers from `alwaysIndexEntries` that have successfully resolved
+    /// to a path and had `startBatch` dispatched at least once during the
+    /// current engine session. Used by `startAlwaysIndexBatches` to skip
+    /// no-op re-entry triggered by the reload pump. Reset on engine swap,
+    /// off→on toggle, and entry-list change so genuinely new work re-runs.
+    private var dispatchedAlwaysIndexIdentifiers: Set<String> = []
+    #endif
 
     public init(documentState: DocumentState) {
         self.documentState = documentState
@@ -297,6 +308,10 @@ public final class RuntimeBackgroundIndexingCoordinator {
         #if canImport(RuntimeViewerSettings)
         startImageLoadedPump()
         startReloadDataPump()
+        // New engine session — clear the dispatched-identifiers gate so the
+        // always-index list re-dispatches against the new engine's image
+        // list (which starts empty for remote engines).
+        dispatchedAlwaysIndexIdentifiers.removeAll()
         // If the feature is enabled, treat the swap like a fresh document
         // open — the new engine's main executable should be indexed.
         // `documentDidOpen()` also triggers the always-index list.
@@ -396,19 +411,35 @@ extension RuntimeBackgroundIndexingCoordinator {
 
     // MARK: - Always-index list
 
-    /// Reads `Settings.Indexing.alwaysIndexIdentifiers` and starts one batch
-    /// per resolvable identifier. Identifiers that don't resolve to a path
-    /// in the engine's `imageList` are silently skipped — they're recorded
-    /// in `lastKnownAlwaysIndexIdentifiers` as still-pending so the next
+    /// Reads `Settings.Indexing.alwaysIndexEntries` and starts one batch
+    /// per resolvable entry. Entries that don't resolve to a path in the
+    /// engine's `imageList` are silently skipped — they remain in
+    /// `lastKnownAlwaysIndexEntries` as still-pending so the next
     /// fullReload retry can pick them up.
+    ///
+    /// `followDependencies` controls the per-entry depth: when false, the
+    /// batch is pinned to `depth: 0` so the BFS only emits the resolved
+    /// image itself; when true, the global `BackgroundMode.depth` is used
+    /// and the BFS walks the full dependency closure like the main-executable
+    /// batch.
     ///
     /// The Manager dedups by `rootImagePath`, so re-entry on the same path
     /// is a cheap no-op that returns the existing batch id — making this
     /// method safe to call from multiple triggers (documentDidOpen, fullReload,
     /// settings change, engine swap).
     private func startAlwaysIndexBatches() {
-        let identifiers = currentAlwaysIndexIdentifiers()
-        guard !identifiers.isEmpty else { return }
+        let entries = currentAlwaysIndexEntries()
+        guard !entries.isEmpty else { return }
+        // Gate: only process entries we haven't dispatched yet this session.
+        // The reload pump re-enters here after every fullReload, including
+        // ones our own batch finishes emit; without this filter we'd start
+        // a fresh zero-item batch for each already-dispatched identifier,
+        // which finishes immediately, fires reloadData, re-enters here,
+        // loops forever.
+        let pendingEntries = entries.filter {
+            !dispatchedAlwaysIndexIdentifiers.contains($0.identifier)
+        }
+        guard !pendingEntries.isEmpty else { return }
         Task { [weak self, engine] in
             guard let self else { return }
             let settings = self.currentBackgroundIndexingSettings()
@@ -417,17 +448,21 @@ extension RuntimeBackgroundIndexingCoordinator {
             // snapshot we'll use to resolve every identifier this round.
             // Remote engines populate `imageList` asynchronously via the
             // `imageList` message handler, so an early call here may see
-            // `[]` — `startReloadDataPump` retries after fullReload.
+            // `[]` — `startReloadDataPump` retries after fullReload, and
+            // the gate above leaves unresolved identifiers eligible for
+            // retry until they finally match a path in `imageList`.
             let imageList = await engine.imageList
-            for identifier in identifiers {
-                guard let resolvedPath = resolveAlwaysIndexIdentifier(identifier, in: imageList) else { continue }
+            for entry in pendingEntries {
+                guard let resolvedPath = resolveAlwaysIndexIdentifier(entry.identifier, in: imageList) else { continue }
+                let effectiveDepth = entry.followDependencies ? settings.depth : 0
                 let id = await engine.backgroundIndexingManager.startBatch(
                     rootImagePath: resolvedPath,
-                    depth: settings.depth,
+                    depth: effectiveDepth,
                     maxConcurrency: settings.maxConcurrency,
-                    reason: .alwaysIndex(identifier: identifier))
+                    reason: .alwaysIndex(identifier: entry.identifier))
                 guard self.engine === engine else { return }
                 self.staging.insertDocumentBatchID(id)
+                self.dispatchedAlwaysIndexIdentifiers.insert(entry.identifier)
             }
         }
     }
@@ -473,14 +508,14 @@ extension RuntimeBackgroundIndexingCoordinator {
         return settings.indexing.backgroundMode
     }
 
-    private func currentAlwaysIndexIdentifiers() -> [String] {
+    private func currentAlwaysIndexEntries() -> [Settings.Indexing.AlwaysIndexEntry] {
         @Dependency(\.settings) var settings
-        return settings.indexing.alwaysIndexIdentifiers
+        return settings.indexing.alwaysIndexEntries
     }
 
     private func bootstrapSettingsObservation() {
         self.lastKnownIsEnabled = currentBackgroundIndexingSettings().isEnabled
-        self.lastKnownAlwaysIndexIdentifiers = currentAlwaysIndexIdentifiers()
+        self.lastKnownAlwaysIndexEntries = currentAlwaysIndexEntries()
         self.subscribeToSettings()
     }
 
@@ -490,9 +525,10 @@ extension RuntimeBackgroundIndexingCoordinator {
             _ = snapshot.isEnabled
             _ = snapshot.depth
             _ = snapshot.maxConcurrency
-            // Track always-index identifiers too so the observation re-fires
-            // when the user adds / edits / removes a row in Settings UI.
-            _ = currentAlwaysIndexIdentifiers()
+            // Track always-index entries too so the observation re-fires
+            // when the user adds / edits / removes a row or flips the
+            // per-row followDependencies toggle in Settings UI.
+            _ = currentAlwaysIndexEntries()
         } onChange: { [weak self] in
             // onChange fires off the main actor synchronously after any mutation.
             // Hop back to MainActor to (a) handle the change and (b) re-register.
@@ -512,7 +548,9 @@ extension RuntimeBackgroundIndexingCoordinator {
             // Scenario E: off→on. Use `.settingsEnabled` so the popover's
             // title-by-reason mapping shows "Settings enabled" instead of
             // the misleading "App launch indexing". Also re-trigger the
-            // always-index list since this is effectively a fresh start.
+            // always-index list since this is effectively a fresh start —
+            // clear the dispatched gate first so every entry runs again.
+            dispatchedAlwaysIndexIdentifiers.removeAll()
             startMainExecutableBatch(reason: .settingsEnabled)
             startAlwaysIndexBatches()
         } else if wasEnabled && !latest.isEnabled {
@@ -521,18 +559,39 @@ extension RuntimeBackgroundIndexingCoordinator {
             }
         }
 
-        // Identifier list changes: trigger always-index when content actually
-        // changed and the feature is enabled. Adding / editing entries kicks
-        // off batches for the new content; removing entries is silent —
-        // already-running batches keep running unless the user cancels them
-        // from the popover.
-        let latestIdentifiers = currentAlwaysIndexIdentifiers()
-        let identifiersChanged = latestIdentifiers != lastKnownAlwaysIndexIdentifiers
-        lastKnownAlwaysIndexIdentifiers = latestIdentifiers
+        // Entry list changes: trigger always-index when content actually
+        // changed and the feature is enabled. Adding / editing entries (or
+        // flipping a per-row followDependencies toggle) kicks off batches
+        // for the new content; removing entries is silent — already-running
+        // batches keep running unless the user cancels them from the popover.
+        // Toggling followDependencies on an existing entry also kicks off a
+        // new batch: Manager dedup is by `rootImagePath`, so the existing
+        // depth=0 batch stays the in-flight winner until it finishes. The
+        // depth change picks up on the next start (e.g. document reopen).
+        let previousEntries = lastKnownAlwaysIndexEntries
+        let latestEntries = currentAlwaysIndexEntries()
+        let entriesChanged = latestEntries != previousEntries
+        lastKnownAlwaysIndexEntries = latestEntries
         // Skip when off→on already fired startAlwaysIndexBatches above to
         // avoid a duplicate (Manager dedup would no-op the second call, but
         // skipping the redundant Task hop is cleaner).
-        if identifiersChanged, latest.isEnabled, wasEnabled {
+        if entriesChanged, latest.isEnabled, wasEnabled {
+            // Drop identifiers no longer in the list and reset
+            // followDependencies-flipped ones so they can re-dispatch with
+            // the new depth. Identifiers whose row was untouched stay in
+            // the set so we don't pointlessly re-run their batches.
+            // Duplicate identifiers in either list collapse to "last wins";
+            // a per-identifier resolution can only produce one rootImagePath
+            // anyway, so equivalence under the last copy is good enough.
+            let latestByID = Dictionary(latestEntries.map { ($0.identifier, $0) },
+                                        uniquingKeysWith: { _, latest in latest })
+            let previousByID = Dictionary(previousEntries.map { ($0.identifier, $0) },
+                                          uniquingKeysWith: { _, latest in latest })
+            dispatchedAlwaysIndexIdentifiers = dispatchedAlwaysIndexIdentifiers.filter { identifier in
+                guard let latestEntry = latestByID[identifier] else { return false }
+                guard let previousEntry = previousByID[identifier] else { return true }
+                return latestEntry == previousEntry
+            }
             startAlwaysIndexBatches()
         }
         // depth / maxConcurrency changes: intentional no-op; next startBatch picks

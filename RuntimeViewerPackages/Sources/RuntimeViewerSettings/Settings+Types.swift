@@ -94,16 +94,35 @@ extension Settings {
         @Default(BackgroundMode.default)
         public var backgroundMode: BackgroundMode
 
-        /// User-configured "always-index" list. Each entry is either a full
-        /// imagePath (leading `/`) matched verbatim against the engine's
-        /// `imageList`, or an imageName matched against the last path
-        /// component of any loaded image. Entries that don't resolve to a
-        /// loaded image are silently skipped (no-op, not marked failed).
+        /// One row in the user-configured "always-index" list. `identifier`
+        /// is either a full imagePath (leading `/`) matched verbatim against
+        /// the engine's `imageList`, or an imageName matched against the
+        /// last path component of any loaded image. Entries that don't
+        /// resolve to a loaded image are silently skipped (no-op, not
+        /// marked failed).
         ///
-        /// Lives at `Indexing` scope rather than inside `BackgroundMode` so
-        /// users can edit it even when background indexing is disabled.
+        /// `followDependencies` opts the entry into the BFS dependency
+        /// expansion that main-executable batches use; when false (the
+        /// default) the batch is constrained to the resolved image alone,
+        /// so adding "SwiftUICore" indexes SwiftUICore literally rather
+        /// than every framework it links against.
+        @Codable
+        @MemberInit
+        public struct AlwaysIndexEntry: Equatable {
+            @Default("")
+            public var identifier: String
+
+            @Default(false)
+            public var followDependencies: Bool
+
+            public static let `default` = Self()
+        }
+
+        /// User-configured "always-index" list. Lives at `Indexing` scope
+        /// rather than inside `BackgroundMode` so users can edit it even
+        /// when background indexing is disabled.
         @Default([])
-        public var alwaysIndexIdentifiers: [String]
+        public var alwaysIndexEntries: [AlwaysIndexEntry]
 
         public static let `default` = Self()
     }
