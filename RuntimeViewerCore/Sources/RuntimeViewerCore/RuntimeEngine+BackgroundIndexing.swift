@@ -39,9 +39,26 @@ extension RuntimeEngine {
     /// Local implementation of `loadImageForBackgroundIndexing(at:)`. Mirrors
     /// `_loadImage(at:)` byte-for-byte sans `reloadData` / `imageDidLoad`
     /// emission. See `_loadImage(at:)` for the canonicalization rationale.
+    ///
+    /// Skips `dlopen` when dyld already has the image mapped. The indexer's
+    /// dependency-graph BFS can reach the host process's own main executable
+    /// (which `dlopen` refuses to re-open by definition) and, on iOS
+    /// Simulator, system images whose canonical path differs from dyld's
+    /// runtime form due to `DYLD_ROOT_PATH` rewriting (the rewritten path
+    /// resolves to `(no such file)` on disk). Either failure mode raises
+    /// `DyldOpenError`, which the request-handler catch arm echoes back as
+    /// a bare `RuntimeNetworkRequestError` carrying no `identifier` field —
+    /// the peer fails envelope decode, echoes its own bare error, and both
+    /// sides ping-pong on the shared `sendSemaphore`, starving every other
+    /// request (image-list pushes, sidebar `isImageLoaded`, indexing
+    /// progress). See Changelogs/v2.1.0-beta.4.md for the full failure
+    /// description. Section caching below is idempotent on already-loaded
+    /// images so the rest of the indexing pipeline still runs.
     func _loadImageForBackgroundIndexing(at path: String) async throws {
         let canonical = DyldUtilities.patchImagePathForDyld(path)
-        try DyldUtilities.loadImage(at: canonical)
+        if !imageList.contains(canonical) {
+            try DyldUtilities.loadImage(at: canonical)
+        }
         _ = try await objcSectionFactory.section(for: canonical)
         _ = try await swiftSectionFactory.section(for: canonical)
         loadedImagePaths.insert(canonical)
@@ -51,21 +68,64 @@ extension RuntimeEngine {
 // MARK: - BackgroundIndexingEngineRepresenting
 
 extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
-    func canOpenImage(at path: String) -> Bool {
-        DyldUtilities.machOImage(forPath: path) != nil
+    /// All three metadata methods below `dispatch` so they query the engine
+    /// hosting the actual binary (`DyldUtilities.machOImage(forPath:)` reads
+    /// the current process's dyld, which is only correct for the local
+    /// arm). Without dispatch, remote sources (XPC / Bonjour / iOS Simulator)
+    /// would resolve every dependency path against the client process's
+    /// dyld map — which doesn't know about the remote app's images — and
+    /// `dependencies(for: rootPath)` would always return `[]`, leaving the
+    /// BFS stuck at the root image. That's why pre-fix remote engines only
+    /// ever indexed their own main executable instead of the full
+    /// dependency closure.
+    func canOpenImage(at path: String) async -> Bool {
+        // Errors map to `false` (treat as "can't open"), matching the
+        // pre-dispatch behaviour where a missing image silently returned
+        // `false` rather than throwing.
+        (try? await dispatch(CanOpenImageRequest(path: path))) ?? false
     }
 
-    func rpaths(for path: String) -> [String] {
-        guard let image = DyldUtilities.machOImage(forPath: path) else {
-            return []
-        }
-        return image.rpaths
+    func rpaths(for path: String) async throws -> [String] {
+        try await dispatch(RpathsRequest(path: path))
     }
 
     func dependencies(for path: String,
                       ancestorRpaths: [String],
                       mainExecutablePath: String) async throws
         -> [(installName: String, resolvedPath: String?)]
+    {
+        let entries: [RuntimeDependencyEntry] = try await dispatch(
+            DependenciesRequest(
+                path: path,
+                ancestorRpaths: ancestorRpaths,
+                mainExecutablePath: mainExecutablePath
+            )
+        )
+        // Manager-facing API still uses the tuple shape it was written
+        // against; only the wire form needs a named struct (tuples aren't
+        // Codable). Repack here.
+        return entries.map { ($0.installName, $0.resolvedPath) }
+    }
+}
+
+// MARK: - Local implementations of the BFS metadata methods
+
+extension RuntimeEngine {
+    func _canOpenImage(at path: String) -> Bool {
+        DyldUtilities.machOImage(forPath: path) != nil
+    }
+
+    func _rpaths(for path: String) -> [String] {
+        guard let image = DyldUtilities.machOImage(forPath: path) else {
+            return []
+        }
+        return image.rpaths
+    }
+
+    func _dependencies(for path: String,
+                       ancestorRpaths: [String],
+                       mainExecutablePath: String)
+        -> [RuntimeDependencyEntry]
     {
         guard let image = DyldUtilities.machOImage(forPath: path) else {
             return []
@@ -122,7 +182,56 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
                         return nil
                     }
                 }
-                return (installName, resolvedPath)
+                return RuntimeDependencyEntry(installName: installName, resolvedPath: resolvedPath)
             }
+    }
+}
+
+// MARK: - Wire types
+
+/// Codable equivalent of the BFS metadata tuple. Tuples can't conform to
+/// `Codable`, so the on-wire form uses this struct and the public
+/// `dependencies(...)` API repacks to tuples at the dispatch seam.
+public struct RuntimeDependencyEntry: Codable, Sendable {
+    public let installName: String
+    public let resolvedPath: String?
+
+    public init(installName: String, resolvedPath: String?) {
+        self.installName = installName
+        self.resolvedPath = resolvedPath
+    }
+}
+
+// MARK: - Request types
+
+extension RuntimeEngine {
+    struct CanOpenImageRequest: RuntimeEngineRequest {
+        let path: String
+        static var commandName: String { CommandNames.canOpenImage.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> Bool {
+            await engine._canOpenImage(at: path)
+        }
+    }
+
+    struct RpathsRequest: RuntimeEngineRequest {
+        let path: String
+        static var commandName: String { CommandNames.rpathsForImage.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> [String] {
+            await engine._rpaths(for: path)
+        }
+    }
+
+    struct DependenciesRequest: RuntimeEngineRequest {
+        let path: String
+        let ancestorRpaths: [String]
+        let mainExecutablePath: String
+        static var commandName: String { CommandNames.dependenciesForImage.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> [RuntimeDependencyEntry] {
+            await engine._dependencies(
+                for: path,
+                ancestorRpaths: ancestorRpaths,
+                mainExecutablePath: mainExecutablePath
+            )
+        }
     }
 }

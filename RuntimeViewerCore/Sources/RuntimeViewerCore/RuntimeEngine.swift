@@ -56,6 +56,9 @@ public actor RuntimeEngine {
         case isImageIndexed
         case mainExecutablePath
         case loadImageForBackgroundIndexing
+        case canOpenImage
+        case rpathsForImage
+        case dependenciesForImage
         case patchImagePathForDyld
         case runtimeObjectHierarchy
         case runtimeRelationshipsForObject
