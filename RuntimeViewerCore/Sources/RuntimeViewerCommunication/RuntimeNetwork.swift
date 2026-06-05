@@ -27,19 +27,34 @@ struct RuntimeRequestData: Codable {
 
     let data: Data
 
-    init(identifier: String, data: Data) {
+    /// Per-round-trip routing key. `nil` for fire-and-forget messages and
+    /// for messages that originated on a peer that doesn't stamp one
+    /// (wire-level backward compat). When non-nil, `sendRequest<Response>`
+    /// uses it to key the `pendingRequests` entry — multiple concurrent
+    /// in-flight requests can therefore share the same `identifier`
+    /// (command name) without colliding on the pending-routing table, so
+    /// the channel's `sendSemaphore` no longer has to serialize round
+    /// trips end-to-end. Peer-side handlers must echo the value verbatim
+    /// in the response envelope; without it the client falls back to
+    /// `identifier` (legacy behavior, single in-flight per command).
+    let nonce: String?
+
+    init(identifier: String, data: Data, nonce: String? = nil) {
         self.identifier = identifier
         self.data = data
+        self.nonce = nonce
     }
 
-    init<Value: Codable>(identifier: String, value: Value) throws {
+    init<Value: Codable>(identifier: String, value: Value, nonce: String? = nil) throws {
         self.identifier = identifier
         self.data = try JSONEncoder().encode(value)
+        self.nonce = nonce
     }
 
-    init<Request: RuntimeRequest>(request: Request) throws {
+    init<Request: RuntimeRequest>(request: Request, nonce: String? = nil) throws {
         self.identifier = Request.identifier
         self.data = try JSONEncoder().encode(request)
+        self.nonce = nonce
     }
 }
 

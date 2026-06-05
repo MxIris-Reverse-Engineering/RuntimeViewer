@@ -179,17 +179,23 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         messageHandlers.withLock { $0[identifier] }
     }
 
-    /// Checks if there's a pending request waiting for a response with the given identifier.
-    /// If found, delivers the data to the pending request and returns true.
+    /// Looks up a pending request by routing key and delivers the response.
+    ///
+    /// `routingKey` is the per-round-trip `nonce` when the envelope carries
+    /// one, otherwise the legacy `identifier` (command name). The new
+    /// `sendRequest<Response>` always stamps + registers under `nonce` so
+    /// concurrent in-flight requests sharing the same command name route
+    /// correctly; envelope-decode paths fall back to `identifier` only when
+    /// a peer doesn't echo a nonce (e.g. legacy wire interop).
     /// - Parameters:
-    ///   - identifier: The request identifier to check.
+    ///   - routingKey: Lookup key — typically `envelope.nonce ?? envelope.identifier`.
     ///   - data: The response data to deliver.
     /// - Returns: `true` if the data was delivered to a pending request, `false` otherwise.
-    func deliverToPendingRequest(identifier: String, data: Data) -> Bool {
-        guard let pending = pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) else {
+    func deliverToPendingRequest(routingKey: String, data: Data) -> Bool {
+        guard let pending = pendingRequests.withLock({ $0.removeValue(forKey: routingKey) }) else {
             return false
         }
-        #log(.debug, "Delivered response to pending request: \(identifier, privacy: .public)")
+        #log(.debug, "Delivered response to pending request: \(routingKey, privacy: .public)")
         pending.cancelTimeoutTask()
         pending.continuation.resume(returning: data)
         return true
@@ -298,8 +304,20 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     /// Sends a request and waits for a response.
     ///
+    /// Concurrency model: `sendSemaphore` now guards only the on-wire write,
+    /// **not** the wait for the response. A slow peer handler (e.g. 20 s of
+    /// section parsing on the background indexer) no longer monopolizes the
+    /// semaphore for its entire round trip, so other `sendRequest`s can
+    /// leave the local outbox immediately. Each in-flight request is keyed
+    /// in `pendingRequests` by a freshly minted per-round-trip nonce
+    /// (`RuntimeRequestData.nonce`) so concurrent requests sharing the same
+    /// command name (e.g. multiple `isImageLoaded`) route their responses
+    /// without collision; the peer must echo the nonce verbatim in its
+    /// response envelope.
+    ///
     /// - Parameters:
     ///   - requestData: The request payload framed by `RuntimeRequestData`.
+    ///     If `nonce` is `nil` a fresh `UUID` is stamped before sending.
     ///   - timeout: Optional deadline (seconds). When non-nil, if no response arrives within
     ///     the deadline the call throws `RuntimeMessageChannelError.requestTimeout` and the
     ///     pending entry is removed, so a late response will be ignored. When `nil` the call
@@ -311,45 +329,57 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         timeout: TimeInterval? = nil,
         writer: @escaping @Sendable (Data) async throws -> Void
     ) async throws -> Response {
-        await sendSemaphore.wait()
-        // Use defer so the semaphore is released on every exit path — including when the
-        // continuation throws. The previous implementation released only on the success path
-        // and leaked the slot whenever sendRequest threw, blocking every subsequent caller.
-        defer { sendSemaphore.signal() }
+        // Stamp a nonce so concurrent same-`identifier` requests don't collide
+        // in `pendingRequests`. Honor any caller-supplied nonce (internal
+        // echo paths) but allocate one otherwise.
+        let nonce = requestData.nonce ?? UUID().uuidString
+        let stamped: RuntimeRequestData = (requestData.nonce == nil)
+            ? RuntimeRequestData(identifier: requestData.identifier, data: requestData.data, nonce: nonce)
+            : requestData
 
-        #log(.debug, "Sending request: \(requestData.identifier, privacy: .public)")
-        let data = try JSONEncoder().encode(requestData)
+        #log(.debug, "Sending request: \(stamped.identifier, privacy: .public) [nonce \(nonce, privacy: .public)]")
+        let data = try JSONEncoder().encode(stamped)
         let dataToSend = data + Self.endMarkerData
 
         // Register pending request before sending
         let responseData: Data = try await withCheckedThrowingContinuation { continuation in
             let pending = PendingRequest(continuation: continuation)
-            pendingRequests.withLock { $0[requestData.identifier] = pending }
+            pendingRequests.withLock { $0[nonce] = pending }
 
             // Spawn the timeout task before the writer task so the entry is fully wired
             // up — including its cancel handle — before any code path that resolves the
             // continuation can run. The success/writer-error paths cancel the timer so
             // it cannot wake later and incorrectly time out a re-used identifier.
             if let timeout {
-                let identifier = requestData.identifier
-                let timeoutTask = Task {
+                let identifier = stamped.identifier
+                let timeoutTask = Task { [nonce] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
                     if Task.isCancelled { return }
-                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: identifier) }) {
-                        #log(.error, "Request \(identifier, privacy: .public) timed out after \(timeout, privacy: .public)s")
+                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: nonce) }) {
+                        #log(.error, "Request \(identifier, privacy: .public) [nonce \(nonce, privacy: .public)] timed out after \(timeout, privacy: .public)s")
                         pending.continuation.resume(throwing: RuntimeMessageChannelError.requestTimeout)
                     }
                 }
                 pending.setTimeoutTask(timeoutTask)
             }
 
-            Task {
+            Task { [identifier = stamped.identifier, nonce] in
+                // Acquire the semaphore here, inside the write Task, so the
+                // outer await (`withCheckedThrowingContinuation`) doesn't
+                // hold it for the full round trip. The semaphore still
+                // serializes adjacent writes so length-prefixed envelopes
+                // don't interleave on the wire; once `writer` returns the
+                // slot frees immediately even though we keep waiting on
+                // `continuation` for the response.
+                await self.sendSemaphore.wait()
                 do {
                     try await writer(dataToSend)
+                    self.sendSemaphore.signal()
                 } catch {
+                    self.sendSemaphore.signal()
                     // Remove pending request and resume with error
-                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: requestData.identifier) }) {
-                        #log(.error, "Failed to send request \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
+                    if let pending = self.pendingRequests.withLock({ $0.removeValue(forKey: nonce) }) {
+                        #log(.error, "Failed to send request \(identifier, privacy: .public) [nonce \(nonce, privacy: .public)]: \(String(describing: error), privacy: .public)")
                         pending.cancelTimeoutTask()
                         pending.continuation.resume(throwing: error)
                     }
@@ -357,7 +387,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
             }
         }
 
-        #log(.debug, "Received response for: \(requestData.identifier, privacy: .public)")
+        #log(.debug, "Received response for: \(stamped.identifier, privacy: .public) [nonce \(nonce, privacy: .public)]")
         let response = try JSONDecoder().decode(RuntimeRequestData.self, from: responseData)
         return try JSONDecoder().decode(Response.self, from: response.data)
     }

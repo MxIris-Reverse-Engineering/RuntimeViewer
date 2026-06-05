@@ -225,36 +225,61 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
             do {
                 guard let stream = messageChannel.receivedMessages() else { return }
                 for try await data in stream {
-                    do {
-                        let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
-
-                        // Check if this is a response to a pending request
-                        if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
-                            continue
-                        }
-
-                        guard let handler = messageChannel.handler(for: requestData.identifier) else {
-                            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
-                            continue
-                        }
-
-                        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
-                        let responseData = try await handler.closure(requestData.data)
-
-                        if handler.responseType != RuntimeMessageNull.self {
-                            let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData)
-                            try await send(requestData: response)
-                        }
-                    } catch {
-                        #log(.error, "Handler error: \(error, privacy: .public)")
-                        let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
-                        if let errorData = try? JSONEncoder().encode(errorResponse) {
-                            try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
-                        }
-                    }
+                    await dispatchReceivedMessage(data)
                 }
             } catch {
                 #log(.error, "Message observation error: \(error, privacy: .public)")
+            }
+        }
+    }
+
+    /// Dispatch one received envelope. Splits the failure surface into two
+    /// arms so a peer's bare error never feeds back into our own bare error,
+    /// which would otherwise ping-pong on the shared `sendSemaphore` and
+    /// starve real traffic. See Changelogs/v2.1.0-beta.4.md.
+    private func dispatchReceivedMessage(_ data: Data) async {
+        let requestData: RuntimeRequestData
+        do {
+            requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+        } catch {
+            // Envelope decode failure → no identifier, no safe way to
+            // route an error response. Swallow rather than echo, otherwise
+            // both peers loop on each other's malformed errors.
+            #log(.error, "Envelope decode failed, swallowing to avoid ping-pong: \(error, privacy: .public)")
+            return
+        }
+
+        // Route by nonce when present (new wire form), fall back to
+        // identifier for legacy peers.
+        let routingKey = requestData.nonce ?? requestData.identifier
+        if messageChannel.deliverToPendingRequest(routingKey: routingKey, data: data) {
+            return
+        }
+
+        guard let handler = messageChannel.handler(for: requestData.identifier) else {
+            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
+            return
+        }
+
+        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
+        do {
+            let responseData = try await handler.closure(requestData.data)
+            if handler.responseType != RuntimeMessageNull.self {
+                // Echo the request's nonce so concurrent same-`identifier`
+                // round trips route their responses without collision.
+                let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData, nonce: requestData.nonce)
+                try await send(requestData: response)
+            }
+        } catch {
+            // Handler-execution failure → wrap in
+            // `RuntimeNetworkRequestError` and emit via the same
+            // nonce-stamped envelope used by successful responses so
+            // the peer's `sendRequest` finds the matching pending entry.
+            #log(.error, "Handler \(requestData.identifier, privacy: .public) failed: \(error, privacy: .public)")
+            let errorPayload = RuntimeNetworkRequestError(message: "\(error)")
+            if let errorData = try? JSONEncoder().encode(errorPayload) {
+                let errorEnvelope = RuntimeRequestData(identifier: requestData.identifier, data: errorData, nonce: requestData.nonce)
+                try? await send(requestData: errorEnvelope)
             }
         }
     }
