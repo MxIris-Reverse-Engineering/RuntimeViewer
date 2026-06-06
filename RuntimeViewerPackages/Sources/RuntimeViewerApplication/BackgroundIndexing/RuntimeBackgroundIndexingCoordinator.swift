@@ -12,10 +12,10 @@ import RuntimeViewerSettings
 @MainActor
 public final class RuntimeBackgroundIndexingCoordinator {
     /// Soft cap on `historyRelay` size. A long-running session that triggers
-    /// many `imageLoaded` notifications would otherwise grow history without
-    /// bound; once this cap is exceeded we drop the oldest entries from the
-    /// tail (history is inserted at index 0, so the tail is the oldest).
-    /// The user can still manually clear via `clearHistory()`.
+    /// many always-index retries would otherwise grow history without bound;
+    /// once this cap is exceeded we drop the oldest entries from the tail
+    /// (history is inserted at index 0, so the tail is the oldest). The user
+    /// can still manually clear via `clearHistory()`.
     private static let maxHistoryEntries = 100
 
     public struct AggregateState: Equatable, Sendable {
@@ -59,7 +59,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
     private static let coalesceWindowNanos: UInt64 = 16_000_000
 
     private var eventPumpTask: Task<Void, Never>?
-    private var imageLoadedPumpTask: Task<Void, Never>?
     /// Pump that re-runs `startAlwaysIndexBatches()` after every fullReload.
     /// Required because remote engines (XPC / Bonjour) populate `imageList`
     /// asynchronously: the first `documentDidOpen` may see an empty list and
@@ -70,14 +69,20 @@ public final class RuntimeBackgroundIndexingCoordinator {
     /// this engine session — otherwise every batch finish → `reloadData` →
     /// pump → empty-batch-start → finish → loop would spin forever.
     private var reloadDataPumpTask: Task<Void, Never>?
-    private var lastKnownIsEnabled: Bool = false
+    /// Last observed values of each Settings.Indexing toggle, used by
+    /// `handleSettingsChange` to detect transitions and dispatch only the
+    /// minimal start / cancel work. Seeded by `bootstrapSettingsObservation`.
+    private var lastKnownMasterEnabled: Bool = false
+    private var lastKnownHeuristicEnabled: Bool = false
+    private var lastKnownCustomEnabled: Bool = false
     #if canImport(RuntimeViewerSettings)
-    private var lastKnownAlwaysIndexEntries: [Settings.Indexing.AlwaysIndexEntry] = []
-    /// Identifiers from `alwaysIndexEntries` that have successfully resolved
+    private var lastKnownCustomEntries: [Settings.Indexing.AlwaysIndexEntry] = []
+    /// Identifiers from `custom.entries` that have successfully resolved
     /// to a path and had `startBatch` dispatched at least once during the
     /// current engine session. Used by `startAlwaysIndexBatches` to skip
     /// no-op re-entry triggered by the reload pump. Reset on engine swap,
-    /// off→on toggle, and entry-list change so genuinely new work re-runs.
+    /// master off→on, custom off→on, and entry-list change so genuinely
+    /// new work re-runs.
     private var dispatchedAlwaysIndexIdentifiers: Set<String> = []
     #endif
 
@@ -86,7 +91,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
         self.engine = documentState.runtimeEngine
         startEventPump()
         #if canImport(RuntimeViewerSettings)
-        startImageLoadedPump()
         startReloadDataPump()
         bootstrapSettingsObservation()
         #endif
@@ -95,7 +99,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
 
     deinit {
         eventPumpTask?.cancel()
-        imageLoadedPumpTask?.cancel()
         reloadDataPumpTask?.cancel()
     }
 
@@ -270,22 +273,20 @@ public final class RuntimeBackgroundIndexingCoordinator {
         //    looping over an AsyncStream owned by the old manager; cancelling
         //    them ends the loops cleanly.
         eventPumpTask?.cancel()
-        imageLoadedPumpTask?.cancel()
         reloadDataPumpTask?.cancel()
         eventPumpTask = nil
-        imageLoadedPumpTask = nil
         reloadDataPumpTask = nil
 
         // 2) Cancel **all** in-flight batches on the old manager — not just
         //    the ones in `documentBatchIDs`. A `startBatch` Task that
         //    suspended before its id was inserted into `documentBatchIDs`
         //    would otherwise leak: the `self.engine === engine` guard in
-        //    `startMainExecutableBatch` / `handleImageLoaded` correctly drops
-        //    its id, but the batch itself remains active on the old manager
-        //    and runs to completion uninterrupted, occupying CPU and the
-        //    section-cache slots until the old engine is finally deinit'd.
-        //    `cancelAllBatches` covers both already-tracked batches and any
-        //    swap-window arrivals.
+        //    `startMainExecutableBatch` / `startAlwaysIndexBatches` correctly
+        //    drops its id, but the batch itself remains active on the old
+        //    manager and runs to completion uninterrupted, occupying CPU and
+        //    the section-cache slots until the old engine is finally
+        //    deinit'd. `cancelAllBatches` covers both already-tracked
+        //    batches and any swap-window arrivals.
         //
         //    Fire-and-forget — old engine's manager will deinit shortly.
         Task {
@@ -306,7 +307,6 @@ public final class RuntimeBackgroundIndexingCoordinator {
         // 5) Restart pumps on the new engine's manager.
         startEventPump()
         #if canImport(RuntimeViewerSettings)
-        startImageLoadedPump()
         startReloadDataPump()
         // New engine session — clear the dispatched-identifiers gate so the
         // always-index list re-dispatches against the new engine's image
@@ -323,15 +323,22 @@ public final class RuntimeBackgroundIndexingCoordinator {
 #if canImport(RuntimeViewerSettings)
 extension RuntimeBackgroundIndexingCoordinator {
     public func documentDidOpen() {
-        startMainExecutableBatch(reason: .appLaunch)
-        startAlwaysIndexBatches()
+        let indexing = currentIndexingSettings()
+        guard indexing.isEnabled else { return }
+        if indexing.heuristic.isEnabled {
+            startMainExecutableBatch(reason: .appLaunch)
+        }
+        if indexing.custom.isEnabled {
+            startAlwaysIndexBatches()
+        }
     }
 
     /// Shared logic for "index the main executable" batches. Both the document
     /// open path (reason `.appLaunch`) and the off→on settings toggle (reason
     /// `.settingsEnabled`) funnel through here so the popover's title-by-reason
     /// branch surfaces the correct label instead of always saying "App launch
-    /// indexing".
+    /// indexing". Callers are responsible for checking master / heuristic
+    /// enablement before invoking — this method does not re-check.
     private func startMainExecutableBatch(reason: RuntimeIndexingBatchReason) {
         // The class is `@MainActor`, so this Task inherits main-actor isolation
         // and can mutate `documentBatchIDs` synchronously after the awaits.
@@ -342,8 +349,11 @@ extension RuntimeBackgroundIndexingCoordinator {
         // `documentBatchIDs`.
         Task { [weak self, engine] in
             guard let self else { return }
-            let settings = self.currentBackgroundIndexingSettings()
-            guard settings.isEnabled else { return }
+            let indexing = self.currentIndexingSettings()
+            // Re-check both gates after the Task hop because the settings
+            // observation may have flipped a toggle between the caller's check
+            // and this Task running.
+            guard indexing.isEnabled, indexing.heuristic.isEnabled else { return }
             // mainExecutablePath is `async throws` because remote (XPC / TCP)
             // sources may fail; on launch we silently skip the batch in that
             // case rather than surface the error to the user.
@@ -351,8 +361,8 @@ extension RuntimeBackgroundIndexingCoordinator {
                   !root.isEmpty else { return }
             let id = await engine.backgroundIndexingManager.startBatch(
                 rootImagePath: root,
-                depth: settings.depth,
-                maxConcurrency: settings.maxConcurrency,
+                depth: indexing.heuristic.depth,
+                maxConcurrency: indexing.maxConcurrency,
                 reason: reason)
             // If the engine swapped while we were suspended, the batch landed
             // on the now-old manager which `handleEngineSwap` has already
@@ -372,63 +382,27 @@ extension RuntimeBackgroundIndexingCoordinator {
         }
     }
 
-    private func startImageLoadedPump() {
-        // Class is `@MainActor`; this Task and `for await` loop run on the main
-        // actor. `handleImageLoaded` doesn't need a `MainActor.run` hop.
-        // Capture `engine` so the pump (and the `handleImageLoaded` call below)
-        // stay bound to the engine that owned this pump at startup, even if
-        // `self.engine` is reassigned by `handleEngineSwap` mid-flight.
-        imageLoadedPumpTask = Task { [weak self, engine] in
-            guard let self else { return }
-            // Combine.Publisher.values bridges to AsyncSequence on macOS 12+ /
-            // iOS 15+; the project's deployment targets satisfy this. Errors are
-            // Never on this publisher, so no try is needed.
-            for await path in engine.imageDidLoadPublisher.values {
-                await self.handleImageLoaded(path: path, on: engine)
-            }
-        }
-    }
-
-    private func handleImageLoaded(path: String, on engine: RuntimeEngine) async {
-        let settings = currentBackgroundIndexingSettings()
-        guard settings.isEnabled else { return }
-        // If `documentDidOpen` is currently indexing the same path (e.g. dyld
-        // fires this notification for the main executable right after launch),
-        // the manager dedups by `rootImagePath` and returns the existing
-        // batch's id. Inserting it into `documentBatchIDs` is a no-op on the
-        // Set when it's already tracked.
-        let id = await engine.backgroundIndexingManager.startBatch(
-            rootImagePath: path,
-            depth: settings.depth,
-            maxConcurrency: settings.maxConcurrency,
-            reason: .imageLoaded(path: path))
-        // If the engine swapped while we were suspended on `startBatch`, the
-        // id belongs to the old manager and `handleEngineSwap` has already
-        // cleared `documentBatchIDs`; don't reintroduce a stale id.
-        guard self.engine === engine else { return }
-        self.staging.insertDocumentBatchID(id)
-    }
-
     // MARK: - Always-index list
 
-    /// Reads `Settings.Indexing.alwaysIndexEntries` and starts one batch
-    /// per resolvable entry. Entries that don't resolve to a path in the
-    /// engine's `imageList` are silently skipped — they remain in
-    /// `lastKnownAlwaysIndexEntries` as still-pending so the next
-    /// fullReload retry can pick them up.
+    /// Reads `Settings.Indexing.custom.entries` and starts one batch per
+    /// resolvable entry. Entries that don't resolve to a path in the engine's
+    /// `imageList` are silently skipped — they remain in
+    /// `lastKnownCustomEntries` as still-pending so the next fullReload
+    /// retry can pick them up.
     ///
     /// `followDependencies` controls the per-entry depth: when false, the
     /// batch is pinned to `depth: 0` so the BFS only emits the resolved
-    /// image itself; when true, the global `BackgroundMode.depth` is used
-    /// and the BFS walks the full dependency closure like the main-executable
+    /// image itself; when true, the heuristic sub-mode's `depth` is reused
+    /// so the BFS walks the full dependency closure like the main-executable
     /// batch.
     ///
     /// The Manager dedups by `rootImagePath`, so re-entry on the same path
     /// is a cheap no-op that returns the existing batch id — making this
     /// method safe to call from multiple triggers (documentDidOpen, fullReload,
-    /// settings change, engine swap).
+    /// settings change, engine swap). Callers are responsible for checking
+    /// master / custom enablement before invoking.
     private func startAlwaysIndexBatches() {
-        let entries = currentAlwaysIndexEntries()
+        let entries = currentIndexingSettings().custom.entries
         guard !entries.isEmpty else { return }
         // Gate: only process entries we haven't dispatched yet this session.
         // The reload pump re-enters here after every fullReload, including
@@ -442,8 +416,10 @@ extension RuntimeBackgroundIndexingCoordinator {
         guard !pendingEntries.isEmpty else { return }
         Task { [weak self, engine] in
             guard let self else { return }
-            let settings = self.currentBackgroundIndexingSettings()
-            guard settings.isEnabled else { return }
+            let indexing = self.currentIndexingSettings()
+            // Re-check both gates after the Task hop (mirrors
+            // `startMainExecutableBatch`).
+            guard indexing.isEnabled, indexing.custom.isEnabled else { return }
             // `engine.imageList` is `actor`-isolated; one hop fetches the
             // snapshot we'll use to resolve every identifier this round.
             // Remote engines populate `imageList` asynchronously via the
@@ -454,11 +430,11 @@ extension RuntimeBackgroundIndexingCoordinator {
             let imageList = await engine.imageList
             for entry in pendingEntries {
                 guard let resolvedPath = resolveAlwaysIndexIdentifier(entry.identifier, in: imageList) else { continue }
-                let effectiveDepth = entry.followDependencies ? settings.depth : 0
+                let effectiveDepth = entry.followDependencies ? indexing.heuristic.depth : 0
                 let id = await engine.backgroundIndexingManager.startBatch(
                     rootImagePath: resolvedPath,
                     depth: effectiveDepth,
-                    maxConcurrency: settings.maxConcurrency,
+                    maxConcurrency: indexing.maxConcurrency,
                     reason: .alwaysIndex(identifier: entry.identifier))
                 guard self.engine === engine else { return }
                 self.staging.insertDocumentBatchID(id)
@@ -497,38 +473,40 @@ extension RuntimeBackgroundIndexingCoordinator {
             for await _ in engine.reloadDataPublisher.values {
                 await MainActor.run {
                     guard self.engine === engine else { return }
+                    let indexing = self.currentIndexingSettings()
+                    guard indexing.isEnabled, indexing.custom.isEnabled else { return }
                     self.startAlwaysIndexBatches()
                 }
             }
         }
     }
 
-    private func currentBackgroundIndexingSettings() -> Settings.Indexing.BackgroundMode {
+    private func currentIndexingSettings() -> Settings.Indexing {
         @Dependency(\.settings) var settings
-        return settings.indexing.backgroundMode
-    }
-
-    private func currentAlwaysIndexEntries() -> [Settings.Indexing.AlwaysIndexEntry] {
-        @Dependency(\.settings) var settings
-        return settings.indexing.alwaysIndexEntries
+        return settings.indexing
     }
 
     private func bootstrapSettingsObservation() {
-        self.lastKnownIsEnabled = currentBackgroundIndexingSettings().isEnabled
-        self.lastKnownAlwaysIndexEntries = currentAlwaysIndexEntries()
+        let indexing = currentIndexingSettings()
+        self.lastKnownMasterEnabled = indexing.isEnabled
+        self.lastKnownHeuristicEnabled = indexing.heuristic.isEnabled
+        self.lastKnownCustomEnabled = indexing.custom.isEnabled
+        self.lastKnownCustomEntries = indexing.custom.entries
         self.subscribeToSettings()
     }
 
     private func subscribeToSettings() {
         withObservationTracking {
-            let snapshot = currentBackgroundIndexingSettings()
+            let snapshot = currentIndexingSettings()
             _ = snapshot.isEnabled
-            _ = snapshot.depth
             _ = snapshot.maxConcurrency
-            // Track always-index entries too so the observation re-fires
-            // when the user adds / edits / removes a row or flips the
-            // per-row followDependencies toggle in Settings UI.
-            _ = currentAlwaysIndexEntries()
+            _ = snapshot.heuristic.isEnabled
+            _ = snapshot.heuristic.depth
+            _ = snapshot.custom.isEnabled
+            // Track custom entries too so the observation re-fires when the
+            // user adds / edits / removes a row or flips the per-row
+            // followDependencies toggle in Settings UI.
+            _ = snapshot.custom.entries
         } onChange: { [weak self] in
             // onChange fires off the main actor synchronously after any mutation.
             // Hop back to MainActor to (a) handle the change and (b) re-register.
@@ -540,42 +518,108 @@ extension RuntimeBackgroundIndexingCoordinator {
         }
     }
 
+    /// Reconciles the three Indexing toggles (master / heuristic / custom)
+    /// against their last-known values. The matrix:
+    ///
+    /// - master off → on : honor whatever sub-toggles are on by dispatching
+    ///   their batches with `.settingsEnabled` (heuristic) / always-index
+    ///   refresh (custom).
+    /// - master on → off : cancel **every** active batch.
+    /// - heuristic off → on (master stays on) : dispatch a fresh main-
+    ///   executable batch.
+    /// - heuristic on → off (master stays on) : cancel only batches whose
+    ///   reason `isHeuristic`; custom batches keep running.
+    /// - custom off → on (master stays on) : reset the dispatched-identifiers
+    ///   gate and dispatch always-index.
+    /// - custom on → off (master stays on) : cancel only batches whose
+    ///   reason `isCustom`; heuristic batches keep running.
+    /// - custom.entries changed (both stay on) : drop removed identifiers
+    ///   from the gate, reset edited ones, dispatch fresh entries.
+    ///
+    /// `depth` / `maxConcurrency` changes are intentional no-ops; next
+    /// `startBatch` picks up the new values.
     private func handleSettingsChange() {
-        let latest = currentBackgroundIndexingSettings()
-        let wasEnabled = lastKnownIsEnabled
-        lastKnownIsEnabled = latest.isEnabled
-        if !wasEnabled && latest.isEnabled {
-            // Scenario E: off→on. Use `.settingsEnabled` so the popover's
-            // title-by-reason mapping shows "Settings enabled" instead of
-            // the misleading "App launch indexing". Also re-trigger the
-            // always-index list since this is effectively a fresh start —
-            // clear the dispatched gate first so every entry runs again.
+        let indexing = currentIndexingSettings()
+        let wasMaster = lastKnownMasterEnabled
+        let wasHeuristic = lastKnownHeuristicEnabled
+        let wasCustom = lastKnownCustomEnabled
+        let nowMaster = indexing.isEnabled
+        let nowHeuristic = indexing.heuristic.isEnabled
+        let nowCustom = indexing.custom.isEnabled
+        lastKnownMasterEnabled = nowMaster
+        lastKnownHeuristicEnabled = nowHeuristic
+        lastKnownCustomEnabled = nowCustom
+
+        if !wasMaster && nowMaster {
+            // Master off→on: treat as a fresh start. Reset the dispatched gate
+            // so every custom entry re-runs. Each sub-mode dispatches only if
+            // its own toggle is on.
             dispatchedAlwaysIndexIdentifiers.removeAll()
-            startMainExecutableBatch(reason: .settingsEnabled)
-            startAlwaysIndexBatches()
-        } else if wasEnabled && !latest.isEnabled {
+            if nowHeuristic {
+                startMainExecutableBatch(reason: .settingsEnabled)
+            }
+            if nowCustom {
+                startAlwaysIndexBatches()
+            }
+            // Sync the entries baseline so the entries-changed branch below
+            // doesn't double-fire after this off→on sweep.
+            lastKnownCustomEntries = indexing.custom.entries
+            return
+        }
+
+        if wasMaster && !nowMaster {
+            // Master on→off: stop everything; sub-toggles are now irrelevant.
             Task { [engine] in
                 await engine.backgroundIndexingManager.cancelAllBatches()
+            }
+            // Don't update the entries baseline here — if the user flips
+            // master back on later, we want the same baseline to compare
+            // against on the next change.
+            return
+        }
+
+        // From here on, master stayed on. Reconcile each sub-toggle in turn.
+
+        if nowMaster {
+            if !wasHeuristic && nowHeuristic {
+                startMainExecutableBatch(reason: .settingsEnabled)
+            } else if wasHeuristic && !nowHeuristic {
+                Task { [engine] in
+                    await engine.backgroundIndexingManager.cancelBatches(matching: { $0.reason.isHeuristic })
+                }
+            }
+
+            if !wasCustom && nowCustom {
+                // Custom off→on while master stays on: reset the gate so
+                // every entry dispatches (same semantics as master off→on
+                // for custom).
+                dispatchedAlwaysIndexIdentifiers.removeAll()
+                startAlwaysIndexBatches()
+            } else if wasCustom && !nowCustom {
+                Task { [engine] in
+                    await engine.backgroundIndexingManager.cancelBatches(matching: { $0.reason.isCustom })
+                }
             }
         }
 
         // Entry list changes: trigger always-index when content actually
-        // changed and the feature is enabled. Adding / editing entries (or
-        // flipping a per-row followDependencies toggle) kicks off batches
-        // for the new content; removing entries is silent — already-running
-        // batches keep running unless the user cancels them from the popover.
-        // Toggling followDependencies on an existing entry also kicks off a
-        // new batch: Manager dedup is by `rootImagePath`, so the existing
-        // depth=0 batch stays the in-flight winner until it finishes. The
-        // depth change picks up on the next start (e.g. document reopen).
-        let previousEntries = lastKnownAlwaysIndexEntries
-        let latestEntries = currentAlwaysIndexEntries()
+        // changed and both master + custom are enabled. Adding / editing
+        // entries (or flipping a per-row followDependencies toggle) kicks
+        // off batches for the new content; removing entries is silent —
+        // already-running batches keep running unless the user cancels
+        // them from the popover. Toggling followDependencies on an existing
+        // entry also kicks off a new batch: Manager dedup is by
+        // `rootImagePath`, so the existing depth=0 batch stays the in-flight
+        // winner until it finishes. The depth change picks up on the next
+        // start (e.g. document reopen).
+        let previousEntries = lastKnownCustomEntries
+        let latestEntries = indexing.custom.entries
         let entriesChanged = latestEntries != previousEntries
-        lastKnownAlwaysIndexEntries = latestEntries
-        // Skip when off→on already fired startAlwaysIndexBatches above to
-        // avoid a duplicate (Manager dedup would no-op the second call, but
-        // skipping the redundant Task hop is cleaner).
-        if entriesChanged, latest.isEnabled, wasEnabled {
+        lastKnownCustomEntries = latestEntries
+        // Skip when custom off→on already fired startAlwaysIndexBatches
+        // above to avoid a duplicate (Manager dedup would no-op the second
+        // call, but skipping the redundant Task hop is cleaner).
+        if entriesChanged, nowMaster, nowCustom, wasCustom {
             // Drop identifiers no longer in the list and reset
             // followDependencies-flipped ones so they can re-dispatch with
             // the new depth. Identifiers whose row was untouched stay in
@@ -594,8 +638,6 @@ extension RuntimeBackgroundIndexingCoordinator {
             }
             startAlwaysIndexBatches()
         }
-        // depth / maxConcurrency changes: intentional no-op; next startBatch picks
-        // up the new values.
     }
 }
 #endif

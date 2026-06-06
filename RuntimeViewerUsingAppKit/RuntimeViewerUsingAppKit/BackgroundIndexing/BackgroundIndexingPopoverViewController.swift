@@ -202,9 +202,13 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         // `viewFor:item:` re-invocation) for content updates.
         output.nodes.drive(outlineView.rx.nodes) { [weak self] (outlineView: NSOutlineView, _: NSTableColumn?, node: BackgroundIndexingNode) -> NSView? in
             switch node {
-            case .section(let kind, let batches):
+            case .section(let kind, let batchCount, _):
                 let cell = outlineView.box.makeView(ofClass: SectionHeaderCellView.self)
-                cell.configure(kind: kind, count: batches.count)
+                cell.configure(kind: kind, count: batchCount)
+                return cell
+            case .reasonGroup(_, let category, let batchCount, _):
+                let cell = outlineView.box.makeView(ofClass: ReasonGroupHeaderCellView.self)
+                cell.configure(category: category, count: batchCount)
                 return cell
             case .batch(let batch, _):
                 let cell = outlineView.box.makeView(ofClass: BatchCellView.self)
@@ -227,12 +231,13 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         output.nodes.driveOnNext { [weak self] nodes in
             guard let self else { return }
 //            #log(.fault, "Nodes Update")
-            // Auto-expand only the ACTIVE section and its batches. HISTORY stays
+            // Auto-expand only the ACTIVE section and its descendants (reason
+            // groups + batches + items) on first reveal. HISTORY stays
             // collapsed by default; once the user expands it, NSOutlineView
             // preserves that state across diffs (the section identifier is
             // kind-only, see BackgroundIndexingNode.differenceIdentifier).
             for node in nodes {
-                if case .section(.active, _) = node, !outlineView.isItemExpanded(node) {
+                if case .section(.active, _, _) = node, !outlineView.isItemExpanded(node) {
                     outlineView.expandItem(node, expandChildren: true)
                 }
             }
@@ -244,6 +249,20 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 extension BackgroundIndexingPopoverViewController: NSOutlineViewDelegate {
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
         return false
+    }
+
+    /// Auto-expand reason groups when their parent section is expanded so the
+    /// user doesn't have to drill in twice (HISTORY → Always Index → batches)
+    /// to see the previously-flat list. Batches themselves stay collapsed
+    /// inside HISTORY so the popover doesn't blow up with finished item rows.
+    func outlineViewItemDidExpand(_ notification: Notification) {
+        guard let item = notification.userInfo?["NSObject"] as? BackgroundIndexingNode,
+              case .section = item else { return }
+        for child in item.children {
+            if case .reasonGroup = child, !outlineView.isItemExpanded(child) {
+                outlineView.expandItem(child, expandChildren: false)
+            }
+        }
     }
 }
 
@@ -258,10 +277,10 @@ extension BackgroundIndexingPopoverViewController {
             $0.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
             $0.textColor = .tertiaryLabelColor
         }
-        
+
         override func setup() {
             super.setup()
-            
+
             titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
             countLabel.setContentHuggingPriority(.required, for: .horizontal)
             countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
@@ -285,6 +304,53 @@ extension BackgroundIndexingPopoverViewController {
             case .history: titleLabel.stringValue = "HISTORY"
             }
             countLabel.stringValue = "\(count)"
+        }
+    }
+
+    /// Header for a reason category (Heuristic Discovery / Always Index /
+    /// Manual). Sits one level below the section header and one level above
+    /// the batch rows.
+    private final class ReasonGroupHeaderCellView: TableCellView {
+        private let titleLabel = Label("").then {
+            $0.font = .systemFont(ofSize: 12, weight: .semibold)
+        }
+
+        private let countLabel = Label("").then {
+            $0.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            $0.textColor = .secondaryLabelColor
+        }
+
+        override func setup() {
+            super.setup()
+
+            titleLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            countLabel.setContentHuggingPriority(.required, for: .horizontal)
+            countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+            let stack = HStackView(alignment: .center, spacing: 6) {
+                titleLabel
+                countLabel
+            }
+
+            addSubview(stack)
+            stack.snp.makeConstraints { make in
+                make.top.equalToSuperview().offset(4)
+                make.bottom.equalToSuperview().offset(-4)
+                make.leading.trailing.equalToSuperview()
+            }
+        }
+
+        func configure(category: RuntimeIndexingBatchReason.Category, count: Int) {
+            titleLabel.stringValue = Self.title(for: category)
+            countLabel.stringValue = "\(count)"
+        }
+
+        private static func title(for category: RuntimeIndexingBatchReason.Category) -> String {
+            switch category {
+            case .heuristic: return "Heuristic Discovery"
+            case .alwaysIndex: return "Always Index"
+            case .manual: return "Manual"
+            }
         }
     }
 
@@ -427,17 +493,20 @@ extension BackgroundIndexingPopoverViewController {
         }
 
         private static func title(for reason: RuntimeIndexingBatchReason) -> String {
+            // The parent ReasonGroupHeaderCellView already names the category
+            // (Heuristic Discovery / Always Index / Manual). Batch labels can
+            // drop the now-redundant prefix; for .alwaysIndex this means the
+            // user-supplied identifier surfaces directly (e.g. "SwiftUI"
+            // instead of "Always: SwiftUI").
             switch reason {
             case .appLaunch:
                 return "App launch indexing"
-            case .imageLoaded(let path):
-                return "\((path as NSString).lastPathComponent) deps"
             case .settingsEnabled:
                 return "Settings enabled"
             case .manual:
                 return "Manual indexing"
             case .alwaysIndex(let identifier):
-                return "Always: \(identifier)"
+                return identifier
             }
         }
     }

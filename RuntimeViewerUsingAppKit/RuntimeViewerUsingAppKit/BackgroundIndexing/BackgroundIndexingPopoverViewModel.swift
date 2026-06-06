@@ -129,9 +129,12 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
 
     /// Seeds `isEnabled` from settings once and registers the observation.
     /// Mirrors `RuntimeBackgroundIndexingCoordinator.bootstrapSettingsObservation`'s
-    /// "seed on bootstrap, only re-register on change" pattern.
+    /// "seed on bootstrap, only re-register on change" pattern. Bound to the
+    /// master switch — `isEnabled` represents "the background-indexing feature
+    /// is on", regardless of which sub-mode (heuristic / custom) is doing the
+    /// work.
     private func bootstrapIsEnabledObservation() {
-        isEnabled = settings.indexing.backgroundMode.isEnabled
+        isEnabled = settings.indexing.isEnabled
         registerIsEnabledObservation()
     }
 
@@ -140,14 +143,14 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
     /// the `onChange` closure runs once, then the tracker is gone.
     private func registerIsEnabledObservation() {
         withObservationTracking {
-            _ = settings.indexing.backgroundMode.isEnabled
+            _ = settings.indexing.isEnabled
         } onChange: { [weak self] in
             // `onChange` fires off the main actor right after a mutation;
             // hop back to the main actor to read the latest value and
             // re-register the observation.
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.isEnabled = self.settings.indexing.backgroundMode.isEnabled
+                self.isEnabled = self.settings.indexing.isEnabled
                 self.registerIsEnabledObservation()
             }
         }
@@ -158,16 +161,61 @@ final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
         history: [RuntimeIndexingBatch]
     )
         -> [BackgroundIndexingNode] {
-        let activeBatchNodes = active.map(makeBatchNode)
-        var nodes: [BackgroundIndexingNode] = [.section(.active, batches: activeBatchNodes)]
+        var nodes: [BackgroundIndexingNode] = [
+            .section(.active, batchCount: active.count, groups: makeReasonGroups(for: active, kind: .active))
+        ]
         // History section is omitted entirely when empty so it doesn't clutter
         // the popover with an empty header. Active is always present so the
         // user always has the "ACTIVE" group as context.
         if !history.isEmpty {
-            let historyBatchNodes = history.map(makeBatchNode)
-            nodes.append(.section(.history, batches: historyBatchNodes))
+            nodes.append(.section(.history, batchCount: history.count, groups: makeReasonGroups(for: history, kind: .history)))
         }
         return nodes
+    }
+
+    /// Buckets a section's batches by `reason.category`, emitting one
+    /// `.reasonGroup` per non-empty category in a stable order
+    /// (heuristic → always index → manual). Batch order inside each group
+    /// preserves the input order, which matches how the coordinator queues
+    /// them.
+    ///
+    /// `.alwaysIndex` groups flatten their batches' items directly into the
+    /// group's children — each entry's batch typically contains just one item
+    /// (or a small follow-dependency closure), so an intermediate batch row
+    /// would just repeat the entry's image name. `.heuristic` and `.manual`
+    /// keep the batch nesting because their batches usually contain many
+    /// items each (full dependency closure for a document).
+    private static func makeReasonGroups(
+        for batches: [RuntimeIndexingBatch],
+        kind: BackgroundIndexingNode.SectionKind
+    )
+        -> [BackgroundIndexingNode] {
+        let categoryOrder: [RuntimeIndexingBatchReason.Category] = [
+            .heuristic, .alwaysIndex, .manual
+        ]
+        var bucketed: [RuntimeIndexingBatchReason.Category: [RuntimeIndexingBatch]] = [:]
+        for batch in batches {
+            bucketed[batch.reason.category, default: []].append(batch)
+        }
+        return categoryOrder.compactMap { category in
+            guard let groupBatches = bucketed[category], !groupBatches.isEmpty else {
+                return nil
+            }
+            let children: [BackgroundIndexingNode]
+            switch category {
+            case .alwaysIndex:
+                children = groupBatches.flatMap { batch in
+                    batch.items.map { item in
+                        BackgroundIndexingNode.item(batchID: batch.id, item: item)
+                    }
+                }
+            case .heuristic, .manual:
+                children = groupBatches.map(makeBatchNode)
+            }
+            return BackgroundIndexingNode.reasonGroup(
+                kind, category, batchCount: groupBatches.count, children: children
+            )
+        }
     }
 
     private static func makeBatchNode(_ batch: RuntimeIndexingBatch)

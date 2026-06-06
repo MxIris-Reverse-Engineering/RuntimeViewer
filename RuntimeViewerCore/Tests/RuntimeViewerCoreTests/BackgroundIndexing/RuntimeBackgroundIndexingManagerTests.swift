@@ -300,11 +300,12 @@ import Testing
         // No crash; batch still completes. No .taskPrioritized emitted.
     }
 
-    /// Real-world double-batch: `documentDidOpen` dispatches `.appLaunch` on the
-    /// main executable; concurrently `imageDidLoadPublisher` fires for the same
-    /// path and `handleImageLoaded` dispatches `.imageLoaded`. Without dedup
-    /// these become two parallel batches indexing the same dependency graph.
-    /// The manager must collapse them to a single batch (same id returned).
+    /// Real-world double-batch: `documentDidOpen` dispatches `.appLaunch` on
+    /// the main executable; concurrently the user flips the master switch off
+    /// and back on while the first batch is still pending, dispatching a
+    /// second batch with `.settingsEnabled`. Without dedup these become two
+    /// parallel batches indexing the same dependency graph. The manager must
+    /// collapse them to a single batch (same id returned).
     @Test func startBatchDedupsByRootImagePathAcrossDifferentReasons() async {
         let engine = keep(MockBackgroundIndexingEngine())
         // depth 0 with `isIndexed: false` → batch contains one pending item
@@ -318,7 +319,7 @@ import Testing
             maxConcurrency: 1, reason: .appLaunch)
         let secondId = await manager.startBatch(
             rootImagePath: "/App", depth: 0,
-            maxConcurrency: 1, reason: .imageLoaded(path: "/App"))
+            maxConcurrency: 1, reason: .settingsEnabled)
 
         #expect(
             firstId == secondId,
@@ -327,6 +328,62 @@ import Testing
 
         // Cleanup so the test doesn't leave a Task in flight.
         await manager.cancelBatch(firstId)
+    }
+
+    /// `cancelBatches(matching:)` cancels only the batches matching the
+    /// supplied predicate, leaving others running. Used by the Coordinator to
+    /// scope cancellation to a single sub-mode (Heuristic / Custom) when the
+    /// user disables that sub-mode while batches are in flight.
+    @Test func cancelBatchesMatchingScopesCancellationByPredicate() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        // The mock's default 5ms sleep inside loadImageForBackgroundIndexing
+        // is enough headroom for cancelBatches(matching:) to reach both
+        // batches before they finalize, since actor calls serialize and
+        // cancellation runs before any in-flight load wakes up.
+        engine.program(path: "/App", .init())
+        engine.program(path: "/System/Library/Frameworks/Foundation.framework/Foundation",
+                       .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        let events = manager.events
+        let heuristicId = await manager.startBatch(
+            rootImagePath: "/App", depth: 0,
+            maxConcurrency: 1, reason: .appLaunch)
+        let customId = await manager.startBatch(
+            rootImagePath: "/System/Library/Frameworks/Foundation.framework/Foundation",
+            depth: 0, maxConcurrency: 1,
+            reason: .alwaysIndex(identifier: "Foundation"))
+
+        await manager.cancelBatches(matching: { $0.reason.isHeuristic })
+
+        // Drain terminal events for both ids — the heuristic must report
+        // `batchCancelled`, the custom must report `batchFinished` (it runs
+        // to completion because cancelBatches only matched the heuristic
+        // reason).
+        var heuristicCancelled = false
+        var customFinishedNaturally = false
+        let observer = Task { () -> (Bool, Bool) in
+            var localHeuristic = false
+            var localCustom = false
+            for await event in events {
+                switch event {
+                case .batchCancelled(let batch) where batch.id == heuristicId:
+                    localHeuristic = true
+                case .batchFinished(let batch) where batch.id == customId:
+                    localCustom = true
+                case .batchCancelled(let batch) where batch.id == customId:
+                    // Should not happen — captured for assertion below.
+                    localCustom = false
+                default:
+                    break
+                }
+                if localHeuristic && localCustom { return (localHeuristic, localCustom) }
+            }
+            return (localHeuristic, localCustom)
+        }
+        (heuristicCancelled, customFinishedNaturally) = await observer.value
+        #expect(heuristicCancelled, "Heuristic batch must emit batchCancelled")
+        #expect(customFinishedNaturally, "Custom batch must run to completion (batchFinished)")
     }
 
     /// `.alwaysIndex(identifier:)` carries the raw user-supplied string through
