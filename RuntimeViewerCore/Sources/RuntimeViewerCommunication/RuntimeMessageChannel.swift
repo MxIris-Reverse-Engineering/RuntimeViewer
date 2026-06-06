@@ -239,7 +239,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         }
         for messageData in extractedMessages {
             #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
-            receivedDataContinuation.withLock { $0?.yield(messageData) }
+            _ = receivedDataContinuation.withLock { $0?.yield(messageData) }
             onMessageReceived?(messageData)
         }
     }
