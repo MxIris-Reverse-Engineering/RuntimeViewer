@@ -245,7 +245,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         case #selector(exportInterface(_:)):
             return documentState.currentImageNode != nil
         case #selector(exportMultipleImages(_:)):
-            return true
+            return documentState.runtimeEngine.imageNodes.count >= 2
         default:
             return super.responds(to: aSelector)
         }

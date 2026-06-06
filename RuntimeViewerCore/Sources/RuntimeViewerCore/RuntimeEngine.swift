@@ -121,7 +121,7 @@ public actor RuntimeEngine {
     private var needsReregistrationOnConnect = false
 
     private nonisolated let stateSubject = CurrentValueSubject<State, Never>(.initializing)
-    
+
     /// Publisher that emits engine state changes.
     public nonisolated var statePublisher: some Publisher<State, Never> {
         stateSubject.eraseToAnyPublisher()
@@ -140,9 +140,8 @@ public actor RuntimeEngine {
 
     private nonisolated let imageNodesSubject = CurrentValueSubject<[RuntimeImageNode], Never>([])
 
-    public var imageNodes: [RuntimeImageNode] {
+    public nonisolated var imageNodes: [RuntimeImageNode] {
         get { imageNodesSubject.value }
-        set { imageNodesSubject.send(newValue) }
     }
 
     /// Publisher that emits image node changes. Accessible from any isolation context.
@@ -213,17 +212,17 @@ public actor RuntimeEngine {
     /// `self` only after all other stored properties are initialized; the
     /// actor's isolation guarantees the lazy initialization is single-threaded.
     public private(set) lazy var backgroundIndexingManager: RuntimeBackgroundIndexingManager =
-        RuntimeBackgroundIndexingManager(engine: self)
+        .init(engine: self)
 
     public init(
         source: RuntimeSource,
         engineID: String = UUID().uuidString,
         hostInfo: RuntimeHostInfo = RuntimeHostInfo(
             hostID: RuntimeNetworkBonjour.localInstanceID,
-            hostName: RuntimeNetworkBonjour.localHostName
+            hostName: RuntimeNetworkBonjour.localHostName,
         ),
         originChain: [String] = [RuntimeNetworkBonjour.localInstanceID],
-        pushesRuntimeData: Bool = true
+        pushesRuntimeData: Bool = true,
     ) {
         self.engineID = engineID
         self.source = source
@@ -349,7 +348,7 @@ public actor RuntimeEngine {
         // structured `objects(in:)` request with NSCocoaErrorDomain 4864.
         connection.setMessageHandler(name: CommandNames.runtimeObjectsInImage.commandName) { [weak self] (request: ObjectsInImageRequest) -> [RuntimeObject] in
             guard let self else { throw RequestError.senderConnectionIsLose }
-            return try await self._serverObjectsWithProgress(in: request.image)
+            return try await _serverObjectsWithProgress(in: request.image)
         }
 
         // Server-only: manager-layer engine list lookup. Not part of the
@@ -367,7 +366,7 @@ public actor RuntimeEngine {
     private func setupMessageHandlerForClient() {
         #log(.debug, "Setting up client message handlers for source: \(String(describing: self.source), privacy: .public)")
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
-        setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
+        setMessageHandlerBinding(forName: .imageNodes) { $0.setImageNodes($1) }
         setMessageHandlerBinding(forName: .dataDidChange) { (engine: RuntimeEngine, change: RuntimeDataChange) in
             engine.dataChangeSubject.send(change)
         }
@@ -428,7 +427,7 @@ public actor RuntimeEngine {
     /// Overload for commands with no request body but a response.
     private func setMessageHandlerBinding<Response: Codable>(
         forName name: CommandNames,
-        respond: @escaping (isolated RuntimeEngine) async throws -> Response
+        respond: @escaping (isolated RuntimeEngine) async throws -> Response,
     ) {
         guard let connection else {
             #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
@@ -445,7 +444,7 @@ public actor RuntimeEngine {
         imageList = DyldUtilities.imageNames()
         #log(.debug, "Loaded \(self.imageList.count, privacy: .public) images")
         if isReloadImageNodes {
-            imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
+            setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
             #log(.debug, "Reloaded image nodes")
         }
         broadcast(.fullReload(isReloadImageNodes: isReloadImageNodes))
@@ -491,7 +490,7 @@ public actor RuntimeEngine {
     }
 
     private func setImageNodes(_ imageNodes: [RuntimeImageNode]) {
-        self.imageNodes = imageNodes
+        self.imageNodesSubject.value = imageNodes
     }
 
     /// Forwards an `imageDidLoad` event to the connected client when this
@@ -660,11 +659,10 @@ extension RuntimeEngine {
                     return
                 }
                 do {
-                    let objects: [RuntimeObject]
-                    if let remoteRole = self.source.remoteRole, remoteRole.isClient {
-                        objects = try await self._remoteObjectsWithProgress(in: image, continuation: continuation)
+                    let objects: [RuntimeObject] = if let remoteRole = source.remoteRole, remoteRole.isClient {
+                        try await _remoteObjectsWithProgress(in: image, continuation: continuation)
                     } else {
-                        objects = try await self._localObjectsWithProgress(in: image, continuation: continuation)
+                        try await _localObjectsWithProgress(in: image, continuation: continuation)
                     }
                     continuation.yield(.completed(objects))
                     continuation.finish()
@@ -677,7 +675,7 @@ extension RuntimeEngine {
 
     private func _localObjectsWithProgress(
         in image: String,
-        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
+        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation,
     ) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects with progress in image: \(image, privacy: .public)")
         let image = DyldUtilities.patchImagePathForDyld(image)
@@ -707,7 +705,7 @@ extension RuntimeEngine {
 
     private func _remoteObjectsWithProgress(
         in image: String,
-        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
+        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation,
     ) async throws -> [RuntimeObject] {
         guard let connection else { throw RequestError.senderConnectionIsLose }
         let cancellable = objectsLoadingProgressSubject.sink { progress in
@@ -784,8 +782,8 @@ extension RuntimeEngine {
     }
 
     public func pushEngineListChanged(_ descriptors: [RuntimeRemoteEngineDescriptor]) async throws {
-        let hasConnection = self.connection != nil
-        let isServer = self.source.remoteRole?.isServer == true
+        let hasConnection = connection != nil
+        let isServer = source.remoteRole?.isServer == true
         guard let connection, isServer else {
             #log(.debug, "[EngineMirroring] pushEngineListChanged skipped: connection=\(hasConnection, privacy: .public), isServer=\(isServer, privacy: .public)")
             return
@@ -827,7 +825,7 @@ extension RuntimeEngine {
 
     public func exportInterfaces(
         with configuration: RuntimeInterfaceExportConfiguration,
-        reporter: RuntimeInterfaceExportReporter
+        reporter: RuntimeInterfaceExportReporter,
     ) async throws {
         defer { reporter.finish() }
         let startTime = CFAbsoluteTimeGetCurrent()
@@ -854,7 +852,7 @@ extension RuntimeEngine {
                 let item = RuntimeInterfaceExportItem(
                     object: object,
                     plainText: runtimeInterface.interfaceString.string,
-                    suggestedFileName: object.exportFileName
+                    suggestedFileName: object.exportFileName,
                 )
                 results.append(item)
                 succeeded += 1
@@ -881,12 +879,12 @@ extension RuntimeEngine {
                     try RuntimeInterfaceExportWriter.writeSingleFile(
                         items: objcItems,
                         to: configuration.directory,
-                        imageName: configuration.imageName
+                        imageName: configuration.imageName,
                     )
                 case .directory:
                     let writeResult = try RuntimeInterfaceExportWriter.writeDirectory(
                         items: objcItems,
-                        to: configuration.directory
+                        to: configuration.directory,
                     )
                     for (failedItem, writeError) in writeResult.failedItems {
                         reporter.send(.objectFailed(failedItem.object, writeError))
@@ -901,12 +899,12 @@ extension RuntimeEngine {
                     try RuntimeInterfaceExportWriter.writeSingleFile(
                         items: swiftItems,
                         to: configuration.directory,
-                        imageName: configuration.imageName
+                        imageName: configuration.imageName,
                     )
                 case .directory:
                     let writeResult = try RuntimeInterfaceExportWriter.writeDirectory(
                         items: swiftItems,
-                        to: configuration.directory
+                        to: configuration.directory,
                     )
                     for (failedItem, writeError) in writeResult.failedItems {
                         reporter.send(.objectFailed(failedItem.object, writeError))
@@ -921,7 +919,7 @@ extension RuntimeEngine {
                     objcInterfaceCount: objcCount,
                     swiftInterfaceCount: swiftCount,
                     succeeded: succeeded,
-                    failed: failed + writeFailed
+                    failed: failed + writeFailed,
                 )
                 try RuntimeInterfaceExportWriter.writeMetadata(metadata, to: configuration.directory)
             }
@@ -937,7 +935,7 @@ extension RuntimeEngine {
             failed: failed + writeFailed,
             totalDuration: duration,
             objcCount: objcCount,
-            swiftCount: swiftCount
+            swiftCount: swiftCount,
         )
         reporter.send(.completed(result))
     }

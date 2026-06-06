@@ -76,7 +76,7 @@ public actor RuntimeEngineProxyServer {
             return
         }
         let imageList = await engine.imageList
-        let imageNodes = await engine.imageNodes
+        let imageNodes = engine.imageNodes
         #log(.info, "[PROXY \(self.identifier, privacy: .public)] sendInitialData: imageList=\(imageList.count, privacy: .public), imageNodes=\(imageNodes.count, privacy: .public)")
         do {
             try await connection.sendMessage(

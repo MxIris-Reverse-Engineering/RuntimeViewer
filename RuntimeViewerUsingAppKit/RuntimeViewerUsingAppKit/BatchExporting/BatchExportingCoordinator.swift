@@ -22,7 +22,7 @@ final class BatchExportingCoordinator: SceneCoordinator<ExportingRoute, Exportin
     private func loadAvailableImages() {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let nodes = await documentState.runtimeEngine.imageNodes
+            let nodes = documentState.runtimeEngine.imageNodes
             exportingState.availableImages = Self.flattenImageNodes(nodes)
         }
     }
