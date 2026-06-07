@@ -1,8 +1,9 @@
 import AppKit
+import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
 
-final class BatchExportingProgressRowViewModel: NSObject, @unchecked Sendable {
+final class BatchExportingProgressRowViewModel: CellViewModel {
     enum Status: Sendable {
         case queued
         case running

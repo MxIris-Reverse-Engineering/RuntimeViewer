@@ -77,8 +77,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ukushu/Ifrit",
       "state" : {
-        "revision" : "9b9556e14cee24ad16b19d0eb099283cf79a7d94",
-        "version" : "3.0.0"
+        "revision" : "7c889a67bad90c5efefa56889b2d61bfbb831473",
+        "version" : "4.0.0"
       }
     },
     {
@@ -145,6 +145,15 @@
       }
     },
     {
+      "identity" : "openuxkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/OpenUXKit/OpenUXKit",
+      "state" : {
+        "branch" : "main",
+        "revision" : "21b944e638ff66d45ba1f550483c875be3c1f93f"
+      }
+    },
+    {
       "identity" : "rainbow",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Rainbow",
@@ -199,15 +208,6 @@
       }
     },
     {
-      "identity" : "rxswiftplus",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
-      "state" : {
-        "revision" : "d40a7d551b58ce3006eaabcaa3721b99db72ea78",
-        "version" : "0.2.3"
-      }
-    },
-    {
       "identity" : "semaphore",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Library-Forks/Semaphore",
@@ -230,8 +230,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SnapKit/SnapKit",
       "state" : {
-        "revision" : "2842e6e84e82eb9a8dac0100ca90d9444b0307f4",
-        "version" : "5.7.1"
+        "revision" : "e27a338a03a5f388de759da63f9baf7988ed9e00",
+        "version" : "6.0.0"
       }
     },
     {
@@ -388,21 +388,12 @@
       }
     },
     {
-      "identity" : "swift-demangling",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
-      "state" : {
-        "revision" : "f165282b354bd2fdeeb3b48a54cf173b25a3bb7b",
-        "version" : "0.4.1"
-      }
-    },
-    {
       "identity" : "swift-dependencies",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "706feb7858a7f6c242879d137b8ee30926aa5b26",
-        "version" : "1.12.0"
+        "revision" : "f80552807ec92f72fe3fe4543d71879182b0bfd5",
+        "version" : "1.13.0"
       }
     },
     {
@@ -514,21 +505,21 @@
       }
     },
     {
-      "identity" : "swift-semantic-string",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
-      "state" : {
-        "revision" : "1c3438861ea6dbba0856ab02071d683914468e82",
-        "version" : "0.1.1"
-      }
-    },
-    {
       "identity" : "swift-system",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-system.git",
       "state" : {
-        "revision" : "7c6ad0fc39d0763e0b699210e4124afd5041c5df",
-        "version" : "1.6.4"
+        "revision" : "669763cfd5806a67e21972d7e5e2d6b80b1ea985",
+        "version" : "1.6.5"
+      }
+    },
+    {
+      "identity" : "swiftcross",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Cocoanetics/SwiftCross.git",
+      "state" : {
+        "revision" : "cc164b31ede7d2ee72af713b59c5d1f9be1556e0",
+        "version" : "1.2.0"
       }
     },
     {
@@ -536,8 +527,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Cocoanetics/SwiftMCP",
       "state" : {
-        "revision" : "5e8961f73834abb6f05fede365831a019a68be91",
-        "version" : "1.4.7"
+        "revision" : "df3ef01ab09bcdf775f4669be242065e05d61feb",
+        "version" : "1.5.1"
       }
     },
     {
@@ -559,12 +550,12 @@
       }
     },
     {
-      "identity" : "systemhud",
+      "identity" : "uxkitcoordinator",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/SystemHUD",
+      "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
       "state" : {
-        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
-        "version" : "0.1.0"
+        "branch" : "main",
+        "revision" : "481806584ed23911fbe0449fdda57085f8615779"
       }
     },
     {

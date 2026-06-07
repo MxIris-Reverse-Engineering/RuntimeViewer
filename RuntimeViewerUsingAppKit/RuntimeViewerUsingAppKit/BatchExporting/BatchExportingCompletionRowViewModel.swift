@@ -1,7 +1,8 @@
 import AppKit
+import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-final class BatchExportingCompletionRowViewModel: NSObject, @unchecked Sendable {
+final class BatchExportingCompletionRowViewModel: CellViewModel {
     let outcome: BatchExportingPerImageOutcome
 
     init(outcome: BatchExportingPerImageOutcome) {

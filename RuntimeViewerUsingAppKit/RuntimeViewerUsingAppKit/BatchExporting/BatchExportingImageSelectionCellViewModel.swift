@@ -1,8 +1,9 @@
 import AppKit
-import RuntimeViewerArchitectures
 import RuntimeViewerCore
+import RuntimeViewerApplication
+import RuntimeViewerArchitectures
 
-final class BatchExportingImageSelectionCellViewModel: NSObject, @unchecked Sendable {
+final class BatchExportingImageSelectionCellViewModel: CellViewModel {
     let image: BatchExportingImage
 
     @Observed
@@ -19,7 +20,7 @@ final class BatchExportingImageSelectionCellViewModel: NSObject, @unchecked Send
     }
 }
 
-extension BatchExportingImageSelectionCellViewModel: Differentiable {
+extension BatchExportingImageSelectionCellViewModel: @MainActor Differentiable {
     var differenceIdentifier: String { image.path }
 
     func isContentEqual(to source: BatchExportingImageSelectionCellViewModel) -> Bool {

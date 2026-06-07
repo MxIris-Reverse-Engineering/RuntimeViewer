@@ -19,7 +19,7 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
 
     @Dependency(\.settings)
     public var settings
-    
+
     public let errorRelay = PublishRelay<Error>()
 
     package let _commonLoading = ActivityIndicator()
@@ -50,3 +50,6 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
         self.router = router
     }
 }
+
+@MainActor
+open class CellViewModel: NSObject {}
