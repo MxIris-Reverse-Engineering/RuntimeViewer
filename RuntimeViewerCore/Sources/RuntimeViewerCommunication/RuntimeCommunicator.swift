@@ -54,11 +54,21 @@ public final class RuntimeCommunicator {
     ///
     /// - Parameters:
     ///   - source: The runtime source to connect to.
-    ///   - bonjourEndpoint: The Bonjour endpoint to connect to (required for `.bonjour` with `.client` role).
+    ///   - credential: Session-scoped credential resolved at connect time. Required for
+    ///     `.bonjour` + `.client` (the discovered `NWEndpoint`); optional for `.remote` + `.client`
+    ///     (a previously-handshaked XPC peer endpoint enables direct reconnect). See
+    ///     `RuntimeConnectionCredential` for the full matrix.
+    ///   - waitForConnection: For `.directTCP` server only — whether to block until the first
+    ///     client connects.
     ///   - modifier: Optional closure to configure the connection before use.
     /// - Returns: A configured `RuntimeConnection` ready for communication.
     /// - Throws: An error if the connection cannot be established.
-    public func connect(to source: RuntimeSource, bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: (any Sendable)? = nil, waitForConnection: Bool = true, modifier: ((RuntimeConnection) async throws -> Void)? = nil) async throws -> RuntimeConnection {
+    public func connect(
+        to source: RuntimeSource,
+        credential: RuntimeConnectionCredential? = nil,
+        waitForConnection: Bool = true,
+        modifier: ((RuntimeConnection) async throws -> Void)? = nil
+    ) async throws -> RuntimeConnection {
         #log(.info, "Connecting to source: \(String(describing: source), privacy: .public)")
         switch source {
         case .local:
@@ -73,9 +83,9 @@ public final class RuntimeCommunicator {
                 #log(.info, "XPC server connection established")
                 return connection
             } else {
-                if let xpcServerEndpoint = xpcServerEndpoint as? HelperPeerEndpoint {
+                if case .xpcServer(let serverEndpoint) = credential {
                     #log(.debug, "Creating XPC client connection (direct reconnect) with identifier: \(String(describing: identifier), privacy: .public)")
-                    let connection = try await RuntimeXPCClientConnection(identifier: identifier, serverEndpoint: xpcServerEndpoint, modifier: modifier)
+                    let connection = try await RuntimeXPCClientConnection(identifier: identifier, serverEndpoint: serverEndpoint, modifier: modifier)
                     #log(.info, "XPC client direct reconnection established")
                     return connection
                 } else {
@@ -92,7 +102,7 @@ public final class RuntimeCommunicator {
 
         case .bonjour(let name, _, let role):
             if role.isClient {
-                guard let bonjourEndpoint else {
+                guard case .bonjour(let bonjourEndpoint) = credential else {
                     #log(.error, "Bonjour client connection requires an endpoint")
                     throw RuntimeCommunicatorError.bonjourClientRequiresEndpoint
                 }

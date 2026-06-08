@@ -197,15 +197,8 @@ public actor RuntimeEngine {
 
     private let communicator = RuntimeCommunicator()
 
-    /// The connection to the sender or receiver
+    /// The connection to the sender or receiver, established by `connect()`.
     private var connection: RuntimeConnection?
-
-    /// The XPC listener endpoint of this engine's connection, if applicable.
-    /// Set after `connect()` succeeds for XPC-based connections (macOS only).
-    /// Used by injected apps to register their endpoint with the Mach Service
-    /// for Host reconnection. Stored as `any Sendable` to avoid platform-specific
-    /// types in the actor interface; cast to `HelperPeerEndpoint` on macOS.
-    public private(set) var xpcListenerEndpoint: (any Sendable)?
 
     /// Coordinator for background indexing batches that load and index images
     /// without blocking the main runtime data flow. `lazy` so it captures
@@ -235,31 +228,26 @@ public actor RuntimeEngine {
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
-    public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: (any Sendable)? = nil) async throws {
+    public func connect(credential: RuntimeConnectionCredential? = nil) async throws {
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
 
             switch role {
             case .server:
                 #log(.info, "Starting as server")
-                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint) { connection in
+                connection = try await communicator.connect(to: source, credential: credential) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForServer()
                     self.observeConnectionState(connection)
                 }
                 #log(.info, "Server connection established")
-                #if os(macOS)
-                if let xpcEndpointProvider = connection as? XPCListenerEndpointProviding {
-                    xpcListenerEndpoint = xpcEndpointProvider.xpcListenerEndpoint
-                }
-                #endif
                 if pushesRuntimeData {
                     await observeRuntime()
                 }
                 stateSubject.send(.connected)
             case .client:
                 #log(.info, "Starting as client for source: \(String(describing: self.source), privacy: .public)")
-                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint, xpcServerEndpoint: xpcServerEndpoint) { connection in
+                connection = try await communicator.connect(to: source, credential: credential) { connection in
                     #log(.debug, "[EngineMirroring] client connection modifier called for \(String(describing: self.source), privacy: .public), connection state: \(String(describing: connection.state), privacy: .public)")
                     self.connection = connection
                     self.setupMessageHandlerForClient()

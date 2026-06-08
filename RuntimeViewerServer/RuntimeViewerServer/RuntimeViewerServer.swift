@@ -8,12 +8,6 @@ import RuntimeViewerUtilities
 import LaunchServicesPrivate
 #endif
 
-#if os(macOS)
-import HelperCommunication
-import HelperClient
-import InjectedEndpointRegistryServiceInterface
-#endif
-
 #if canImport(UIKit)
 #if os(watchOS)
 import WatchKit.WKInterfaceDevice
@@ -53,7 +47,7 @@ private enum RuntimeViewerServer {
         #log(.default, "Attach successfully")
         Task {
             do {
-                #log(.default, "Will Launch")
+                #log(.default, "RuntimeViewerServer Will Launch")
 
                 #if os(macOS) || targetEnvironment(macCatalyst)
 
@@ -63,12 +57,6 @@ private enum RuntimeViewerServer {
                 } else {
                     runtimeEngine = RuntimeEngine(source: .remote(name: processName, identifier: .init(rawValue: identifier), role: .server))
                     try await runtimeEngine?.connect()
-
-                    // Register the XPC listener endpoint with the Mach Service
-                    // so the Host can reconnect after restart.
-                    #if os(macOS)
-                    await registerInjectedEndpoint()
-                    #endif
                 }
 
                 #else
@@ -81,36 +69,10 @@ private enum RuntimeViewerServer {
 
                 #endif
 
-                #log(.default, "Did Launch")
+                #log(.default, "RuntimeViewerServer Did Launch")
             } catch {
-                #log(.error, "Failed to create runtime engine: \(error, privacy: .public)")
+                #log(.error, "RuntimeViewerServer failed to create runtime engine: \(error, privacy: .public)")
             }
         }
     }
-
-    #if os(macOS)
-    private static func registerInjectedEndpoint() async {
-        guard let endpoint = await runtimeEngine?.xpcListenerEndpoint as? HelperPeerEndpoint else {
-            #log(.error, "Failed to get XPC listener endpoint for registration")
-            return
-        }
-
-        do {
-            let helperClient = HelperClient()
-            try await helperClient.connectToTool(
-                machServiceName: RuntimeViewerMachServiceName,
-                isPrivilegedHelperTool: true
-            )
-            try await helperClient.sendToTool(request: RegisterInjectedEndpointRequest(
-                pid: ProcessInfo.processInfo.processIdentifier,
-                appName: processName,
-                bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
-                endpoint: endpoint
-            ))
-            #log(.info, "Registered injected endpoint with Mach Service (PID: \(ProcessInfo.processInfo.processIdentifier))")
-        } catch {
-            #log(.error, "Failed to register injected endpoint: \(error, privacy: .public)")
-        }
-    }
-    #endif
 }

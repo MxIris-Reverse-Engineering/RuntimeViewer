@@ -242,7 +242,7 @@ public final class RuntimeEngineManager {
                 hostInfo: remoteHostInfo,
                 originChain: [endpoint.instanceID ?? endpoint.name]
             )
-            try await runtimeEngine.connect(bonjourEndpoint: endpoint)
+            try await runtimeEngine.connect(credential: .bonjour(endpoint))
             appendBonjourRuntimeEngine(runtimeEngine)
             #log(.info,"Successfully connected to Bonjour endpoint: \(endpoint.name, privacy: .public)")
 
@@ -415,7 +415,7 @@ public final class RuntimeEngineManager {
                             role: .client
                         )
                     )
-                    try await runtimeEngine.connect(xpcServerEndpoint: injectedEndpointInfo.endpoint)
+                    try await runtimeEngine.connect(credential: .xpcServer(injectedEndpointInfo.endpoint))
                     #log(.info, "Reconnected to injected app: \(injectedEndpointInfo.appName, privacy: .public) (PID: \(injectedEndpointInfo.pid))")
                     attachedRuntimeEngines.append(runtimeEngine)
                     observeRuntimeEngineState(runtimeEngine)
