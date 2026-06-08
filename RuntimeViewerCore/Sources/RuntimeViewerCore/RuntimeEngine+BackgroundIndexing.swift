@@ -82,7 +82,7 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
         // Errors map to `false` (treat as "can't open"), matching the
         // pre-dispatch behaviour where a missing image silently returned
         // `false` rather than throwing.
-        (try? await dispatch(CanOpenImageRequest(path: path))) ?? false
+        await (try? dispatch(CanOpenImageRequest(path: path))) ?? false
     }
 
     func rpaths(for path: String) async throws -> [String] {
@@ -92,14 +92,13 @@ extension RuntimeEngine: RuntimeBackgroundIndexingEngineRepresenting {
     func dependencies(for path: String,
                       ancestorRpaths: [String],
                       mainExecutablePath: String) async throws
-        -> [(installName: String, resolvedPath: String?)]
-    {
+        -> [(installName: String, resolvedPath: String?)] {
         let entries: [RuntimeDependencyEntry] = try await dispatch(
             DependenciesRequest(
                 path: path,
                 ancestorRpaths: ancestorRpaths,
-                mainExecutablePath: mainExecutablePath
-            )
+                mainExecutablePath: mainExecutablePath,
+            ),
         )
         // Manager-facing API still uses the tuple shape it was written
         // against; only the wire form needs a named struct (tuples aren't
@@ -125,8 +124,7 @@ extension RuntimeEngine {
     func _dependencies(for path: String,
                        ancestorRpaths: [String],
                        mainExecutablePath: String)
-        -> [RuntimeDependencyEntry]
-    {
+        -> [RuntimeDependencyEntry] {
         guard let image = DyldUtilities.machOImage(forPath: path) else {
             return []
         }
@@ -144,7 +142,7 @@ extension RuntimeEngine {
                     installName: installName,
                     imagePath: path,
                     rpaths: mergedRpaths,
-                    mainExecutablePath: mainExecutablePath
+                    mainExecutablePath: mainExecutablePath,
                 )
                 // Two link modes where dyld is allowed to never produce a
                 // loaded image at BFS time:
@@ -230,7 +228,7 @@ extension RuntimeEngine {
             await engine._dependencies(
                 for: path,
                 ancestorRpaths: ancestorRpaths,
-                mainExecutablePath: mainExecutablePath
+                mainExecutablePath: mainExecutablePath,
             )
         }
     }
