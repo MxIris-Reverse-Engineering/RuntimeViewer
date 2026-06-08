@@ -1,5 +1,5 @@
 {
-  "originHash" : "dc766f6e99ca9f3794bde24cce3eefec3b3208e385f26c807b068020b36d0855",
+  "originHash" : "52454f2d1779089b9c6ae08b6c6b64023e8264f9809a2ba047215a945805be4f",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -209,6 +209,15 @@
       }
     },
     {
+      "identity" : "swift-demangling",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
+      "state" : {
+        "revision" : "f165282b354bd2fdeeb3b48a54cf173b25a3bb7b",
+        "version" : "0.4.1"
+      }
+    },
+    {
       "identity" : "swift-dependencies",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
@@ -278,6 +287,15 @@
       "state" : {
         "revision" : "93806cfecae1f198c894ed5585b93aff0e2d1f5a",
         "version" : "0.5.0"
+      }
+    },
+    {
+      "identity" : "swift-semantic-string",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
+      "state" : {
+        "revision" : "1c3438861ea6dbba0856ab02071d683914468e82",
+        "version" : "0.1.1"
       }
     },
     {
