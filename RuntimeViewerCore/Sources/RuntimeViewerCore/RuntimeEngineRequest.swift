@@ -52,6 +52,7 @@ extension RuntimeEngine {
         register(RpathsRequest.self, on: connection, engine: engine)
         register(DependenciesRequest.self, on: connection, engine: engine)
         register(ImageNameOfObjectRequest.self, on: connection, engine: engine)
+        register(ExportModuleInfoRequest.self, on: connection, engine: engine)
         register(ObjectsInImageRequest.self, on: connection, engine: engine)
         register(InterfaceRequest.self, on: connection, engine: engine)
         register(HierarchyRequest.self, on: connection, engine: engine)

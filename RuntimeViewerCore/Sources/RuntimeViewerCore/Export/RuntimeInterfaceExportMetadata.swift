@@ -61,6 +61,7 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
 
     static func make(
         configuration: RuntimeInterfaceExportConfiguration,
+        module: ModuleInfo? = nil,
         objcInterfaceCount: Int,
         swiftInterfaceCount: Int,
         succeeded: Int,
@@ -69,7 +70,7 @@ struct RuntimeInterfaceExportMetadata: Codable, Sendable {
     ) -> RuntimeInterfaceExportMetadata {
         RuntimeInterfaceExportMetadata(
             runtimeViewer: .current,
-            module: .resolve(imagePath: configuration.imagePath, imageName: configuration.imageName),
+            module: module ?? .resolve(imagePath: configuration.imagePath, imageName: configuration.imageName),
             export: .init(
                 generatedAt: generatedAt,
                 objcFormat: configuration.objcFormat.displayName,
@@ -408,15 +409,7 @@ private extension RuntimeInterfaceExportMetadata.RuntimeViewerInfo {
     }
 }
 
-private extension RuntimeInterfaceExportMetadata.ModuleInfo {
-    struct MachOVersionInfo {
-        var installName: String?
-        var currentVersion: String?
-        var compatibilityVersion: String?
-        var sourceVersion: String?
-        var uuid: String?
-    }
-
+extension RuntimeInterfaceExportMetadata.ModuleInfo {
     static func resolve(imagePath: String, imageName: String) -> Self {
         let resolvedPath = DyldUtilities.patchImagePathForDyld(imagePath)
         let displayedResolvedPath = resolvedPath == imagePath ? nil : resolvedPath
@@ -436,6 +429,16 @@ private extension RuntimeInterfaceExportMetadata.ModuleInfo {
             sourceVersion: machOInfo.sourceVersion,
             uuid: machOInfo.uuid
         )
+    }
+}
+
+private extension RuntimeInterfaceExportMetadata.ModuleInfo {
+    struct MachOVersionInfo {
+        var installName: String?
+        var currentVersion: String?
+        var compatibilityVersion: String?
+        var sourceVersion: String?
+        var uuid: String?
     }
 
     static func bundleInfo(forPath path: String) -> [String: String]? {
@@ -495,7 +498,7 @@ private extension RuntimeInterfaceExportMetadata.ModuleInfo {
     }
 
     static func machOVersionInfo(forPath imagePath: String, resolvedPath: String) -> MachOVersionInfo {
-        if let image = DyldUtilities.machOImage(forPath: imagePath) ?? DyldUtilities.machOImage(forPath: resolvedPath) {
+        if let image = DyldUtilities.exactMachOImage(forPath: imagePath) ?? DyldUtilities.exactMachOImage(forPath: resolvedPath) {
             return machOVersionInfo(for: image)
         }
 
