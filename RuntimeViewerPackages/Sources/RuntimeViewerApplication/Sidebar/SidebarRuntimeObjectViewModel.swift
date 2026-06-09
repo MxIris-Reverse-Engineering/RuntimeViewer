@@ -303,20 +303,14 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     private func applySpecializationAdded(parent: RuntimeObject, child: RuntimeObject) {
         guard let parentViewModel = locate(parent, in: nodes) else { return }
 
-        // Append onto the cell's *current* runtimeObject (which already
-        // reflects every prior specialization spliced into this cell), not
-        // the event payload — the broadcast carries the originally selected
-        // generic, so a second specialization on the same parent would
-        // otherwise overwrite the first one's child.
-        let currentParent = parentViewModel.runtimeObject
-
-        // De-dupe: a re-broadcast (e.g. server reconnect, repeated user
-        // action) would otherwise insert the same child twice. RuntimeObjectKey
-        // ignores `children`, which is the right identity for "is this the
-        // same specialized type already attached".
-        guard !currentParent.children.contains(where: { $0.key == child.key }) else { return }
-
-        parentViewModel.runtimeObject = currentParent.withAppendedChild(child)
+        // Append onto a materialized copy of the cell's *current* subtree, not
+        // the event payload or the parent RuntimeObject's stale `children`
+        // snapshot. A descendant may already have received a specialization
+        // through its own cell viewmodel; rebuilding this parent from the stale
+        // snapshot would drop that descendant child.
+        guard parentViewModel.appendRuntimeObjectChildPreservingCurrentDescendants(child) else {
+            return
+        }
         nodes = nodes
         if isFiltering {
             filteredNodes = FilterEngine.filter(
@@ -347,7 +341,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         in viewModels: [SidebarRuntimeObjectCellViewModel]
     ) -> SidebarRuntimeObjectCellViewModel? {
         for viewModel in viewModels {
-            if viewModel.runtimeObject == object { return viewModel }
+            if viewModel.runtimeObject.key == object.key { return viewModel }
             if let matchedViewModel = locate(object, in: viewModel.children) {
                 return matchedViewModel
             }

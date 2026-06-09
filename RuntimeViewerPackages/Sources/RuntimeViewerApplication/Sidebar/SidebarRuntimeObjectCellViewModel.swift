@@ -187,6 +187,32 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         applyFilter()
     }
 
+    /// Returns a RuntimeObject tree that reflects the current child viewmodels,
+    /// including children that were spliced into descendants after this cell's
+    /// original RuntimeObject was created.
+    func materializedRuntimeObject() -> RuntimeObject {
+        RuntimeObject(
+            name: runtimeObject.name,
+            displayName: runtimeObject.displayName,
+            kind: runtimeObject.kind,
+            secondaryKind: runtimeObject.secondaryKind,
+            imagePath: runtimeObject.imagePath,
+            children: _children.map { $0.materializedRuntimeObject() },
+            identityPath: runtimeObject.identityPath,
+            properties: runtimeObject.properties
+        )
+    }
+
+    @discardableResult
+    func appendRuntimeObjectChildPreservingCurrentDescendants(_ child: RuntimeObject) -> Bool {
+        let currentRuntimeObject = materializedRuntimeObject()
+        guard !currentRuntimeObject.children.contains(where: { $0.key == child.key }) else {
+            return false
+        }
+        runtimeObject = currentRuntimeObject.withAppendedChild(child)
+        return true
+    }
+
     /// Recompute icons and the highlighted name. Called whenever
     /// `runtimeObject` changes (e.g. a new specialized child arrives,
     /// flipping the parent's `properties` bookkeeping).
