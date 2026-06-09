@@ -121,15 +121,25 @@ package enum DyldUtilities {
     ///    a path whose exact spelling doesn't match dyld's registered form
     ///    (e.g. symlink-resolved vs. raw, or a bare framework name).
     package static func machOImage(forPath path: String) -> MachOImage? {
-        if path == mainExecutablePath(),
-           let debugDylib = loadedImage(forExactPath: path + ".debug.dylib") {
-            return debugDylib
-        }
-        if let exact = loadedImage(forExactPath: path) {
+        if let exact = exactMachOImage(forPath: path) {
             return exact
         }
         let imageName = path.lastPathComponent.deletingPathExtension.deletingPathExtension
         return MachOImage(name: imageName)
+    }
+
+    /// Resolves a filesystem path to a loaded `MachOImage` without basename
+    /// fallback.
+    ///
+    /// Export metadata must use exact matching only: when inspecting a remote
+    /// iOS simulator image from the macOS app process, a fuzzy basename match
+    /// can accidentally pick the host's same-named framework.
+    package static func exactMachOImage(forPath path: String) -> MachOImage? {
+        if path == mainExecutablePath(),
+           let debugDylib = loadedImage(forExactPath: path + ".debug.dylib") {
+            return debugDylib
+        }
+        return loadedImage(forExactPath: path)
     }
 
     /// Returns the loaded `MachOImage` whose dyld-registered path equals

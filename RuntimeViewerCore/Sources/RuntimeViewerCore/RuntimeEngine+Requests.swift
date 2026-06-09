@@ -56,6 +56,19 @@ extension RuntimeEngine {
             nil
         }
     }
+
+    /// Resolves Mach-O / bundle metadata for the inspected image on the engine
+    /// that actually owns the image, so export README metadata is not polluted
+    /// by the macOS host process picking up a same-named framework via
+    /// `DyldUtilities`' basename fallback.
+    struct ExportModuleInfoRequest: RuntimeEngineRequest {
+        let imagePath: String
+        let imageName: String
+        static var commandName: String { CommandNames.runtimeInterfaceExportModuleInfo.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeInterfaceExportMetadata.ModuleInfo {
+            RuntimeInterfaceExportMetadata.ModuleInfo.resolve(imagePath: imagePath, imageName: imageName)
+        }
+    }
 }
 
 // MARK: - Objects & interfaces

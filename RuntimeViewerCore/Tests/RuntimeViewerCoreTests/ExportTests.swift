@@ -113,6 +113,45 @@ struct RuntimeInterfaceExportMetadataTests {
         #expect(readme.contains("- RuntimeViewer license: MIT License"))
     }
 
+    @Test("make uses engine-provided module metadata")
+    func makeUsesEngineProvidedModuleMetadata() {
+        let configuration = RuntimeInterfaceExportConfiguration(
+            imagePath: "/remote/System/Library/Frameworks/SwiftUICore.framework/SwiftUICore",
+            imageName: "SwiftUICore",
+            directory: FileManager.default.temporaryDirectory,
+            objcFormat: .singleFile,
+            swiftFormat: .singleFile,
+            generationOptions: .mcp
+        )
+        let module = RuntimeInterfaceExportMetadata.ModuleInfo(
+            name: "SwiftUICore",
+            path: "/remote/System/Library/Frameworks/SwiftUICore.framework/SwiftUICore",
+            resolvedPath: nil,
+            bundleIdentifier: "com.apple.SwiftUICore",
+            bundleShortVersion: "8.0.66.1.103",
+            bundleVersion: "8.0.66.1.103",
+            installName: "/System/Library/Frameworks/SwiftUICore.framework/SwiftUICore",
+            currentVersion: "8.0.66",
+            compatibilityVersion: "1.0.0",
+            sourceVersion: "1165.1.103",
+            uuid: "A8FC6D2D-DFE9-3557-A734-7F2B231F8C97"
+        )
+
+        let metadata = RuntimeInterfaceExportMetadata.make(
+            configuration: configuration,
+            module: module,
+            objcInterfaceCount: 1,
+            swiftInterfaceCount: 2,
+            succeeded: 3,
+            failed: 0,
+            generatedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(metadata.module.installName == "/System/Library/Frameworks/SwiftUICore.framework/SwiftUICore")
+        #expect(metadata.module.currentVersion == "8.0.66")
+        #expect(metadata.module.sourceVersion == "1165.1.103")
+    }
+
     @Test("writer emits README only")
     func writerEmitsReadmeOnly() throws {
         let directory = FileManager.default.temporaryDirectory

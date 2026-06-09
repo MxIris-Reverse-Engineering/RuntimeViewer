@@ -65,6 +65,7 @@ public actor RuntimeEngine {
         case runtimeObjectInfo
         case imageNameOfClassName
         case observeRuntime
+        case runtimeInterfaceExportModuleInfo
         case runtimeInterfaceForRuntimeObjectInImageWithOptions
         case runtimeObjectsOfKindInImage
         case runtimeObjectsInImage
@@ -320,7 +321,6 @@ public actor RuntimeEngine {
             #log(.default, "Connection is nil when setting up server message handlers")
             return
         }
-
         // Shared registry — same set of commands that
         // `RuntimeEngineProxyServer.setupRequestHandlers()` installs.
         Self.registerSharedHandlers(on: connection, engine: self)
@@ -902,8 +902,15 @@ extension RuntimeEngine {
             }
 
             if configuration.includeMetadata {
+                let module = try await dispatch(
+                    ExportModuleInfoRequest(
+                        imagePath: configuration.imagePath,
+                        imageName: configuration.imageName
+                    )
+                )
                 let metadata = RuntimeInterfaceExportMetadata.make(
                     configuration: configuration,
+                    module: module,
                     objcInterfaceCount: objcCount,
                     swiftInterfaceCount: swiftCount,
                     succeeded: succeeded,
