@@ -20,6 +20,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         public let imagePath: String
         public let name: String
         public let kind: RuntimeObjectKind
+        public let identityPath: String
     }
 
     /// Mutable so the sidebar can splice in a new specialized child via
@@ -38,7 +39,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     public let forOpenQuickly: Bool
 
     public var stableID: StableID {
-        StableID(imagePath: runtimeObject.imagePath, name: runtimeObject.name, kind: runtimeObject.kind)
+        StableID(imagePath: runtimeObject.imagePath, name: runtimeObject.name, kind: runtimeObject.kind, identityPath: runtimeObject.identityPath)
     }
 
     public var children: [SidebarRuntimeObjectCellViewModel] {
@@ -170,7 +171,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             let childStableID = StableID(
                 imagePath: childRuntimeObject.imagePath,
                 name: childRuntimeObject.name,
-                kind: childRuntimeObject.kind
+                kind: childRuntimeObject.kind,
+                identityPath: childRuntimeObject.identityPath
             )
             if let recycledChild = recycledChildrenByStableID[childStableID] {
                 recycledChild.runtimeObject = childRuntimeObject // recurses via didSet

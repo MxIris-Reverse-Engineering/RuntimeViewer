@@ -173,6 +173,32 @@ struct RuntimeObjectTests {
         #expect(a.key != differentKind.key)
     }
 
+    @Test("RuntimeObjectKey distinguishes same object name under different tree paths")
+    func runtimeObjectKeyDiscriminatesIdentityPath() {
+        let manualNested = RuntimeObject(
+            name: "ValueOfHoverEvent",
+            displayName: "Value<HoverEvent>",
+            kind: .swift(.type(.struct)),
+            secondaryKind: nil,
+            imagePath: "/p",
+            children: [],
+            identityPath: "Phase/Value/ValueOfHoverEvent",
+            properties: [.isSpecialized]
+        )
+        let derivedNested = RuntimeObject(
+            name: "ValueOfHoverEvent",
+            displayName: "Value<HoverEvent>",
+            kind: .swift(.type(.struct)),
+            secondaryKind: nil,
+            imagePath: "/p",
+            children: [],
+            identityPath: "Phase/PhaseOfHoverEvent/ValueOfHoverEvent",
+            properties: [.isSpecialized]
+        )
+
+        #expect(manualNested.key != derivedNested.key)
+    }
+
     @Test("RuntimeObjectKey-keyed Set acts as a dedup oracle for accumulated children")
     func runtimeObjectKeyDedup() {
         // Mirrors the sidebar's de-dup guard:

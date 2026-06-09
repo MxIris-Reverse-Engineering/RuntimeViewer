@@ -85,6 +85,8 @@ actor RuntimeSwiftSection {
     // both maps and throw `invalidRuntimeObject`.
     private var interfaceByObject: OrderedDictionary<RuntimeObjectKey, RuntimeObjectInterface> = [:]
 
+    private var specializedDefinitionByObject: [RuntimeObjectKey: TypeDefinition] = [:]
+
     private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
 
     private var interfaceDefinitionNameByObject: [RuntimeObjectKey: InterfaceDefinitionName] = [:]
@@ -188,15 +190,30 @@ actor RuntimeSwiftSection {
         return runtimeObjectName
     }
 
-    private func makeRuntimeObject(for typeDefinition: TypeDefinition, isChild: Bool, unspecializedTypeName: SwiftInterface.TypeName? = nil) throws -> RuntimeObject {
-        let typeChildren = try typeDefinition.typeChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
+    private func makeRuntimeObject(
+        for typeDefinition: TypeDefinition,
+        isChild: Bool,
+        unspecializedTypeName: SwiftInterface.TypeName? = nil,
+        parentIdentityPath: String? = nil
+    ) throws -> RuntimeObject {
+        let mangledName = try mangleAsString(typeDefinition.typeName.node)
+        let identityPath = [parentIdentityPath, mangledName]
+            .compactMap { $0 }
+            .joined(separator: "/")
+        let typeChildren = try typeDefinition.typeChildren.map {
+            try makeRuntimeObject(for: $0, isChild: true, parentIdentityPath: identityPath)
+        }
         let protocolChildren = try typeDefinition.protocolChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
         let specializedChildren = try typeDefinition.specializedChildren.map {
-            try makeRuntimeObject(for: $0, isChild: true, unspecializedTypeName: typeDefinition.typeName)
+            try makeRuntimeObject(
+                for: $0,
+                isChild: true,
+                unspecializedTypeName: typeDefinition.typeName,
+                parentIdentityPath: identityPath
+            )
         }
         let allChildren = typeChildren + protocolChildren + specializedChildren
 
-        let mangledName = try mangleAsString(typeDefinition.typeName.node)
         var properties: RuntimeObject.Properties = []
         if typeDefinition.type.contextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
             properties.insert(.isGeneric)
@@ -207,9 +224,27 @@ actor RuntimeSwiftSection {
         }
         let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.name
 
-        let runtimeObject = RuntimeObject(name: mangledName, displayName: displayName, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: allChildren, properties: properties)
-        if isSpecialized, let unspecializedTypeName {
-            interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: unspecializedTypeName, specialized: typeDefinition.typeName)
+        let runtimeObject = RuntimeObject(
+            name: mangledName,
+            displayName: displayName,
+            kind: typeDefinition.typeName.runtimeObjectKind,
+            secondaryKind: nil,
+            imagePath: imagePath,
+            children: allChildren,
+            identityPath: identityPath,
+            properties: properties
+        )
+        let specializedLookupTypeName: SwiftInterface.TypeName?
+        if let unspecializedTypeName {
+            specializedLookupTypeName = unspecializedTypeName
+        } else if isSpecialized {
+            specializedLookupTypeName = typeDefinition.typeName
+        } else {
+            specializedLookupTypeName = nil
+        }
+        if isSpecialized, let specializedLookupTypeName {
+            interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: specializedLookupTypeName, specialized: typeDefinition.typeName)
+            specializedDefinitionByObject[runtimeObject.key] = typeDefinition
         } else if isChild {
             interfaceDefinitionNameByObject[runtimeObject.key] = .childType(typeDefinition.typeName)
         } else {
@@ -238,6 +273,10 @@ extension RuntimeSwiftSection {
         var newInterfaceString: SemanticString = ""
         switch interfaceDefinitionName {
         case .specializedType(let unspecializedTypeName, let specializedTypeName):
+            if let specializedDefinition = specializedDefinitionByObject[object.key] {
+                try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
+                break
+            }
             // The indexer keeps `allTypeDefinitions` keyed by the
             // unspecialized typeName; specialized children live on the
             // parent's `specializedChildren` array (per the upstream's
@@ -446,7 +485,9 @@ extension RuntimeSwiftSection {
                 collect(from: typeDefinition)
             }
         case .specializedType(let unspecializedTypeName, let specializedTypeName):
-            if let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
+            if let specializedDefinition = specializedDefinitionByObject[object.key] {
+                collect(from: specializedDefinition)
+            } else if let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
                let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName }) {
                 collect(from: specializedDefinition)
             }
@@ -600,6 +641,9 @@ extension RuntimeSwiftSection {
         let specializedDefinition = try await baseTypeDefinition.specialize(
             with: result,
             typeArgumentNodes: typeArgumentNodes.count == upstreamRequest.parameters.count ? typeArgumentNodes : nil,
+            derivingNestedSpecializationsWith: specializer,
+            selection: upstreamSelection,
+            typeArgumentNodesByParameter: resolved.nodesByParameter,
             in: machO
         )
         // After the lone suspension point — bail out before mutating section

@@ -32,6 +32,10 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
 
     public let children: [RuntimeObject]
 
+    @Default("")
+    @Init(default: "")
+    public let identityPath: String
+
     @Default([])
     @Init(default: [])
     public let properties: Properties
@@ -41,7 +45,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
 
     public func withImagePath(_ imagePath: String) -> RuntimeObject {
-        .init(name: name, displayName: displayName, kind: kind, secondaryKind: secondaryKind, imagePath: imagePath, children: children)
+        .init(name: name, displayName: displayName, kind: kind, secondaryKind: secondaryKind, imagePath: imagePath, children: children, identityPath: identityPath, properties: properties)
     }
 
     /// Returns a copy of this object with `child` appended to its `children`.
@@ -55,16 +59,19 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
             secondaryKind: secondaryKind,
             imagePath: imagePath,
             children: children + [child],
+            identityPath: identityPath,
             properties: properties,
         )
     }
 }
 
 extension RuntimeObject: ComparableBuildable {
-    public static var comparableDefinition: some ComparisonStep<Self> {
-        compare(\.imagePath)
-        compare(\.kind)
-        compare(\.displayName)
+    public static var comparableDefinition: ComparableDefinition<Self> {
+        makeComparable {
+            compare(\.imagePath)
+            compare(\.kind)
+            compare(\.displayName)
+        }
     }
 }
 
@@ -82,11 +89,13 @@ public struct RuntimeObjectKey: Hashable, Sendable {
     private let imagePath: String
     private let name: String
     private let kind: RuntimeObjectKind
+    private let identityPath: String
 
     public init(_ object: RuntimeObject) {
         self.imagePath = object.imagePath
         self.name = object.name
         self.kind = object.kind
+        self.identityPath = object.identityPath
     }
 }
 

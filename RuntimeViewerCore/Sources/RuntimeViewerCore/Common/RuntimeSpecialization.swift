@@ -87,10 +87,12 @@ extension RuntimeSpecializationRequest {
             case `class`
         }
 
-        public static var comparableDefinition: some ComparisonStep<Self> {
-            compare(\.imagePath)
-            compare(\.kind)
-            compare(\.displayName)
+        public static var comparableDefinition: ComparableDefinition<Self> {
+            makeComparable {
+                compare(\.imagePath)
+                compare(\.kind)
+                compare(\.displayName)
+            }
         }
     }
 }
