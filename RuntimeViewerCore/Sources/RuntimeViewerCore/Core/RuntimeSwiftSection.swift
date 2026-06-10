@@ -193,23 +193,18 @@ actor RuntimeSwiftSection {
     private func makeRuntimeObject(
         for typeDefinition: TypeDefinition,
         isChild: Bool,
-        unspecializedTypeName: SwiftInterface.TypeName? = nil,
-        parentIdentityPath: String? = nil
+        unspecializedTypeName: SwiftInterface.TypeName? = nil
     ) throws -> RuntimeObject {
         let mangledName = try mangleAsString(typeDefinition.typeName.node)
-        let identityPath = [parentIdentityPath, mangledName]
-            .compactMap { $0 }
-            .joined(separator: "/")
         let typeChildren = try typeDefinition.typeChildren.map {
-            try makeRuntimeObject(for: $0, isChild: true, parentIdentityPath: identityPath)
+            try makeRuntimeObject(for: $0, isChild: true)
         }
         let protocolChildren = try typeDefinition.protocolChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
         let specializedChildren = try typeDefinition.specializedChildren.map {
             try makeRuntimeObject(
                 for: $0,
                 isChild: true,
-                unspecializedTypeName: typeDefinition.typeName,
-                parentIdentityPath: identityPath
+                unspecializedTypeName: typeDefinition.typeName
             )
         }
         let allChildren = typeChildren + protocolChildren + specializedChildren
@@ -231,7 +226,6 @@ actor RuntimeSwiftSection {
             secondaryKind: nil,
             imagePath: imagePath,
             children: allChildren,
-            identityPath: identityPath,
             properties: properties
         )
         let specializedLookupTypeName: SwiftInterface.TypeName?
