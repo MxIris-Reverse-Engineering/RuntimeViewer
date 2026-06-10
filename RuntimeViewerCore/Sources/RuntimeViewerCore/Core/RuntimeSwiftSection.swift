@@ -85,6 +85,8 @@ actor RuntimeSwiftSection {
     // both maps and throw `invalidRuntimeObject`.
     private var interfaceByObject: OrderedDictionary<RuntimeObjectKey, RuntimeObjectInterface> = [:]
 
+    private var specializedDefinitionByObject: [RuntimeObjectKey: TypeDefinition] = [:]
+
     private var lastTransformerConfiguration: Transformer.SwiftConfiguration = .init()
 
     private var interfaceDefinitionNameByObject: [RuntimeObjectKey: InterfaceDefinitionName] = [:]
@@ -107,6 +109,17 @@ actor RuntimeSwiftSection {
         /// specialized definitions live on the parent rather than on the
         /// indexer).
         case specializedType(unspecialized: SwiftInterface.TypeName, specialized: SwiftInterface.TypeName)
+        /// Nested specialized types derived by upstream's
+        /// `derivingNestedSpecializationsWith` — e.g. when specializing
+        /// `Phase<Event>`, upstream walks the parent's `typeChildren` and
+        /// produces a `Phase<Event>.Value` that is itself specialized but
+        /// has no generic parent the indexer knows about (the unspecialized
+        /// `Phase.Value` lives under the unspecialized `Phase`, not under
+        /// this derived `Phase<Event>`). Its `TypeDefinition` is only
+        /// reachable through `specializedDefinitionByObject`; consumers
+        /// MUST route through that cache rather than trying to look up the
+        /// typeName in `indexer.allTypeDefinitions`.
+        case derivedSpecializedType(SwiftInterface.TypeName)
         case rootProtocol(SwiftInterface.ProtocolName)
         case childProtocol(SwiftInterface.ProtocolName)
         case typeExtension(SwiftInterface.ExtensionName)
@@ -188,15 +201,25 @@ actor RuntimeSwiftSection {
         return runtimeObjectName
     }
 
-    private func makeRuntimeObject(for typeDefinition: TypeDefinition, isChild: Bool, unspecializedTypeName: SwiftInterface.TypeName? = nil) throws -> RuntimeObject {
-        let typeChildren = try typeDefinition.typeChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
+    private func makeRuntimeObject(
+        for typeDefinition: TypeDefinition,
+        isChild: Bool,
+        unspecializedTypeName: SwiftInterface.TypeName? = nil
+    ) throws -> RuntimeObject {
+        let mangledName = try mangleAsString(typeDefinition.typeName.node)
+        let typeChildren = try typeDefinition.typeChildren.map {
+            try makeRuntimeObject(for: $0, isChild: true)
+        }
         let protocolChildren = try typeDefinition.protocolChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
         let specializedChildren = try typeDefinition.specializedChildren.map {
-            try makeRuntimeObject(for: $0, isChild: true, unspecializedTypeName: typeDefinition.typeName)
+            try makeRuntimeObject(
+                for: $0,
+                isChild: true,
+                unspecializedTypeName: typeDefinition.typeName
+            )
         }
         let allChildren = typeChildren + protocolChildren + specializedChildren
 
-        let mangledName = try mangleAsString(typeDefinition.typeName.node)
         var properties: RuntimeObject.Properties = []
         if typeDefinition.type.contextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
             properties.insert(.isGeneric)
@@ -207,9 +230,28 @@ actor RuntimeSwiftSection {
         }
         let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.name
 
-        let runtimeObject = RuntimeObject(name: mangledName, displayName: displayName, kind: typeDefinition.typeName.runtimeObjectKind, secondaryKind: nil, imagePath: imagePath, children: allChildren, properties: properties)
+        let runtimeObject = RuntimeObject(
+            name: mangledName,
+            displayName: displayName,
+            kind: typeDefinition.typeName.runtimeObjectKind,
+            secondaryKind: nil,
+            imagePath: imagePath,
+            children: allChildren,
+            properties: properties
+        )
         if isSpecialized, let unspecializedTypeName {
             interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: unspecializedTypeName, specialized: typeDefinition.typeName)
+            specializedDefinitionByObject[runtimeObject.key] = typeDefinition
+        } else if isSpecialized {
+            // Derived nested specialization: upstream produced this object
+            // by walking a freshly specialized parent's `typeChildren` (see
+            // `derivingNestedSpecializationsWith`) — its generic ancestor
+            // lives elsewhere in the indexer and is not addressable from
+            // here. The `TypeDefinition` is still authoritative, so cache
+            // it directly and let consumers look it up through
+            // `specializedDefinitionByObject` instead of the indexer.
+            interfaceDefinitionNameByObject[runtimeObject.key] = .derivedSpecializedType(typeDefinition.typeName)
+            specializedDefinitionByObject[runtimeObject.key] = typeDefinition
         } else if isChild {
             interfaceDefinitionNameByObject[runtimeObject.key] = .childType(typeDefinition.typeName)
         } else {
@@ -238,6 +280,10 @@ extension RuntimeSwiftSection {
         var newInterfaceString: SemanticString = ""
         switch interfaceDefinitionName {
         case .specializedType(let unspecializedTypeName, let specializedTypeName):
+            if let specializedDefinition = specializedDefinitionByObject[object.key] {
+                try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
+                break
+            }
             // The indexer keeps `allTypeDefinitions` keyed by the
             // unspecialized typeName; specialized children live on the
             // parent's `specializedChildren` array (per the upstream's
@@ -247,6 +293,11 @@ extension RuntimeSwiftSection {
             guard let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
                   let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName })
             else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
+        case .derivedSpecializedType:
+            guard let specializedDefinition = specializedDefinitionByObject[object.key] else {
+                throw Error.invalidRuntimeObject
+            }
             try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
         case .rootType(let rootTypeName):
             guard let typeDefinition = indexer.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObject }
@@ -446,8 +497,14 @@ extension RuntimeSwiftSection {
                 collect(from: typeDefinition)
             }
         case .specializedType(let unspecializedTypeName, let specializedTypeName):
-            if let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
+            if let specializedDefinition = specializedDefinitionByObject[object.key] {
+                collect(from: specializedDefinition)
+            } else if let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
                let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName }) {
+                collect(from: specializedDefinition)
+            }
+        case .derivedSpecializedType:
+            if let specializedDefinition = specializedDefinitionByObject[object.key] {
                 collect(from: specializedDefinition)
             }
         case .rootProtocol(let protocolName),
@@ -600,6 +657,9 @@ extension RuntimeSwiftSection {
         let specializedDefinition = try await baseTypeDefinition.specialize(
             with: result,
             typeArgumentNodes: typeArgumentNodes.count == upstreamRequest.parameters.count ? typeArgumentNodes : nil,
+            derivingNestedSpecializationsWith: specializer,
+            selection: upstreamSelection,
+            typeArgumentNodesByParameter: resolved.nodesByParameter,
             in: machO
         )
         // After the lone suspension point — bail out before mutating section
@@ -1001,6 +1061,7 @@ extension RuntimeSwiftSection {
         if newIndexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
             #log(.debug, "Index configuration changed, re-preparing builder")
             interfaceDefinitionNameByObject.removeAll()
+            specializedDefinitionByObject.removeAll()
         }
 
         if newPrintConfiguration != oldPrintConfiguration {

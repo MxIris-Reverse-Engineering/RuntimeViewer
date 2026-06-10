@@ -41,7 +41,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
 
     public func withImagePath(_ imagePath: String) -> RuntimeObject {
-        .init(name: name, displayName: displayName, kind: kind, secondaryKind: secondaryKind, imagePath: imagePath, children: children)
+        .init(name: name, displayName: displayName, kind: kind, secondaryKind: secondaryKind, imagePath: imagePath, children: children, properties: properties)
     }
 
     /// Returns a copy of this object with `child` appended to its `children`.

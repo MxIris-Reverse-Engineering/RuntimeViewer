@@ -16,10 +16,18 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     /// `rebuildChildren()`. Crucially does NOT depend on `RuntimeObject.children`,
     /// so a parent whose children change (e.g. via specialization) still
     /// matches its previous instance.
+    ///
+    /// `parentFingerprint` folds the entire ancestry chain into a single
+    /// `Int`, which is what lets two cells with the same `(imagePath, name,
+    /// kind)` but different sidebar positions stay distinct — e.g. the
+    /// `Phase.Value<Event>` produced by directly specializing the inner
+    /// generic vs. the `Phase<Event>.Value` derived when the outer generic
+    /// gets specialized.
     public struct StableID: Hashable {
         public let imagePath: String
         public let name: String
         public let kind: RuntimeObjectKind
+        public let parentFingerprint: Int
     }
 
     /// Mutable so the sidebar can splice in a new specialized child via
@@ -37,8 +45,33 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
     public let forOpenQuickly: Bool
 
+    /// Sidebar-tree parent. Weak to avoid retain cycles since the parent
+    /// strongly holds its children via `_children`. Only the cell's own
+    /// position in the sidebar uses this — `RuntimeObject` itself stays
+    /// position-agnostic.
+    public private(set) weak var parent: SidebarRuntimeObjectCellViewModel?
+
+    /// Recursive identity hash folding `parent.fingerprint` into the cell's
+    /// own `(imagePath, name, kind)`. Not cached: `stableID` reads it on
+    /// demand so a late-binding `parent` change (or `parent` deallocation)
+    /// just shows up next access. `runtimeObject.children` is intentionally
+    /// excluded — splicing a child must not flip the parent's fingerprint.
+    public var fingerprint: Int {
+        var hasher = Hasher()
+        hasher.combine(parent?.fingerprint ?? 0)
+        hasher.combine(runtimeObject.imagePath)
+        hasher.combine(runtimeObject.name)
+        hasher.combine(runtimeObject.kind)
+        return hasher.finalize()
+    }
+
     public var stableID: StableID {
-        StableID(imagePath: runtimeObject.imagePath, name: runtimeObject.name, kind: runtimeObject.kind)
+        StableID(
+            imagePath: runtimeObject.imagePath,
+            name: runtimeObject.name,
+            kind: runtimeObject.kind,
+            parentFingerprint: parent?.fingerprint ?? 0
+        )
     }
 
     public var children: [SidebarRuntimeObjectCellViewModel] {
@@ -149,10 +182,11 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             .lineBreakeMode(.byTruncatingTail)
     }
 
-    public init(runtimeObject: RuntimeObject, forOpenQuickly: Bool) {
+    public init(runtimeObject: RuntimeObject, forOpenQuickly: Bool, parent: SidebarRuntimeObjectCellViewModel? = nil) {
         self.runtimeObject = runtimeObject
         self.forOpenQuickly = forOpenQuickly
         super.init()
+        self.parent = parent
         rebuildChildren()
         refreshAppearance()
     }
@@ -162,6 +196,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     /// `Differentiable` consumers see stable identities and outlineView
     /// state (selection/expansion) is preserved.
     private func rebuildChildren() {
+        let parentFingerprint = fingerprint
         let recycledChildrenByStableID = Dictionary(
             _children.map { ($0.stableID, $0) },
             uniquingKeysWith: { firstViewModel, _ in firstViewModel }
@@ -170,19 +205,45 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             let childStableID = StableID(
                 imagePath: childRuntimeObject.imagePath,
                 name: childRuntimeObject.name,
-                kind: childRuntimeObject.kind
+                kind: childRuntimeObject.kind,
+                parentFingerprint: parentFingerprint
             )
             if let recycledChild = recycledChildrenByStableID[childStableID] {
                 recycledChild.runtimeObject = childRuntimeObject // recurses via didSet
                 return recycledChild
             }
-            return Self(runtimeObject: childRuntimeObject, forOpenQuickly: forOpenQuickly)
+            return Self(runtimeObject: childRuntimeObject, forOpenQuickly: forOpenQuickly, parent: self)
         }
         .sorted { leftChild, rightChild in
             leftChild.runtimeObject.displayName < rightChild.runtimeObject.displayName
         }
         _children = rebuiltChildren
         applyFilter()
+    }
+
+    /// Returns a RuntimeObject tree that reflects the current child viewmodels,
+    /// including children that were spliced into descendants after this cell's
+    /// original RuntimeObject was created.
+    func materializedRuntimeObject() -> RuntimeObject {
+        RuntimeObject(
+            name: runtimeObject.name,
+            displayName: runtimeObject.displayName,
+            kind: runtimeObject.kind,
+            secondaryKind: runtimeObject.secondaryKind,
+            imagePath: runtimeObject.imagePath,
+            children: _children.map { $0.materializedRuntimeObject() },
+            properties: runtimeObject.properties
+        )
+    }
+
+    @discardableResult
+    func appendRuntimeObjectChildPreservingCurrentDescendants(_ child: RuntimeObject) -> Bool {
+        let currentRuntimeObject = materializedRuntimeObject()
+        guard !currentRuntimeObject.children.contains(where: { $0.key == child.key }) else {
+            return false
+        }
+        runtimeObject = currentRuntimeObject.withAppendedChild(child)
+        return true
     }
 
     /// Recompute icons and the highlighted name. Called whenever
