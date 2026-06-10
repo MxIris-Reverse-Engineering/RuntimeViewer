@@ -47,6 +47,19 @@ public actor RuntimeBackgroundIndexingManager {
         }
     }
 
+    /// Cancels every active batch whose `RuntimeIndexingBatch` matches the
+    /// supplied predicate. Used by the coordinator when the user disables a
+    /// single sub-mode (Heuristic / Custom) so that the other sub-mode's
+    /// in-flight batches keep running.
+    public func cancelBatches(matching predicate: @Sendable (RuntimeIndexingBatch) -> Bool) {
+        let ids = activeBatches.compactMap { id, state in
+            predicate(state.batch) ? id : nil
+        }
+        for id in ids {
+            cancelBatch(id)
+        }
+    }
+
     /// Best-effort priority boost for `imagePath` inside any active batch.
     ///
     /// Items currently in `.pending` state are marked with `hasPriorityBoost`
@@ -85,15 +98,16 @@ public actor RuntimeBackgroundIndexingManager {
     ) async -> RuntimeIndexingBatchID {
         // Dedup before doing any expansion work. Real-world trigger:
         // `documentDidOpen` dispatches `.appLaunch` on the main executable
-        // and dyld's add-image notification simultaneously fires
-        // `handleImageLoaded` with the same path, dispatching `.imageLoaded`.
-        // Two concurrent batches on the same root would duplicate work and
-        // race for the same section caches.
+        // and the user simultaneously toggles the master switch off / on,
+        // causing `handleSettingsChange` to dispatch a second batch on the
+        // same root with `.settingsEnabled`. Two concurrent batches on the
+        // same root would duplicate work and race for the same section
+        // caches.
         //
         // We dedup by `rootImagePath` only — `reason` is intentionally
-        // ignored so `.appLaunch` ↔ `.imageLoaded(path:)` (which have
-        // different discriminants) collapse together. Callers that want
-        // a fresh batch must wait for the previous one to finish.
+        // ignored so `.appLaunch` ↔ `.settingsEnabled` (which have different
+        // discriminants) collapse together. Callers that want a fresh batch
+        // must wait for the previous one to finish.
         if let existingId = findActiveBatchID(forRootImagePath: rootImagePath) {
             return existingId
         }

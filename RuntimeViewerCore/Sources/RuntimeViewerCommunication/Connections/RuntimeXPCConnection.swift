@@ -5,16 +5,8 @@ import FoundationToolbox
 import Combine
 public import HelperCommunication
 import HelperPeer
-
-// MARK: - XPCListenerEndpointProviding
-
-/// Protocol for connections that expose their XPC listener endpoint.
-///
-/// Used by `RuntimeEngine` to retrieve the server's listener endpoint
-/// for registration with the Mach Service injected endpoint registry.
-public protocol XPCListenerEndpointProviding: AnyObject {
-    var xpcListenerEndpoint: HelperPeerEndpoint { get }
-}
+import HelperClient
+import InjectedEndpointRegistryServiceInterface
 
 // MARK: - RuntimeXPCConnection
 
@@ -33,8 +25,8 @@ public protocol XPCListenerEndpointProviding: AnyObject {
 /// - This adapter bridges the peer's `AsyncStream<PeerConnectionState>` to a
 ///   Combine `CurrentValueSubject<RuntimeConnectionState, Never>` for
 ///   compatibility with the rest of `RuntimeEngine`.
-/// - `XPCListenerEndpointProviding.xpcListenerEndpoint` is cached at init time
-///   so callers retain synchronous access (matches the previous semantics).
+/// - The peer's listener endpoint is cached at init time so server-side
+///   self-registration (see `RuntimeXPCServerConnection`) is synchronous.
 ///
 /// ## Use Cases
 ///
@@ -152,10 +144,6 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
     }
 }
 
-extension RuntimeXPCConnection: XPCListenerEndpointProviding {
-    public var xpcListenerEndpoint: HelperPeerEndpoint { cachedListenerEndpoint }
-}
-
 // MARK: - RuntimeXPCClientConnection
 
 /// XPC client connection for the main application side.
@@ -234,6 +222,41 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
         await super.init(identifier: identifier, peer: peer)
         try await modifier?(self)
         try await peer.activate()
+        await announceListenerEndpoint()
+    }
+
+    /// Announce this server's listener endpoint to the Mach Service injected-endpoint
+    /// registry so the host can reconnect directly after restart, bypassing the broker
+    /// handshake. Failures are logged but never propagated: a successful peer activation
+    /// must not be torn down just because the registry is unreachable — the host can
+    /// still rediscover this process via the broker.
+    private func announceListenerEndpoint() async {
+        do {
+            let helperClient = HelperClient()
+            try await helperClient.connectToTool(
+                machServiceName: RuntimeViewerMachServiceName,
+                isPrivilegedHelperTool: true
+            )
+            try await helperClient.sendToTool(request: RegisterInjectedEndpointRequest(
+                pid: ProcessInfo.processInfo.processIdentifier,
+                appName: Self.injectedAppName,
+                bundleIdentifier: Bundle.main.bundleIdentifier ?? "",
+                endpoint: cachedListenerEndpoint
+            ))
+            #log(.info, "Registered injected endpoint with Mach Service (PID: \(ProcessInfo.processInfo.processIdentifier))")
+        } catch {
+            #log(.error, "Failed to register injected endpoint: \(error, privacy: .public)")
+        }
+    }
+
+    private static var injectedAppName: String {
+        if let displayName = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String {
+            return displayName
+        }
+        if let bundleName = Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String {
+            return bundleName
+        }
+        return ProcessInfo.processInfo.processName
     }
 }
 

@@ -43,9 +43,11 @@ func envEnable(_ key: String, default defaultValue: Bool = false) -> Bool {
     }
 }
 
+let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
+
 extension Package.Dependency {
     enum LocalSearchPath {
-        case package(path: String, isRelative: Bool, isEnabled: Bool)
+        case package(path: String, isRelative: Bool, isEnabled: Bool = usingLocalDependencies, traits: Set<PackageDescription.Package.Dependency.Trait> = [.defaults])
     }
 
     static func package(local localSearchPaths: LocalSearchPath..., remote: Package.Dependency) -> Package.Dependency {
@@ -59,7 +61,7 @@ extension Package.Dependency {
         }
         for local in localSearchPaths {
             switch local {
-            case .package(let path, let isRelative, let isEnabled):
+            case .package(let path, let isRelative, let isEnabled, let traits):
                 guard isEnabled else { continue }
                 let url = if isRelative {
                     URL(fileURLWithPath: path, relativeTo: URL(fileURLWithPath: #filePath))
@@ -68,7 +70,7 @@ extension Package.Dependency {
                 }
 
                 if FileManager.default.fileExists(atPath: url.path) {
-                    return .package(path: url.path)
+                    return .package(path: url.path, traits: traits)
                 }
             }
         }
@@ -79,8 +81,6 @@ extension Package.Dependency {
 let appkitPlatforms: [Platform] = [.macOS]
 
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS, .macCatalyst, .watchOS]
-
-let usingLocalDependencies = envEnable("USING_LOCAL_DEPENDENCIES")
 
 let package = Package(
     name: "RuntimeViewerCore",
@@ -106,7 +106,6 @@ let package = Package(
             local: .package(
                 path: "../../MachOKit",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit",
@@ -117,54 +116,50 @@ let package = Package(
             local: .package(
                 path: "../../MachOObjCSection",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
-                from: "0.6.101",
+                from: "0.7.103",
             ),
         ),
         .package(
             local: .package(
                 path: "../../MachOSwiftSection",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                exact: "0.12.0-beta.1",
+                exact: "0.12.0-beta.3",
             ),
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/Asynchrone",
-            from: "0.23.0-fork",
+            from: "0.23.0-fork.1",
         ),
         .package(
             url: "https://github.com/MxIris-Library-Forks/Semaphore",
-            from: "0.1.0",
+            from: "0.1.1",
         ),
         .package(
             url: "https://github.com/apple/swift-collections",
-            from: "1.1.0",
+            from: "1.5.1",
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox",
-            from: "0.5.5",
+            from: "0.7.1",
         ),
         .package(
             local: .package(
                 path: "../../../../Personal/Library/macOS/swift-helper-service",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             .package(
                 path: "../../swift-helper-service",
                 isRelative: true,
-                isEnabled: usingLocalDependencies,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.1.2",
+                from: "0.1.3",
             ),
         ),
         .package(
@@ -173,7 +168,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/mxcl/Version",
-            from: "2.2.0",
+            from: "2.2.1",
         ),
         .package(
             url: "https://github.com/SwiftyLab/MetaCodable",

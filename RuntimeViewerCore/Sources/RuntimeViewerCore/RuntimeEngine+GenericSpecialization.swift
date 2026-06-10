@@ -13,14 +13,14 @@ extension RuntimeEngine {
     /// (`RuntimeSpecializationRequest`) so the client does not need
     /// `@_spi(Support) SwiftInterface` to deserialize the response.
     public func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
-        try await request {
-            guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath) else {
-                throw EngineError.imageNotIndexed(imagePath: object.imagePath)
-            }
-            return try await swiftSection.specializationRequest(for: object)
-        } remote: { senderConnection in
-            try await senderConnection.sendMessage(name: .specializationRequest, request: object)
+        try await dispatch(SpecializationRequestForObjectRequest(object: object))
+    }
+
+    func _specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
+        guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath) else {
+            throw EngineError.imageNotIndexed(imagePath: object.imagePath)
         }
+        return try await swiftSection.specializationRequest(for: object)
     }
 
     /// Run runtime-aware preflight on the user's selection before invoking
@@ -37,22 +37,17 @@ extension RuntimeEngine {
         for object: RuntimeObject,
         with selection: RuntimeSpecializationSelection
     ) async throws -> RuntimeSpecializationValidation {
-        try await runtimePreflight(for: .init(object: object, selection: selection))
+        try await dispatch(RuntimePreflightRequest(object: object, selection: selection))
     }
 
-    /// Internal (rather than `private`) so that
-    /// `RuntimeEngine.setMessageHandlerBinding(forName:of:to:)` in `RuntimeEngine.swift`
-    /// can reference `$0.runtimePreflight(for:)` across files. `private` extension
-    /// members are only visible within the file declaring the extension.
-    func runtimePreflight(for request: SpecializeRequest) async throws -> RuntimeSpecializationValidation {
-        try await self.request {
-            guard let swiftSection = await swiftSectionFactory.existingSection(for: request.object.imagePath) else {
-                throw EngineError.imageNotIndexed(imagePath: request.object.imagePath)
-            }
-            return try await swiftSection.runtimePreflight(for: request.object, with: request.selection)
-        } remote: { senderConnection in
-            try await senderConnection.sendMessage(name: .runtimePreflight, request: request)
+    func _runtimePreflight(
+        for object: RuntimeObject,
+        with selection: RuntimeSpecializationSelection
+    ) async throws -> RuntimeSpecializationValidation {
+        guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath) else {
+            throw EngineError.imageNotIndexed(imagePath: object.imagePath)
         }
+        return try await swiftSection.runtimePreflight(for: object, with: selection)
     }
 
     /// Specialize the given generic Swift type and register the resulting
@@ -72,35 +67,20 @@ extension RuntimeEngine {
         _ object: RuntimeObject,
         with selection: RuntimeSpecializationSelection
     ) async throws -> RuntimeObject {
-        try await specialize(for: .init(object: object, selection: selection))
+        try await dispatch(SpecializeRequest(object: object, selection: selection))
     }
 
-    /// Internal (rather than `private`) so that
-    /// `RuntimeEngine.setMessageHandlerBinding(forName:of:to:)` in `RuntimeEngine.swift`
-    /// can reference `$0.specialize(for:)` across files. `private` extension
-    /// members are only visible within the file declaring the extension.
     @discardableResult
-    func specialize(for request: SpecializeRequest) async throws -> RuntimeObject {
-        try await self.request {
-            guard let swiftSection = await swiftSectionFactory.existingSection(for: request.object.imagePath) else {
-                throw EngineError.imageNotIndexed(imagePath: request.object.imagePath)
-            }
-            let runtimeObject = try await swiftSection.specialize(for: request.object, with: request.selection)
-            broadcast(.specializationAdded(parent: request.object, child: runtimeObject))
-            return runtimeObject
-        } remote: { senderConnection in
-            try await senderConnection.sendMessage(name: .specialize, request: request)
+    func _specialize(
+        _ object: RuntimeObject,
+        with selection: RuntimeSpecializationSelection
+    ) async throws -> RuntimeObject {
+        guard let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath) else {
+            throw EngineError.imageNotIndexed(imagePath: object.imagePath)
         }
-    }
-
-    struct SpecializeRequest: Codable, Sendable {
-        let object: RuntimeObject
-        let selection: RuntimeSpecializationSelection
-    }
-
-    struct SpecializationRequestForCandidateRequest: Codable, Sendable {
-        let candidateID: String
-        let imagePath: String
+        let runtimeObject = try await swiftSection.specialize(for: object, with: selection)
+        broadcast(.specializationAdded(parent: object, child: runtimeObject))
+        return runtimeObject
     }
 
     /// Build an inner `RuntimeSpecializationRequest` for a generic candidate
@@ -113,22 +93,19 @@ extension RuntimeEngine {
         forCandidateID candidateID: String,
         in imagePath: String
     ) async throws -> RuntimeSpecializationRequest {
-        try await specializationRequest(for: .init(candidateID: candidateID, imagePath: imagePath))
+        try await dispatch(SpecializationRequestForCandidateRequest(candidateID: candidateID, imagePath: imagePath))
     }
 
-    func specializationRequest(
-        for request: SpecializationRequestForCandidateRequest
+    func _specializationRequest(
+        forCandidateID candidateID: String,
+        in imagePath: String
     ) async throws -> RuntimeSpecializationRequest {
-        try await self.request {
-            guard let swiftSection = await swiftSectionFactory.existingSection(for: request.imagePath) else {
-                throw EngineError.imageNotIndexed(imagePath: request.imagePath)
-            }
-            return try await swiftSection.specializationRequest(
-                forCandidateID: request.candidateID,
-                in: request.imagePath
-            )
-        } remote: { senderConnection in
-            try await senderConnection.sendMessage(name: .specializationRequestForCandidate, request: request)
+        guard let swiftSection = await swiftSectionFactory.existingSection(for: imagePath) else {
+            throw EngineError.imageNotIndexed(imagePath: imagePath)
         }
+        return try await swiftSection.specializationRequest(
+            forCandidateID: candidateID,
+            in: imagePath
+        )
     }
 }

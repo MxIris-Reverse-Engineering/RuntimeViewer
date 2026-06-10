@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewController<ViewModel> {
+class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewController<ViewModel>, NSOutlineViewDelegate {
     var isReorderable: Bool {
         false
     }
@@ -79,7 +79,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
 
         let output = viewModel.transform(input)
 
-        output.nodes.drive(isReorderable ? outlineView.rx.reorderableNodes : outlineView.rx.nodes)({ (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: SidebarRootCellViewModel) -> NSView? in
+        output.nodes.drive(outlineView.rx.nodes(options: isReorderable ? [.reorderable] : []))({ (outlineView: NSOutlineView, tableColumn: NSTableColumn?, node: SidebarRootCellViewModel) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: SidebarRootTableCellView.self)
             cellView.bind(to: node)
             return cellView
@@ -151,5 +151,12 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
                 }
             }
             .disposed(by: rx.disposeBag)
+        
+        outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
+    }
+    
+    func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
+        guard let cellViewModel = item as? SidebarRootCellViewModel else { return nil }
+        return cellViewModel.name.string
     }
 }

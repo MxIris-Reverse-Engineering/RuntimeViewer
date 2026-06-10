@@ -11,6 +11,8 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 
     public private(set) var contentView: NSView = UXView()
 
+    open var contentInsets: NSDirectionalEdgeInsets { .init() }
+
     open var shouldDisplayCommonLoading: Bool { false }
 
     open var contentViewUsingSafeArea: Bool { false }
@@ -38,9 +40,15 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 
         contentView.snp.makeConstraints { make in
             if contentViewUsingSafeArea {
-                make.edges.equalTo(view.safeAreaLayoutGuide)
+                make.top.equalTo(view.safeAreaLayoutGuide).inset(contentInsets.top)
+                make.leading.equalTo(view.safeAreaLayoutGuide).inset(contentInsets.leading)
+                make.trailing.equalTo(view.safeAreaLayoutGuide).inset(contentInsets.trailing)
+                make.bottom.equalTo(view.safeAreaLayoutGuide).inset(contentInsets.bottom)
             } else {
-                make.edges.equalToSuperview()
+                make.top.equalToSuperview().inset(contentInsets.top)
+                make.leading.equalToSuperview().inset(contentInsets.leading)
+                make.trailing.equalToSuperview().inset(contentInsets.trailing)
+                make.bottom.equalToSuperview().inset(contentInsets.bottom)
             }
         }
 
@@ -58,7 +66,7 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 
     open func setupBindings(for viewModel: ViewModel) {
         loadViewIfNeeded()
-        
+
         rx.disposeBag = DisposeBag()
 
         self.viewModel = viewModel
@@ -129,9 +137,8 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
 open class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<ViewModel> {
     private lazy var effectView: NSView = {
         if #available(macOS 26.0, *) {
-            let view = UXView()
+            return UXView()
 //            view.backgroundColor = .windowBackgroundColor
-            return view
         } else {
             return NSVisualEffectView()
         }
@@ -139,38 +146,6 @@ open class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewContro
 
     open override var contentView: NSView { effectView }
 }
-
-open class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController {
-    public private(set) var viewModel: ViewModel?
-
-    public init(viewModel: ViewModel? = nil) {
-        self.viewModel = viewModel
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    @available(*, unavailable)
-    public required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    open func setupBindings(for viewModel: ViewModel) {
-        rx.disposeBag = DisposeBag()
-        self.viewModel = viewModel
-
-        viewModel.errorRelay
-            .asSignal()
-            .emitOnNextMainActor { [weak self] error in
-                guard let self else { return }
-                if let window = view.window {
-                    NSAlert(error: error).beginSheetModal(for: window)
-                } else {
-                    NSAlert(error: error).runModal()
-                }
-            }
-            .disposed(by: rx.disposeBag)
-    }
-}
-
 
 open class UXKitNavigationController: UXNavigationController {
     open override func viewDidLoad() {

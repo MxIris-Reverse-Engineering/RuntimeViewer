@@ -5,6 +5,12 @@ import OrderedCollections
 
 typealias ExportFormat = RuntimeInterfaceExportConfiguration.Format
 
+enum ExportingDefaultsKey {
+    static let objcFormat = "Exporting.objcFormat"
+    static let swiftFormat = "Exporting.swiftFormat"
+    static let includeMetadata = "Exporting.includeMetadata"
+}
+
 enum ExportingStep: Int {
     case configuration
     case progress

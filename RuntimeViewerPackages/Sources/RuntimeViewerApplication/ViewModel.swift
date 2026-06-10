@@ -1,10 +1,7 @@
 import Foundation
 import FoundationToolbox
 import RuntimeViewerArchitectures
-
-#if canImport(RuntimeViewerSettings)
 import RuntimeViewerSettings
-#endif
 
 @MainActor
 open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
@@ -14,17 +11,15 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
 
     @Dependency(\.appDefaults)
     public var appDefaults
-    
+
     #if os(macOS)
     @Dependency(\.appRouter)
     public var appRouter
     #endif
-    
-    #if canImport(RuntimeViewerSettings)
+
     @Dependency(\.settings)
     public var settings
-    #endif
-    
+
     public let errorRelay = PublishRelay<Error>()
 
     package let _commonLoading = ActivityIndicator()
@@ -55,3 +50,6 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
         self.router = router
     }
 }
+
+@MainActor
+open class CellViewModel: NSObject {}

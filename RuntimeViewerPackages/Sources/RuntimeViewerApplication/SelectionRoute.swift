@@ -19,12 +19,21 @@ import RuntimeViewerArchitectures
 /// - `switchImage`: change the currently inspected image, atomically
 ///   clearing any in-flight drill-down stack (sidebar image click, sidebar
 ///   back).
-/// - `selectAtRoot`: replace the entire inspection stack with one object
-///   (sidebar row click, specialization completion).
-/// - `drillInto`: push one object onto the stack (inspector relationship /
-///   specialization child click).
-/// - `pop`: remove the topmost object (toolbar content back).
-/// - `clear`: empty the stack but keep `currentImageNode`.
+/// - `selectAtRoot`: replace the entire inspection history with one
+///   object (specialization completion). Resets `selectionIndex` to 0.
+/// - `push`: append a new object after the cursor, truncating any
+///   forward history first, then advance the cursor to the new entry
+///   (sidebar row click, inspector relationship / specialization child
+///   click, content link click).
+/// - `pop`: actually remove the topmost entry from the history array
+///   and clamp the cursor back into the new bounds. Reserved for callers
+///   that need to shrink the history (the toolbar previous button uses
+///   `.backward` instead — it only moves the cursor).
+/// - `backward`: step the cursor one entry back without mutating the
+///   history array (toolbar previous). No-op at index 0.
+/// - `forward`: step the cursor one entry forward without mutating the
+///   history array (toolbar next). No-op at the latest entry.
+/// - `clear`: empty the history but keep `currentImageNode`.
 @AssociatedValue(.public)
 @CaseCheckable(.public)
 public enum SelectionRoute: Routable {
@@ -33,5 +42,7 @@ public enum SelectionRoute: Routable {
     case selectAtRoot(RuntimeObject)
     case push(RuntimeObject)
     case pop
+    case backward
+    case forward
     case clear
 }

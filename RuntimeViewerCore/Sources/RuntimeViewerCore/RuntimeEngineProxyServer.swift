@@ -76,7 +76,7 @@ public actor RuntimeEngineProxyServer {
             return
         }
         let imageList = await engine.imageList
-        let imageNodes = await engine.imageNodes
+        let imageNodes = engine.imageNodes
         #log(.info, "[PROXY \(self.identifier, privacy: .public)] sendInitialData: imageList=\(imageList.count, privacy: .public), imageNodes=\(imageNodes.count, privacy: .public)")
         do {
             try await connection.sendMessage(
@@ -121,82 +121,15 @@ public actor RuntimeEngineProxyServer {
             return
         }
 
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.isImageLoaded.commandName) {
-            [engine] (path: String) -> Bool in
-            try await engine.isImageLoaded(path: path)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.isImageIndexed.commandName) {
-            [engine] (path: String) -> Bool in
-            try await engine.isImageIndexed(path: path)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.mainExecutablePath.commandName) {
-            [engine] () -> String in
-            try await engine.mainExecutablePath()
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimeObjectsInImage.commandName) {
-            [engine] (image: String) -> [RuntimeObject] in
-            try await engine.objects(in: image)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimeInterfaceForRuntimeObjectInImageWithOptions.commandName) {
-            [engine] (request: RuntimeEngine.InterfaceRequest) -> RuntimeObjectInterface? in
-            try await engine.interface(for: request.object, options: request.options)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimeObjectHierarchy.commandName) {
-            [engine] (object: RuntimeObject) -> [String] in
-            try await engine.hierarchy(for: object)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimeRelationshipsForObject.commandName) {
-            [engine] (object: RuntimeObject) -> RuntimeRelationships in
-            try await engine.relationships(for: object)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.loadImage.commandName) {
-            [engine] (path: String) in
-            try await engine.loadImage(at: path)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.loadImageForBackgroundIndexing.commandName) {
-            [engine] (path: String) in
-            try await engine.loadImageForBackgroundIndexing(at: path)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.imageNameOfClassName.commandName) {
-            [engine] (name: RuntimeObject) -> String? in
-            try await engine.imageName(ofObjectName: name)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.memberAddresses.commandName) {
-            [engine] (request: RuntimeEngine.MemberAddressesRequest) -> [RuntimeMemberAddress] in
-            try await engine.memberAddresses(for: request.object, memberName: request.memberName)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.specializationRequest.commandName) {
-            [engine] (object: RuntimeObject) -> RuntimeSpecializationRequest in
-            try await engine.specializationRequest(for: object)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.specializationRequestForCandidate.commandName) {
-            [engine] (request: RuntimeEngine.SpecializationRequestForCandidateRequest) -> RuntimeSpecializationRequest in
-            try await engine.specializationRequest(forCandidateID: request.candidateID, in: request.imagePath)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.runtimePreflight.commandName) {
-            [engine] (request: RuntimeEngine.SpecializeRequest) -> RuntimeSpecializationValidation in
-            try await engine.runtimePreflight(for: request.object, with: request.selection)
-        }
-
-        connection.setMessageHandler(name: RuntimeEngine.CommandNames.specialize.commandName) {
-            [engine] (request: RuntimeEngine.SpecializeRequest) -> RuntimeObject in
-            try await engine.specialize(request.object, with: request.selection)
-        }
+        // Shared registry — same set of commands `RuntimeEngine`'s own server
+        // arm installs. Adding a new shared command in
+        // `RuntimeEngine.registerSharedHandlers(on:engine:)` automatically
+        // takes effect here too, eliminating the parallel-edit hazard that
+        // used to bite us every time a new command landed.
+        RuntimeEngine.registerSharedHandlers(on: connection, engine: engine)
 
         #if canImport(AppKit)
+        // Proxy-only: serve the running app icon to whichever client connects.
         let engineSource = engine.source
         connection.setMessageHandler(name: Self.iconRequestCommand) {
             () -> Data? in

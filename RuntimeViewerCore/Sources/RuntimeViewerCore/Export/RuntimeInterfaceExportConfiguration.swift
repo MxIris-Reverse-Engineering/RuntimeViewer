@@ -1,7 +1,7 @@
 public import Foundation
 
 public struct RuntimeInterfaceExportConfiguration: Sendable {
-    public enum Format: Int, Sendable {
+    public enum Format: Int, Sendable, Codable {
         case singleFile = 0
         case directory = 1
     }

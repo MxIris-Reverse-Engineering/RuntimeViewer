@@ -6,6 +6,29 @@ import RuntimeViewerMCPBridge
 final class MainToolbarController: NSObject, NSToolbarDelegate {
     protocol Delegate: AnyObject {}
 
+    final class NavigationToolbarItem: NSToolbarItem {
+//        let previousItem = IconButtonToolbarItem(itemIdentifier: .Main.navigationPrevious, icon: .chevronBackward).then {
+//            $0.label = "Previous"
+//        }
+//        
+//        let nextItem = IconButtonToolbarItem(itemIdentifier: .Main.navigationNext, icon: .chevronForward).then {
+//            $0.label = "Next"
+//        }
+        
+        let segmentedControl = NSSegmentedControl()
+        
+        init() {
+            super.init(itemIdentifier: .Main.navigation)
+            isNavigational = true
+            view = segmentedControl
+            segmentedControl.segmentCount = 2
+            segmentedControl.segmentStyle = .automatic
+            segmentedControl.trackingMode = .momentary
+            segmentedControl.setImage(.symbol(systemName: .chevronBackward), forSegment: 0)
+            segmentedControl.setImage(.symbol(systemName: .chevronForward), forSegment: 1)
+        }
+    }
+    
     class IconButtonToolbarItem: NSToolbarItem {
         let button = ToolbarButton()
         
@@ -141,10 +164,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         $0.label = "Back"
     }
 
-    let contentBackItem = IconButtonToolbarItem(itemIdentifier: .Main.contentBack, icon: .chevronBackward).then {
-        $0.isNavigational = true
-        $0.label = "Back"
-    }
+    let navigationItem = NavigationToolbarItem()
 
     let titleItem = TitleToolbarItem()
 
@@ -207,7 +227,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.sidebarBack,
             .flexibleSpace,
             .sidebarTrackingSeparator,
-            .Main.contentBack,
+            .Main.navigation,
             .Main.title,
             .flexibleSpace,
             .Main.switchSource,
@@ -229,7 +249,7 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
             .Main.sidebarBack,
-            .Main.contentBack,
+            .Main.navigation,
             .Main.title,
             .flexibleSpace,
             .toggleSidebar,
@@ -253,8 +273,8 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         switch itemIdentifier {
         case .Main.sidebarBack:
             return sidebarBackItem
-        case .Main.contentBack:
-            return contentBackItem
+        case .Main.navigation:
+            return navigationItem
         case .Main.title:
             return titleItem
         case .Main.share:
@@ -294,7 +314,9 @@ extension NSToolbarItem.Identifier: @retroactive ExpressibleByStringLiteral {
 extension NSToolbarItem.Identifier {
     enum Main {
         static let sidebarBack: NSToolbarItem.Identifier = "sidebarBack"
-        static let contentBack: NSToolbarItem.Identifier = "contentBack"
+        static let navigation: NSToolbarItem.Identifier = "navigation"
+        static let navigationPrevious: NSToolbarItem.Identifier = "navigationPrevious"
+        static let navigationNext: NSToolbarItem.Identifier = "navigationNext"
         static let title: NSToolbarItem.Identifier = "title"
         static let share: NSToolbarItem.Identifier = "share"
         static let save: NSToolbarItem.Identifier = "save"

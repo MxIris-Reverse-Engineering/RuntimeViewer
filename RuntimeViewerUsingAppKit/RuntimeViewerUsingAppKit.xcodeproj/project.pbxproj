@@ -7,14 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0C554F36A5732FDAF8C0A3F1 /* BatchExportingConfigurationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC848E755B855C64A7FFF5E8 /* BatchExportingConfigurationViewModel.swift */; };
+		12D07EA725AFECCD93E61DD7 /* BatchExportingCompletionRowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C83BCFA7DEDB3FD171EB6C6 /* BatchExportingCompletionRowViewModel.swift */; };
+		5A6BBD9C254FFE24540D71F9 /* BatchExportingProgressRowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8249F8BA66937D5C7CCFB2BE /* BatchExportingProgressRowViewModel.swift */; };
+		620FD421F830F882232BCBCD /* BatchExportingCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0809C7E1B5879399F4AD5CFD /* BatchExportingCoordinator.swift */; };
+		69943AEB856963F21AEA89C4 /* BatchExportingProgressViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF5295BA547818A41EC080DA /* BatchExportingProgressViewModel.swift */; };
 		735AF17B8EF9B5F85B95D1E9 /* UpdaterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BB7A834FDF101E624B4EEA8 /* UpdaterService.swift */; };
+		84FE4364758FE65EA7D5E9A7 /* BatchExportingImageSelectionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A94DAF52736C3A88802C38 /* BatchExportingImageSelectionViewModel.swift */; };
 		8FC7CF2AD73A74EC8D81C0CB /* InspectorRuntimeObjectTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D57DB6E4F581069CBA /* InspectorRuntimeObjectTabViewController.swift */; };
 		8FC7CF2BD73A74EC8D81C0CB /* InspectorSwiftSpecializationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D67DB6E4F581069CBA /* InspectorSwiftSpecializationViewController.swift */; };
 		8FC7CF2CD73A74EC8D81C0CB /* InspectorRuntimeObjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D77DB6E4F581069CBA /* InspectorRuntimeObjectCoordinator.swift */; };
 		8FC7CF2DD73A74EC8D81C0CB /* InspectorRelationshipsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E923F0D87DB6E4F581069CBA /* InspectorRelationshipsViewController.swift */; };
+		8FF2C3F9302864D9F3404E35 /* BatchExportingConfigurationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7366E572547581647D1A395 /* BatchExportingConfigurationViewController.swift */; };
 		9677438C01BDD12085C27522 /* SpecializationTypePickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */; };
+		9CA80CE73BB3CFC59ED54FA9 /* BatchExportingImageSelectionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDDE868F82139B514DD706D1 /* BatchExportingImageSelectionViewController.swift */; };
+		A2519448E7F7FA797E155C73 /* BatchExportingImageSelectionCellViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 061FB631FA9AEDDF6ED4549F /* BatchExportingImageSelectionCellViewModel.swift */; };
+		A9F67D4F08F37DE09A9772C2 /* BatchExportingCompletionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96DBB7C902543EF2B169FC99 /* BatchExportingCompletionViewModel.swift */; };
 		CB5EBCC699B082FC52857966 /* SpecializationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EC4339B0319BDED6270B85F /* SpecializationCoordinator.swift */; };
+		D16A49532E755901A1D32E5F /* BatchExportingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFA5EB1BB7210538B942D40 /* BatchExportingState.swift */; };
 		D9073E10AE2361972768175D /* SpecializationViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D54B1B904A0B5FDFA93B2F /* SpecializationViewController.swift */; };
+		D9593A7A868FB627B0966159 /* BatchExportingCompletionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35D4C6E546DAF4CAF7E7AA37 /* BatchExportingCompletionViewController.swift */; };
 		D9913AAAD5EC88F6427B25C1 /* SpecializationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FBD344C22E90BA7623E9663 /* SpecializationWindowController.swift */; };
 		E90329732F5C6A450080B9CC /* dev.mxiris.runtimeviewer.service.plist in Embed LaunchDaemon */ = {isa = PBXBuildFile; fileRef = E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */; };
 		E91CD9972C2127AD00C989CC /* EventMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E91CD9962C2127AD00C989CC /* EventMonitor.swift */; };
@@ -103,11 +115,11 @@
 		E9D470672F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */; };
 		E9D470692F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */; };
 		E9D4706B2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */; };
+		E9DC0F0B2E8D000000000002 /* LoadingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9DC0F0A2E8D000000000001 /* LoadingButton.swift */; };
 		E9E900EB2C2D0D5B00FADDCC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9E900EA2C2D0D5B00FADDCC /* main.swift */; };
 		E9EB37AC2C397024003E2859 /* InspectorClassViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EB37AB2C397024003E2859 /* InspectorClassViewController.swift */; };
 		E9EE3F9E2FB573A700B540A3 /* SpecializationCellViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */; };
 		E9EEE84B2E071704008D85D1 /* CommonLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */; };
-		E9DC0F0B2E8D000000000002 /* LoadingButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9DC0F0A2E8D000000000001 /* LoadingButton.swift */; };
 		E9EEF7612E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */; };
 		E9EEF7652E08540B008D85D1 /* ContentTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7642E08540B008D85D1 /* ContentTextView.swift */; };
 		E9EEF7672E085420008D85D1 /* InspectorDisclosureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */; };
@@ -118,6 +130,7 @@
 		E9F11E162F12671D0052B0A3 /* TabViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E152F12671D0052B0A3 /* TabViewController.swift */; };
 		E9F11E182F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F11E172F12812B0052B0A3 /* SidebarRootBookmarkViewController.swift */; };
 		E9F759422CF603DD00BE7A5F /* RuntimeObjectCellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */; };
+		F43FDB3F17E51666B7FDF810 /* BatchExportingProgressViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71878BCA0F09ADE6484478B0 /* BatchExportingProgressViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -232,10 +245,22 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		061FB631FA9AEDDF6ED4549F /* BatchExportingImageSelectionCellViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingImageSelectionCellViewModel.swift; sourceTree = "<group>"; };
+		0809C7E1B5879399F4AD5CFD /* BatchExportingCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingCoordinator.swift; sourceTree = "<group>"; };
 		0FBD344C22E90BA7623E9663 /* SpecializationWindowController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationWindowController.swift; sourceTree = "<group>"; };
+		35D4C6E546DAF4CAF7E7AA37 /* BatchExportingCompletionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingCompletionViewController.swift; sourceTree = "<group>"; };
+		4C83BCFA7DEDB3FD171EB6C6 /* BatchExportingCompletionRowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingCompletionRowViewModel.swift; sourceTree = "<group>"; };
+		5FFA5EB1BB7210538B942D40 /* BatchExportingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingState.swift; sourceTree = "<group>"; };
+		65A94DAF52736C3A88802C38 /* BatchExportingImageSelectionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingImageSelectionViewModel.swift; sourceTree = "<group>"; };
+		71878BCA0F09ADE6484478B0 /* BatchExportingProgressViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingProgressViewController.swift; sourceTree = "<group>"; };
+		8249F8BA66937D5C7CCFB2BE /* BatchExportingProgressRowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingProgressRowViewModel.swift; sourceTree = "<group>"; };
+		96DBB7C902543EF2B169FC99 /* BatchExportingCompletionViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingCompletionViewModel.swift; sourceTree = "<group>"; };
 		99D54B1B904A0B5FDFA93B2F /* SpecializationViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationViewController.swift; sourceTree = "<group>"; };
 		9BB7A834FDF101E624B4EEA8 /* UpdaterService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdaterService.swift; sourceTree = "<group>"; };
 		9EC4339B0319BDED6270B85F /* SpecializationCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationCoordinator.swift; sourceTree = "<group>"; };
+		C7366E572547581647D1A395 /* BatchExportingConfigurationViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingConfigurationViewController.swift; sourceTree = "<group>"; };
+		CC848E755B855C64A7FFF5E8 /* BatchExportingConfigurationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingConfigurationViewModel.swift; sourceTree = "<group>"; };
+		DF5295BA547818A41EC080DA /* BatchExportingProgressViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingProgressViewModel.swift; sourceTree = "<group>"; };
 		E5C6DBFCCFA6B22702BC7667 /* SpecializationTypePickerViewController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpecializationTypePickerViewController.swift; sourceTree = "<group>"; };
 		E90329712F5C6A280080B9CC /* dev.mxiris.runtimeviewer.service.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = dev.mxiris.runtimeviewer.service.plist; sourceTree = "<group>"; };
 		E91CD9962C2127AD00C989CC /* EventMonitor.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = EventMonitor.swift; sourceTree = "<group>"; };
@@ -329,6 +354,7 @@
 		E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectListViewController.swift; sourceTree = "<group>"; };
 		E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectBookmarkViewController.swift; sourceTree = "<group>"; };
 		E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectTabViewController.swift; sourceTree = "<group>"; };
+		E9DC0F0A2E8D000000000001 /* LoadingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingButton.swift; sourceTree = "<group>"; };
 		E9E900D72C2CF96500FADDCC /* RuntimeViewerCatalystHelper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RuntimeViewerCatalystHelper.entitlements; sourceTree = "<group>"; };
 		E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerCatalystHelperPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -337,7 +363,6 @@
 		E9EC5BC52F1CBDBA00859091 /* com.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9EE3F9D2FB573A700B540A3 /* SpecializationCellViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpecializationCellViewModel.swift; sourceTree = "<group>"; };
 		E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonLoadingView.swift; sourceTree = "<group>"; };
-		E9DC0F0A2E8D000000000001 /* LoadingButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingButton.swift; sourceTree = "<group>"; };
 		E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarRuntimeObjectCoordinator.swift; sourceTree = "<group>"; };
 		E9EEF7642E08540B008D85D1 /* ContentTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentTextView.swift; sourceTree = "<group>"; };
 		E9EEF7662E085420008D85D1 /* InspectorDisclosureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorDisclosureView.swift; sourceTree = "<group>"; };
@@ -352,6 +377,7 @@
 		E9F2E9B72ED3BD36001DCC3E /* Shared-Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Shared-Debug.xcconfig"; path = ../Configurations/Shared/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = CodeSigning.xcconfig; path = ../Configurations/CodeSigning.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeObjectCellView.swift; sourceTree = "<group>"; };
+		EDDE868F82139B514DD706D1 /* BatchExportingImageSelectionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchExportingImageSelectionViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -398,6 +424,26 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9B20F5E805C0E15B32D5F771 /* BatchExporting */ = {
+			isa = PBXGroup;
+			children = (
+				5FFA5EB1BB7210538B942D40 /* BatchExportingState.swift */,
+				0809C7E1B5879399F4AD5CFD /* BatchExportingCoordinator.swift */,
+				061FB631FA9AEDDF6ED4549F /* BatchExportingImageSelectionCellViewModel.swift */,
+				65A94DAF52736C3A88802C38 /* BatchExportingImageSelectionViewModel.swift */,
+				EDDE868F82139B514DD706D1 /* BatchExportingImageSelectionViewController.swift */,
+				CC848E755B855C64A7FFF5E8 /* BatchExportingConfigurationViewModel.swift */,
+				C7366E572547581647D1A395 /* BatchExportingConfigurationViewController.swift */,
+				8249F8BA66937D5C7CCFB2BE /* BatchExportingProgressRowViewModel.swift */,
+				DF5295BA547818A41EC080DA /* BatchExportingProgressViewModel.swift */,
+				71878BCA0F09ADE6484478B0 /* BatchExportingProgressViewController.swift */,
+				4C83BCFA7DEDB3FD171EB6C6 /* BatchExportingCompletionRowViewModel.swift */,
+				96DBB7C902543EF2B169FC99 /* BatchExportingCompletionViewModel.swift */,
+				35D4C6E546DAF4CAF7E7AA37 /* BatchExportingCompletionViewController.swift */,
+			);
+			path = BatchExporting;
+			sourceTree = "<group>";
+		};
 		BD36D2C74648FEB09A3B7E81 /* Specialization */ = {
 			isa = PBXGroup;
 			children = (
@@ -478,6 +524,7 @@
 				E9A9D8032F5F254800A10DD3 /* MCP */,
 				E9BD1A142FA000050000ABCD /* BackgroundIndexing */,
 				E92CB2E52F41E7560091450B /* Exporting */,
+				9B20F5E805C0E15B32D5F771 /* BatchExporting */,
 				BD36D2C74648FEB09A3B7E81 /* Specialization */,
 				E9CE07BF2C14981D0070A6E8 /* Utils */,
 				E94E36C72CF87BBC006101C8 /* Resources */,
@@ -593,6 +640,7 @@
 				E9EEE84A2E071704008D85D1 /* CommonLoadingView.swift */,
 				E9DC0F0A2E8D000000000001 /* LoadingButton.swift */,
 				E9F11E152F12671D0052B0A3 /* TabViewController.swift */,
+				E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */,
 			);
 			path = Base;
 			sourceTree = "<group>";
@@ -696,7 +744,6 @@
 				E9EEF7602E084D7D008D85D1 /* SidebarRuntimeObjectCoordinator.swift */,
 				E9D4706A2F136E7F008BF7A9 /* SidebarRuntimeObjectTabViewController.swift */,
 				E9A825392C0E095500D9A85D /* SidebarRuntimeObjectViewController.swift */,
-				E9F759412CF603DD00BE7A5F /* RuntimeObjectCellView.swift */,
 				E9D470662F136E2A008BF7A9 /* SidebarRuntimeObjectListViewController.swift */,
 				E9D470682F136E52008BF7A9 /* SidebarRuntimeObjectBookmarkViewController.swift */,
 			);
@@ -1077,6 +1124,19 @@
 				8FC7CF2BD73A74EC8D81C0CB /* InspectorSwiftSpecializationViewController.swift in Sources */,
 				8FC7CF2CD73A74EC8D81C0CB /* InspectorRuntimeObjectCoordinator.swift in Sources */,
 				8FC7CF2DD73A74EC8D81C0CB /* InspectorRelationshipsViewController.swift in Sources */,
+				D16A49532E755901A1D32E5F /* BatchExportingState.swift in Sources */,
+				620FD421F830F882232BCBCD /* BatchExportingCoordinator.swift in Sources */,
+				A2519448E7F7FA797E155C73 /* BatchExportingImageSelectionCellViewModel.swift in Sources */,
+				84FE4364758FE65EA7D5E9A7 /* BatchExportingImageSelectionViewModel.swift in Sources */,
+				9CA80CE73BB3CFC59ED54FA9 /* BatchExportingImageSelectionViewController.swift in Sources */,
+				0C554F36A5732FDAF8C0A3F1 /* BatchExportingConfigurationViewModel.swift in Sources */,
+				8FF2C3F9302864D9F3404E35 /* BatchExportingConfigurationViewController.swift in Sources */,
+				69943AEB856963F21AEA89C4 /* BatchExportingProgressViewModel.swift in Sources */,
+				F43FDB3F17E51666B7FDF810 /* BatchExportingProgressViewController.swift in Sources */,
+				12D07EA725AFECCD93E61DD7 /* BatchExportingCompletionRowViewModel.swift in Sources */,
+				A9F67D4F08F37DE09A9772C2 /* BatchExportingCompletionViewModel.swift in Sources */,
+				D9593A7A868FB627B0966159 /* BatchExportingCompletionViewController.swift in Sources */,
+				5A6BBD9C254FFE24540D71F9 /* BatchExportingProgressRowViewModel.swift in Sources */,
 			);
 		};
 		E947C3632C2A4D0400296B2E /* Sources */ = {

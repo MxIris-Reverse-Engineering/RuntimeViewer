@@ -15,6 +15,7 @@ public enum MainRoute: Routable {
     case backgroundIndexing(sender: NSView)
     case dismiss
     case exportInterfaces
+    case exportMultipleImages
     /// Begin the document-window sheet that walks the user through
     /// specializing the supplied generic Swift type. Forwarded by
     /// `InspectorCoordinator` via its delegate.

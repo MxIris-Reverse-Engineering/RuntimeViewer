@@ -268,6 +268,20 @@ override func setupBindings(for viewModel: MyViewModel) {
 | `VStackView(alignment:spacing:) { ... }` | `NSStackView(orientation: .vertical)` |
 | `HStackView(spacing:) { ... }` | `NSStackView(orientation: .horizontal)` |
 | `ScrollView()` | `NSScrollView()` |
+| `final class XxxView: LayerBackedView` | `final class XxxView: NSView` (when it needs `cornerRadius` / border / `backgroundColor` / shadow) |
+
+**Layer-backed views** — any custom AppKit view that needs layer-level visuals (rounded corners, border, background color, shadow) MUST inherit `UIFoundationAppKit.LayerBackedView`, never raw `NSView` with hand-rolled `wantsLayer = true` + `layer?.cornerRadius / layer?.borderColor / layer?.backgroundColor = ....cgColor`. The base class already sets `wantsLayer + layerContentsRedrawPolicy = .onSetNeedsDisplay` and centralizes everything in `updateLayer()`, so:
+
+- Assign the exposed `NSColor?` properties directly — `backgroundColor = NSColor(light:dark:)`, `borderColor = ...` — **without** `.cgColor`. Dynamic colors re-resolve on appearance change automatically; you do NOT need to override `viewDidChangeEffectiveAppearance`.
+- One-time setup goes in `override func setup()` (called by `commonInit`); first-layout work goes in `override func firstLayout()`. Don't repeat `wantsLayer = true` in `init`.
+- Available properties: `cornerRadius`, `borderWidth`, `borderColor`, `borderPositions`, `borderLocation`, `borderInsets`, `backgroundColor`, `shadowColor`, `shadowOpacity`, `shadowOffset`, `shadowRadius`, `shadowPath`.
+- **Gotcha — `borderPositions` defaults to `[]`, so the border won't render** even with non-zero `borderWidth` + non-nil `borderColor`. To draw a full rounded border you MUST set `borderPositions = .all`:
+  ```swift
+  cornerRadius = 8
+  borderWidth = 1
+  borderColor = NSColor(light: ..., dark: ...)
+  borderPositions = .all   // ← otherwise the previous 3 lines are ignored
+  ```
 
 **View initialization** — `.then {}` returns the configured object (for assignment):
 ```swift

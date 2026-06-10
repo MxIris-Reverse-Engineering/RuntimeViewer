@@ -255,7 +255,7 @@ struct RuntimeMessageChannelPendingRequestTests {
     func testNoPendingRequest() {
         let channel = RuntimeMessageChannel()
 
-        let delivered = channel.deliverToPendingRequest(identifier: "nonexistent", data: Data())
+        let delivered = channel.deliverToPendingRequest(routingKey: "nonexistent", data: Data())
         #expect(delivered == false)
     }
 }
@@ -350,7 +350,11 @@ struct RuntimeMessageChannelTimeoutTests {
     func testTimeoutFiresWhenResponseMissing() async throws {
         let channel = RuntimeMessageChannel()
         let identifier = "timeout-test-1"
-        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+        // Caller-supplied nonce makes the test's `deliverToPendingRequest`
+        // lookup match the routing key `sendRequest` registers under;
+        // without it the channel would mint a fresh UUID and the test
+        // couldn't reach the pending entry by name.
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null, nonce: identifier)
 
         let start = Date()
         do {
@@ -369,8 +373,8 @@ struct RuntimeMessageChannelTimeoutTests {
         #expect(elapsed < 1.0)
 
         // Once the deadline fired, the pending entry must be gone — a late response
-        // arriving with the same identifier should not match anything.
-        let lateDelivery = channel.deliverToPendingRequest(identifier: identifier, data: Data())
+        // arriving with the same routing key should not match anything.
+        let lateDelivery = channel.deliverToPendingRequest(routingKey: identifier, data: Data())
         #expect(lateDelivery == false)
     }
 
@@ -378,7 +382,9 @@ struct RuntimeMessageChannelTimeoutTests {
     func testTimeoutDoesNotFireWhenResponseFastEnough() async throws {
         let channel = RuntimeMessageChannel()
         let identifier = "timeout-test-2"
-        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+        // Caller-supplied nonce so the response envelope below can be
+        // routed back to this exact pending entry by name.
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null, nonce: identifier)
 
         async let response: String = channel.sendRequest(
             requestData: payload,
@@ -391,9 +397,9 @@ struct RuntimeMessageChannelTimeoutTests {
         // response synthetically. We deliver the same wire shape sendRequest expects:
         // an outer RuntimeRequestData whose `data` field decodes into Response.
         try await Task.sleep(nanoseconds: 50_000_000)
-        let responseEnvelope = try RuntimeRequestData(identifier: identifier, value: "ok")
+        let responseEnvelope = try RuntimeRequestData(identifier: identifier, value: "ok", nonce: identifier)
         let envelopeData = try JSONEncoder().encode(responseEnvelope)
-        let delivered = channel.deliverToPendingRequest(identifier: identifier, data: envelopeData)
+        let delivered = channel.deliverToPendingRequest(routingKey: identifier, data: envelopeData)
         #expect(delivered)
 
         let actual = try await response
@@ -404,7 +410,7 @@ struct RuntimeMessageChannelTimeoutTests {
     func testNilTimeoutDoesNotFire() async throws {
         let channel = RuntimeMessageChannel()
         let identifier = "timeout-test-3"
-        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null, nonce: identifier)
 
         async let response: String = channel.sendRequest(
             requestData: payload,
@@ -415,9 +421,9 @@ struct RuntimeMessageChannelTimeoutTests {
         // the call must still be waiting for an explicit response or disconnect.
         try await Task.sleep(nanoseconds: 300_000_000)
 
-        let responseEnvelope = try RuntimeRequestData(identifier: identifier, value: "delivered")
+        let responseEnvelope = try RuntimeRequestData(identifier: identifier, value: "delivered", nonce: identifier)
         let envelopeData = try JSONEncoder().encode(responseEnvelope)
-        let delivered = channel.deliverToPendingRequest(identifier: identifier, data: envelopeData)
+        let delivered = channel.deliverToPendingRequest(routingKey: identifier, data: envelopeData)
         #expect(delivered)
 
         let actual = try await response
@@ -449,17 +455,22 @@ struct RuntimeMessageChannelTimeoutTests {
         #expect(elapsed < 1.0)
     }
 
-    @Test("a finished request's timeout task does not spuriously fail a later same-identifier request")
+    @Test("a finished request's timeout task does not spuriously fail a later same-routing-key request")
     func testTimeoutDoesNotPoisonLaterRequestUnderSameIdentifier() async throws {
         struct WriterFailure: Error, Equatable {}
 
         let channel = RuntimeMessageChannel()
         let identifier = "timeout-test-5"
-        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null)
+        // Force both round trips to use the same routing key by supplying
+        // the nonce ourselves; this is the pessimistic scenario the
+        // timeout-cleanup guarantee has to hold under. (Real production
+        // traffic gives every round trip a fresh UUID nonce, so they end
+        // up in distinct dictionary slots and can't collide at all.)
+        let payload = try RuntimeRequestData(identifier: identifier, value: RuntimeMessageNull.null, nonce: identifier)
 
         // Step 1: first request fails fast in the writer, with a short timeout. If the
         // timeout task were left orphaned, it would wake at ~0.3 s and remove whatever
-        // entry happens to be registered under the same identifier — clobbering step 2.
+        // entry happens to be registered under the same routing key — clobbering step 2.
         do {
             let _: String = try await channel.sendRequest(
                 requestData: payload,
@@ -472,7 +483,7 @@ struct RuntimeMessageChannelTimeoutTests {
             // expected
         }
 
-        // Step 2: register a second request under the *same* identifier, with a longer
+        // Step 2: register a second request under the *same* routing key, with a longer
         // timeout. Sleep past the first request's would-be deadline (0.3 s) but well
         // under the second's (3 s), then deliver a synthetic response.
         async let secondResponse: String = channel.sendRequest(
@@ -486,13 +497,157 @@ struct RuntimeMessageChannelTimeoutTests {
         // the first request's stale deadline.
         try await Task.sleep(nanoseconds: 600_000_000)
 
-        let envelope = try RuntimeRequestData(identifier: identifier, value: "ok")
+        let envelope = try RuntimeRequestData(identifier: identifier, value: "ok", nonce: identifier)
         let envelopeData = try JSONEncoder().encode(envelope)
-        let delivered = channel.deliverToPendingRequest(identifier: identifier, data: envelopeData)
+        let delivered = channel.deliverToPendingRequest(routingKey: identifier, data: envelopeData)
         #expect(delivered, "second request should still be pending — first request's timer must not have removed it")
 
         let actual = try await secondResponse
         #expect(actual == "ok")
+    }
+}
+
+// MARK: - Burst / Stack-Overflow Regression Tests
+//
+// These tests pin down the f2b6324 regression that the buffered-stream bridge
+// in `RuntimeNetworkConnection.observeIncomingMessages` was added to fix.
+//
+// Background — `RuntimeMessageChannel.processReceivedData` extracts every
+// complete frame in a single `_receivingData.withLock` pass and then fires
+// `onMessageReceived` for each frame in a tight synchronous for-loop. When the
+// transport (NWConnection here) is on a `DispatchQueue` and a single `receive`
+// callback delivers a burst of small frames (heartbeats, acks, batch-export
+// chunks), that loop runs on the dispatch-queue worker thread. The pre-fix
+// `RuntimeNetworkConnection.observeIncomingMessages` spawned a fresh
+// `Task { await handleReceivedMessage(data) }` *inside the callback body* —
+// every iteration leaves the `swift_task_create_commonImpl` / `addStatusRecord`
+// / `task_status_changed` / `os_signpost_*` frames pinned on the dispatch
+// queue's stack, and the thread overflows once the burst clears a few thousand
+// frames. The fix routes the callback through an unbounded `AsyncStream` and
+// drains it from one long-lived consumer task, so the hot loop only does a
+// non-blocking `yield`.
+
+@Suite("RuntimeMessageChannel Burst Regression", .serialized)
+struct RuntimeMessageChannelBurstRegressionTests {
+
+    @Test("Buffered stream bridge survives 10k-message burst from a dispatch queue with FIFO + no loss")
+    func testBufferedStreamBridgeSurvivesBurst() async throws {
+        let channel = RuntimeMessageChannel()
+        // Same bridge shape as RuntimeNetworkConnection: callback does an
+        // unbounded `yield`, a long-lived consumer drains the stream.
+        let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+        channel.onMessageReceived = { data in
+            continuation.yield(data)
+        }
+
+        let endMarker = RuntimeMessageChannel.endMarkerData
+        let messageCount = 10_000
+        var buffer = Data()
+        for messageIndex in 0..<messageCount {
+            buffer.append("\(messageIndex)".data(using: .utf8)!)
+            buffer.append(endMarker)
+        }
+
+        // Drive the channel from a dispatch queue to mirror the NWConnection
+        // receive-callback context where the regression originally fired.
+        let connectionQueue = DispatchQueue(label: "test.connection-queue")
+        connectionQueue.sync {
+            channel.appendReceivedData(buffer)
+        }
+        continuation.finish()
+
+        var receivedIndices: [Int] = []
+        receivedIndices.reserveCapacity(messageCount)
+        for await data in stream {
+            guard let text = String(data: data, encoding: .utf8),
+                  let messageIndex = Int(text)
+            else {
+                Issue.record("decoded an unexpected frame: \(data as NSData)")
+                continue
+            }
+            receivedIndices.append(messageIndex)
+        }
+
+        #expect(receivedIndices.count == messageCount)
+        #expect(receivedIndices == Array(0..<messageCount), "Buffered bridge must preserve FIFO across a single-receive burst")
+    }
+
+    @Test("Synchronous callback dispatch in burst is FIFO across thousands of frames")
+    func testSynchronousCallbackBurstFIFO() {
+        let channel = RuntimeMessageChannel()
+        var receivedIndices: [Int] = []
+        receivedIndices.reserveCapacity(10_000)
+        channel.onMessageReceived = { data in
+            guard let text = String(data: data, encoding: .utf8),
+                  let messageIndex = Int(text)
+            else { return }
+            receivedIndices.append(messageIndex)
+        }
+
+        let endMarker = RuntimeMessageChannel.endMarkerData
+        let messageCount = 10_000
+        var buffer = Data()
+        for messageIndex in 0..<messageCount {
+            buffer.append("\(messageIndex)".data(using: .utf8)!)
+            buffer.append(endMarker)
+        }
+
+        channel.appendReceivedData(buffer)
+
+        #expect(receivedIndices.count == messageCount)
+        #expect(receivedIndices == Array(0..<messageCount))
+    }
+}
+
+// MARK: - Stack-Overflow Reproducer (Disabled)
+//
+// This suite reproduces the original `EXC_BAD_ACCESS (code=2)` crash from
+// f2b6324 by replaying the pre-fix callback shape: in `onMessageReceived` the
+// body spawns one `Task { … }` *per message*, while the channel is fed from a
+// dispatch queue. On a 10k-message burst the dispatch worker's stack overflows
+// inside `swift_task_create_commonImpl` → `os_signpost_enabled`, which kills
+// the entire test process — so it ships disabled.
+//
+// To verify the regression manually:
+//   1. Drop the `.disabled(…)` trait below.
+//   2. Run only this suite (e.g. `swift test --filter
+//      RuntimeNetworkConnectionStackOverflowReproducer`).
+//   3. Expect `Crashed: com.RuntimeViewer.…` with a multi-thousand-frame
+//      backtrace ending in `os_signpost_enabled`.
+//   4. The same case, run against the buffered-stream bridge from
+//      `RuntimeNetworkConnection`, completes without crashing.
+
+@Suite(
+    "RuntimeNetworkConnection Stack Overflow Reproducer",
+    .disabled("Pre-fix per-message-Task callback shape overflows the dispatch queue's stack and aborts the test process. Enable manually to confirm the f2b6324 regression."),
+    .serialized
+)
+struct RuntimeNetworkConnectionStackOverflowReproducer {
+
+    @Test("Per-message Task spawn in dispatch-queue callback overflows the worker-thread stack")
+    func testPerMessageTaskSpawnOverflowsStack() {
+        let channel = RuntimeMessageChannel()
+        // Verbatim copy of the pre-fix `RuntimeNetworkConnection.observeIncomingMessages`
+        // callback body — the regression lives in this one Task spawn.
+        channel.onMessageReceived = { _ in
+            Task { /* intentionally empty: even an empty Task is enough */ }
+        }
+
+        let endMarker = RuntimeMessageChannel.endMarkerData
+        let messageCount = 10_000
+        var buffer = Data()
+        for messageIndex in 0..<messageCount {
+            buffer.append("msg-\(messageIndex)".data(using: .utf8)!)
+            buffer.append(endMarker)
+        }
+
+        // Crash point — only on the dispatch-queue worker thread, not on the
+        // Swift Concurrency cooperative pool, because that's where Task
+        // creation frames pin without unwinding under load.
+        let connectionQueue = DispatchQueue(label: "test.connection-queue")
+        connectionQueue.sync {
+            channel.appendReceivedData(buffer)
+        }
     }
 }
 

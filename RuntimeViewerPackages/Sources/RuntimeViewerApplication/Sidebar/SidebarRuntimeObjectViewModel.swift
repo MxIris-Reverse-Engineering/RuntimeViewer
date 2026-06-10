@@ -170,7 +170,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             .emitOnNextMainActor { [weak self] viewModel in
                 guard let self else { return }
                 #if os(macOS)
-                documentState.selectionRouter.trigger(.selectAtRoot(viewModel.runtimeObject))
+                documentState.selectionRouter.trigger(.push(viewModel.runtimeObject))
                 #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
                 #endif

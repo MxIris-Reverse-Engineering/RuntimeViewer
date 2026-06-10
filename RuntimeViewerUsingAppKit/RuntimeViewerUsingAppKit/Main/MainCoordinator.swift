@@ -84,7 +84,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             viewController.setupBindings(for: viewModel)
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         case .attachToProcess:
-            let viewController = AttachToProcessViewController()
+            let viewController = AttachToProcessViewController.shared
             let viewModel = AttachToProcessViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
             viewController.preferredContentSize = .init(width: 800, height: 600)
@@ -95,6 +95,10 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             guard let exportingCoordinator = ExportingCoordinator(documentState: documentState) else { return .none() }
             addChild(exportingCoordinator)
             return .beginSheet(exportingCoordinator)
+        case .exportMultipleImages:
+            let batchExportingCoordinator = BatchExportingCoordinator(documentState: documentState)
+            addChild(batchExportingCoordinator)
+            return .beginSheet(batchExportingCoordinator)
         case .beginSpecializationSheet(let object):
             let specializationCoordinator = SpecializationCoordinator(
                 documentState: documentState,
@@ -158,6 +162,15 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 contentCoordinator.contextTrigger(.back)
                 inspectorCoordinator.contextTrigger(.back)
             }
+        case .backward, .forward:
+            // History array unchanged — only the cursor moved. Re-enter
+            // the text/runtimeObject scene for the new
+            // `selectedRuntimeObject`. `.back` is the right vocabulary
+            // because both panes reuse their existing controller and
+            // just rebind to the cursor target (no push-transition
+            // flash).
+            contentCoordinator.contextTrigger(.back)
+            inspectorCoordinator.contextTrigger(.back)
         case .clear:
             contentCoordinator.contextTrigger(.placeholder)
             inspectorCoordinator.contextTrigger(.placeholder)

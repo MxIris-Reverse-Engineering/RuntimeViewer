@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingCompletionViewController: AppKitViewController<ExportingCompletionViewModel>, ExportingStepViewController {
+final class ExportingCompletionViewController: UXKitViewController<ExportingCompletionViewModel>, ExportingStepViewController {
     private let checkmarkImageView = NSImageView().then {
         $0.image = .symbol(systemName: .checkmarkCircleFill)
         $0.symbolConfiguration = .init(pointSize: 56, weight: .regular)
@@ -39,7 +39,7 @@ final class ExportingCompletionViewController: AppKitViewController<ExportingCom
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        hierarchy {
+        contentView.hierarchy {
             contentStackView
         }
 

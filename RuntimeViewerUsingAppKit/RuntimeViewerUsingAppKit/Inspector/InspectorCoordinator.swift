@@ -69,8 +69,8 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
         case .root(let inspectableObject), .next(let inspectableObject):
             return enter(for: inspectableObject)
         case .back:
-            if let last = documentState.selectionStack.last {
-                return enter(for: .object(last))
+            if let selected = documentState.selectedRuntimeObject {
+                return enter(for: .object(selected))
             } else {
                 return enterPlaceholderScene()
             }

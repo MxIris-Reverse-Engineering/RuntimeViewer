@@ -217,31 +217,63 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     }
 
     private func handleReceivedMessage(_ data: Data) async {
+        let requestData: RuntimeRequestData
         do {
-            let requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+            requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+        } catch {
+            // Envelope decode failure: the payload carries no `identifier`,
+            // so any error response we emit cannot be routed back to a
+            // pending `sendRequest` on the peer. Echoing a bare
+            // `RuntimeNetworkRequestError` (the pre-fix behavior) causes
+            // the peer to also fail envelope decode and echo its own bare
+            // error, producing an unbounded ping-pong that starves real
+            // traffic on the shared `sendSemaphore`. Swallow silently —
+            // `sendRequest` carries a configurable timeout so a peer that
+            // drops a single bad message will not hang indefinitely.
+            // See Changelogs/v2.1.0-beta.4.md for the full failure mode.
+            #log(.error, "Envelope decode failed, swallowing to avoid ping-pong: \(error, privacy: .public)")
+            return
+        }
 
-            // Check if this is a response to a pending request
-            if messageChannel.deliverToPendingRequest(identifier: requestData.identifier, data: data) {
-                return
-            }
+        // Check if this is a response to a pending request. Route by
+        // `nonce` when the envelope carries one (the new wire form);
+        // legacy envelopes without a nonce fall back to `identifier`,
+        // matching the pre-nonce single-in-flight model.
+        let routingKey = requestData.nonce ?? requestData.identifier
+        if messageChannel.deliverToPendingRequest(routingKey: routingKey, data: data) {
+            return
+        }
 
-            guard let handler = messageChannel.handler(for: requestData.identifier) else {
-                #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
-                return
-            }
+        guard let handler = messageChannel.handler(for: requestData.identifier) else {
+            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
+            return
+        }
 
-            #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
+        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
+        do {
             let responseData = try await handler.closure(requestData.data)
-
             if handler.responseType != RuntimeMessageNull.self {
-                let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData)
+                // Echo the request's nonce so the peer's `sendRequest` can
+                // route this response back to the correct pending entry
+                // even when multiple round trips share the same command
+                // name (e.g. concurrent `isImageLoaded` lookups).
+                let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData, nonce: requestData.nonce)
                 try await send(requestData: response)
             }
         } catch {
-            #log(.error, "Handler error: \(error, privacy: .public)")
-            let errorResponse = RuntimeNetworkRequestError(message: "\(error)")
-            if let errorData = try? JSONEncoder().encode(errorResponse) {
-                try? await sendRaw(data: errorData + RuntimeMessageChannel.endMarkerData)
+            // Handler execution failure: wrap in `RuntimeNetworkRequestError`
+            // and emit via the same nonce-stamped envelope used by
+            // successful responses. The peer's `deliverToPendingRequest`
+            // routes it back to the matching `sendRequest`, which surfaces
+            // the failure (envelope.data fails to decode as the expected
+            // `Response` → DecodingError). Nonce scoping is what prevents
+            // the envelope-decode → bare-echo loop the pre-fix arm
+            // produced on every handler throw.
+            #log(.error, "Handler \(requestData.identifier, privacy: .public) failed: \(error, privacy: .public)")
+            let errorPayload = RuntimeNetworkRequestError(message: "\(error)")
+            if let errorData = try? JSONEncoder().encode(errorPayload) {
+                let errorEnvelope = RuntimeRequestData(identifier: requestData.identifier, data: errorData, nonce: requestData.nonce)
+                try? await send(requestData: errorEnvelope)
             }
         }
     }

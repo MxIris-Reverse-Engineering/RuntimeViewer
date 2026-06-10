@@ -2,7 +2,8 @@ import RuntimeViewerCore
 import RxAppKit
 
 enum BackgroundIndexingNode: Hashable {
-    case section(SectionKind, batches: [BackgroundIndexingNode])
+    case section(SectionKind, batchCount: Int, groups: [BackgroundIndexingNode])
+    case reasonGroup(SectionKind, RuntimeIndexingBatchReason.Category, batchCount: Int, children: [BackgroundIndexingNode])
     case batch(RuntimeIndexingBatch, items: [BackgroundIndexingNode])
     case item(batchID: RuntimeIndexingBatchID, item: RuntimeIndexingTaskItem)
 
@@ -15,7 +16,8 @@ enum BackgroundIndexingNode: Hashable {
 extension BackgroundIndexingNode: OutlineNodeType {
     var children: [BackgroundIndexingNode] {
         switch self {
-        case .section(_, let batches): return batches
+        case .section(_, _, let groups): return groups
+        case .reasonGroup(_, _, _, let children): return children
         case .batch(_, let items): return items
         case .item: return []
         }
@@ -25,18 +27,22 @@ extension BackgroundIndexingNode: OutlineNodeType {
 extension BackgroundIndexingNode: Differentiable {
     enum Identifier: Hashable {
         case section(SectionKind)
+        case reasonGroup(SectionKind, RuntimeIndexingBatchReason.Category)
         case batch(RuntimeIndexingBatchID)
         case item(batchID: RuntimeIndexingBatchID, itemID: String)
     }
 
-    // Identifier for `.section` is intentionally kind-only — not derived
-    // from children. RxAppKit's staged changeset detects child insertions
-    // and removals as nested diffs without recreating the section row,
-    // which preserves the user's expand / collapse state across updates.
+    // Identifier for `.section` / `.reasonGroup` is intentionally key-only —
+    // not derived from children or counts. RxAppKit's staged changeset
+    // detects child insertions and removals as nested diffs without
+    // recreating the header row, which preserves the user's expand / collapse
+    // state across updates.
     var differenceIdentifier: Identifier {
         switch self {
-        case .section(let kind, _):
+        case .section(let kind, _, _):
             return .section(kind)
+        case .reasonGroup(let kind, let category, _, _):
+            return .reasonGroup(kind, category)
         case .batch(let batch, _):
             return .batch(batch.id)
         case .item(let batchID, let item):

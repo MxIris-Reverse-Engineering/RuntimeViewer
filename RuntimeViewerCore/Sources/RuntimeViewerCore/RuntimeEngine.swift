@@ -56,12 +56,16 @@ public actor RuntimeEngine {
         case isImageIndexed
         case mainExecutablePath
         case loadImageForBackgroundIndexing
+        case canOpenImage
+        case rpathsForImage
+        case dependenciesForImage
         case patchImagePathForDyld
         case runtimeObjectHierarchy
         case runtimeRelationshipsForObject
         case runtimeObjectInfo
         case imageNameOfClassName
         case observeRuntime
+        case runtimeInterfaceExportModuleInfo
         case runtimeInterfaceForRuntimeObjectInImageWithOptions
         case runtimeObjectsOfKindInImage
         case runtimeObjectsInImage
@@ -118,7 +122,7 @@ public actor RuntimeEngine {
     private var needsReregistrationOnConnect = false
 
     private nonisolated let stateSubject = CurrentValueSubject<State, Never>(.initializing)
-    
+
     /// Publisher that emits engine state changes.
     public nonisolated var statePublisher: some Publisher<State, Never> {
         stateSubject.eraseToAnyPublisher()
@@ -137,9 +141,8 @@ public actor RuntimeEngine {
 
     private nonisolated let imageNodesSubject = CurrentValueSubject<[RuntimeImageNode], Never>([])
 
-    public var imageNodes: [RuntimeImageNode] {
+    public nonisolated var imageNodes: [RuntimeImageNode] {
         get { imageNodesSubject.value }
-        set { imageNodesSubject.send(newValue) }
     }
 
     /// Publisher that emits image node changes. Accessible from any isolation context.
@@ -195,32 +198,25 @@ public actor RuntimeEngine {
 
     private let communicator = RuntimeCommunicator()
 
-    /// The connection to the sender or receiver
+    /// The connection to the sender or receiver, established by `connect()`.
     private var connection: RuntimeConnection?
-
-    /// The XPC listener endpoint of this engine's connection, if applicable.
-    /// Set after `connect()` succeeds for XPC-based connections (macOS only).
-    /// Used by injected apps to register their endpoint with the Mach Service
-    /// for Host reconnection. Stored as `any Sendable` to avoid platform-specific
-    /// types in the actor interface; cast to `HelperPeerEndpoint` on macOS.
-    public private(set) var xpcListenerEndpoint: (any Sendable)?
 
     /// Coordinator for background indexing batches that load and index images
     /// without blocking the main runtime data flow. `lazy` so it captures
     /// `self` only after all other stored properties are initialized; the
     /// actor's isolation guarantees the lazy initialization is single-threaded.
     public private(set) lazy var backgroundIndexingManager: RuntimeBackgroundIndexingManager =
-        RuntimeBackgroundIndexingManager(engine: self)
+        .init(engine: self)
 
     public init(
         source: RuntimeSource,
         engineID: String = UUID().uuidString,
         hostInfo: RuntimeHostInfo = RuntimeHostInfo(
             hostID: RuntimeNetworkBonjour.localInstanceID,
-            hostName: RuntimeNetworkBonjour.localHostName
+            hostName: RuntimeNetworkBonjour.localHostName,
         ),
         originChain: [String] = [RuntimeNetworkBonjour.localInstanceID],
-        pushesRuntimeData: Bool = true
+        pushesRuntimeData: Bool = true,
     ) {
         self.engineID = engineID
         self.source = source
@@ -233,31 +229,26 @@ public actor RuntimeEngine {
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
-    public func connect(bonjourEndpoint: RuntimeNetworkEndpoint? = nil, xpcServerEndpoint: (any Sendable)? = nil) async throws {
+    public func connect(credential: RuntimeConnectionCredential? = nil) async throws {
         if let role = source.remoteRole {
             stateSubject.send(.connecting)
 
             switch role {
             case .server:
                 #log(.info, "Starting as server")
-                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint) { connection in
+                connection = try await communicator.connect(to: source, credential: credential) { connection in
                     self.connection = connection
                     self.setupMessageHandlerForServer()
                     self.observeConnectionState(connection)
                 }
                 #log(.info, "Server connection established")
-                #if os(macOS)
-                if let xpcEndpointProvider = connection as? XPCListenerEndpointProviding {
-                    xpcListenerEndpoint = xpcEndpointProvider.xpcListenerEndpoint
-                }
-                #endif
                 if pushesRuntimeData {
                     await observeRuntime()
                 }
                 stateSubject.send(.connected)
             case .client:
                 #log(.info, "Starting as client for source: \(String(describing: self.source), privacy: .public)")
-                connection = try await communicator.connect(to: source, bonjourEndpoint: bonjourEndpoint, xpcServerEndpoint: xpcServerEndpoint) { connection in
+                connection = try await communicator.connect(to: source, credential: credential) { connection in
                     #log(.debug, "[EngineMirroring] client connection modifier called for \(String(describing: self.source), privacy: .public), connection state: \(String(describing: connection.state), privacy: .public)")
                     self.connection = connection
                     self.setupMessageHandlerForClient()
@@ -326,33 +317,31 @@ public actor RuntimeEngine {
 
     private func setupMessageHandlerForServer() {
         #log(.debug, "Setting up server message handlers")
-        setMessageHandlerBinding(forName: .isImageLoaded, of: self) { $0.isImageLoaded(path:) }
-        setMessageHandlerBinding(forName: .isImageIndexed, of: self) { $0.isImageIndexed(path:) }
-        setMessageHandlerBinding(forName: .mainExecutablePath) { engine -> String in
-            try await engine.mainExecutablePath()
+        guard let connection else {
+            #log(.default, "Connection is nil when setting up server message handlers")
+            return
         }
-        setMessageHandlerBinding(forName: .loadImage, of: self) { $0.loadImage(at:) }
-        setMessageHandlerBinding(forName: .loadImageForBackgroundIndexing, of: self) { $0.loadImageForBackgroundIndexing(at:) }
-        setMessageHandlerBinding(forName: .imageNameOfClassName, of: self) { $0.imageName(ofObjectName:) }
+        // Shared registry — same set of commands that
+        // `RuntimeEngineProxyServer.setupRequestHandlers()` installs.
+        Self.registerSharedHandlers(on: connection, engine: self)
 
-        connection?.setMessageHandler(name: CommandNames.runtimeObjectsInImage.commandName) { [weak self] (imagePath: String) -> [RuntimeObject] in
+        // Server-only override: progress-bearing variant of
+        // `runtimeObjectsInImage`. Re-registering after the shared handler is
+        // intentional — the last `setMessageHandler` wins.
+        //
+        // The payload MUST stay `ObjectsInImageRequest` to match the wire form
+        // the client's `dispatch(ObjectsInImageRequest:)` and
+        // `_remoteObjectsWithProgress` both send, as well as the shared handler
+        // this overrides. Decoding it as a bare `String` here would fail every
+        // structured `objects(in:)` request with NSCocoaErrorDomain 4864.
+        connection.setMessageHandler(name: CommandNames.runtimeObjectsInImage.commandName) { [weak self] (request: ObjectsInImageRequest) -> [RuntimeObject] in
             guard let self else { throw RequestError.senderConnectionIsLose }
-            return try await self._serverObjectsWithProgress(in: imagePath)
+            return try await _serverObjectsWithProgress(in: request.image)
         }
-        setMessageHandlerBinding(forName: .runtimeInterfaceForRuntimeObjectInImageWithOptions, of: self) { $0.interface(for:) }
-        setMessageHandlerBinding(forName: .runtimeObjectHierarchy, of: self) { $0.hierarchy(for:) }
-        setMessageHandlerBinding(forName: .runtimeRelationshipsForObject, of: self) { $0.relationships(for:) }
-        setMessageHandlerBinding(forName: .memberAddresses, of: self) { $0.memberAddresses(for:) }
-        connection?.setMessageHandler(name: CommandNames.specializationRequest.commandName) { [weak self] (object: RuntimeObject) -> RuntimeSpecializationRequest in
-            guard let self else { throw RequestError.senderConnectionIsLose }
-            return try await self.specializationRequest(for: object)
-        }
-        connection?.setMessageHandler(name: CommandNames.specializationRequestForCandidate.commandName) { [weak self] (request: SpecializationRequestForCandidateRequest) -> RuntimeSpecializationRequest in
-            guard let self else { throw RequestError.senderConnectionIsLose }
-            return try await self.specializationRequest(for: request)
-        }
-        setMessageHandlerBinding(forName: .runtimePreflight, of: self) { $0.runtimePreflight(for:) }
-        setMessageHandlerBinding(forName: .specialize, of: self) { $0.specialize(for:) }
+
+        // Server-only: manager-layer engine list lookup. Not part of the
+        // shared registry because `RuntimeEngineProxyServer` runs below the
+        // manager and has no engine list of its own.
         setMessageHandlerBinding(forName: .engineList) { _ -> [RuntimeRemoteEngineDescriptor] in
             #log(.debug, "[EngineMirroring] engineList handler called, provider set: \(RuntimeEngine.engineListProvider != nil, privacy: .public)")
             let result = await RuntimeEngine.engineListProvider?() ?? []
@@ -365,7 +354,7 @@ public actor RuntimeEngine {
     private func setupMessageHandlerForClient() {
         #log(.debug, "Setting up client message handlers for source: \(String(describing: self.source), privacy: .public)")
         setMessageHandlerBinding(forName: .imageList) { $0.imageList = $1 }
-        setMessageHandlerBinding(forName: .imageNodes) { $0.imageNodes = $1 }
+        setMessageHandlerBinding(forName: .imageNodes) { $0.setImageNodes($1) }
         setMessageHandlerBinding(forName: .dataDidChange) { (engine: RuntimeEngine, change: RuntimeDataChange) in
             engine.dataChangeSubject.send(change)
         }
@@ -426,7 +415,7 @@ public actor RuntimeEngine {
     /// Overload for commands with no request body but a response.
     private func setMessageHandlerBinding<Response: Codable>(
         forName name: CommandNames,
-        respond: @escaping (isolated RuntimeEngine) async throws -> Response
+        respond: @escaping (isolated RuntimeEngine) async throws -> Response,
     ) {
         guard let connection else {
             #log(.default, "Connection is nil when setting message handler for \(name.commandName, privacy: .public)")
@@ -443,7 +432,7 @@ public actor RuntimeEngine {
         imageList = DyldUtilities.imageNames()
         #log(.debug, "Loaded \(self.imageList.count, privacy: .public) images")
         if isReloadImageNodes {
-            imageNodes = [DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode]
+            setImageNodes([DyldUtilities.dyldSharedCacheImageRootNode, DyldUtilities.otherImageRootNode])
             #log(.debug, "Reloaded image nodes")
         }
         broadcast(.fullReload(isReloadImageNodes: isReloadImageNodes))
@@ -489,7 +478,7 @@ public actor RuntimeEngine {
     }
 
     private func setImageNodes(_ imageNodes: [RuntimeImageNode]) {
-        self.imageNodes = imageNodes
+        self.imageNodesSubject.value = imageNodes
     }
 
     /// Forwards an `imageDidLoad` event to the connected client when this
@@ -503,7 +492,7 @@ public actor RuntimeEngine {
         }
     }
 
-    private func _objects(in image: String) async throws -> [RuntimeObject] {
+    func _objects(in image: String) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects in image: \(image, privacy: .public)")
         let image = DyldUtilities.patchImagePathForDyld(image)
         let (isObjCSectionExisted, objcSection) = try await objcSectionFactory.section(for: image)
@@ -517,7 +506,7 @@ public actor RuntimeEngine {
         return objcObjects + swiftObjects
     }
 
-    private func _interface(for name: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+    func _interface(for name: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
         let rawInterface: RuntimeObjectInterface?
 
         switch name.kind {
@@ -594,76 +583,60 @@ extension RuntimeEngine {
         case senderConnectionIsLose
     }
 
-    func request<T>(local: () async throws -> T, remote: (_ senderConnection: RuntimeConnection) async throws -> T) async throws -> T {
+    /// Dispatch the request against this engine. On a client engine the call
+    /// is serialized and forwarded to the connected server; otherwise the
+    /// local `RuntimeEngineRequest.perform(on:)` implementation runs.
+    ///
+    /// Lives in this file rather than `RuntimeEngineRequest.swift` so it can read
+    /// the file-private `connection` directly without widening visibility.
+    func dispatch<R: RuntimeEngineRequest>(_ request: R) async throws -> R.Response {
         if let remoteRole = source.remoteRole, remoteRole.isClient {
             guard let connection else { throw RequestError.senderConnectionIsLose }
-            return try await remote(connection)
-        } else {
-            return try await local()
+            return try await connection.sendMessage(name: R.commandName, request: request)
         }
+        return try await request.perform(on: self)
     }
 
     public func isImageLoaded(path: String) async throws -> Bool {
-        try await request {
-            imageList.contains(DyldUtilities.patchImagePathForDyld(path))
-        } remote: {
-            return try await $0.sendMessage(name: .isImageLoaded, request: path)
-        }
+        try await dispatch(IsImageLoadedRequest(path: path))
+    }
+
+    func _isImageLoaded(path: String) -> Bool {
+        imageList.contains(DyldUtilities.patchImagePathForDyld(path))
     }
 
     public func loadImage(at path: String) async throws {
-        try await request {
-            // Canonicalize on entry so internal storage (loadedImagePaths,
-            // section factory caches) stays symmetric with reader-side
-            // lookups (isImageLoaded, isImageIndexed, _objects), all of which
-            // patch first. On macOS this is identity; on iOS Simulator it
-            // applies DYLD_ROOT_PATH so dyld's own image-name reports match.
-            // patchImagePathForDyld is idempotent — re-patching an already
-            // patched path is safe.
-            let canonical = DyldUtilities.patchImagePathForDyld(path)
-            try DyldUtilities.loadImage(at: canonical)
-            _ = try await objcSectionFactory.section(for: canonical)
-            _ = try await swiftSectionFactory.section(for: canonical)
-            reloadData(isReloadImageNodes: false)
-            loadedImagePaths.insert(canonical)
-            imageDidLoadSubject.send(canonical)
-            sendRemoteImageDidLoadIfNeeded(path: canonical)
-        } remote: {
-            try await $0.sendMessage(name: .loadImage, request: path)
-        }
+        _ = try await dispatch(LoadImageRequest(path: path))
+    }
+
+    /// Local implementation of `loadImage(at:)`. Canonicalizes on entry so
+    /// internal storage (loadedImagePaths, section factory caches) stays
+    /// symmetric with reader-side lookups (isImageLoaded, isImageIndexed,
+    /// _objects), all of which patch first. On macOS this is identity; on iOS
+    /// Simulator it applies DYLD_ROOT_PATH so dyld's own image-name reports
+    /// match. patchImagePathForDyld is idempotent — re-patching an already
+    /// patched path is safe.
+    func _loadImage(at path: String) async throws {
+        let canonical = DyldUtilities.patchImagePathForDyld(path)
+        try DyldUtilities.loadImage(at: canonical)
+        _ = try await objcSectionFactory.section(for: canonical)
+        _ = try await swiftSectionFactory.section(for: canonical)
+        reloadData(isReloadImageNodes: false)
+        loadedImagePaths.insert(canonical)
+        imageDidLoadSubject.send(canonical)
+        sendRemoteImageDidLoadIfNeeded(path: canonical)
     }
 
     public func imageName(ofObjectName name: RuntimeObject) async throws -> String? {
-        try await request {
-            nil
-        } remote: {
-            return try await $0.sendMessage(name: .imageNameOfClassName, request: name)
-        }
-    }
-
-    struct InterfaceRequest: Codable {
-        let object: RuntimeObject
-        let options: RuntimeObjectInterface.GenerationOptions
+        try await dispatch(ImageNameOfObjectRequest(object: name))
     }
 
     public func interface(for object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
-        return try await interface(for: .init(object: object, options: options))
-    }
-
-    private func interface(for request: InterfaceRequest) async throws -> RuntimeObjectInterface? {
-        try await self.request {
-            try await _interface(for: request.object, options: request.options)
-        } remote: { senderConnection in
-            return try await senderConnection.sendMessage(name: .runtimeInterfaceForRuntimeObjectInImageWithOptions, request: InterfaceRequest(object: request.object, options: request.options))
-        }
+        try await dispatch(InterfaceRequest(object: object, options: options))
     }
 
     public func objects(in image: String) async throws -> [RuntimeObject] {
-        try await request {
-            try await _objects(in: image)
-        } remote: {
-            return try await $0.sendMessage(name: .runtimeObjectsInImage, request: image)
-        }
+        try await dispatch(ObjectsInImageRequest(image: image))
     }
 
     public func objectsWithProgress(in image: String) -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error> {
@@ -674,11 +647,10 @@ extension RuntimeEngine {
                     return
                 }
                 do {
-                    let objects: [RuntimeObject]
-                    if let remoteRole = self.source.remoteRole, remoteRole.isClient {
-                        objects = try await self._remoteObjectsWithProgress(in: image, continuation: continuation)
+                    let objects: [RuntimeObject] = if let remoteRole = source.remoteRole, remoteRole.isClient {
+                        try await _remoteObjectsWithProgress(in: image, continuation: continuation)
                     } else {
-                        objects = try await self._localObjectsWithProgress(in: image, continuation: continuation)
+                        try await _localObjectsWithProgress(in: image, continuation: continuation)
                     }
                     continuation.yield(.completed(objects))
                     continuation.finish()
@@ -691,7 +663,7 @@ extension RuntimeEngine {
 
     private func _localObjectsWithProgress(
         in image: String,
-        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
+        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation,
     ) async throws -> [RuntimeObject] {
         #log(.debug, "Getting objects with progress in image: \(image, privacy: .public)")
         let image = DyldUtilities.patchImagePathForDyld(image)
@@ -721,28 +693,32 @@ extension RuntimeEngine {
 
     private func _remoteObjectsWithProgress(
         in image: String,
-        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
+        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation,
     ) async throws -> [RuntimeObject] {
         guard let connection else { throw RequestError.senderConnectionIsLose }
         let cancellable = objectsLoadingProgressSubject.sink { progress in
             continuation.yield(RuntimeObjectsLoadingEvent.progress(progress))
         }
         defer { cancellable.cancel() }
-        return try await connection.sendMessage(name: .runtimeObjectsInImage, request: image)
+        // Send the structured `ObjectsInImageRequest` (not a bare `String`) so the
+        // wire form matches the server's `runtimeObjectsInImage` handler, which
+        // decodes `ObjectsInImageRequest`. Keeping these symmetric is what lets
+        // both `objects(in:)` and `objectsWithProgress(in:)` hit the same server arm.
+        return try await connection.sendMessage(name: .runtimeObjectsInImage, request: ObjectsInImageRequest(image: image))
     }
 
     public func hierarchy(for object: RuntimeObject) async throws -> [String] {
-        try await request { () -> [String] in
-            switch object.kind {
-            case .c:
-                return []
-            case .objc:
-                return try await objcSectionFactory.existingSection(for: object.imagePath)?.classHierarchy(for: object) ?? []
-            case .swift:
-                return try await swiftSectionFactory.existingSection(for: object.imagePath)?.classHierarchy(for: object) ?? []
-            }
-        } remote: {
-            return try await $0.sendMessage(name: .runtimeObjectHierarchy, request: object)
+        try await dispatch(HierarchyRequest(object: object))
+    }
+
+    func _hierarchy(for object: RuntimeObject) async throws -> [String] {
+        switch object.kind {
+        case .c:
+            return []
+        case .objc:
+            return try await objcSectionFactory.existingSection(for: object.imagePath)?.classHierarchy(for: object) ?? []
+        case .swift:
+            return try await swiftSectionFactory.existingSection(for: object.imagePath)?.classHierarchy(for: object) ?? []
         }
     }
 
@@ -755,36 +731,26 @@ extension RuntimeEngine {
     /// factories; this method keeps only the thin local/remote dispatch.
     /// The remote arm forwards the query to the connected server.
     public func relationships(for object: RuntimeObject) async throws -> RuntimeRelationships {
-        try await request {
-            await relationshipsResolver.relationships(for: object)
-        } remote: {
-            return try await $0.sendMessage(name: .runtimeRelationshipsForObject, request: object)
-        }
+        try await dispatch(RelationshipsRequest(object: object))
     }
 
-    struct MemberAddressesRequest: Codable {
-        let object: RuntimeObject
-        let memberName: String?
+    func _relationships(for object: RuntimeObject) async -> RuntimeRelationships {
+        await relationshipsResolver.relationships(for: object)
     }
-    
+
     public func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
-        try await memberAddresses(for: .init(object: object, memberName: memberName))
+        try await dispatch(MemberAddressesRequest(object: object, memberName: memberName))
     }
-    
-    private func memberAddresses(for request: MemberAddressesRequest) async throws -> [RuntimeMemberAddress] {
-        try await self.request {
-            switch request.object.kind {
-            case .swift:
-                return try await swiftSectionFactory.existingSection(for: request.object.imagePath)?.memberAddresses(for: request.object, memberName: request.memberName) ?? []
-            case .objc:
-                return try await objcSectionFactory.existingSection(for: request.object.imagePath)?.memberAddresses(for: request.object, memberName: request.memberName) ?? []
-            default:
-                return []
-            }
-        } remote: { senderConnection in
-            return try await senderConnection.sendMessage(name: .memberAddresses, request: request)
-        }
 
+    func _memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {
+        switch object.kind {
+        case .swift:
+            return try await swiftSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
+        case .objc:
+            return try await objcSectionFactory.existingSection(for: object.imagePath)?.memberAddresses(for: object, memberName: memberName) ?? []
+        default:
+            return []
+        }
     }
 
     /// Asks the connected peer for its shared engine list.
@@ -795,16 +761,17 @@ extension RuntimeEngine {
     /// "treat as direct engine" branch instead of hanging forever on a flaky link
     /// (e.g. AWDL between iPhone and Mac).
     public func requestEngineList(timeout: TimeInterval = 5) async throws -> [RuntimeRemoteEngineDescriptor] {
-        try await request {
-            []
-        } remote: {
-            try await $0.sendMessage(name: .engineList, timeout: timeout)
-        }
+        // Bypasses the standard `dispatch` because the client arm needs a
+        // configurable per-call timeout, and the local arm always returns an
+        // empty list (no engine-list provider runs on a non-server engine).
+        guard let remoteRole = source.remoteRole, remoteRole.isClient else { return [] }
+        guard let connection else { throw RequestError.senderConnectionIsLose }
+        return try await connection.sendMessage(name: .engineList, timeout: timeout)
     }
 
     public func pushEngineListChanged(_ descriptors: [RuntimeRemoteEngineDescriptor]) async throws {
-        let hasConnection = self.connection != nil
-        let isServer = self.source.remoteRole?.isServer == true
+        let hasConnection = connection != nil
+        let isServer = source.remoteRole?.isServer == true
         guard let connection, isServer else {
             #log(.debug, "[EngineMirroring] pushEngineListChanged skipped: connection=\(hasConnection, privacy: .public), isServer=\(isServer, privacy: .public)")
             return
@@ -846,7 +813,7 @@ extension RuntimeEngine {
 
     public func exportInterfaces(
         with configuration: RuntimeInterfaceExportConfiguration,
-        reporter: RuntimeInterfaceExportReporter
+        reporter: RuntimeInterfaceExportReporter,
     ) async throws {
         defer { reporter.finish() }
         let startTime = CFAbsoluteTimeGetCurrent()
@@ -873,7 +840,7 @@ extension RuntimeEngine {
                 let item = RuntimeInterfaceExportItem(
                     object: object,
                     plainText: runtimeInterface.interfaceString.string,
-                    suggestedFileName: object.exportFileName
+                    suggestedFileName: object.exportFileName,
                 )
                 results.append(item)
                 succeeded += 1
@@ -900,12 +867,12 @@ extension RuntimeEngine {
                     try RuntimeInterfaceExportWriter.writeSingleFile(
                         items: objcItems,
                         to: configuration.directory,
-                        imageName: configuration.imageName
+                        imageName: configuration.imageName,
                     )
                 case .directory:
                     let writeResult = try RuntimeInterfaceExportWriter.writeDirectory(
                         items: objcItems,
-                        to: configuration.directory
+                        to: configuration.directory,
                     )
                     for (failedItem, writeError) in writeResult.failedItems {
                         reporter.send(.objectFailed(failedItem.object, writeError))
@@ -920,12 +887,12 @@ extension RuntimeEngine {
                     try RuntimeInterfaceExportWriter.writeSingleFile(
                         items: swiftItems,
                         to: configuration.directory,
-                        imageName: configuration.imageName
+                        imageName: configuration.imageName,
                     )
                 case .directory:
                     let writeResult = try RuntimeInterfaceExportWriter.writeDirectory(
                         items: swiftItems,
-                        to: configuration.directory
+                        to: configuration.directory,
                     )
                     for (failedItem, writeError) in writeResult.failedItems {
                         reporter.send(.objectFailed(failedItem.object, writeError))
@@ -935,12 +902,19 @@ extension RuntimeEngine {
             }
 
             if configuration.includeMetadata {
+                let module = try await dispatch(
+                    ExportModuleInfoRequest(
+                        imagePath: configuration.imagePath,
+                        imageName: configuration.imageName
+                    )
+                )
                 let metadata = RuntimeInterfaceExportMetadata.make(
                     configuration: configuration,
+                    module: module,
                     objcInterfaceCount: objcCount,
                     swiftInterfaceCount: swiftCount,
                     succeeded: succeeded,
-                    failed: failed + writeFailed
+                    failed: failed + writeFailed,
                 )
                 try RuntimeInterfaceExportWriter.writeMetadata(metadata, to: configuration.directory)
             }
@@ -956,7 +930,7 @@ extension RuntimeEngine {
             failed: failed + writeFailed,
             totalDuration: duration,
             objcCount: objcCount,
-            swiftCount: swiftCount
+            swiftCount: swiftCount,
         )
         reporter.send(.completed(result))
     }

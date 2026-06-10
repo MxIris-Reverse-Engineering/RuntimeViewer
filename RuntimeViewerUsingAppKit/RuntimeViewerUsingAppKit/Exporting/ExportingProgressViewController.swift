@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingProgressViewController: AppKitViewController<ExportingProgressViewModel>, ExportingStepViewController {
+final class ExportingProgressViewController: UXKitViewController<ExportingProgressViewModel>, ExportingStepViewController {
     private let progressPhaseLabel = Label("Preparing...").then {
         $0.font = .systemFont(ofSize: 20, weight: .bold)
         $0.textColor = .controlTextColor
@@ -29,7 +29,7 @@ final class ExportingProgressViewController: AppKitViewController<ExportingProgr
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        hierarchy {
+        contentView.hierarchy {
             progressPhaseLabel
             progressIndicator
             progressObjectLabel

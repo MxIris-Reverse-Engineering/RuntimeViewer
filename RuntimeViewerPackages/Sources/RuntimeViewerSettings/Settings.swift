@@ -21,7 +21,7 @@ public final class Settings {
         didSet { scheduleAutoSave() }
     }
 
-    @Default(TransformerSettings())
+    @Default(TransformerSettings.default)
     public var transformer: TransformerSettings = .init() {
         didSet { scheduleAutoSave() }
     }

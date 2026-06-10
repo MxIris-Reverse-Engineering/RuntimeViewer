@@ -96,6 +96,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
             $0.rowHeight = 28
             $0.allowsEmptySelection = true
             $0.allowsMultipleSelection = false
+            $0.selectionHighlightStyle = .none
         }
 
         preferredContentSize = NSSize(width: 520, height: 360)
@@ -181,7 +182,7 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
         }
         .disposed(by: rx.disposeBag)
         
-        outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
+//        outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
     }
 
     // MARK: - Load state helpers
@@ -217,11 +218,11 @@ final class SpecializationViewController: UXKitViewController<SpecializationView
     }
 }
 
-extension SpecializationViewController: NSOutlineViewDelegate {
-    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        false
-    }
-}
+//extension SpecializationViewController: NSOutlineViewDelegate {
+//    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+//        false
+//    }
+//}
 
 // MARK: - ParameterRowCellView
 
