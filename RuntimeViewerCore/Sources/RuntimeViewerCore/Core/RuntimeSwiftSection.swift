@@ -109,6 +109,17 @@ actor RuntimeSwiftSection {
         /// specialized definitions live on the parent rather than on the
         /// indexer).
         case specializedType(unspecialized: SwiftInterface.TypeName, specialized: SwiftInterface.TypeName)
+        /// Nested specialized types derived by upstream's
+        /// `derivingNestedSpecializationsWith` — e.g. when specializing
+        /// `Phase<Event>`, upstream walks the parent's `typeChildren` and
+        /// produces a `Phase<Event>.Value` that is itself specialized but
+        /// has no generic parent the indexer knows about (the unspecialized
+        /// `Phase.Value` lives under the unspecialized `Phase`, not under
+        /// this derived `Phase<Event>`). Its `TypeDefinition` is only
+        /// reachable through `specializedDefinitionByObject`; consumers
+        /// MUST route through that cache rather than trying to look up the
+        /// typeName in `indexer.allTypeDefinitions`.
+        case derivedSpecializedType(SwiftInterface.TypeName)
         case rootProtocol(SwiftInterface.ProtocolName)
         case childProtocol(SwiftInterface.ProtocolName)
         case typeExtension(SwiftInterface.ExtensionName)
@@ -228,16 +239,18 @@ actor RuntimeSwiftSection {
             children: allChildren,
             properties: properties
         )
-        let specializedLookupTypeName: SwiftInterface.TypeName?
-        if let unspecializedTypeName {
-            specializedLookupTypeName = unspecializedTypeName
+        if isSpecialized, let unspecializedTypeName {
+            interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: unspecializedTypeName, specialized: typeDefinition.typeName)
+            specializedDefinitionByObject[runtimeObject.key] = typeDefinition
         } else if isSpecialized {
-            specializedLookupTypeName = typeDefinition.typeName
-        } else {
-            specializedLookupTypeName = nil
-        }
-        if isSpecialized, let specializedLookupTypeName {
-            interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: specializedLookupTypeName, specialized: typeDefinition.typeName)
+            // Derived nested specialization: upstream produced this object
+            // by walking a freshly specialized parent's `typeChildren` (see
+            // `derivingNestedSpecializationsWith`) — its generic ancestor
+            // lives elsewhere in the indexer and is not addressable from
+            // here. The `TypeDefinition` is still authoritative, so cache
+            // it directly and let consumers look it up through
+            // `specializedDefinitionByObject` instead of the indexer.
+            interfaceDefinitionNameByObject[runtimeObject.key] = .derivedSpecializedType(typeDefinition.typeName)
             specializedDefinitionByObject[runtimeObject.key] = typeDefinition
         } else if isChild {
             interfaceDefinitionNameByObject[runtimeObject.key] = .childType(typeDefinition.typeName)
@@ -280,6 +293,11 @@ extension RuntimeSwiftSection {
             guard let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
                   let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName })
             else { throw Error.invalidRuntimeObject }
+            try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
+        case .derivedSpecializedType:
+            guard let specializedDefinition = specializedDefinitionByObject[object.key] else {
+                throw Error.invalidRuntimeObject
+            }
             try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
         case .rootType(let rootTypeName):
             guard let typeDefinition = indexer.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObject }
@@ -483,6 +501,10 @@ extension RuntimeSwiftSection {
                 collect(from: specializedDefinition)
             } else if let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
                let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName }) {
+                collect(from: specializedDefinition)
+            }
+        case .derivedSpecializedType:
+            if let specializedDefinition = specializedDefinitionByObject[object.key] {
                 collect(from: specializedDefinition)
             }
         case .rootProtocol(let protocolName),
@@ -1039,6 +1061,7 @@ extension RuntimeSwiftSection {
         if newIndexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
             #log(.debug, "Index configuration changed, re-preparing builder")
             interfaceDefinitionNameByObject.removeAll()
+            specializedDefinitionByObject.removeAll()
         }
 
         if newPrintConfiguration != oldPrintConfiguration {
