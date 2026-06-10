@@ -105,11 +105,9 @@ struct FuzzySrchResultWrapper: ComparableBuildable {
         wrappedValue[keyPath: keyPath]
     }
 
-    static var comparableDefinition: ComparableDefinition<Self> {
-        makeComparable {
-            compare(\.wrappedValue.diffScore)
-            compare(\.resultsScore)
-        }
+    static var comparableDefinition: some ComparisonStep<Self> {
+        compare(\.wrappedValue.diffScore)
+        compare(\.resultsScore)
     }
 }
 
