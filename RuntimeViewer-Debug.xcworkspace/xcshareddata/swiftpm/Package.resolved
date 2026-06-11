@@ -28,15 +28,6 @@
       }
     },
     {
-      "identity" : "cocoacoordinator",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/CocoaCoordinator",
-      "state" : {
-        "revision" : "8756b37cfc91918a6d92ba92125dd6f45e5a8aae",
-        "version" : "0.4.1"
-      }
-    },
-    {
       "identity" : "combine-schedulers",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/combine-schedulers",
@@ -68,8 +59,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "4ab712e98990bb3a44a5ef160bd0b0c3f03ace08",
-        "version" : "0.5.5"
+        "revision" : "b82281eb8a6ffcb312941c3d06584182837f4ca9",
+        "version" : "0.7.1"
       }
     },
     {
@@ -86,8 +77,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ukushu/Ifrit",
       "state" : {
-        "revision" : "9b9556e14cee24ad16b19d0eb099283cf79a7d94",
-        "version" : "3.0.0"
+        "revision" : "7c889a67bad90c5efefa56889b2d61bfbb831473",
+        "version" : "4.0.0"
       }
     },
     {
@@ -181,24 +172,6 @@
       }
     },
     {
-      "identity" : "runningapplicationkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
-      "state" : {
-        "revision" : "8c64a39bbcbe96b7758afd0e2e0a9f3d82f7305a",
-        "version" : "0.3.3"
-      }
-    },
-    {
-      "identity" : "rxappkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RxAppKit",
-      "state" : {
-        "revision" : "e4ea5c272acdc4f1c220bcc0a44d79cebf1ed98b",
-        "version" : "0.3.1"
-      }
-    },
-    {
       "identity" : "rxcombine",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/CombineCommunity/RxCombine",
@@ -235,30 +208,12 @@
       }
     },
     {
-      "identity" : "rxswiftplus",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
-      "state" : {
-        "revision" : "d40a7d551b58ce3006eaabcaa3721b99db72ea78",
-        "version" : "0.2.3"
-      }
-    },
-    {
-      "identity" : "rxuikit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RxUIKit",
-      "state" : {
-        "revision" : "f4397315d83edf4f9390dbe96e212c892577c7eb",
-        "version" : "0.1.1"
-      }
-    },
-    {
       "identity" : "semaphore",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Library-Forks/Semaphore",
       "state" : {
-        "revision" : "2543679282aa6f6c8ecf2138acd613ed20790bc2",
-        "version" : "0.1.0"
+        "revision" : "e6a244dec033ed1033878d5da5911a3ba2489701",
+        "version" : "0.1.1"
       }
     },
     {
@@ -266,8 +221,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/SFSymbols",
       "state" : {
-        "revision" : "98c7f4a22419d8034a058a8bfaec7cba4e53dcca",
-        "version" : "0.2.0"
+        "revision" : "373b919278adc197759ebcc2018956cacff1cc57",
+        "version" : "0.3.0"
       }
     },
     {
@@ -275,8 +230,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SnapKit/SnapKit",
       "state" : {
-        "revision" : "2842e6e84e82eb9a8dac0100ca90d9444b0307f4",
-        "version" : "5.7.1"
+        "revision" : "e27a338a03a5f388de759da63f9baf7988ed9e00",
+        "version" : "6.0.0"
       }
     },
     {
@@ -392,8 +347,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",
       "state" : {
-        "revision" : "6675bc0ff86e61436e615df6fc5174e043e57924",
-        "version" : "1.4.1"
+        "revision" : "a0cb0954ecb21e4e31b0070e6ed5674e8556685a",
+        "version" : "1.6.0"
       }
     },
     {
@@ -437,8 +392,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "706feb7858a7f6c242879d137b8ee30926aa5b26",
-        "version" : "1.12.0"
+        "revision" : "f80552807ec92f72fe3fe4543d71879182b0bfd5",
+        "version" : "1.13.0"
       }
     },
     {
@@ -466,15 +421,6 @@
       "state" : {
         "revision" : "8d83506dd4dff737807d90dbf2264096ed98c7a7",
         "version" : "0.2.2"
-      }
-    },
-    {
-      "identity" : "swift-helper-service",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/swift-helper-service",
-      "state" : {
-        "revision" : "d15e26aa1e96e03a72a913511e5cd19b96c2a3bf",
-        "version" : "0.1.3"
       }
     },
     {
@@ -541,15 +487,6 @@
       }
     },
     {
-      "identity" : "swift-objc-dump",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-objc-dump.git",
-      "state" : {
-        "revision" : "4206040acd64db453c5c28c1539b98fa5befa8fc",
-        "version" : "0.8.100"
-      }
-    },
-    {
       "identity" : "swift-object-association",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-object-association.git",
@@ -613,15 +550,6 @@
       }
     },
     {
-      "identity" : "systemhud",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/SystemHUD",
-      "state" : {
-        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
-        "version" : "0.1.0"
-      }
-    },
-    {
       "identity" : "uxkitcoordinator",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
@@ -637,15 +565,6 @@
       "state" : {
         "revision" : "3043fcd2a50375db76d89ff206a612471833d1c2",
         "version" : "2.2.1"
-      }
-    },
-    {
-      "identity" : "xcoordinator",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/XCoordinator",
-      "state" : {
-        "revision" : "1d35f8bf10b9cf0ab49736493d2d8b6c27fc63c0",
-        "version" : "3.0.0-beta.1"
       }
     },
     {

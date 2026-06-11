@@ -209,14 +209,14 @@ let package = Package(
         ),
 
         .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
-                isRelative: true,
-            ),
-            .package(
-                path: "../../CocoaCoordinator",
-                isRelative: true,
-            ),
+//            local: .package(
+//                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
+//                isRelative: true,
+//            ),
+//            .package(
+//                path: "../../CocoaCoordinator",
+//                isRelative: true,
+//            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
                 from: "0.4.1",
