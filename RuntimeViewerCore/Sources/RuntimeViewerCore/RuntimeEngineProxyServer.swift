@@ -23,6 +23,12 @@ public actor RuntimeEngineProxyServer {
     private let communicator = RuntimeCommunicator()
     private var connection: RuntimeConnection?
     private var subscriptions: Set<AnyCancellable> = []
+    /// Push-relay subscriptions are re-established on every `.connected`
+    /// transition (each new/reconnecting client). They live in their own set so
+    /// `setupPushRelay()` can drop the previous client's relays before wiring
+    /// new ones — otherwise each reconnect would stack another relay and every
+    /// data change would be sent N times.
+    private var pushRelaySubscriptions: Set<AnyCancellable> = []
     private let identifier: String
 
     public private(set) var port: UInt16 = 0
@@ -111,6 +117,7 @@ public actor RuntimeEngineProxyServer {
         #log(.info, "[PROXY \(self.identifier, privacy: .public)] stopping")
         connection?.stop()
         subscriptions.removeAll()
+        pushRelaySubscriptions.removeAll()
     }
 
     // MARK: - Request Handlers
@@ -192,6 +199,11 @@ public actor RuntimeEngineProxyServer {
             return
         }
 
+        // Drop the previous client's relays before wiring new ones, so a
+        // reconnect doesn't stack duplicate subscriptions (which would resend
+        // every change once per past connection).
+        pushRelaySubscriptions.removeAll()
+
         let id = self.identifier
         engine.imageNodesPublisher
             .dropFirst()
@@ -204,7 +216,7 @@ public actor RuntimeEngineProxyServer {
                     )
                 }
             }
-            .store(in: &subscriptions)
+            .store(in: &pushRelaySubscriptions)
 
         engine.dataChangePublisher
             .sink { [weak self] change in
@@ -226,7 +238,7 @@ public actor RuntimeEngineProxyServer {
                     )
                 }
             }
-            .store(in: &subscriptions)
+            .store(in: &pushRelaySubscriptions)
     }
 }
 

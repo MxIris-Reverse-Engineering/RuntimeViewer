@@ -231,80 +231,31 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
                     break
                 } else {
                     let recvErrno = errno
-                    if recvErrno != EAGAIN && recvErrno != EWOULDBLOCK {
-                        #log(.error, "Receive error, errno=\(recvErrno, privacy: .public)")
-                        self.messageChannel.finishReceiving()
-                        DispatchQueue.main.async {
-                            self.stop(with: .socketError("Receive error: errno=\(recvErrno)"))
-                        }
-                        break
+                    // EINTR: the syscall was interrupted by a signal (not rare in
+                    // an injected process) — retry rather than tear the connection
+                    // down. EAGAIN/EWOULDBLOCK: no data yet on a (non-blocking)
+                    // socket — also just retry.
+                    if recvErrno == EINTR || recvErrno == EAGAIN || recvErrno == EWOULDBLOCK {
+                        continue
                     }
+                    #log(.error, "Receive error, errno=\(recvErrno, privacy: .public)")
+                    self.messageChannel.finishReceiving()
+                    DispatchQueue.main.async {
+                        self.stop(with: .socketError("Receive error: errno=\(recvErrno)"))
+                    }
+                    break
                 }
             }
         }
     }
 
     private func observeIncomingMessages() {
-        Task {
-            do {
-                guard let stream = messageChannel.receivedMessages() else { return }
-                for try await data in stream {
-                    await dispatchReceivedMessage(data)
-                }
-            } catch {
-                #log(.error, "Message observation error: \(error, privacy: .public)")
-            }
-        }
-    }
-
-    /// Dispatch one received envelope. Splits the failure surface into two
-    /// arms so a peer's bare error never feeds back into our own bare error,
-    /// which would otherwise ping-pong on the shared `sendSemaphore` and
-    /// starve real traffic. See Changelogs/v2.1.0-beta.4.md.
-    private func dispatchReceivedMessage(_ data: Data) async {
-        let requestData: RuntimeRequestData
-        do {
-            requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
-        } catch {
-            // Envelope decode failure → no identifier, no safe way to
-            // route an error response. Swallow rather than echo, otherwise
-            // both peers loop on each other's malformed errors.
-            #log(.error, "Envelope decode failed, swallowing to avoid ping-pong: \(error, privacy: .public)")
-            return
-        }
-
-        // Route by nonce when present (new wire form), fall back to
-        // identifier for legacy peers.
-        let routingKey = requestData.nonce ?? requestData.identifier
-        if messageChannel.deliverToPendingRequest(routingKey: routingKey, data: data) {
-            return
-        }
-
-        guard let handler = messageChannel.handler(for: requestData.identifier) else {
-            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
-            return
-        }
-
-        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
-        do {
-            let responseData = try await handler.closure(requestData.data)
-            if handler.responseType != RuntimeMessageNull.self {
-                // Echo the request's nonce so concurrent same-`identifier`
-                // round trips route their responses without collision.
-                let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData, nonce: requestData.nonce)
-                try await send(requestData: response)
-            }
-        } catch {
-            // Handler-execution failure → wrap in
-            // `RuntimeNetworkRequestError` and emit via the same
-            // nonce-stamped envelope used by successful responses so
-            // the peer's `sendRequest` finds the matching pending entry.
-            #log(.error, "Handler \(requestData.identifier, privacy: .public) failed: \(error, privacy: .public)")
-            let errorPayload = RuntimeNetworkRequestError(message: "\(error)")
-            if let errorData = try? JSONEncoder().encode(errorPayload) {
-                let errorEnvelope = RuntimeRequestData(identifier: requestData.identifier, data: errorData, nonce: requestData.nonce)
-                try? await send(requestData: errorEnvelope)
-            }
+        // Centralized dispatch (see `RuntimeMessageChannel.beginDispatch`):
+        // inline response routing, ordered fire-and-forget, concurrent
+        // request handlers, and error replies for unknown handlers / throws.
+        messageChannel.beginDispatch { [weak self] data in
+            guard let self else { throw RuntimeMessageChannelError.notConnected }
+            try await self.sendRaw(data: data)
         }
     }
 
@@ -313,14 +264,16 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
     func send(requestData: RuntimeRequestData) async throws {
         let data = try JSONEncoder().encode(requestData)
         try await messageChannel.send(data: data) { [weak self] dataToSend in
-            try await self?.sendRaw(data: dataToSend)
+            guard let self else { throw RuntimeLocalSocketError.notConnected }
+            try await self.sendRaw(data: dataToSend)
         }
         #log(.debug, "Sent request: \(requestData.identifier, privacy: .public)")
     }
 
     func send<Response: Codable>(requestData: RuntimeRequestData, timeout: TimeInterval?) async throws -> Response {
         try await messageChannel.sendRequest(requestData: requestData, timeout: timeout) { [weak self] data in
-            try await self?.sendRaw(data: data)
+            guard let self else { throw RuntimeLocalSocketError.notConnected }
+            try await self.sendRaw(data: data)
         }
     }
 
@@ -881,9 +834,20 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
     private let identifier: String
 
     /// Pending message handlers to apply to new connections.
+    ///
+    /// Mirrors `RuntimeLocalSocketClientConnection`: public `setMessageHandler`
+    /// overloads (caller contexts) append while the background accept loop
+    /// iterates via `applyPendingHandlers`. `@Mutex` serializes the append
+    /// against that iteration — without it the concurrent array access is
+    /// memory-unsafe despite `@unchecked Sendable`.
+    @Mutex
     private var pendingHandlers: [@Sendable (RuntimeLocalSocketConnection) -> Void] = []
 
     /// Subscription for observing connection state changes.
+    ///
+    /// Reassigned from the background accept loop and nil'd from `stop()` on an
+    /// unrelated caller context, so cancel-and-replace must be atomic.
+    @Mutex
     private var connectionStateCancellable: AnyCancellable?
 
     /// The port the server is listening on (available after `start()` is called).
@@ -983,8 +947,12 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
     }
 
     /// Applies all pending handlers to a connection.
+    ///
+    /// Snapshots the array inside the lock so user-supplied handler closures run
+    /// outside the critical section.
     private func applyPendingHandlers(to connection: RuntimeLocalSocketConnection) {
-        for handler in pendingHandlers {
+        let snapshot = _pendingHandlers.withLock { $0 }
+        for handler in snapshot {
             handler(connection)
         }
     }
@@ -1083,8 +1051,10 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
         // Apply all pending message handlers to the new connection
         applyPendingHandlers(to: socketConnection)
 
-        // Observe connection state to restart accepting when disconnected
-        connectionStateCancellable = socketConnection.statePublisher
+        // Observe connection state to restart accepting when disconnected.
+        // Cancel-and-replace atomically under the lock so a stale subscription
+        // can't leak if `stop()` races from another context.
+        let newCancellable = socketConnection.statePublisher
             .sink { [weak self] state in
                 guard let self else { return }
                 #log(.info, "Local socket connection state: \(String(describing: state), privacy: .public)")
@@ -1096,6 +1066,10 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
                     startAcceptingConnections()
                 }
             }
+        _connectionStateCancellable.withLock { current in
+            current?.cancel()
+            current = newCancellable
+        }
 
         do {
             try socketConnection.start()
@@ -1110,8 +1084,10 @@ final class RuntimeLocalSocketServerConnection: RuntimeConnectionBase<RuntimeLoc
     /// Stops the server and cleans up resources.
     override func stop() {
         #log(.info, "Stopping local socket server on port \(self.port, privacy: .public)")
-        connectionStateCancellable?.cancel()
-        connectionStateCancellable = nil
+        _connectionStateCancellable.withLock { current in
+            current?.cancel()
+            current = nil
+        }
         underlyingConnection?.stop()
         if serverSocketFD >= 0 {
             // shutdown() before close() to unblock accept() on the background accept loop.

@@ -39,22 +39,34 @@ struct RuntimeRequestData: Codable {
     /// `identifier` (legacy behavior, single in-flight per command).
     let nonce: String?
 
-    init(identifier: String, data: Data, nonce: String? = nil) {
+    /// Marks a response envelope whose `data` carries a
+    /// `RuntimeNetworkRequestError` instead of the expected `Response`. Set on
+    /// every error reply (the handler threw, or no handler was registered) so
+    /// `sendRequest` can surface the remote failure as a real error rather than
+    /// an opaque `DecodingError` (or — worse — a bogus all-optional "success").
+    /// Optional for wire backward-compat: an absent key decodes to `nil`, which
+    /// is treated as "not an error", matching legacy peers that never set it.
+    let isError: Bool?
+
+    init(identifier: String, data: Data, nonce: String? = nil, isError: Bool? = nil) {
         self.identifier = identifier
         self.data = data
         self.nonce = nonce
+        self.isError = isError
     }
 
     init<Value: Codable>(identifier: String, value: Value, nonce: String? = nil) throws {
         self.identifier = identifier
         self.data = try JSONEncoder().encode(value)
         self.nonce = nonce
+        self.isError = nil
     }
 
     init<Request: RuntimeRequest>(request: Request, nonce: String? = nil) throws {
         self.identifier = Request.identifier
         self.data = try JSONEncoder().encode(request)
         self.nonce = nonce
+        self.isError = nil
     }
 }
 

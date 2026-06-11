@@ -116,6 +116,15 @@ public actor RuntimeEngine {
 
     private var connectionStateCancellable: AnyCancellable?
 
+    /// Consumes connection-state events strictly in arrival order. The Combine
+    /// sink only forwards into an unbounded `AsyncStream`; this single task
+    /// applies them one at a time. Spawning a `Task` per event (the previous
+    /// shape) let the actor hops race, so a fast disconnect→connect pair could
+    /// be applied out of order — leaving the engine stuck at `.disconnected` or
+    /// mis-sequencing the `needsReregistrationOnConnect` handshake.
+    private var connectionStateTask: Task<Void, Never>?
+    private var connectionStateContinuation: AsyncStream<RuntimeConnectionState>.Continuation?
+
     /// Flag indicating that message handlers need to be re-registered on next connection.
     /// Set to `true` when a server connection disconnects, so that reconnection
     /// triggers handler re-registration and data push.
@@ -266,13 +275,22 @@ public actor RuntimeEngine {
 
     /// Observes the connection state and updates the engine state accordingly.
     private func observeConnectionState(_ connection: RuntimeConnection) {
+        // Serialize state events through one consumer so they are applied in
+        // arrival order (see `connectionStateTask`).
+        connectionStateTask?.cancel()
+        connectionStateContinuation?.finish()
+
+        let (stream, continuation) = AsyncStream<RuntimeConnectionState>.makeStream(bufferingPolicy: .unbounded)
+        connectionStateContinuation = continuation
         connectionStateCancellable = connection.statePublisher
-            .sink { [weak self] state in
-                guard let self else { return }
-                Task {
-                    await self.handleConnectionStateChange(state)
-                }
+            .sink { state in
+                continuation.yield(state)
             }
+        connectionStateTask = Task { [weak self] in
+            for await state in stream {
+                await self?.handleConnectionStateChange(state)
+            }
+        }
     }
 
     /// Handles connection state changes and updates the engine state.
@@ -308,6 +326,10 @@ public actor RuntimeEngine {
 
     /// Stops the engine and its connection.
     public func stop() {
+        connectionStateTask?.cancel()
+        connectionStateTask = nil
+        connectionStateContinuation?.finish()
+        connectionStateContinuation = nil
         connectionStateCancellable?.cancel()
         connectionStateCancellable = nil
         connection?.stop()

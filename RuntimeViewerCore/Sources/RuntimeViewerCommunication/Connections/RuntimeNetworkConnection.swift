@@ -197,84 +197,37 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
                 #log(.error, "Receive error: \(error, privacy: .public)")
                 self.messageChannel.finishReceiving(throwing: error)
                 self.stop()
-            } else if isComplete {
+                return
+            }
+
+            // Consume any delivered bytes BEFORE acting on `isComplete`.
+            // NWConnection coalesces the peer's final chunk with the FIN, so the
+            // closing callback can carry both `data` and `isComplete == true`.
+            // Checking `isComplete` first would drop that trailing message.
+            if let data, !data.isEmpty {
+                #log(.debug, "Received \(data.count, privacy: .public) bytes")
+                self.messageChannel.appendReceivedData(data)
+            }
+
+            if isComplete {
                 #log(.debug, "Receive complete")
                 self.messageChannel.finishReceiving()
                 self.stop()
-            } else if let data {
-                #log(.debug, "Received \(data.count, privacy: .public) bytes")
-                self.messageChannel.appendReceivedData(data)
+            } else {
                 self.setupReceiver()
             }
         }
     }
 
     private func observeIncomingMessages() {
-        messageChannel.onMessageReceived = { [weak self] data in
-            guard let self else { return }
-            Task { await self.handleReceivedMessage(data) }
-        }
-    }
-
-    private func handleReceivedMessage(_ data: Data) async {
-        let requestData: RuntimeRequestData
-        do {
-            requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
-        } catch {
-            // Envelope decode failure: the payload carries no `identifier`,
-            // so any error response we emit cannot be routed back to a
-            // pending `sendRequest` on the peer. Echoing a bare
-            // `RuntimeNetworkRequestError` (the pre-fix behavior) causes
-            // the peer to also fail envelope decode and echo its own bare
-            // error, producing an unbounded ping-pong that starves real
-            // traffic on the shared `sendSemaphore`. Swallow silently —
-            // `sendRequest` carries a configurable timeout so a peer that
-            // drops a single bad message will not hang indefinitely.
-            // See Changelogs/v2.1.0-beta.4.md for the full failure mode.
-            #log(.error, "Envelope decode failed, swallowing to avoid ping-pong: \(error, privacy: .public)")
-            return
-        }
-
-        // Check if this is a response to a pending request. Route by
-        // `nonce` when the envelope carries one (the new wire form);
-        // legacy envelopes without a nonce fall back to `identifier`,
-        // matching the pre-nonce single-in-flight model.
-        let routingKey = requestData.nonce ?? requestData.identifier
-        if messageChannel.deliverToPendingRequest(routingKey: routingKey, data: data) {
-            return
-        }
-
-        guard let handler = messageChannel.handler(for: requestData.identifier) else {
-            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
-            return
-        }
-
-        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
-        do {
-            let responseData = try await handler.closure(requestData.data)
-            if handler.responseType != RuntimeMessageNull.self {
-                // Echo the request's nonce so the peer's `sendRequest` can
-                // route this response back to the correct pending entry
-                // even when multiple round trips share the same command
-                // name (e.g. concurrent `isImageLoaded` lookups).
-                let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData, nonce: requestData.nonce)
-                try await send(requestData: response)
-            }
-        } catch {
-            // Handler execution failure: wrap in `RuntimeNetworkRequestError`
-            // and emit via the same nonce-stamped envelope used by
-            // successful responses. The peer's `deliverToPendingRequest`
-            // routes it back to the matching `sendRequest`, which surfaces
-            // the failure (envelope.data fails to decode as the expected
-            // `Response` → DecodingError). Nonce scoping is what prevents
-            // the envelope-decode → bare-echo loop the pre-fix arm
-            // produced on every handler throw.
-            #log(.error, "Handler \(requestData.identifier, privacy: .public) failed: \(error, privacy: .public)")
-            let errorPayload = RuntimeNetworkRequestError(message: "\(error)")
-            if let errorData = try? JSONEncoder().encode(errorPayload) {
-                let errorEnvelope = RuntimeRequestData(identifier: requestData.identifier, data: errorData, nonce: requestData.nonce)
-                try? await send(requestData: errorEnvelope)
-            }
+        // Centralized dispatch (see `RuntimeMessageChannel.beginDispatch`).
+        // Draining through the channel's stream from a cooperative-pool task —
+        // instead of spawning a Task per message inside the NWConnection
+        // receive callback — also keeps frame ordering and avoids piling Task
+        // creation frames onto the dispatch-queue stack under a burst.
+        messageChannel.beginDispatch { [weak self] data in
+            guard let self else { throw RuntimeMessageChannelError.notConnected }
+            try await self.sendRaw(data: data)
         }
     }
 
@@ -283,14 +236,16 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     func send(requestData: RuntimeRequestData) async throws {
         let data = try JSONEncoder().encode(requestData)
         try await messageChannel.send(data: data) { [weak self] dataToSend in
-            try await self?.sendRaw(data: dataToSend)
+            guard let self else { throw RuntimeMessageChannelError.notConnected }
+            try await self.sendRaw(data: dataToSend)
         }
         #log(.debug, "Sent request: \(requestData.identifier, privacy: .public)")
     }
 
     func send<Response: Codable>(requestData: RuntimeRequestData, timeout: TimeInterval?) async throws -> Response {
         try await messageChannel.sendRequest(requestData: requestData, timeout: timeout) { [weak self] data in
-            try await self?.sendRaw(data: data)
+            guard let self else { throw RuntimeMessageChannelError.notConnected }
+            try await self.sendRaw(data: data)
         }
     }
 

@@ -113,8 +113,17 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// a *different* request that happened to be registered under the same identifier.
     private let pendingRequests = Mutex<[String: PendingRequest]>([:])
 
-    /// Buffer for incoming data.
-    private let receivingData = Mutex<Data>(Data())
+    /// Buffer for incoming data, plus how far it has already been scanned for an
+    /// end-marker. Persisting the scan offset across appends keeps a large
+    /// message that arrives in many chunks at O(n) total instead of O(n²) — the
+    /// old code re-walked the whole accumulated buffer on every chunk.
+    private struct ReceiveBuffer {
+        var data = Data()
+        /// Bytes `[0, scannedPrefix)` are known not to begin a complete marker.
+        var scannedPrefix = 0
+    }
+
+    private let receivingData = Mutex<ReceiveBuffer>(ReceiveBuffer())
 
     /// Stream for received messages.
     private var receivedDataStream: SharedAsyncSequence<AsyncThrowingStream<Data, Error>>?
@@ -205,7 +214,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     /// Appends data to the receiving buffer and processes complete messages.
     func appendReceivedData(_ data: Data) {
-        receivingData.withLock { $0.append(data) }
+        receivingData.withLock { $0.data.append(data) }
         processReceivedData()
     }
 
@@ -213,24 +222,36 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     private func processReceivedData() {
         var extractedMessages: [Data] = []
         var remainingBufferSize = 0
+        let marker = Self.endMarkerData
+        let markerCount = marker.count
 
-        receivingData.withLock { buffer in
-            while true {
-                guard let endRange = buffer.range(of: Self.endMarkerData) else {
+        receivingData.withLock { state in
+            // Resume scanning where the previous pass stopped, backing up by
+            // `markerCount - 1` so a marker straddling the old/new boundary is
+            // still found.
+            var searchStart = max(0, state.scannedPrefix - (markerCount - 1))
+            var consumedUpTo = 0
+            while searchStart <= state.data.count - markerCount {
+                guard let endRange = state.data.range(of: marker, in: searchStart ..< state.data.count) else {
                     break
                 }
-
-                let messageData = buffer.subdata(in: 0 ..< endRange.lowerBound)
+                let messageData = state.data.subdata(in: consumedUpTo ..< endRange.lowerBound)
                 extractedMessages.append(messageData)
-
-                if endRange.upperBound < buffer.count {
-                    buffer = buffer.subdata(in: endRange.upperBound ..< buffer.count)
-                } else {
-                    buffer = Data()
-                    break
-                }
+                consumedUpTo = endRange.upperBound
+                searchStart = endRange.upperBound
             }
-            remainingBufferSize = buffer.count
+
+            if consumedUpTo > 0 {
+                state.data = consumedUpTo < state.data.count
+                    ? state.data.subdata(in: consumedUpTo ..< state.data.count)
+                    : Data()
+                state.scannedPrefix = 0
+            } else {
+                // No complete message this round — remember how far we scanned so
+                // the next append doesn't re-walk the whole buffer.
+                state.scannedPrefix = max(0, state.data.count - (markerCount - 1))
+            }
+            remainingBufferSize = state.data.count
         }
 
         let hasContinuation = receivedDataContinuation.withLock { $0 != nil }
@@ -240,6 +261,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
         for messageData in extractedMessages {
             #log(.debug, "[MessageChannel] processReceivedData: yielding message (\(messageData.count, privacy: .public) bytes, continuation=\(hasContinuation, privacy: .public))")
             _ = receivedDataContinuation.withLock { $0?.yield(messageData) }
+            _ = dispatchContinuation.withLock { $0?.yield(messageData) }
             onMessageReceived?(messageData)
         }
     }
@@ -265,6 +287,15 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
             continuation = nil
         }
 
+        // Finish the dispatch stream too. Any frames yielded before this call
+        // (e.g. a final message that arrived coalesced with the FIN) are still
+        // delivered to the dispatch consumer first — `AsyncStream` drains its
+        // buffer ahead of the terminal event.
+        dispatchContinuation.withLock { continuation in
+            continuation?.finish()
+            continuation = nil
+        }
+
         // Drain any pending requests that were waiting for a response on the now-dead channel
         // and resume each with an error so the `await` in `sendRequest` unblocks.
         let drainedRequests: [PendingRequest] = pendingRequests.withLock { pending in
@@ -284,7 +315,7 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
     /// Returns the current size of the receiving buffer.
     var receivingBufferSize: Int {
-        receivingData.withLock { $0.count }
+        receivingData.withLock { $0.data.count }
     }
 
     // MARK: - Sending Data
@@ -389,6 +420,18 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
 
         #log(.debug, "Received response for: \(stamped.identifier, privacy: .public) [nonce \(nonce, privacy: .public)]")
         let response = try JSONDecoder().decode(RuntimeRequestData.self, from: responseData)
+        // A peer that couldn't service the request (handler threw, or no handler
+        // was registered) flags the envelope and ships a `RuntimeNetworkRequestError`
+        // in `data`. Surface that as the thrown error instead of blindly decoding
+        // it as `Response` — which would otherwise yield an opaque `DecodingError`
+        // or, for an all-optional `Response`, a bogus "success".
+        if response.isError == true {
+            if let remoteError = try? JSONDecoder().decode(RuntimeNetworkRequestError.self, from: response.data) {
+                #log(.error, "Request \(stamped.identifier, privacy: .public) [nonce \(nonce, privacy: .public)] failed remotely: \(remoteError.message, privacy: .public)")
+                throw remoteError
+            }
+            throw RuntimeMessageChannelError.receiveFailed
+        }
         return try JSONDecoder().decode(Response.self, from: response.data)
     }
 
@@ -430,6 +473,157 @@ final class RuntimeMessageChannel: @unchecked Sendable, RuntimeMessageProtocol {
     /// Returns an async sequence of received messages.
     func receivedMessages() -> SharedAsyncSequence<AsyncThrowingStream<Data, Error>>? {
         receivedDataStream
+    }
+
+    // MARK: - Dispatch
+
+    /// Serial tail for fire-and-forget handler execution. Each enqueued unit of
+    /// work `await`s its predecessor, so push handlers run in submission order
+    /// (e.g. `imageList` → `imageNodes` → `dataDidChange`) even though they run
+    /// off the receive loop.
+    private let orderedHandlerTail = Mutex<Task<Void, Never>>(Task {})
+
+    /// Long-lived task draining the dedicated dispatch stream below.
+    private let dispatchTask = Mutex<Task<Void, Never>?>(nil)
+
+    /// Continuation feeding `beginDispatch`'s consumer. A dedicated, unbounded,
+    /// non-`shared` `AsyncStream` is used (rather than `receivedDataStream`) so
+    /// that frames yielded just before `finishReceiving()` are still delivered:
+    /// `AsyncStream` guarantees buffered elements drain before the terminal
+    /// event. That is what stops "peer sent its final message, then closed" from
+    /// dropping that last message.
+    private let dispatchContinuation = Mutex<AsyncStream<Data>.Continuation?>(nil)
+
+    /// Drives the receive → dispatch pipeline for a connection. Centralizes the
+    /// logic that previously lived (duplicated, and subtly divergent) in every
+    /// transport's `dispatchReceivedMessage` / `handleReceivedMessage`.
+    ///
+    /// Design guarantees:
+    /// - **Responses route inline.** `deliverToPendingRequest` runs on the drain
+    ///   loop itself, so a response is never queued behind handler execution.
+    ///   This is what prevents a nested round trip (a handler awaiting a reply
+    ///   over the same connection) from deadlocking the loop.
+    /// - **Fire-and-forget handlers preserve order.** They run on a serial tail
+    ///   so state-sync pushes are applied in the order they were sent.
+    /// - **Response-producing handlers run concurrently.** A slow handler can no
+    ///   longer head-of-line block unrelated requests; each reply is routed by
+    ///   its nonce.
+    /// - **Unknown handler / handler throw replies with an error envelope** when
+    ///   (and only when) the sender carries a nonce, i.e. is awaiting a response.
+    ///   That unblocks the caller instead of leaving it to hang on a `nil`
+    ///   timeout, while staying silent for fire-and-forget to avoid an error
+    ///   ping-pong.
+    ///
+    /// - Parameter rawWriter: Performs the actual on-wire write for replies.
+    ///   Framing (`\nOK`) and send-serialization are added by `send(data:writer:)`.
+    func beginDispatch(rawWriter: @escaping @Sendable (Data) async throws -> Void) {
+        let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .unbounded)
+        dispatchContinuation.withLock { existing in
+            existing?.finish()
+            existing = continuation
+        }
+        let task = Task { [weak self] in
+            for await data in stream {
+                guard let self else { return }
+                self.dispatchReceived(data, rawWriter: rawWriter)
+            }
+        }
+        dispatchTask.withLock { existing in
+            existing?.cancel()
+            existing = task
+        }
+    }
+
+    private func dispatchReceived(_ data: Data, rawWriter: @escaping @Sendable (Data) async throws -> Void) {
+        let requestData: RuntimeRequestData
+        do {
+            requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
+        } catch {
+            // Envelope decode failure → no identifier, no safe way to route an
+            // error response. Swallow rather than echo, otherwise both peers
+            // loop on each other's malformed errors.
+            #log(.error, "Envelope decode failed, swallowing to avoid ping-pong: \(error, privacy: .public)")
+            return
+        }
+
+        // Route by nonce when present (new wire form), fall back to identifier
+        // for legacy peers. Responses are delivered inline so handler execution
+        // never blocks them.
+        let routingKey = requestData.nonce ?? requestData.identifier
+        if deliverToPendingRequest(routingKey: routingKey, data: data) {
+            return
+        }
+
+        guard let handler = handler(for: requestData.identifier) else {
+            if requestData.nonce != nil {
+                #log(.error, "No handler for: \(requestData.identifier, privacy: .public); replying with error so the caller doesn't hang")
+                sendErrorReply(for: requestData, message: "No handler registered for \(requestData.identifier)", rawWriter: rawWriter)
+            } else {
+                #log(.default, "No handler for fire-and-forget: \(requestData.identifier, privacy: .public)")
+            }
+            return
+        }
+
+        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
+        if handler.responseType == RuntimeMessageNull.self {
+            // Fire-and-forget: preserve submission order on the serial tail.
+            enqueueOrdered { [weak self] in
+                do {
+                    _ = try await handler.closure(requestData.data)
+                } catch {
+                    self?.logHandlerFailure(requestData.identifier, error: error)
+                }
+            }
+        } else {
+            // Response-producing: run concurrently so a slow handler doesn't
+            // head-of-line block other in-flight requests.
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let responseData = try await handler.closure(requestData.data)
+                    let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData, nonce: requestData.nonce)
+                    let encoded = try JSONEncoder().encode(response)
+                    try await self.send(data: encoded, writer: rawWriter)
+                } catch {
+                    self.logHandlerFailure(requestData.identifier, error: error)
+                    self.sendErrorReply(for: requestData, message: "\(error)", rawWriter: rawWriter)
+                }
+            }
+        }
+    }
+
+    /// Appends `work` to the serial fire-and-forget tail, preserving order.
+    private func enqueueOrdered(_ work: @escaping @Sendable () async -> Void) {
+        orderedHandlerTail.withLock { tail in
+            let previous = tail
+            tail = Task {
+                await previous.value
+                await work()
+            }
+        }
+    }
+
+    /// Sends a nonce-routed error envelope so the peer's awaiting `sendRequest`
+    /// resolves with the failure. No-op when the sender didn't supply a nonce
+    /// (fire-and-forget) — replying there would risk an error ping-pong since
+    /// the peer has no pending request to absorb it.
+    private func sendErrorReply(for requestData: RuntimeRequestData, message: String, rawWriter: @escaping @Sendable (Data) async throws -> Void) {
+        guard requestData.nonce != nil else { return }
+        Task { [weak self] in
+            guard let self,
+                  let payload = try? JSONEncoder().encode(RuntimeNetworkRequestError(message: message)) else { return }
+            let envelope = RuntimeRequestData(identifier: requestData.identifier, data: payload, nonce: requestData.nonce, isError: true)
+            guard let encoded = try? JSONEncoder().encode(envelope) else { return }
+            do {
+                try await self.send(data: encoded, writer: rawWriter)
+            } catch {
+                #log(.error, "Failed to send error reply for \(requestData.identifier, privacy: .public): \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    private func logHandlerFailure(_ identifier: String, error: any Error) {
+        #log(.error, "Handler \(identifier, privacy: .public) failed: \(String(describing: error), privacy: .public)")
     }
 }
 

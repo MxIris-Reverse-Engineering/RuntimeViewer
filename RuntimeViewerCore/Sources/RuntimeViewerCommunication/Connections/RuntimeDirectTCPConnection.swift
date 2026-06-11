@@ -81,6 +81,7 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
     private let messageChannel = RuntimeMessageChannel()
 
     private var isStarted = false
+    private var waitingTimeoutWork: DispatchWorkItem?
     private let queue = DispatchQueue(label: "com.RuntimeViewer.RuntimeViewerCommunication.RuntimeDirectTCPConnection")
 
     // MARK: - Initialization
@@ -137,6 +138,8 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
         guard isStarted else { return }
         isStarted = false
 
+        waitingTimeoutWork?.cancel()
+        waitingTimeoutWork = nil
         connection.stateUpdateHandler = nil
         connection.cancel()
         messageChannel.finishReceiving()
@@ -149,6 +152,8 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
         guard isStarted else { return }
         isStarted = false
 
+        waitingTimeoutWork?.cancel()
+        waitingTimeoutWork = nil
         connection.stateUpdateHandler = nil
         connection.cancel()
         messageChannel.finishReceiving()
@@ -172,11 +177,26 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
             #log(.debug, "Connection is setup")
         case .waiting(let error):
             #log(.default, "Connection is waiting: \(error, privacy: .public)")
-            stop(with: .networkError("Connection waiting: \(error.localizedDescription)"))
+            // `.waiting` is transient: DNS resolution, route changes, and — even
+            // for a direct LAN IP on iOS 14+ — the local-network permission
+            // prompt all surface here before the connection recovers. Tear down
+            // only if it fails to recover within a tolerance window (matching
+            // `RuntimeNetworkConnection`), not on the first `.waiting`.
+            if waitingTimeoutWork == nil {
+                let work = DispatchWorkItem { [weak self] in
+                    guard let self, self.isStarted else { return }
+                    #log(.error, "Connection waiting timeout exceeded, stopping")
+                    self.stop(with: .networkError("Connection waiting timeout: \(error.localizedDescription)"))
+                }
+                waitingTimeoutWork = work
+                queue.asyncAfter(deadline: .now() + 10, execute: work)
+            }
         case .preparing:
             #log(.debug, "Connection is preparing")
         case .ready:
             #log(.info, "Connection is ready")
+            waitingTimeoutWork?.cancel()
+            waitingTimeoutWork = nil
             stateSubject.send(.connected)
         case .failed(let error):
             #log(.error, "Connection failed: \(error, privacy: .public)")
@@ -198,79 +218,37 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
                 #log(.error, "Receive error: \(error, privacy: .public)")
                 self.messageChannel.finishReceiving(throwing: error)
                 self.stop()
-            } else if isComplete {
+                return
+            }
+
+            // Consume any delivered bytes BEFORE acting on `isComplete`.
+            // NWConnection can deliver the peer's final chunk together with the
+            // FIN (`data` non-nil and `isComplete == true` in the same callback).
+            // Checking `isComplete` first would drop that trailing message.
+            if let data, !data.isEmpty {
+                #log(.debug, "Received \(data.count, privacy: .public) bytes")
+                self.messageChannel.appendReceivedData(data)
+            }
+
+            if isComplete {
                 #log(.debug, "Receive complete")
                 self.messageChannel.finishReceiving()
                 self.stop()
-            } else if let data {
-                #log(.debug, "Received \(data.count, privacy: .public) bytes")
-                self.messageChannel.appendReceivedData(data)
+            } else {
                 self.setupReceiver()
             }
         }
     }
 
     private func observeIncomingMessages() {
-        Task {
-            do {
-                guard let stream = messageChannel.receivedMessages() else { return }
-                for try await data in stream {
-                    await dispatchReceivedMessage(data)
-                }
-            } catch {
-                #log(.error, "Message observation error: \(error, privacy: .public)")
-            }
-        }
-    }
-
-    /// Dispatch one received envelope. Splits the failure surface into two
-    /// arms so a peer's bare error never feeds back into our own bare error,
-    /// which would otherwise ping-pong on the shared `sendSemaphore` and
-    /// starve real traffic. See Changelogs/v2.1.0-beta.4.md.
-    private func dispatchReceivedMessage(_ data: Data) async {
-        let requestData: RuntimeRequestData
-        do {
-            requestData = try JSONDecoder().decode(RuntimeRequestData.self, from: data)
-        } catch {
-            // Envelope decode failure → no identifier, no safe way to
-            // route an error response. Swallow rather than echo, otherwise
-            // both peers loop on each other's malformed errors.
-            #log(.error, "Envelope decode failed, swallowing to avoid ping-pong: \(error, privacy: .public)")
-            return
-        }
-
-        // Route by nonce when present (new wire form), fall back to
-        // identifier for legacy peers.
-        let routingKey = requestData.nonce ?? requestData.identifier
-        if messageChannel.deliverToPendingRequest(routingKey: routingKey, data: data) {
-            return
-        }
-
-        guard let handler = messageChannel.handler(for: requestData.identifier) else {
-            #log(.default, "No handler for: \(requestData.identifier, privacy: .public)")
-            return
-        }
-
-        #log(.debug, "Handling request: \(requestData.identifier, privacy: .public)")
-        do {
-            let responseData = try await handler.closure(requestData.data)
-            if handler.responseType != RuntimeMessageNull.self {
-                // Echo the request's nonce so concurrent same-`identifier`
-                // round trips route their responses without collision.
-                let response = RuntimeRequestData(identifier: requestData.identifier, data: responseData, nonce: requestData.nonce)
-                try await send(requestData: response)
-            }
-        } catch {
-            // Handler-execution failure → wrap in
-            // `RuntimeNetworkRequestError` and emit via the same
-            // nonce-stamped envelope used by successful responses so
-            // the peer's `sendRequest` finds the matching pending entry.
-            #log(.error, "Handler \(requestData.identifier, privacy: .public) failed: \(error, privacy: .public)")
-            let errorPayload = RuntimeNetworkRequestError(message: "\(error)")
-            if let errorData = try? JSONEncoder().encode(errorPayload) {
-                let errorEnvelope = RuntimeRequestData(identifier: requestData.identifier, data: errorData, nonce: requestData.nonce)
-                try? await send(requestData: errorEnvelope)
-            }
+        // Dispatch is centralized in `RuntimeMessageChannel.beginDispatch`:
+        // responses route inline (no nested-round-trip deadlock), fire-and-forget
+        // handlers run in order, response-producing handlers run concurrently,
+        // and unknown-handler / handler-throw replies surface as errors instead
+        // of hanging the caller.
+        messageChannel.beginDispatch { [weak self] data in
+            guard let self else { throw RuntimeMessageChannelError.notConnected }
+            try await self.sendRaw(data: data)
         }
     }
 
@@ -279,14 +257,16 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
     func send(requestData: RuntimeRequestData) async throws {
         let data = try JSONEncoder().encode(requestData)
         try await messageChannel.send(data: data) { [weak self] dataToSend in
-            try await self?.sendRaw(data: dataToSend)
+            guard let self else { throw RuntimeMessageChannelError.notConnected }
+            try await self.sendRaw(data: dataToSend)
         }
         #log(.debug, "Sent request: \(requestData.identifier, privacy: .public)")
     }
 
     func send<Response: Codable>(requestData: RuntimeRequestData, timeout: TimeInterval?) async throws -> Response {
         try await messageChannel.sendRequest(requestData: requestData, timeout: timeout) { [weak self] data in
-            try await self?.sendRaw(data: data)
+            guard let self else { throw RuntimeMessageChannelError.notConnected }
+            try await self.sendRaw(data: data)
         }
     }
 
@@ -622,7 +602,17 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
         #log(.info, "Restarting direct TCP listener on \(self.host, privacy: .public):\(self.port, privacy: .public)...")
         ownStateSubject.send(.connecting)
 
-        let newListener = try NWListener(using: listenerParameters, on: NWEndpoint.Port(rawValue: self.port)!)
+        // Re-bind the SAME port the client already knows. If the port was never
+        // assigned (listener never reached `.ready`), there's nothing to restart
+        // on — re-binding port 0 would silently move to a new random port and
+        // strand the client's saved address, so bail instead.
+        guard self.port != 0, let restartPort = NWEndpoint.Port(rawValue: self.port) else {
+            #log(.error, "Cannot restart direct TCP listener: no assigned port")
+            ownStateSubject.send(.disconnected(error: .networkError("Listener has no assigned port to restart on")))
+            return
+        }
+
+        let newListener = try NWListener(using: listenerParameters, on: restartPort)
         self.listener = newListener
 
         newListener.stateUpdateHandler = { [weak self] state in
@@ -687,42 +677,54 @@ final class RuntimeDirectTCPServerConnection: RuntimeConnectionBase<RuntimeDirec
         stop()
     }
 
-    /// Gets the local IP address of the device.
+    /// Gets the local IPv4 address other devices can reach this server on.
+    ///
+    /// Prefers the primary Wi-Fi/Ethernet interfaces (`en0`/`en1`) but falls
+    /// back to any other up, non-loopback IPv4 interface — USB/Thunderbolt
+    /// bridges, tethering, and VPNs all surface under different names (`en2+`,
+    /// `bridge0`, `utun*`, …), and without the fallback the server would report
+    /// `127.0.0.1` and a scanned/typed connection from another device fails.
     private static func getLocalIPAddress() -> String? {
-        var address: String?
-
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
             return nil
         }
-
         defer { freeifaddrs(ifaddr) }
+
+        var preferredAddress: String?
+        var fallbackAddress: String?
 
         for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
             let interface = ptr.pointee
-            let addrFamily = interface.ifa_addr.pointee.sa_family
+            guard interface.ifa_addr.pointee.sa_family == UInt8(AF_INET) else { continue }
 
-            if addrFamily == UInt8(AF_INET) {
-                let name = String(cString: interface.ifa_name)
+            // Skip interfaces that are down or are the loopback.
+            let flags = Int32(interface.ifa_flags)
+            guard (flags & IFF_UP) == IFF_UP, (flags & IFF_LOOPBACK) == 0 else { continue }
 
-                if name == "en0" || name == "en1" {
-                    var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                    getnameinfo(
-                        interface.ifa_addr,
-                        socklen_t(interface.ifa_addr.pointee.sa_len),
-                        &hostname,
-                        socklen_t(hostname.count),
-                        nil,
-                        0,
-                        NI_NUMERICHOST
-                    )
-                    address = String(cString: hostname)
-                    break
-                }
+            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            guard getnameinfo(
+                interface.ifa_addr,
+                socklen_t(interface.ifa_addr.pointee.sa_len),
+                &hostname,
+                socklen_t(hostname.count),
+                nil,
+                0,
+                NI_NUMERICHOST
+            ) == 0 else { continue }
+
+            let name = String(cString: interface.ifa_name)
+            let address = String(cString: hostname)
+
+            if name == "en0" || name == "en1" {
+                preferredAddress = address
+                break
+            } else if fallbackAddress == nil {
+                fallbackAddress = address
             }
         }
 
-        return address
+        return preferredAddress ?? fallbackAddress
     }
 }
 
