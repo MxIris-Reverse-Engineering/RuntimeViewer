@@ -114,6 +114,10 @@ final class GenerationOptionsViewController: UXKitViewController<GenerationOptio
                     let itemStack = HStackView(spacing: 8) {
                         titleLabel
                         segmentedControl
+                    }.then {
+                        // NSStackView's default horizontal hugging (~250) loses to the outer
+                        // stack's cross-axis stretching, leaving this row's width ambiguous.
+                        $0.setHuggingPriority(.defaultHigh, for: .horizontal)
                     }
                     stackView.addArrangedSubview(itemStack)
                     segmentedControlBindings.append((control: segmentedControl, selectedIndex: selectedIndex, mutation: mutation))

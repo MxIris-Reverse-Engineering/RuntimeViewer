@@ -75,7 +75,7 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
             return showTypePicker(for: parameterPath, rows: rows)
         case .didSelectCandidate(let parameterPath, let candidate):
             specializationViewModel?.applyArgumentChange(path: parameterPath, candidate: candidate)
-            return .dismiss()
+            return .closeUXPopover()
         }
     }
 
@@ -108,14 +108,12 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
             return .none()
         }
         let pickerViewController = makeTypePicker(parameterPath: parameterPath, rows: rows)
-        return .present(
+        return .uxPopover(
             pickerViewController,
-            mode: .asPopover(
-                relativeToRect: anchor.bounds,
-                ofView: anchor,
-                preferredEdge: .minY,
-                behavior: .transient
-            )
+            relativeTo: anchor.bounds,
+            of: anchor,
+            preferredEdge: .minY,
+            behavior: .transient
         )
     }
 
