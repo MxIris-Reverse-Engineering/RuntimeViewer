@@ -3,7 +3,7 @@
 import Foundation
 import FoundationToolbox
 import Combine
-public import HelperCommunication
+import HelperCommunication
 import HelperPeer
 import HelperClient
 import InjectedEndpointRegistryServiceInterface
