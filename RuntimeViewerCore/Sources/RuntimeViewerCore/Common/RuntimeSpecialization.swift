@@ -46,6 +46,7 @@ extension RuntimeSpecializationRequest {
         }
     }
 
+    @Equatable
     public struct Candidate: Codable, Hashable, Sendable, ComparableBuildable {
         /// Stable identity used to round-trip a selection back to the
         /// originating upstream `SpecializationRequest.Candidate` on the engine
