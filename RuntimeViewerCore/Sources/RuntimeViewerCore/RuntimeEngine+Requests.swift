@@ -74,11 +74,15 @@ extension RuntimeEngine {
 // MARK: - Objects & interfaces
 
 extension RuntimeEngine {
-    struct ObjectsInImageRequest: RuntimeEngineRequest {
+    struct ObjectsInImageRequest: RuntimeEngineProgressRequest {
         let image: String
         static var commandName: String { CommandNames.runtimeObjectsInImage.commandName }
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeObject] {
             try await engine._objects(in: image)
+        }
+
+        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
+            try await engine._objects(in: image, reportProgress: reportProgress)
         }
     }
 

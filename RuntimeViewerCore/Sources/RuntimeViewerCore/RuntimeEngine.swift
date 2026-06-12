@@ -73,7 +73,10 @@ public actor RuntimeEngine {
         case memberAddresses
         case engineList
         case engineListChanged
-        case objectsLoadingProgress
+        /// Shared side channel for `RuntimeEngineProgressRequest` pushes.
+        /// Carries `RuntimeEngineProgressPush` frames routed by token, so a
+        /// single command name serves every progress-bearing request type.
+        case progressEvent
         case specializationRequest
         case specializationRequestForCandidate
         case runtimePreflight
@@ -195,7 +198,13 @@ public actor RuntimeEngine {
 
     private nonisolated let imageDidLoadSubject = PassthroughSubject<String, Never>()
 
-    private nonisolated let objectsLoadingProgressSubject = PassthroughSubject<RuntimeObjectsLoadingProgress, Never>()
+    /// In-flight progress routes keyed by the per-round-trip token minted in
+    /// `dispatch(_:onProgress:)`. Inbound `progressEvent` pushes look up
+    /// their token here and forward the decoded payload to the awaiting
+    /// call's `onProgress` closure. Token routing (rather than a shared
+    /// subject) keeps concurrent progress-bearing requests from
+    /// cross-talking.
+    private var progressRoutes: [String: @Sendable (Data) async -> Void] = [:]
 
     let objcSectionFactory: RuntimeObjCSectionFactory
 
@@ -345,21 +354,10 @@ public actor RuntimeEngine {
         }
         // Shared registry — same set of commands that
         // `RuntimeEngineProxyServer.setupRequestHandlers()` installs.
+        // Progress-bearing commands (`runtimeObjectsInImage`) are included:
+        // `registerProgress` relays their progress pushes automatically, so
+        // no server-only override is needed here anymore.
         Self.registerSharedHandlers(on: connection, engine: self)
-
-        // Server-only override: progress-bearing variant of
-        // `runtimeObjectsInImage`. Re-registering after the shared handler is
-        // intentional — the last `setMessageHandler` wins.
-        //
-        // The payload MUST stay `ObjectsInImageRequest` to match the wire form
-        // the client's `dispatch(ObjectsInImageRequest:)` and
-        // `_remoteObjectsWithProgress` both send, as well as the shared handler
-        // this overrides. Decoding it as a bare `String` here would fail every
-        // structured `objects(in:)` request with NSCocoaErrorDomain 4864.
-        connection.setMessageHandler(name: CommandNames.runtimeObjectsInImage.commandName) { [weak self] (request: ObjectsInImageRequest) -> [RuntimeObject] in
-            guard let self else { throw RequestError.senderConnectionIsLose }
-            return try await _serverObjectsWithProgress(in: request.image)
-        }
 
         // Server-only: manager-layer engine list lookup. Not part of the
         // shared registry because `RuntimeEngineProxyServer` runs below the
@@ -383,7 +381,9 @@ public actor RuntimeEngine {
         setMessageHandlerBinding(forName: .imageDidLoad) { (engine: RuntimeEngine, path: String) in
             engine.imageDidLoadSubject.send(path)
         }
-        setMessageHandlerBinding(forName: .objectsLoadingProgress) { $0.objectsLoadingProgressSubject.send($1) }
+        setMessageHandlerBinding(forName: .progressEvent) { (engine: RuntimeEngine, push: RuntimeEngineProgressPush) in
+            await engine.routeProgressPush(push)
+        }
         setMessageHandlerBinding(forName: .engineListChanged) { (engine: RuntimeEngine, descriptors: [RuntimeRemoteEngineDescriptor]) in
             #log(.debug, "[EngineMirroring] engineListChanged received: \(descriptors.count, privacy: .public) descriptors, handler set: \(RuntimeEngine.engineListChangedHandler != nil, privacy: .public)")
             await RuntimeEngine.engineListChangedHandler?(descriptors, engine)
@@ -619,6 +619,62 @@ extension RuntimeEngine {
         return try await request.perform(on: self)
     }
 
+    /// Progress-request overload of `dispatch(_:)` with no progress listener.
+    /// Exists so plain call sites stay wire-correct: a progress request must
+    /// always ship the `RuntimeEngineProgressEnvelope` (here with a `nil`
+    /// token) because the peer's handler decodes the envelope, not the bare
+    /// request. Being more constrained than the base overload, Swift selects
+    /// this one automatically for any `RuntimeEngineProgressRequest` conformer.
+    func dispatch<R: RuntimeEngineProgressRequest>(_ request: R) async throws -> R.Response {
+        try await dispatch(request, onProgress: nil)
+    }
+
+    /// Dispatch a progress-reporting request.
+    ///
+    /// Mirrors `dispatch(_:)` with a progress side channel. On a client engine
+    /// the request is wrapped in a `RuntimeEngineProgressEnvelope` carrying a
+    /// freshly minted token; the peer echoes that token on every
+    /// `progressEvent` push, and `routeProgressPush` forwards the decoded
+    /// payloads to `onProgress` until the response resolves. Locally the
+    /// request's `perform(on:reportProgress:)` runs with `onProgress` wired
+    /// straight through. Passing `nil` skips all progress machinery on both
+    /// sides.
+    func dispatch<R: RuntimeEngineProgressRequest>(
+        _ request: R,
+        onProgress: (@Sendable (R.Progress) async -> Void)?
+    ) async throws -> R.Response {
+        if let remoteRole = source.remoteRole, remoteRole.isClient {
+            guard let connection else { throw RequestError.senderConnectionIsLose }
+            guard let onProgress else {
+                return try await connection.sendMessage(
+                    name: R.commandName,
+                    request: RuntimeEngineProgressEnvelope(progressToken: nil, request: request)
+                )
+            }
+            let token = UUID().uuidString
+            progressRoutes[token] = { payload in
+                guard let progress = try? JSONDecoder().decode(R.Progress.self, from: payload) else { return }
+                await onProgress(progress)
+            }
+            defer { progressRoutes.removeValue(forKey: token) }
+            return try await connection.sendMessage(
+                name: R.commandName,
+                request: RuntimeEngineProgressEnvelope(progressToken: token, request: request)
+            )
+        }
+        return try await request.perform(on: self, reportProgress: onProgress ?? { _ in })
+    }
+
+    /// Routes an inbound `progressEvent` push to the in-flight `dispatch`
+    /// call it belongs to. Unknown tokens are dropped silently — the request
+    /// already completed, or the push raced its own response. Awaiting the
+    /// route inline (rather than detaching a `Task`) preserves push ordering:
+    /// fire-and-forget handlers run on the message channel's serial tail.
+    func routeProgressPush(_ push: RuntimeEngineProgressPush) async {
+        guard let route = progressRoutes[push.token] else { return }
+        await route(push.payload)
+    }
+
     public func isImageLoaded(path: String) async throws -> Bool {
         try await dispatch(IsImageLoadedRequest(path: path))
     }
@@ -658,7 +714,7 @@ extension RuntimeEngine {
     }
 
     public func objects(in image: String) async throws -> [RuntimeObject] {
-        try await dispatch(ObjectsInImageRequest(image: image))
+        try await dispatch(ObjectsInImageRequest(image: image), onProgress: nil)
     }
 
     public func objectsWithProgress(in image: String) -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error> {
@@ -669,10 +725,8 @@ extension RuntimeEngine {
                     return
                 }
                 do {
-                    let objects: [RuntimeObject] = if let remoteRole = source.remoteRole, remoteRole.isClient {
-                        try await _remoteObjectsWithProgress(in: image, continuation: continuation)
-                    } else {
-                        try await _localObjectsWithProgress(in: image, continuation: continuation)
+                    let objects = try await dispatch(ObjectsInImageRequest(image: image)) { progress in
+                        continuation.yield(.progress(progress))
                     }
                     continuation.yield(.completed(objects))
                     continuation.finish()
@@ -680,6 +734,33 @@ extension RuntimeEngine {
                     continuation.finish(throwing: error)
                 }
             }
+        }
+    }
+
+    /// Local arm of `ObjectsInImageRequest`'s progress-bearing `perform`.
+    /// Bridges the continuation-based indexing internals (section factories
+    /// take a `LoadingEventContinuation`) to the closure-based
+    /// `RuntimeEngineProgressRequest` reporting surface. The pump task awaits
+    /// `reportProgress` per event, preserving order; it is drained before
+    /// returning so no progress event can trail the response on the wire.
+    func _objects(in image: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
+        let (stream, continuation) = AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.makeStream()
+        let pump = Task {
+            for try await event in stream {
+                if case .progress(let progress) = event {
+                    await reportProgress(progress)
+                }
+            }
+        }
+        do {
+            let objects = try await _localObjectsWithProgress(in: image, continuation: continuation)
+            continuation.finish()
+            _ = await pump.result
+            return objects
+        } catch {
+            continuation.finish()
+            _ = await pump.result
+            throw error
         }
     }
 
@@ -698,35 +779,6 @@ extension RuntimeEngine {
         }
         #log(.debug, "Found \(objcObjects.count, privacy: .public) ObjC and \(swiftObjects.count, privacy: .public) Swift objects with progress")
         return objcObjects + swiftObjects
-    }
-
-    private func _serverObjectsWithProgress(in image: String) async throws -> [RuntimeObject] {
-        var result: [RuntimeObject] = []
-        for try await event in objectsWithProgress(in: image) {
-            switch event {
-            case .progress(let progress):
-                try? await connection?.sendMessage(name: .objectsLoadingProgress, request: progress)
-            case .completed(let objects):
-                result = objects
-            }
-        }
-        return result
-    }
-
-    private func _remoteObjectsWithProgress(
-        in image: String,
-        continuation: AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation,
-    ) async throws -> [RuntimeObject] {
-        guard let connection else { throw RequestError.senderConnectionIsLose }
-        let cancellable = objectsLoadingProgressSubject.sink { progress in
-            continuation.yield(RuntimeObjectsLoadingEvent.progress(progress))
-        }
-        defer { cancellable.cancel() }
-        // Send the structured `ObjectsInImageRequest` (not a bare `String`) so the
-        // wire form matches the server's `runtimeObjectsInImage` handler, which
-        // decodes `ObjectsInImageRequest`. Keeping these symmetric is what lets
-        // both `objects(in:)` and `objectsWithProgress(in:)` hit the same server arm.
-        return try await connection.sendMessage(name: .runtimeObjectsInImage, request: ObjectsInImageRequest(image: image))
     }
 
     public func hierarchy(for object: RuntimeObject) async throws -> [String] {

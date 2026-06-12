@@ -132,7 +132,10 @@ public actor RuntimeEngineProxyServer {
         // arm installs. Adding a new shared command in
         // `RuntimeEngine.registerSharedHandlers(on:engine:)` automatically
         // takes effect here too, eliminating the parallel-edit hazard that
-        // used to bite us every time a new command landed.
+        // used to bite us every time a new command landed. Progress-bearing
+        // commands need no proxy-specific code either: `registerProgress`
+        // relays their progress pushes back to the requesting peer, including
+        // across chained client engines (e.g. the Mac Catalyst helper).
         RuntimeEngine.registerSharedHandlers(on: connection, engine: engine)
 
         #if canImport(AppKit)

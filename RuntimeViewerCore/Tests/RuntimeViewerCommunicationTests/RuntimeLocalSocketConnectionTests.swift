@@ -475,10 +475,10 @@ struct RuntimeLocalSocketRapidTests {
 /// while `observeIncomingMessages` used `RuntimeMessageNull.self` as its "don't
 /// reply" sentinel. The two types were never equal, so every fire-and-forget
 /// message triggered a `send(requestData:)` reply. In the
-/// `runtimeObjectsInImage` → `objectsLoadingProgress` push scenario this
-/// reply contended for the same `sendSemaphore` the in-flight `sendRequest`
-/// was holding, permanently wedging the dispatch loop and the originating
-/// request.
+/// `runtimeObjectsInImage` → progress-push scenario (now the generic
+/// `progressEvent` channel) this reply contended for the same `sendSemaphore`
+/// the in-flight `sendRequest` was holding, permanently wedging the dispatch
+/// loop and the originating request.
 @Suite("RuntimeLocalSocket No-Response Handler Regression Tests", .serialized)
 struct RuntimeLocalSocketNoResponseHandlerTests {
 
@@ -505,7 +505,7 @@ struct RuntimeLocalSocketNoResponseHandlerTests {
 
         // Server "compute" handler pushes N fire-and-forget "progress" messages
         // back to the client *before* returning the real response, mirroring
-        // `_serverObjectsWithProgress`.
+        // the engine's `progressEvent` push channel.
         server.setMessageHandler(name: "compute") { [weak server] (_: String) -> String in
             guard let server else { return "cancelled" }
             for progressIndex in 0 ..< pushCount {
