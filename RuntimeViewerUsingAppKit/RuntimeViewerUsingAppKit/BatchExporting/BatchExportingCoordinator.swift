@@ -108,7 +108,7 @@ final class BatchExportingCoordinator: SceneCoordinator<ExportingRoute, Exportin
             panel.canCreateDirectories = true
             panel.canChooseDirectories = true
             panel.canChooseFiles = false
-            panel.beginSheetModal(for: windowController.contentWindow) { [weak self, weak panel] result in
+            panel.beginSheetModal(for: rootWindowController.contentWindow) { [weak self, weak panel] result in
                 guard result == .OK, let self, let panel, let url = panel.url else { return }
                 exportingState.destinationURL = url
                 contextTrigger(.next)

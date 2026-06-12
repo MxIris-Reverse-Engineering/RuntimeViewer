@@ -50,7 +50,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             contentCoordinator = ContentCoordinator(documentState: documentState)
             inspectorCoordinator = InspectorCoordinator(documentState: documentState)
             inspectorCoordinator.delegate = self
-            windowController.setupBindings(for: viewModel)
+            rootWindowController.setupBindings(for: viewModel)
 
             // Subscribe with the fresh sub-coordinators in place.
             documentState.routeSignal
@@ -58,7 +58,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 .disposed(by: routeDisposeBag)
 
             return .multiple(
-                .show(windowController.splitViewController),
+                .show(rootWindowController.splitViewController),
                 .set(sidebar: sidebarCoordinator, content: contentCoordinator, inspector: inspectorCoordinator),
                 .route(on: sidebarCoordinator, to: .root),
                 .route(on: contentCoordinator, to: .placeholder),
@@ -113,7 +113,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
     override func completeTransition(for route: MainRoute) {
         switch route {
         case .main:
-            windowController.splitViewController.setupSplitViewItems()
+            rootWindowController.splitViewController.setupSplitViewItems()
         default:
             break
         }

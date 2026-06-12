@@ -139,7 +139,7 @@ extension Transition where ViewController: ExportingViewController {
         }
     }
 
-    static func set(_ presentables: [Presentable]) -> Self {
+    static func set(_ presentables: [ViewPresentable]) -> Self {
         Self(presentables: presentables) { windowController, viewController, options, completion in
             guard let viewController = viewController ?? ((windowController as? NSWindowController)?.contentViewController as? ViewController) else {
                 completion?()
