@@ -3,9 +3,12 @@
 
 SMPrivilegedExecutable = $(RUNTIME_VIEWER_DEBUG_SM_PRIVILEGED_EXECUTABLE)
 
-// LaunchDaemon helper identity for Debug / Debug-arm64e builds. Must stay in sync with
-// the DEBUG branch of RuntimeViewerMachServiceName (RuntimeRequestResponse.swift). Drives
-// both the merged service target's product name and the build-time-generated launchd plist.
+// LaunchDaemon helper identity for Debug builds. (Debug-arm64e overrides this in the app
+// target's Debug-arm64e build settings with dev.arm64e.mxiris.runtimeviewer.service.)
+// Single build-time source consumed by the merged service target's PRODUCT_NAME, the
+// build-time-generated launchd plist (name / Label / MachServices / EnvironmentVariables),
+// and the app Info.plist RuntimeViewerServiceName key. At runtime RuntimeViewerMachServiceName
+// reads it back: launchd env for the daemon, Info.plist for the app.
 RUNTIME_VIEWER_SERVICE_NAME = dev.mxiris.runtimeviewer.service
 
 RUNTIME_VIEWER_BUILD_DATE = unknown

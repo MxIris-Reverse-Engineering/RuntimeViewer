@@ -784,9 +784,9 @@
 			productReference = E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */;
 			productType = "com.apple.product-type.application";
 		};
-		E9A9CCDD2F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */ = {
+		E9A9CCDD2F5D880400A10DD3 /* com.mxiris.runtimeviewer.service */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E9A9CCE42F5D880400A10DD3 /* Build configuration list for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */;
+			buildConfigurationList = E9A9CCE42F5D880400A10DD3 /* Build configuration list for PBXNativeTarget "com.mxiris.runtimeviewer.service" */;
 			buildPhases = (
 				E9A9CCDF2F5D880400A10DD3 /* Sources */,
 				E9A9CCE12F5D880400A10DD3 /* Frameworks */,
@@ -794,7 +794,7 @@
 			);
 			buildRules = (
 			);
-			name = dev.mxiris.runtimeviewer.service;
+			name = com.mxiris.runtimeviewer.service;
 			packageProductDependencies = (
 				E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */,
 			);
@@ -889,7 +889,7 @@
 				E947C3662C2A4D0400296B2E /* RuntimeViewerCatalystHelper */,
 				E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */,
 				E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
-				E9A9CCDD2F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */,
+				E9A9CCDD2F5D880400A10DD3 /* com.mxiris.runtimeviewer.service */,
 			);
 		};
 /* End PBXProject section */
@@ -978,7 +978,7 @@
 			alwaysOutOfDate = 1;
 			name = "Generate LaunchDaemon plist";
 			shellPath = /bin/sh;
-			shellScript = "set -e\nLAUNCHD_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons\"\nPLIST=\"${LAUNCHD_DIR}/${RUNTIME_VIEWER_SERVICE_NAME}.plist\"\nmkdir -p \"${LAUNCHD_DIR}\"\nrm -f \"${PLIST}\"\nprintf '%s\\n' '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' '<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">' '<plist version=\"1.0\"><dict/></plist>' > \"${PLIST}\"\nPB=/usr/libexec/PlistBuddy\n\"${PB}\" -c \"Add :Label string ${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\n\"${PB}\" -c \"Add :BundleProgram string Contents/Library/LaunchServices/${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\n\"${PB}\" -c \"Add :KeepAlive bool true\" \"${PLIST}\"\n\"${PB}\" -c \"Add :MachServices dict\" \"${PLIST}\"\n\"${PB}\" -c \"Add :MachServices:${RUNTIME_VIEWER_SERVICE_NAME} bool true\" \"${PLIST}\"\necho \"Generated LaunchDaemon plist: ${PLIST}\"\n";
+			shellScript = "set -e\nLAUNCHD_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons\"\nPLIST=\"${LAUNCHD_DIR}/${RUNTIME_VIEWER_SERVICE_NAME}.plist\"\nmkdir -p \"${LAUNCHD_DIR}\"\nrm -f \"${PLIST}\"\nprintf '%s\\n' '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' '<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">' '<plist version=\"1.0\"><dict/></plist>' > \"${PLIST}\"\nPB=/usr/libexec/PlistBuddy\n\"${PB}\" -c \"Add :Label string ${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\n\"${PB}\" -c \"Add :BundleProgram string Contents/Library/LaunchServices/${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\n\"${PB}\" -c \"Add :KeepAlive bool true\" \"${PLIST}\"\n\"${PB}\" -c \"Add :MachServices dict\" \"${PLIST}\"\n\"${PB}\" -c \"Add :MachServices:${RUNTIME_VIEWER_SERVICE_NAME} bool true\" \"${PLIST}\"\n\"${PB}\" -c \"Add :EnvironmentVariables dict\" \"${PLIST}\"\n\"${PB}\" -c \"Add :EnvironmentVariables:RUNTIME_VIEWER_SERVICE_NAME string ${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\necho \"Generated LaunchDaemon plist: ${PLIST}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1119,7 +1119,7 @@
 		};
 		E9A9CCE92F5D882E00A10DD3 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = E9A9CCDD2F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */;
+			target = E9A9CCDD2F5D880400A10DD3 /* com.mxiris.runtimeviewer.service */;
 			targetProxy = E9A9CCE82F5D882E00A10DD3 /* PBXContainerItemProxy */;
 		};
 		E9C9E9D92C2D161000C4AA34 /* PBXTargetDependency */ = {
@@ -1583,8 +1583,9 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 2.1.0;
 				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER)";
-				PRODUCT_NAME = "RuntimeViewer-Debug";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_DEBUG_ARM64E_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "RuntimeViewer-Debug-arm64e";
+				RUNTIME_VIEWER_SERVICE_NAME = dev.arm64e.mxiris.runtimeviewer.service;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
@@ -1686,7 +1687,7 @@
 			};
 			name = "Debug-arm64e";
 		};
-		E9958CDB2FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */ = {
+		E9958CDB2FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -1694,7 +1695,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = dev.arm64e.mxiris.runtimeviewer.service;
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -1702,7 +1703,7 @@
 			};
 			name = "Debug-arm64e";
 		};
-		E9A9CCE52F5D880400A10DD3 /* Debug configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */ = {
+		E9A9CCE52F5D880400A10DD3 /* Debug configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -1710,7 +1711,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = dev.mxiris.runtimeviewer.service;
 				SKIP_INSTALL = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
@@ -1718,7 +1719,7 @@
 			};
 			name = Debug;
 		};
-		E9A9CCE62F5D880400A10DD3 /* Release configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */ = {
+		E9A9CCE62F5D880400A10DD3 /* Release configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
@@ -1856,12 +1857,12 @@
 			);
 			defaultConfigurationName = Release;
 		};
-		E9A9CCE42F5D880400A10DD3 /* Build configuration list for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */ = {
+		E9A9CCE42F5D880400A10DD3 /* Build configuration list for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				E9A9CCE52F5D880400A10DD3 /* Debug configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */,
-				E9958CDB2FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */,
-				E9A9CCE62F5D880400A10DD3 /* Release configuration for PBXNativeTarget "dev.mxiris.runtimeviewer.service" */,
+				E9A9CCE52F5D880400A10DD3 /* Debug configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */,
+				E9958CDB2FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */,
+				E9A9CCE62F5D880400A10DD3 /* Release configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */,
 			);
 			defaultConfigurationName = Release;
 		};

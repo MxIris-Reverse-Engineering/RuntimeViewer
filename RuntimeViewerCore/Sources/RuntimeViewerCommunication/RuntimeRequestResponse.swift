@@ -4,11 +4,28 @@ import OSLog
 public import HelperCommunication
 #endif
 
-#if DEBUG
-public let RuntimeViewerMachServiceName = "dev.mxiris.runtimeviewer.service"
-#else
-public let RuntimeViewerMachServiceName = "com.mxiris.runtimeviewer.service"
-#endif
+/// Mach service name shared by the app (client) and the helper daemon (server).
+///
+/// Resolved at runtime from a single build-time source (`RUNTIME_VIEWER_SERVICE_NAME`),
+/// so per-configuration variants (including Debug-arm64e) stay in sync without a
+/// compile flag — which cannot reach this SPM package anyway:
+/// - the daemon process receives it via its launchd plist `EnvironmentVariables`;
+/// - the app process reads it from its `Info.plist` (`RuntimeViewerServiceName`).
+/// The `#if DEBUG` values are only a fallback for contexts where neither is present
+/// (e.g. unit tests).
+public let RuntimeViewerMachServiceName: String = {
+    if let injected = ProcessInfo.processInfo.environment["RUNTIME_VIEWER_SERVICE_NAME"], !injected.isEmpty {
+        return injected
+    }
+    if let fromBundle = Bundle.main.object(forInfoDictionaryKey: "RuntimeViewerServiceName") as? String, !fromBundle.isEmpty {
+        return fromBundle
+    }
+    #if DEBUG
+    return "dev.mxiris.runtimeviewer.service"
+    #else
+    return "com.mxiris.runtimeviewer.service"
+    #endif
+}()
 
 /// Protocol version shared between the app and the helper service daemon.
 /// Bump this whenever the service binary changes in a way that requires reinstallation.

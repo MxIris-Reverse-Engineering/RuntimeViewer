@@ -5,6 +5,7 @@ RUNTIME_VIEWER_DEVELOPMENT_TEAM = D5Q73692VW
 
 // Main app (RuntimeViewerUsingAppKit, RuntimeViewerUsingUIKit, RuntimeViewerUsingVision)
 RUNTIME_VIEWER_APP_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer
+RUNTIME_VIEWER_APP_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewer.arm64e
 RUNTIME_VIEWER_APP_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewer
 
 // SMJobBless privileged helper (com.JH.RuntimeViewerService target)
