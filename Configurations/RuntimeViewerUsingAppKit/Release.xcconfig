@@ -3,6 +3,11 @@
 
 SMPrivilegedExecutable = $(RUNTIME_VIEWER_RELEASE_SM_PRIVILEGED_EXECUTABLE)
 
+// LaunchDaemon helper identity for Release builds. Must stay in sync with the non-DEBUG
+// branch of RuntimeViewerMachServiceName (RuntimeRequestResponse.swift). Drives both the
+// merged service target's product name and the build-time-generated launchd plist.
+RUNTIME_VIEWER_SERVICE_NAME = com.mxiris.runtimeviewer.service
+
 RUNTIME_VIEWER_BUILD_DATE = unknown
 RUNTIME_VIEWER_GIT_BRANCH = unknown
 RUNTIME_VIEWER_GIT_COMMIT = unknown
