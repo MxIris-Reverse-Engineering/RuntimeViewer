@@ -265,6 +265,7 @@
 		E95CDA662DAA6FA900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = ../Configurations/RuntimeViewerService/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		E95CDA672DAA970300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/RuntimeViewerUsingAppKit/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		E95CDA682DAA970900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = ../Configurations/RuntimeViewerUsingAppKit/Release.xcconfig; sourceTree = SOURCE_ROOT; };
+		E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Debug-arm64e.xcconfig"; path = "../Configurations/RuntimeViewerUsingAppKit/Debug-arm64e.xcconfig"; sourceTree = SOURCE_ROOT; };
 		E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = RuntimeViewerUsingAppKit.xctestplan; sourceTree = "<group>"; };
 		E9668FFB2CEF7140007B344A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E9668FFC2CEF7140007B344A /* launchd.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = launchd.plist; sourceTree = "<group>"; };
@@ -493,6 +494,7 @@
 				E9432FEC2C0D614A00362862 /* RuntimeViewerUsingAppKit.entitlements */,
 				E95CDA672DAA970300D97B03 /* Debug.xcconfig */,
 				E95CDA682DAA970900D97B03 /* Release.xcconfig */,
+				E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */,
 				E9C9E9CE2C2D10C600C4AA34 /* Info.plist */,
 			);
 			path = RuntimeViewerUsingAppKit;
@@ -978,7 +980,7 @@
 			alwaysOutOfDate = 1;
 			name = "Generate LaunchDaemon plist";
 			shellPath = /bin/sh;
-			shellScript = "set -e\nLAUNCHD_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons\"\nPLIST=\"${LAUNCHD_DIR}/${RUNTIME_VIEWER_SERVICE_NAME}.plist\"\nmkdir -p \"${LAUNCHD_DIR}\"\nrm -f \"${PLIST}\"\nprintf '%s\\n' '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' '<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">' '<plist version=\"1.0\"><dict/></plist>' > \"${PLIST}\"\nPB=/usr/libexec/PlistBuddy\n\"${PB}\" -c \"Add :Label string ${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\n\"${PB}\" -c \"Add :BundleProgram string Contents/Library/LaunchServices/${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\n\"${PB}\" -c \"Add :KeepAlive bool true\" \"${PLIST}\"\n\"${PB}\" -c \"Add :MachServices dict\" \"${PLIST}\"\n\"${PB}\" -c \"Add :MachServices:${RUNTIME_VIEWER_SERVICE_NAME} bool true\" \"${PLIST}\"\n\"${PB}\" -c \"Add :EnvironmentVariables dict\" \"${PLIST}\"\n\"${PB}\" -c \"Add :EnvironmentVariables:RUNTIME_VIEWER_SERVICE_NAME string ${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\necho \"Generated LaunchDaemon plist: ${PLIST}\"\n";
+			shellScript = "set -e\nLAUNCHD_DIR=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons\"\nPLIST=\"${LAUNCHD_DIR}/${RUNTIME_VIEWER_SERVICE_NAME}.plist\"\nmkdir -p \"${LAUNCHD_DIR}\"\nrm -f \"${PLIST}\"\nprintf '%s\\n' '<?xml version=\"1.0\" encoding=\"UTF-8\"?>' '<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">' '<plist version=\"1.0\"><dict/></plist>' > \"${PLIST}\"\nPB=/usr/libexec/PlistBuddy\n\"${PB}\" -c \"Add :Label string ${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\n\"${PB}\" -c \"Add :BundleProgram string Contents/Library/LaunchServices/${RUNTIME_VIEWER_SERVICE_NAME}\" \"${PLIST}\"\n\"${PB}\" -c \"Add :KeepAlive bool true\" \"${PLIST}\"\n\"${PB}\" -c \"Add :MachServices dict\" \"${PLIST}\"\n\"${PB}\" -c \"Add :MachServices:${RUNTIME_VIEWER_SERVICE_NAME} bool true\" \"${PLIST}\"\necho \"Generated LaunchDaemon plist: ${PLIST}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1536,7 +1538,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG RUNTIMEVIEWER_ARM64E $(inherited)";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -1544,7 +1546,7 @@
 		};
 		E9958CD72FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E95CDA672DAA970300D97B03 /* Debug.xcconfig */;
+			baseConfigurationReference = E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -1585,7 +1587,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_DEBUG_ARM64E_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "RuntimeViewer-Debug-arm64e";
-				RUNTIME_VIEWER_SERVICE_NAME = dev.arm64e.mxiris.runtimeviewer.service;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;

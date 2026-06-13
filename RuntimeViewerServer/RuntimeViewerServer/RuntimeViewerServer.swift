@@ -44,6 +44,9 @@ private enum RuntimeViewerServer {
     }
 
     fileprivate static func main() {
+        #if RUNTIMEVIEWER_ARM64E
+        runtimeViewerIsARM64EVariant = true
+        #endif
         #log(.default, "Attach successfully")
         Task {
             do {

@@ -11,6 +11,7 @@ import RuntimeViewerSettingsUI
 import RuntimeViewerArchitectures
 import RuntimeViewerMCPBridge
 import RuntimeViewerHelperClient
+import RuntimeViewerCommunication
 
 @MainActor
 @Loggable(.private)
@@ -25,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static let launchDate = Date()
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        #if RUNTIMEVIEWER_ARM64E
+        runtimeViewerIsARM64EVariant = true
+        #endif
         _ = Self.launchDate
 
         NSToolbarItemViewerOverflowFix.install()

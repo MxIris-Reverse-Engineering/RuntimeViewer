@@ -4,28 +4,29 @@ import OSLog
 public import HelperCommunication
 #endif
 
+#if DEBUG
+
+/// In debug builds the helper-daemon mach-service identity is chosen by `runtimeViewerIsARM64EVariant`,
+/// which each executable entry point (app / daemon / injected server) flips on for the
+/// Debug-arm64e variant via `#if RUNTIMEVIEWER_ARM64E`. The arm64e variant cannot be detected
+/// inside this SwiftPM package: custom build conditions don't reach package targets, and the
+/// running architecture isn't a reliable signal (the app slice stays arm64 while the daemon /
+/// injected slices are arm64e). Release is a fixed compile-time constant.
+nonisolated(unsafe) public var runtimeViewerIsARM64EVariant = false
+
 /// Mach service name shared by the app (client) and the helper daemon (server).
-///
-/// Resolved at runtime from a single build-time source (`RUNTIME_VIEWER_SERVICE_NAME`),
-/// so per-configuration variants (including Debug-arm64e) stay in sync without a
-/// compile flag — which cannot reach this SPM package anyway:
-/// - the daemon process receives it via its launchd plist `EnvironmentVariables`;
-/// - the app process reads it from its `Info.plist` (`RuntimeViewerServiceName`).
-/// The `#if DEBUG` values are only a fallback for contexts where neither is present
-/// (e.g. unit tests).
-public let RuntimeViewerMachServiceName: String = {
-    if let injected = ProcessInfo.processInfo.environment["RUNTIME_VIEWER_SERVICE_NAME"], !injected.isEmpty {
-        return injected
-    }
-    if let fromBundle = Bundle.main.object(forInfoDictionaryKey: "RuntimeViewerServiceName") as? String, !fromBundle.isEmpty {
-        return fromBundle
-    }
-    #if DEBUG
-    return "dev.mxiris.runtimeviewer.service"
-    #else
-    return "com.mxiris.runtimeviewer.service"
-    #endif
-}()
+public var RuntimeViewerMachServiceName: String {
+    runtimeViewerIsARM64EVariant
+        ? "dev.arm64e.mxiris.runtimeviewer.service"
+        : "dev.mxiris.runtimeviewer.service"
+}
+
+#else
+
+/// Mach service name shared by the app (client) and the helper daemon (server).
+public let RuntimeViewerMachServiceName = "com.mxiris.runtimeviewer.service"
+
+#endif
 
 /// Protocol version shared between the app and the helper service daemon.
 /// Bump this whenever the service binary changes in a way that requires reinstallation.

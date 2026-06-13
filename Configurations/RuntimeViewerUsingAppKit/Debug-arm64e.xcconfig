@@ -1,0 +1,11 @@
+#include "Debug.xcconfig"
+
+// arm64e variant of the Debug configuration.
+//
+// Gives the Debug-arm64e build a fully distinct launch-service identity so it never
+// collides with a plain Debug build (same DEBUG mach name otherwise). This overrides the
+// dev.* value inherited from Debug.xcconfig. It feeds the app Info.plist RuntimeViewerServiceName
+// key and the build-time-generated launchd plist; the service target's own embedded Info.plist
+// carries the matching name via $(PRODUCT_NAME), and RuntimeViewerMachServiceName reads it back
+// from each process's own bundle at runtime.
+RUNTIME_VIEWER_SERVICE_NAME = dev.arm64e.mxiris.runtimeviewer.service

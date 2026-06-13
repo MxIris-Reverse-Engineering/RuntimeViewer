@@ -25,8 +25,8 @@ public final class HelperServiceManager {
 
     public static let legacyPlistFileURL = URL(filePath: "/Library/LaunchDaemons/com.JH.RuntimeViewerService.plist")
 
-    public static let helperServiceDaemon = SMAppService.daemon(plistName: "\(RuntimeViewerMachServiceName).plist")
-    private static let helperServicePlistName = "\(RuntimeViewerMachServiceName).plist"
+    public static var helperServiceDaemon: SMAppService { SMAppService.daemon(plistName: "\(RuntimeViewerMachServiceName).plist") }
+    private static var helperServicePlistName: String { "\(RuntimeViewerMachServiceName).plist" }
 
     // MARK: - Observable State
 
