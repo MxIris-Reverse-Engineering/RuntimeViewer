@@ -147,6 +147,16 @@ CATALYST_EXPORT_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit"
 CATALYST_HELPER_ARCHIVE="$BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive"
 MAIN_ARCHIVE="$BUILD_PATH/RuntimeViewer.xcarchive"
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/Products/Logs}"
+
+# DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
+# SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
+# tree (otherwise git clients like Fork index them). Falls back to a
+# project-relative path when the volume is absent (e.g. CI).
+if [[ -d "/Volumes/DerivedData" ]]; then
+    DERIVED_DATA="/Volumes/DerivedData/RuntimeViewer/Archive"
+else
+    DERIVED_DATA="$PROJECT_DIR/DerivedData"
+fi
 XCODEBUILD_LOG_INDEX=0
 
 mkdir -p "$BUILD_PATH" "$LOG_DIR"
@@ -187,11 +197,13 @@ update_packages() {
     XCODEBUILD_LOG_NAME="resolve-catalyst-helper-packages" run_piped xcodebuild -resolvePackageDependencies \
         -workspace "$WORKSPACE" \
         -scheme "$CATALYST_SCHEME" \
+        -derivedDataPath "$DERIVED_DATA" \
         -skipPackagePluginValidation -skipMacroValidation
 
     XCODEBUILD_LOG_NAME="resolve-main-packages" run_piped xcodebuild -resolvePackageDependencies \
         -workspace "$WORKSPACE" \
         -scheme "$SCHEME" \
+        -derivedDataPath "$DERIVED_DATA" \
         -skipPackagePluginValidation -skipMacroValidation
 }
 
@@ -203,15 +215,22 @@ resolve_generate_appcast() {
         command -v generate_appcast
         return
     fi
+    local candidate
+    # Prefer the DerivedData this script archived into.
+    candidate="$DERIVED_DATA/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast"
+    if [[ -x "$candidate" ]]; then
+        echo "$candidate"
+        return
+    fi
+    # Fall back to the default per-workspace DerivedData location.
     local workspace_name="${WORKSPACE%.xcworkspace}"
     workspace_name="${workspace_name##*/}"
-    local candidate
     candidate=$(ls -dt "$HOME/Library/Developer/Xcode/DerivedData/${workspace_name}-"*/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast 2>/dev/null | head -1)
     if [[ -n "$candidate" && -x "$candidate" ]]; then
         echo "$candidate"
         return
     fi
-    fail "generate_appcast not found on PATH or under DerivedData/${workspace_name}-*/SourcePackages/artifacts/sparkle. Install Sparkle (brew install --cask sparkle) or run xcodebuild -resolvePackageDependencies first."
+    fail "generate_appcast not found on PATH, under $DERIVED_DATA/SourcePackages/artifacts/sparkle, or DerivedData/${workspace_name}-*/SourcePackages/artifacts/sparkle. Install Sparkle (brew install --cask sparkle) or run xcodebuild -resolvePackageDependencies first."
 }
 
 # Catch version drift early: --version-tag vX.Y.Z[-beta.N] must agree with the
@@ -224,7 +243,7 @@ verify_marketing_version() {
     local expected="${VERSION_TAG#v}"
     expected="${expected%%-*}"
     local actual
-    actual=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration "$CONFIGURATION" -showBuildSettings 2>/dev/null \
+    actual=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration "$CONFIGURATION" -derivedDataPath "$DERIVED_DATA" -showBuildSettings 2>/dev/null \
         | awk -F' = ' '$1 ~ /^[[:space:]]*MARKETING_VERSION$/ { print $2; exit }')
     [[ -n "$actual" ]] || fail "could not read MARKETING_VERSION from scheme '$SCHEME'; run --update-packages or verify the workspace path."
     if [[ "$actual" != "$expected" ]]; then
@@ -270,6 +289,7 @@ XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
     -configuration "$CONFIGURATION" \
     -destination 'generic/platform=macOS,variant=Mac Catalyst' \
     -archivePath "$CATALYST_HELPER_ARCHIVE" \
+    -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
@@ -290,6 +310,7 @@ XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -configuration "$CONFIGURATION" \
     -destination 'generic/platform=macOS' \
     -archivePath "$MAIN_ARCHIVE" \
+    -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
@@ -322,17 +343,16 @@ fi
 IOS_SIM_ZIP=""
 if $INCLUDE_IOS_SIMULATOR; then
     log "Building iOS Simulator app"
-    DERIVED="$PROJECT_DIR/DerivedData"
     XCODEBUILD_LOG_NAME="build-ios-simulator" run_piped xcodebuild build \
         -workspace "$WORKSPACE" \
         -scheme "RuntimeViewer iOS" \
         -configuration "$CONFIGURATION" \
         -destination 'generic/platform=iOS Simulator' \
-        -derivedDataPath "$DERIVED" \
+        -derivedDataPath "$DERIVED_DATA" \
         -skipPackagePluginValidation -skipMacroValidation \
         CODE_SIGNING_ALLOWED=NO
 
-    IOS_APP="$DERIVED/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewer.app"
+    IOS_APP="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewer.app"
     IOS_SIM_ZIP="$PROJECT_DIR/RuntimeViewer-iOS-Simulator.zip"
     [[ -d "$IOS_APP" ]] || fail "iOS Simulator app missing at $IOS_APP"
     ( cd "$(dirname "$IOS_APP")" && /usr/bin/ditto -c -k --keepParent "RuntimeViewer.app" "$IOS_SIM_ZIP" )

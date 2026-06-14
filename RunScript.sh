@@ -27,7 +27,17 @@ SCHEME="RuntimeViewer macOS"
 CATALYST_SCHEME="RuntimeViewerCatalystHelper"
 CONFIGURATION="Debug-arm64e"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
-DERIVED_DATA="$PROJECT_DIR/DerivedData/Debug-arm64e"
+
+# DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
+# SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
+# tree (otherwise git clients like Fork index them). Falls back to a
+# project-relative path when the volume is absent (e.g. CI). Override with
+# --derived-data.
+if [[ -d "/Volumes/DerivedData" ]]; then
+    DERIVED_DATA="/Volumes/DerivedData/RuntimeViewer/Debug-arm64e"
+else
+    DERIVED_DATA="$PROJECT_DIR/DerivedData/Debug-arm64e"
+fi
 
 UPDATE_PACKAGES=false
 LAUNCH=true
@@ -116,11 +126,13 @@ update_packages() {
     XCODEBUILD_LOG_NAME="resolve-catalyst-helper-packages" run_piped xcodebuild -resolvePackageDependencies \
         -workspace "$WORKSPACE" \
         -scheme "$CATALYST_SCHEME" \
+        -derivedDataPath "$DERIVED_DATA" \
         -skipPackagePluginValidation -skipMacroValidation
 
     XCODEBUILD_LOG_NAME="resolve-main-packages" run_piped xcodebuild -resolvePackageDependencies \
         -workspace "$WORKSPACE" \
         -scheme "$SCHEME" \
+        -derivedDataPath "$DERIVED_DATA" \
         -skipPackagePluginValidation -skipMacroValidation
 }
 

@@ -27,6 +27,16 @@ ARCHIVE_PATH="${OUTPUT_DIR}/Archives"
 XCFRAMEWORK_NAME="${FRAMEWORK_NAME}.xcframework"
 CONFIGURATION="Distribution"
 
+# DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
+# SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
+# tree (otherwise git clients like Fork index them). Falls back to a
+# project-relative path when the volume is absent (e.g. CI).
+if [ -d "/Volumes/DerivedData" ]; then
+    DERIVED_DATA_DIR="/Volumes/DerivedData/RuntimeViewer/ServerXCFramework"
+else
+    DERIVED_DATA_DIR="${OUTPUT_DIR}/DerivedData"
+fi
+
 # Parse arguments
 VERBOSE=false
 CLEAN_BUILD=true
@@ -148,9 +158,10 @@ echo ""
 if [ "$CLEAN_BUILD" = true ]; then
     echo "🧹 Cleaning previous build artifacts..."
     rm -rf "$OUTPUT_DIR"
+    rm -rf "$DERIVED_DATA_DIR"
 fi
 mkdir -p "$ARCHIVE_PATH"
-mkdir -p "$OUTPUT_DIR/DerivedData"
+mkdir -p "$DERIVED_DATA_DIR"
 
 # ==========================================
 # Update / Resolve Workspace Package Dependencies
@@ -164,16 +175,17 @@ mkdir -p "$OUTPUT_DIR/DerivedData"
 # To force a real update (latest versions matching workspace
 # constraints) we:
 #   1. delete the workspace's Package.resolved
-#   2. point -resolvePackageDependencies at our clean
-#      $OUTPUT_DIR/DerivedData so SPM cannot reuse a stale
+#   2. point -resolvePackageDependencies at our dedicated
+#      $DERIVED_DATA_DIR so SPM cannot reuse a stale
 #      SourcePackages/checkouts directory from the default
-#      ~/Library/Developer/Xcode/DerivedData location.
+#      ~/Library/Developer/Xcode/DerivedData location. A clean
+#      build wipes $DERIVED_DATA_DIR above, so resolution is fresh.
 # Without (2), SPM happily keeps an older transitive version
 # (e.g. swift-dyld-private 1.1.0) even though a newer matching
 # version (1.2.0) is available in the repository cache.
-# Both Package.resolved and DerivedData are gitignored / disposable.
+# Both Package.resolved and the fallback DerivedData are gitignored.
 WORKSPACE_RESOLVED="$WORKSPACE_PATH/xcshareddata/swiftpm/Package.resolved"
-RESOLVE_DERIVED_DATA="$OUTPUT_DIR/DerivedData"
+RESOLVE_DERIVED_DATA="$DERIVED_DATA_DIR"
 
 if [ "$UPDATE_PACKAGES" = true ] && [ -f "$WORKSPACE_RESOLVED" ]; then
     echo "🔄 Removing workspace Package.resolved to force update..."
@@ -209,7 +221,7 @@ build_archive() {
     local archive_name=$3
     shift 3
     local extra_build_settings=("$@")
-    local derived_data_path="$OUTPUT_DIR/DerivedData"
+    local derived_data_path="$DERIVED_DATA_DIR"
 
     echo "🛠  [$(date +%T)] Building: $archive_name (scheme: $scheme) ..."
 

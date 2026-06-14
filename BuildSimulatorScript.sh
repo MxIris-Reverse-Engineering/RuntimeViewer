@@ -10,7 +10,15 @@ scheme_name="RuntimeViewer iOS"
 configuration="Release"
 cpu_cores=$(sysctl -n hw.ncpu 2>/dev/null || echo 8)
 
-derived_data_path="${project_path}/DerivedData"
+# DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
+# SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
+# tree (otherwise git clients like Fork index them). Falls back to a
+# project-relative path when the volume is absent (e.g. CI).
+if [ -d "/Volumes/DerivedData" ]; then
+    derived_data_path="/Volumes/DerivedData/RuntimeViewer/Simulator"
+else
+    derived_data_path="${project_path}/DerivedData"
+fi
 build_products_path="${derived_data_path}/Build/Products/${configuration}-iphonesimulator"
 export_path="${project_path}/Products/Archives/Products/Export"
 output_zip="${export_path}/${project_name}-iOS-Simulator.zip"
