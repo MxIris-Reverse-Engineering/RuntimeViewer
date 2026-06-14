@@ -1,4 +1,5 @@
 import Foundation
+import MachOKit
 import MachOObjCSection
 import ObjCDump
 import ObjCTypeDecodeKit
@@ -281,7 +282,17 @@ public final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
             setObjCTypeFromMethods(objcClassInfo.methods + objcClassInfo.classMethods)
         }
 
-        let objcProtocols: [any ObjCProtocolProtocol] = machO.objc.protocols64.orEmpty + machO.objc.protocols32.orEmpty
+        // `__objc_protolist` carries a full `protocol_t` record for *every*
+        // protocol whose `@protocol` declaration was in scope at compile
+        // time — including ones merely imported from dependencies (`NSObject`,
+        // `NSCopying`, …), not just this image's own. Keep only the protocols
+        // this image *canonically owns* (see `isProtocolOwnedByThisImage(_:)`)
+        // so the listing mirrors the image's actual surface, and so we skip
+        // re-decoding every imported protocol's full interface in every image
+        // that imports it. Filtering on the cheap `mangledName` happens before
+        // the expensive per-protocol `info(in:)` decode below.
+        let objcProtocols: [any ObjCProtocolProtocol] = (machO.objc.protocols64.orEmpty + machO.objc.protocols32.orEmpty)
+            .filter { isProtocolOwnedByThisImage($0) }
 
         for objcProtocol in objcProtocols {
             guard let objcProtocolInfo = objcProtocol.info(in: machO) else { continue }
@@ -399,6 +410,52 @@ public final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
         }
 
         return resultInfos
+    }
+
+    // MARK: - Protocol Ownership
+
+    /// Whether `objcProtocol` should be listed under **this** image, as opposed
+    /// to being a protocol this image merely imports from one of its
+    /// dependencies.
+    ///
+    /// Why this is needed: the compiler emits a full `protocol_t` into
+    /// `__objc_protolist` for **every** image whose translation units had the
+    /// protocol's `@protocol` declaration in scope — not just the image that
+    /// "owns" it. So AppKit physically carries its own copies of `NSObject`,
+    /// `CALayerDelegate`, `AVAudioPlayerDelegate`; SwiftUI carries copies of
+    /// `NSFetchRequestResult`, `RBLayerDelegate`, `NSWindowDelegate`; and so
+    /// on. Listing `__objc_protolist` verbatim floods each framework with its
+    /// dependencies' protocols.
+    ///
+    /// There is **no** authoritative "defining image" recorded for a protocol
+    /// (unlike classes, which are emitted exactly once in their own image's
+    /// `__objc_classlist`). The dyld shared cache's protocol hash table does
+    /// record an owning dylib index, but it is the cache builder's
+    /// *size-sorted* pick — for `CALayerDelegate` that resolves to AppKit (the
+    /// largest carrier), which is exactly the noise we want gone. The objc
+    /// runtime's canonical `Protocol *` follows that same arbitrary pick, and
+    /// dyld load order / cache-enumeration order are not dependency-topological
+    /// (AppKit enumerates *before* QuartzCore/CoreUI). All verified empirically.
+    ///
+    /// What works (and matches the semantic notion of "imported"): a protocol
+    /// `P` is imported into this image iff some **other** image that carries
+    /// `P` is in this image's transitive dependency closure. The whole dyld
+    /// shared cache is scanned once (every image's protocol names + dependency
+    /// graph) by `ObjCProtocolOwnershipRegistry`, so attribution is independent
+    /// of which images happen to be loaded. This keeps `NSWindowDelegate` under
+    /// AppKit while dropping `NSObject` (→ libobjc), `CALayerDelegate` (→
+    /// CoreUI), `CAAnimationDelegate` (→ QuartzCore), `NSFetchRequestResult`
+    /// (→ CoreData), etc.
+    ///
+    /// Irreducible limitation: a protocol that its semantic framework declares
+    /// only in headers (never emitting a `protocol_t`) — e.g.
+    /// `NSFilePromiseProviderDelegate`, which AppKit declares but only SwiftUI
+    /// emits — has no carrier in any dependency, so nothing attributes it away
+    /// from the emitting image. Fails open on an empty name.
+    private func isProtocolOwnedByThisImage(_ objcProtocol: any ObjCProtocolProtocol) -> Bool {
+        let mangledName = objcProtocol.mangledName(in: machO)
+        guard !mangledName.isEmpty else { return true }
+        return ObjCProtocolOwnershipRegistry.shared.isOwningImage(of: mangledName, in: machO)
     }
 
     // MARK: - Reverse-table Feed
@@ -614,4 +671,125 @@ public enum RuntimeObjCInterfaceEvents {
     }
 
     public typealias Handler = @Sendable (Event) -> Void
+}
+
+// MARK: - Protocol Ownership Registry
+
+/// Decides, for any Objective-C protocol name, whether a given image *owns* it
+/// or merely *imports* it from a dependency — so a per-image protocol listing
+/// can drop the `protocol_t` records every framework redundantly carries for
+/// its dependencies' protocols (`NSObject`, `CALayerDelegate`,
+/// `NSFetchRequestResult`, …).
+///
+/// Rule (semantic "imported"): protocol `P` is imported into image `X` iff some
+/// **other** image that also carries `P` (has a `protocol_t` for it in its
+/// `__objc_protolist`) lies in `X`'s transitive dependency closure. Equivalently
+/// `X` owns `P` iff none of `P`'s other carriers is a dependency of `X`.
+///
+/// The whole dyld shared cache is scanned **once** to learn, for every image,
+/// the set of protocol names it carries and its direct dependency list. This
+/// makes attribution independent of which images are currently `dlopen`ed (the
+/// owning framework — e.g. QuartzCore for `CALayerDelegate` — is in the cache
+/// even when it isn't loaded). The cache is immutable, so the scan never needs
+/// to be repeated. `@unchecked Sendable`: every access is serialized by `lock`.
+///
+/// See `RuntimeObjCInterfaceIndexer.isProtocolOwnedByThisImage(_:)` for why the
+/// cache's own protocol→dylib index, the objc runtime canonical, and
+/// load/enumeration order were all rejected.
+private final class ObjCProtocolOwnershipRegistry: @unchecked Sendable {
+    static let shared = ObjCProtocolOwnershipRegistry()
+
+    private let lock = NSLock()
+    private var didBuild = false
+
+    /// Protocol mangled name → indices of every cache image that carries a
+    /// `protocol_t` for it.
+    private var carrierImageIndicesByProtocolName: [String: [Int]] = [:]
+
+    /// Cache image index → indices of its directly-linked dependencies (already
+    /// resolved from install names).
+    private var directDependencyIndicesByImage: [[Int]] = []
+
+    /// Cache image install path → its index, for resolving dependency install
+    /// names (and the queried image's own dependency list) to indices.
+    private var imageIndexByPath: [String: Int] = [:]
+
+    /// Memoized dependency closure per queried image (keyed by header address),
+    /// since every protocol in one `prepare()` shares the same closure.
+    private var dependencyClosureByHeaderAddress: [UInt: Set<Int>] = [:]
+
+    /// Whether `machO` owns `protocolName` rather than importing it from a
+    /// dependency. Returns `true` (keep) when the protocol is carried by no
+    /// cache image (e.g. a protocol unique to a non-cache image) or the shared
+    /// cache is unavailable — attribution only ever *removes* an imported
+    /// protocol, never an image's own.
+    func isOwningImage(of protocolName: String, in machO: MachOImage) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        buildIfNeeded()
+
+        guard let carrierIndices = carrierImageIndicesByProtocolName[protocolName],
+              !carrierIndices.isEmpty
+        else {
+            return true
+        }
+        let closure = dependencyClosure(of: machO)
+        // An image is never in its own dependency closure, so a protocol carried
+        // only by `machO` itself survives; one also carried by a dependency does
+        // not.
+        for carrierIndex in carrierIndices where closure.contains(carrierIndex) {
+            return false
+        }
+        return true
+    }
+
+    private func buildIfNeeded() {
+        guard !didBuild else { return }
+        didBuild = true
+
+        guard let cache = DyldCacheLoaded.current else { return }
+
+        var dependencyNamesByImage: [[String]] = []
+        var imageIndex = 0
+        for image in cache.machOImages() {
+            let path = image.imagePath
+            if !path.isEmpty {
+                imageIndexByPath[path] = imageIndex
+            }
+            if let protocols = image.objc.protocols64 {
+                for objcProtocol in protocols {
+                    carrierImageIndicesByProtocolName[objcProtocol.mangledName(in: image), default: []]
+                        .append(imageIndex)
+                }
+            }
+            dependencyNamesByImage.append(image.dependencies.map { $0.dylib.name })
+            imageIndex += 1
+        }
+
+        // Resolve dependency install names to indices in a second pass, once
+        // every image's path is known (dependencies may be forward references).
+        directDependencyIndicesByImage = dependencyNamesByImage.map { names in
+            names.compactMap { imageIndexByPath[$0] }
+        }
+    }
+
+    /// The transitive set of cache image indices `machO` (directly or
+    /// indirectly) depends on. The starting edges come from `machO`'s own load
+    /// commands, so this works whether or not `machO` is itself a cache image.
+    private func dependencyClosure(of machO: MachOImage) -> Set<Int> {
+        let key = UInt(bitPattern: machO.ptr)
+        if let cached = dependencyClosureByHeaderAddress[key] {
+            return cached
+        }
+        var visited = Set<Int>()
+        var stack = machO.dependencies.compactMap { imageIndexByPath[$0.dylib.name] }
+        while let current = stack.popLast() {
+            if visited.insert(current).inserted {
+                stack.append(contentsOf: directDependencyIndicesByImage[current])
+            }
+        }
+        dependencyClosureByHeaderAddress[key] = visited
+        return visited
+    }
 }
