@@ -209,29 +209,29 @@ let package = Package(
         ),
 
         .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
-                isRelative: true,
-            ),
-            .package(
-                path: "../../CocoaCoordinator",
-                isRelative: true,
-            ),
+//            local: .package(
+//                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
+//                isRelative: true,
+//            ),
+//            .package(
+//                path: "../../CocoaCoordinator",
+//                isRelative: true,
+//            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
-                from: "0.4.1",
+                from: "0.5.0",
             ),
         ),
 
         .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("UXKitCoordinator"),
-                isRelative: true,
-            ),
-            .package(
-                path: "../../UXKitCoordinator",
-                isRelative: true,
-            ),
+//            local: .package(
+//                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("UXKitCoordinator"),
+//                isRelative: true,
+//            ),
+//            .package(
+//                path: "../../UXKitCoordinator",
+//                isRelative: true,
+//            ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/UXKitCoordinator",
                 branch: "main",
@@ -250,14 +250,14 @@ let package = Package(
         ),
         
         .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("OpenUXKit"),
-                isRelative: true,
-            ),
-            .package(
-                path: "../../OpenUXKit",
-                isRelative: true,
-            ),
+//            local: .package(
+//                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("OpenUXKit"),
+//                isRelative: true,
+//            ),
+//            .package(
+//                path: "../../OpenUXKit",
+//                isRelative: true,
+//            ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/OpenUXKit",
                 branch: "main",

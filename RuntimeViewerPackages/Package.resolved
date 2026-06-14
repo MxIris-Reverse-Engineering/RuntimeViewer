@@ -1,5 +1,5 @@
 {
-  "originHash" : "87c078de9798a5eb9f341245f98da58b0ac955198ef85190eb208c2ee84eb723",
+  "originHash" : "a90c1fee17092974f65cf6bb2d704e8ceb589c795d6d4a7352832b3987e33b45",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "b2e5d13c9741de58a62dbc40aefa9653c33c83ce",
         "version" : "0.23.0-fork.1"
-      }
-    },
-    {
-      "identity" : "binarycodable",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/christophhagen/BinaryCodable",
-      "state" : {
-        "revision" : "c2ef4834bf038a998c36301d910a8525de5e12b1",
-        "version" : "3.2.0"
       }
     },
     {
@@ -96,8 +87,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher",
       "state" : {
-        "revision" : "cf8be20d07654570554c8a8a4952bc8a5766a8b0",
-        "version" : "8.9.0"
+        "revision" : "ac632bd26a1c00f139ff62fd01806f21cf67325e",
+        "version" : "8.10.0"
       }
     },
     {
@@ -143,15 +134,6 @@
       "state" : {
         "revision" : "96d782a576273b73b277b577943a2a25b00b919e",
         "version" : "0.5.0"
-      }
-    },
-    {
-      "identity" : "openuxkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/OpenUXKit/OpenUXKit",
-      "state" : {
-        "branch" : "main",
-        "revision" : "21b944e638ff66d45ba1f550483c875be3c1f93f"
       }
     },
     {
@@ -236,24 +218,6 @@
       }
     },
     {
-      "identity" : "sourcekitd",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/SourceKitD",
-      "state" : {
-        "revision" : "47ddc958a3962f9bb0fe08de1c8f39723e472228",
-        "version" : "0.1.0"
-      }
-    },
-    {
-      "identity" : "swift-apinotes",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-DeveloperTool/swift-apinotes",
-      "state" : {
-        "revision" : "e762ac739f71adf83ed2e05f40211c96cd91f6c5",
-        "version" : "0.2.0"
-      }
-    },
-    {
       "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-argument-parser",
@@ -296,15 +260,6 @@
       "state" : {
         "revision" : "206cbce3882b4de9aee19ce62ac5b7306cadd45b",
         "version" : "1.7.3"
-      }
-    },
-    {
-      "identity" : "swift-clang",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-DeveloperTool/swift-clang",
-      "state" : {
-        "revision" : "89195b5191f6678da7e782cec24f2cbc8d75cf79",
-        "version" : "0.3.0"
       }
     },
     {
@@ -366,8 +321,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "f80552807ec92f72fe3fe4543d71879182b0bfd5",
-        "version" : "1.13.0"
+        "revision" : "16f7dd14ee28d04617090f2a73198b8b316ffa12",
+        "version" : "1.13.1"
       }
     },
     {
@@ -465,8 +420,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
-        "revision" : "f99ae8aa18f0cf0d53481901f88a0991dc3bd4a2",
-        "version" : "601.0.1"
+        "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
+        "version" : "602.0.0"
       }
     },
     {
@@ -488,15 +443,6 @@
       }
     },
     {
-      "identity" : "uxkitcoordinator",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
-      "state" : {
-        "branch" : "main",
-        "revision" : "481806584ed23911fbe0449fdda57085f8615779"
-      }
-    },
-    {
       "identity" : "version",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mxcl/Version",
@@ -512,15 +458,6 @@
       "state" : {
         "revision" : "cb281f343fd953280336dcbd3822cdf47c182f5b",
         "version" : "1.10.0"
-      }
-    },
-    {
-      "identity" : "yams",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/jpsim/Yams",
-      "state" : {
-        "revision" : "a27b21e0c81c5bf42049b897a62aaf387e80f279",
-        "version" : "6.2.2"
       }
     }
   ],
