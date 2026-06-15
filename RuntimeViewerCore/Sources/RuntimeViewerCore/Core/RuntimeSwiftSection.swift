@@ -1,3 +1,7 @@
+@_spi(Support) import SwiftDeclaration
+@_spi(Support) import SwiftIndexing
+@_spi(Support) import SwiftSpecialization
+@_spi(Support) import SwiftPrinting
 import Demangling
 import Foundation
 import FoundationToolbox
@@ -76,7 +80,7 @@ actor RuntimeSwiftSection {
     /// `Sendable` and guards its own state.
     nonisolated let indexer: RuntimeSwiftInterfaceIndexer
 
-    private let printer: SwiftInterfacePrinter<MachOImage>
+    private let printer: SwiftDeclarationPrinter<MachOImage>
 
     // Keyed by `RuntimeObjectKey` (identity without `children`) so the
     // sidebar's `parent.withAppendedChild(child)` replacement after a
@@ -99,8 +103,8 @@ actor RuntimeSwiftSection {
     private lazy var specializer: GenericSpecializer<MachOImage> = .init(machO: machO, conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream), indexer: factory.indexer.upstream)
 
     private enum InterfaceDefinitionName {
-        case rootType(SwiftInterface.TypeName)
-        case childType(SwiftInterface.TypeName)
+        case rootType(SwiftDeclaration.TypeName)
+        case childType(SwiftDeclaration.TypeName)
         /// Specialized children: each carries the unspecialized parent's
         /// `TypeName` (the lookup key into `indexer.allTypeDefinitions`)
         /// alongside the bound `TypeName` produced by
@@ -108,7 +112,7 @@ actor RuntimeSwiftSection {
         /// inside the parent's `specializedChildren` array, since
         /// specialized definitions live on the parent rather than on the
         /// indexer).
-        case specializedType(unspecialized: SwiftInterface.TypeName, specialized: SwiftInterface.TypeName)
+        case specializedType(unspecialized: SwiftDeclaration.TypeName, specialized: SwiftDeclaration.TypeName)
         /// Nested specialized types derived by upstream's
         /// `derivingNestedSpecializationsWith` — e.g. when specializing
         /// `Phase<Event>`, upstream walks the parent's `typeChildren` and
@@ -119,15 +123,15 @@ actor RuntimeSwiftSection {
         /// reachable through `specializedDefinitionByObject`; consumers
         /// MUST route through that cache rather than trying to look up the
         /// typeName in `indexer.allTypeDefinitions`.
-        case derivedSpecializedType(SwiftInterface.TypeName)
-        case rootProtocol(SwiftInterface.ProtocolName)
-        case childProtocol(SwiftInterface.ProtocolName)
-        case typeExtension(SwiftInterface.ExtensionName)
-        case protocolExtension(SwiftInterface.ExtensionName)
-        case typeAliasExtension(SwiftInterface.ExtensionName)
-        case conformance(SwiftInterface.ExtensionName)
+        case derivedSpecializedType(SwiftDeclaration.TypeName)
+        case rootProtocol(SwiftDeclaration.ProtocolName)
+        case childProtocol(SwiftDeclaration.ProtocolName)
+        case typeExtension(SwiftDeclaration.ExtensionName)
+        case protocolExtension(SwiftDeclaration.ExtensionName)
+        case typeAliasExtension(SwiftDeclaration.ExtensionName)
+        case conformance(SwiftDeclaration.ExtensionName)
 
-        var typeName: SwiftInterface.TypeName? {
+        var typeName: SwiftDeclaration.TypeName? {
             switch self {
             case .rootType(let typeName):
                 return typeName
@@ -149,7 +153,7 @@ actor RuntimeSwiftSection {
         self.imagePath = imagePath
         self.machO = machO
         #log(.debug, "Creating Swift Interface Components")
-        let eventHandlers: [SwiftInterfaceEvents.Handler] = progressContinuation.map { [ProgressEventHandler(continuation: $0)] } ?? []
+        let eventHandlers: [SwiftIndexEvents.Handler] = progressContinuation.map { [ProgressEventHandler(continuation: $0)] } ?? []
         self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, eventHandlers: eventHandlers)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
         // `prepare()` runs the upstream extraction and then builds the
@@ -204,7 +208,7 @@ actor RuntimeSwiftSection {
     private func makeRuntimeObject(
         for typeDefinition: TypeDefinition,
         isChild: Bool,
-        unspecializedTypeName: SwiftInterface.TypeName? = nil
+        unspecializedTypeName: SwiftDeclaration.TypeName? = nil
     ) throws -> RuntimeObject {
         let mangledName = try mangleAsString(typeDefinition.typeName.node)
         let typeChildren = try typeDefinition.typeChildren.map {
@@ -1036,7 +1040,7 @@ extension RuntimeSwiftSection {
         #log(.debug, "Updating Swift section configuration")
 
         let oldIndexConfiguration = indexer.configuration
-        let newIndexConfiguration = SwiftInterfaceIndexConfiguration(showCImportedTypes: false)
+        let newIndexConfiguration = SwiftDeclarationIndexConfiguration(showCImportedTypes: false)
         try await indexer.updateConfiguration(newIndexConfiguration)
 
         let oldPrintConfiguration = printer.configuration
@@ -1074,10 +1078,10 @@ extension RuntimeSwiftSection {
 
     private func buildPrintConfiguration(
         from options: SwiftGenerationOptions,
-        oldConfiguration: SwiftInterfacePrintConfiguration,
+        oldConfiguration: SwiftDeclarationPrintConfiguration,
         transformer: Transformer.SwiftConfiguration,
         transformerChanged: Bool
-    ) -> SwiftInterfacePrintConfiguration {
+    ) -> SwiftDeclarationPrintConfiguration {
         var fieldOffsetTransformer: FieldOffsetTransformer? = oldConfiguration.fieldOffsetTransformer
         var vtableOffsetTransformer: VTableOffsetTransformer? = oldConfiguration.vtableOffsetTransformer
         var memberAddressTransformer: MemberAddressTransformer? = oldConfiguration.memberAddressTransformer
@@ -1093,12 +1097,12 @@ extension RuntimeSwiftSection {
             (enumLayoutTransformer, enumLayoutCaseTransformer) = buildEnumLayoutTransformers(from: transformer)
         }
 
-        let swiftInterfaceMemberSortOrder: SwiftInterfaceMemberSortOrder = switch options.memberSortOrder {
+        let swiftInterfaceMemberSortOrder: SwiftDeclarationMemberSortOrder = switch options.memberSortOrder {
         case .byCategory: .byCategory
         case .byOffset: .byOffset
         }
 
-        return SwiftInterfacePrintConfiguration(
+        return SwiftDeclarationPrintConfiguration(
             printStrippedSymbolicItem: options.printStrippedSymbolicItem,
             printFieldOffset: options.printFieldOffset,
             printExpandedFieldOffsets: options.printExpandedFieldOffset,
@@ -1242,7 +1246,7 @@ extension RuntimeSwiftSection {
 }
 
 extension RuntimeSwiftSection {
-    private final class ProgressEventHandler: SwiftInterfaceEvents.Handler, Sendable {
+    private final class ProgressEventHandler: SwiftIndexEvents.Handler, Sendable {
         let continuation: LoadingEventContinuation
 
         @Mutex
@@ -1252,7 +1256,7 @@ extension RuntimeSwiftSection {
             self.continuation = continuation
         }
 
-        func handle(event: SwiftInterfaceEvents.Payload) {
+        func handle(event: SwiftIndexEvents.Payload) {
             switch event {
             case .extractionStarted(let section):
                 if let phase = extractionPhase(for: section) {
@@ -1291,7 +1295,7 @@ extension RuntimeSwiftSection {
             }
         }
 
-        private func extractionPhase(for section: SwiftInterfaceEvents.Section) -> RuntimeObjectsLoadingProgress.Phase? {
+        private func extractionPhase(for section: SwiftIndexEvents.Section) -> RuntimeObjectsLoadingProgress.Phase? {
             switch section {
             case .swiftTypes: return .extractingSwiftTypes
             case .swiftProtocols: return .extractingSwiftProtocols
@@ -1322,7 +1326,7 @@ extension RuntimeSwiftSection {
     }
 }
 
-extension SwiftInterface.TypeName {
+extension SwiftDeclaration.TypeName {
     var runtimeObjectKind: RuntimeObjectKind {
         switch kind {
         case .enum:
@@ -1335,13 +1339,13 @@ extension SwiftInterface.TypeName {
     }
 }
 
-extension SwiftInterface.ProtocolName {
+extension SwiftDeclaration.ProtocolName {
     fileprivate var runtimeObjectKind: RuntimeObjectKind {
         return .swift(.type(.protocol))
     }
 }
 
-extension SwiftInterface.ExtensionName {
+extension SwiftDeclaration.ExtensionName {
     fileprivate var runtimeObjectKindOfSwiftExtension: RuntimeObjectKind {
         switch kind {
         case .type(let type):
@@ -1393,7 +1397,7 @@ extension Array where Element == SemanticString {
 }
 
 extension ExtensionName {
-    fileprivate var typeName: SwiftInterface.TypeName? {
+    fileprivate var typeName: SwiftDeclaration.TypeName? {
         switch kind {
         case .type(let type):
             switch type {
@@ -1409,7 +1413,7 @@ extension ExtensionName {
         }
     }
 
-    fileprivate var protocolName: SwiftInterface.ProtocolName? {
+    fileprivate var protocolName: SwiftDeclaration.ProtocolName? {
         switch kind {
         case .protocol:
             return .init(node: node)
@@ -1433,7 +1437,7 @@ actor RuntimeSwiftSectionFactory {
     /// logging) can surface a human-readable name even when the lookup is
     /// driven by the opaque mangled candidate ID.
     typealias IndexedTypeEntry = (
-        typeName: SwiftInterface.TypeName,
+        typeName: SwiftDeclaration.TypeName,
         entry: MachOIndexedValue<MachOImage, TypeDefinition>
     )
 
@@ -1520,9 +1524,9 @@ actor RuntimeSwiftSectionFactory {
 }
 
 @FrameworkToolboxExtension(.internal)
-extension SwiftInterface.Definition {}
+extension SwiftDeclaration.Definition {}
 
-extension SwiftInterface.AccessorKind {
+extension SwiftDeclaration.AccessorKind {
     fileprivate var kindString: String {
         switch self {
         case .getter: return "getter"

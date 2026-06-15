@@ -1,3 +1,5 @@
+import SwiftDeclaration
+@_spi(Support) import SwiftIndexing
 import Demangling
 import Foundation
 import MachOKit
@@ -8,14 +10,14 @@ import SwiftStdlibToolbox
 @_spi(Support) import SwiftInterface
 
 /// Per-image Swift interface index: a project-owned wrapper around the
-/// upstream `MachOSwiftSection` `SwiftInterfaceIndexer` that layers on the
+/// upstream `MachOSwiftSection` `SwiftDeclarationIndexer` that layers on the
 /// relationship reverse tables backing the Inspector's Relationships tab.
 ///
 /// This is the Swift counterpart of `RuntimeObjCInterfaceIndexer`, but the
 /// two are not built the same way. On the ObjC side `RuntimeObjCInterfaceIndexer`
 /// *is* the indexer — it parses `MachOObjCSection` / `ObjCDump` itself. On the
 /// Swift side the heavy parsing is already done by the upstream
-/// `SwiftInterfaceIndexer`, which we neither own nor can extend; so this type
+/// `SwiftDeclarationIndexer`, which we neither own nor can extend; so this type
 /// *wraps* one (`upstream`) and adds only the RuntimeViewer-specific
 /// relationship indexing on top.
 ///
@@ -43,7 +45,7 @@ import SwiftStdlibToolbox
 /// aggregate, which holds every per-image indexer, spans all loaded images.
 /// Mirrors `RuntimeObjCInterfaceIndexer`.
 ///
-/// `@unchecked Sendable`: the `MachOImage` and `SwiftInterface.TypeName`
+/// `@unchecked Sendable`: the `MachOImage` and `SwiftDeclaration.TypeName`
 /// values held here are not themselves `Sendable`, but `machO` / `upstream`
 /// are immutable `let`s and the reverse tables plus `subIndexers` are all
 /// `@Mutex`-guarded — mirroring `RuntimeObjCInterfaceIndexer`.
@@ -63,16 +65,16 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// `RuntimeSwiftSection` drives interface generation, member-address
     /// lookup and generic specialization directly off its full API; this
     /// wrapper only *adds* the relationship layer, it does not hide `upstream`.
-    let upstream: SwiftInterfaceIndexer<MachOImage>
+    let upstream: SwiftDeclarationIndexer<MachOImage>
 
     /// Transparent read-through to `upstream`: any property this wrapper does
-    /// not declare itself resolves against `SwiftInterfaceIndexer`, so
+    /// not declare itself resolves against `SwiftDeclarationIndexer`, so
     /// `RuntimeSwiftSection` can treat the wrapper as its indexer for
     /// interface-generation reads (`allTypeDefinitions`, `rootTypeDefinitions`,
     /// …) without spelling out `.upstream`. Methods are not key-path-
     /// expressible, so the upstream methods the codebase needs are exposed as
     /// explicit wrapper methods (see `updateConfiguration`, `addSubIndexer`).
-    subscript<Value>(dynamicMember keyPath: KeyPath<SwiftInterfaceIndexer<MachOImage>, Value>) -> Value {
+    subscript<Value>(dynamicMember keyPath: KeyPath<SwiftDeclarationIndexer<MachOImage>, Value>) -> Value {
         upstream[keyPath: keyPath]
     }
 
@@ -92,7 +94,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// a caller holding only the mangled string recover the `TypeName` in
     /// `O(1)` instead of re-scanning and re-mangling every definition.
     @Mutex
-    private var typeNameByMangledName: [String: SwiftInterface.TypeName] = [:]
+    private var typeNameByMangledName: [String: SwiftDeclaration.TypeName] = [:]
 
     /// Per-image sub-indexers registered via `addSubIndexer`. Empty on a
     /// section's own indexer; on the `RuntimeSwiftSectionFactory` aggregate it
@@ -108,7 +110,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// straight to the upstream indexer (`RuntimeSwiftSection` builds the
     /// progress-event handler). Mirrors `RuntimeObjCInterfaceIndexer.init`,
     /// where the image is likewise bound at construction.
-    init(machO: MachOImage, eventHandlers: [SwiftInterfaceEvents.Handler] = []) {
+    init(machO: MachOImage, eventHandlers: [SwiftIndexEvents.Handler] = []) {
         self.machO = machO
         self.upstream = .init(configuration: .init(showCImportedTypes: false), eventHandlers: eventHandlers, in: machO)
     }
@@ -137,7 +139,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         // no lock is held across the `await mangleAsString` suspension points.
         // Mirrors `RuntimeObjCInterfaceIndexer.prepare()`.
         var subclassTable: [String: OrderedSet<String>] = [:]
-        var typeNameTable: [String: SwiftInterface.TypeName] = [:]
+        var typeNameTable: [String: SwiftDeclaration.TypeName] = [:]
         for (typeName, typeDefinition) in upstream.allTypeDefinitions {
             // Record `mangledName -> TypeName` for every type, regardless of
             // whether it is a class. `RuntimeSwiftSection.makeRuntimeObject`
@@ -216,7 +218,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// image first, then each registered sub-indexer — so on the factory
     /// aggregate the lookup spans every loaded image. `RuntimeSwiftSection`
     /// uses it to translate a relationship result back into a `RuntimeObject`.
-    func typeName(forMangledName mangledName: String) -> SwiftInterface.TypeName? {
+    func typeName(forMangledName mangledName: String) -> SwiftDeclaration.TypeName? {
         if let typeName = typeNameByMangledName[mangledName] {
             return typeName
         }
@@ -234,7 +236,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// forwards property *reads* only, so the upstream methods the codebase
     /// needs are wrapped explicitly — `RuntimeSwiftSection.updateConfiguration`
     /// calls this when Swift generation options change.
-    func updateConfiguration(_ newConfiguration: SwiftInterfaceIndexConfiguration) async throws {
+    func updateConfiguration(_ newConfiguration: SwiftDeclarationIndexConfiguration) async throws {
         try await upstream.updateConfiguration(newConfiguration)
     }
 

@@ -33,7 +33,7 @@ public struct ObjCClassReference: Hashable, Sendable, Codable {
 /// definitions, plus the class-inheritance and protocol-adoption reverse
 /// tables that back `RuntimeRelationshipsResolver`.
 ///
-/// This is the Objective-C counterpart of `SwiftInterfaceIndexer` on the
+/// This is the Objective-C counterpart of `SwiftDeclarationIndexer` on the
 /// Swift side: it takes the image's `MachOImage` at `init` and owns *all*
 /// of the raw `MachOObjCSection` / `ObjCDump` extraction (`prepare()`), so
 /// `RuntimeObjCSection` is left as a thin translation layer that turns this
@@ -43,13 +43,13 @@ public struct ObjCClassReference: Hashable, Sendable, Codable {
 /// Aggregation: a `RuntimeObjCSectionFactory` keeps one empty aggregate
 /// instance and registers every per-image indexer as a sub-indexer via
 /// `addSubIndexer(_:)`, so relationship queries can fan out across all
-/// loaded ObjC images. Mirrors `SwiftInterfaceIndexer.addSubIndexer(_:)`.
+/// loaded ObjC images. Mirrors `SwiftDeclarationIndexer.addSubIndexer(_:)`.
 ///
 /// `@unchecked Sendable`: the `MachOImage` supplied at `init` and the
 /// stored `ObjCDump` / `MachOObjCSection` values are not themselves
 /// `Sendable`, but `machO` is an immutable `let` and every dictionary is
 /// `@Mutex`-guarded and immutable once `prepare()` returns — mirroring the
-/// `SwiftInterfaceIndexer` reference-type indexer pattern (a shared
+/// `SwiftDeclarationIndexer` reference-type indexer pattern (a shared
 /// `Sendable` data store), though the exact isolation annotations on each
 /// side differ.
 public final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
@@ -105,7 +105,7 @@ public final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     // MARK: - Indexed Image
 
     /// The Mach-O image this indexer parses. Bound at `init` and never
-    /// reassigned — mirrors `SwiftInterfaceIndexer`, which likewise binds
+    /// reassigned — mirrors `SwiftDeclarationIndexer`, which likewise binds
     /// its `MachOImage` at construction. `prepare()` reads it to populate
     /// the data store below.
     private let machO: MachOImage
@@ -645,7 +645,7 @@ public final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     // MARK: - Aggregation
 
     /// Registers a per-image indexer with this aggregate. Mirrors
-    /// `SwiftInterfaceIndexer.addSubIndexer(_:)` and is called by
+    /// `SwiftDeclarationIndexer.addSubIndexer(_:)` and is called by
     /// `RuntimeObjCSectionFactory` immediately after a new per-image
     /// `RuntimeObjCSection` has been constructed.
     public func addSubIndexer(_ subIndexer: RuntimeObjCInterfaceIndexer) {

@@ -129,7 +129,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                exact: "0.12.0-beta.3",
+                branch: "refactor/split-swift-interface-modules",
             ),
         ),
         .package(
@@ -199,6 +199,10 @@ let package = Package(
                 .product(name: "MachOKit", package: "MachOKit"),
                 .product(name: "MachOObjCSection", package: "MachOObjCSection"),
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
+                .product(name: "SwiftDeclaration", package: "MachOSwiftSection"),
+                .product(name: "SwiftIndexing", package: "MachOSwiftSection"),
+                .product(name: "SwiftPrinting", package: "MachOSwiftSection"),
+                .product(name: "SwiftSpecialization", package: "MachOSwiftSection"),
                 .product(name: "SwiftInterface", package: "MachOSwiftSection"),
                 .product(name: "MetaCodable", package: "MetaCodable"),
                 .product(name: "Semaphore", package: "Semaphore"),
