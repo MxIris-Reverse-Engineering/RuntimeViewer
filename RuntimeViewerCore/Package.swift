@@ -129,7 +129,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                branch: "refactor/split-swift-interface-modules",
+                exact: "0.12.0-beta.5",
             ),
         ),
         .package(
