@@ -176,16 +176,6 @@ let package = Package(
         ),
         
         .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
-                isRelative: true,
-                traits: UIFoundationTraits,
-            ),
-            .package(
-                path: "../../UIFoundation",
-                isRelative: true,
-                traits: UIFoundationTraits,
-            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
                 from: "0.10.2",
@@ -194,14 +184,6 @@ let package = Package(
         ),
 
         .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.forkLibraryDirectory.libraryPath("XCoordinator"),
-                isRelative: true,
-            ),
-            .package(
-                path: "../../XCoordinator",
-                isRelative: true,
-            ),
             remote: .package(
                 url: "https://github.com/MxIris-Library-Forks/XCoordinator",
                 from: "3.0.0-beta.1",
@@ -209,14 +191,6 @@ let package = Package(
         ),
 
         .package(
-//            local: .package(
-//                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("CocoaCoordinator"),
-//                isRelative: true,
-//            ),
-//            .package(
-//                path: "../../CocoaCoordinator",
-//                isRelative: true,
-//            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/CocoaCoordinator",
                 from: "0.5.0",
@@ -224,14 +198,6 @@ let package = Package(
         ),
 
         .package(
-//            local: .package(
-//                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("UXKitCoordinator"),
-//                isRelative: true,
-//            ),
-//            .package(
-//                path: "../../UXKitCoordinator",
-//                isRelative: true,
-//            ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/UXKitCoordinator",
                 branch: "main",
@@ -239,10 +205,6 @@ let package = Package(
         ),
 
         .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("RxSwiftPlus"),
-                isRelative: true,
-            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
                 from: "0.2.3",
@@ -250,14 +212,6 @@ let package = Package(
         ),
         
         .package(
-//            local: .package(
-//                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("OpenUXKit"),
-//                isRelative: true,
-//            ),
-//            .package(
-//                path: "../../OpenUXKit",
-//                isRelative: true,
-//            ),
             remote: .package(
                 url: "https://github.com/OpenUXKit/OpenUXKit",
                 branch: "main",

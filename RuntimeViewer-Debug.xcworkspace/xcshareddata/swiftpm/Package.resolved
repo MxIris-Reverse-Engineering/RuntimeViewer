@@ -19,6 +19,15 @@
       }
     },
     {
+      "identity" : "cocoacoordinator",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/CocoaCoordinator",
+      "state" : {
+        "revision" : "7bfb995aafa0c802bb8296add707421e6950d1b0",
+        "version" : "0.5.0"
+      }
+    },
+    {
       "identity" : "combine-schedulers",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/combine-schedulers",
@@ -136,6 +145,15 @@
       }
     },
     {
+      "identity" : "openuxkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/OpenUXKit/OpenUXKit",
+      "state" : {
+        "branch" : "main",
+        "revision" : "2ab2afc03cb6c19f56cbbd4c6fdd6fdd7e3f42f2"
+      }
+    },
+    {
       "identity" : "rainbow",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Rainbow",
@@ -187,6 +205,15 @@
       "state" : {
         "revision" : "132aea4f236ccadc51590b38af0357a331d51fa2",
         "version" : "6.10.2"
+      }
+    },
+    {
+      "identity" : "rxswiftplus",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
+      "state" : {
+        "revision" : "d40a7d551b58ce3006eaabcaa3721b99db72ea78",
+        "version" : "0.2.3"
       }
     },
     {
@@ -514,12 +541,48 @@
       }
     },
     {
+      "identity" : "systemhud",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/SystemHUD",
+      "state" : {
+        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
+        "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "uifoundation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/UIFoundation",
+      "state" : {
+        "revision" : "36dc65d71b0f27a3ec3e7576f56703275d4f02af",
+        "version" : "0.10.2"
+      }
+    },
+    {
+      "identity" : "uxkitcoordinator",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
+      "state" : {
+        "branch" : "main",
+        "revision" : "57e86a21d9c079c860e65de1ac0b96cac82689bc"
+      }
+    },
+    {
       "identity" : "version",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mxcl/Version",
       "state" : {
         "revision" : "3043fcd2a50375db76d89ff206a612471833d1c2",
         "version" : "2.2.1"
+      }
+    },
+    {
+      "identity" : "xcoordinator",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Library-Forks/XCoordinator",
+      "state" : {
+        "revision" : "1d35f8bf10b9cf0ab49736493d2d8b6c27fc63c0",
+        "version" : "3.0.0-beta.1"
       }
     },
     {
