@@ -1,7 +1,10 @@
 @_spi(Support) import SwiftDeclaration
+@_spi(Support) import SwiftDeclarationRendering
 @_spi(Support) import SwiftIndexing
 @_spi(Support) import SwiftSpecialization
 @_spi(Support) import SwiftPrinting
+@_spi(Support) import SwiftInterface
+@_spi(Internals) import SwiftInspection
 import Demangling
 import Foundation
 import FoundationToolbox
@@ -10,9 +13,6 @@ import MachOKit
 import MachOSwiftSection
 import OrderedCollections
 import Semantic
-import SwiftDump
-@_spi(Internals) import SwiftInspection
-@_spi(Support) import SwiftInterface
 import MetaCodable
 
 @Codable
