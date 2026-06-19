@@ -10,6 +10,15 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         false
     }
 
+    /// When `true`, the outline groups runtime objects into kind sections
+    /// (`output.runtimeObjectSections`) and renders section group rows; when
+    /// `false`, it shows the flat single-layer list (`output.runtimeObjects`).
+    /// Sections and root-level reordering are mutually exclusive, so the
+    /// reorderable bookmark variant keeps the flat list.
+    var supportsSections: Bool {
+        false
+    }
+
     @ViewLoading
     private var tabView: NSTabView
 
@@ -151,12 +160,25 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         let output = viewModel.transform(input)
 
-        output.runtimeObjects.drive(imageLoadedView.outlineView.rx.nodes(options: isReorderable ? [.reorderable] : [])) { (outlineView: NSOutlineView, tableColumn: NSTableColumn?, viewModel: SidebarRuntimeObjectCellViewModel) -> NSView? in
-            let cellView = outlineView.box.makeView(ofClass: RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel>.self)
-            cellView.bind(to: viewModel)
-            return cellView
+        let cellProvider = { (outlineView: NSOutlineView, _: NSTableColumn?, viewModel: SidebarRuntimeObjectCellViewModel) -> NSView? in
+            outlineView.box.makeView(ofClass: RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel>.self).then {
+                $0.bind(to: viewModel)
+            }
         }
-        .disposed(by: rx.disposeBag)
+
+        if supportsSections {
+            let sectionsSource = output.runtimeObjectSections
+                .asObservable()
+                .map { $0.map { ArraySection(model: $0, elements: $0.objects) } }
+            let sectionHeaderProvider = { (outlineView: NSOutlineView, _: NSTableColumn?, section: SidebarRuntimeObjectSection) -> NSView? in
+                let headerView = outlineView.box.makeView(ofClass: SectionHeaderCellView.self)
+                headerView.configure(title: section.title)
+                return headerView
+            }
+            imageLoadedView.outlineView.rx.sections(source: sectionsSource)(sectionHeaderProvider, cellProvider).disposed(by: rx.disposeBag)
+        } else {
+            imageLoadedView.outlineView.rx.nodes(source: output.runtimeObjects.asObservable(), options: isReorderable ? [.reorderable] : [])(cellProvider).disposed(by: rx.disposeBag)
+        }
 
         output.errorText.drive(imageLoadErrorView.titleLabel.rx.stringValue).disposed(by: rx.disposeBag)
 
@@ -237,6 +259,35 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 }
 
 extension SidebarRuntimeObjectViewController {
+    /// Group-row cell for a kind section header (e.g. "Objective-C Class").
+    /// Rendered as an `NSOutlineView` group item; the system applies the
+    /// standard group-row styling, so this only supplies the title text.
+    fileprivate final class SectionHeaderCellView: TableCellView {
+        private let titleLabel = Label()
+
+        override func setup() {
+            super.setup()
+
+            addSubview(titleLabel)
+
+            titleLabel.snp.makeConstraints { make in
+                make.leading.trailing.equalToSuperview()
+                make.top.bottom.equalToSuperview().inset(2)
+            }
+
+            titleLabel.do {
+                $0.font = .systemFont(ofSize: 11, weight: .semibold)
+                $0.textColor = .secondaryLabelColor
+                $0.alignment = .left
+                $0.maximumNumberOfLines = 1
+            }
+        }
+
+        func configure(title: String) {
+            titleLabel.stringValue = title
+        }
+    }
+
     final class ImageUnknownView: XiblessView {}
 
     final class ImageLoadedView: XiblessView {

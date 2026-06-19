@@ -124,6 +124,11 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
     public struct Output {
         public let runtimeObjects: Driver<[SidebarRuntimeObjectCellViewModel]>
+        /// Same objects as `runtimeObjects`, grouped into kind sections. The
+        /// sectioned sidebar (AppKit outline / UIKit collection view) binds this
+        /// instead of the flat `runtimeObjects`; the flat form is still used by
+        /// platforms / views that present a single layer (Open Quickly, iOS).
+        public let runtimeObjectSections: Driver<[SidebarRuntimeObjectSection]>
         public let loadState: Driver<RuntimeImageLoadState>
         public let notLoadedText: Driver<String>
         public let errorText: Driver<String>
@@ -211,6 +216,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
         return Output(
             runtimeObjects: $filteredNodes.asDriver(),
+            runtimeObjectSections: $filteredNodes.asDriver().map { Self.makeSections(from: $0) },
             loadState: distinctLoadState,
             notLoadedText: .just("\(imageName) is not yet loaded"),
             errorText: errorText,
@@ -226,6 +232,27 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
             reloadRow: reloadRowRelay.asSignal()
         )
+    }
+
+    /// Groups a flat list of cell viewmodels into kind sections, sorted by
+    /// `RuntimeObjectKind` (which is `Comparable`). Encounter order is preserved
+    /// within each section, so when the input is already sorted (the runtime
+    /// object list sets `isSorted`), each section's objects stay name-sorted.
+    /// Only kinds that actually occur produce a section, so empty sections never
+    /// appear.
+    static func makeSections(from nodes: [SidebarRuntimeObjectCellViewModel]) -> [SidebarRuntimeObjectSection] {
+        var orderedKinds: [RuntimeObjectKind] = []
+        var objectsByKind: [RuntimeObjectKind: [SidebarRuntimeObjectCellViewModel]] = [:]
+        for node in nodes {
+            let kind = node.runtimeObject.kind
+            if objectsByKind[kind] == nil {
+                orderedKinds.append(kind)
+            }
+            objectsByKind[kind, default: []].append(node)
+        }
+        return orderedKinds
+            .sorted()
+            .map { SidebarRuntimeObjectSection(kind: $0, objects: objectsByKind[$0] ?? []) }
     }
 
     func reloadData() async throws {

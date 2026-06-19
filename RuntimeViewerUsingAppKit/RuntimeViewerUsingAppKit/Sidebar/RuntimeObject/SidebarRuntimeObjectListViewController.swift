@@ -6,6 +6,8 @@ import RuntimeViewerCore
 import RuntimeViewerApplication
 
 final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewController<SidebarRuntimeObjectListViewModel> {
+    override var supportsSections: Bool { true }
+
     private let openQuicklyActionBar = QuickActionBar()
 
     private let openQuicklyActivateRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
