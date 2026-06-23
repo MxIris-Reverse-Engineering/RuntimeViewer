@@ -216,9 +216,21 @@ final class ContentLineNumberRulerView: NSRulerView {
     }
 
     private func drawSeparator() {
+        // The separator is a static decoration, so it must not bleed up under the window's
+        // title bar / toolbar (the scroll view, and thus this ruler, extends beneath them).
+        // Clip its top to where the unobscured content area begins. Line numbers and the
+        // background still scroll under the toolbar, matching the text.
         separatorColor.setFill()
-        let separatorRect = NSRect(x: bounds.maxX - separatorWidth, y: bounds.minY, width: separatorWidth, height: bounds.height)
+        let separatorTop = contentAreaMinY
+        let separatorRect = NSRect(x: bounds.maxX - separatorWidth, y: separatorTop, width: separatorWidth, height: bounds.maxY - separatorTop)
         separatorRect.fill()
+    }
+
+    /// The y in this ruler's (flipped) coordinate space where the unobscured content area begins,
+    /// i.e. the bottom edge of the title bar / toolbar that the scroll view extends beneath.
+    private var contentAreaMinY: CGFloat {
+        guard let clipView = scrollView?.contentView else { return bounds.minY }
+        return max(bounds.minY, convert(NSPoint.zero, from: clipView).y)
     }
 
     // MARK: - Notification Observers
