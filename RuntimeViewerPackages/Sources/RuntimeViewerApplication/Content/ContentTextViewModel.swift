@@ -28,7 +28,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
     public init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
-        self.theme = XcodePresentationTheme()
+        self.theme = ResolvedTheme.fallback
         super.init(documentState: documentState, router: router)
 
         self.imageNameOfRuntimeObject = runtimeObject.imageName
@@ -56,7 +56,35 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         transformerObservable = .just(.init())
         #endif
 
-        Observable.combineLatest($runtimeObject, appDefaults.$options, appDefaults.$themeProfile, transformerObservable)
+        let themeObservable: Observable<ThemeProfile>
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        themeObservable = Observable<ThemeProfile>.create { observer in
+            let settings = Settings.shared
+
+            observer.onNext(ResolvedTheme(settings: settings))
+            func observe() {
+                withObservationTracking {
+                    _ = settings.theme
+                } onChange: {
+                    DispatchQueue.main.async {
+                        observer.onNext(ResolvedTheme(settings: settings))
+                        observe()
+                    }
+                }
+            }
+            observe()
+            return Disposables.create()
+        }
+        #else
+        themeObservable = .just(ResolvedTheme.fallback)
+        #endif
+
+        themeObservable
+            .observeOnMainScheduler()
+            .bind(to: $theme)
+            .disposed(by: rx.disposeBag)
+
+        Observable.combineLatest($runtimeObject, appDefaults.$options, themeObservable, transformerObservable)
             .flatMapLatest { [unowned self] runtimeObject, options, theme, transformer in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
