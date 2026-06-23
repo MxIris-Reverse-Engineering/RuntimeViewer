@@ -18,6 +18,7 @@ struct SettingsRootView: View {
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
     case general = "General"
+    case theme = "Theme"
     case notifications = "Notifications"
     case transformer = "Transformer"
     case indexing = "Indexing"
@@ -30,6 +31,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .general: "gearshape"
+        case .theme: "paintpalette"
         case .notifications: "bell.badge"
         case .transformer: "arrow.triangle.2.circlepath"
         case .indexing: "square.stack.3d.down.right"
@@ -43,6 +45,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     var contentView: some View {
         switch self {
         case .general: GeneralSettingsView()
+        case .theme: ThemeSettingsView()
         case .notifications: NotificationSettingsView()
         case .transformer: TransformerSettingsView()
         case .indexing: IndexingSettingsView()
