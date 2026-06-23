@@ -29,9 +29,11 @@ final class ExportingCompletionViewController: UXKitViewController<ExportingComp
 
     private lazy var contentStackView = VStackView(distribution: .fill, spacing: 10) {
         checkmarkImageView
+            .stackView
             .customSpacing(24)
         titleLabel
         summaryLabel
+            .stackView
             .customSpacing(16)
         showInFinderButton
     }
