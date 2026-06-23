@@ -41,6 +41,11 @@ public final class Settings {
         didSet { scheduleAutoSave() }
     }
 
+    @Default(Theme.default)
+    public var theme: Theme = .init() {
+        didSet { scheduleAutoSave() }
+    }
+
     @IgnoreCoding
     @ObservationIgnored
     private var saveTask: Task<Void, Error>?
@@ -81,6 +86,7 @@ public final class Settings {
             mcp = decoded.mcp
             indexing = decoded.indexing
             update = decoded.update
+            theme = decoded.theme
             #log(.debug, "Settings loaded successfully.")
         } catch {
             #log(.debug, "No saved settings found or load failed, using defaults. (\(error, privacy: .public))")
