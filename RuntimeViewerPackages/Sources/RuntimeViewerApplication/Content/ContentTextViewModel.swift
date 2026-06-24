@@ -35,46 +35,24 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
         let transformerObservable: Observable<Transformer.Configuration>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        transformerObservable = Observable<Transformer.Configuration>.create { observer in
-            let settings = Settings.shared
-            
-            observer.onNext(settings.transformer)
-            func observe() {
-                withObservationTracking {
-                    _ = settings.transformer
-                } onChange: {
-                    DispatchQueue.main.async {
-                        observer.onNext(settings.transformer)
-                        observe()
-                    }
-                }
+        transformerObservable = Observable<Transformer.Configuration>
+            .tracking {
+                @Dependency(\.settings) var settings
+                return settings.transformer
             }
-            observe()
-            return Disposables.create()
-        }
+            .share(replay: 1, scope: .whileConnected)
         #else
         transformerObservable = .just(.init())
         #endif
 
         let themeObservable: Observable<ThemeProfile>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        themeObservable = Observable<ThemeProfile>.create { observer in
-            let settings = Settings.shared
-
-            observer.onNext(ResolvedTheme(settings: settings))
-            func observe() {
-                withObservationTracking {
-                    _ = settings.theme
-                } onChange: {
-                    DispatchQueue.main.async {
-                        observer.onNext(ResolvedTheme(settings: settings))
-                        observe()
-                    }
-                }
+        themeObservable = Observable<ThemeProfile>
+            .tracking {
+                @Dependency(\.settings) var settings
+                return ResolvedTheme(settings: settings)
             }
-            observe()
-            return Disposables.create()
-        }
+            .share(replay: 1, scope: .whileConnected)
         #else
         themeObservable = .just(ResolvedTheme.fallback)
         #endif
