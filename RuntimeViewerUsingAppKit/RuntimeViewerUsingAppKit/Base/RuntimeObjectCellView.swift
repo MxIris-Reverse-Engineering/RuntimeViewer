@@ -35,23 +35,33 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
 
     private lazy var textStackView = VStackView(distribution: .fill, alignment: .leading, spacing: 2) {
         titleLabel
+            .box
             .contentCompressionResistance(h: .defaultLow)
         subtitleLabel
+            .box
             .contentCompressionResistance(h: .defaultLow)
     }
 
     private lazy var contentStackView = HStackView(distribution: .fill, spacing: 6) {
         primaryIconImageView
+            .box
             .contentHugging(h: .required)
+            .box
             .contentCompressionResistance(h: .required)
         secondaryIconImageView
+            .box
             .contentHugging(h: .required)
+            .box
             .contentCompressionResistance(h: .required)
         tertiaryIconImageView
+            .box
             .contentHugging(h: .required)
+            .box
             .contentCompressionResistance(h: .required)
         textStackView
+            .box
             .contentHugging(h: .defaultLow)
+            .box
             .contentCompressionResistance(h: .defaultLow)
     }
 

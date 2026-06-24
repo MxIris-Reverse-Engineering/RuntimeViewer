@@ -34,6 +34,8 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         return (scrollView, textView)
     }()
 
+    private lazy var lineNumberRulerView = ContentLineNumberRulerView(scrollView: scrollView, orientation: .verticalRuler)
+
     private let eventMonitor = EventMonitor()
 
     private let jumpToDefinitionRelay = PublishRelay<RuntimeObject>()
@@ -54,6 +56,9 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
 
         scrollView.do {
             $0.drawsBackground = true
+            $0.hasVerticalRuler = true
+            $0.verticalRulerView = lineNumberRulerView
+            $0.rulersVisible = true
         }
 
         textView.do {
@@ -64,6 +69,8 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
             $0.linkTextAttributes = [:]
             $0.delegate = self
         }
+
+        lineNumberRulerView.clientView = textView
     }
 
 
@@ -88,6 +95,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
 
         output.attributedString.drive(with: self) { target, attributedString in
             target.textView.textStorage?.setAttributedString(attributedString)
+            target.lineNumberRulerView.reload()
         }
         .disposed(by: rx.disposeBag)
 
@@ -95,6 +103,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
             ($0.contentView as? UXView)?.backgroundColor = $1.backgroundColor
             $0.textView.backgroundColor = $1.backgroundColor
             $0.scrollView.backgroundColor = $1.backgroundColor
+            $0.lineNumberRulerView.backgroundColor = $1.backgroundColor
         }
         .disposed(by: rx.disposeBag)
 

@@ -380,8 +380,10 @@ extension SidebarRuntimeObjectViewController {
 
         lazy var contentView = VStackView(alignment: .center, spacing: 10) {
             titleLabel
+                .stackView
                 .gravity(.center)
             loadImageButton
+                .stackView
                 .gravity(.center)
         }
 

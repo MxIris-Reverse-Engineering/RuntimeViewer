@@ -132,10 +132,14 @@ extension BatchExportingImageSelectionViewController {
 
         private lazy var textStack = VStackView(alignment: .leading, spacing: 2) {
             nameLabel
+                .box
                 .contentHugging(h: .defaultLow)
+                .box
                 .contentCompressionResistance(h: .defaultLow)
             pathLabel
+                .box
                 .contentHugging(h: .defaultLow)
+                .box
                 .contentCompressionResistance(h: .defaultLow)
         }
 
