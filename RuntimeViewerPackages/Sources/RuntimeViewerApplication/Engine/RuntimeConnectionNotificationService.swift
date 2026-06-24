@@ -40,8 +40,9 @@ public final class RuntimeConnectionNotificationService: NSObject {
     /// Sends a notification when a runtime engine is connected.
     /// - Parameter source: The runtime source that was connected.
     public func notifyConnected(source: RuntimeSource) {
-        let settings = Settings.shared.notifications
-        guard settings.isEnabled, settings.showOnConnect else { return }
+        @Dependency(\.settings) var settings
+        let notificationSettings = settings.notifications
+        guard notificationSettings.isEnabled, notificationSettings.showOnConnect else { return }
 
         let content = UNMutableNotificationContent()
         content.title = "Connected"
@@ -55,8 +56,9 @@ public final class RuntimeConnectionNotificationService: NSObject {
     ///   - source: The runtime source that was disconnected.
     ///   - error: Optional error if disconnection was unexpected.
     public func notifyDisconnected(source: RuntimeSource, error: Error?) {
-        let settings = Settings.shared.notifications
-        guard settings.isEnabled, settings.showOnDisconnect else { return }
+        @Dependency(\.settings) var settings
+        let notificationSettings = settings.notifications
+        guard notificationSettings.isEnabled, notificationSettings.showOnDisconnect else { return }
 
         let content = UNMutableNotificationContent()
         content.title = "Disconnected"

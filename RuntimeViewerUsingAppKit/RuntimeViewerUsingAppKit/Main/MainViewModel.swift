@@ -137,12 +137,14 @@ final class MainViewModel: ViewModel<MainRoute> {
 //        .disposed(by: rx.disposeBag)
 
         input.fontSizeSmallerClick.emitOnNext {
-            Settings.shared.theme.fontSize = max(Self.minimumFontSize, Settings.shared.theme.fontSize - 1)
+            @Dependency(\.settings) var settings
+            settings.theme.fontSize = max(Self.minimumFontSize, settings.theme.fontSize - 1)
         }
         .disposed(by: rx.disposeBag)
 
         input.fontSizeLargerClick.emitOnNext {
-            Settings.shared.theme.fontSize = min(Self.maximumFontSize, Settings.shared.theme.fontSize + 1)
+            @Dependency(\.settings) var settings
+            settings.theme.fontSize = min(Self.maximumFontSize, settings.theme.fontSize + 1)
         }
         .disposed(by: rx.disposeBag)
 

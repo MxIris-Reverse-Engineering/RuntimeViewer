@@ -7,7 +7,7 @@ import MetaCodable
 @Codable
 @Loggable
 public final class Settings {
-    public static let shared = Settings()
+    fileprivate static let shared = Settings()
 
     private static var storage: SettingsStorageStrategy = SettingsFileSystemStorage()
 
@@ -91,5 +91,19 @@ public final class Settings {
         } catch {
             #log(.debug, "No saved settings found or load failed, using defaults. (\(error, privacy: .public))")
         }
+    }
+}
+
+import Dependencies
+
+private enum SettingsKey: DependencyKey {
+    static let liveValue = Settings.shared
+    static let previewValue = Settings()
+}
+
+extension DependencyValues {
+    public var settings: Settings {
+        get { self[SettingsKey.self] }
+        set { self[SettingsKey.self] = newValue }
     }
 }
