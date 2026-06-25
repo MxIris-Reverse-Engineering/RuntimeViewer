@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -125,29 +124,36 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         super.setupBindings(for: viewModel)
 
         // Mouse click and arrow-key navigation are explicit user intents — load
-        // immediately. Anything else (type-select character input, programmatic
-        // selection) is treated as "still searching" and goes through debounce
-        // so we only load the final landing row.
-        let arrowKeyCodes = [kVK_LeftArrow, kVK_RightArrow, kVK_DownArrow, kVK_UpArrow]
+        // immediately. Type-select character input fires a selection event on every
+        // keystroke, so debounce that path to skip the intermediate rows and only
+        // load the landing one.
+        let arrowKeyCodes: Set<UInt16> = [123, 124, 125, 126] // Left, Right, Down, Up
         let isExplicitSelection: (NSEvent?) -> Bool = { event in
-            guard let event else { return false }
+            guard let event else { return true }
             switch event.type {
             case .leftMouseUp:
                 return true
             case .keyDown:
-                return arrowKeyCodes.contains(.init(event.keyCode))
+                return arrowKeyCodes.contains(event.keyCode)
             default:
-                return false
+                return true
             }
         }
+        let userSelection = imageLoadedView.outlineView.rx.proposedSelection()
+            .compactMap { [weak outlineView = imageLoadedView.outlineView] proposed -> (SidebarRuntimeObjectCellViewModel, NSEvent?)? in
+                guard let outlineView,
+                      let row = proposed.indexes.first,
+                      let cellViewModel = outlineView.item(atRow: row) as? SidebarRuntimeObjectCellViewModel
+                else { return nil }
+                return (cellViewModel, proposed.triggeringEvent)
+            }
+            .share(replay: 0, scope: .whileConnected)
+        let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel> = .merge(
+            userSelection.filter { isExplicitSelection($0.1) }.map { $0.0 }.asSignal(onErrorSignalWith: .empty()),
+            userSelection.filter { !isExplicitSelection($0.1) }.map { $0.0 }.debounce(.milliseconds(800), scheduler: MainScheduler.instance).asSignal(onErrorSignalWith: .empty())
+        )
         let input = ViewModel.Input(
-            runtimeObjectClicked: .merge(
-                imageLoadedView.outlineView.rx.modelSelectedFilteringCurrentEvent(isExplicitSelection).asSignal(),
-                imageLoadedView.outlineView.rx
-                    .modelSelectedFilteringCurrentEvent { !isExplicitSelection($0) }
-                    .asSignal()
-                    .debounce(.milliseconds(800)),
-            ),
+            runtimeObjectClicked: runtimeObjectClicked,
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
@@ -171,7 +177,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 .asObservable()
                 .map { $0.map { ArraySection(model: $0, elements: $0.objects) } }
             let sectionHeaderProvider = { (outlineView: NSOutlineView, _: NSTableColumn?, section: SidebarRuntimeObjectSection) -> NSView? in
-                let headerView = outlineView.box.makeView(ofClass: SectionHeaderCellView.self)
+                let headerView = outlineView.box.makeView(ofClass: SectionHeaderView.self)
                 headerView.configure(title: section.title)
                 return headerView
             }
@@ -256,13 +262,17 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
         return cellViewModel.title.string
     }
+    
+    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+        !(item is SidebarRuntimeObjectSection)
+    }
 }
 
 extension SidebarRuntimeObjectViewController {
     /// Group-row cell for a kind section header (e.g. "Objective-C Class").
     /// Rendered as an `NSOutlineView` group item; the system applies the
     /// standard group-row styling, so this only supplies the title text.
-    fileprivate final class SectionHeaderCellView: TableCellView {
+    private final class SectionHeaderView: LayerBackedView {
         private let titleLabel = Label()
 
         override func setup() {
