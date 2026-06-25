@@ -212,8 +212,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RxAppKit",
       "state" : {
-        "revision" : "de60ea4bbee88c1dc8f5520005b42a4e093eda40",
-        "version" : "0.5.1"
+        "revision" : "80103f60629fa421360ee29c5ab79c5cde06969b",
+        "version" : "0.5.3"
       }
     },
     {
