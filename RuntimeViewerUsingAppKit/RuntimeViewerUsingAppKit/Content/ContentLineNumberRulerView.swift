@@ -18,9 +18,6 @@ final class ContentLineNumberRulerView: NSRulerView {
     /// The minimum thickness of the gutter regardless of digit count.
     private let minimumThickness: CGFloat = 32
 
-    /// Width of the trailing separator line.
-    private let separatorWidth: CGFloat = 1
-
     /// Background color of the gutter, kept in sync with the editor background by the controller.
     var backgroundColor: NSColor = .textBackgroundColor {
         didSet {
@@ -33,14 +30,6 @@ final class ContentLineNumberRulerView: NSRulerView {
     var lineNumberColor: NSColor = NSColor(light: NSColor(white: 0.6, alpha: 1), dark: NSColor(white: 0.46, alpha: 1)) {
         didSet {
             guard lineNumberColor != oldValue else { return }
-            needsDisplay = true
-        }
-    }
-
-    /// Color of the trailing separator line.
-    var separatorColor: NSColor = NSColor(light: NSColor(white: 0.85, alpha: 1), dark: NSColor(white: 0.26, alpha: 1)) {
-        didSet {
-            guard separatorColor != oldValue else { return }
             needsDisplay = true
         }
     }
@@ -158,7 +147,6 @@ final class ContentLineNumberRulerView: NSRulerView {
         bounds.fill()
 
         drawLineNumbers()
-        drawSeparator()
     }
 
     private func drawLineNumbers() {
@@ -213,24 +201,6 @@ final class ContentLineNumberRulerView: NSRulerView {
             numberString.draw(at: NSPoint(x: drawX, y: drawY))
             return true
         }
-    }
-
-    private func drawSeparator() {
-        // The separator is a static decoration, so it must not bleed up under the window's
-        // title bar / toolbar (the scroll view, and thus this ruler, extends beneath them).
-        // Clip its top to where the unobscured content area begins. Line numbers and the
-        // background still scroll under the toolbar, matching the text.
-        separatorColor.setFill()
-        let separatorTop = contentAreaMinY
-        let separatorRect = NSRect(x: bounds.maxX - separatorWidth, y: separatorTop, width: separatorWidth, height: bounds.maxY - separatorTop)
-        separatorRect.fill()
-    }
-
-    /// The y in this ruler's (flipped) coordinate space where the unobscured content area begins,
-    /// i.e. the bottom edge of the title bar / toolbar that the scroll view extends beneath.
-    private var contentAreaMinY: CGFloat {
-        guard let clipView = scrollView?.contentView else { return bounds.minY }
-        return max(bounds.minY, convert(NSPoint.zero, from: clipView).y)
     }
 
     // MARK: - Notification Observers
