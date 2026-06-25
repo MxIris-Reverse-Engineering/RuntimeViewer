@@ -45,7 +45,8 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
             $0.allowsMultipleSelection = false
             $0.allowsEmptySelection = true
             $0.usesAutomaticRowHeights = true
-            $0.style = .sourceList
+            $0.style = .inset
+            $0.intercellSpacing = .init(width: 0, height: 10)
         }
 
         scrollView.do {
