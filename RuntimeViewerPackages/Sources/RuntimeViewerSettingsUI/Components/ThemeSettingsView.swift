@@ -9,6 +9,9 @@ struct ThemeSettingsView: View {
     @AppSettings(\.theme)
     private var theme
 
+    @Environment(\.colorScheme)
+    private var colorScheme
+
     @State private var editingPreset: RuntimeViewerSettings.Settings.Theme.Preset?
 
     private static let minimumFontSize: Double = 8
@@ -49,7 +52,10 @@ struct ThemeSettingsView: View {
             }
         }
         .sheet(item: $editingPreset) { preset in
-            ThemeDetailsView(preset: preset) { updated in
+            ThemeDetailsView(
+                preset: preset,
+                initialAppearance: colorScheme == .dark ? .dark : .light
+            ) { updated in
                 guard let index = theme.customPresets.firstIndex(where: { $0.id == updated.id }) else { return }
                 theme.customPresets[index] = updated
             }
@@ -61,11 +67,21 @@ struct ThemeSettingsView: View {
     private func duplicate(_ preset: RuntimeViewerSettings.Settings.Theme.Preset) {
         var copy = preset
         copy.id = UUID().uuidString
-        copy.name = "\(preset.name) copy"
+        copy.name = uniquePresetName(basedOn: "\(preset.name) copy")
         copy.isBuiltin = false
         theme.customPresets.append(copy)
         theme.selectedPresetID = copy.id
         editingPreset = copy
+    }
+
+    private func uniquePresetName(basedOn base: String) -> String {
+        let existing = Set(theme.allPresets.map(\.name))
+        if !existing.contains(base) { return base }
+        var counter = 2
+        while existing.contains("\(base) \(counter)") {
+            counter += 1
+        }
+        return "\(base) \(counter)"
     }
 
     private func delete(_ preset: RuntimeViewerSettings.Settings.Theme.Preset) {
@@ -162,13 +178,13 @@ private struct ThemeColorPreview: View {
 
 // MARK: - Theme Details (Color Editor)
 
-private struct ThemeDetailsView: View {
-    private enum EditingAppearance: String, CaseIterable, Identifiable {
-        case light = "Light"
-        case dark = "Dark"
-        var id: String { rawValue }
-    }
+private enum EditingAppearance: String, CaseIterable, Identifiable {
+    case light = "Light"
+    case dark = "Dark"
+    var id: String { rawValue }
+}
 
+private struct ThemeDetailsView: View {
     private struct Slot: Identifiable {
         let title: String
         let keyPath: WritableKeyPath<RuntimeViewerSettings.Settings.Theme.Preset, RuntimeViewerSettings.Settings.Theme.Style>
@@ -191,17 +207,22 @@ private struct ThemeDetailsView: View {
     let onUpdate: (RuntimeViewerSettings.Settings.Theme.Preset) -> Void
 
     @State private var draft: RuntimeViewerSettings.Settings.Theme.Preset
-    @State private var editingAppearance: EditingAppearance = .dark
+    @State private var editingAppearance: EditingAppearance
+    @State private var pendingFlushTask: Task<Void, Never>?
 
     @Environment(\.dismiss)
     private var dismiss
 
+    private static let draftFlushDelay: Duration = .milliseconds(150)
+
     init(
         preset: RuntimeViewerSettings.Settings.Theme.Preset,
+        initialAppearance: EditingAppearance,
         onUpdate: @escaping (RuntimeViewerSettings.Settings.Theme.Preset) -> Void
     ) {
         self.onUpdate = onUpdate
         self._draft = State(initialValue: preset)
+        self._editingAppearance = State(initialValue: initialAppearance)
     }
 
     var body: some View {
@@ -253,14 +274,28 @@ private struct ThemeDetailsView: View {
 
             HStack {
                 Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+                Button("Done") {
+                    pendingFlushTask?.cancel()
+                    pendingFlushTask = nil
+                    onUpdate(draft)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)
         .frame(width: 460, height: 600)
         .onChange(of: draft) { _, newValue in
-            onUpdate(newValue)
+            pendingFlushTask?.cancel()
+            pendingFlushTask = Task { @MainActor in
+                try? await Task.sleep(for: Self.draftFlushDelay)
+                guard !Task.isCancelled else { return }
+                onUpdate(newValue)
+            }
+        }
+        .onDisappear {
+            pendingFlushTask?.cancel()
+            pendingFlushTask = nil
         }
     }
 
