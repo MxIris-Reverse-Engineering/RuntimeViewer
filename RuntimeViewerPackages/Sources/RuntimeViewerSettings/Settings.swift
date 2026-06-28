@@ -96,27 +96,40 @@ public final class Settings {
 
     /// One-shot migration from the pre-data-driven theme storage. Earlier
     /// builds persisted `XcodePresentationTheme` under the UserDefaults key
-    /// `themeProfile`, which carried the user's customized font size.
-    /// Pulls that font size into the new `theme.fontSize` slot exactly once,
-    /// then removes the legacy key so subsequent launches skip the work.
+    /// `themeProfile`, which carried the user's customized font size. Pulls
+    /// that font size into the new `theme.fontSize` slot exactly once.
+    ///
+    /// Whether the migration has run is tracked by a dedicated
+    /// `didMigrateLegacyThemeProfile` flag rather than by comparing
+    /// `theme.fontSize` against the default value — otherwise a user who
+    /// explicitly sets the new font size back to the default would have it
+    /// silently overwritten by the legacy value on the next launch.
     private func migrateLegacyThemeProfileIfNeeded() {
         let legacyKey = "themeProfile"
+        let migrationFlagKey = "didMigrateLegacyThemeProfile"
         let defaults = UserDefaults.standard
 
+        guard !defaults.bool(forKey: migrationFlagKey) else { return }
+        // Mark the migration as attempted unconditionally so a malformed
+        // blob does not retry on every launch; the legacy data itself is
+        // only removed once we have successfully consumed it.
+        defer { defaults.set(true, forKey: migrationFlagKey) }
+
         guard let legacyData = defaults.data(forKey: legacyKey) else { return }
-        defer { defaults.removeObject(forKey: legacyKey) }
 
         struct LegacyThemeProfile: Decodable {
             let fontSize: Double
         }
-        guard let legacy = try? JSONDecoder().decode(LegacyThemeProfile.self, from: legacyData) else { return }
+        guard let legacy = try? JSONDecoder().decode(LegacyThemeProfile.self, from: legacyData) else {
+            // Decode failed: leave the legacy blob in place so a future
+            // build that extends `LegacyThemeProfile` can still recover it.
+            return
+        }
 
-        // Only honor the legacy font size if the user has not already picked
-        // one in the new build (still at the default 13.0). Anyone running
-        // this build twice has already had a chance to adjust the new
-        // `theme.fontSize` and that choice wins.
-        guard theme.fontSize == 13.0, legacy.fontSize >= 8.0, legacy.fontSize <= 32.0 else { return }
-        theme.fontSize = legacy.fontSize
+        if legacy.fontSize >= 8.0, legacy.fontSize <= 32.0 {
+            theme.fontSize = legacy.fontSize
+        }
+        defaults.removeObject(forKey: legacyKey)
     }
 }
 

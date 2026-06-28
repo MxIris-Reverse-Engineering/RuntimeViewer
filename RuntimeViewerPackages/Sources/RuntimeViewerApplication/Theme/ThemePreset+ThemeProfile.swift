@@ -119,7 +119,14 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
 
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         let italicDescriptor = baseFont.fontDescriptor.withSymbolicTraits(.italic)
-        return NSUIFont(descriptor: italicDescriptor, size: fontSize) ?? baseFont
+        if let italicFont = NSUIFont(descriptor: italicDescriptor, size: fontSize) {
+            return italicFont
+        }
+        // Fallback when the font family ships no italic face (e.g. systems
+        // missing the SF Mono Italic supplement): synthesize oblique italic
+        // via a shear matrix so the edited italic flag still has a visible
+        // effect, matching what the SwiftUI preview shows via `Text.italic()`.
+        return Self.synthesizedObliqueFont(from: baseFont, pointSize: fontSize) ?? baseFont
         #else
         guard let italicDescriptor = baseFont.fontDescriptor.withSymbolicTraits(.traitItalic) else {
             return baseFont
@@ -127,6 +134,18 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
         return NSUIFont(descriptor: italicDescriptor, size: fontSize)
         #endif
     }
+
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+    /// ~12° forward slant, matching the conventional `NSObliquenessAttributeName`
+    /// magnitude used to fake italic when a font has no italic face.
+    private static let italicShear: CGFloat = 0.2
+
+    private static func synthesizedObliqueFont(from baseFont: NSUIFont, pointSize: CGFloat) -> NSUIFont? {
+        var matrix = AffineTransform(scale: pointSize)
+        matrix.append(AffineTransform(m11: 1, m12: 0, m21: italicShear, m22: 1, tX: 0, tY: 0))
+        return NSUIFont(descriptor: baseFont.fontDescriptor, textTransform: matrix)
+    }
+    #endif
 }
 
 // MARK: - Equatable

@@ -414,12 +414,14 @@ extension RuntimeViewerSettings.Settings.Theme.ColorValue {
     }
 
     /// Converts a SwiftUI `Color` into a stored sRGB component triple, or
-    /// returns nil when the source color has no RGB representation. Callers
+    /// returns nil when the source color has no sRGB representation. Callers
     /// should treat nil as "leave the previous value untouched" — substituting
-    /// a default (e.g. opaque black) would clobber the user's edit.
+    /// a default (e.g. opaque black) would clobber the user's edit. A
+    /// `genericRGB` fallback would silently mis-tag the components as sRGB
+    /// and shift the persisted color.
     fileprivate static func from(_ color: Color) -> Self? {
         let nsColor = NSColor(color)
-        guard let resolved = nsColor.usingColorSpace(.sRGB) ?? nsColor.usingColorSpace(.genericRGB) else {
+        guard let resolved = nsColor.usingColorSpace(.sRGB) else {
             return nil
         }
         return .init(

@@ -47,19 +47,13 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
         let themeObservable: Observable<ThemeProfile>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        // Track on the concrete `ResolvedTheme` so `distinctUntilChanged` has
-        // an Equatable element. Without this guard, editing any custom preset
-        // (even one that is not the active theme) emits a fresh value through
-        // the same identity-equal `ResolvedTheme` and re-runs the engine
-        // `interface(for:)` fetch in the downstream `combineLatest`.
-        themeObservable = Observable<ResolvedTheme>
-            .tracking {
-                @Dependency(\.settings) var settings
-                return ResolvedTheme(settings: settings)
-            }
-            .distinctUntilChanged()
-            .map { $0 as ThemeProfile }
-            .share(replay: 1, scope: .whileConnected)
+        // The shared stream multicasts a single `Observable.tracking` chain
+        // across every document, so editing any custom preset only rebuilds
+        // `ResolvedTheme` once instead of once per open document. Equatable
+        // dedup happens upstream so the downstream `combineLatest` only
+        // re-runs the engine `interface(for:)` fetch on a real change.
+        @Dependency(\.resolvedThemeStream) var resolvedThemeStream
+        themeObservable = resolvedThemeStream.observable.map { $0 as ThemeProfile }
         #else
         themeObservable = .just(ResolvedTheme.fallback)
         #endif
