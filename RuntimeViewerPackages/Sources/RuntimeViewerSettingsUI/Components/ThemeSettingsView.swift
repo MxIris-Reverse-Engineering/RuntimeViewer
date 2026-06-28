@@ -12,7 +12,12 @@ struct ThemeSettingsView: View {
     @Environment(\.colorScheme)
     private var colorScheme
 
-    @State private var editingPreset: RuntimeViewerSettings.Settings.Theme.Preset?
+    /// Identifier of the preset whose detail sheet is open, if any. Storing
+    /// the id (not the preset snapshot) lets ``editingPresetBinding`` look the
+    /// preset up against the live `customPresets` so the sheet auto-dismisses
+    /// when the underlying preset is removed (external sync, in-process
+    /// delete, …) rather than silently dropping flushed edits.
+    @State private var editingPresetID: String?
 
     private static let minimumFontSize: Double = 8
     private static let maximumFontSize: Double = 32
@@ -23,9 +28,14 @@ struct ThemeSettingsView: View {
                 ForEach(theme.allPresets) { preset in
                     ThemeRow(
                         preset: preset,
-                        isSelected: preset.id == theme.selectedPresetID,
+                        // Drive the checkmark off `selectedPreset.id` (which
+                        // falls back to xcode when `selectedPresetID` is
+                        // stale) so the active row always matches what the
+                        // editor renders, even when an out-of-band write
+                        // leaves `selectedPresetID` pointing at a deleted id.
+                        isSelected: preset.id == theme.selectedPreset.id,
                         onSelect: { theme.selectedPresetID = preset.id },
-                        onEdit: preset.isBuiltin ? nil : { editingPreset = preset },
+                        onEdit: preset.isBuiltin ? nil : { editingPresetID = preset.id },
                         onDuplicate: { duplicate(preset) },
                         onDelete: preset.isBuiltin ? nil : { delete(preset) }
                     )
@@ -51,7 +61,7 @@ struct ThemeSettingsView: View {
                 Text("Editor")
             }
         }
-        .sheet(item: $editingPreset) { preset in
+        .sheet(item: editingPresetBinding) { preset in
             ThemeDetailsView(
                 preset: preset,
                 initialAppearance: colorScheme == .dark ? .dark : .light
@@ -60,6 +70,22 @@ struct ThemeSettingsView: View {
                 theme.customPresets[index] = updated
             }
         }
+    }
+
+    /// `.sheet(item:)` binding that resolves the editing preset from the live
+    /// `customPresets` on every body re-evaluation. When the preset is removed
+    /// the `get` returns nil, which causes SwiftUI to dismiss the sheet
+    /// instead of leaving stale edits in mid-air.
+    private var editingPresetBinding: Binding<RuntimeViewerSettings.Settings.Theme.Preset?> {
+        Binding(
+            get: {
+                guard let id = editingPresetID else { return nil }
+                return theme.customPresets.first { $0.id == id }
+            },
+            set: { newValue in
+                editingPresetID = newValue?.id
+            }
+        )
     }
 
     // MARK: - Actions
@@ -71,7 +97,7 @@ struct ThemeSettingsView: View {
         copy.isBuiltin = false
         theme.customPresets.append(copy)
         theme.selectedPresetID = copy.id
-        editingPreset = copy
+        editingPresetID = copy.id
     }
 
     private func uniquePresetName(basedOn base: String) -> String {
@@ -88,6 +114,9 @@ struct ThemeSettingsView: View {
         theme.customPresets.removeAll { $0.id == preset.id }
         if theme.selectedPresetID == preset.id {
             theme.selectedPresetID = RuntimeViewerSettings.Settings.Theme.builtinXcodePresetID
+        }
+        if editingPresetID == preset.id {
+            editingPresetID = nil
         }
     }
 }
@@ -266,6 +295,7 @@ private struct ThemeDetailsView: View {
 
                             ColorPicker("", selection: colorBinding(slot.keyPath), supportsOpacity: true)
                                 .labelsHidden()
+
                         }
                     }
                 }
@@ -343,7 +373,11 @@ private struct ThemeDetailsView: View {
         Binding(
             get: { variant(keyPath) },
             set: { newColor in
-                let colorValue = RuntimeViewerSettings.Settings.Theme.ColorValue.from(newColor)
+                // Drop the write when the picker hands back a color we cannot
+                // express as sRGB components (pattern colors, some
+                // catalog/named colors). Falling back to opaque black would
+                // destroy the user's previous slot value silently.
+                guard let colorValue = RuntimeViewerSettings.Settings.Theme.ColorValue.from(newColor) else { return }
                 if editingAppearance == .light {
                     draft[keyPath: keyPath].light = colorValue
                 } else {
@@ -379,15 +413,20 @@ extension RuntimeViewerSettings.Settings.Theme.ColorValue {
         Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
     }
 
-    fileprivate static func from(_ color: Color) -> Self {
-        guard let sRGBColor = NSColor(color).usingColorSpace(.sRGB) else {
-            return .rgb(0, 0, 0)
+    /// Converts a SwiftUI `Color` into a stored sRGB component triple, or
+    /// returns nil when the source color has no RGB representation. Callers
+    /// should treat nil as "leave the previous value untouched" — substituting
+    /// a default (e.g. opaque black) would clobber the user's edit.
+    fileprivate static func from(_ color: Color) -> Self? {
+        let nsColor = NSColor(color)
+        guard let resolved = nsColor.usingColorSpace(.sRGB) ?? nsColor.usingColorSpace(.genericRGB) else {
+            return nil
         }
         return .init(
-            red: Double(sRGBColor.redComponent),
-            green: Double(sRGBColor.greenComponent),
-            blue: Double(sRGBColor.blueComponent),
-            alpha: Double(sRGBColor.alphaComponent)
+            red: Double(resolved.redComponent),
+            green: Double(resolved.greenComponent),
+            blue: Double(resolved.blueComponent),
+            alpha: Double(resolved.alphaComponent)
         )
     }
 }

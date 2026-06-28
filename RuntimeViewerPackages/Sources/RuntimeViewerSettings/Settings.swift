@@ -91,6 +91,32 @@ public final class Settings {
         } catch {
             #log(.debug, "No saved settings found or load failed, using defaults. (\(error, privacy: .public))")
         }
+        migrateLegacyThemeProfileIfNeeded()
+    }
+
+    /// One-shot migration from the pre-data-driven theme storage. Earlier
+    /// builds persisted `XcodePresentationTheme` under the UserDefaults key
+    /// `themeProfile`, which carried the user's customized font size.
+    /// Pulls that font size into the new `theme.fontSize` slot exactly once,
+    /// then removes the legacy key so subsequent launches skip the work.
+    private func migrateLegacyThemeProfileIfNeeded() {
+        let legacyKey = "themeProfile"
+        let defaults = UserDefaults.standard
+
+        guard let legacyData = defaults.data(forKey: legacyKey) else { return }
+        defer { defaults.removeObject(forKey: legacyKey) }
+
+        struct LegacyThemeProfile: Decodable {
+            let fontSize: Double
+        }
+        guard let legacy = try? JSONDecoder().decode(LegacyThemeProfile.self, from: legacyData) else { return }
+
+        // Only honor the legacy font size if the user has not already picked
+        // one in the new build (still at the default 13.0). Anyone running
+        // this build twice has already had a chance to adjust the new
+        // `theme.fontSize` and that choice wins.
+        guard theme.fontSize == 13.0, legacy.fontSize >= 8.0, legacy.fontSize <= 32.0 else { return }
+        theme.fontSize = legacy.fontSize
     }
 }
 
