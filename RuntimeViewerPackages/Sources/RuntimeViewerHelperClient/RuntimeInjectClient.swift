@@ -25,7 +25,7 @@ public final class RuntimeInjectClient: @unchecked Sendable {
         }
     }
 
-    public static let shared = RuntimeInjectClient()
+    fileprivate static let shared = RuntimeInjectClient()
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
 

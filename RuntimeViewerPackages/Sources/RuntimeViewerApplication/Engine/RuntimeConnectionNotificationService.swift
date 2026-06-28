@@ -11,7 +11,7 @@ import Dependencies
 @Loggable
 @MainActor
 public final class RuntimeConnectionNotificationService: NSObject {
-    public static let shared = RuntimeConnectionNotificationService()
+    fileprivate static let shared = RuntimeConnectionNotificationService()
 
     private let notificationCenter = UNUserNotificationCenter.current()
 

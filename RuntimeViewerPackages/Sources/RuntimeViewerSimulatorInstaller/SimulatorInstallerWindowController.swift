@@ -2,9 +2,10 @@
 
 import AppKit
 import SwiftUI
+import Dependencies
 
 public final class SimulatorInstallerWindowController: NSWindowController {
-    public static let shared = SimulatorInstallerWindowController()
+    fileprivate static let shared = SimulatorInstallerWindowController()
 
     private let viewModel = SimulatorInstallerViewModel()
 
@@ -35,6 +36,19 @@ public final class SimulatorInstallerWindowController: NSWindowController {
         super.showWindow(sender)
         window?.makeKeyAndOrderFront(sender)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+// MARK: - Dependencies
+
+private enum SimulatorInstallerWindowControllerKey: @preconcurrency DependencyKey {
+    @MainActor static let liveValue = SimulatorInstallerWindowController.shared
+}
+
+extension DependencyValues {
+    public var simulatorInstallerWindowController: SimulatorInstallerWindowController {
+        get { self[SimulatorInstallerWindowControllerKey.self] }
+        set { self[SimulatorInstallerWindowControllerKey.self] = newValue }
     }
 }
 

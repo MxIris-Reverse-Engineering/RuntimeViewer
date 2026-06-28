@@ -6,7 +6,7 @@ import RuntimeViewerArchitectures
 
 final class AttachToProcessViewController: UXKitViewController<AttachToProcessViewModel> {
     
-    static let shared = AttachToProcessViewController()
+    fileprivate static let shared = AttachToProcessViewController()
     
     private let pickerViewController: RunningPickerTabViewController
 
@@ -68,5 +68,18 @@ extension AttachToProcessViewController: RunningPickerTabViewController.Delegate
 
     func runningPickerTabViewControllerWasCancelled(_ viewController: RunningPickerTabViewController) {
         cancelRelay.accept()
+    }
+}
+
+// MARK: - Dependencies
+
+private enum AttachToProcessViewControllerKey: @preconcurrency DependencyKey {
+    @MainActor static let liveValue = AttachToProcessViewController.shared
+}
+
+extension DependencyValues {
+    var attachToProcessViewController: AttachToProcessViewController {
+        get { self[AttachToProcessViewControllerKey.self] }
+        set { self[AttachToProcessViewControllerKey.self] = newValue }
     }
 }
