@@ -31,16 +31,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     let imageUnknownView = ImageUnknownView()
 
-    private let filterModeButton = ItemPopUpButton<FilterMode>()
-
-    private let filterSearchField = FilterSearchField()
-
-    private let bottomSeparatorView = NSBox()
-
     private let filterModeDidChange = BehaviorRelay<Void>(value: ())
-
-    @ViewLoading
-    private var searchCaseInsensitiveButton: NSButton
 
     @Dependency(\.appDefaults)
     private var appDefaults
@@ -56,31 +47,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         contentView.hierarchy {
             tabView
-            bottomSeparatorView
-            filterModeButton
-            filterSearchField
         }
 
         tabView.snp.makeConstraints { make in
-            make.top.left.right.equalToSuperview()
-            make.bottom.equalTo(bottomSeparatorView.snp.top)
-        }
-
-        bottomSeparatorView.snp.makeConstraints { make in
-            make.left.right.equalToSuperview()
-            make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
-            make.height.equalTo(1)
-        }
-
-        filterModeButton.snp.makeConstraints { make in
-            make.left.equalToSuperview().inset(12)
-            make.centerY.equalTo(filterSearchField)
-        }
-
-        filterSearchField.snp.makeConstraints { make in
-            make.left.equalTo(filterModeButton.snp.right).offset(8)
-            make.right.equalToSuperview().inset(10)
-            make.bottom.equalToSuperview().inset(8)
+            make.edges.equalToSuperview()
         }
 
         tabView.do {
@@ -94,29 +64,13 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             $0.tabViewBorderType = .none
         }
 
-        bottomSeparatorView.do {
-            $0.boxType = .separator
-        }
-
-        filterModeButton.do {
-            $0.icon = .symbol(systemName: .line3HorizontalDecrease)
-            $0.setup()
+        imageLoadedView.filterModeButton.do {
             $0.onItem = appDefaults.filterMode
             $0.stateChanged = { [weak self] filterMode in
                 guard let self else { return }
                 appDefaults.filterMode = filterMode
                 filterModeDidChange.accept()
             }
-        }
-
-        filterSearchField.do {
-            if #available(macOS 26.0, *) {
-                $0.controlSize = .extraLarge
-            } else {
-                $0.controlSize = .large
-            }
-
-            $0.addFilterButton(systemSymbolName: "textformat", toolTip: "Case Insensitive").do { searchCaseInsensitiveButton = $0 }
         }
     }
 
@@ -158,8 +112,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
             ).merge(),
-            searchString: .combineLatest(filterSearchField.rx.stringValue.asDriver(), filterModeDidChange.asDriver(), resultSelector: { a, b in a }),
-            isSearchCaseInsensitive: searchCaseInsensitiveButton.rx.state.asDriver().map {
+            searchString: .combineLatest(imageLoadedView.filterSearchField.rx.stringValue.asDriver(), filterModeDidChange.asDriver(), resultSelector: { a, b in a }),
+            isSearchCaseInsensitive: imageLoadedView.searchCaseInsensitiveButton.rx.state.asDriver().map {
                 $0 == .on
             }
         )
@@ -305,22 +259,58 @@ extension SidebarRuntimeObjectViewController {
 
         let emptyLabel = Label()
 
+        let filterModeButton = ItemPopUpButton<FilterMode>()
+
+        let filterSearchField = FilterSearchField()
+
+        let bottomSeparatorView = NSBox()
+
+        private(set) var searchCaseInsensitiveButton: NSButton!
+
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
+
+            searchCaseInsensitiveButton = filterSearchField.addFilterButton(
+                systemSymbolName: "textformat",
+                toolTip: "Case Insensitive"
+            )
 
             hierarchy {
                 scrollView
                 emptyLabel
+                bottomSeparatorView
+                filterModeButton
+                filterSearchField
             }
 
             scrollView.snp.makeConstraints { make in
-                make.edges.equalToSuperview()
+                make.top.left.right.equalToSuperview()
+                make.bottom.equalTo(bottomSeparatorView.snp.top)
             }
 
             emptyLabel.snp.makeConstraints { make in
-                make.center.equalToSuperview()
+                make.centerX.equalToSuperview()
+                make.centerY.equalTo(scrollView)
                 make.top.left.greaterThanOrEqualTo(16).priority(.high)
-                make.bottom.right.lessThanOrEqualTo(-16).priority(.high)
+                make.right.lessThanOrEqualTo(-16).priority(.high)
+                make.bottom.lessThanOrEqualTo(bottomSeparatorView.snp.top).offset(-16).priority(.high)
+            }
+
+            bottomSeparatorView.snp.makeConstraints { make in
+                make.left.right.equalToSuperview()
+                make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
+                make.height.equalTo(1)
+            }
+
+            filterModeButton.snp.makeConstraints { make in
+                make.left.equalToSuperview().inset(12)
+                make.centerY.equalTo(filterSearchField)
+            }
+
+            filterSearchField.snp.makeConstraints { make in
+                make.left.equalTo(filterModeButton.snp.right).offset(8)
+                make.right.equalToSuperview().inset(10)
+                make.bottom.equalToSuperview().inset(8)
             }
 
             emptyLabel.do {
@@ -330,7 +320,25 @@ extension SidebarRuntimeObjectViewController {
             }
 
             scrollView.do {
+                $0.autohidesScrollers = true
                 $0.isHiddenVisualEffectView = true
+            }
+
+            bottomSeparatorView.do {
+                $0.boxType = .separator
+            }
+
+            filterModeButton.do {
+                $0.icon = .symbol(systemName: .line3HorizontalDecrease)
+                $0.setup()
+            }
+
+            filterSearchField.do {
+                if #available(macOS 26.0, *) {
+                    $0.controlSize = .extraLarge
+                } else {
+                    $0.controlSize = .large
+                }
             }
         }
     }
