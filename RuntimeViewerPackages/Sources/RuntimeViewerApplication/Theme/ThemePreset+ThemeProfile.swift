@@ -15,13 +15,49 @@ import RuntimeViewerSettings
 /// A render-ready theme resolved from a stored ``Settings/Theme/Preset`` plus
 /// the global font size. Conforms to ``ThemeProfile`` so the existing
 /// `SemanticString.attributedString(for:)` rendering path is unchanged.
-public struct ResolvedTheme: ThemeProfile, Sendable {
+///
+/// Color and font resolutions are precomputed at init time and looked up by
+/// ``Settings/Theme/Style`` so the per-token render path on large interfaces
+/// stays allocation-free.
+public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
     public let preset: Settings.Theme.Preset
     public let fontSize: CGFloat
+
+    public let backgroundColor: NSUIColor
+    public let selectionBackgroundColor: NSUIColor
+
+    private let colorByStyle: [Settings.Theme.Style: NSUIColor]
+    private let fontByStyle: [Settings.Theme.Style: NSUIFont]
 
     public init(preset: Settings.Theme.Preset, fontSize: CGFloat) {
         self.preset = preset
         self.fontSize = fontSize
+        self.backgroundColor = preset.background.nsuiColor
+        self.selectionBackgroundColor = preset.selection.nsuiColor
+
+        let textStyles: [Settings.Theme.Style] = [
+            preset.text,
+            preset.keyword,
+            preset.declaration,
+            preset.typeName,
+            preset.comment,
+            preset.number,
+            preset.error,
+        ]
+        var colorByStyle: [Settings.Theme.Style: NSUIColor] = [:]
+        var fontByStyle: [Settings.Theme.Style: NSUIFont] = [:]
+        colorByStyle.reserveCapacity(textStyles.count)
+        fontByStyle.reserveCapacity(textStyles.count)
+        for style in textStyles {
+            if colorByStyle[style] == nil {
+                colorByStyle[style] = style.nsuiColor
+            }
+            if fontByStyle[style] == nil {
+                fontByStyle[style] = Self.font(for: style, fontSize: fontSize)
+            }
+        }
+        self.colorByStyle = colorByStyle
+        self.fontByStyle = fontByStyle
     }
 
     /// Resolves the currently-selected preset and global font size from the
@@ -39,20 +75,14 @@ public struct ResolvedTheme: ThemeProfile, Sendable {
         .init(preset: .xcode, fontSize: 13)
     }
 
-    public var backgroundColor: NSUIColor {
-        preset.background.nsuiColor
-    }
-
-    public var selectionBackgroundColor: NSUIColor {
-        preset.selection.nsuiColor
-    }
-
     public func color(for type: SemanticType) -> NSUIColor {
-        style(for: type).nsuiColor
+        let style = style(for: type)
+        return colorByStyle[style] ?? style.nsuiColor
     }
 
     public func font(for type: SemanticType) -> NSUIFont {
-        font(for: style(for: type))
+        let style = style(for: type)
+        return fontByStyle[style] ?? Self.font(for: style, fontSize: fontSize)
     }
 
     /// Maps a semantic token type onto the preset's editable color slots,
@@ -81,7 +111,7 @@ public struct ResolvedTheme: ThemeProfile, Sendable {
         }
     }
 
-    private func font(for style: Settings.Theme.Style) -> NSUIFont {
+    private static func font(for style: Settings.Theme.Style, fontSize: CGFloat) -> NSUIFont {
         let weight: NSUIFont.Weight = style.isBold ? .semibold : .regular
         let baseFont = NSUIFont.monospacedSystemFont(ofSize: fontSize, weight: weight)
 
@@ -96,6 +126,16 @@ public struct ResolvedTheme: ThemeProfile, Sendable {
         }
         return NSUIFont(descriptor: italicDescriptor, size: fontSize)
         #endif
+    }
+}
+
+// MARK: - Equatable
+
+extension ResolvedTheme: Equatable {
+    /// Identity is fully determined by the source `preset` and `fontSize`;
+    /// the precomputed color/font caches are derived state.
+    public static func == (lhs: ResolvedTheme, rhs: ResolvedTheme) -> Bool {
+        lhs.preset == rhs.preset && lhs.fontSize == rhs.fontSize
     }
 }
 
@@ -114,7 +154,15 @@ extension Settings.Theme.ColorValue {
 
 extension Settings.Theme.Style {
     /// An appearance-adaptive color built from the light and dark variants.
+    ///
+    /// Solid slots (`light == dark`) short-circuit to a single static color so
+    /// they do not pay for a dynamic appearance-resolving wrapper that would
+    /// otherwise re-evaluate `effectiveAppearance` on every CGColor
+    /// materialization.
     public var nsuiColor: NSUIColor {
-        NSUIColor(light: light.nsuiColor, dark: dark.nsuiColor)
+        if light == dark {
+            return light.nsuiColor
+        }
+        return NSUIColor(light: light.nsuiColor, dark: dark.nsuiColor)
     }
 }
