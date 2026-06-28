@@ -150,7 +150,14 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 //        input.isSearchCaseInsensitive.drive($isSearchCaseInsensitive).disposed(by: rx.disposeBag)
 
         Driver.combineLatest(input.searchString, input.isSearchCaseInsensitive)
-            .debounce(.milliseconds(500))
+            .flatMapLatest { searchString, isSearchCaseInsensitive -> Driver<(String, Bool)> in
+                if searchString.isEmpty {
+                    return .just((searchString, isSearchCaseInsensitive))
+                } else {
+                    return .just((searchString, isSearchCaseInsensitive))
+                        .debounce(.milliseconds(500))
+                }
+            }
             .driveOnNextMainActor { [weak self] searchString, isSearchCaseInsensitive in
                 guard let self else { return }
                 guard (self.searchString != searchString) || (self.isSearchCaseInsensitive != isSearchCaseInsensitive) else { return }
