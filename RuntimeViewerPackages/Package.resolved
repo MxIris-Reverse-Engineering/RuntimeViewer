@@ -166,7 +166,7 @@
     {
       "identity" : "rearrange",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ChimeHQ/Rearrange",
+      "location" : "https://github.com/ChimeHQ/Rearrange.git",
       "state" : {
         "revision" : "4de8be41dba304192e87dc0a11e0aa39e72aa2e8",
         "version" : "2.1.1"
@@ -458,6 +458,15 @@
       "state" : {
         "revision" : "456b212834f2032312af1ea5f98d214cbaca5a2c",
         "version" : "0.5.102"
+      }
+    },
+    {
+      "identity" : "systemhud",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/SystemHUD",
+      "state" : {
+        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
+        "version" : "0.1.0"
       }
     },
     {
