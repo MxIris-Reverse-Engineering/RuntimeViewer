@@ -207,9 +207,34 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             .disposed(by: rx.disposeBag)
 
         outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
-        
+
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
         outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
+
+        imageLoadedView.scopeButton.rx.click.asSignal()
+            .emitOnNextMainActor { [weak self, weak viewModel] in
+                guard let self, let viewModel else { return }
+                viewModel.router.trigger(
+                    .scope(
+                        sender: imageLoadedView.scopeButton,
+                        relay: viewModel.scopeRelay,
+                        availableKinds: viewModel.availableKinds,
+                        availableProperties: viewModel.availableProperties
+                    )
+                )
+            }
+            .disposed(by: rx.disposeBag)
+
+        viewModel.scopeRelay
+            .asDriver()
+            .map(\.isActive)
+            .distinctUntilChanged()
+            .driveOnNextMainActor { [weak self] isActive in
+                guard let self else { return }
+                imageLoadedView.scopeButton.contentTintColor = isActive ? .controlAccentColor : nil
+                imageLoadedView.scopeButton.state = isActive ? .on : .off
+            }
+            .disposed(by: rx.disposeBag)
     }
     
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
@@ -261,6 +286,8 @@ extension SidebarRuntimeObjectViewController {
 
         let filterModeButton = ItemPopUpButton<FilterMode>()
 
+        let scopeButton = NSButton()
+
         let filterSearchField = FilterSearchField()
 
         let bottomSeparatorView = NSBox()
@@ -280,6 +307,7 @@ extension SidebarRuntimeObjectViewController {
                 emptyLabel
                 bottomSeparatorView
                 filterModeButton
+                scopeButton
                 filterSearchField
             }
 
@@ -307,8 +335,13 @@ extension SidebarRuntimeObjectViewController {
                 make.centerY.equalTo(filterSearchField)
             }
 
+            scopeButton.snp.makeConstraints { make in
+                make.left.equalTo(filterModeButton.snp.right).offset(4)
+                make.centerY.equalTo(filterSearchField)
+            }
+
             filterSearchField.snp.makeConstraints { make in
-                make.left.equalTo(filterModeButton.snp.right).offset(8)
+                make.left.equalTo(scopeButton.snp.right).offset(6)
                 make.right.equalToSuperview().inset(10)
                 make.bottom.equalToSuperview().inset(8)
             }
@@ -331,6 +364,16 @@ extension SidebarRuntimeObjectViewController {
             filterModeButton.do {
                 $0.icon = .symbol(systemName: .line3HorizontalDecrease)
                 $0.setup()
+            }
+
+            scopeButton.do {
+                $0.isBordered = false
+                $0.bezelStyle = .accessoryBarAction
+                $0.imagePosition = .imageOnly
+                $0.image = SFSymbols(systemName: .line3HorizontalDecreaseCircle).nsuiImgae
+                $0.alternateImage = SFSymbols(systemName: .line3HorizontalDecreaseCircleFill).nsuiImgae
+                $0.toolTip = "Filter Scope"
+                $0.imageScaling = .scaleProportionallyDown
             }
 
             filterSearchField.do {
