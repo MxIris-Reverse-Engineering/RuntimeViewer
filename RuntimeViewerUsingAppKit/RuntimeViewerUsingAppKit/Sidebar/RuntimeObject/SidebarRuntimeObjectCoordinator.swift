@@ -52,13 +52,14 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
             // ivar to NSPopover via KVO — and that bridge re-emits CA-
             // interpolated intermediate values, causing the popover to
             // animate through zero height during disclosure expansion.
-            return .popover(
-                viewController,
-                relativeTo: sender.bounds,
-                of: sender,
-                preferredEdge: .maxY,
-                behavior: .transient
-            )
+//            return .uxPopover(
+//                viewController,
+//                relativeTo: sender.bounds,
+//                of: sender,
+//                preferredEdge: .maxY,
+//                behavior: .transient
+//            )
+            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         }
     }
 }

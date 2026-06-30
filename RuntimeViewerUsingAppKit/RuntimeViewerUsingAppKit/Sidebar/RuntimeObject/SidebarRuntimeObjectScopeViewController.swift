@@ -19,7 +19,7 @@ import RuntimeViewerCore
 /// re-emitted intermediate values to `NSPopover.contentSize` whenever the
 /// property was animated — producing the "popover collapses to zero before
 /// growing" glitch during disclosure expansion.
-final class SidebarRuntimeObjectScopeViewController: AppKitViewController<SidebarRuntimeObjectScopeViewModel<SidebarRuntimeObjectRoute>> {
+final class SidebarRuntimeObjectScopeViewController: UXKitViewController<SidebarRuntimeObjectScopeViewModel<SidebarRuntimeObjectRoute>> {
     // MARK: - Header
 
     private let titleLabel = Label("Filter Scope")
@@ -51,31 +51,34 @@ final class SidebarRuntimeObjectScopeViewController: AppKitViewController<Sideba
         configureKindSection()
         configurePropertySection()
 
-        let kindStack = VStackView(alignment: .leading, spacing: 6) {
+        let kindStack = VStackView(distribution: .fill, alignment: .fill, spacing: 6) {
             kindHeaderLabel
             groupRows[.c]!
             groupRows[.objectiveC]!
             groupRows[.swift]!
         }
 
-        let propertyStack = VStackView(alignment: .leading, spacing: 6) {
+        let propertyStack = VStackView(distribution: .fill, alignment: .fill, spacing: 6) {
             propertyHeaderLabel
             genericRow
             specializedRow
         }
 
-        let headerRow = HStackView(spacing: 8) {
+        let headerRow = HStackView(distribution: .fill, alignment: .fill, spacing: 8) {
             titleLabel
             NSView()
             resetButton
         }
-        headerRow.alignment = .centerY
 
-        let contentStack = VStackView(alignment: .leading, spacing: 14) {
+        let contentStack = VStackView(distribution: .fill, alignment: .fill, spacing: 14) {
             headerRow
             NSBox().then { $0.boxType = .separator }
+                .box
+                .size(height: 1)
             kindStack
             NSBox().then { $0.boxType = .separator }
+                .box
+                .size(height: 1)
             propertyStack
         }
 
@@ -85,18 +88,6 @@ final class SidebarRuntimeObjectScopeViewController: AppKitViewController<Sideba
 
         contentStack.snp.makeConstraints { make in
             make.edges.equalToSuperview().inset(NSEdgeInsets(top: 14, left: 16, bottom: 14, right: 16))
-        }
-
-        headerRow.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview()
-        }
-
-        kindStack.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview()
-        }
-
-        propertyStack.snp.makeConstraints { make in
-            make.leading.trailing.equalToSuperview()
         }
 
         // Constrain width so the row layouts (which depend on label
@@ -269,6 +260,7 @@ extension SidebarRuntimeObjectScopeViewController {
         private let disclosureButton = NSButton()
         private let titleLabel = Label()
         private let bodyStack = NSStackView()
+        private var contentStackView: NSStackView?
         private var kindCheckboxes: [RuntimeObjectKind: NSButton] = [:]
         /// Kinds the parent VC has flagged as "actually present in the
         /// image." Hidden checkboxes still live in `kindCheckboxes` so the
@@ -289,6 +281,11 @@ extension SidebarRuntimeObjectScopeViewController {
 
         @available(*, unavailable)
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override var intrinsicContentSize: NSSize {
+            guard let contentStackView else { return super.intrinsicContentSize }
+            return NSSize(width: NSView.noIntrinsicMetric, height: contentStackView.fittingSize.height)
+        }
 
         private func configureSubviews() {
             titleLabel.do {
@@ -312,6 +309,8 @@ extension SidebarRuntimeObjectScopeViewController {
             }
 
             bodyStack.do {
+                $0.translatesAutoresizingMaskIntoConstraints = false
+                $0.distribution = .fill
                 $0.orientation = .vertical
                 $0.alignment = .leading
                 $0.spacing = 4
@@ -322,33 +321,31 @@ extension SidebarRuntimeObjectScopeViewController {
                 let checkbox = NSButton().then {
                     $0.setButtonType(.switch)
                     $0.title = kind.scopePopoverShortTitle
+                    $0.translatesAutoresizingMaskIntoConstraints = false
+                    $0.setContentHuggingPriority(.required, for: .vertical)
+                    $0.setContentCompressionResistancePriority(.required, for: .vertical)
                 }
                 kindCheckboxes[kind] = checkbox
-                bodyStack.addArrangedSubview(checkbox)
             }
         }
 
         private func buildLayout() {
-            let headerRow = HStackView(spacing: 6) {
+            let headerRow = HStackView(distribution: .fill, alignment: .fill, spacing: 6) {
                 disclosureButton
                 headerCheckbox
                 titleLabel
                 NSView()
             }
-            headerRow.alignment = .centerY
 
-            let container = VStackView(alignment: .leading, spacing: 2) {
+            let contentStackView = VStackView(distribution: .fill, alignment: .fill, spacing: 2) {
                 headerRow
                 bodyStack
             }
+            self.contentStackView = contentStackView
 
-            addSubview(container)
-            container.snp.makeConstraints { make in
+            addSubview(contentStackView)
+            contentStackView.snp.makeConstraints { make in
                 make.edges.equalToSuperview()
-            }
-
-            headerRow.snp.makeConstraints { make in
-                make.leading.trailing.equalToSuperview()
             }
         }
 
@@ -373,29 +370,28 @@ extension SidebarRuntimeObjectScopeViewController {
 
             // Forward disclosure clicks so the parent VC can drive the
             // animation. The row deliberately does NOT animate its own
-            // body inside a separate `NSAnimationContext` — that used to
-            // run a frame ahead of the popover's resize and the body
-            // would briefly overflow the still-smaller popover, causing
-            // a one-frame flash on expand. The VC instead opens a single
-            // animation context around both the body's isHidden flip and
-            // the popover's preferredContentSize update so both register
-            // on the same Core Animation transaction.
+            // body inside a separate `NSAnimationContext` because that can
+            // run a frame ahead of the popover resize.
             disclosureButton.rx.click
                 .bind(to: disclosureChangedRelay)
                 .disposed(by: rx.disposeBag)
 
             // Initial state: collapsed.
-            bodyStack.isHidden = true
+            applyDisclosureState()
         }
 
         /// Sync `bodyStack`'s visibility with the disclosure button's
-        /// current state. MUST be called synchronously (NOT inside an
-        /// `allowsImplicitAnimation = true` block), so that NSStackView's
-        /// `detachesHiddenViews` reflow runs immediately and the parent
-        /// VC can read the correct `fittingSize` before driving the
-        /// popover resize.
+        /// current state. This is called synchronously before the parent
+        /// view controller measures the target popover size.
         fileprivate func applyDisclosureState() {
-            bodyStack.isHidden = disclosureButton.state != .on
+            if disclosureButton.state == .on {
+                rebuildBodyStackArrangedSubviews()
+                bodyStack.isHidden = false
+            } else {
+                bodyStack.isHidden = true
+                removeBodyStackArrangedSubviews()
+            }
+            invalidateLayoutSizing()
         }
 
         fileprivate static let disclosureAnimationDuration: TimeInterval = 0.2
@@ -405,9 +401,10 @@ extension SidebarRuntimeObjectScopeViewController {
         /// surfaces kinds the current image actually carries.
         func applyVisibleKinds(_ kinds: Set<RuntimeObjectKind>) {
             visibleKinds = kinds
-            for (kind, checkbox) in kindCheckboxes {
-                checkbox.isHidden = !kinds.contains(kind)
+            if disclosureButton.state == .on {
+                rebuildBodyStackArrangedSubviews()
             }
+            invalidateLayoutSizing()
         }
 
         func apply(scope: RuntimeObjectScope, group: RuntimeObjectScope.KindGroup) {
@@ -437,6 +434,31 @@ extension SidebarRuntimeObjectScopeViewController {
                 headerCheckbox.state = .mixed
             }
         }
+
+        private func invalidateLayoutSizing() {
+            bodyStack.invalidateIntrinsicContentSize()
+            contentStackView?.invalidateIntrinsicContentSize()
+            invalidateIntrinsicContentSize()
+            superview?.invalidateIntrinsicContentSize()
+        }
+
+        private func rebuildBodyStackArrangedSubviews() {
+            removeBodyStackArrangedSubviews()
+
+            let currentlyVisibleKinds = visibleKinds ?? Set(group.kinds)
+            for kind in group.kinds where currentlyVisibleKinds.contains(kind) {
+                guard let checkbox = kindCheckboxes[kind] else { continue }
+                checkbox.isHidden = false
+                bodyStack.addArrangedSubview(checkbox)
+            }
+        }
+
+        private func removeBodyStackArrangedSubviews() {
+            for arrangedSubview in bodyStack.arrangedSubviews {
+                bodyStack.removeArrangedSubview(arrangedSubview)
+                arrangedSubview.removeFromSuperview()
+            }
+        }
     }
 }
 
@@ -455,6 +477,7 @@ extension SidebarRuntimeObjectScopeViewController {
 
         private let titleLabel = Label()
         private let segmented = NSSegmentedControl()
+        private var rowStackView: NSStackView?
 
         init(title: String) {
             super.init(frame: .zero)
@@ -477,15 +500,15 @@ extension SidebarRuntimeObjectScopeViewController {
                 $0.font = .systemFont(ofSize: 11)
             }
 
-            let row = HStackView(spacing: 8) {
+            let rowStackView = HStackView(distribution: .fill, alignment: .fill, spacing: 8) {
                 titleLabel
                 NSView()
                 segmented
             }
-            row.alignment = .centerY
+            self.rowStackView = rowStackView
 
-            addSubview(row)
-            row.snp.makeConstraints { make in
+            addSubview(rowStackView)
+            rowStackView.snp.makeConstraints { make in
                 make.edges.equalToSuperview()
             }
 
@@ -508,6 +531,11 @@ extension SidebarRuntimeObjectScopeViewController {
 
         @available(*, unavailable)
         required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override var intrinsicContentSize: NSSize {
+            guard let rowStackView else { return super.intrinsicContentSize }
+            return NSSize(width: NSView.noIntrinsicMetric, height: rowStackView.fittingSize.height)
+        }
 
         func apply(state: RuntimeObjectScope.PropertyState) {
             switch state {
