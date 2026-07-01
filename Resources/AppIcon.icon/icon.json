@@ -1,12 +1,12 @@
 {
   "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+    "linear-gradient" : [
+      "display-p3:0.34500,0.74500,0.96100,1.00000",
+      "srgb:0.09800,0.43100,0.98000,1.00000"
+    ]
   },
   "groups" : [
     {
-      "blend-mode" : "normal",
-      "blur-material" : 0.5,
-      "hidden" : false,
       "layers" : [
         {
           "glass" : false,
@@ -21,15 +21,79 @@
           }
         }
       ],
-      "lighting" : "individual",
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.5
+        "opacity" : 0.6
       },
-      "specular" : true,
       "translucency" : {
         "enabled" : true,
-        "value" : 0.5
+        "value" : 0.2
+      }
+    },
+    {
+      "blend-mode-specializations" : [
+        {
+          "value" : "plus-lighter"
+        },
+        {
+          "appearance" : "dark",
+          "value" : "normal"
+        },
+        {
+          "appearance" : "tinted",
+          "value" : "normal"
+        }
+      ],
+      "hidden" : false,
+      "layers" : [
+        {
+          "fill-specializations" : [
+            {
+              "appearance" : "dark",
+              "value" : {
+                "linear-gradient" : [
+                  "display-p3:0.34500,0.74500,0.96100,1.00000",
+                  "srgb:0.00000,0.54100,1.00000,1.00000"
+                ]
+              }
+            }
+          ],
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "Grid 10pt.svg",
+          "name" : "Grid 10pt",
+          "opacity" : 0.5,
+          "position" : {
+            "scale" : 1.07031,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "opacity-specializations" : [
+        {
+          "value" : 0.2
+        },
+        {
+          "appearance" : "dark",
+          "value" : 0.6
+        },
+        {
+          "appearance" : "tinted",
+          "value" : 0.4
+        }
+      ],
+      "shadow" : {
+        "kind" : "none",
+        "opacity" : 0.5
+      },
+      "specular" : false,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0
       }
     }
   ],
