@@ -50,12 +50,7 @@
           "fill-specializations" : [
             {
               "appearance" : "dark",
-              "value" : {
-                "linear-gradient" : [
-                  "display-p3:0.34500,0.74500,0.96100,1.00000",
-                  "srgb:0.00000,0.54100,1.00000,1.00000"
-                ]
-              }
+              "value" : "none"
             }
           ],
           "glass" : true,
