@@ -103,8 +103,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             }
             .share(replay: 0, scope: .whileConnected)
         let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel> = .merge(
-            userSelection.filter { isExplicitSelection($0.1) }.map { $0.0 }.asSignal(onErrorSignalWith: .empty()),
-            userSelection.filter { !isExplicitSelection($0.1) }.map { $0.0 }.debounce(.milliseconds(800), scheduler: MainScheduler.instance).asSignal(onErrorSignalWith: .empty())
+            userSelection.filter { isExplicitSelection($0.1) }.map(\.0).asSignal(onErrorSignalWith: .empty()),
+            userSelection.filter { !isExplicitSelection($0.1) }.map(\.0).debounce(.milliseconds(800), scheduler: MainScheduler.instance).asSignal(onErrorSignalWith: .empty()),
         )
         let input = ViewModel.Input(
             runtimeObjectClicked: runtimeObjectClicked,
@@ -112,10 +112,11 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
             ).merge(),
-            searchString: .combineLatest(imageLoadedView.filterSearchField.rx.stringValue.asDriver(), filterModeDidChange.asDriver(), resultSelector: { a, b in a }),
-            isSearchCaseInsensitive: imageLoadedView.searchCaseInsensitiveButton.rx.state.asDriver().map {
-                $0 == .on
-            }
+            searchString: .combineLatestFirstResult(
+                imageLoadedView.filterSearchField.rx.stringValue.asDriver(),
+                filterModeDidChange.asDriver(),
+            ),
+            isSearchCaseInsensitive: imageLoadedView.searchCaseInsensitiveButton.rx.state.asDriver().map { $0 == .on },
         )
 
         let output = viewModel.transform(input)
@@ -219,8 +220,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                         sender: imageLoadedView.scopeButton,
                         relay: viewModel.$scope,
                         availableKinds: viewModel.availableKinds,
-                        availableProperties: viewModel.availableProperties
-                    )
+                        availableProperties: viewModel.availableProperties,
+                    ),
                 )
             }
             .disposed(by: rx.disposeBag)
@@ -235,12 +236,12 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             }
             .disposed(by: rx.disposeBag)
     }
-    
+
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
         guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
         return cellViewModel.title.string
     }
-    
+
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
         !(item is SidebarRuntimeObjectSection)
     }
@@ -298,7 +299,7 @@ extension SidebarRuntimeObjectViewController {
 
             searchCaseInsensitiveButton = filterSearchField.addFilterButton(
                 systemSymbolName: "textformat",
-                toolTip: "Case Insensitive"
+                toolTip: "Case Insensitive",
             )
 
             hierarchy {
@@ -362,6 +363,7 @@ extension SidebarRuntimeObjectViewController {
 
             filterModeButton.do {
                 $0.icon = .symbol(systemName: .line3HorizontalDecrease)
+                $0.alternateIcon = SFSymbols(systemName: .line3HorizontalDecrease).hierarchicalColor(.controlAccentColor).nsuiImgae
                 $0.setup()
             }
 
@@ -495,5 +497,47 @@ extension NSTabViewItem {
         let vc = NSViewController()
         vc.view = view
         self.viewController = vc
+    }
+}
+
+
+public extension SharedSequence {
+
+    static func combineLatestFirstResult<
+        FirstSharedSequence: SharedSequenceConvertibleType,
+        SecondSharedSequence: SharedSequenceConvertibleType
+    >(
+        _ firstSharedSequence: FirstSharedSequence,
+        _ secondSharedSequence: SecondSharedSequence
+    ) -> SharedSequence<SharingStrategy, Element>
+    where
+        FirstSharedSequence.SharingStrategy == SharingStrategy,
+        SecondSharedSequence.SharingStrategy == SharingStrategy,
+        FirstSharedSequence.Element == Element
+    {
+        combineLatest(
+            firstSharedSequence,
+            secondSharedSequence,
+            resultSelector: { firstElement, _ in firstElement }
+        )
+    }
+    
+    static func combineLatestSecondResult<
+        FirstSharedSequence: SharedSequenceConvertibleType,
+        SecondSharedSequence: SharedSequenceConvertibleType
+    >(
+        _ firstSharedSequence: FirstSharedSequence,
+        _ secondSharedSequence: SecondSharedSequence
+    ) -> SharedSequence<SharingStrategy, Element>
+    where
+        FirstSharedSequence.SharingStrategy == SharingStrategy,
+        SecondSharedSequence.SharingStrategy == SharingStrategy,
+        SecondSharedSequence.Element == Element
+    {
+        combineLatest(
+            firstSharedSequence,
+            secondSharedSequence,
+            resultSelector: { _, secondElement in secondElement }
+        )
     }
 }
