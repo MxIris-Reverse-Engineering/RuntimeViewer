@@ -24,7 +24,7 @@ public enum MCPServerState: Equatable, Sendable {
 @Loggable
 @MainActor
 public final class MCPService {
-    public static let shared = MCPService()
+    fileprivate static let shared = MCPService()
 
     @Dependency(\.settings)
     private var settings
@@ -199,5 +199,18 @@ public final class MCPService {
         } catch {
             #log(.error,"Failed to remove port file: \(error)")
         }
+    }
+}
+
+// MARK: - Dependencies
+
+private enum MCPServiceKey: @preconcurrency DependencyKey {
+    @MainActor static let liveValue = MCPService.shared
+}
+
+extension DependencyValues {
+    public var mcpService: MCPService {
+        get { self[MCPServiceKey.self] }
+        set { self[MCPServiceKey.self] = newValue }
     }
 }

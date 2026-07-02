@@ -16,6 +16,8 @@ public final class ItemPopUpButton<Item: CaseIterable & CustomStringConvertible 
     
     public var icon: NSImage?
     
+    public var alternateIcon: NSImage?
+    
     public var stateChanged: ((Item?) -> Void)?
 
     public func setup() {
@@ -41,6 +43,15 @@ public final class ItemPopUpButton<Item: CaseIterable & CustomStringConvertible 
             } else {
                 stateChanged?(nil)
             }
+            reloadStates()
+        }
+    }
+    
+    private func reloadStates() {
+        let hasOn = itemArray.contains { $0.state == .on }
+        
+        item(at: 0)?.do {
+            $0.image = hasOn ? alternateIcon : icon
         }
     }
 }

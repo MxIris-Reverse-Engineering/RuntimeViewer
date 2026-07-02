@@ -52,7 +52,12 @@ enum MCPConfigType {
 }
 
 final class MCPStatusPopoverViewModel<Route: Routable>: ViewModel<Route> {
-    @Observed private(set) var state: MCPServerState = MCPService.shared.serverState
+    @Dependency(\.mcpService) private var mcpService
+
+    @Observed private(set) var state: MCPServerState = {
+        @Dependency(\.mcpService) var mcpService
+        return mcpService.serverState
+    }()
 
     struct Input {
         let actionButtonClick: Signal<Void>
@@ -65,7 +70,7 @@ final class MCPStatusPopoverViewModel<Route: Routable>: ViewModel<Route> {
     }
 
     func transform(_ input: Input) -> Output {
-        MCPService.shared.onStateChange = { [weak self] newState in
+        mcpService.onStateChange = { [weak self] newState in
             guard let self else { return }
             state = newState
         }
@@ -76,9 +81,9 @@ final class MCPStatusPopoverViewModel<Route: Routable>: ViewModel<Route> {
             case .disabled:
                 appRouter.trigger(.settings)
             case .stopped:
-                MCPService.shared.start(for: AppMCPBridgeDocumentProvider())
+                mcpService.start(for: AppMCPBridgeDocumentProvider())
             case .running:
-                MCPService.shared.stop()
+                mcpService.stop()
             }
         }
         .disposed(by: rx.disposeBag)

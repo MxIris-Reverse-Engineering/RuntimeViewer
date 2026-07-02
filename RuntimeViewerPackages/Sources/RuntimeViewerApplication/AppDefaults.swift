@@ -40,9 +40,6 @@ public final class AppDefaults {
     @UserDefault(key: "generationOptions", defaultValue: .init())
     public var options: RuntimeObjectInterface.GenerationOptions
 
-    @UserDefault(key: "themeProfile", defaultValue: XcodePresentationTheme())
-    public var themeProfile: XcodePresentationTheme
-    
     @UserDefault(key: "filterMode", defaultValue: nil)
     public var filterMode: FilterMode?
 

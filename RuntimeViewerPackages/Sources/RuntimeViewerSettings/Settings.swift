@@ -7,7 +7,7 @@ import MetaCodable
 @Codable
 @Loggable
 public final class Settings {
-    public static let shared = Settings()
+    fileprivate static let shared = Settings()
 
     private static var storage: SettingsStorageStrategy = SettingsFileSystemStorage()
 
@@ -38,6 +38,11 @@ public final class Settings {
 
     @Default(Update.default)
     public var update: Update = .init() {
+        didSet { scheduleAutoSave() }
+    }
+
+    @Default(Theme.default)
+    public var theme: Theme = .init() {
         didSet { scheduleAutoSave() }
     }
 
@@ -81,9 +86,63 @@ public final class Settings {
             mcp = decoded.mcp
             indexing = decoded.indexing
             update = decoded.update
+            theme = decoded.theme
             #log(.debug, "Settings loaded successfully.")
         } catch {
             #log(.debug, "No saved settings found or load failed, using defaults. (\(error, privacy: .public))")
         }
+        migrateLegacyThemeProfileIfNeeded()
+    }
+
+    /// One-shot migration from the pre-data-driven theme storage. Earlier
+    /// builds persisted `XcodePresentationTheme` under the UserDefaults key
+    /// `themeProfile`, which carried the user's customized font size. Pulls
+    /// that font size into the new `theme.fontSize` slot exactly once.
+    ///
+    /// Whether the migration has run is tracked by a dedicated
+    /// `didMigrateLegacyThemeProfile` flag rather than by comparing
+    /// `theme.fontSize` against the default value — otherwise a user who
+    /// explicitly sets the new font size back to the default would have it
+    /// silently overwritten by the legacy value on the next launch.
+    private func migrateLegacyThemeProfileIfNeeded() {
+        let legacyKey = "themeProfile"
+        let migrationFlagKey = "didMigrateLegacyThemeProfile"
+        let defaults = UserDefaults.standard
+
+        guard !defaults.bool(forKey: migrationFlagKey) else { return }
+        // Mark the migration as attempted unconditionally so a malformed
+        // blob does not retry on every launch; the legacy data itself is
+        // only removed once we have successfully consumed it.
+        defer { defaults.set(true, forKey: migrationFlagKey) }
+
+        guard let legacyData = defaults.data(forKey: legacyKey) else { return }
+
+        struct LegacyThemeProfile: Decodable {
+            let fontSize: Double
+        }
+        guard let legacy = try? JSONDecoder().decode(LegacyThemeProfile.self, from: legacyData) else {
+            // Decode failed: leave the legacy blob in place so a future
+            // build that extends `LegacyThemeProfile` can still recover it.
+            return
+        }
+
+        if legacy.fontSize >= 8.0, legacy.fontSize <= 32.0 {
+            theme.fontSize = legacy.fontSize
+        }
+        defaults.removeObject(forKey: legacyKey)
+    }
+}
+
+import Dependencies
+
+private enum SettingsKey: DependencyKey {
+    static let liveValue = Settings.shared
+    static let previewValue = Settings()
+}
+
+extension DependencyValues {
+    public var settings: Settings {
+        get { self[SettingsKey.self] }
+        set { self[SettingsKey.self] = newValue }
     }
 }

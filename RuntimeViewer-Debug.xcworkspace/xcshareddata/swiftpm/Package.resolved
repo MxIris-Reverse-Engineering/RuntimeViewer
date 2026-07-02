@@ -343,15 +343,6 @@
       }
     },
     {
-      "identity" : "swift-confidential",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Library-Forks/swift-confidential.git",
-      "state" : {
-        "revision" : "0e3e84cc18ffb4b39c4e51d9deacc3007e5fc67b",
-        "version" : "0.5.100"
-      }
-    },
-    {
       "identity" : "swift-crypto",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
@@ -376,15 +367,6 @@
       "state" : {
         "revision" : "16f7dd14ee28d04617090f2a73198b8b316ffa12",
         "version" : "1.13.1"
-      }
-    },
-    {
-      "identity" : "swift-dyld-private",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-dyld-private",
-      "state" : {
-        "revision" : "e9b255ed123e0ff5bb998d11639b993196159214",
-        "version" : "1.2.1"
       }
     },
     {

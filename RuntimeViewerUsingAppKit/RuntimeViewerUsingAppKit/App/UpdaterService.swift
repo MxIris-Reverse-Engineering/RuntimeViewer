@@ -9,7 +9,7 @@ import OSLog
 @Loggable(.private)
 @MainActor
 final class UpdaterService: NSObject {
-    static let shared = UpdaterService()
+    fileprivate static let shared = UpdaterService()
 
     @Dependency(\.settings) private var settings
     @Dependency(\.updaterClient) private var updaterClient
@@ -150,5 +150,18 @@ extension UpdaterService: SPUUpdaterDelegate {
             self.updaterClient.setIsSessionInProgress(updater.sessionInProgress)
             self.updaterClient.setLastCheckError(error)
         }
+    }
+}
+
+// MARK: - Dependencies
+
+private enum UpdaterServiceKey: @preconcurrency DependencyKey {
+    @MainActor static let liveValue = UpdaterService.shared
+}
+
+extension DependencyValues {
+    var updaterService: UpdaterService {
+        get { self[UpdaterServiceKey.self] }
+        set { self[UpdaterServiceKey.self] = newValue }
     }
 }

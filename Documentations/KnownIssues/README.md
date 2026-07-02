@@ -35,3 +35,9 @@ when picking up follow-up work.
   sidebar because Case-2 cleanup only matches by ownership, not by `engineID`
   prefix. Companion architecture walkthrough at
   [`Documentations/EngineMirroringWalkthrough.md`](../EngineMirroringWalkthrough.md).
+- [2026-06-25-theme-settings-panel-review-findings.md](2026-06-25-theme-settings-panel-review-findings.md) —
+  `/code-review` pass on `feature/theme-settings-panel` (PR #80). Four issues
+  on the Theme settings UI: TS.1 ColorPicker / Name field write storm causing
+  full re-render + autosave per frame; TS.2 editor's Light/Dark variant
+  selector hardcoded to `.dark`; TS.3 duplicate-preset names not deduped;
+  TS.4 toolbar font-size +/- read-modify-write not coalesced on auto-repeat.
