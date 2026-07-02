@@ -24,12 +24,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @Observed public private(set) var loadingProgress: Double = 0
     @Observed public private(set) var loadingDescription: String = ""
     @Observed public private(set) var loadingItemCount: String = ""
-
-    /// User-configured pre-filter applied before `FilterEngine` runs over the
-    /// search string. Owned by this view model so the scope popover and the
-    /// sidebar can share a single source of truth — the popover receives this
-    /// relay through the `.scope` route and writes user edits straight back.
-    public let scopeRelay = BehaviorRelay<RuntimeObjectScope>(value: .init())
+    @Observed public private(set) var scope: RuntimeObjectScope = .init()
 
     /// Distinct kinds that actually appear in the current image (top-level
     /// nodes and every descendant). The scope popover uses this to skip
@@ -219,7 +214,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             }
             .disposed(by: rx.disposeBag)
 
-        scopeRelay
+        $scope
             .asDriver()
             .skip(1) // initial value already covered by `nodes` reload
             .driveOnNextMainActor { [weak self] _ in
@@ -398,7 +393,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     ///    `filterResult` highlighting from a previous search.
     @MainActor
     private func rebuildFilteredNodes() {
-        let scope = scopeRelay.value
+        let scope = scope
 
         // Drive `isFiltering` off the union of text + scope. This flag
         // controls the outline view's beginFiltering / endFiltering

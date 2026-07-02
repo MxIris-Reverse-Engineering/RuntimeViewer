@@ -217,7 +217,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 viewModel.router.trigger(
                     .scope(
                         sender: imageLoadedView.scopeButton,
-                        relay: viewModel.scopeRelay,
+                        relay: viewModel.$scope,
                         availableKinds: viewModel.availableKinds,
                         availableProperties: viewModel.availableProperties
                     )
@@ -225,14 +225,13 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             }
             .disposed(by: rx.disposeBag)
 
-        viewModel.scopeRelay
+        viewModel.$scope
             .asDriver()
             .map(\.isActive)
             .distinctUntilChanged()
             .driveOnNextMainActor { [weak self] isActive in
                 guard let self else { return }
-                imageLoadedView.scopeButton.contentTintColor = isActive ? .controlAccentColor : nil
-                imageLoadedView.scopeButton.state = isActive ? .on : .off
+                imageLoadedView.scopeButton.contentTintColor = isActive ? .controlAccentColor : .labelColor
             }
             .disposed(by: rx.disposeBag)
     }
@@ -336,7 +335,7 @@ extension SidebarRuntimeObjectViewController {
             }
 
             scopeButton.snp.makeConstraints { make in
-                make.left.equalTo(filterModeButton.snp.right).offset(4)
+                make.left.equalTo(filterModeButton.snp.right).offset(6)
                 make.centerY.equalTo(filterSearchField)
             }
 
@@ -368,12 +367,9 @@ extension SidebarRuntimeObjectViewController {
 
             scopeButton.do {
                 $0.isBordered = false
-                $0.bezelStyle = .accessoryBarAction
                 $0.imagePosition = .imageOnly
-                $0.image = SFSymbols(systemName: .line3HorizontalDecreaseCircle).nsuiImgae
-                $0.alternateImage = SFSymbols(systemName: .line3HorizontalDecreaseCircleFill).nsuiImgae
+                $0.image = .symbol(systemName: .sliderHorizontal3)
                 $0.toolTip = "Filter Scope"
-                $0.imageScaling = .scaleProportionallyDown
             }
 
             filterSearchField.do {

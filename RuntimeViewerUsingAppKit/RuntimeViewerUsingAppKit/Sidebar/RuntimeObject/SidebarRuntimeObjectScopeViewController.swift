@@ -313,7 +313,7 @@ extension SidebarRuntimeObjectScopeViewController {
                 $0.distribution = .fill
                 $0.orientation = .vertical
                 $0.alignment = .leading
-                $0.spacing = 4
+                $0.spacing = 6
                 $0.edgeInsets = NSEdgeInsets(top: 2, left: 28, bottom: 4, right: 0)
             }
 
@@ -337,7 +337,7 @@ extension SidebarRuntimeObjectScopeViewController {
                 NSView()
             }
 
-            let contentStackView = VStackView(distribution: .fill, alignment: .fill, spacing: 2) {
+            let contentStackView = VStackView(distribution: .fill, alignment: .fill, spacing: 6) {
                 headerRow
                 bodyStack
             }
