@@ -212,12 +212,12 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
         outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
 
-        imageLoadedView.scopeButton.rx.click.asSignal()
+        imageLoadedView.filterScopeButton.rx.click.asSignal()
             .emitOnNextMainActor { [weak self, weak viewModel] in
                 guard let self, let viewModel else { return }
                 viewModel.router.trigger(
                     .scope(
-                        sender: imageLoadedView.scopeButton,
+                        sender: imageLoadedView.filterScopeButton,
                         relay: viewModel.$scope,
                         availableKinds: viewModel.availableKinds,
                         availableProperties: viewModel.availableProperties,
@@ -232,7 +232,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             .distinctUntilChanged()
             .driveOnNextMainActor { [weak self] isActive in
                 guard let self else { return }
-                imageLoadedView.scopeButton.contentTintColor = isActive ? .controlAccentColor : .labelColor
+                imageLoadedView.filterScopeButton.contentTintColor = isActive ? .controlAccentColor : .labelColor
             }
             .disposed(by: rx.disposeBag)
     }
@@ -284,14 +284,20 @@ extension SidebarRuntimeObjectViewController {
 
         let emptyLabel = Label()
 
+        let bottomSeparatorView = NSBox()
+        
         let filterModeButton = ItemPopUpButton<FilterMode>()
 
-        let scopeButton = NSButton()
+        let filterScopeButton = NSButton()
 
         let filterSearchField = FilterSearchField()
 
-        let bottomSeparatorView = NSBox()
-
+        private lazy var filterStackView = HStackView(distribution: .fill, alignment: .fill, spacing: 6) {
+            filterModeButton
+            filterScopeButton
+            filterSearchField
+        }
+        
         private(set) var searchCaseInsensitiveButton: NSButton!
 
         override init(frame frameRect: NSRect) {
@@ -306,9 +312,7 @@ extension SidebarRuntimeObjectViewController {
                 scrollView
                 emptyLabel
                 bottomSeparatorView
-                filterModeButton
-                scopeButton
-                filterSearchField
+                filterStackView
             }
 
             scrollView.snp.makeConstraints { make in
@@ -326,23 +330,32 @@ extension SidebarRuntimeObjectViewController {
 
             bottomSeparatorView.snp.makeConstraints { make in
                 make.left.right.equalToSuperview()
-                make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
                 make.height.equalTo(1)
+//                make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
+                make.bottom.equalTo(filterStackView.snp.top).offset(-8)
             }
-
-            filterModeButton.snp.makeConstraints { make in
-                make.left.equalToSuperview().inset(12)
-                make.centerY.equalTo(filterSearchField)
+            
+            searchCaseInsensitiveButton.snp.makeConstraints { make in
+                make.top.bottom.equalToSuperview()
             }
-
-            scopeButton.snp.makeConstraints { make in
-                make.left.equalTo(filterModeButton.snp.right).offset(6)
-                make.centerY.equalTo(filterSearchField)
-            }
-
-            filterSearchField.snp.makeConstraints { make in
-                make.left.equalTo(scopeButton.snp.right).offset(6)
-                make.right.equalToSuperview().inset(10)
+//            filterModeButton.snp.makeConstraints { make in
+//                make.left.equalToSuperview().inset(12)
+//                make.centerY.equalTo(filterSearchField)
+//            }
+//
+//            filterScopeButton.snp.makeConstraints { make in
+//                make.left.equalTo(filterModeButton.snp.right).offset(6)
+//                make.centerY.equalTo(filterSearchField)
+//            }
+//
+//            filterSearchField.snp.makeConstraints { make in
+//                make.left.equalTo(filterScopeButton.snp.right).offset(6)
+//                make.right.equalToSuperview().inset(10)
+//                make.bottom.equalToSuperview().inset(8)
+//            }
+            
+            filterStackView.snp.makeConstraints { make in
+                make.leading.trailing.equalToSuperview().inset(12)
                 make.bottom.equalToSuperview().inset(8)
             }
 
@@ -367,7 +380,7 @@ extension SidebarRuntimeObjectViewController {
                 $0.setup()
             }
 
-            scopeButton.do {
+            filterScopeButton.do {
                 $0.isBordered = false
                 $0.imagePosition = .imageOnly
                 $0.image = .symbol(systemName: .sliderHorizontal3)
