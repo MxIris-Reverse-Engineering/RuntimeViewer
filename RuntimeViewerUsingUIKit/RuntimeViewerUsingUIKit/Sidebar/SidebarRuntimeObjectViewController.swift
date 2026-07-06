@@ -67,30 +67,13 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         let output = viewModel.transform(input)
 
-        let sectionsSource = output.runtimeObjectSections
-            .asObservable()
-            .map { sections in
-                sections.map { CollectionViewOutlineSection(id: $0, nodes: $0.objects) }
-            }
-
-        imageLoadedView.listView.rx.sections(source: sectionsSource)(
-            { (headerCell: UICollectionViewListCell, section: SidebarRuntimeObjectSection) in
-                #if os(tvOS)
-                var content = UIListContentConfiguration.groupedHeader()
-                #else
-                var content = UIListContentConfiguration.sidebarHeader()
-                #endif
-                content.text = section.title
-                headerCell.contentConfiguration = content
-            },
-            { (_: UICollectionView, _: IndexPath, viewModel: SidebarRuntimeObjectCellViewModel, cell: UICollectionViewListCell) in
-                var content = cell.defaultContentConfiguration()
-                content.textProperties.allowsDefaultTighteningForTruncation = false
-                content.attributedText = viewModel.title
-                content.image = viewModel.primaryIcon
-                cell.contentConfiguration = content
-            }
-        )
+        output.runtimeObjects.drive(imageLoadedView.listView.rx.nodes(source:)) { (_: UICollectionView, _: IndexPath, viewModel: SidebarRuntimeObjectCellViewModel, cell: UICollectionViewListCell) in
+            var content = cell.defaultContentConfiguration()
+            content.textProperties.allowsDefaultTighteningForTruncation = false
+            content.attributedText = viewModel.title
+            content.image = viewModel.primaryIcon
+            cell.contentConfiguration = content
+        }
         .disposed(by: rx.disposeBag)
 
         output.errorText.drive(imageLoadErrorView.titleLabel.rx.text).disposed(by: rx.disposeBag)
@@ -162,8 +145,6 @@ extension SidebarRuntimeObjectViewController {
             } else {
                 configuration.backgroundColor = UIDevice.current.userInterfaceIdiom == .phone ? .systemBackground : .secondarySystemBackground
             }
-            // Render a header per kind section (see `runtimeObjectSections`).
-            configuration.headerMode = .supplementary
             let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewCompositionalLayout.list(using: configuration))
             return collectionView
         }()
