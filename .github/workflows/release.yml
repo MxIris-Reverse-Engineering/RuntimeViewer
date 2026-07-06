@@ -45,7 +45,9 @@ jobs:
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1.7.0
         with:
-          xcode-version: '26.4'
+          # Xcode 26.4.1 crashes while loading the synchronized-folder
+          # workspace after SwiftPM resolution; 26.6 handles it correctly.
+          xcode-version: '26.6'
 
       - name: Import code signing certificates
         env:
