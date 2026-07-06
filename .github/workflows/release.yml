@@ -21,8 +21,8 @@ on:
       runner:
         description: 'Runner to use'
         type: choice
-        default: 'macos-26'
-        options: [macos-26, macos-latest, self-hosted]
+        default: 'macos-26-xlarge'
+        options: [macos-26-xlarge, macos-26, macos-26-large, macos-26-intel, macos-latest, self-hosted]
       create_release:
         description: 'Create GitHub Release and update appcast'
         type: boolean
@@ -30,7 +30,8 @@ on:
 
 jobs:
   release:
-    runs-on: ${{ inputs.runner || 'macos-26' }}
+    runs-on: ${{ inputs.runner || 'macos-26-xlarge' }}
+    timeout-minutes: 120
     permissions:
       contents: write
       pull-requests: write
