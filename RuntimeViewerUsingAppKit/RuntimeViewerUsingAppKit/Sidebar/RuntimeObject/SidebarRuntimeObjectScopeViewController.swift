@@ -46,7 +46,7 @@ final class SidebarRuntimeObjectScopeViewController: UXKitViewController<Sidebar
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         configureHeader()
         configureKindSection()
         configurePropertySection()
@@ -99,7 +99,7 @@ final class SidebarRuntimeObjectScopeViewController: UXKitViewController<Sidebar
 
         preferredContentSize = view.fittingSize
     }
-    
+
     private func configureHeader() {
         titleLabel.do {
             $0.font = .systemFont(ofSize: 13, weight: .semibold)

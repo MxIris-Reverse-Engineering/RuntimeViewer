@@ -285,7 +285,7 @@ extension SidebarRuntimeObjectViewController {
         let emptyLabel = Label()
 
         let bottomSeparatorView = NSBox()
-        
+
         let filterModeButton = ItemPopUpButton<FilterMode>()
 
         let filterScopeButton = NSButton()
@@ -297,7 +297,7 @@ extension SidebarRuntimeObjectViewController {
             filterScopeButton
             filterSearchField
         }
-        
+
         private(set) var searchCaseInsensitiveButton: NSButton!
 
         override init(frame frameRect: NSRect) {
@@ -334,7 +334,7 @@ extension SidebarRuntimeObjectViewController {
 //                make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
                 make.bottom.equalTo(filterStackView.snp.top).offset(-8)
             }
-            
+
             searchCaseInsensitiveButton.snp.makeConstraints { make in
                 make.top.bottom.equalToSuperview()
             }
@@ -353,7 +353,7 @@ extension SidebarRuntimeObjectViewController {
 //                make.right.equalToSuperview().inset(10)
 //                make.bottom.equalToSuperview().inset(8)
 //            }
-            
+
             filterStackView.snp.makeConstraints { make in
                 make.leading.trailing.equalToSuperview().inset(12)
                 make.bottom.equalToSuperview().inset(8)
@@ -534,7 +534,7 @@ public extension SharedSequence {
             resultSelector: { firstElement, _ in firstElement }
         )
     }
-    
+
     static func combineLatestSecondResult<
         FirstSharedSequence: SharedSequenceConvertibleType,
         SecondSharedSequence: SharedSequenceConvertibleType
