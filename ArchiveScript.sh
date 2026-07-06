@@ -242,16 +242,19 @@ verify_marketing_version() {
     [[ -z "$VERSION_TAG" ]] && return 0
     local expected="${VERSION_TAG#v}"
     expected="${expected%%-*}"
-    local actual
-    actual=$(xcodebuild \
-        -workspace "$WORKSPACE" \
-        -scheme "$SCHEME" \
-        -configuration "$CONFIGURATION" \
-        -derivedDataPath "$DERIVED_DATA" \
-        -skipPackagePluginValidation -skipMacroValidation \
-        -showBuildSettings 2>/dev/null \
-        | awk -F' = ' '$1 ~ /^[[:space:]]*MARKETING_VERSION$/ { print $2; exit }')
-    [[ -n "$actual" ]] || fail "could not read MARKETING_VERSION from scheme '$SCHEME'; run --update-packages or verify the workspace path."
+    local project_file_path="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj/project.pbxproj"
+    [[ -f "$project_file_path" ]] || fail "project.pbxproj missing at $project_file_path"
+
+    # Avoid xcodebuild -showBuildSettings here: it resolves SwiftPM packages
+    # before archive logging is active, and Xcode workspace-load failures then
+    # hide the real error from CI.
+    local marketing_versions
+    marketing_versions=$(awk -F' = ' '$1 ~ /^[[:space:]]*MARKETING_VERSION$/ { gsub(/;$/, "", $2); print $2 }' "$project_file_path" | sort -u)
+    local marketing_version_count
+    marketing_version_count=$(printf '%s\n' "$marketing_versions" | sed '/^$/d' | wc -l | tr -d ' ')
+    [[ "$marketing_version_count" == "1" ]] || fail "expected exactly one MARKETING_VERSION in $project_file_path, found: ${marketing_versions:-<none>}"
+
+    local actual="$marketing_versions"
     if [[ "$actual" != "$expected" ]]; then
         fail "MARKETING_VERSION ($actual) does not match --version-tag ($VERSION_TAG, expected $expected). Bump MARKETING_VERSION in project.pbxproj before re-running."
     fi
