@@ -149,8 +149,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "f17bc65b57f372b461fe45687298671c3400909e",
-        "version" : "0.12.0-beta.5"
+        "revision" : "6097de4d5b56adf54ff269e2b3f9cd0e7424923e"
       }
     },
     {
