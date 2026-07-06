@@ -243,7 +243,13 @@ verify_marketing_version() {
     local expected="${VERSION_TAG#v}"
     expected="${expected%%-*}"
     local actual
-    actual=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration "$CONFIGURATION" -derivedDataPath "$DERIVED_DATA" -showBuildSettings 2>/dev/null \
+    actual=$(xcodebuild \
+        -workspace "$WORKSPACE" \
+        -scheme "$SCHEME" \
+        -configuration "$CONFIGURATION" \
+        -derivedDataPath "$DERIVED_DATA" \
+        -skipPackagePluginValidation -skipMacroValidation \
+        -showBuildSettings 2>/dev/null \
         | awk -F' = ' '$1 ~ /^[[:space:]]*MARKETING_VERSION$/ { print $2; exit }')
     [[ -n "$actual" ]] || fail "could not read MARKETING_VERSION from scheme '$SCHEME'; run --update-packages or verify the workspace path."
     if [[ "$actual" != "$expected" ]]; then
