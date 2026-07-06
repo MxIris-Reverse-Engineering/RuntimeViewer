@@ -64,6 +64,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
         }
 
         scrollView.do {
+            $0.autohidesScrollers = true
             $0.isHiddenVisualEffectView = true
         }
     }

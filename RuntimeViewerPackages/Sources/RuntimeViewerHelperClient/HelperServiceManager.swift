@@ -19,7 +19,7 @@ import Dependencies
 @Observable
 @MainActor
 public final class HelperServiceManager {
-    public static let shared = HelperServiceManager()
+    fileprivate static let shared = HelperServiceManager()
 
     // MARK: - Static Properties
 

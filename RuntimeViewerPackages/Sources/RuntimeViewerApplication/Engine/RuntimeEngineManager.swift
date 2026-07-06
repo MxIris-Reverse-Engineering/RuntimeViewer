@@ -15,7 +15,7 @@ import RuntimeViewerCatalystExtensions
 @Loggable
 @MainActor
 public final class RuntimeEngineManager {
-    public static let shared = RuntimeEngineManager()
+    fileprivate static let shared = RuntimeEngineManager()
 
     // MARK: - Published State
 

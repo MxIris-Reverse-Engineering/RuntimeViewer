@@ -28,35 +28,42 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
     public init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<ContentRoute>) {
         self.runtimeObject = runtimeObject
-        self.theme = XcodePresentationTheme()
+        self.theme = ResolvedTheme.fallback
         super.init(documentState: documentState, router: router)
 
         self.imageNameOfRuntimeObject = runtimeObject.imageName
 
         let transformerObservable: Observable<Transformer.Configuration>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        transformerObservable = Observable<Transformer.Configuration>.create { observer in
-            let settings = Settings.shared
-            
-            observer.onNext(settings.transformer)
-            func observe() {
-                withObservationTracking {
-                    _ = settings.transformer
-                } onChange: {
-                    DispatchQueue.main.async {
-                        observer.onNext(settings.transformer)
-                        observe()
-                    }
-                }
+        transformerObservable = Observable<Transformer.Configuration>
+            .tracking {
+                @Dependency(\.settings) var settings
+                return settings.transformer
             }
-            observe()
-            return Disposables.create()
-        }
+            .share(replay: 1, scope: .whileConnected)
         #else
         transformerObservable = .just(.init())
         #endif
 
-        Observable.combineLatest($runtimeObject, appDefaults.$options, appDefaults.$themeProfile, transformerObservable)
+        let themeObservable: Observable<ThemeProfile>
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        // The shared stream multicasts a single `Observable.tracking` chain
+        // across every document, so editing any custom preset only rebuilds
+        // `ResolvedTheme` once instead of once per open document. Equatable
+        // dedup happens upstream so the downstream `combineLatest` only
+        // re-runs the engine `interface(for:)` fetch on a real change.
+        @Dependency(\.resolvedThemeStream) var resolvedThemeStream
+        themeObservable = resolvedThemeStream.observable.map { $0 as ThemeProfile }
+        #else
+        themeObservable = .just(ResolvedTheme.fallback)
+        #endif
+
+        themeObservable
+            .observeOnMainScheduler()
+            .bind(to: $theme)
+            .disposed(by: rx.disposeBag)
+
+        Observable.combineLatest($runtimeObject, appDefaults.$options, themeObservable, transformerObservable)
             .flatMapLatest { [unowned self] runtimeObject, options, theme, transformer in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer

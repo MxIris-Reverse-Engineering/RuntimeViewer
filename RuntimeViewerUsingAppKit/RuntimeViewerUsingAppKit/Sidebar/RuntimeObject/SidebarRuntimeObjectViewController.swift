@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -32,16 +31,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     let imageUnknownView = ImageUnknownView()
 
-    private let filterModeButton = ItemPopUpButton<FilterMode>()
-
-    private let filterSearchField = FilterSearchField()
-
-    private let bottomSeparatorView = NSBox()
-
     private let filterModeDidChange = BehaviorRelay<Void>(value: ())
-
-    @ViewLoading
-    private var searchCaseInsensitiveButton: NSButton
 
     @Dependency(\.appDefaults)
     private var appDefaults
@@ -57,31 +47,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         contentView.hierarchy {
             tabView
-            bottomSeparatorView
-            filterModeButton
-            filterSearchField
         }
 
         tabView.snp.makeConstraints { make in
-            make.top.left.right.equalToSuperview()
-            make.bottom.equalTo(bottomSeparatorView.snp.top)
-        }
-
-        bottomSeparatorView.snp.makeConstraints { make in
-            make.left.right.equalToSuperview()
-            make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
-            make.height.equalTo(1)
-        }
-
-        filterModeButton.snp.makeConstraints { make in
-            make.left.equalToSuperview().inset(12)
-            make.centerY.equalTo(filterSearchField)
-        }
-
-        filterSearchField.snp.makeConstraints { make in
-            make.left.equalTo(filterModeButton.snp.right).offset(8)
-            make.right.equalToSuperview().inset(10)
-            make.bottom.equalToSuperview().inset(8)
+            make.edges.equalToSuperview()
         }
 
         tabView.do {
@@ -95,13 +64,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             $0.tabViewBorderType = .none
         }
 
-        bottomSeparatorView.do {
-            $0.boxType = .separator
-        }
-
-        filterModeButton.do {
-            $0.icon = .symbol(systemName: .line3HorizontalDecrease)
-            $0.setup()
+        imageLoadedView.filterModeButton.do {
             $0.onItem = appDefaults.filterMode
             $0.stateChanged = { [weak self] filterMode in
                 guard let self else { return }
@@ -109,53 +72,51 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 filterModeDidChange.accept()
             }
         }
-
-        filterSearchField.do {
-            if #available(macOS 26.0, *) {
-                $0.controlSize = .extraLarge
-            } else {
-                $0.controlSize = .large
-            }
-
-            $0.addFilterButton(systemSymbolName: "textformat", toolTip: "Case Insensitive").do { searchCaseInsensitiveButton = $0 }
-        }
     }
 
     override func setupBindings(for viewModel: ViewModel) {
         super.setupBindings(for: viewModel)
 
         // Mouse click and arrow-key navigation are explicit user intents — load
-        // immediately. Anything else (type-select character input, programmatic
-        // selection) is treated as "still searching" and goes through debounce
-        // so we only load the final landing row.
-        let arrowKeyCodes = [kVK_LeftArrow, kVK_RightArrow, kVK_DownArrow, kVK_UpArrow]
+        // immediately. Type-select character input fires a selection event on every
+        // keystroke, so debounce that path to skip the intermediate rows and only
+        // load the landing one.
+        let arrowKeyCodes: Set<UInt16> = [123, 124, 125, 126] // Left, Right, Down, Up
         let isExplicitSelection: (NSEvent?) -> Bool = { event in
-            guard let event else { return false }
+            guard let event else { return true }
             switch event.type {
             case .leftMouseUp:
                 return true
             case .keyDown:
-                return arrowKeyCodes.contains(.init(event.keyCode))
+                return arrowKeyCodes.contains(event.keyCode)
             default:
-                return false
+                return true
             }
         }
+        let userSelection = imageLoadedView.outlineView.rx.proposedSelection()
+            .compactMap { [weak outlineView = imageLoadedView.outlineView] proposed -> (SidebarRuntimeObjectCellViewModel, NSEvent?)? in
+                guard let outlineView,
+                      let row = proposed.indexes.first,
+                      let cellViewModel = outlineView.item(atRow: row) as? SidebarRuntimeObjectCellViewModel
+                else { return nil }
+                return (cellViewModel, proposed.triggeringEvent)
+            }
+            .share(replay: 0, scope: .whileConnected)
+        let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel> = .merge(
+            userSelection.filter { isExplicitSelection($0.1) }.map(\.0).asSignal(onErrorSignalWith: .empty()),
+            userSelection.filter { !isExplicitSelection($0.1) }.map(\.0).debounce(.milliseconds(800), scheduler: MainScheduler.instance).asSignal(onErrorSignalWith: .empty()),
+        )
         let input = ViewModel.Input(
-            runtimeObjectClicked: .merge(
-                imageLoadedView.outlineView.rx.modelSelectedFilteringCurrentEvent(isExplicitSelection).asSignal(),
-                imageLoadedView.outlineView.rx
-                    .modelSelectedFilteringCurrentEvent { !isExplicitSelection($0) }
-                    .asSignal()
-                    .debounce(.milliseconds(800)),
-            ),
+            runtimeObjectClicked: runtimeObjectClicked,
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
             ).merge(),
-            searchString: .combineLatest(filterSearchField.rx.stringValue.asDriver(), filterModeDidChange.asDriver(), resultSelector: { a, b in a }),
-            isSearchCaseInsensitive: searchCaseInsensitiveButton.rx.state.asDriver().map {
-                $0 == .on
-            }
+            searchString: .combineLatestFirstResult(
+                imageLoadedView.filterSearchField.rx.stringValue.asDriver(),
+                filterModeDidChange.asDriver(),
+            ),
+            isSearchCaseInsensitive: imageLoadedView.searchCaseInsensitiveButton.rx.state.asDriver().map { $0 == .on },
         )
 
         let output = viewModel.transform(input)
@@ -171,7 +132,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 .asObservable()
                 .map { $0.map { ArraySection(model: $0, elements: $0.objects) } }
             let sectionHeaderProvider = { (outlineView: NSOutlineView, _: NSTableColumn?, section: SidebarRuntimeObjectSection) -> NSView? in
-                let headerView = outlineView.box.makeView(ofClass: SectionHeaderCellView.self)
+                let headerView = outlineView.box.makeView(ofClass: SectionHeaderView.self)
                 headerView.configure(title: section.title)
                 return headerView
             }
@@ -247,14 +208,42 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             .disposed(by: rx.disposeBag)
 
         outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
-        
+
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
         outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
+
+        imageLoadedView.filterScopeButton.rx.click.asSignal()
+            .emitOnNextMainActor { [weak self, weak viewModel] in
+                guard let self, let viewModel else { return }
+                viewModel.router.trigger(
+                    .scope(
+                        sender: imageLoadedView.filterScopeButton,
+                        relay: viewModel.$scope,
+                        availableKinds: viewModel.availableKinds,
+                        availableProperties: viewModel.availableProperties,
+                    ),
+                )
+            }
+            .disposed(by: rx.disposeBag)
+
+        viewModel.$scope
+            .asDriver()
+            .map(\.isActive)
+            .distinctUntilChanged()
+            .driveOnNextMainActor { [weak self] isActive in
+                guard let self else { return }
+                imageLoadedView.filterScopeButton.contentTintColor = isActive ? .controlAccentColor : .labelColor
+            }
+            .disposed(by: rx.disposeBag)
     }
-    
+
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
         guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
         return cellViewModel.title.string
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+        !(item is SidebarRuntimeObjectSection)
     }
 }
 
@@ -262,7 +251,7 @@ extension SidebarRuntimeObjectViewController {
     /// Group-row cell for a kind section header (e.g. "Objective-C Class").
     /// Rendered as an `NSOutlineView` group item; the system applies the
     /// standard group-row styling, so this only supplies the title text.
-    fileprivate final class SectionHeaderCellView: TableCellView {
+    private final class SectionHeaderView: LayerBackedView {
         private let titleLabel = Label()
 
         override func setup() {
@@ -295,22 +284,79 @@ extension SidebarRuntimeObjectViewController {
 
         let emptyLabel = Label()
 
+        let bottomSeparatorView = NSBox()
+
+        let filterModeButton = ItemPopUpButton<FilterMode>()
+
+        let filterScopeButton = NSButton()
+
+        let filterSearchField = FilterSearchField()
+
+        private lazy var filterStackView = HStackView(distribution: .fill, alignment: .fill, spacing: 6) {
+            filterModeButton
+            filterScopeButton
+            filterSearchField
+        }
+
+        private(set) var searchCaseInsensitiveButton: NSButton!
+
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
+
+            searchCaseInsensitiveButton = filterSearchField.addFilterButton(
+                systemSymbolName: "textformat",
+                toolTip: "Case Insensitive",
+            )
 
             hierarchy {
                 scrollView
                 emptyLabel
+                bottomSeparatorView
+                filterStackView
             }
 
             scrollView.snp.makeConstraints { make in
-                make.edges.equalToSuperview()
+                make.top.left.right.equalToSuperview()
+                make.bottom.equalTo(bottomSeparatorView.snp.top)
             }
 
             emptyLabel.snp.makeConstraints { make in
-                make.center.equalToSuperview()
+                make.centerX.equalToSuperview()
+                make.centerY.equalTo(scrollView)
                 make.top.left.greaterThanOrEqualTo(16).priority(.high)
-                make.bottom.right.lessThanOrEqualTo(-16).priority(.high)
+                make.right.lessThanOrEqualTo(-16).priority(.high)
+                make.bottom.lessThanOrEqualTo(bottomSeparatorView.snp.top).offset(-16).priority(.high)
+            }
+
+            bottomSeparatorView.snp.makeConstraints { make in
+                make.left.right.equalToSuperview()
+                make.height.equalTo(1)
+//                make.bottom.equalTo(filterSearchField.snp.top).offset(-8)
+                make.bottom.equalTo(filterStackView.snp.top).offset(-8)
+            }
+
+            searchCaseInsensitiveButton.snp.makeConstraints { make in
+                make.top.bottom.equalToSuperview()
+            }
+//            filterModeButton.snp.makeConstraints { make in
+//                make.left.equalToSuperview().inset(12)
+//                make.centerY.equalTo(filterSearchField)
+//            }
+//
+//            filterScopeButton.snp.makeConstraints { make in
+//                make.left.equalTo(filterModeButton.snp.right).offset(6)
+//                make.centerY.equalTo(filterSearchField)
+//            }
+//
+//            filterSearchField.snp.makeConstraints { make in
+//                make.left.equalTo(filterScopeButton.snp.right).offset(6)
+//                make.right.equalToSuperview().inset(10)
+//                make.bottom.equalToSuperview().inset(8)
+//            }
+
+            filterStackView.snp.makeConstraints { make in
+                make.leading.trailing.equalToSuperview().inset(12)
+                make.bottom.equalToSuperview().inset(8)
             }
 
             emptyLabel.do {
@@ -320,7 +366,33 @@ extension SidebarRuntimeObjectViewController {
             }
 
             scrollView.do {
+                $0.autohidesScrollers = true
                 $0.isHiddenVisualEffectView = true
+            }
+
+            bottomSeparatorView.do {
+                $0.boxType = .separator
+            }
+
+            filterModeButton.do {
+                $0.icon = .symbol(systemName: .line3HorizontalDecrease)
+                $0.alternateIcon = SFSymbols(systemName: .line3HorizontalDecrease).hierarchicalColor(.controlAccentColor).nsuiImgae
+                $0.setup()
+            }
+
+            filterScopeButton.do {
+                $0.isBordered = false
+                $0.imagePosition = .imageOnly
+                $0.image = .symbol(systemName: .sliderHorizontal3)
+                $0.toolTip = "Filter Scope"
+            }
+
+            filterSearchField.do {
+                if #available(macOS 26.0, *) {
+                    $0.controlSize = .extraLarge
+                } else {
+                    $0.controlSize = .large
+                }
             }
         }
     }
@@ -438,5 +510,47 @@ extension NSTabViewItem {
         let vc = NSViewController()
         vc.view = view
         self.viewController = vc
+    }
+}
+
+
+public extension SharedSequence {
+
+    static func combineLatestFirstResult<
+        FirstSharedSequence: SharedSequenceConvertibleType,
+        SecondSharedSequence: SharedSequenceConvertibleType
+    >(
+        _ firstSharedSequence: FirstSharedSequence,
+        _ secondSharedSequence: SecondSharedSequence
+    ) -> SharedSequence<SharingStrategy, Element>
+    where
+        FirstSharedSequence.SharingStrategy == SharingStrategy,
+        SecondSharedSequence.SharingStrategy == SharingStrategy,
+        FirstSharedSequence.Element == Element
+    {
+        combineLatest(
+            firstSharedSequence,
+            secondSharedSequence,
+            resultSelector: { firstElement, _ in firstElement }
+        )
+    }
+
+    static func combineLatestSecondResult<
+        FirstSharedSequence: SharedSequenceConvertibleType,
+        SecondSharedSequence: SharedSequenceConvertibleType
+    >(
+        _ firstSharedSequence: FirstSharedSequence,
+        _ secondSharedSequence: SecondSharedSequence
+    ) -> SharedSequence<SharingStrategy, Element>
+    where
+        FirstSharedSequence.SharingStrategy == SharingStrategy,
+        SecondSharedSequence.SharingStrategy == SharingStrategy,
+        SecondSharedSequence.Element == Element
+    {
+        combineLatest(
+            firstSharedSequence,
+            secondSharedSequence,
+            resultSelector: { _, secondElement in secondElement }
+        )
     }
 }

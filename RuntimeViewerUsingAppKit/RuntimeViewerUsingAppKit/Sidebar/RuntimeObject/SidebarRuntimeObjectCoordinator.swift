@@ -36,6 +36,30 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
             return .select(index: 0)
         case .bookmarks:
             return .select(index: 1)
+        case .scope(let sender, let relay, let availableKinds, let availableProperties):
+            let viewController = SidebarRuntimeObjectScopeViewController()
+            let viewModel = SidebarRuntimeObjectScopeViewModel<SidebarRuntimeObjectRoute>(
+                relay: relay,
+                availableKinds: availableKinds,
+                availableProperties: availableProperties,
+                documentState: documentState,
+                router: self
+            )
+            viewController.setupBindings(for: viewModel)
+            // Plain NSPopover via CocoaCoordinator's `GlobalPopover`. Using
+            // `.uxPopover` here would route through `UXPopoverController`,
+            // which bridges UXViewController's private `preferredContentSize`
+            // ivar to NSPopover via KVO — and that bridge re-emits CA-
+            // interpolated intermediate values, causing the popover to
+            // animate through zero height during disclosure expansion.
+//            return .uxPopover(
+//                viewController,
+//                relativeTo: sender.bounds,
+//                of: sender,
+//                preferredEdge: .maxY,
+//                behavior: .transient
+//            )
+            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         }
     }
 }

@@ -110,8 +110,51 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         didSet { applyFilter() }
     }
 
+    /// Scope filter applied to `_children` before the text filter runs.
+    /// Pushed down from `SidebarRuntimeObjectViewModel` whenever the user
+    /// edits the scope popover. The scope itself does not cascade through
+    /// this setter — callers responsible for tree-wide propagation use
+    /// `applyScopeRecursively(_:)` so every descendant ends up with the
+    /// same value before any parent's `_filteredChildren` is read.
+    var scope: RuntimeObjectScope = .init() {
+        didSet {
+            guard oldValue != scope else { return }
+            applyFilter()
+        }
+    }
+
     private func applyFilter() {
-        _filteredChildren = FilterEngine.filter(filter, items: _children, mode: appDefaults.filterMode, isCaseInsensitive: isCaseInsensitive)
+        let scopeFiltered: [SidebarRuntimeObjectCellViewModel]
+        if scope.isActive {
+            scopeFiltered = _children.filter { $0.matchesScopeRecursively(scope) }
+        } else {
+            scopeFiltered = _children
+        }
+        _filteredChildren = FilterEngine.filter(filter, items: scopeFiltered, mode: appDefaults.filterMode, isCaseInsensitive: isCaseInsensitive)
+    }
+
+    /// Returns `true` if this cell or any of its descendants pass `scope`.
+    /// Walks the cell-viewmodel tree (`_children`) rather than the value-
+    /// type runtime-object tree so it always sees splices applied by
+    /// `appendRuntimeObjectChildPreservingCurrentDescendants(_:)` even
+    /// when the ancestor's stored `runtimeObject` is stale.
+    func matchesScopeRecursively(_ scope: RuntimeObjectScope) -> Bool {
+        if scope.passes(runtimeObject) { return true }
+        for child in _children {
+            if child.matchesScopeRecursively(scope) { return true }
+        }
+        return false
+    }
+
+    /// Push `newScope` into this cell and every descendant depth-first.
+    /// Each cell's own `_filteredChildren` rebuild happens via the
+    /// `scope` didSet, so after this call returns the entire subtree
+    /// reflects the new scope consistently.
+    func applyScopeRecursively(_ newScope: RuntimeObjectScope) {
+        for child in _children {
+            child.applyScopeRecursively(newScope)
+        }
+        scope = newScope
     }
 
     var filterResult: FuzzyFilterResult? {

@@ -4,6 +4,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
+import RuntimeViewerSettings
 
 enum MessageError: LocalizedError {
     case message(String)
@@ -37,6 +38,12 @@ struct SwitchSourceState: Equatable {
 }
 
 final class MainViewModel: ViewModel<MainRoute> {
+    /// Bounds for the toolbar font-size controls, applied to `Settings.theme.fontSize`.
+    private static let minimumFontSize: Double = 8
+    private static let maximumFontSize: Double = 32
+
+    private static let fontSizeThrottleMilliseconds: Int = 120
+
     struct Input {
         let sidebarBackClick: Signal<Void>
         let navigationPreviousClick: Signal<Void>
@@ -131,17 +138,21 @@ final class MainViewModel: ViewModel<MainRoute> {
 //        }
 //        .disposed(by: rx.disposeBag)
 
-        input.fontSizeSmallerClick.emitOnNext { [weak self] in
-            guard let self else { return }
-            appDefaults.themeProfile.fontSizeSmaller()
-        }
-        .disposed(by: rx.disposeBag)
+        input.fontSizeSmallerClick
+            .throttle(.milliseconds(Self.fontSizeThrottleMilliseconds), latest: true)
+            .emitOnNext {
+                @Dependency(\.settings) var settings
+                settings.theme.fontSize = max(Self.minimumFontSize, settings.theme.fontSize - 1)
+            }
+            .disposed(by: rx.disposeBag)
 
-        input.fontSizeLargerClick.emitOnNext { [weak self] in
-            guard let self else { return }
-            appDefaults.themeProfile.fontSizeLarger()
-        }
-        .disposed(by: rx.disposeBag)
+        input.fontSizeLargerClick
+            .throttle(.milliseconds(Self.fontSizeThrottleMilliseconds), latest: true)
+            .emitOnNext {
+                @Dependency(\.settings) var settings
+                settings.theme.fontSize = min(Self.maximumFontSize, settings.theme.fontSize + 1)
+            }
+            .disposed(by: rx.disposeBag)
 
         input.attachToProcessClick.emitOnNextMainActor { [weak self] in
             guard let self else { return }

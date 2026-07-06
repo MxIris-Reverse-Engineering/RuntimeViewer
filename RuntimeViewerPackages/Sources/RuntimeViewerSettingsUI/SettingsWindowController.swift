@@ -6,7 +6,7 @@ import RuntimeViewerSettings
 package final class SettingsWindow: NSWindow {}
 
 package final class SettingsWindowController: XiblessWindowController<SettingsWindow> {
-    public static let shared = SettingsWindowController()
+    fileprivate static let shared = SettingsWindowController()
 
     private lazy var settingsViewController = SettingsViewController()
 

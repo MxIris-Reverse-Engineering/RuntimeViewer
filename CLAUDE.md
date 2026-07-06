@@ -127,6 +127,8 @@ When adding new features, you **MUST** follow these rules:
 3. **Reactive**: Use RxSwift for data binding and event handling
 4. **No SwiftUI** in non-Settings areas — keep the codebase consistent
 5. **Swift Language Mode**: All packages use `swiftLanguageModes: [.v5]`
+6. **Singletons go through `@Dependency`**: every project singleton is declared `fileprivate static let shared` and exposed only via a `DependencyKey` + `extension DependencyValues` accessor. Callers consume it through `@Dependency(\.xxx)`. Never `public static let shared`, never `Foo.shared.bar()` from outside the defining file. See **Singletons & Dependency Injection** under Code Style.
+7. **AppDelegate stays thin**: AppDelegate is a dispatch shell, not a service container. Every non-trivial lifecycle responsibility (appearance, debug menu, update checking, version probes, etc.) lives in its own `@MainActor` controller class under `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered via `@Dependency` per rule #6. See **AppDelegate Convention** under Code Style.
 
 ## Code Style
 
@@ -141,6 +143,129 @@ When adding new features, you **MUST** follow these rules:
 - ViewModel `@Observed` state properties: `@Observed private(set) var`
 - ViewController relays: `private let xxxRelay = PublishRelay<Void>()`
 - ViewController views: `private let xxxLabel = Label()`
+
+### Singletons & Dependency Injection
+
+**Every project singleton MUST be hidden behind `@Dependency`. No exceptions.** Direct `XxxService.shared.foo()` access from outside the defining file is forbidden — the language enforces it because `shared` is `fileprivate`.
+
+**Pattern** (for `@MainActor` singletons — the common case in this codebase):
+
+```swift
+@MainActor
+public final class MyService {
+    fileprivate static let shared = MyService()
+
+    @Dependency(\.someUpstream) private var someUpstream
+
+    private init() {}
+
+    public func start() { /* ... */ }
+    public func stop()  { /* ... */ }
+}
+
+// MARK: - Dependencies
+
+private enum MyServiceKey: @preconcurrency DependencyKey {
+    @MainActor static let liveValue = MyService.shared
+}
+
+extension DependencyValues {
+    public var myService: MyService {
+        get { self[MyServiceKey.self] }
+        set { self[MyServiceKey.self] = newValue }
+    }
+}
+```
+
+For non-`@MainActor` singletons, drop `@preconcurrency` and the `@MainActor` on `liveValue`:
+
+```swift
+private enum MyServiceKey: DependencyKey {
+    static let liveValue = MyService.shared
+}
+```
+
+**Consumers** always go through `@Dependency`:
+
+```swift
+final class MyConsumer {
+    @Dependency(\.myService) private var myService
+
+    func doWork() { myService.start() }
+}
+```
+
+**Rules**:
+- `static let shared` is **always** `fileprivate` (never `public`, never plain `static let`). The DependencyKey lives in the same file, so it can see `shared`; nothing else can.
+- The `DependencyKey` enum is `private`; the `DependencyValues` accessor is `public` (or matches the singleton's visibility).
+- Pick a key path name that matches the type, lowercased: `MyService` → `\.myService`, `HelperServiceManager` → `\.helperServiceManager`.
+- Test value: usually omit (defaults to `liveValue`); add `testValue` only when tests need an isolated/no-op variant.
+- Access modifier on the `DependencyValues` accessor matches reach: `public` if used outside the module, `package` / internal otherwise.
+
+**Exceptions** (narrow):
+- If the enclosing type is **already** `private` / `fileprivate` (e.g. a file-scoped helper class like `EmptyRouteTransitionContext`), the static `shared` is already file-scoped — leave it `static let shared`. Adding `fileprivate` triggers a redundant-modifier warning.
+- Apple SDK singletons (`NSApplication.shared`, `NSWorkspace.shared`, `NSDocumentController.shared`, `UserDefaults.standard`, `FileManager.default`, …) are not project singletons — use them directly without wrapping.
+
+**Anti-patterns** — if you catch yourself writing any of these, stop and apply the pattern above:
+- `public static let shared = Foo()` in a project type
+- `Foo.shared.bar()` at a call site outside `Foo.swift`
+- A new project class that owns shared state but skips the `DependencyKey` boilerplate
+- Importing a module purely to reach `Foo.shared` instead of going through `@Dependency(\.foo)`
+
+### AppDelegate Convention
+
+**AppDelegate is a dispatch shell, not a service container.** Treat it like a router that translates app lifecycle into one-line calls on injected services.
+
+**Allowed in AppDelegate** (and nothing else):
+- Lifecycle hooks (`applicationDidFinishLaunching`, `applicationWillTerminate`, `applicationSupportsSecureRestorableState`, `applicationShouldTerminateAfterLastWindowClosed`, `application(_:open:)`, …)
+- `@Dependency(\.xxx)` declarations for the controllers/services it dispatches to
+- `IBAction` methods that immediately delegate to a router or injected service (one line each)
+- One-line `start()` / `install()` / `stop()` / `checkOnLaunch()` calls on injected services
+- Compile-time flag toggles like `runtimeViewerIsARM64EVariant = true` and one-shot fixes like `NSToolbarItemViewerOverflowFix.install()`
+
+**Forbidden in AppDelegate**:
+- `@objc` action handlers with bodies (extract to a controller's `@objc` method)
+- `Task { … }` blocks doing work (push the work into a service method)
+- `NSMenu` / `NSMenuItem` construction (extract to a `XxxMenuController.install()`)
+- `NSAlert` / `NSSavePanel` / `NSOpenPanel` flows (extract to the responsible controller)
+- `observe { … }` / `withObservationTracking { … }` blocks (extract to a controller that owns the `ObserveToken`)
+- Singleton bootstrapping logic, version checks, file I/O, log export — all belong to dedicated controllers
+
+**The pattern** — every new lifecycle responsibility is a new `@MainActor` controller class in `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered via the Singletons & Dependency Injection pattern above. Current examples:
+- `AppearanceController` — observes `settings.general.appearance` and updates `NSApp.appearance`
+- `DebugMenuController` — installs the Debug menu and owns the Export Logs flow
+- `HelperServiceVersionChecker` — runs the helper version probe and presents reinstall alerts
+- `UpdaterService` — owns the Sparkle updater lifecycle
+
+AppDelegate then reduces to:
+
+```swift
+@MainActor
+@main
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    @Dependency(\.appearanceController)         private var appearanceController
+    @Dependency(\.debugMenuController)          private var debugMenuController
+    @Dependency(\.helperServiceVersionChecker)  private var helperServiceVersionChecker
+    @Dependency(\.mcpService)                   private var mcpService
+    @Dependency(\.updaterService)               private var updaterService
+
+    func applicationDidFinishLaunching(_ note: Notification) {
+        NSToolbarItemViewerOverflowFix.install()
+        appearanceController.start()
+        debugMenuController.install()
+        mcpService.start(for: AppMCPBridgeDocumentProvider())
+        updaterService.start()
+        helperServiceVersionChecker.checkOnLaunch()
+    }
+
+    func applicationWillTerminate(_ note: Notification) {
+        updaterService.stop()
+        mcpService.stop()
+    }
+}
+```
+
+If a lifecycle responsibility doesn't fit one of these one-liners, **make it a new controller before touching AppDelegate**.
 
 ### MVVM-C Completeness
 

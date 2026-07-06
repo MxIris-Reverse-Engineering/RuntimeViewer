@@ -27,7 +27,7 @@ public final class RuntimeHelperClient: @unchecked Sendable {
         }
     }
 
-    public static let shared = RuntimeHelperClient()
+    fileprivate static let shared = RuntimeHelperClient()
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
 

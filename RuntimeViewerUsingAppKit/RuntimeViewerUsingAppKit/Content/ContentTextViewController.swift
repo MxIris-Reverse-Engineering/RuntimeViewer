@@ -104,6 +104,9 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
             $0.textView.backgroundColor = $1.backgroundColor
             $0.scrollView.backgroundColor = $1.backgroundColor
             $0.lineNumberRulerView.backgroundColor = $1.backgroundColor
+            var selectedAttributes = $0.textView.selectedTextAttributes
+            selectedAttributes[.backgroundColor] = $1.selectionBackgroundColor
+            $0.textView.selectedTextAttributes = selectedAttributes
         }
         .disposed(by: rx.disposeBag)
 

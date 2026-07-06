@@ -24,6 +24,52 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @Observed public private(set) var loadingProgress: Double = 0
     @Observed public private(set) var loadingDescription: String = ""
     @Observed public private(set) var loadingItemCount: String = ""
+    @Observed public private(set) var scope: RuntimeObjectScope = .init()
+
+    /// Distinct kinds that actually appear in the current image (top-level
+    /// nodes and every descendant). The scope popover uses this to skip
+    /// drawing checkboxes for kinds nothing in the image carries, so the UI
+    /// adapts per image rather than always listing the full universe of
+    /// `RuntimeObjectKind`s. Recomputed on demand — cheap because nodes are
+    /// only walked at popover-open time and the tree is shallow.
+    @MainActor
+    public var availableKinds: Set<RuntimeObjectKind> {
+        var collected: Set<RuntimeObjectKind> = []
+        func visit(_ runtimeObject: RuntimeObject) {
+            collected.insert(runtimeObject.kind)
+            for child in runtimeObject.children {
+                visit(child)
+            }
+        }
+        for cellViewModel in nodes {
+            // `materializedRuntimeObject()` rebuilds the runtime object
+            // tree from the cell viewmodel's `_children`, picking up
+            // specialized descendants that were spliced in after the
+            // initial reload (when the parent's stored `runtimeObject`
+            // might be stale relative to the cell tree).
+            visit(cellViewModel.materializedRuntimeObject())
+        }
+        return collected
+    }
+
+    /// Union of `RuntimeObject.Properties` bits observed across every node
+    /// in the current image. The popover hides property rows for bits that
+    /// never occur, since toggling them would only further restrict an
+    /// already-empty result.
+    @MainActor
+    public var availableProperties: RuntimeObject.Properties {
+        var collected: RuntimeObject.Properties = []
+        func visit(_ runtimeObject: RuntimeObject) {
+            collected.formUnion(runtimeObject.properties)
+            for child in runtimeObject.children {
+                visit(child)
+            }
+        }
+        for cellViewModel in nodes {
+            visit(cellViewModel.materializedRuntimeObject())
+        }
+        return collected
+    }
 
     /// Fires after a specialized child is spliced into a parent cell
     /// viewmodel so the outline view re-queries its children. `outlineView.rx.nodes`
@@ -150,24 +196,30 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 //        input.isSearchCaseInsensitive.drive($isSearchCaseInsensitive).disposed(by: rx.disposeBag)
 
         Driver.combineLatest(input.searchString, input.isSearchCaseInsensitive)
-            .debounce(.milliseconds(500))
+            .flatMapLatest { searchString, isSearchCaseInsensitive -> Driver<(String, Bool)> in
+                if searchString.isEmpty {
+                    return .just((searchString, isSearchCaseInsensitive))
+                } else {
+                    return .just((searchString, isSearchCaseInsensitive))
+                        .debounce(.milliseconds(500))
+                }
+            }
             .driveOnNextMainActor { [weak self] searchString, isSearchCaseInsensitive in
                 guard let self else { return }
                 guard (self.searchString != searchString) || (self.isSearchCaseInsensitive != isSearchCaseInsensitive) else { return }
 
                 self.searchString = searchString
                 self.isSearchCaseInsensitive = isSearchCaseInsensitive
+                rebuildFilteredNodes()
+            }
+            .disposed(by: rx.disposeBag)
 
-                if searchString.isEmpty {
-                    if isFiltering {
-                        isFiltering = false
-                    }
-                } else {
-                    if !isFiltering {
-                        isFiltering = true
-                    }
-                }
-                filteredNodes = FilterEngine.filter(searchString, items: nodes, mode: appDefaults.filterMode, isCaseInsensitive: isSearchCaseInsensitive)
+        $scope
+            .asDriver()
+            .skip(1) // initial value already covered by `nodes` reload
+            .driveOnNextMainActor { [weak self] _ in
+                guard let self else { return }
+                rebuildFilteredNodes()
             }
             .disposed(by: rx.disposeBag)
 
@@ -316,8 +368,68 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             } else {
                 self.nodes = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
             }
-            self.filteredNodes = self.nodes
+            rebuildFilteredNodes()
         }
+    }
+
+    /// Apply the scope pre-filter and then the text filter, publishing the
+    /// result to `filteredNodes`. Centralized so every call site (initial
+    /// load, search-string change, scope change, specialization splice) hits
+    /// the same ordering.
+    ///
+    /// Three passes:
+    /// 1. Push the active scope into every cell in the tree so each cell's
+    ///    `_filteredChildren` excludes children that fail the scope. The
+    ///    cell-level scope filter is what keeps a node's expansion clean —
+    ///    without it, a parent that passes via `matchesScopeRecursively`
+    ///    would still show every sibling under it, including those that
+    ///    fail the scope.
+    /// 2. Filter the top-level `nodes` array by `matchesScopeRecursively`
+    ///    so parents whose hits live only in descendants are still
+    ///    surfaced.
+    /// 3. Run the text filter via `FilterEngine.filter`. Always invoked —
+    ///    even with an empty search string — because it cascades the
+    ///    `filter` value through child cells and clears stale
+    ///    `filterResult` highlighting from a previous search.
+    @MainActor
+    private func rebuildFilteredNodes() {
+        let scope = scope
+
+        // Drive `isFiltering` off the union of text + scope. This flag
+        // controls the outline view's beginFiltering / endFiltering
+        // auto-expand path, so scoping (without a text query) still
+        // surfaces matching descendants automatically. Must be set
+        // *before* `filteredNodes` is reassigned so `didChangeFiltering`
+        // (`withLatestFrom($isFiltering)`) sees the new value.
+        let shouldFilter = !searchString.isEmpty || scope.isActive
+        if shouldFilter != isFiltering {
+            isFiltering = shouldFilter
+        }
+
+        // Pass 1: cascade scope into every cell so deeper levels rebuild
+        // their `_filteredChildren` before the top-level filter reads them.
+        for cell in nodes {
+            cell.applyScopeRecursively(scope)
+        }
+
+        // Pass 2: prune top-level by matchesScopeRecursively (a parent
+        // survives if itself or any descendant passes the scope).
+        let scoped: [SidebarRuntimeObjectCellViewModel]
+        if scope.isActive {
+            scoped = nodes.filter { $0.matchesScopeRecursively(scope) }
+        } else {
+            scoped = nodes
+        }
+
+        // Pass 3: text filter — FilterEngine handles an empty search by
+        // clearing every item's `filterResult` and cascading the empty
+        // filter through child cells.
+        filteredNodes = FilterEngine.filter(
+            searchString,
+            items: scoped,
+            mode: appDefaults.filterMode,
+            isCaseInsensitive: isSearchCaseInsensitive
+        )
     }
 
     /// Splice a newly specialized child into the existing sidebar tree without
@@ -339,16 +451,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             return
         }
         nodes = nodes
-        if isFiltering {
-            filteredNodes = FilterEngine.filter(
-                searchString,
-                items: nodes,
-                mode: appDefaults.filterMode,
-                isCaseInsensitive: isSearchCaseInsensitive
-            )
-        } else {
-            filteredNodes = nodes
-        }
+        rebuildFilteredNodes()
         // `nodes`/`filteredNodes` re-emissions above are no-ops for the
         // outline view (same `SidebarRuntimeObjectCellViewModel` instance in
         // both snapshots → DifferenceKit's `isContentEqual` always true →

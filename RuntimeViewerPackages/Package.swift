@@ -165,6 +165,10 @@ let package = Package(
             targets: ["RuntimeViewerSettingsUI"],
         ),
         .library(
+            name: "RuntimeViewerSimulatorInstaller",
+            targets: ["RuntimeViewerSimulatorInstaller"],
+        ),
+        .library(
             name: "RuntimeViewerCatalystExtensions",
             targets: ["RuntimeViewerCatalystExtensions"],
         ),
@@ -421,10 +425,18 @@ let package = Package(
                 "RuntimeViewerUI",
                 "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerSimulatorInstaller", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "SwiftUIIntrospect", package: "swiftui-introspect"),
             ],
             resources: [
                 .process("Resources"),
+            ],
+        ),
+
+        .target(
+            name: "RuntimeViewerSimulatorInstaller",
+            dependencies: [
+                .product(name: "Dependencies", package: "swift-dependencies"),
             ],
         ),
 
