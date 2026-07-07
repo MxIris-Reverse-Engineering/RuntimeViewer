@@ -207,6 +207,11 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         output.loadingItemCount.drive(imageLoadingView.countLabel.rx.stringValue)
             .disposed(by: rx.disposeBag)
 
+        outlineView.rx.shouldSelectItem { _, item, _, _ in
+            !(item is SidebarRuntimeObjectSection)
+        }
+        .disposed(by: rx.disposeBag)
+
         outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
 
         outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
@@ -240,10 +245,6 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
         guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
         return cellViewModel.title.string
-    }
-
-    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        !(item is SidebarRuntimeObjectSection)
     }
 }
 

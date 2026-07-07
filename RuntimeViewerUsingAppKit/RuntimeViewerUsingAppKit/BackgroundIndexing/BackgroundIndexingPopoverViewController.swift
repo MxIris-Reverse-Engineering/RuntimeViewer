@@ -162,6 +162,11 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
         )
         let output = viewModel.transform(input)
 
+        outlineView.rx.shouldSelectItem { _, _, _, _ in
+            false
+        }
+        .disposed(by: rx.disposeBag)
+
         outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
 
         output.subtitle
@@ -247,10 +252,6 @@ final class BackgroundIndexingPopoverViewController: UXKitViewController<Backgro
 }
 
 extension BackgroundIndexingPopoverViewController: NSOutlineViewDelegate {
-    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        return false
-    }
-
     /// Auto-expand reason groups when their parent section is expanded so the
     /// user doesn't have to drill in twice (HISTORY → Always Index → batches)
     /// to see the previously-flat list. Batches themselves stay collapsed
