@@ -248,7 +248,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxUIKit",
-                from: "0.1.1",
+                from: "0.1.2",
             ),
         ),
 
