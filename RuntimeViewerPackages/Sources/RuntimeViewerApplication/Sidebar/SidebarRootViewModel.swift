@@ -123,7 +123,14 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         .disposed(by: rx.disposeBag)
 
         input.searchString
-            .debounce(.milliseconds(500))
+            .flatMapLatest { filter -> Signal<String> in
+                if filter.isEmpty {
+                    return .just(filter)
+                } else {
+                    return .just(filter)
+                        .debounce(.milliseconds(500))
+                }
+            }
             .emitOnNextMainActor { [weak self] filter in
                 guard let self else { return }
                 for node in nodes {
