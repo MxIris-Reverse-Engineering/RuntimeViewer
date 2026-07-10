@@ -321,7 +321,24 @@ enum RuntimeStdioError: Error, LocalizedError, Sendable {
 /// // Or send by name
 /// let result: String = try await client.sendMessage(name: "echo", request: "hello")
 /// ```
-final class RuntimeStdioClientConnection: RuntimeConnectionBase<RuntimeStdioConnection>, @unchecked Sendable {
+final class RuntimeStdioClientConnection: RuntimeForwardingConnection, @unchecked Sendable {
+    private(set) var underlyingConnection: RuntimeStdioConnection?
+
+    private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
+
+    /// Bridges underlying connection state into `stateSubject`; kept alive for
+    /// the connection's lifetime so subscribers still observe the final
+    /// `.disconnected` emitted while stopping.
+    private var underlyingStateCancellable: AnyCancellable?
+
+    var statePublisher: some Publisher<RuntimeConnectionState, Never> {
+        stateSubject
+    }
+
+    var state: RuntimeConnectionState {
+        stateSubject.value
+    }
+
     /// Creates a client connection with the specified file handles.
     ///
     /// - Parameters:
@@ -329,9 +346,12 @@ final class RuntimeStdioClientConnection: RuntimeConnectionBase<RuntimeStdioConn
     ///   - outputHandle: File handle to write requests to (typically the child's stdin).
     /// - Throws: `RuntimeStdioError` if connection cannot be started.
     init(inputHandle: FileHandle, outputHandle: FileHandle) throws {
-        super.init()
         let connection = RuntimeStdioConnection(inputHandle: inputHandle, outputHandle: outputHandle)
         self.underlyingConnection = connection
+        self.underlyingStateCancellable = connection.statePublisher
+            .sink { [weak self] connectionState in
+                self?.stateSubject.send(connectionState)
+            }
         try connection.start()
     }
 }
@@ -363,7 +383,24 @@ final class RuntimeStdioClientConnection: RuntimeConnectionBase<RuntimeStdioConn
 /// // Keep process alive
 /// RunLoop.main.run()
 /// ```
-final class RuntimeStdioServerConnection: RuntimeConnectionBase<RuntimeStdioConnection>, @unchecked Sendable {
+final class RuntimeStdioServerConnection: RuntimeForwardingConnection, @unchecked Sendable {
+    private(set) var underlyingConnection: RuntimeStdioConnection?
+
+    private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
+
+    /// Bridges underlying connection state into `stateSubject`; kept alive for
+    /// the connection's lifetime so subscribers still observe the final
+    /// `.disconnected` emitted while stopping.
+    private var underlyingStateCancellable: AnyCancellable?
+
+    var statePublisher: some Publisher<RuntimeConnectionState, Never> {
+        stateSubject
+    }
+
+    var state: RuntimeConnectionState {
+        stateSubject.value
+    }
+
     /// Creates a server connection with the specified file handles.
     ///
     /// - Parameters:
@@ -371,9 +408,12 @@ final class RuntimeStdioServerConnection: RuntimeConnectionBase<RuntimeStdioConn
     ///   - outputHandle: File handle to write responses to (typically `.standardOutput`).
     /// - Throws: `RuntimeStdioError` if connection cannot be started.
     init(inputHandle: FileHandle, outputHandle: FileHandle) throws {
-        super.init()
         let connection = RuntimeStdioConnection(inputHandle: inputHandle, outputHandle: outputHandle)
         self.underlyingConnection = connection
+        self.underlyingStateCancellable = connection.statePublisher
+            .sink { [weak self] connectionState in
+                self?.stateSubject.send(connectionState)
+            }
         try connection.start()
     }
 }

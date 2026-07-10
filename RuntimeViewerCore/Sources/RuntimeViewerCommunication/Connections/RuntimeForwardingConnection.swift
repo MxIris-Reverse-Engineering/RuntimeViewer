@@ -2,42 +2,33 @@ import Foundation
 import FoundationToolbox
 import Combine
 
-// MARK: - RuntimeConnectionBase
+// MARK: - RuntimeForwardingConnection
 
-/// Generic base class for RuntimeConnection implementations.
+/// Protocol for `RuntimeConnection` implementations backed by an underlying
+/// transport connection.
 ///
-/// This class provides a common implementation of the `RuntimeConnection` protocol
-/// by delegating to an underlying connection object that handles the actual
-/// message sending and receiving.
+/// Conforming types expose their transport via `underlyingConnection`; the
+/// protocol extension forwards every messaging requirement to it, so a
+/// conformer only implements connection-specific concerns: state publishing
+/// (each conformer owns a private state subject and exposes it through its
+/// `some Publisher` witness), lifecycle, and reconnection orchestration.
 ///
-/// ## Usage
-///
-/// Subclasses should set the `underlyingConnection` property and implement
-/// any connection-specific initialization logic.
-///
-/// ## Type Parameters
+/// ## Associated Types
 ///
 /// - `Connection`: The underlying connection type that provides `send` and
 ///   `setMessageHandler` methods.
-class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeConnection, @unchecked Sendable {
+protocol RuntimeForwardingConnection: RuntimeConnection {
+    /// The underlying connection type that handles actual communication.
+    associatedtype Connection: RuntimeUnderlyingConnection
+
     /// The underlying connection that handles actual communication.
     /// - Note: Thread-safety is managed by the underlying connection itself.
-    var underlyingConnection: Connection?
+    var underlyingConnection: Connection? { get }
+}
 
-    init() {}
+// MARK: - Default Forwarding Implementations
 
-    // MARK: - RuntimeConnection State Properties
-
-    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
-        underlyingConnection?.statePublisher ?? Just(.connecting).eraseToAnyPublisher()
-    }
-
-    var state: RuntimeConnectionState {
-        underlyingConnection?.state ?? .connecting
-    }
-
-    var connectionInfo: RuntimeConnectionInfo? { nil }
-
+extension RuntimeForwardingConnection {
     func stop() {
         underlyingConnection?.stop()
     }
@@ -122,7 +113,7 @@ class RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>: RuntimeCon
 
 /// Protocol for underlying connection types that can send and receive messages.
 ///
-/// This protocol abstracts the common interface needed by `RuntimeConnectionBase`
+/// This protocol abstracts the common interface needed by `RuntimeForwardingConnection`
 /// to delegate message handling to different connection implementations.
 protocol RuntimeUnderlyingConnection: Sendable {
     /// Publisher that emits connection state changes.

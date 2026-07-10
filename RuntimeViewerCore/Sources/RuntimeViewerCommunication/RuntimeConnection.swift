@@ -71,10 +71,16 @@ public struct RuntimeConnectionInfo: Sendable {
 // MARK: - RuntimeConnection
 
 public protocol RuntimeConnection: Sendable {
+    /// The concrete publisher type each implementation exposes for state changes.
+    ///
+    /// Implementations typically satisfy this with an opaque `some Publisher`
+    /// so the backing subject's mutability stays hidden from subscribers.
+    associatedtype StatePublisher: Publisher<RuntimeConnectionState, Never>
+
     /// Publisher that emits connection state changes.
     ///
     /// Subscribe to this publisher to observe connection lifecycle events.
-    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> { get }
+    var statePublisher: StatePublisher { get }
 
     /// The current connection state.
     var state: RuntimeConnectionState { get }

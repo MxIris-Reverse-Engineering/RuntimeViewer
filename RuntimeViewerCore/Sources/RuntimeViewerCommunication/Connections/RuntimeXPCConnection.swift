@@ -48,8 +48,8 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
 
     fileprivate let stateBridgeTask: Task<Void, Never>
 
-    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
-        stateSubject.eraseToAnyPublisher()
+    var statePublisher: some Publisher<RuntimeConnectionState, Never> {
+        stateSubject
     }
 
     var state: RuntimeConnectionState {

@@ -63,11 +63,14 @@
 
 **① 状态观测**
 ```swift
-var statePublisher: AnyPublisher<RuntimeConnectionState, Never> { get }
+associatedtype StatePublisher: Publisher<RuntimeConnectionState, Never>
+var statePublisher: StatePublisher { get }
 var state: RuntimeConnectionState { get }
 func stop()
 ```
 状态机只有三态（`RuntimeConnectionState.swift`）：`.connecting → .connected → .disconnected(error:)`。
+
+`statePublisher` 通过关联类型声明，各实现以 `some Publisher<RuntimeConnectionState, Never>` 返回私有的 `CurrentValueSubject`（SwiftUI `View.body` 式的 opaque witness）——订阅方拿不到 `send` 能力，subject 的可变性被完全封在实现内部。在 `any RuntimeConnection` 上访问时被擦除为 `any Publisher<RuntimeConnectionState, Never>`，直接 `.sink` 即可。
 
 **② 发送消息（多种重载）**
 - 即发即忘：`sendMessage(name:)` / `sendMessage(name:request:)`
@@ -120,28 +123,30 @@ let connection = try await communicator.connect(to: source, credential: ..., mod
 
 ## 3. 五种连接实现详解
 
-### 3.0 两条继承路线
+### 3.0 两条实现路线
 
-实现分成两族：
+实现分成两族（没有基类继承，全部是协议组合）：
 
 ```
-RuntimeConnection (protocol)
-├── RuntimeConnectionBase<Connection: RuntimeUnderlyingConnection>   ← 通用基类
-│     · 把协议的所有 sendMessage/setMessageHandler 重载
-│       委托给内部的 underlyingConnection
+RuntimeConnection (protocol, associatedtype StatePublisher)
+├── RuntimeForwardingConnection (protocol, associatedtype Connection)   ← 转发协议
+│     · 协议扩展把所有 sendMessage/setMessageHandler 重载
+│       转发给 underlyingConnection（协议只要求 { get }）
 │     · underlyingConnection 负责真正的收发 + RuntimeMessageChannel 组帧
+│     · 各实现类自持 private stateSubject，以 some Publisher 作 witness
 │     │
 │     ├── RuntimeNetworkClient/ServerConnection      → RuntimeNetworkConnection
 │     ├── RuntimeLocalSocketClient/ServerConnection  → RuntimeLocalSocketConnection
 │     ├── RuntimeDirectTCPClient/ServerConnection    → RuntimeDirectTCPConnection
 │     └── RuntimeStdioClient/ServerConnection        → RuntimeStdioConnection
 │
-└── RuntimeXPCConnection (直接实现协议，不走 Base)                    ← 特殊
+└── RuntimeXPCConnection (直接实现 RuntimeConnection)                   ← 特殊
       ├── RuntimeXPCClientConnection
       └── RuntimeXPCServerConnection
 ```
 
-- **走 `RuntimeConnectionBase` 的四族**：共享 `RuntimeUnderlyingConnection` 协议 + `RuntimeMessageChannel`（JSON + `\nOK` 组帧）。它们的差异只在"字节怎么进出"（socket / NWConnection / FileHandle）。
+- **走 `RuntimeForwardingConnection` 的四族**：共享 `RuntimeUnderlyingConnection` 协议 + `RuntimeMessageChannel`（JSON + `\nOK` 组帧）。它们的差异只在"字节怎么进出"（socket / NWConnection / FileHandle）。
+- **状态发布分两种模式**：纯转发型（NetworkClient、DirectTCPClient、Stdio 两个）在 init 里订阅 underlying 的 `statePublisher` 原样桥接进自己的 subject；编排型（NetworkServer、DirectTCPServer、LocalSocket 两个）过滤/重译 underlying 状态（预就绪握手不外发、监听器重启补 `.connecting`），跨重连维持稳定的状态序列。
 - **XPC 独立成族**：因为它委托给 `HelperPeer` 库（`HelperPeerClient` / `HelperPeerServer`），后者自己管握手、重连、状态流，所以 XPC 适配器不需要 `RuntimeMessageChannel`。
 
 ---
@@ -236,7 +241,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 - 底层 `RuntimeLocalSocketConnection` 用裸 BSD socket + 独立 `readQueue`/`writeQueue`，`TCP_NODELAY` 关 Nagle。
 - 收包循环对 `EINTR`/`EAGAIN`/`EWOULDBLOCK` 重试（注入进程里信号频繁），对端关闭 → `.peerClosed`。
 - `stop()` 先 `shutdown(SHUT_RDWR)` 再 `close()`，可靠唤醒阻塞在另一线程的 `recv()`。
-- 客户端 `RuntimeLocalSocketClientConnection` 内置**重连循环**（500ms 间隔）+ `pendingHandlers` 快照，断线后自动重连并重装处理器，用独立的 `ownStateSubject` 跨重连桥接状态。
+- 客户端 `RuntimeLocalSocketClientConnection` 内置**重连循环**（500ms 间隔）+ `pendingHandlers` 快照，断线后自动重连并重装处理器，用自持的 private `stateSubject` 跨重连桥接状态。
 
 ---
 
@@ -513,7 +518,7 @@ port = connection.connectionInfo.port
 
 | 我想…… | 看这里 |
 |--------|--------|
-| 新增一种传输 | 实现 `RuntimeConnection`（或走 `RuntimeConnectionBase` + `RuntimeUnderlyingConnection`），在 `RuntimeSource` 加 case，在 `RuntimeCommunicator.connect` 加分支 |
+| 新增一种传输 | 实现 `RuntimeConnection`（或走 `RuntimeForwardingConnection` + `RuntimeUnderlyingConnection`），在 `RuntimeSource` 加 case，在 `RuntimeCommunicator.connect` 加分支 |
 | 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData`（`RuntimeNetwork.swift`） |
 | 加一条业务 RPC 命令 | `RuntimeEngine.CommandNames` + `RuntimeEngine.registerSharedHandlers`（Proxy 自动继承） |
 | 调 Bonjour 发现/心跳/重试参数 | `RuntimeEngineManager` 顶部的 static 常量 |
