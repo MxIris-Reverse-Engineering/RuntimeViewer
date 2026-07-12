@@ -18,6 +18,7 @@
 		E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E9A9CCE22F5D880400A10DD3 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */; };
+		E9A9CCF12F5D884900A10DD3 /* $(RUNTIME_VIEWER_SERVICE_NAME) in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
@@ -70,19 +71,12 @@
 			);
 			name = "Copy RuntimeViewerServer Framework";
 		};
-		E9A9CCE32F5D880400A10DD3 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolder = None;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
-		};
 		E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = Contents/Library/LaunchServices;
 			dstSubfolder = Wrapper;
 			files = (
+				E9A9CCF12F5D884900A10DD3 /* $(RUNTIME_VIEWER_SERVICE_NAME) in Embed LaunchServices */,
 			);
 			name = "Embed LaunchServices";
 		};
@@ -119,6 +113,7 @@
 		E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Config.xcconfig; path = ../Configurations/RuntimeViewerService/Config.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
+		E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "$(RUNTIME_VIEWER_SERVICE_NAME)"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Debug-arm64e.xcconfig"; path = "../Configurations/RuntimeViewerUsingAppKit/Debug-arm64e.xcconfig"; sourceTree = SOURCE_ROOT; };
 		E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerCatalystHelperPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -346,7 +341,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E9432FEF2C0D614A00362862 /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingAppKit" */;
 			buildPhases = (
-				E92988472F0D6A61001926A2 /* Update Build version */,
 				E9432FDE2C0D614900362862 /* Sources */,
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
@@ -380,7 +374,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E947C37A2C2A4D0500296B2E /* Build configuration list for PBXNativeTarget "RuntimeViewerCatalystHelper" */;
 			buildPhases = (
-				E92988482F0D6A86001926A2 /* Update Build version */,
 				E947C3632C2A4D0400296B2E /* Sources */,
 				E947C3642C2A4D0400296B2E /* Frameworks */,
 				E947C3652C2A4D0400296B2E /* Resources */,
@@ -405,7 +398,6 @@
 			buildPhases = (
 				E9A9CCDF2F5D880400A10DD3 /* Sources */,
 				E9A9CCE12F5D880400A10DD3 /* Frameworks */,
-				E9A9CCE32F5D880400A10DD3 /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -467,7 +459,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2630;
-				LastUpgradeCheck = 2650;
+				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					E9432FE12C0D614900362862 = {
 						CreatedOnToolsVersion = 15.4;
@@ -552,44 +544,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		E92988472F0D6A61001926A2 /* Update Build version */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			name = "Update Build version";
-			shellPath = /bin/sh;
-			shellScript = (
-				"#!/bin/bash",
-				"",
-				"#if [ \"${CONFIGURATION}\" = \"Release\" ]; then",
-				"#    buildNumber=$(date +\"%Y%m%d.%H.%M.%S\")",
-				"#    plistPath=\"${SRCROOT}/${INFOPLIST_FILE}\"",
-				"#    echo \"🚀 Release build detected. Updating Build Number to: $buildNumber\"",
-				"#    /usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $buildNumber\" \"$plistPath\"",
-				"#else",
-				"#    echo \"⚠️ Debug build detected. Skipping Build Number update to keep Git clean.\"",
-				"#fi",
-				"",
-			);
-		};
-		E92988482F0D6A86001926A2 /* Update Build version */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			name = "Update Build version";
-			shellPath = /bin/sh;
-			shellScript = (
-				"#!/bin/bash",
-				"",
-				"#if [ \"${CONFIGURATION}\" = \"Release\" ]; then",
-				"#    buildNumber=$(date +\"%Y%m%d.%H.%M.%S\")",
-				"#    plistPath=\"${SRCROOT}/${INFOPLIST_FILE}\"",
-				"#    echo \"🚀 Release build detected. Updating Build Number to: $buildNumber\"",
-				"#    /usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $buildNumber\" \"$plistPath\"",
-				"#else",
-				"#    echo \"⚠️ Debug build detected. Skipping Build Number update to keep Git clean.\"",
-				"#fi",
-				"",
-			);
-		};
 		E9CAFE010000000000000001 /* Generate LaunchDaemon plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -724,6 +678,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -785,6 +740,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 			};
@@ -1056,6 +1012,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG RUNTIMEVIEWER_ARM64E $(inherited)";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";

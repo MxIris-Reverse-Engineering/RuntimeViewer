@@ -21,7 +21,7 @@ public actor RuntimeEngineProxyServer {
     public let engine: RuntimeEngine
 
     private let communicator = RuntimeCommunicator()
-    private var connection: RuntimeConnection?
+    private var connection: (any RuntimeConnection)?
     private var subscriptions: Set<AnyCancellable> = []
     /// Push-relay subscriptions are re-established on every `.connected`
     /// transition (each new/reconnecting client). They live in their own set so

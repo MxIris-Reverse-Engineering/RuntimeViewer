@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "2650"
+   LastUpgradeVersion = "2660"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -30,12 +30,10 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            default = "YES"
-            reference = "container:RuntimeViewerUsingAppKit.xctestplan">
+            reference = "container:RuntimeViewerUsingAppKit.xctestplan"
+            default = "YES">
          </TestPlanReference>
       </TestPlans>
-      <Testables>
-      </Testables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

@@ -101,7 +101,7 @@ extension RuntimeEngine {
     /// `perform(on:)`, so their behavior is unchanged.
     static func register<R: RuntimeEngineRequest>(
         _ requestType: R.Type,
-        on connection: RuntimeConnection,
+        on connection: any RuntimeConnection,
         engine: RuntimeEngine
     ) {
         connection.setMessageHandler(name: R.commandName) { (request: R) -> R.Response in
@@ -124,7 +124,7 @@ extension RuntimeEngine {
     /// hand-rolled `objectsLoadingProgress` channel this replaces.
     static func registerProgress<R: RuntimeEngineProgressRequest>(
         _ requestType: R.Type,
-        on connection: RuntimeConnection,
+        on connection: any RuntimeConnection,
         engine: RuntimeEngine
     ) {
         connection.setMessageHandler(name: R.commandName) { (envelope: RuntimeEngineProgressEnvelope<R>) -> R.Response in
@@ -146,7 +146,7 @@ extension RuntimeEngine {
     /// Adding a command requires only appending one line here — see the
     /// matching Request struct in `RuntimeEngine+Requests.swift` /
     /// `RuntimeEngine+GenericSpecialization.swift`.
-    static func registerSharedHandlers(on connection: RuntimeConnection, engine: RuntimeEngine) {
+    static func registerSharedHandlers(on connection: any RuntimeConnection, engine: RuntimeEngine) {
         register(IsImageLoadedRequest.self, on: connection, engine: engine)
         register(IsImageIndexedRequest.self, on: connection, engine: engine)
         register(MainExecutablePathRequest.self, on: connection, engine: engine)

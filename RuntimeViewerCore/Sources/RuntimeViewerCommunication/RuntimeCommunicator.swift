@@ -67,8 +67,8 @@ public final class RuntimeCommunicator {
         to source: RuntimeSource,
         credential: RuntimeConnectionCredential? = nil,
         waitForConnection: Bool = true,
-        modifier: ((RuntimeConnection) async throws -> Void)? = nil
-    ) async throws -> RuntimeConnection {
+        modifier: ((any RuntimeConnection) async throws -> Void)? = nil
+    ) async throws -> any RuntimeConnection {
         #log(.info, "Connecting to source: \(String(describing: source), privacy: .public)")
         switch source {
         case .local:

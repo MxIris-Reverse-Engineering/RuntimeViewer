@@ -217,7 +217,7 @@ public actor RuntimeEngine {
     private let communicator = RuntimeCommunicator()
 
     /// The connection to the sender or receiver, established by `connect()`.
-    private var connection: RuntimeConnection?
+    private var connection: (any RuntimeConnection)?
 
     /// Coordinator for background indexing batches that load and index images
     /// without blocking the main runtime data flow. `lazy` so it captures
@@ -283,7 +283,7 @@ public actor RuntimeEngine {
     }
 
     /// Observes the connection state and updates the engine state accordingly.
-    private func observeConnectionState(_ connection: RuntimeConnection) {
+    private func observeConnectionState(_ connection: any RuntimeConnection) {
         // Serialize state events through one consumer so they are applied in
         // arrival order (see `connectionStateTask`).
         connectionStateTask?.cancel()

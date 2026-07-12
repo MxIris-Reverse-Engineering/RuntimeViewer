@@ -150,7 +150,7 @@
       "location" : "https://github.com/OpenUXKit/OpenUXKit",
       "state" : {
         "branch" : "main",
-        "revision" : "21b944e638ff66d45ba1f550483c875be3c1f93f"
+        "revision" : "6d117727b7e2f86615d483c0e129dcd3460a2fdf"
       }
     },
     {
@@ -523,15 +523,6 @@
       }
     },
     {
-      "identity" : "systemhud",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/SystemHUD",
-      "state" : {
-        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
-        "version" : "0.1.0"
-      }
-    },
-    {
       "identity" : "uifoundation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
@@ -546,7 +537,7 @@
       "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
       "state" : {
         "branch" : "main",
-        "revision" : "481806584ed23911fbe0449fdda57085f8615779"
+        "revision" : "57e86a21d9c079c860e65de1ac0b96cac82689bc"
       }
     },
     {
