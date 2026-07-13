@@ -15,19 +15,25 @@ Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspec
 `RuntimeViewerUsingAppKit` in the same Xcode/DerivedData session. Do not model
 this as a direct target dependency: Xcode treats the Mac Catalyst helper as
 iOS-family embedded content and rejects it from the macOS app target.
-`ArchiveScript.sh` already handles this by archiving/exporting the helper before
-the main app.
+`RunScript.sh` and `ArchiveScript.sh` both already handle this by building/
+archiving the helper before the main app.
 
 Recommended Xcode order:
 1. Build `RuntimeViewerCatalystHelper` for `My Mac (Mac Catalyst)`.
 2. Build `RuntimeViewer macOS` for `My Mac`.
 
 ```bash
-# Debug build (x86_64 and arm64e)
-./BuildScript.sh
-
-# Or directly via xcodebuild (debug scheme)
-xcodebuild build -scheme RuntimeViewerUsingAppKit -configuration Debug -destination 'generic/platform=macOS'
+# Debug build + launch (configuration "Debug-arm64e", workspace
+# RuntimeViewer-Debug.xcworkspace, scheme "RuntimeViewer macOS"; builds
+# RuntimeViewerCatalystHelper first, then the main app). This is the only
+# working path for Debug-arm64e — the Xcode GUI fails to compile under
+# iOSPackagesShouldBuildARM64e=true. Product: RuntimeViewer-Debug-arm64e.app
+# under /Volumes/DerivedData/RuntimeViewer/Debug-arm64e when that volume
+# exists (project-relative DerivedData otherwise).
+./RunScript.sh
+./RunScript.sh --no-launch         # build only
+./RunScript.sh --update-packages   # refresh SPM pins before building
+./RunScript.sh --dry-run           # print commands without running
 
 # Release build (archives Catalyst helper + main app, notarizes, and optionally
 # generates appcast + uploads GitHub Release). Uses scheme "RuntimeViewer macOS".
@@ -40,9 +46,17 @@ xcodebuild build -scheme RuntimeViewerUsingAppKit -configuration Debug -destinat
 ./BuildRuntimeViewerServerXCFramework.sh
 ```
 
+**Workspaces**: `RuntimeViewer-Debug.xcworkspace` (used by `RunScript.sh`)
+already wires the local sibling checkouts of MachOKit / MachOObjCSection /
+MachOSwiftSection / swift-demangling / swift-semantic-string plus the
+precompiled swift-syntax, so Debug builds pick up in-progress fixes in those
+repos without touching remote SPM pins. `RuntimeViewer-Distribution.xcworkspace`
+serves release archives.
+
 **Build Schemes**:
-- `RuntimeViewerUsingAppKit` — Debug builds
-- `RuntimeViewer macOS` — Release archives
+- `RuntimeViewer macOS` — main app; Debug-arm64e via `RunScript.sh`, Release archives via `ArchiveScript.sh`
+- `RuntimeViewerCatalystHelper` — Mac Catalyst helper, always built before the main app
+- `RuntimeViewerUsingAppKit` — plain Debug builds of the AppKit app target
 
 ## Architecture
 
