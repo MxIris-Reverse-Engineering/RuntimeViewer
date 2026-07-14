@@ -6,6 +6,7 @@ import RuntimeViewerSettings
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import Dependencies
+import DependenciesMacros
 
 /// Service responsible for sending local notifications for runtime connection events.
 @Loggable
@@ -133,15 +134,8 @@ extension RuntimeSource {
 // MARK: - Dependencies
 
 @MainActor
-private enum RuntimeConnectionNotificationServiceKey: @MainActor DependencyKey {
-    static let liveValue = RuntimeConnectionNotificationService.shared
-}
-
-@MainActor
 extension DependencyValues {
-    public var runtimeConnectionNotificationService: RuntimeConnectionNotificationService {
-        get { self[RuntimeConnectionNotificationServiceKey.self] }
-        set { self[RuntimeConnectionNotificationServiceKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { RuntimeConnectionNotificationService.shared })
+    public var runtimeConnectionNotificationService: RuntimeConnectionNotificationService
 }
 #endif

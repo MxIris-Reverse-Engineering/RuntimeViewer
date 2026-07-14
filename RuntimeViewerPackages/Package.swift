@@ -330,7 +330,7 @@ let package = Package(
         
         .package(
             url: "https://github.com/pointfreeco/swift-dependencies",
-            from: "1.13.0",
+            from: "1.13.1",
         ),
         
         .package(
@@ -388,6 +388,7 @@ let package = Package(
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "UXKitCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "SwiftNavigation", package: "swift-navigation"),
             ],
             swiftSettings: sharedSwiftSettings,
@@ -416,6 +417,7 @@ let package = Package(
             dependencies: [
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
             ],
         ),
 
@@ -426,6 +428,8 @@ let package = Package(
                 "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerSimulatorInstaller", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "SwiftUIIntrospect", package: "swiftui-introspect"),
             ],
             resources: [
@@ -437,6 +441,7 @@ let package = Package(
             name: "RuntimeViewerSimulatorInstaller",
             dependencies: [
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
             ],
         ),
 
@@ -450,6 +455,7 @@ let package = Package(
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),
                 .product(name: "IfritStatic", package: "Ifrit"),
                 .product(name: "FuzzySearch", package: "fuzzy-search"),
@@ -480,6 +486,7 @@ let package = Package(
                 "RuntimeViewerServiceHelper",
                 .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
                 .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "ApplicationsServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),

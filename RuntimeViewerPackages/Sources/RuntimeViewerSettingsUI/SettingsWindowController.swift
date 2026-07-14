@@ -73,14 +73,9 @@ extension NSSplitViewItem {
 }
 
 import Dependencies
+import DependenciesMacros
 
 extension DependencyValues {
-    package var settingsWindowController: SettingsWindowController {
-        set { self[SettingsWindowControllerKey.self] = newValue }
-        get { self[SettingsWindowControllerKey.self] }
-    }
-}
-
-private enum SettingsWindowControllerKey: DependencyKey {
-    static let liveValue: SettingsWindowController = .shared
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { SettingsWindowController.shared })
+    package var settingsWindowController: SettingsWindowController
 }

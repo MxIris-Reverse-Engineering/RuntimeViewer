@@ -1,6 +1,7 @@
 import AppKit
 import RuntimeViewerArchitectures
 import RuntimeViewerSettings
+import DependenciesMacros
 
 @MainActor
 final class AppearanceController {
@@ -35,13 +36,7 @@ final class AppearanceController {
 
 // MARK: - Dependencies
 
-private enum AppearanceControllerKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = AppearanceController.shared
-}
-
 extension DependencyValues {
-    var appearanceController: AppearanceController {
-        get { self[AppearanceControllerKey.self] }
-        set { self[AppearanceControllerKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { AppearanceController.shared })
+    var appearanceController: AppearanceController
 }

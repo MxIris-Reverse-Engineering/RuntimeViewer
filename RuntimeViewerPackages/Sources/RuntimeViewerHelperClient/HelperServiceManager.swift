@@ -9,6 +9,7 @@ import HelperClient
 import FilesServiceInterface
 import RuntimeViewerCommunication
 import Dependencies
+import DependenciesMacros
 
 /// Manages the helper service lifecycle including registration, unregistration, and XPC connections.
 ///
@@ -355,15 +356,9 @@ public final class HelperServiceManager {
 
 // MARK: - Dependencies
 
-private enum HelperServiceManagerKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = HelperServiceManager.shared
-}
-
 extension DependencyValues {
-    public var helperServiceManager: HelperServiceManager {
-        get { self[HelperServiceManagerKey.self] }
-        set { self[HelperServiceManagerKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { HelperServiceManager.shared })
+    public var helperServiceManager: HelperServiceManager
 }
 
 #endif

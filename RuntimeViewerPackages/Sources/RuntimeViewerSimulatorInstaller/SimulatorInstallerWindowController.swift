@@ -3,6 +3,7 @@
 import AppKit
 import SwiftUI
 import Dependencies
+import DependenciesMacros
 
 public final class SimulatorInstallerWindowController: NSWindowController {
     fileprivate static let shared = SimulatorInstallerWindowController()
@@ -41,15 +42,9 @@ public final class SimulatorInstallerWindowController: NSWindowController {
 
 // MARK: - Dependencies
 
-private enum SimulatorInstallerWindowControllerKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = SimulatorInstallerWindowController.shared
-}
-
 extension DependencyValues {
-    public var simulatorInstallerWindowController: SimulatorInstallerWindowController {
-        get { self[SimulatorInstallerWindowControllerKey.self] }
-        set { self[SimulatorInstallerWindowControllerKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { SimulatorInstallerWindowController.shared })
+    public var simulatorInstallerWindowController: SimulatorInstallerWindowController
 }
 
 #endif

@@ -2,6 +2,7 @@
 
 import AppKit
 import Dependencies
+import DependenciesMacros
 import CocoaCoordinator
 import RuntimeViewerSettingsUI
 
@@ -26,15 +27,8 @@ private final class AppCoordinator: Coordinator<AppRoute, AppTransition> {
 
 @MainActor
 extension DependencyValues {
-    public var appRouter: any Router<AppRoute> {
-        set { self[AppCoordinatorKey.self] = newValue }
-        get { self[AppCoordinatorKey.self] }
-    }
-}
-
-private enum AppCoordinatorKey: @MainActor DependencyKey {
-    @MainActor
-    static let liveValue: any Router<AppRoute> = AppCoordinator.shared
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { AppCoordinator.shared })
+    public var appRouter: any Router<AppRoute>
 }
 
 

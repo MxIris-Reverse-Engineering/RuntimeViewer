@@ -4,6 +4,7 @@ import RuntimeViewerCommunication
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import Dependencies
+import DependenciesMacros
 import OrderedCollections
 
 public final class AppDefaults {
@@ -61,14 +62,7 @@ public final class AppDefaults {
     public var objectBookmarksBySourceAndImagePath: [RuntimeSource: [String: [RuntimeObjectBookmark]]] = [:]
 }
 
-private enum AppDefaultsKey: DependencyKey {
-    static let liveValue: AppDefaults = .shared
-    static let testValue: AppDefaults = .shared
-}
-
 extension DependencyValues {
-    public var appDefaults: AppDefaults {
-        get { self[AppDefaultsKey.self] }
-        set { self[AppDefaultsKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: AppDefaults.shared)
+    public var appDefaults = AppDefaults.shared
 }

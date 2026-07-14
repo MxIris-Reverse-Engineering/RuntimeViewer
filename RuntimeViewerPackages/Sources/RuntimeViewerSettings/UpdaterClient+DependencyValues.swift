@@ -1,12 +1,7 @@
 import Dependencies
-
-private enum UpdaterClientKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = UpdaterClient()
-}
+import DependenciesMacros
 
 extension DependencyValues {
-    public var updaterClient: UpdaterClient {
-        get { self[UpdaterClientKey.self] }
-        set { self[UpdaterClientKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { UpdaterClient() })
+    public var updaterClient: UpdaterClient
 }

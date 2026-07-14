@@ -7,6 +7,7 @@ import HelperClient
 import ApplicationsServiceInterface
 import RuntimeViewerCommunication
 import Dependencies
+import DependenciesMacros
 import ServiceManagement
 
 /// Thin wrapper that routes Catalyst-launch RPCs through the shared lib `HelperClient`
@@ -74,15 +75,9 @@ enum RuntimeViewerCatalystHelperLauncher {
 
 // MARK: - Dependencies
 
-private enum RuntimeHelperClientKey: DependencyKey {
-    static let liveValue = RuntimeHelperClient.shared
-}
-
 extension DependencyValues {
-    public var runtimeHelperClient: RuntimeHelperClient {
-        get { self[RuntimeHelperClientKey.self] }
-        set { self[RuntimeHelperClientKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: RuntimeHelperClient.shared)
+    public var runtimeHelperClient: RuntimeHelperClient
 }
 
 #endif

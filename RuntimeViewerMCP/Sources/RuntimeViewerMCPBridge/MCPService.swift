@@ -1,6 +1,7 @@
 import Foundation
 import FoundationToolbox
 import Dependencies
+import DependenciesMacros
 import SwiftNavigation
 import RuntimeViewerSettings
 import SwiftMCP
@@ -204,13 +205,7 @@ public final class MCPService {
 
 // MARK: - Dependencies
 
-private enum MCPServiceKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = MCPService.shared
-}
-
 extension DependencyValues {
-    public var mcpService: MCPService {
-        get { self[MCPServiceKey.self] }
-        set { self[MCPServiceKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { MCPService.shared })
+    public var mcpService: MCPService
 }

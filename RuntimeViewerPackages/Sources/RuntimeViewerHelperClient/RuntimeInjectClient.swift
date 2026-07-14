@@ -9,6 +9,7 @@ import InjectionServiceInterface
 import InjectedEndpointRegistryServiceInterface
 import RuntimeViewerCommunication
 import Dependencies
+import DependenciesMacros
 import ServiceManagement
 
 /// Thin wrapper that routes injection / framework-install / injected-endpoint registry
@@ -125,15 +126,9 @@ public final class RuntimeInjectClient: @unchecked Sendable {
 
 // MARK: - Dependencies
 
-private enum RuntimeInjectClientKey: DependencyKey {
-    static let liveValue = RuntimeInjectClient.shared
-}
-
 extension DependencyValues {
-    public var runtimeInjectClient: RuntimeInjectClient {
-        get { self[RuntimeInjectClientKey.self] }
-        set { self[RuntimeInjectClientKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: RuntimeInjectClient.shared)
+    public var runtimeInjectClient: RuntimeInjectClient
 }
 
 #endif

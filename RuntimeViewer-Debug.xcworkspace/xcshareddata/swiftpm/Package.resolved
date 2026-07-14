@@ -523,6 +523,15 @@
       }
     },
     {
+      "identity" : "systemhud",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/SystemHUD",
+      "state" : {
+        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "uifoundation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",

@@ -134,15 +134,9 @@ public final class Settings {
 }
 
 import Dependencies
-
-private enum SettingsKey: DependencyKey {
-    static let liveValue = Settings.shared
-    static let previewValue = Settings()
-}
+import DependenciesMacros
 
 extension DependencyValues {
-    public var settings: Settings {
-        get { self[SettingsKey.self] }
-        set { self[SettingsKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: Settings.shared, previewValue: Settings())
+    public var settings: Settings
 }

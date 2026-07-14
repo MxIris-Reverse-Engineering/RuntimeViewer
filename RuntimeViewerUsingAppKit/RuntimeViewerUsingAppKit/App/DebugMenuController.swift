@@ -2,6 +2,7 @@ import AppKit
 import FoundationToolbox
 import OSLog
 import RuntimeViewerArchitectures
+import DependenciesMacros
 
 @MainActor
 @Loggable(.private)
@@ -66,13 +67,7 @@ final class DebugMenuController: NSObject {
 
 // MARK: - Dependencies
 
-private enum DebugMenuControllerKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = DebugMenuController.shared
-}
-
 extension DependencyValues {
-    var debugMenuController: DebugMenuController {
-        get { self[DebugMenuControllerKey.self] }
-        set { self[DebugMenuControllerKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { DebugMenuController.shared })
+    var debugMenuController: DebugMenuController
 }

@@ -2,6 +2,7 @@
 import Foundation
 import RxSwift
 import Dependencies
+import DependenciesMacros
 import RuntimeViewerArchitectures
 @preconcurrency import RuntimeViewerSettings
 
@@ -37,14 +38,8 @@ public final class ResolvedThemeStream {
 
 // MARK: - Dependencies
 
-private enum ResolvedThemeStreamKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = ResolvedThemeStream.shared
-}
-
 extension DependencyValues {
-    public var resolvedThemeStream: ResolvedThemeStream {
-        get { self[ResolvedThemeStreamKey.self] }
-        set { self[ResolvedThemeStreamKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { ResolvedThemeStream.shared })
+    public var resolvedThemeStream: ResolvedThemeStream
 }
 #endif

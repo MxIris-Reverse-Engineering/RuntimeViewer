@@ -4,6 +4,7 @@ import Synchronization
 import FoundationToolbox
 import RuntimeViewerSettings
 import Dependencies
+import DependenciesMacros
 import OSLog
 
 @Loggable(.private)
@@ -155,13 +156,7 @@ extension UpdaterService: SPUUpdaterDelegate {
 
 // MARK: - Dependencies
 
-private enum UpdaterServiceKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = UpdaterService.shared
-}
-
 extension DependencyValues {
-    var updaterService: UpdaterService {
-        get { self[UpdaterServiceKey.self] }
-        set { self[UpdaterServiceKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { UpdaterService.shared })
+    var updaterService: UpdaterService
 }

@@ -140,7 +140,7 @@ When adding new features, you **MUST** follow these rules:
 3. **Reactive**: Use RxSwift for data binding and event handling
 4. **No SwiftUI** in non-Settings areas — keep the codebase consistent
 5. **Swift Language Mode**: All packages use `swiftLanguageModes: [.v5]`
-6. **Singletons go through `@Dependency`**: every project singleton is declared `fileprivate static let shared` and exposed only via a `DependencyKey` + `extension DependencyValues` accessor. Callers consume it through `@Dependency(\.xxx)`. Never `public static let shared`, never `Foo.shared.bar()` from outside the defining file. See **Singletons & Dependency Injection** under Code Style.
+6. **Singletons go through `@Dependency`**：每个项目 singleton 都声明为 `fileprivate static let shared`，并通过 `extension DependencyValues` 中的 `@DependencyEntry` 暴露。调用方统一使用 `@Dependency(\.xxx)`；禁止 `public static let shared`，也禁止在定义文件外调用 `Foo.shared.bar()`。详见 Code Style 下的 **Singletons & Dependency Injection**。
 7. **AppDelegate stays thin**: AppDelegate is a dispatch shell, not a service container. Every non-trivial lifecycle responsibility (appearance, debug menu, update checking, version probes, etc.) lives in its own `@MainActor` controller class under `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered via `@Dependency` per rule #6. See **AppDelegate Convention** under Code Style.
 
 ## Code Style
@@ -159,11 +159,14 @@ When adding new features, you **MUST** follow these rules:
 
 ### Singletons & Dependency Injection
 
-**Every project singleton MUST be hidden behind `@Dependency`. No exceptions.** Direct `XxxService.shared.foo()` access from outside the defining file is forbidden — the language enforces it because `shared` is `fileprivate`.
+**每个项目 singleton 都必须隐藏在 `@Dependency` 后面，没有例外。** 禁止在定义文件外直接调用 `XxxService.shared.foo()`；`shared` 使用 `fileprivate`，由编译器强制保证这一边界。
 
-**Pattern** (for `@MainActor` singletons — the common case in this codebase):
+**标准写法**（以下为本项目最常见的 `@MainActor` singleton）：
 
 ```swift
+import Dependencies
+import DependenciesMacros
+
 @MainActor
 public final class MyService {
     fileprivate static let shared = MyService()
@@ -178,27 +181,15 @@ public final class MyService {
 
 // MARK: - Dependencies
 
-private enum MyServiceKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = MyService.shared
-}
-
 extension DependencyValues {
-    public var myService: MyService {
-        get { self[MyServiceKey.self] }
-        set { self[MyServiceKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { MyService.shared })
+    public var myService: MyService
 }
 ```
 
-For non-`@MainActor` singletons, drop `@preconcurrency` and the `@MainActor` on `liveValue`:
+`@DependencyEntry` 生成的 key 是 `nonisolated`。因此，`@MainActor` singleton 的 `liveValue` 必须像上例一样使用 `MainActor.assumeIsolated`；这类依赖只允许在既有的 main-actor 调用路径中首次解析。非 `@MainActor` singleton 直接使用 `@DependencyEntry(liveValue: MyService.shared)`，不再手写 `DependencyKey`。
 
-```swift
-private enum MyServiceKey: DependencyKey {
-    static let liveValue = MyService.shared
-}
-```
-
-**Consumers** always go through `@Dependency`:
+**调用方**始终通过 `@Dependency` 使用：
 
 ```swift
 final class MyConsumer {
@@ -208,21 +199,21 @@ final class MyConsumer {
 }
 ```
 
-**Rules**:
-- `static let shared` is **always** `fileprivate` (never `public`, never plain `static let`). The DependencyKey lives in the same file, so it can see `shared`; nothing else can.
-- The `DependencyKey` enum is `private`; the `DependencyValues` accessor is `public` (or matches the singleton's visibility).
-- Pick a key path name that matches the type, lowercased: `MyService` → `\.myService`, `HelperServiceManager` → `\.helperServiceManager`.
-- Test value: usually omit (defaults to `liveValue`); add `testValue` only when tests need an isolated/no-op variant.
-- Access modifier on the `DependencyValues` accessor matches reach: `public` if used outside the module, `package` / internal otherwise.
+**规则**：
+- `static let shared` **始终**使用 `fileprivate`，绝不使用 `public` 或无修饰的 `static let`。同文件中的 macro expansion 可以访问它，其他文件不能。
+- 必须使用 `@DependencyEntry` 生成 key 与 accessor；不要再手写 `DependencyKey` enum 和 `get` / `set`。
+- `@DependencyEntry(liveValue:)` 指定运行时实现；通常只写属性类型，让 `DependencyKey` 的默认 test behavior 保持不变。仅当确实需要默认 test value 时才添加 initializer；`previewValue:` 也只在需要独立 preview 实现时添加。
+- key path 名称应与类型匹配并以小写开头：`MyService` → `\.myService`，`HelperServiceManager` → `\.helperServiceManager`。
+- `DependencyValues` 属性的访问级别与实际使用范围一致：跨 module 使用 `public`，否则使用 `package` 或 internal。
 
-**Exceptions** (narrow):
-- If the enclosing type is **already** `private` / `fileprivate` (e.g. a file-scoped helper class like `EmptyRouteTransitionContext`), the static `shared` is already file-scoped — leave it `static let shared`. Adding `fileprivate` triggers a redundant-modifier warning.
-- Apple SDK singletons (`NSApplication.shared`, `NSWorkspace.shared`, `NSDocumentController.shared`, `UserDefaults.standard`, `FileManager.default`, …) are not project singletons — use them directly without wrapping.
+**有限例外**：
+- 如果 enclosing type 已经是 `private` / `fileprivate`（例如 file-scoped helper `EmptyRouteTransitionContext`），`shared` 已天然限制在文件内，保留 `static let shared`；额外添加 `fileprivate` 会触发 redundant-modifier warning。
+- Apple SDK singleton（`NSApplication.shared`、`NSWorkspace.shared`、`NSDocumentController.shared`、`UserDefaults.standard`、`FileManager.default` 等）不属于项目 singleton，可直接使用，无需包装。
 
-**Anti-patterns** — if you catch yourself writing any of these, stop and apply the pattern above:
+**禁止写法**——出现以下任一情况时，改用上面的标准模式：
 - `public static let shared = Foo()` in a project type
 - `Foo.shared.bar()` at a call site outside `Foo.swift`
-- A new project class that owns shared state but skips the `DependencyKey` boilerplate
+- 手写 `DependencyKey` enum 与 `DependencyValues` accessor boilerplate
 - Importing a module purely to reach `Foo.shared` instead of going through `@Dependency(\.foo)`
 
 ### AppDelegate Convention

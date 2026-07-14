@@ -3,6 +3,7 @@ import FoundationToolbox
 import ServiceManagement
 import RuntimeViewerArchitectures
 import RuntimeViewerHelperClient
+import DependenciesMacros
 
 @MainActor
 @Loggable(.private)
@@ -71,13 +72,7 @@ final class HelperServiceVersionChecker {
 
 // MARK: - Dependencies
 
-private enum HelperServiceVersionCheckerKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = HelperServiceVersionChecker.shared
-}
-
 extension DependencyValues {
-    var helperServiceVersionChecker: HelperServiceVersionChecker {
-        get { self[HelperServiceVersionCheckerKey.self] }
-        set { self[HelperServiceVersionCheckerKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { HelperServiceVersionChecker.shared })
+    var helperServiceVersionChecker: HelperServiceVersionChecker
 }
