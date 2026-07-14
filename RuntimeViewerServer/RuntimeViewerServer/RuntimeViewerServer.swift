@@ -4,10 +4,6 @@ import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerUtilities
 
-#if os(macOS) || targetEnvironment(macCatalyst)
-import LaunchServicesPrivate
-#endif
-
 #if canImport(UIKit)
 #if os(watchOS)
 import WatchKit.WKInterfaceDevice
@@ -54,7 +50,11 @@ private enum RuntimeViewerServer {
 
                 #if os(macOS) || targetEnvironment(macCatalyst)
 
-                if let proxy = LSBundleProxy.forCurrentProcess(), proxy.isSandbox {
+                // A sandbox that denies mach-lookup of our helper service (App
+                // Sandbox apps and seatbelt-profiled daemons like rapportd) makes
+                // the XPC path impossible; fall back to the localhost socket, which
+                // only needs an outbound connect().
+                if SandboxProbe.isRuntimeViewerServiceMachLookupBlocked(pid: ProcessInfo.processInfo.processIdentifier) {
                     runtimeEngine = RuntimeEngine(source: .localSocket(name: processName, identifier: .init(rawValue: identifier), role: .server))
                     try await runtimeEngine?.connect()
                 } else {

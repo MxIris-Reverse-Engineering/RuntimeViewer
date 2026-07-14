@@ -3,9 +3,12 @@ import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
+import DependenciesMacros
 
 final class AttachToProcessViewController: UXKitViewController<AttachToProcessViewModel> {
-    
+
+    override var shouldDisplayCommonLoading: Bool { true }
+
     fileprivate static let shared = AttachToProcessViewController()
     
     private let pickerViewController: RunningPickerTabViewController
@@ -73,13 +76,7 @@ extension AttachToProcessViewController: RunningPickerTabViewController.Delegate
 
 // MARK: - Dependencies
 
-private enum AttachToProcessViewControllerKey: @preconcurrency DependencyKey {
-    @MainActor static let liveValue = AttachToProcessViewController.shared
-}
-
 extension DependencyValues {
-    var attachToProcessViewController: AttachToProcessViewController {
-        get { self[AttachToProcessViewControllerKey.self] }
-        set { self[AttachToProcessViewControllerKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { AttachToProcessViewController.shared })
+    var attachToProcessViewController: AttachToProcessViewController
 }

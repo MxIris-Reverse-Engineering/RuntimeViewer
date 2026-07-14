@@ -217,6 +217,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerCommunication",
             dependencies: [
+                "RuntimeViewerCoreObjC",
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperPeer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),

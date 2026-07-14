@@ -6,6 +6,7 @@ import OrderedCollections
 import ServiceManagement
 import SystemConfiguration
 import Dependencies
+import DependenciesMacros
 import RuntimeViewerCore
 import RuntimeViewerCommunication
 import RuntimeViewerArchitectures
@@ -391,6 +392,88 @@ public final class RuntimeEngineManager {
         } else {
             terminateRuntimeEngine(for: .remote(name: name, identifier: .init(rawValue: identifier), role: .client))
         }
+    }
+
+    // MARK: - Attached Engine Handshake Confirmation
+
+    public enum AttachedEngineHandshakeError: LocalizedError {
+        case engineNotFound(name: String)
+        case handshakeTimedOut(name: String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .engineNotFound(let name):
+                return "Could not find the runtime engine for \(name) to confirm its connection."
+            case .handshakeTimedOut(let name):
+                return "Timed out waiting for \(name) to connect back after injection. The target may be blocking the connection — a sandboxed system daemon, for example, can deny the injected server's channel."
+            }
+        }
+    }
+
+    /// Confirms the just-injected peer actually connected back, throwing if it never does.
+    ///
+    /// `RuntimeEngine.connect()` only brings up the local half of the transport (the
+    /// socket server's listener, or the XPC client's broker connection) and then
+    /// optimistically reports `.connected`; it does not wait for the injected server to
+    /// connect back. When the peer never does — e.g. its sandbox denies the channel — no
+    /// `.disconnected` event is ever produced, so the engine would otherwise linger in
+    /// `attachedRuntimeEngines` forever with no error surfaced. This probes the peer with a
+    /// lightweight round-trip, retrying to absorb the post-injection connect delay, bounded
+    /// by `timeout`. On failure the caller is expected to tear the engine down (the attach
+    /// flow's error path calls `terminateAttachedRuntimeEngine`).
+    public func confirmAttachedRuntimeEngineConnected(name: String, identifier: String, isSandbox: Bool, timeout: TimeInterval = 10) async throws {
+        let source: RuntimeSource = isSandbox
+            ? .localSocket(name: name, identifier: .init(rawValue: identifier), role: .client)
+            : .remote(name: name, identifier: .init(rawValue: identifier), role: .client)
+
+        guard let runtimeEngine = attachedRuntimeEngines.first(where: { $0.source == source }) else {
+            throw AttachedEngineHandshakeError.engineNotFound(name: name)
+        }
+
+        #log(.info, "Confirming injected peer for \(name, privacy: .public) connected back (timeout: \(timeout, privacy: .public)s)")
+        guard await Self.pollUntilPeerAnswers(engine: runtimeEngine, timeout: timeout) else {
+            #log(.error, "Injected peer for \(name, privacy: .public) never connected back within \(timeout, privacy: .public)s")
+            throw AttachedEngineHandshakeError.handshakeTimedOut(name: name)
+        }
+        #log(.info, "Injected peer for \(name, privacy: .public) confirmed connected")
+    }
+
+    /// Polls the engine with a lightweight `engineList` round-trip until the peer answers,
+    /// returning `true` on success or `false` once `timeout` elapses.
+    ///
+    /// The probe and the deadline race through an `AsyncStream`; the first to yield wins. A
+    /// deadline that resolves independently is deliberate: the XPC transport ignores
+    /// per-request timeouts (`RuntimeConnection`'s default `sendMessage(name:timeout:)`), so a
+    /// single probe can block indefinitely — taking the first yielded value lets this return
+    /// on the deadline even then, abandoning (not awaiting) the stuck probe. The socket
+    /// transport instead throws `notConnected` immediately while no peer has accepted, which
+    /// the retry loop absorbs until the injected client connects.
+    private static func pollUntilPeerAnswers(engine: RuntimeEngine, timeout: TimeInterval) async -> Bool {
+        let (stream, continuation) = AsyncStream<Bool>.makeStream()
+
+        let probeTask = Task {
+            while !Task.isCancelled {
+                if (try? await engine.requestEngineList(timeout: 3)) != nil {
+                    continuation.yield(true)
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+        }
+
+        let deadlineTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+            continuation.yield(false)
+        }
+
+        var didConnect = false
+        for await value in stream {
+            didConnect = value
+            break
+        }
+        probeTask.cancel()
+        deadlineTask.cancel()
+        return didConnect
     }
 
     // MARK: - Injected Endpoint Reconnection
@@ -938,15 +1021,8 @@ extension Reactive where Base == RuntimeEngineManager {
 // MARK: - Dependencies
 
 @MainActor
-private enum RuntimeEngineManagerKey: @MainActor DependencyKey {
-    static let liveValue = RuntimeEngineManager.shared
-}
-
-@MainActor
 extension DependencyValues {
-    public var runtimeEngineManager: RuntimeEngineManager {
-        get { self[RuntimeEngineManagerKey.self] }
-        set { self[RuntimeEngineManagerKey.self] = newValue }
-    }
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { RuntimeEngineManager.shared })
+    public var runtimeEngineManager: RuntimeEngineManager
 }
 #endif
