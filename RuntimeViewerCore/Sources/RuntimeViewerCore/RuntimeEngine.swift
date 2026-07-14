@@ -346,6 +346,20 @@ public actor RuntimeEngine {
         #log(.info, "RuntimeEngine stopped")
     }
 
+    /// Defensive backstop for paths that drop an engine without calling `stop()`.
+    ///
+    /// The primary teardown is the explicit `stop()` above (invoked by
+    /// `RuntimeEngineManager.terminateRuntimeEngine`), which releases the socket
+    /// deterministically. This `deinit` only covers the case where the last
+    /// reference is dropped some other way: a socket-server connection would
+    /// otherwise stay bound because its accept loop keeps the connection alive
+    /// while parked in `accept()`, so nothing ever calls `shutdown()`/`close()`
+    /// on the listening socket. `RuntimeConnection.stop()` is a plain method on a
+    /// non-actor object, so it is safe to call from this `nonisolated` deinit.
+    deinit {
+        connection?.stop()
+    }
+
     private func setupMessageHandlerForServer() {
         #log(.debug, "Setting up server message handlers")
         guard let connection else {

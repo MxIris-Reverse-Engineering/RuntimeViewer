@@ -74,6 +74,17 @@ public final class RuntimeEngineManager {
     /// timeouts, letting the existing disconnect path drop the stale entry.
     private var bonjourHeartbeatTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
 
+    /// Per-engine state-observation tokens, keyed by engine identity.
+    ///
+    /// Stored per engine (mirroring `bonjourHeartbeatTasks`) so
+    /// `terminateRuntimeEngine` can cancel an engine's observation *before*
+    /// calling `stop()` on it. Without that ordering, `stop()`'s `.disconnected`
+    /// emission would re-enter `terminateRuntimeEngine` and double-fire the
+    /// disconnect notification. It also stops the observations from leaking —
+    /// previously one subscription per engine accumulated in the shared
+    /// disposeBag and was never released.
+    private var stateObservationTokens: [ObjectIdentifier: Disposable] = [:]
+
     private static let bonjourHeartbeatInterval: UInt64 = 30_000_000_000 // 30 seconds
     /// 15 s tolerates AWDL congestion: when a remote peer (especially a
     /// simulator routed through a VM) finishes connecting, it pushes a
@@ -369,6 +380,10 @@ public final class RuntimeEngineManager {
         for engine in removedEngines {
             engineIconCache.removeValue(forKey: engine.engineID)
             stopBonjourHeartbeat(for: engine)
+            // Cancel the engine's state observation before `stop()` runs below,
+            // so the `.disconnected` it emits can't re-enter this method or
+            // double-fire a disconnect notification.
+            stateObservationTokens.removeValue(forKey: ObjectIdentifier(engine))?.dispose()
         }
         systemRuntimeEngines.removeAll { $0.source == source }
         attachedRuntimeEngines.removeAll { $0.source == source }
@@ -377,6 +392,17 @@ public final class RuntimeEngineManager {
         }
         bonjourRuntimeEngines.removeAll { $0.source == source }
         rebuildSections()
+
+        // Release each removed engine's underlying connection now, deterministically,
+        // instead of waiting for ARC to deallocate the engine. The socket-server
+        // transport (`RuntimeLocalSocketServerConnection`) otherwise leaks its
+        // listening socket: its accept loop stays parked in `accept()`, pinning the
+        // connection so `deinit` never runs. Because the listen port is derived
+        // deterministically from the target's identifier, the leaked bind would make
+        // a re-injection of the same target fail with EADDRINUSE.
+        for engine in removedEngines {
+            Task { await engine.stop() }
+        }
 
         if let pendingBonjourReconnect {
             #log(.info,"Reconnecting to pending Bonjour endpoint after termination: \(pendingBonjourReconnect.name, privacy: .public)")
@@ -561,7 +587,7 @@ public final class RuntimeEngineManager {
     // MARK: - State Observation
 
     private func observeRuntimeEngineState(_ runtimeEngine: RuntimeEngine) {
-        runtimeEngine.statePublisher.asObservable()
+        let stateObservationToken = runtimeEngine.statePublisher.asObservable()
             .subscribeOnNextMainActor { [weak self, weak runtimeEngine] state in
                 guard let self, let runtimeEngine else { return }
                 switch state {
@@ -600,7 +626,12 @@ public final class RuntimeEngineManager {
                     break
                 }
             }
-            .disposed(by: rx.disposeBag)
+        // Keep the token per engine so `terminateRuntimeEngine` can cancel this
+        // observation *before* it calls `stop()` on the engine — otherwise the
+        // `.disconnected` that `stop()` emits re-enters termination and
+        // double-fires the disconnect notification.
+        stateObservationTokens[ObjectIdentifier(runtimeEngine)]?.dispose()
+        stateObservationTokens[ObjectIdentifier(runtimeEngine)] = stateObservationToken
     }
 
     /// Cleans up mirrored engines affected by a given engine's disconnect.
