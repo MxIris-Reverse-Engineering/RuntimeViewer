@@ -4,16 +4,15 @@ public final class RuntimeImageNode: Codable {
     private enum CodingKeys: CodingKey {
         case name
         case children
-        case absolutePath
     }
 
     public let name: String
 
-    public weak var parent: RuntimeImageNode?
+    public private(set) weak var parent: RuntimeImageNode?
 
-    public var children: [RuntimeImageNode] = []
+    public private(set) var children: [RuntimeImageNode] = []
 
-    public lazy var absolutePath: String = {
+    public private(set) lazy var absolutePath: String = {
         guard let parent else { return "/" + name }
         let directory = parent.absolutePath
         return directory + "/" + name
@@ -61,14 +60,12 @@ public final class RuntimeImageNode: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(children, forKey: .children)
-        try container.encode(absolutePath, forKey: .absolutePath)
     }
 
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.name = try container.decode(String.self, forKey: .name)
         self.children = try container.decode([RuntimeImageNode].self, forKey: .children)
-        self.absolutePath = try container.decode(String.self, forKey: .absolutePath)
 
         for child in children {
             child.parent = self

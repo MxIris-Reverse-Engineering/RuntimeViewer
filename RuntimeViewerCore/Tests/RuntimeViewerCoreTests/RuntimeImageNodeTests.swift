@@ -61,7 +61,7 @@ struct RuntimeImageNodeTests {
     @Test("isLeaf is false for nodes with children")
     func isLeafFalse() {
         let node = RuntimeImageNode("Parent")
-        node.children = [RuntimeImageNode("Child", parent: node)]
+        _ = node.child(named: "Child")
         #expect(node.isLeaf == false)
     }
 
@@ -171,8 +171,7 @@ struct RuntimeImageNodeTests {
     @Test("encodes and decodes correctly")
     func codable() throws {
         let root = RuntimeImageNode("root")
-        let child = RuntimeImageNode("child", parent: root)
-        root.children = [child]
+        let child = root.child(named: "child")
         // Trigger lazy absolutePath
         _ = root.absolutePath
         _ = child.absolutePath
