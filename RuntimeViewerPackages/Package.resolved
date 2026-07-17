@@ -166,7 +166,7 @@
     {
       "identity" : "rearrange",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ChimeHQ/Rearrange",
+      "location" : "https://github.com/ChimeHQ/Rearrange.git",
       "state" : {
         "revision" : "4de8be41dba304192e87dc0a11e0aa39e72aa2e8",
         "version" : "2.1.1"
@@ -285,8 +285,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-case-paths",
       "state" : {
-        "revision" : "1197e80bc7e4b177051b6869ef93d8ac3ad677da",
-        "version" : "1.8.0"
+        "revision" : "5ce3b8e89d6b05e5a369c356152303a10a7608a3",
+        "version" : "1.9.0"
       }
     },
     {
@@ -429,8 +429,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-perception",
       "state" : {
-        "revision" : "25ac73741c3436605d61eceb5207e896973918e7",
-        "version" : "2.0.10"
+        "revision" : "de219a1cf34e958134e75a9ebb134cf09bf52fc6",
+        "version" : "2.0.11"
       }
     },
     {
@@ -461,12 +461,21 @@
       }
     },
     {
+      "identity" : "systemhud",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/SystemHUD",
+      "state" : {
+        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "uifoundation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "959d48f336ef46f97d6d5093c7d456983f2259f7",
-        "version" : "0.12.0"
+        "revision" : "8cd36fb2aa1dac8dfa714c5868aa4c9a6aac35d2",
+        "version" : "0.13.0"
       }
     },
     {
