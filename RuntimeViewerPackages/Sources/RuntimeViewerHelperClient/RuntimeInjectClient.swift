@@ -74,6 +74,23 @@ public final class RuntimeInjectClient: @unchecked Sendable {
         )
     }
 
+    /// Inject `payloadURL` into `pid` via MachInjector's mach_vm_remap path,
+    /// invoking `entrySymbol` on a fresh pthread inside the target.
+    ///
+    /// The dlopen-based ``injectApplication(pid:dylibURL:)`` cannot reach
+    /// strict-seatbelt daemons (sharingd, rapportd) whose sandbox profile
+    /// denies `file-map-executable`; use this variant when
+    /// ``RuntimeViewerCommunication/SandboxProbe/isFileMapExecutableBlocked(pid:path:)``
+    /// answers `true` for the target. See ``MachInjectorRemap`` for the payload
+    /// entry-symbol contract (the payload must expose a `void *(*)(void *)`
+    /// entry because dyld's constructor pass is not run for remapped images).
+    public func injectApplicationViaRemap(pid: pid_t, payloadURL: URL, entrySymbol: String) async throws {
+        try await helperServiceManager.ensureConnectedToTool()
+        try await helperServiceManager.helperClient.sendToTool(
+            request: InjectApplicationViaRemapRequest(pid: pid, payloadURL: payloadURL, entrySymbol: entrySymbol)
+        )
+    }
+
     // MARK: - Framework install
 
     public func installServerFrameworkIfNeeded() async throws {

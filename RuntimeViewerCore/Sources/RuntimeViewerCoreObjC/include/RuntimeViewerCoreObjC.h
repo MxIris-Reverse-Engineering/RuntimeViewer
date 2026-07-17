@@ -26,4 +26,15 @@ const void * _Nullable RVProtocolFromString(NSString *protocolName);
 FOUNDATION_EXPORT
 int RVSandboxCheckGlobalName(pid_t pid, const char *operation, const char *globalName);
 
+/// Thin wrapper over the SPI `sandbox_check` with a path filter. Used to answer
+/// "would `pid`'s sandbox deny `operation` on `path`?" — e.g. whether a target
+/// daemon would refuse `file-map-executable` on the RuntimeViewerServer payload,
+/// which is what drives the choice between the dlopen and mach_vm_remap
+/// injection paths.
+///
+/// Same variadic-ABI reason as ``RVSandboxCheckGlobalName`` for living in C.
+/// Returns 0 when permitted (or unsandboxed), positive when denied, -1 on error.
+FOUNDATION_EXPORT
+int RVSandboxCheckPath(pid_t pid, const char *operation, const char *path);
+
 NS_ASSUME_NONNULL_END

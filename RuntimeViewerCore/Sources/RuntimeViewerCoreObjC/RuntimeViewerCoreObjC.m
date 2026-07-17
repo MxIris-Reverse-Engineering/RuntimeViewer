@@ -21,10 +21,15 @@ const void * _Nullable RVProtocolFromString(NSString *protocolName) {
 extern int sandbox_check(pid_t pid, const char *operation, uint32_t type, ...);
 
 // Values from the private sandbox headers.
+#define RVSandboxFilterPath 1u
 #define RVSandboxFilterGlobalName 2u
 #define RVSandboxCheckNoReport 0x40000000u
 
 int RVSandboxCheckGlobalName(pid_t pid, const char *operation, const char *globalName) {
     // NO_REPORT suppresses the sandbox-violation log a plain probe would emit.
     return sandbox_check(pid, operation, RVSandboxFilterGlobalName | RVSandboxCheckNoReport, globalName);
+}
+
+int RVSandboxCheckPath(pid_t pid, const char *operation, const char *path) {
+    return sandbox_check(pid, operation, RVSandboxFilterPath | RVSandboxCheckNoReport, path);
 }
