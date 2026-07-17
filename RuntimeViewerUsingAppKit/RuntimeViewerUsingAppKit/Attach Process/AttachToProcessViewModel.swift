@@ -57,7 +57,21 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                     guard let dylibURL = Bundle(url: runtimeInjectClient.serverFrameworkDestinationURL)?.executableURL else { return }
 
                     try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: identifier, isSandbox: isSandbox)
-                    try await runtimeInjectClient.injectApplication(pid: runningItem.processIdentifier, dylibURL: dylibURL)
+
+                    // Strict-seatbelt daemons (sharingd, rapportd, ...) deny file-map-executable
+                    // for the payload path, so their dlopen would be refused by seatbelt.
+                    // Route those through the mach_vm_remap path, which projects the payload's
+                    // segments straight into the target's VM space and bypasses the predicate
+                    // entirely; leave every other target on the existing dlopen path.
+                    if SandboxProbe.isFileMapExecutableBlocked(pid: runningItem.processIdentifier, path: dylibURL.path) {
+                        try await runtimeInjectClient.injectApplicationViaRemap(
+                            pid: runningItem.processIdentifier,
+                            payloadURL: dylibURL,
+                            entrySymbol: "runtime_viewer_server_start"
+                        )
+                    } else {
+                        try await runtimeInjectClient.injectApplication(pid: runningItem.processIdentifier, dylibURL: dylibURL)
+                    }
                     // `connect()` only brought up the local half and optimistically reported
                     // `.connected`; confirm the injected peer actually connected back before
                     // dismissing, so a rejected connection surfaces an error and the engine is
