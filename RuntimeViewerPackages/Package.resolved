@@ -1,5 +1,5 @@
 {
-  "originHash" : "b07294c2a84475e116660943661d8e607d9af67758540d946c8c0a70fc566aa1",
+  "originHash" : "cd16a704f287396cbeabf0b26c5329b2d2e83581417f9b15a5450d73225fcabe",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -123,8 +123,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "revision" : "36789658ff09d018939426d7714b8db29d69e731",
-        "version" : "0.4.0"
+        "revision" : "ff2a95eec5d75a0b1acd13d37a81130342879f10",
+        "version" : "0.4.1"
       }
     },
     {
@@ -285,8 +285,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-case-paths",
       "state" : {
-        "revision" : "5ce3b8e89d6b05e5a369c356152303a10a7608a3",
-        "version" : "1.9.0"
+        "revision" : "794f4b0a9cf32042592388d014f6a1ea987d323a",
+        "version" : "1.9.1"
       }
     },
     {

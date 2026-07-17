@@ -118,6 +118,15 @@
       }
     },
     {
+      "identity" : "machinjector",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
+      "state" : {
+        "revision" : "36789658ff09d018939426d7714b8db29d69e731",
+        "version" : "0.4.0"
+      }
+    },
+    {
       "identity" : "metacodable",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SwiftyLab/MetaCodable",
