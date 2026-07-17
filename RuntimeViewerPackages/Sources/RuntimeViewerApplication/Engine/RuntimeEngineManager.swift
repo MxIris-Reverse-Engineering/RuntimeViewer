@@ -431,7 +431,15 @@ public final class RuntimeEngineManager {
             case .engineNotFound(let name):
                 return "Could not find the runtime engine for \(name) to confirm its connection."
             case .handshakeTimedOut(let name):
-                return "Timed out waiting for \(name) to connect back after injection. The target may be blocking the connection — a sandboxed system daemon, for example, can deny the injected server's channel."
+                return """
+                    Timed out waiting for \(name) to connect back after injection.
+
+                    The injection RPC returned successfully, but the injected server never opened its channel back. This almost always means the target process's sandbox refused to load the injected dylib — the remote dlopen() failed silently and the server never ran.
+
+                    Common cause: strict seatbelt daemons (e.g. sharingd, rapportd, and similar system services) enforce a sandbox profile that denies file-map-executable for third-party paths and does not honour any sandbox extension for it. These processes cannot be inspected via code injection regardless of code signature, injection technique, or extension class.
+
+                    For non-system apps, verify the target has `com.apple.security.get-task-allow` and that the RuntimeViewerServer framework at its install path is readable to the target's sandbox.
+                    """
             }
         }
     }
