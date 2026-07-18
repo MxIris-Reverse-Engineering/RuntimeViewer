@@ -1177,16 +1177,18 @@ extension RuntimeSwiftSection {
         let module = transformer.swiftEnumLayout
 
         let layoutTransformer = EnumLayoutTransformer { layoutResult in
-            let payloadCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Payload") }.count
-            let emptyCaseCount = layoutResult.cases.filter { $0.caseName.hasPrefix("Empty") }.count
+            let payloadCaseCount = layoutResult.cases.count { $0.isPayloadCase }
+            let emptyCaseCount = layoutResult.cases.count - payloadCaseCount
             let input = Transformer.SwiftEnumLayout.Input(
                 strategy: layoutResult.strategyDescription,
+                summary: layoutResult.summaryDescription,
                 bitsNeededForTag: layoutResult.bitsNeededForTag,
                 bitsAvailableForPayload: layoutResult.bitsAvailableForPayload,
                 numTags: layoutResult.numTags,
                 totalCases: layoutResult.cases.count,
                 payloadCaseCount: payloadCaseCount,
                 emptyCaseCount: emptyCaseCount,
+                leftoverExtraInhabitantCount: layoutResult.extraInhabitantCount,
                 tagRegionRange: layoutResult.tagRegion.map { "\($0.range)" } ?? "N/A",
                 tagRegionBitCount: layoutResult.tagRegion?.bitCount ?? 0,
                 tagRegionBytesHex: layoutResult.tagRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A",
@@ -1201,21 +1203,37 @@ extension RuntimeSwiftSection {
         let caseTransformer = EnumLayoutCaseTransformer { input in
             let caseProjection = input.caseProjection
             let indentation = input.indentation
-            let caseType: String = caseProjection.caseName.hasPrefix("Payload") ? "Payload" : "Empty"
             let memoryChangesDetail = caseProjection.memoryChanges
                 .sorted(by: { $0.key < $1.key })
                 .map { "[\($0.key)]=0x\(String(format: "%02X", $0.value))" }
                 .joined(separator: ", ")
+
+            let patternKind: String
+            let patternNote: String
+            switch caseProjection.patternResolution {
+            case .exactBytes:
+                patternKind = "exact"
+                patternNote = ""
+            case .unresolvedExtraInhabitant:
+                patternKind = "unresolvedExtraInhabitant"
+                patternNote = "note: the exact bytes depend on the payload type's extra-inhabitant scheme and were not resolved offline (the in-process runtime path resolves them)"
+            }
+
             let caseInput = Transformer.SwiftEnumLayout.CaseInput(
                 caseIndex: caseProjection.caseIndex,
                 caseName: caseProjection.caseName,
+                declaredName: caseProjection.declaredName ?? "",
                 tagValue: caseProjection.tagValue,
                 payloadValue: caseProjection.payloadValue,
                 tagHex: String(format: "0x%02X", caseProjection.tagValue),
                 payloadHex: String(format: "0x%02X", caseProjection.payloadValue),
                 tagValueBinary: "0b\(String(caseProjection.tagValue, radix: 2))",
                 payloadValueBinary: "0b\(String(caseProjection.payloadValue, radix: 2))",
-                caseType: caseType,
+                caseType: caseProjection.isPayloadCase ? "Payload" : "Empty",
+                encoding: caseProjection.encodingExplanation,
+                patternKind: patternKind,
+                patternNote: patternNote,
+                fixedBytesSummary: caseProjection.formattedFixedBytes(),
                 memoryChangeCount: caseProjection.memoryChanges.count,
                 memoryChangesDetail: memoryChangesDetail
             )
@@ -1225,17 +1243,33 @@ extension RuntimeSwiftSection {
             for line in header.split(separator: "\n", omittingEmptySubsequences: false) {
                 output += "\(indentStr)// \(line)\n"
             }
-            if caseProjection.memoryChanges.isEmpty {
-                output += "\(indentStr)// (No bits set / Zero)\n"
-            } else {
-                for offset in caseProjection.memoryChanges.keys.sorted() {
-                    let byteValue = caseProjection.memoryChanges[offset]!
-                    let offsetInput = Transformer.SwiftEnumLayout.MemoryOffsetInput(
-                        offset: offset,
-                        value: byteValue
-                    )
-                    let formattedOffset = module.transformMemoryOffset(offsetInput)
-                    output += "\(indentStr)// \(formattedOffset)\n"
+
+            // Automatically append what the template did not opt into itself:
+            // the unresolved-pattern note, then the fixed-byte lines.
+            if !patternNote.isEmpty, !module.containsCase(.patternNote) {
+                output += "\(indentStr)// \(patternNote)\n"
+            }
+            if !module.containsCase(.fixedBytesSummary), !module.containsCase(.memoryChangesDetail) {
+                if caseProjection.memoryChanges.isEmpty {
+                    switch caseProjection.patternResolution {
+                    case .unresolvedExtraInhabitant:
+                        output += "\(indentStr)// fixed bytes: not computed\n"
+                    case .exactBytes:
+                        output += caseProjection.isPayloadCase
+                            ? "\(indentStr)// fixed bytes: none — any pattern no empty case claims selects this case\n"
+                            : "\(indentStr)// fixed bytes: none recorded\n"
+                    }
+                } else {
+                    output += "\(indentStr)// fixed bytes: \(caseProjection.formattedFixedBytes())\n"
+                    for offset in caseProjection.memoryChanges.keys.sorted() {
+                        let byteValue = caseProjection.memoryChanges[offset]!
+                        let offsetInput = Transformer.SwiftEnumLayout.MemoryOffsetInput(
+                            offset: offset,
+                            value: byteValue
+                        )
+                        let formattedOffset = module.transformMemoryOffset(offsetInput)
+                        output += "\(indentStr)// \(formattedOffset)\n"
+                    }
                 }
             }
             return AtomicComponent(string: output, type: .comment).asSemanticString()

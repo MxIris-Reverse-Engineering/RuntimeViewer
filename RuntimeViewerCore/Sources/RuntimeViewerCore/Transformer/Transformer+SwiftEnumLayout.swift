@@ -52,6 +52,8 @@ extension Transformer {
         public func transform(_ input: Input) -> String {
             var result = template
             result = result.replacingOccurrences(of: Token.strategy.placeholder, with: input.strategy)
+            result = result.replacingOccurrences(of: Token.summary.placeholder, with: input.summary)
+            result = result.replacingOccurrences(of: Token.leftoverExtraInhabitantCount.placeholder, with: formatNumeric(input.leftoverExtraInhabitantCount))
             result = result.replacingOccurrences(of: Token.bitsNeededForTag.placeholder, with: formatNumeric(input.bitsNeededForTag))
             result = result.replacingOccurrences(of: Token.bitsAvailableForPayload.placeholder, with: formatNumeric(input.bitsAvailableForPayload))
             result = result.replacingOccurrences(of: Token.numTags.placeholder, with: formatNumeric(input.numTags))
@@ -73,6 +75,11 @@ extension Transformer {
             result = result.replacingOccurrences(of: CaseToken.caseIndex.placeholder, with: formatNumeric(input.caseIndex))
             result = result.replacingOccurrences(of: CaseToken.caseHex.placeholder, with: String(format: "0x%02X", input.caseIndex))
             result = result.replacingOccurrences(of: CaseToken.caseName.placeholder, with: input.caseName)
+            result = result.replacingOccurrences(of: CaseToken.declaredName.placeholder, with: input.declaredName)
+            result = result.replacingOccurrences(of: CaseToken.encoding.placeholder, with: input.encoding)
+            result = result.replacingOccurrences(of: CaseToken.patternKind.placeholder, with: input.patternKind)
+            result = result.replacingOccurrences(of: CaseToken.patternNote.placeholder, with: input.patternNote)
+            result = result.replacingOccurrences(of: CaseToken.fixedBytesSummary.placeholder, with: input.fixedBytesSummary)
             result = result.replacingOccurrences(of: CaseToken.tagValue.placeholder, with: formatNumeric(input.tagValue))
             result = result.replacingOccurrences(of: CaseToken.payloadValue.placeholder, with: formatNumeric(input.payloadValue))
             result = result.replacingOccurrences(of: CaseToken.tagHex.placeholder, with: input.tagHex)
@@ -126,12 +133,19 @@ extension Transformer.SwiftEnumLayout {
     /// Input for strategy header transformation.
     public struct Input: Sendable {
         public let strategy: String
+        /// The library's rich one-line summary (`LayoutResult.summaryDescription`):
+        /// strategy + case counts + tag values/bits + regions + leftover extra
+        /// inhabitants.
+        public let summary: String
         public let bitsNeededForTag: Int
         public let bitsAvailableForPayload: Int
         public let numTags: Int
         public let totalCases: Int
         public let payloadCaseCount: Int
         public let emptyCaseCount: Int
+        /// Extra inhabitants the enum leaves for an outer enum
+        /// (`LayoutResult.extraInhabitantCount`).
+        public let leftoverExtraInhabitantCount: Int
         public let tagRegionRange: String
         public let tagRegionBitCount: Int
         public let tagRegionBytesHex: String
@@ -141,12 +155,14 @@ extension Transformer.SwiftEnumLayout {
 
         public init(
             strategy: String,
+            summary: String = "",
             bitsNeededForTag: Int,
             bitsAvailableForPayload: Int,
             numTags: Int,
             totalCases: Int = 0,
             payloadCaseCount: Int = 0,
             emptyCaseCount: Int = 0,
+            leftoverExtraInhabitantCount: Int = 0,
             tagRegionRange: String = "N/A",
             tagRegionBitCount: Int = 0,
             tagRegionBytesHex: String = "N/A",
@@ -155,12 +171,14 @@ extension Transformer.SwiftEnumLayout {
             payloadRegionBytesHex: String = "N/A"
         ) {
             self.strategy = strategy
+            self.summary = summary
             self.bitsNeededForTag = bitsNeededForTag
             self.bitsAvailableForPayload = bitsAvailableForPayload
             self.numTags = numTags
             self.totalCases = totalCases
             self.payloadCaseCount = payloadCaseCount
             self.emptyCaseCount = emptyCaseCount
+            self.leftoverExtraInhabitantCount = leftoverExtraInhabitantCount
             self.tagRegionRange = tagRegionRange
             self.tagRegionBitCount = tagRegionBitCount
             self.tagRegionBytesHex = tagRegionBytesHex
@@ -177,7 +195,12 @@ extension Transformer.SwiftEnumLayout {
     /// Input for per-case transformation.
     public struct CaseInput: Sendable {
         public let caseIndex: Int
+        /// Structural label from the library ("payload case", "empty case #0", …).
         public let caseName: String
+        /// Source-level case name from the enum's field records (e.g.
+        /// `implicit`). Falls back to `caseName` when the records carry none,
+        /// so the token always renders something sensible.
+        public let declaredName: String
         public let tagValue: Int
         public let payloadValue: Int
         public let tagHex: String
@@ -185,12 +208,26 @@ extension Transformer.SwiftEnumLayout {
         public let tagValueBinary: String
         public let payloadValueBinary: String
         public let caseType: String
+        /// How the case is encoded, composed by the layout strategy (e.g.
+        /// "stored as the payload's extra-inhabitant pattern #0 (an invalid
+        /// payload bit pattern)").
+        public let encoding: String
+        /// "exact" when the fixed bytes are authoritative,
+        /// "unresolvedExtraInhabitant" when only the extra-inhabitant index is
+        /// known (offline path without runtime projection).
+        public let patternKind: String
+        /// Empty, or a human note explaining an unresolved pattern.
+        public let patternNote: String
+        /// Run-compressed fixed bytes (e.g. "bytes[0x8..<0x10] = 0x1"); empty
+        /// when the case has none.
+        public let fixedBytesSummary: String
         public let memoryChangeCount: Int
         public let memoryChangesDetail: String
 
         public init(
             caseIndex: Int,
             caseName: String,
+            declaredName: String = "",
             tagValue: Int,
             payloadValue: Int,
             tagHex: String = "0x00",
@@ -198,11 +235,16 @@ extension Transformer.SwiftEnumLayout {
             tagValueBinary: String = "0b0",
             payloadValueBinary: String = "0b0",
             caseType: String = "Unknown",
+            encoding: String = "",
+            patternKind: String = "exact",
+            patternNote: String = "",
+            fixedBytesSummary: String = "",
             memoryChangeCount: Int = 0,
             memoryChangesDetail: String = ""
         ) {
             self.caseIndex = caseIndex
             self.caseName = caseName
+            self.declaredName = declaredName.isEmpty ? caseName : declaredName
             self.tagValue = tagValue
             self.payloadValue = payloadValue
             self.tagHex = tagHex
@@ -210,6 +252,10 @@ extension Transformer.SwiftEnumLayout {
             self.tagValueBinary = tagValueBinary
             self.payloadValueBinary = payloadValueBinary
             self.caseType = caseType
+            self.encoding = encoding
+            self.patternKind = patternKind
+            self.patternNote = patternNote
+            self.fixedBytesSummary = fixedBytesSummary
             self.memoryChangeCount = memoryChangeCount
             self.memoryChangesDetail = memoryChangesDetail
         }
@@ -254,12 +300,14 @@ extension Transformer.SwiftEnumLayout {
     /// Available tokens for strategy header templates.
     public enum Token: String, CaseIterable, Sendable {
         case strategy
+        case summary
         case bitsNeededForTag
         case bitsAvailableForPayload
         case numTags
         case totalCases
         case payloadCaseCount
         case emptyCaseCount
+        case leftoverExtraInhabitantCount
         case tagRegionRange
         case tagRegionBitCount
         case tagRegionBytesHex
@@ -271,12 +319,14 @@ extension Transformer.SwiftEnumLayout {
         public var displayName: String {
             switch self {
             case .strategy: "Strategy"
+            case .summary: "Summary (Library Default)"
             case .bitsNeededForTag: "Bits Needed For Tag"
             case .bitsAvailableForPayload: "Bits Available For Payload"
             case .numTags: "Number of Tags"
             case .totalCases: "Total Cases"
             case .payloadCaseCount: "Payload Case Count"
             case .emptyCaseCount: "Empty Case Count"
+            case .leftoverExtraInhabitantCount: "Leftover Extra Inhabitants"
             case .tagRegionRange: "Tag Region Range"
             case .tagRegionBitCount: "Tag Region Bit Count"
             case .tagRegionBytesHex: "Tag Region Bytes (Hex)"
@@ -326,6 +376,7 @@ extension Transformer.SwiftEnumLayout {
         case caseIndex
         case caseHex
         case caseName
+        case declaredName
         case tagValue
         case payloadValue
         case tagHex
@@ -333,6 +384,10 @@ extension Transformer.SwiftEnumLayout {
         case tagValueBinary
         case payloadValueBinary
         case caseType
+        case encoding
+        case patternKind
+        case patternNote
+        case fixedBytesSummary
         case memoryChangeCount
         case memoryChangesDetail
 
@@ -341,7 +396,8 @@ extension Transformer.SwiftEnumLayout {
             switch self {
             case .caseIndex: "Case Index"
             case .caseHex: "Case Hex"
-            case .caseName: "Case Name"
+            case .caseName: "Case Name (Structural)"
+            case .declaredName: "Case Name (Declared)"
             case .tagValue: "Tag Value"
             case .payloadValue: "Payload Value"
             case .tagHex: "Tag Hex"
@@ -349,6 +405,10 @@ extension Transformer.SwiftEnumLayout {
             case .tagValueBinary: "Tag Value (Binary)"
             case .payloadValueBinary: "Payload Value (Binary)"
             case .caseType: "Case Type"
+            case .encoding: "Encoding Explanation"
+            case .patternKind: "Pattern Kind"
+            case .patternNote: "Pattern Note"
+            case .fixedBytesSummary: "Fixed Bytes Summary"
             case .memoryChangeCount: "Memory Change Count"
             case .memoryChangesDetail: "Memory Changes Detail"
             }
@@ -368,6 +428,11 @@ extension Transformer.SwiftEnumLayout {
 
         /// Strategy only: "Multi-Payload (Spare Bits + Occupied Bits Overflow)"
         public static let strategyOnly = "${strategy}"
+
+        /// The library's rich one-line summary (strategy + case counts +
+        /// tag values/bits + regions + leftover extra inhabitants) — matches
+        /// what the library renders when no transformer is installed.
+        public static let libraryDefault = "${summary}"
 
         /// Compact style: "Tags: 3, Bits: 2"
         public static let compact = "Tags: ${numTags}, Bits: ${bitsNeededForTag}"
@@ -394,6 +459,7 @@ extension Transformer.SwiftEnumLayout {
             ("Standard", standard),
             ("Verbose", verbose),
             ("Strategy Only", strategyOnly),
+            ("Library Default", libraryDefault),
             ("Compact", compact),
             ("Technical", technical),
             ("Regions", regions),
@@ -442,10 +508,16 @@ extension Transformer.SwiftEnumLayout {
 
 extension Transformer.SwiftEnumLayout {
     public enum CaseTemplates {
-        /// Standard style: "Case 0 (0x00) - Payload Case 0:\nTag: 0"
-        public static let standard = "Case ${caseIndex} (${caseHex}) - ${caseName}:\nTag: ${tagValue}"
+        /// Standard style, mirroring the library's detailed default:
+        /// "Case 1 (0x01) `implicit` — empty case #0\nencoding: stored as the payload's extra-inhabitant pattern #0 (…)"
+        /// The pattern note and fixed-byte lines are appended automatically
+        /// after the template unless it uses those tokens itself.
+        public static let standard = "Case ${caseIndex} (${caseHex}) `${declaredName}` — ${caseName}\nencoding: ${encoding}"
 
-        /// Verbose style includes payload value: "Case 0 (0x00) - Payload Case 0:\nTag: 0, PayloadValue: 0"
+        /// The pre-0.13 default: "Case 0 (0x00) - payload case:\nTag: 0"
+        public static let classic = "Case ${caseIndex} (${caseHex}) - ${caseName}:\nTag: ${tagValue}"
+
+        /// Verbose style includes payload value: "Case 0 (0x00) - payload case:\nTag: 0, PayloadValue: 0"
         public static let verbose = "Case ${caseIndex} (${caseHex}) - ${caseName}:\nTag: ${tagValue}, PayloadValue: ${payloadValue}"
 
         /// Compact style: "[0] Payload Case 0 (tag: 0)"
@@ -472,8 +544,12 @@ extension Transformer.SwiftEnumLayout {
         /// Memory detail style with per-offset byte changes
         public static let memoryDetail = "Case ${caseIndex} (${caseHex}) - ${caseName} [${caseType}]:\nTag: ${tagValue} (${tagHex}), Payload: ${payloadValue} (${payloadHex})\n${memoryChangesDetail}"
 
+        /// Encoding-focused style with the fixed-byte summary inline
+        public static let encodingDetail = "Case ${caseIndex} (${caseHex}) `${declaredName}` — ${caseName}\nencoding: ${encoding}\nfixed bytes: ${fixedBytesSummary}"
+
         public static let all: [(name: String, template: String)] = [
             ("Standard", standard),
+            ("Classic", classic),
             ("Verbose", verbose),
             ("Compact", compact),
             ("Index Only", indexOnly),
@@ -483,6 +559,7 @@ extension Transformer.SwiftEnumLayout {
             ("Memory", memory),
             ("Binary", binary),
             ("Memory Detail", memoryDetail),
+            ("Encoding Detail", encodingDetail),
         ]
     }
 }

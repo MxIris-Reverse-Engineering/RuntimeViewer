@@ -584,14 +584,48 @@ struct TransformerSwiftEnumLayoutTests {
         let module = Transformer.SwiftEnumLayout(isEnabled: true)
         let input = Transformer.SwiftEnumLayout.CaseInput(
             caseIndex: 0,
-            caseName: "Payload Case 0",
+            caseName: "payload case",
+            declaredName: "explicit",
+            tagValue: 0,
+            payloadValue: 0,
+            encoding: "holds a valid payload value in bytes[0x0..<0x10]; selected when the payload bytes match no empty-case pattern"
+        )
+        let result = module.transformCase(input)
+        #expect(result.contains("Case 0 (0x00)"))
+        #expect(result.contains("`explicit` — payload case"))
+        #expect(result.contains("encoding: holds a valid payload value"))
+    }
+
+    @Test("transformCase with classic template keeps the pre-0.13 shape")
+    func transformCaseClassic() {
+        let module = Transformer.SwiftEnumLayout(
+            isEnabled: true,
+            caseTemplate: Transformer.SwiftEnumLayout.CaseTemplates.classic
+        )
+        let input = Transformer.SwiftEnumLayout.CaseInput(
+            caseIndex: 0,
+            caseName: "payload case",
             tagValue: 0,
             payloadValue: 0
         )
         let result = module.transformCase(input)
-        #expect(result.contains("Case 0 (0x00)"))
-        #expect(result.contains("Payload Case 0"))
-        #expect(result.contains("Tag: 0"))
+        #expect(result == "Case 0 (0x00) - payload case:\nTag: 0")
+    }
+
+    @Test("transformCase declaredName falls back to the structural case name")
+    func transformCaseDeclaredNameFallback() {
+        let module = Transformer.SwiftEnumLayout(
+            isEnabled: true,
+            caseTemplate: "${declaredName}"
+        )
+        let input = Transformer.SwiftEnumLayout.CaseInput(
+            caseIndex: 1,
+            caseName: "empty case #0",
+            tagValue: 0,
+            payloadValue: 0
+        )
+        let result = module.transformCase(input)
+        #expect(result == "empty case #0")
     }
 
     @Test("transformCase with compact template")
@@ -691,7 +725,9 @@ struct TransformerSwiftEnumLayoutTests {
         let module = Transformer.SwiftEnumLayout(caseTemplate: Transformer.SwiftEnumLayout.CaseTemplates.standard)
         #expect(module.containsCase(.caseIndex) == true)
         #expect(module.containsCase(.caseName) == true)
-        #expect(module.containsCase(.tagValue) == true)
+        #expect(module.containsCase(.declaredName) == true)
+        #expect(module.containsCase(.encoding) == true)
+        #expect(module.containsCase(.tagValue) == false)
         #expect(module.containsCase(.payloadValue) == false)
     }
 
@@ -706,14 +742,14 @@ struct TransformerSwiftEnumLayoutTests {
 
     // MARK: - Tokens
 
-    @Test("Token allCases has 13 tokens")
+    @Test("Token allCases has 15 tokens")
     func tokenAllCases() {
-        #expect(Transformer.SwiftEnumLayout.Token.allCases.count == 13)
+        #expect(Transformer.SwiftEnumLayout.Token.allCases.count == 15)
     }
 
-    @Test("CaseToken allCases has 12 tokens")
+    @Test("CaseToken allCases has 17 tokens")
     func caseTokenAllCases() {
-        #expect(Transformer.SwiftEnumLayout.CaseToken.allCases.count == 12)
+        #expect(Transformer.SwiftEnumLayout.CaseToken.allCases.count == 17)
     }
 
     @Test("MemoryOffsetToken allCases has 8 tokens")
@@ -738,14 +774,14 @@ struct TransformerSwiftEnumLayoutTests {
 
     // MARK: - Templates
 
-    @Test("Templates.all has 10 entries")
+    @Test("Templates.all has 11 entries")
     func strategyTemplatesAll() {
-        #expect(Transformer.SwiftEnumLayout.Templates.all.count == 10)
+        #expect(Transformer.SwiftEnumLayout.Templates.all.count == 11)
     }
 
-    @Test("CaseTemplates.all has 10 entries")
+    @Test("CaseTemplates.all has 12 entries")
     func caseTemplatesAll() {
-        #expect(Transformer.SwiftEnumLayout.CaseTemplates.all.count == 10)
+        #expect(Transformer.SwiftEnumLayout.CaseTemplates.all.count == 12)
     }
 
     @Test("MemoryOffsetTemplates.all has 6 entries")
