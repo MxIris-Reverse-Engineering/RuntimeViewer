@@ -1176,6 +1176,11 @@ extension RuntimeSwiftSection {
         guard transformer.swiftEnumLayout.isEnabled else { return (nil, nil) }
         let module = transformer.swiftEnumLayout
 
+        func paddedBinary(_ byteValue: UInt8) -> String {
+            let binaryDigits = String(byteValue, radix: 2)
+            return String(repeating: "0", count: 8 - binaryDigits.count) + binaryDigits
+        }
+
         let layoutTransformer = EnumLayoutTransformer { layoutResult in
             let payloadCaseCount = layoutResult.cases.count { $0.isPayloadCase }
             let emptyCaseCount = layoutResult.cases.count - payloadCaseCount
@@ -1205,7 +1210,16 @@ extension RuntimeSwiftSection {
             let indentation = input.indentation
             let memoryChangesDetail = caseProjection.memoryChanges
                 .sorted(by: { $0.key < $1.key })
-                .map { "[\($0.key)]=0x\(String(format: "%02X", $0.value))" }
+                .map { offset, byteValue in
+                    let mask = caseProjection.fixedBitMask(atByteOffset: offset)
+                    guard mask != 0xFF else {
+                        return "[\(offset)]=0x\(String(format: "%02X", byteValue))"
+                    }
+                    // Only the masked bits are fixed — the byte is shared
+                    // with live payload storage, so a whole-byte value would
+                    // over-claim.
+                    return "[\(offset)]&0b\(paddedBinary(mask))=0b\(paddedBinary(byteValue))"
+                }
                 .joined(separator: ", ")
 
             let patternKind: String
@@ -1263,9 +1277,20 @@ extension RuntimeSwiftSection {
                     output += "\(indentStr)// fixed bytes: \(caseProjection.formattedFixedBytes())\n"
                     for offset in caseProjection.memoryChanges.keys.sorted() {
                         let byteValue = caseProjection.memoryChanges[offset]!
+                        let mask = caseProjection.fixedBitMask(atByteOffset: offset)
+                        if mask != 0xFF {
+                            // A partially-fixed byte (spare-bits tag sharing
+                            // the byte with payload storage): scope the claim
+                            // to the fixed bits, mirroring the library's
+                            // default rendering, instead of pushing a
+                            // whole-byte value through the template.
+                            output += "\(indentStr)// offset 0x\(String(format: "%02X", offset)): fixed bits 0b\(paddedBinary(mask)) = 0b\(paddedBinary(byteValue)) (the other bits hold payload storage)\n"
+                            continue
+                        }
                         let offsetInput = Transformer.SwiftEnumLayout.MemoryOffsetInput(
                             offset: offset,
-                            value: byteValue
+                            value: byteValue,
+                            fixedBitMask: mask
                         )
                         let formattedOffset = module.transformMemoryOffset(offsetInput)
                         output += "\(indentStr)// \(formattedOffset)\n"

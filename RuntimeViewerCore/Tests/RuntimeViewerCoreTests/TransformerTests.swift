@@ -709,6 +709,27 @@ struct TransformerSwiftEnumLayoutTests {
         #expect(input.valueBinaryPaddedRaw == "11111111")
     }
 
+    @Test("MemoryOffsetInput carries the fixed-bit mask (default full)")
+    func memoryOffsetInputFixedBitMask() {
+        let fullyFixed = Transformer.SwiftEnumLayout.MemoryOffsetInput(offset: 0, value: 0x80)
+        #expect(fullyFixed.fixedBitMask == 0xFF)
+        #expect(fullyFixed.fixedBitMaskBinaryPadded == "0b11111111")
+
+        let partiallyFixed = Transformer.SwiftEnumLayout.MemoryOffsetInput(offset: 0, value: 0x80, fixedBitMask: 0xC0)
+        #expect(partiallyFixed.fixedBitMask == 0xC0)
+        #expect(partiallyFixed.fixedBitMaskBinaryPaddedRaw == "11000000")
+        #expect(partiallyFixed.fixedBitMaskBinaryPadded == "0b11000000")
+    }
+
+    @Test("transformMemoryOffset replaces fixed-bit-mask tokens")
+    func transformMemoryOffsetFixedBitMaskTokens() {
+        let module = Transformer.SwiftEnumLayout(
+            memoryOffsetTemplate: "offset ${offsetHex}: fixed bits ${fixedBitMaskBinaryPadded} = ${valueBinaryPadded}"
+        )
+        let input = Transformer.SwiftEnumLayout.MemoryOffsetInput(offset: 0, value: 0x80, fixedBitMask: 0xC0)
+        #expect(module.transformMemoryOffset(input) == "offset 0x00: fixed bits 0b11000000 = 0b10000000")
+    }
+
     // MARK: - contains methods
 
     @Test("contains checks strategy template token")
@@ -752,9 +773,9 @@ struct TransformerSwiftEnumLayoutTests {
         #expect(Transformer.SwiftEnumLayout.CaseToken.allCases.count == 17)
     }
 
-    @Test("MemoryOffsetToken allCases has 8 tokens")
+    @Test("MemoryOffsetToken allCases has 10 tokens")
     func memoryOffsetTokenAllCases() {
-        #expect(Transformer.SwiftEnumLayout.MemoryOffsetToken.allCases.count == 8)
+        #expect(Transformer.SwiftEnumLayout.MemoryOffsetToken.allCases.count == 10)
     }
 
     @Test("all token types have non-empty displayNames", arguments: Transformer.SwiftEnumLayout.Token.allCases)

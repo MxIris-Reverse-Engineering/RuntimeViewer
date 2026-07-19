@@ -103,6 +103,8 @@ extension Transformer {
             result = result.replacingOccurrences(of: MemoryOffsetToken.valueBinary.placeholder, with: input.valueBinary)
             result = result.replacingOccurrences(of: MemoryOffsetToken.valueBinaryPaddedRaw.placeholder, with: input.valueBinaryPaddedRaw)
             result = result.replacingOccurrences(of: MemoryOffsetToken.valueBinaryPadded.placeholder, with: input.valueBinaryPadded)
+            result = result.replacingOccurrences(of: MemoryOffsetToken.fixedBitMask.placeholder, with: String(format: "0x%02X", input.fixedBitMask))
+            result = result.replacingOccurrences(of: MemoryOffsetToken.fixedBitMaskBinaryPadded.placeholder, with: input.fixedBitMaskBinaryPadded)
             return result
         }
 
@@ -269,6 +271,11 @@ extension Transformer.SwiftEnumLayout {
     public struct MemoryOffsetInput: Sendable {
         public let offset: Int
         public let value: UInt8
+        /// Which bits of `value` are actually fixed for the case. `0xFF`
+        /// (every bit — the common case) unless the byte is shared between a
+        /// spare-bits tag and live payload storage, where only the spare bits
+        /// are a claim about the value.
+        public let fixedBitMask: UInt8
         /// Binary string without prefix (e.g., "1")
         public let valueBinaryRaw: String
         /// Binary string with 0b prefix (e.g., "0b1")
@@ -277,19 +284,29 @@ extension Transformer.SwiftEnumLayout {
         public let valueBinaryPaddedRaw: String
         /// Binary string padded to 8 digits with 0b prefix (e.g., "0b00000001")
         public let valueBinaryPadded: String
+        /// `fixedBitMask` padded to 8 binary digits without prefix (e.g., "11111110")
+        public let fixedBitMaskBinaryPaddedRaw: String
+        /// `fixedBitMask` padded to 8 binary digits with 0b prefix (e.g., "0b11111110")
+        public let fixedBitMaskBinaryPadded: String
 
         public init(
             offset: Int,
-            value: UInt8
+            value: UInt8,
+            fixedBitMask: UInt8 = 0xFF
         ) {
             self.offset = offset
             self.value = value
+            self.fixedBitMask = fixedBitMask
             let binaryString = String(value, radix: 2)
             let paddedBinaryString = String(repeating: "0", count: 8 - binaryString.count) + binaryString
             self.valueBinaryRaw = binaryString
             self.valueBinary = "0b\(binaryString)"
             self.valueBinaryPaddedRaw = paddedBinaryString
             self.valueBinaryPadded = "0b\(paddedBinaryString)"
+            let maskBinaryString = String(fixedBitMask, radix: 2)
+            let paddedMaskBinaryString = String(repeating: "0", count: 8 - maskBinaryString.count) + maskBinaryString
+            self.fixedBitMaskBinaryPaddedRaw = paddedMaskBinaryString
+            self.fixedBitMaskBinaryPadded = "0b\(paddedMaskBinaryString)"
         }
     }
 }
@@ -351,6 +368,8 @@ extension Transformer.SwiftEnumLayout {
         case valueBinary
         case valueBinaryPaddedRaw
         case valueBinaryPadded
+        case fixedBitMask
+        case fixedBitMaskBinaryPadded
 
         public var placeholder: String { "${\(rawValue)}" }
         public var displayName: String {
@@ -363,6 +382,8 @@ extension Transformer.SwiftEnumLayout {
             case .valueBinary: "Value (Binary)"
             case .valueBinaryPaddedRaw: "Value (Binary Padded Raw)"
             case .valueBinaryPadded: "Value (Binary Padded)"
+            case .fixedBitMask: "Fixed Bit Mask"
+            case .fixedBitMaskBinaryPadded: "Fixed Bit Mask (Binary Padded)"
             }
         }
     }
