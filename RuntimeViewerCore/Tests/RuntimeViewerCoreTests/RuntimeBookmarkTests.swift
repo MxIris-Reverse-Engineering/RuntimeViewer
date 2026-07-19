@@ -54,6 +54,25 @@ struct RuntimeImageBookmarkTests {
         #expect(decoded.imageNode.name == original.imageNode.name)
         #expect(decoded.imageNode.children.count == original.imageNode.children.count)
     }
+
+    @Test("Bookmarking a deep leaf preserves its image path across a round-trip")
+    func codableDeepLeafBookmark() throws {
+        // Mirrors how bookmarks are created in the sidebar: a single leaf node lifted out of
+        // the live tree, persisted on its own, and later read back with no ancestors around.
+        let rootNode = RuntimeImageNode.rootNode(
+            for: ["/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"],
+            name: "Dyld Shared Cache"
+        )
+        var leafNode = rootNode
+        while let next = leafNode.children.first { leafNode = next }
+
+        let original = RuntimeImageBookmark(source: .local, imageNode: leafNode)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(RuntimeImageBookmark.self, from: data)
+
+        #expect(decoded.imageNode.path == "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
+        #expect(decoded.imageNode == original.imageNode)
+    }
 }
 
 // MARK: - RuntimeObjectBookmark Tests

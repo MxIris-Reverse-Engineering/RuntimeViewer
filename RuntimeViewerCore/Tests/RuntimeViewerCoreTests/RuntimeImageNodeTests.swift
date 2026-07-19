@@ -202,6 +202,48 @@ struct RuntimeImageNodeTests {
         #expect(c.parent === b)
     }
 
+    @Test("detached non-root node round-trips its absolute path")
+    func codableDetachedNodePreservesAbsolutePath() throws {
+        // `root` must stay in scope for the whole test: `parent` is weak, so releasing the
+        // tree early would collapse `absolutePath` and make the assertions vacuously pass.
+        let root = RuntimeImageNode.rootNode(
+            for: ["/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"],
+            name: "Dyld Shared Cache"
+        )
+        var leaf = root
+        while let next = leaf.children.first { leaf = next }
+
+        #expect(leaf.absolutePath == "/Dyld Shared Cache/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
+        #expect(leaf.path == "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
+
+        let data = try JSONEncoder().encode(leaf)
+        let decoded = try JSONDecoder().decode(RuntimeImageNode.self, from: data)
+
+        #expect(decoded.absolutePath == leaf.absolutePath)
+        #expect(decoded.path == leaf.path)
+        #expect(decoded == leaf)
+        #expect(decoded.hashValue == leaf.hashValue)
+    }
+
+    @Test("decodes payloads that carry absolutePath")
+    func codableDecodesPersistedAbsolutePath() throws {
+        let payload = #"{"name":"AppKit","absolutePath":"/Dyld Shared Cache/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit","children":[]}"#
+        let decoded = try JSONDecoder().decode(RuntimeImageNode.self, from: Data(payload.utf8))
+
+        #expect(decoded.absolutePath == "/Dyld Shared Cache/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
+        #expect(decoded.path == "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
+    }
+
+    @Test("decodes payloads missing absolutePath by falling back to lazy derivation")
+    func codableMissingAbsolutePathFallsBack() throws {
+        let payload = #"{"name":"Versions","children":[{"name":"C","children":[]}]}"#
+        let decoded = try JSONDecoder().decode(RuntimeImageNode.self, from: Data(payload.utf8))
+
+        #expect(decoded.absolutePath == "/Versions")
+        // The descendant derives from the parent restored on decode rather than collapsing to "/C".
+        #expect(decoded.children[0].absolutePath == "/Versions/C")
+    }
+
     // MARK: - Hashable / Equatable
 
     @Test("equal nodes have same hash")

@@ -4,6 +4,7 @@ public final class RuntimeImageNode: Codable {
     private enum CodingKeys: CodingKey {
         case name
         case children
+        case absolutePath
     }
 
     public let name: String
@@ -12,6 +13,12 @@ public final class RuntimeImageNode: Codable {
 
     public private(set) var children: [RuntimeImageNode] = []
 
+    /// Absolute path from the tree root.
+    ///
+    /// This is serialized explicitly rather than left to the lazy derivation below. A
+    /// `RuntimeImageBookmark` persists a single node detached from its ancestors, so on decode
+    /// `parent` is nil and the derivation collapses to `"/" + name` — turning `path` into `"/"`
+    /// and breaking image loading. Never remove `.absolutePath` from `CodingKeys`.
     public private(set) lazy var absolutePath: String = {
         guard let parent else { return "/" + name }
         let directory = parent.absolutePath
@@ -60,12 +67,21 @@ public final class RuntimeImageNode: Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(name, forKey: .name)
         try container.encode(children, forKey: .children)
+        try container.encode(absolutePath, forKey: .absolutePath)
     }
 
     public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.name = try container.decode(String.self, forKey: .name)
         self.children = try container.decode([RuntimeImageNode].self, forKey: .children)
+
+        // Only assign when the payload actually carries a path. Leaving the lazy var
+        // unmaterialized on the nil branch lets descendants of a node written without
+        // `.absolutePath` still derive from the parent restored just below, instead of
+        // freezing at `"/" + name`.
+        if let decodedAbsolutePath = try container.decodeIfPresent(String.self, forKey: .absolutePath) {
+            self.absolutePath = decodedAbsolutePath
+        }
 
         for child in children {
             child.parent = self
