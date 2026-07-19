@@ -88,9 +88,6 @@ public final class DocumentState {
 
     private lazy var _selectionRouter = SelectionRouter(documentState: self)
 
-    @Observed
-    public var currentSubtitle: String = ""
-
     /// Per-Document background indexing coordinator.
     ///
     /// Force-initialized on the first Document lifecycle hook
@@ -176,6 +173,12 @@ private final class SelectionRouter: Router {
         case .forward:
             guard documentState.selectionIndex < documentState.selectionStack.count - 1 else { return }
             documentState.selectionIndex += 1
+        case .jump(let toIndex):
+            guard toIndex >= 0,
+                  toIndex < documentState.selectionStack.count,
+                  toIndex != documentState.selectionIndex
+            else { return }
+            documentState.selectionIndex = toIndex
         case .clear:
             guard !documentState.selectionStack.isEmpty else { return }
             documentState.selectionStack = []

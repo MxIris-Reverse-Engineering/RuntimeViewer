@@ -164,13 +164,14 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 contentCoordinator.contextTrigger(.back)
                 inspectorCoordinator.contextTrigger(.back)
             }
-        case .backward, .forward:
+        case .backward, .forward, .jump:
             // History array unchanged — only the cursor moved. Re-enter
             // the text/runtimeObject scene for the new
             // `selectedRuntimeObject`. `.back` is the right vocabulary
             // because both panes reuse their existing controller and
             // just rebind to the cursor target (no push-transition
-            // flash).
+            // flash). `.jump` crosses several entries at once but is
+            // otherwise identical — the cursor is all that moved.
             contentCoordinator.contextTrigger(.back)
             inspectorCoordinator.contextTrigger(.back)
         case .clear:

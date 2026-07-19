@@ -48,6 +48,9 @@ final class MainViewModel: ViewModel<MainRoute> {
         let sidebarBackClick: Signal<Void>
         let navigationPreviousClick: Signal<Void>
         let navigationNextClick: Signal<Void>
+        /// Target index into `selectionStack`, chosen from a long-press
+        /// history menu on either navigation segment.
+        let navigationHistorySelected: Signal<Int>
         let saveClick: Signal<Void>
         let switchSource: Signal<String?>
         let generationOptionsClick: Signal<NSView>
@@ -63,12 +66,21 @@ final class MainViewModel: ViewModel<MainRoute> {
     }
 
     struct Output {
+        /// Everything the `TitleToolbarItem` (and the window title) shows is
+        /// derived here from `DocumentState` rather than pushed in by whichever
+        /// pane happens to become visible — the panes have no business owning
+        /// window-level chrome, and the push model used to leave the subtitle
+        /// stale whenever a reused controller rebound.
+        let windowTitle: Driver<String>
+        let toolbarTitle: Driver<String>
+        let toolbarSubtitle: Driver<String>
         let sharingServiceData: Observable<[SharingData]>
         let isSavable: Driver<Bool>
         let isSidebarBackHidden: Driver<Bool>
         let isNavigationHidden: Driver<Bool>
         let canGoPrevious: Driver<Bool>
         let canGoNext: Driver<Bool>
+        let navigationHistory: Driver<NavigationHistorySnapshot>
         let runtimeEngineSections: Driver<[RuntimeEngineSection]>
         let switchSourceState: Driver<SwitchSourceState>
         let requestFrameworkSelection: Signal<Void>
@@ -182,6 +194,12 @@ final class MainViewModel: ViewModel<MainRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        input.navigationHistorySelected.emitOnNext { [weak self] targetIndex in
+            guard let self else { return }
+            documentState.selectionRouter.trigger(.jump(toIndex: targetIndex))
+        }
+        .disposed(by: rx.disposeBag)
+
         input.generationOptionsClick.emit(with: self) { $0.router.trigger(.generationOptions(sender: $1)) }.disposed(by: rx.disposeBag)
 
         input.mcpStatusClick.emit(with: self) { $0.router.trigger(.mcpStatus(sender: $1)) }.disposed(by: rx.disposeBag)
@@ -286,7 +304,24 @@ final class MainViewModel: ViewModel<MainRoute> {
             }
         }
 
+        let currentImageName = documentState.$currentImageNode.asDriver().map { $0?.name }
+
         return Output(
+            // combineLatest rather than reading `runtimeEngine` inside the
+            // image-node subscription: an engine switch has to retitle the
+            // window even though it clears `currentImageNode` to the same
+            // `nil` it may already hold.
+            windowTitle: Driver.combineLatest(
+                documentState.$runtimeEngine.asDriver(),
+                currentImageName
+            ).map { runtimeEngine, imageName in
+                guard let imageName else { return runtimeEngine.source.description }
+                return "\(runtimeEngine.source.description) - \(imageName)"
+            },
+            toolbarTitle: currentImageName.map { $0 ?? "RuntimeViewer" },
+            toolbarSubtitle: selectedRuntimeObjectObservable
+                .map { $0?.displayName ?? "" }
+                .asDriver(onErrorJustReturn: ""),
             sharingServiceData: sharingServiceData,
             isSavable: documentState.$selectionStack.asDriver().map { !$0.isEmpty },
             isSidebarBackHidden: documentState.$currentImageNode.asDriver().map { $0 == nil },
@@ -297,6 +332,21 @@ final class MainViewModel: ViewModel<MainRoute> {
                 documentState.$selectionIndex.asDriver()
             ).map { stack, index in
                 index < stack.count - 1
+            },
+            navigationHistory: Driver.combineLatest(
+                documentState.$selectionStack.asDriver(),
+                documentState.$selectionIndex.asDriver()
+            ).map { stack, index in
+                NavigationHistorySnapshot(
+                    items: stack.enumerated().map { entryIndex, runtimeObject in
+                        NavigationHistoryItem(
+                            index: entryIndex,
+                            displayName: runtimeObject.displayName,
+                            icon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: NavigationHistorySnapshot.iconSize)
+                        )
+                    },
+                    currentIndex: index
+                )
             },
             runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
             switchSourceState: switchSourceState,

@@ -183,8 +183,6 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let loadingProgress: Driver<Double>
         public let loadingDescription: Driver<String>
         public let loadingItemCount: Driver<String>
-        public let windowInitialTitles: Driver<(title: String, subtitle: String)>
-        public let windowSubtitle: Signal<String>
         public let didBeginFiltering: Signal<Void>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
@@ -251,8 +249,6 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             }
             .asDriver(onErrorJustReturn: "")
 
-        let runtimeImageName = imageNode.name
-
         let distinctLoadState = $loadState.asObservable()
             .distinctUntilChanged()
             .flatMapLatest { state -> Observable<RuntimeImageLoadState> in
@@ -277,8 +273,6 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             loadingProgress: $loadingProgress.asDriver(),
             loadingDescription: $loadingDescription.asDriver(),
             loadingItemCount: $loadingItemCount.asDriver(),
-            windowInitialTitles: .just((runtimeImageName, "")),
-            windowSubtitle: input.runtimeObjectClicked.asSignal().map { "\($0.runtimeObject.displayName)" },
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
             didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
             didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),

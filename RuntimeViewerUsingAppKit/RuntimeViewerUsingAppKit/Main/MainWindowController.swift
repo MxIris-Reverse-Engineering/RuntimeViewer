@@ -69,38 +69,14 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
         splitViewController.setupBindings(for: viewModel)
 
-        documentState.$currentImageNode
-            .asDriver()
-            .map { $0?.name }
-            .driveOnNext { [weak self] imageName in
-                guard let self else { return }
-                var title = documentState.runtimeEngine.source.description
-
-                if let imageName {
-                    title += " - \(imageName)"
-                }
-
-                contentWindow.title = title
-                if let imageName {
-                    toolbarController.titleItem.displayTitle = imageName
-                } else {
-                    toolbarController.titleItem.displayTitle = "RuntimeViewer"
-                }
-            }
-            .disposed(by: rx.disposeBag)
-
-        documentState.$currentSubtitle
-            .asDriver()
-            .driveOnNext { [weak self] subtitle in
-                guard let self else { return }
-                toolbarController.titleItem.displaySubtitle = subtitle
-            }
-            .disposed(by: rx.disposeBag)
-
         let input = MainViewModel.Input(
             sidebarBackClick: toolbarController.sidebarBackItem.button.rx.click.asSignal(),
             navigationPreviousClick: toolbarController.navigationItem.segmentedControl.rx.selectedSegment.asSignal().filter { $0 == 0 }.mapToVoid(),
             navigationNextClick: toolbarController.navigationItem.segmentedControl.rx.selectedSegment.asSignal().filter { $0 == 1 }.mapToVoid(),
+            navigationHistorySelected: Signal.merge(
+                toolbarController.navigationItem.backwardHistoryMenu.rx.itemSelected(NavigationHistoryItem.self).asSignal(),
+                toolbarController.navigationItem.forwardHistoryMenu.rx.itemSelected(NavigationHistoryItem.self).asSignal()
+            ).map(\.item.index),
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
             switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemRepresentedObject(String.self).asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
@@ -114,6 +90,24 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             saveLocationSelected: saveLocationSelectedRelay.asSignal()
         )
         let output = viewModel.transform(input)
+
+        output.windowTitle.driveOnNext { [weak self] title in
+            guard let self else { return }
+            contentWindow.title = title
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.toolbarTitle.driveOnNext { [weak self] title in
+            guard let self else { return }
+            toolbarController.titleItem.displayTitle = title
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.toolbarSubtitle.driveOnNext { [weak self] subtitle in
+            guard let self else { return }
+            toolbarController.titleItem.displaySubtitle = subtitle
+        }
+        .disposed(by: rx.disposeBag)
 
         output.sharingServiceData
             .map { items -> [Any] in
@@ -155,6 +149,29 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         output.canGoPrevious.drive(toolbarController.navigationItem.segmentedControl.rx.enabledForSegment(at: 0)).disposed(by: rx.disposeBag)
 
         output.canGoNext.drive(toolbarController.navigationItem.segmentedControl.rx.enabledForSegment(at: 1)).disposed(by: rx.disposeBag)
+
+        // Row content first, reachability second: `attachHistoryMenus`
+        // must see menus that already match the snapshot it is judging.
+        bindHistoryMenu(
+            toolbarController.navigationItem.backwardHistoryMenu,
+            to: output.navigationHistory.map(\.backwardItems)
+        )
+        .disposed(by: rx.disposeBag)
+
+        bindHistoryMenu(
+            toolbarController.navigationItem.forwardHistoryMenu,
+            to: output.navigationHistory.map(\.forwardItems)
+        )
+        .disposed(by: rx.disposeBag)
+
+        output.navigationHistory.driveOnNext { [weak self] snapshot in
+            guard let self else { return }
+            toolbarController.navigationItem.attachHistoryMenus(
+                hasBackwardItems: !snapshot.backwardItems.isEmpty,
+                hasForwardItems: !snapshot.forwardItems.isEmpty
+            )
+        }
+        .disposed(by: rx.disposeBag)
 
         // Bind menu content + selection from sections and switchSourceState
         Driver.combineLatest(output.runtimeEngineSections, output.switchSourceState)
@@ -209,6 +226,18 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
                 NSAlert(error: error).beginSheetModal(for: contentWindow)
             }
             .disposed(by: rx.disposeBag)
+    }
+
+    /// `NSMenu.rx.items(source:)` is curried — it returns the binding
+    /// function that takes the per-item configuration closure. Calling it
+    /// with a trailing closure instead makes the compiler fall back to
+    /// `Reactive`'s dynamic-member lookup and resolve `rx.items` as the
+    /// `Binder<[NSMenuItem]>` for `NSMenu.items`, so the second call is
+    /// spelled out here once rather than at both call sites.
+    private func bindHistoryMenu(_ menu: NSMenu, to items: Driver<[NavigationHistoryItem]>) -> Disposable {
+        menu.rx.items(source: items.asObservable())({ menuItem, item in
+            menuItem.image = item.icon
+        })
     }
 
     private func presentOpenPanel() {

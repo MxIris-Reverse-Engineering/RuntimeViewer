@@ -118,11 +118,6 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         }
         .disposed(by: rx.disposeBag)
 
-        rx.viewDidAppear.asDriver()
-            .flatMapLatest { output.runtimeObjectName }
-            .drive(with: self) { $0.viewModel?.documentState.currentSubtitle = $1 }
-            .disposed(by: rx.disposeBag)
-
         eventMonitor.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
             guard let self else { return event }
             isPressedCommand = event.modifierFlags.contains(.command)

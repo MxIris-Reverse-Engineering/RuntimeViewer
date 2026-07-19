@@ -33,6 +33,12 @@ import RuntimeViewerArchitectures
 ///   history array (toolbar previous). No-op at index 0.
 /// - `forward`: step the cursor one entry forward without mutating the
 ///   history array (toolbar next). No-op at the latest entry.
+/// - `jump`: move the cursor straight to an arbitrary history index
+///   without mutating the history array (toolbar previous / next
+///   long-press history menu). Unlike `pop` it never shrinks the
+///   array; unlike `backward` / `forward` it can cross several
+///   entries at once. No-op for an out-of-range index or for the
+///   index the cursor already sits on.
 /// - `clear`: empty the history but keep `currentImageNode`.
 @AssociatedValue(.public)
 @CaseCheckable(.public)
@@ -44,5 +50,6 @@ public enum SelectionRoute: Routable {
     case pop
     case backward
     case forward
+    case jump(toIndex: Int)
     case clear
 }

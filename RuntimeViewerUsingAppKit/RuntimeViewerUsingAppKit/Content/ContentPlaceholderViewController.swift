@@ -25,10 +25,4 @@ final class ContentPlaceholderViewController: UXKitViewController<ContentPlaceho
             $0.textColor = .secondaryLabelColor
         }
     }
-
-    override func viewDidAppear() {
-        super.viewDidAppear()
-
-        viewModel?.documentState.currentSubtitle = ""
-    }
 }

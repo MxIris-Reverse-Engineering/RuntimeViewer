@@ -15,7 +15,21 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 //            $0.label = "Next"
 //        }
         
+        /// `setMenu(_:forSegment:)` raises `NSExceptionName.rangeException`
+        /// on an out-of-range index, so the segment configuration below
+        /// names its indexes instead of repeating bare literals.
+        private static let backwardSegment: Int = 0
+        private static let forwardSegment: Int = 1
+
         let segmentedControl = NSSegmentedControl()
+
+        /// Long-press history menus. Alive for the item's lifetime and
+        /// refilled in place by `NavigationHistoryMenuBuilder`;
+        /// `attachHistoryMenus(hasBackwardItems:hasForwardItems:)` decides
+        /// whether each one is actually reachable.
+        let backwardHistoryMenu = NSMenu()
+
+        let forwardHistoryMenu = NSMenu()
         
         init() {
             super.init(itemIdentifier: .Main.navigation)
@@ -24,9 +38,39 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             segmentedControl.segmentCount = 2
             segmentedControl.segmentStyle = .automatic
             segmentedControl.trackingMode = .momentary
-            segmentedControl.setImage(.symbol(systemName: .chevronBackward), forSegment: 0)
-            segmentedControl.setImage(.symbol(systemName: .chevronForward), forSegment: 1)
+            segmentedControl.setImage(.symbol(systemName: .chevronBackward), forSegment: Self.backwardSegment)
+            segmentedControl.setImage(.symbol(systemName: .chevronForward), forSegment: Self.forwardSegment)
+
+            // A segment pops its menu on press-and-hold only while the
+            // control ALSO has a non-nil `action`; with a menu but no
+            // action AppKit pops the menu on a plain click and
+            // single-step navigation is lost. `rx.selectedSegment`
+            // installs its ActionProxy lazily on first subscription —
+            // i.e. after this initializer returns — so a placeholder is
+            // installed here to hold the invariant regardless of
+            // subscription order. The proxy preserves this pair and
+            // keeps forwarding to it.
+            segmentedControl.target = self
+            segmentedControl.action = #selector(navigationSegmentPressed)
+
+            // The indicator arrow would make the segments read as pop-up
+            // buttons; Safari-style back/forward shows no such chrome.
+            segmentedControl.setShowsMenuIndicator(false, forSegment: Self.backwardSegment)
+            segmentedControl.setShowsMenuIndicator(false, forSegment: Self.forwardSegment)
         }
+
+        /// Attaches each history menu only when it has rows — a segment
+        /// wired to an empty `NSMenu` still pops an empty box on a long
+        /// press.
+        func attachHistoryMenus(hasBackwardItems: Bool, hasForwardItems: Bool) {
+            segmentedControl.setMenu(hasBackwardItems ? backwardHistoryMenu : nil, forSegment: Self.backwardSegment)
+            segmentedControl.setMenu(hasForwardItems ? forwardHistoryMenu : nil, forSegment: Self.forwardSegment)
+        }
+
+        /// Placeholder keeping `action` non-nil — see `init`. Real click
+        /// handling runs through `rx.selectedSegment` in
+        /// `MainWindowController.setupBindings(for:)`.
+        @objc private func navigationSegmentPressed() {}
     }
     
     class IconButtonToolbarItem: NSToolbarItem {

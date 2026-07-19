@@ -183,12 +183,6 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
         .disposed(by: rx.disposeBag)
 
-        output.windowInitialTitles.driveOnNext { [weak self] in
-            guard let self else { return }
-            self.viewModel?.documentState.currentSubtitle = $0.subtitle
-        }
-        .disposed(by: rx.disposeBag)
-
         output.loadState.driveOnNextMainActor { [weak self] loadState in
             guard let self else { return }
             tabView.selectTabViewItem(withIdentifier: loadState.tabViewItemIdentifier)
