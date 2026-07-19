@@ -91,7 +91,7 @@ let package = Package(
     dependencies: [
         .package(path: "../RuntimeViewerCore"),
         .package(path: "../RuntimeViewerPackages"),
-        .package(url: "https://github.com/Cocoanetics/SwiftMCP", from: "1.4.0"),
+        .package(url: "https://github.com/Cocoanetics/SwiftMCP", from: "1.9.0", traits: ["Server", "Client", "OpenAPI"]),
     ],
     targets: [
         .target(

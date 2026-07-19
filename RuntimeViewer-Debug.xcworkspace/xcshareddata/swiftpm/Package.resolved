@@ -118,15 +118,6 @@
       }
     },
     {
-      "identity" : "machinjector",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
-      "state" : {
-        "revision" : "36789658ff09d018939426d7714b8db29d69e731",
-        "version" : "0.4.0"
-      }
-    },
-    {
       "identity" : "metacodable",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SwiftyLab/MetaCodable",
@@ -518,17 +509,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "revision" : "456b212834f2032312af1ea5f98d214cbaca5a2c",
-        "version" : "0.5.102"
-      }
-    },
-    {
-      "identity" : "systemhud",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/SystemHUD",
-      "state" : {
-        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
-        "version" : "0.1.0"
+        "revision" : "8c0a1738ba68540e6e911eb409fca8a4603d3efd",
+        "version" : "0.5.103"
       }
     },
     {
