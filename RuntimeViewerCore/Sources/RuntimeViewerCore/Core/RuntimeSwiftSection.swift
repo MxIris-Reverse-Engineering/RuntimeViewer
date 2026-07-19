@@ -1082,27 +1082,12 @@ extension RuntimeSwiftSection {
         transformer: Transformer.SwiftConfiguration,
         transformerChanged: Bool
     ) -> SwiftDeclarationPrintConfiguration {
-        var fieldOffsetTransformer: FieldOffsetTransformer? = oldConfiguration.fieldOffsetTransformer
-        var vtableOffsetTransformer: VTableOffsetTransformer? = oldConfiguration.vtableOffsetTransformer
-        var memberAddressTransformer: MemberAddressTransformer? = oldConfiguration.memberAddressTransformer
-        var typeLayoutTransformer: TypeLayoutTransformer? = oldConfiguration.typeLayoutTransformer
-        var enumLayoutTransformer: EnumLayoutTransformer? = oldConfiguration.enumLayoutTransformer
-        var enumLayoutCaseTransformer: EnumLayoutCaseTransformer? = oldConfiguration.enumLayoutCaseTransformer
-
-        if transformerChanged {
-            vtableOffsetTransformer = buildVTableOffsetTransformer(from: transformer)
-            memberAddressTransformer = buildMemberAddressTransformer(from: transformer)
-            fieldOffsetTransformer = buildFieldOffsetTransformer(from: transformer)
-            typeLayoutTransformer = buildTypeLayoutTransformer(from: transformer)
-            (enumLayoutTransformer, enumLayoutCaseTransformer) = buildEnumLayoutTransformers(from: transformer)
-        }
-
         let swiftInterfaceMemberSortOrder: SwiftDeclarationMemberSortOrder = switch options.memberSortOrder {
         case .byCategory: .byCategory
         case .byOffset: .byOffset
         }
 
-        return SwiftDeclarationPrintConfiguration(
+        var newConfiguration = SwiftDeclarationPrintConfiguration(
             printStrippedSymbolicItem: options.printStrippedSymbolicItem,
             printFieldOffset: options.printFieldOffset,
             printExpandedFieldOffsets: options.printExpandedFieldOffset,
@@ -1112,196 +1097,26 @@ extension RuntimeSwiftSection {
             memberSortOrder: swiftInterfaceMemberSortOrder,
             printTypeLayout: options.printTypeLayout,
             printEnumLayout: options.printEnumLayout,
-            memberAddressTransformer: memberAddressTransformer,
-            vtableOffsetTransformer: vtableOffsetTransformer,
-            fieldOffsetTransformer: fieldOffsetTransformer,
-            typeLayoutTransformer: typeLayoutTransformer,
-            enumLayoutTransformer: enumLayoutTransformer,
-            enumLayoutCaseTransformer: enumLayoutCaseTransformer
+            memberAddressTransformer: oldConfiguration.memberAddressTransformer,
+            vtableOffsetTransformer: oldConfiguration.vtableOffsetTransformer,
+            fieldOffsetTransformer: oldConfiguration.fieldOffsetTransformer,
+            typeLayoutTransformer: oldConfiguration.typeLayoutTransformer,
+            enumLayoutTransformer: oldConfiguration.enumLayoutTransformer,
+            enumLayoutCaseTransformer: oldConfiguration.enumLayoutCaseTransformer
         )
+
+        // The transformer templates render library-side
+        // (`SemanticTransformer` + the closure factories in
+        // `SwiftDeclarationRendering`); this side only hands the settings
+        // over. Reinstalled only on change, because the installed closures
+        // are identity-compared by the configuration's `Equatable` (a fresh
+        // install would invalidate the interface cache on every update).
+        if transformerChanged {
+            newConfiguration.applyTransformers(transformer)
+        }
+        return newConfiguration
     }
 
-    // MARK: - Transformer Builders
-
-    private func buildVTableOffsetTransformer(from transformer: Transformer.SwiftConfiguration) -> VTableOffsetTransformer? {
-        guard transformer.swiftVTableOffset.isEnabled else { return nil }
-        let module = transformer.swiftVTableOffset
-        return VTableOffsetTransformer { input in
-            let result = module.transform(.init(slotOffset: input.slotOffset, label: input.label))
-            return Comment(result).asSemanticString()
-        }
-    }
-
-    private func buildMemberAddressTransformer(from transformer: Transformer.SwiftConfiguration) -> MemberAddressTransformer? {
-        guard transformer.swiftMemberAddress.isEnabled else { return nil }
-        let module = transformer.swiftMemberAddress
-        return MemberAddressTransformer { offset in
-            let result = module.transform(.init(offset: offset))
-            return Comment(result).asSemanticString()
-        }
-    }
-
-    private func buildFieldOffsetTransformer(from transformer: Transformer.SwiftConfiguration) -> FieldOffsetTransformer? {
-        guard transformer.swiftFieldOffset.isEnabled else { return nil }
-        let module = transformer.swiftFieldOffset
-        return FieldOffsetTransformer { input in
-            let result = module.transform(.init(startOffset: input.startOffset, endOffset: input.endOffset))
-            return Comment(result).asSemanticString()
-        }
-    }
-
-    private func buildTypeLayoutTransformer(from transformer: Transformer.SwiftConfiguration) -> TypeLayoutTransformer? {
-        guard transformer.swiftTypeLayout.isEnabled else { return nil }
-        let module = transformer.swiftTypeLayout
-        return TypeLayoutTransformer { typeLayout in
-            let input = Transformer.SwiftTypeLayout.Input(
-                size: Int(typeLayout.size),
-                stride: Int(typeLayout.stride),
-                alignment: Int(typeLayout.flags.alignment),
-                extraInhabitantCount: Int(typeLayout.extraInhabitantCount),
-                isPOD: typeLayout.flags.isPOD,
-                isInlineStorage: typeLayout.flags.isInlineStorage,
-                isBitwiseTakable: typeLayout.flags.isBitwiseTakable,
-                isBitwiseBorrowable: typeLayout.flags.isBitwiseBorrowable,
-                isCopyable: typeLayout.flags.isCopyable,
-                hasEnumWitnesses: typeLayout.flags.hasEnumWitnesses,
-                isIncomplete: typeLayout.flags.isIncomplete
-            )
-            let result = module.transform(input)
-            return Comment(result).asSemanticString()
-        }
-    }
-
-    private func buildEnumLayoutTransformers(from transformer: Transformer.SwiftConfiguration) -> (EnumLayoutTransformer?, EnumLayoutCaseTransformer?) {
-        guard transformer.swiftEnumLayout.isEnabled else { return (nil, nil) }
-        let module = transformer.swiftEnumLayout
-
-        func paddedBinary(_ byteValue: UInt8) -> String {
-            let binaryDigits = String(byteValue, radix: 2)
-            return String(repeating: "0", count: 8 - binaryDigits.count) + binaryDigits
-        }
-
-        let layoutTransformer = EnumLayoutTransformer { layoutResult in
-            let payloadCaseCount = layoutResult.cases.count { $0.isPayloadCase }
-            let emptyCaseCount = layoutResult.cases.count - payloadCaseCount
-            let input = Transformer.SwiftEnumLayout.Input(
-                strategy: layoutResult.strategyDescription,
-                summary: layoutResult.summaryDescription,
-                bitsNeededForTag: layoutResult.bitsNeededForTag,
-                bitsAvailableForPayload: layoutResult.bitsAvailableForPayload,
-                numTags: layoutResult.numTags,
-                totalCases: layoutResult.cases.count,
-                payloadCaseCount: payloadCaseCount,
-                emptyCaseCount: emptyCaseCount,
-                leftoverExtraInhabitantCount: layoutResult.extraInhabitantCount,
-                tagRegionRange: layoutResult.tagRegion.map { "\($0.range)" } ?? "N/A",
-                tagRegionBitCount: layoutResult.tagRegion?.bitCount ?? 0,
-                tagRegionBytesHex: layoutResult.tagRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A",
-                payloadRegionRange: layoutResult.payloadRegion.map { "\($0.range)" } ?? "N/A",
-                payloadRegionBitCount: layoutResult.payloadRegion?.bitCount ?? 0,
-                payloadRegionBytesHex: layoutResult.payloadRegion.map { $0.bytes.map { String(format: "%02X", $0) }.joined(separator: " ") } ?? "N/A"
-            )
-            let result = module.transform(input)
-            return InlineComment(result).asSemanticString()
-        }
-
-        let caseTransformer = EnumLayoutCaseTransformer { input in
-            let caseProjection = input.caseProjection
-            let indentation = input.indentation
-            let memoryChangesDetail = caseProjection.memoryChanges
-                .sorted(by: { $0.key < $1.key })
-                .map { offset, byteValue in
-                    let mask = caseProjection.fixedBitMask(atByteOffset: offset)
-                    guard mask != 0xFF else {
-                        return "[\(offset)]=0x\(String(format: "%02X", byteValue))"
-                    }
-                    // Only the masked bits are fixed — the byte is shared
-                    // with live payload storage, so a whole-byte value would
-                    // over-claim.
-                    return "[\(offset)]&0b\(paddedBinary(mask))=0b\(paddedBinary(byteValue))"
-                }
-                .joined(separator: ", ")
-
-            let patternKind: String
-            let patternNote: String
-            switch caseProjection.patternResolution {
-            case .exactBytes:
-                patternKind = "exact"
-                patternNote = ""
-            case .unresolvedExtraInhabitant:
-                patternKind = "unresolvedExtraInhabitant"
-                patternNote = "note: the exact bytes depend on the payload type's extra-inhabitant scheme and were not resolved offline (the in-process runtime path resolves them)"
-            }
-
-            let caseInput = Transformer.SwiftEnumLayout.CaseInput(
-                caseIndex: caseProjection.caseIndex,
-                caseName: caseProjection.caseName,
-                declaredName: caseProjection.declaredName ?? "",
-                tagValue: caseProjection.tagValue,
-                payloadValue: caseProjection.payloadValue,
-                tagHex: String(format: "0x%02X", caseProjection.tagValue),
-                payloadHex: String(format: "0x%02X", caseProjection.payloadValue),
-                tagValueBinary: "0b\(String(caseProjection.tagValue, radix: 2))",
-                payloadValueBinary: "0b\(String(caseProjection.payloadValue, radix: 2))",
-                caseType: caseProjection.isPayloadCase ? "Payload" : "Empty",
-                encoding: caseProjection.encodingExplanation,
-                patternKind: patternKind,
-                patternNote: patternNote,
-                fixedBytesSummary: caseProjection.formattedFixedBytes(),
-                memoryChangeCount: caseProjection.memoryChanges.count,
-                memoryChangesDetail: memoryChangesDetail
-            )
-            let header = module.transformCase(caseInput)
-            let indentStr = String(repeating: "    ", count: indentation)
-            var output = ""
-            for line in header.split(separator: "\n", omittingEmptySubsequences: false) {
-                output += "\(indentStr)// \(line)\n"
-            }
-
-            // Automatically append what the template did not opt into itself:
-            // the unresolved-pattern note, then the fixed-byte lines.
-            if !patternNote.isEmpty, !module.containsCase(.patternNote) {
-                output += "\(indentStr)// \(patternNote)\n"
-            }
-            if !module.containsCase(.fixedBytesSummary), !module.containsCase(.memoryChangesDetail) {
-                if caseProjection.memoryChanges.isEmpty {
-                    switch caseProjection.patternResolution {
-                    case .unresolvedExtraInhabitant:
-                        output += "\(indentStr)// fixed bytes: not computed\n"
-                    case .exactBytes:
-                        output += caseProjection.isPayloadCase
-                            ? "\(indentStr)// fixed bytes: none — any pattern no empty case claims selects this case\n"
-                            : "\(indentStr)// fixed bytes: none recorded\n"
-                    }
-                } else {
-                    output += "\(indentStr)// fixed bytes: \(caseProjection.formattedFixedBytes())\n"
-                    for offset in caseProjection.memoryChanges.keys.sorted() {
-                        let byteValue = caseProjection.memoryChanges[offset]!
-                        let mask = caseProjection.fixedBitMask(atByteOffset: offset)
-                        if mask != 0xFF {
-                            // A partially-fixed byte (spare-bits tag sharing
-                            // the byte with payload storage): scope the claim
-                            // to the fixed bits, mirroring the library's
-                            // default rendering, instead of pushing a
-                            // whole-byte value through the template.
-                            output += "\(indentStr)// offset 0x\(String(format: "%02X", offset)): fixed bits 0b\(paddedBinary(mask)) = 0b\(paddedBinary(byteValue)) (the other bits hold payload storage)\n"
-                            continue
-                        }
-                        let offsetInput = Transformer.SwiftEnumLayout.MemoryOffsetInput(
-                            offset: offset,
-                            value: byteValue,
-                            fixedBitMask: mask
-                        )
-                        let formattedOffset = module.transformMemoryOffset(offsetInput)
-                        output += "\(indentStr)// \(formattedOffset)\n"
-                    }
-                }
-            }
-            return AtomicComponent(string: output, type: .comment).asSemanticString()
-        }
-
-        return (layoutTransformer, caseTransformer)
-    }
 }
 
 extension RuntimeSwiftSection {

@@ -199,6 +199,7 @@ let package = Package(
                 .product(name: "MachOKit", package: "MachOKit"),
                 .product(name: "MachOObjCSection", package: "MachOObjCSection"),
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
+                .product(name: "SemanticTransformer", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclaration", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclarationRendering", package: "MachOSwiftSection"),
                 .product(name: "SwiftIndexing", package: "MachOSwiftSection"),

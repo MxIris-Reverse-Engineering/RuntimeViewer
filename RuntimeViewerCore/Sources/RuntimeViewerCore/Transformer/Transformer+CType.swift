@@ -177,7 +177,7 @@ extension Transformer.CType {
             .uint: "uint32_t",
             .ulong: "uint64_t",
             .ulongLong: "uint64_t",
-            
+
             .char: "int8_t",
             .short: "int16_t",
             .int: "int32_t",
@@ -192,7 +192,7 @@ extension Transformer.CType {
             .longLong: "NSInteger",
             .ulongLong: "NSUInteger",
         ]
-        
+
         public static let mixed: [Pattern: String] = [
             .uchar: "uint8_t",
             .ushort: "uint16_t",
