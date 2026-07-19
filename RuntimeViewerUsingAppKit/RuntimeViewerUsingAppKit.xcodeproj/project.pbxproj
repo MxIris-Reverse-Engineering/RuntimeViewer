@@ -247,6 +247,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E92139E3300BCF5C00B1EFB0 /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
@@ -262,6 +270,7 @@
 				E9CF000A2FF0010000000001 /* Configurations */,
 				E9432FE32C0D614900362862 /* Products */,
 				E9432FF32C0D637500362862 /* Frameworks */,
+				E92139E3300BCF5C00B1EFB0 /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
