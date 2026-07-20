@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.debugMenuController) private var debugMenuController
     @Dependency(\.helperServiceVersionChecker) private var helperServiceVersionChecker
     @Dependency(\.mcpService) private var mcpService
+    @Dependency(\.tabMenuController) private var tabMenuController
     @Dependency(\.updaterService) private var updaterService
     @Dependency(\.simulatorInstallerWindowController) private var simulatorInstallerWindowController
 
@@ -25,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         appearanceController.start()
         debugMenuController.install()
+        tabMenuController.install()
         mcpService.start(for: AppMCPBridgeDocumentProvider())
         updaterService.start()
         helperServiceVersionChecker.checkOnLaunch()

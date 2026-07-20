@@ -40,6 +40,22 @@ import RuntimeViewerArchitectures
 ///   entries at once. No-op for an out-of-range index or for the
 ///   index the cursor already sits on.
 /// - `clear`: empty the history but keep `currentImageNode`.
+///
+/// Tab routes (content-pane tabs — see `DocumentTab`). Every tab shares the
+/// one document-level navigation history; switching tabs rebinds the shared
+/// history to the target tab's object. The active tab's object is kept in
+/// sync with `selectedRuntimeObject` by the router after every history
+/// mutation, so these routes only handle tab *lifecycle*:
+/// - `newTab`: append an empty tab (inheriting the current image) and make it
+///   active; the shared history is cleared so the panes show the placeholder.
+/// - `openInNewTab`: append a tab already showing `object` and make it active
+///   (⌘⇧-click / "Open in New Tab"); the shared history is reset to `[object]`.
+/// - `switchTab`: make the tab at `index` active and rebind the shared history
+///   to its object (or clear it for an empty tab). No-op for the active index.
+/// - `closeTab`: remove the tab at `index`. Closing the active tab activates
+///   the right neighbour (or the left when there is none). Never removes the
+///   last remaining tab — the menu layer turns ⌘W into "close window" then.
+/// - `moveTab`: reorder a tab (drag), keeping the active tab active.
 @AssociatedValue(.public)
 @CaseCheckable(.public)
 public enum SelectionRoute: Routable {
@@ -52,4 +68,9 @@ public enum SelectionRoute: Routable {
     case forward
     case jump(toIndex: Int)
     case clear
+    case newTab
+    case openInNewTab(RuntimeObject)
+    case switchTab(index: Int)
+    case closeTab(index: Int)
+    case moveTab(from: Int, to: Int)
 }

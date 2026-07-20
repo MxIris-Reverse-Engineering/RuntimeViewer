@@ -56,6 +56,28 @@ public final class DocumentState {
     @Observed
     public fileprivate(set) var selectionIndex: Int = -1
 
+    /// Content-pane tabs. Every tab shares the one document-level navigation
+    /// history above; the active tab's `object` mirrors
+    /// `selectedRuntimeObject` (the router writes navigation through to it),
+    /// while inactive tabs hold a frozen object. There is always at least one
+    /// tab. Read-only externally: mutated only via the tab selection routes
+    /// (`newTab`, `openInNewTab`, `switchTab`, `closeTab`, `moveTab`) and the
+    /// active-tab write-through applied after every history mutation.
+    @Observed
+    public fileprivate(set) var tabs: [DocumentTab] = [DocumentTab()]
+
+    /// Index of the active tab in `tabs`. Always a valid index (there is
+    /// always at least one tab).
+    @Observed
+    public fileprivate(set) var activeTabIndex: Int = 0
+
+    /// The active tab, or `nil` only in the degenerate empty-`tabs` state
+    /// (which the router never produces).
+    public var activeTab: DocumentTab? {
+        guard activeTabIndex >= 0, activeTabIndex < tabs.count else { return nil }
+        return tabs[activeTabIndex]
+    }
+
     /// Element at `selectionIndex` in `selectionStack`. `nil` when the
     /// stack is empty. Mutations go through explicit selection routes
     /// (`selectAtRoot`, `push`, `pop`, `forward`, `clear`).
@@ -139,11 +161,21 @@ private final class SelectionRouter: Router {
             documentState.currentImageNode = nil
             documentState.selectionStack = []
             documentState.selectionIndex = -1
+            // Engine switch resets the whole document: collapse back to a
+            // single empty tab.
+            documentState.tabs = [DocumentTab()]
+            documentState.activeTabIndex = 0
         case .switchImage(let node):
             if documentState.currentImageNode == node, documentState.selectionStack.isEmpty { return }
             documentState.currentImageNode = node
             documentState.selectionStack = []
             documentState.selectionIndex = -1
+            // Tabs hold objects belonging to the current image; switching the
+            // inspected image is a fresh browsing context, so collapse back to
+            // a single empty tab (mirrors `.switchEngine`). Cross-image tab
+            // persistence is a possible later enhancement.
+            documentState.tabs = [DocumentTab()]
+            documentState.activeTabIndex = 0
         case .selectAtRoot(let object):
             documentState.selectionStack = [object]
             documentState.selectionIndex = 0
@@ -183,9 +215,77 @@ private final class SelectionRouter: Router {
             guard !documentState.selectionStack.isEmpty else { return }
             documentState.selectionStack = []
             documentState.selectionIndex = -1
+        case .newTab:
+            documentState.tabs.append(DocumentTab())
+            documentState.activeTabIndex = documentState.tabs.count - 1
+            documentState.selectionStack = []
+            documentState.selectionIndex = -1
+        case .openInNewTab(let object):
+            documentState.tabs.append(DocumentTab(object: object))
+            documentState.activeTabIndex = documentState.tabs.count - 1
+            documentState.selectionStack = [object]
+            documentState.selectionIndex = 0
+        case .switchTab(let index):
+            guard index >= 0, index < documentState.tabs.count, index != documentState.activeTabIndex else { return }
+            documentState.activeTabIndex = index
+            rebindHistory(to: documentState.tabs[index].object)
+        case .closeTab(let index):
+            // The last remaining tab is never closed here — the menu layer
+            // turns ⌘W into "close window" in that state.
+            guard documentState.tabs.count > 1, index >= 0, index < documentState.tabs.count else { return }
+            let wasActive = index == documentState.activeTabIndex
+            documentState.tabs.remove(at: index)
+            if wasActive {
+                // Activate the right neighbour (same index after removal), or
+                // the left one when the closed tab was last.
+                let newActiveIndex = min(index, documentState.tabs.count - 1)
+                documentState.activeTabIndex = newActiveIndex
+                rebindHistory(to: documentState.tabs[newActiveIndex].object)
+            } else if index < documentState.activeTabIndex {
+                documentState.activeTabIndex -= 1
+            }
+        case .moveTab(let from, let to):
+            guard from >= 0, from < documentState.tabs.count,
+                  to >= 0, to < documentState.tabs.count,
+                  from != to
+            else { return }
+            let activeID = documentState.activeTab?.id
+            let moved = documentState.tabs.remove(at: from)
+            documentState.tabs.insert(moved, at: to)
+            if let activeID, let newActiveIndex = documentState.tabs.firstIndex(where: { $0.id == activeID }) {
+                documentState.activeTabIndex = newActiveIndex
+            }
         }
+        // Keep the active tab's object in step with the (possibly mutated)
+        // navigation cursor. The tab-management cases above already set both
+        // sides consistently; the guard makes the write a no-op for them and
+        // suppresses redundant `tabs` emissions on plain navigation.
+        syncActiveTabObject()
         routeRelay.accept(route)
         completion?(EmptyRouteTransitionContext.shared)
+    }
+
+    /// Resets the shared navigation history to show a single object (or the
+    /// placeholder for `nil`). Used when switching to / closing a tab.
+    private func rebindHistory(to object: RuntimeObject?) {
+        if let object {
+            documentState.selectionStack = [object]
+            documentState.selectionIndex = 0
+        } else {
+            documentState.selectionStack = []
+            documentState.selectionIndex = -1
+        }
+    }
+
+    /// Writes the current `selectedRuntimeObject` through to the active tab, so
+    /// the active tab's title tracks navigation. No-op (no emission) when the
+    /// object is already in sync.
+    private func syncActiveTabObject() {
+        let index = documentState.activeTabIndex
+        guard index >= 0, index < documentState.tabs.count else { return }
+        let currentObject = documentState.selectedRuntimeObject
+        guard documentState.tabs[index].object != currentObject else { return }
+        documentState.tabs[index].object = currentObject
     }
 }
 

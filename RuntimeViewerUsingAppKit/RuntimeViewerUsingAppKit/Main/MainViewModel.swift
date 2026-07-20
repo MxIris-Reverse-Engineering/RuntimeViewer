@@ -63,6 +63,9 @@ final class MainViewModel: ViewModel<MainRoute> {
         let backgroundIndexingClick: Signal<NSView>
         let frameworksSelected: Signal<[URL]>
         let saveLocationSelected: Signal<URL>
+        let tabSelected: Signal<Int>
+        let tabClosed: Signal<Int>
+        let newTabClicked: Signal<Void>
     }
 
     struct Output {
@@ -86,6 +89,8 @@ final class MainViewModel: ViewModel<MainRoute> {
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
         let requestRestartConfirmation: Signal<Void>
+        let tabBarSnapshot: Driver<TabBarSnapshot>
+        let isTabBarHidden: Driver<Bool>
     }
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
@@ -306,6 +311,36 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         let currentImageName = documentState.$currentImageNode.asDriver().map { $0?.name }
 
+        // MARK: - Tabs
+
+        input.tabSelected.emitOnNext { [weak self] index in
+            guard let self else { return }
+            documentState.selectionRouter.trigger(.switchTab(index: index))
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.tabClosed.emitOnNext { [weak self] index in
+            guard let self else { return }
+            documentState.selectionRouter.trigger(.closeTab(index: index))
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.newTabClicked.emitOnNext { [weak self] in
+            guard let self else { return }
+            documentState.selectionRouter.trigger(.newTab)
+        }
+        .disposed(by: rx.disposeBag)
+
+        let tabBarSnapshot = Driver.combineLatest(
+            documentState.$tabs.asDriver(),
+            documentState.$activeTabIndex.asDriver()
+        ) { tabs, activeIndex in
+            TabBarSnapshot(
+                items: tabs.map { TabBarItem(title: $0.title, kind: $0.object?.kind) },
+                activeIndex: activeIndex
+            )
+        }
+
         return Output(
             // combineLatest rather than reading `runtimeEngine` inside the
             // image-node subscription: an engine switch has to retitle the
@@ -352,7 +387,9 @@ final class MainViewModel: ViewModel<MainRoute> {
             switchSourceState: switchSourceState,
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
-            requestRestartConfirmation: requestRestartConfirmationRelay.asSignal()
+            requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),
+            tabBarSnapshot: tabBarSnapshot,
+            isTabBarHidden: tabBarSnapshot.map { $0.items.count <= 1 }.distinctUntilChanged()
         )
     }
 }

@@ -30,6 +30,8 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private(set) lazy var toolbarController = MainToolbarController(delegate: self)
 
+    private(set) lazy var tabBarAccessoryController = TabBarAccessoryController(nibName: nil, bundle: nil)
+
     private(set) lazy var splitViewController = MainSplitViewController()
 
     private var viewModel: MainViewModel?
@@ -54,6 +56,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.title = documentState.runtimeEngine.source.description
         contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
+        contentWindow.addTitlebarAccessoryViewController(tabBarAccessoryController)
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
         contentWindow.box.centerInScreen()
         contentWindow.identifier = .makeIdentifier(of: Self.self)
@@ -87,9 +90,24 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             mcpStatusClick: toolbarController.mcpStatusItem.button.rx.clickWithSelf.asSignal().map { $0 },
             backgroundIndexingClick: toolbarController.backgroundIndexingItem.button.rx.clickWithSelf.asSignal().map { $0 },
             frameworksSelected: frameworksSelectedRelay.asSignal(),
-            saveLocationSelected: saveLocationSelectedRelay.asSignal()
+            saveLocationSelected: saveLocationSelectedRelay.asSignal(),
+            tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
+            tabClosed: tabBarAccessoryController.tabClosedRelay.asSignal(),
+            newTabClicked: tabBarAccessoryController.newTabClicked
         )
         let output = viewModel.transform(input)
+
+        output.tabBarSnapshot.driveOnNext { [weak self] snapshot in
+            guard let self else { return }
+            tabBarAccessoryController.applySnapshot(snapshot)
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.isTabBarHidden.driveOnNext { [weak self] isHidden in
+            guard let self else { return }
+            tabBarAccessoryController.isHidden = isHidden
+        }
+        .disposed(by: rx.disposeBag)
 
         output.windowTitle.driveOnNext { [weak self] title in
             guard let self else { return }
@@ -269,12 +287,45 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         viewModel?.router.trigger(.exportMultipleImages)
     }
 
+    // MARK: - Tab Actions
+
+    @objc func newTab(_ sender: Any?) {
+        documentState.selectionRouter.trigger(.newTab)
+    }
+
+    /// ⌘W: close the active tab, or fall back to closing the window when it is
+    /// the only tab (Safari behaviour). "Close Window" (⌘⇧W) always closes the
+    /// window.
+    @objc func closeTab(_ sender: Any?) {
+        if documentState.tabs.count > 1 {
+            documentState.selectionRouter.trigger(.closeTab(index: documentState.activeTabIndex))
+        } else {
+            contentWindow.performClose(sender)
+        }
+    }
+
+    @objc func selectNextTab(_ sender: Any?) {
+        let tabCount = documentState.tabs.count
+        guard tabCount > 1 else { return }
+        let nextIndex = (documentState.activeTabIndex + 1) % tabCount
+        documentState.selectionRouter.trigger(.switchTab(index: nextIndex))
+    }
+
+    @objc func selectPreviousTab(_ sender: Any?) {
+        let tabCount = documentState.tabs.count
+        guard tabCount > 1 else { return }
+        let previousIndex = (documentState.activeTabIndex - 1 + tabCount) % tabCount
+        documentState.selectionRouter.trigger(.switchTab(index: previousIndex))
+    }
+
     override func responds(to aSelector: Selector!) -> Bool {
         switch aSelector {
         case #selector(exportInterface(_:)):
             return documentState.currentImageNode != nil
         case #selector(exportMultipleImages(_:)):
             return documentState.runtimeEngine.imageNodes.count >= 2
+        case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):
+            return documentState.tabs.count > 1
         default:
             return super.responds(to: aSelector)
         }

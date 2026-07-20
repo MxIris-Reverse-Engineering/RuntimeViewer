@@ -185,6 +185,32 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             } else {
                 sidebarCoordinator.contextTrigger(.back)
             }
+        case .newTab:
+            // New empty tab inherits the current image; the shared history was
+            // cleared, so the content / inspector panes show the placeholder.
+            // The sidebar is untouched (tabs do not carry an image selection).
+            contentCoordinator.contextTrigger(.placeholder)
+            inspectorCoordinator.contextTrigger(.placeholder)
+        case .openInNewTab(let object):
+            // New tab already showing `object`; the shared history was reset to
+            // `[object]`, so bind both panes to it (same as `.selectAtRoot`).
+            contentCoordinator.contextTrigger(.root(object))
+            inspectorCoordinator.contextTrigger(.root(.object(object)))
+        case .switchTab, .closeTab:
+            // The active tab changed and the shared history was rebound to the
+            // new tab's object. Re-enter both panes for the new
+            // `selectedRuntimeObject`, or fall back to the placeholder for an
+            // empty tab.
+            if documentState.selectedRuntimeObject != nil {
+                contentCoordinator.contextTrigger(.back)
+                inspectorCoordinator.contextTrigger(.back)
+            } else {
+                contentCoordinator.contextTrigger(.placeholder)
+                inspectorCoordinator.contextTrigger(.placeholder)
+            }
+        case .moveTab:
+            // Pure reorder of the tab bar — no pane content changes.
+            break
         }
     }
 }
