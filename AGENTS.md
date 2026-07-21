@@ -686,6 +686,19 @@ output.result.driveOnNext { [weak self] value in
 .disposed(by: rx.disposeBag)
 ```
 
+**Never `[unowned self]` in any closure that can outlive the ViewModel** — which in practice means every Rx operator closure and every async closure. `Observable.async` / async `flatMapLatest` run their body inside a `Task`; disposal only *cooperatively* cancels that Task, so the closure can still execute after `deinit` and the unowned load aborts in `swift_abortRetainUnowned`. ViewModels are torn down constantly (every selection rebind, tab switch, tab close), so this is a crash in normal navigation, not an edge case. Choose by what the closure body needs:
+
+- Body only needs document-scoped services → capture the properties, not `self`:
+  ```swift
+  .flatMapLatest { [documentState = self.documentState, _commonLoading = self._commonLoading] object, options in
+      Observable.async {
+          try await documentState.runtimeEngine.interface(for: object, options: options)
+      }
+      .trackActivity(_commonLoading)
+  }
+  ```
+- Body genuinely needs `self` (e.g. `#log`, which expands to `Self.logger`) → `[weak self]` + `guard let self` with an early-return value.
+
 ### Coordinator Conventions
 
 **Route enums** — use `@AssociatedValue` and `@CaseCheckable` macros:

@@ -41,6 +41,16 @@ final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
     /// state-driven snapshot.
     private var isApplyingSnapshot = false
 
+    /// Guards against `TabsControl`'s own post-close neighbour selection.
+    /// After `didCloseItem`, `TabsControl.closeTab(_:)` continues in the same
+    /// call stack and auto-selects the *left* neighbour, firing
+    /// `tabsControlDidChangeSelection` before the state-driven snapshot
+    /// arrives (snapshot delivery is async). Forwarding that synthetic event
+    /// would emit a spurious `switchTab` that overrides the close route's
+    /// right-neighbour activation. Set on close, cleared on the next runloop
+    /// pass — the synthetic selection is always synchronous with the close.
+    private var isHandlingClose = false
+
     // MARK: - Outputs to the window controller
 
     let tabSelectedRelay = PublishRelay<Int>()
@@ -162,12 +172,19 @@ extension TabBarAccessoryController: TabsControl.Delegate {
     }
 
     func tabsControlDidChangeSelection(_ control: TabsControl, item: Any?) {
-        guard !isApplyingSnapshot, let item, let index = self.item(from: item)?.index else { return }
+        guard !isApplyingSnapshot, !isHandlingClose, let item, let index = self.item(from: item)?.index else { return }
         tabSelectedRelay.accept(index)
     }
 
     func tabsControl(_ control: TabsControl, didCloseItem item: Any) {
         guard let index = self.item(from: item)?.index else { return }
+        isHandlingClose = true
         tabClosedRelay.accept(index)
+        // Reset asynchronously rather than in `applySnapshot`: if the close
+        // route is rejected (stale index) no snapshot comes back, and the flag
+        // must not swallow the user's next real tab click.
+        DispatchQueue.main.async { [weak self] in
+            self?.isHandlingClose = false
+        }
     }
 }

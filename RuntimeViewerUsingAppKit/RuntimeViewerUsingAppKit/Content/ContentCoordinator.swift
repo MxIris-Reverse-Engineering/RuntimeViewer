@@ -36,6 +36,17 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     private lazy var textViewController: ContentTextViewController = .init()
 
+    /// Object the text scene is currently bound to. `.back` re-entries
+    /// (cursor moves, tab routes) skip rebinding when the object is unchanged:
+    /// closing a background tab re-enters the text scene without changing the
+    /// visible object, and rebuilding the `ContentTextViewModel` then only
+    /// wastes a full interface regeneration and tears down a ViewModel whose
+    /// fetch is still in flight. Explicit selections (`.root` / `.next`)
+    /// still rebind unconditionally so re-clicking a row recovers from a
+    /// failed generation (`catchAndReturn` terminates the old ViewModel's
+    /// stream).
+    private var boundRuntimeObject: RuntimeObject?
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(rootViewController: .init(nibName: nil, bundle: nil), initialRoute: .placeholder)
@@ -46,12 +57,12 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         case .placeholder:
             return enterPlaceholderScene()
         case .root(let runtimeObject):
-            return enterTextScene(for: runtimeObject)
+            return enterTextScene(for: runtimeObject, forceRebind: true)
         case .next(let runtimeObject):
-            return enterTextScene(for: runtimeObject)
+            return enterTextScene(for: runtimeObject, forceRebind: true)
         case .back:
             if let selected = documentState.selectedRuntimeObject {
-                return enterTextScene(for: selected)
+                return enterTextScene(for: selected, forceRebind: false)
             } else {
                 return enterPlaceholderScene()
             }
@@ -63,20 +74,24 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
     private func enterPlaceholderScene() -> ContentTransition {
         guard currentScene != .placeholder else { return .none() }
         currentScene = .placeholder
+        boundRuntimeObject = nil
         return .set([placeholderViewController], animated: false)
     }
 
-    private func enterTextScene(for runtimeObject: RuntimeObject) -> ContentTransition {
-        rebindTextViewController(for: runtimeObject)
+    private func enterTextScene(for runtimeObject: RuntimeObject, forceRebind: Bool) -> ContentTransition {
+        rebindTextViewController(for: runtimeObject, forceRebind: forceRebind)
         guard !isCurrentTextScene else { return .none() }
         currentScene = .text
         return .set([textViewController], animated: false)
     }
 
-    private func rebindTextViewController(for runtimeObject: RuntimeObject) {
+    private func rebindTextViewController(for runtimeObject: RuntimeObject, forceRebind: Bool) {
         if !isCurrentTextScene {
             textViewController = .init()
+            boundRuntimeObject = nil
         }
+        guard forceRebind || boundRuntimeObject != runtimeObject else { return }
+        boundRuntimeObject = runtimeObject
         let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
         textViewController.setupBindings(for: viewModel)
         textViewController.loadViewIfNeeded()

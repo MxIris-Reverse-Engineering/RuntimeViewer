@@ -19,7 +19,12 @@ public final class InspectorClassViewModel: ViewModel<InspectorRuntimeObjectRout
 
     public func transform(_ input: Input) -> Output {
         return Output(
-            classHierarchy: $runtimeObject.flatMapLatest { [unowned self] runtimeObject in
+            // `weak` + guard, not `unowned`: the async Task outlives disposal
+            // (cancellation is cooperative), and the Inspector is rebound on
+            // every tab switch / close, so an `unowned self` aborts whenever
+            // the fetch is still in flight at deallocation.
+            classHierarchy: $runtimeObject.flatMapLatest { [weak self] runtimeObject in
+                guard let self else { return runtimeObject.displayName }
                 do {
                     return try await documentState.runtimeEngine.hierarchy(for: runtimeObject).joined(separator: "\n")
                 } catch {

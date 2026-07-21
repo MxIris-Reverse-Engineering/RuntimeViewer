@@ -63,12 +63,17 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .bind(to: $theme)
             .disposed(by: rx.disposeBag)
 
+        // Capture the document-scoped dependencies instead of `self`: the
+        // `Observable.async` Task keeps running briefly after disposal
+        // (cancellation is cooperative), so an `unowned self` here aborts in
+        // `swift_unknownObjectUnownedLoadStrong` whenever the ViewModel is
+        // rebound away (tab switch / close) mid-generation.
         Observable.combineLatest($runtimeObject, appDefaults.$options, themeObservable, transformerObservable)
-            .flatMapLatest { [unowned self] runtimeObject, options, theme, transformer in
+            .flatMapLatest { [documentState = self.documentState, _commonLoading = self._commonLoading] runtimeObject, options, theme, transformer in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 return Observable.async {
-                    try await self.documentState.runtimeEngine.interface(for: runtimeObject, options: mergedOptions).map { ($0.interfaceString, theme, runtimeObject) }
+                    try await documentState.runtimeEngine.interface(for: runtimeObject, options: mergedOptions).map { ($0.interfaceString, theme, runtimeObject) }
                 }
                 .trackActivity(_commonLoading)
             }
@@ -95,9 +100,9 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let runtimeObjectNotFoundRelay = PublishRelay<Void>()
         
         input.runtimeObjectClicked
-            .flatMapLatest { [unowned self] runtimeObject in
+            .flatMapLatest { [documentState = self.documentState, _commonLoading = self._commonLoading] runtimeObject in
                 Observable.async {
-                    try await self.documentState.runtimeEngine.interface(for: runtimeObject, options: .init())
+                    try await documentState.runtimeEngine.interface(for: runtimeObject, options: .init())
                 }
                 .trackActivity(_commonLoading)
                 .asSignal(onErrorJustReturn: nil)
