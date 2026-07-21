@@ -40,7 +40,11 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
 
     private let jumpToDefinitionRelay = PublishRelay<RuntimeObject>()
 
+    private let openInNewTabRelay = PublishRelay<RuntimeObject>()
+
     private var isPressedCommand: Bool = false
+
+    private var isPressedShift: Bool = false
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -77,8 +81,11 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
     override func setupBindings(for viewModel: ContentTextViewModel) {
         super.setupBindings(for: viewModel)
 
+        let linkClicked = textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObject }.asSignalOnErrorJustComplete()
         let input = ContentTextViewModel.Input(
-            runtimeObjectClicked: Signal.of(textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObject }.asSignalOnErrorJustComplete().filter { [unowned self] _ in isPressedCommand }, jumpToDefinitionRelay.asSignal()).merge()
+            // ⌘-click jumps in place; ⌘⇧-click opens in a new tab (Safari semantics).
+            runtimeObjectClicked: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedShift != true }, jumpToDefinitionRelay.asSignal()).merge(),
+            runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedShift == true }, openInNewTabRelay.asSignal()).merge()
         )
         let output = viewModel.transform(input)
 
@@ -121,6 +128,7 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         eventMonitor.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
             guard let self else { return event }
             isPressedCommand = event.modifierFlags.contains(.command)
+            isPressedShift = event.modifierFlags.contains(.shift)
             if isPressedCommand {
                 textView.linkTextAttributes = [
                     .cursor: NSCursor.pointingHand,
@@ -135,18 +143,27 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
     func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
         var newMenuItems: [NSMenuItem] = []
         if let runtimeObject = view.attributedString().attributes(at: charIndex, effectiveRange: nil)[.link] as? RuntimeObject {
-            let menuItem = JumpToDefinitionMenuItem(runtimeObject: runtimeObject)
-            menuItem.target = self
-            menuItem.action = #selector(jumpToDefinitionAction(_:))
-            newMenuItems.append(menuItem)
+            let jumpToDefinitionMenuItem = RuntimeObjectMenuItem(title: "Jump to Definition", symbolName: .arrowTurnDownRight, runtimeObject: runtimeObject)
+            jumpToDefinitionMenuItem.target = self
+            jumpToDefinitionMenuItem.action = #selector(jumpToDefinitionAction(_:))
+            newMenuItems.append(jumpToDefinitionMenuItem)
+
+            let openInNewTabMenuItem = RuntimeObjectMenuItem(title: "Open in New Tab", symbolName: .plusSquareOnSquare, runtimeObject: runtimeObject)
+            openInNewTabMenuItem.target = self
+            openInNewTabMenuItem.action = #selector(openInNewTabAction(_:))
+            newMenuItems.append(openInNewTabMenuItem)
         }
         newMenuItems.append(contentsOf: menu.items.filter { $0.action?.isStandardAction ?? false })
         menu.items = newMenuItems
         return menu
     }
 
-    @objc private func jumpToDefinitionAction(_ sender: JumpToDefinitionMenuItem) {
+    @objc private func jumpToDefinitionAction(_ sender: RuntimeObjectMenuItem) {
         jumpToDefinitionRelay.accept(sender.runtimeObject)
+    }
+
+    @objc private func openInNewTabAction(_ sender: RuntimeObjectMenuItem) {
+        openInNewTabRelay.accept(sender.runtimeObject)
     }
 
     override func lateResponderSelectors() -> [Selector] {
@@ -171,14 +188,14 @@ extension ContentTextViewController: NSMenuItemValidation {
     }
 }
 
-private final class JumpToDefinitionMenuItem: NSMenuItem {
+private final class RuntimeObjectMenuItem: NSMenuItem {
     let runtimeObject: RuntimeObject
 
-    init(runtimeObject: RuntimeObject) {
+    init(title: String, symbolName: SFSymbols.SystemSymbolName, runtimeObject: RuntimeObject) {
         self.runtimeObject = runtimeObject
-        super.init(title: "Jump to Definition", action: nil, keyEquivalent: "")
+        super.init(title: title, action: nil, keyEquivalent: "")
         if #available(macOS 26.0, *) {
-            image = SFSymbols(systemName: .arrowTurnDownRight).nsuiImgae
+            image = SFSymbols(systemName: symbolName).nsuiImgae
         }
     }
 

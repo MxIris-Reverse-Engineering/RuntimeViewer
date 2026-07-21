@@ -57,6 +57,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         super.setupBindings(for: viewModel)
         let input = ViewModel.Input(
             runtimeObjectClicked: imageLoadedView.listView.rx.modelSelected(SidebarRuntimeObjectCellViewModel.self).asSignal(),
+            runtimeObjectOpenedInNewTab: .empty(),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.tap.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.tap.asSignal()

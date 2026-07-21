@@ -87,6 +87,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<RuntimeObject>
+        /// ⌘⇧-click on a type link / "Open in New Tab" context menu item.
+        /// Resolved the same way as `runtimeObjectClicked` but routed to
+        /// `.openInNewTab` instead of an in-place `.push`.
+        public let runtimeObjectOpenedInNewTab: Signal<RuntimeObject>
     }
 
     public struct Output {
@@ -115,7 +119,24 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 }
             }
             .disposed(by: rx.disposeBag)
-        
+
+        input.runtimeObjectOpenedInNewTab
+            .flatMapLatest { [documentState = self.documentState, _commonLoading = self._commonLoading] runtimeObject in
+                Observable.async {
+                    try await documentState.runtimeEngine.interface(for: runtimeObject, options: .init())
+                }
+                .trackActivity(_commonLoading)
+                .asSignal(onErrorJustReturn: nil)
+            }
+            .emit(with: self) { target, interface in
+                if let interface {
+                    target.documentState.selectionRouter.trigger(.openInNewTab(interface.object))
+                } else {
+                    runtimeObjectNotFoundRelay.accept(())
+                }
+            }
+            .disposed(by: rx.disposeBag)
+
         return Output(
             attributedString: $attributedString.asDriver().compactMap { $0 },
             theme: $theme.asDriver(),

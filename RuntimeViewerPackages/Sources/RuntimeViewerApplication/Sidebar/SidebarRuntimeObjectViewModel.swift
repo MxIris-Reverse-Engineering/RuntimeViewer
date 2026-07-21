@@ -163,6 +163,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @MemberwiseInit(.public)
     public struct Input {
         public let runtimeObjectClicked: Signal<SidebarRuntimeObjectCellViewModel>
+        /// Row context menu "Open in New Tab" (macOS only — UIKit callers
+        /// pass `.empty()`).
+        public let runtimeObjectOpenedInNewTab: Signal<SidebarRuntimeObjectCellViewModel>
         public let loadImageClicked: Signal<Void>
         public let searchString: Driver<String>
         public let isSearchCaseInsensitive: Driver<Bool>
@@ -228,6 +231,15 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 documentState.selectionRouter.trigger(.push(viewModel.runtimeObject))
                 #else
                 self.router.trigger(.selectedObject(viewModel.runtimeObject))
+                #endif
+            }
+            .disposed(by: rx.disposeBag)
+
+        input.runtimeObjectOpenedInNewTab
+            .emitOnNextMainActor { [weak self] viewModel in
+                guard let self else { return }
+                #if os(macOS)
+                documentState.selectionRouter.trigger(.openInNewTab(viewModel.runtimeObject))
                 #endif
             }
             .disposed(by: rx.disposeBag)

@@ -35,7 +35,7 @@ class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
 
     override func setupBindings(for viewModel: ContentTextViewModel) {
         super.setupBindings(for: viewModel)
-        let input = ContentTextViewModel.Input(runtimeObjectClicked: runtimeObjectClicked.asSignal())
+        let input = ContentTextViewModel.Input(runtimeObjectClicked: runtimeObjectClicked.asSignal(), runtimeObjectOpenedInNewTab: .empty())
         let output = viewModel.transform(input)
 
         output.attributedString.drive(textView.rx.attributedText).disposed(by: rx.disposeBag)

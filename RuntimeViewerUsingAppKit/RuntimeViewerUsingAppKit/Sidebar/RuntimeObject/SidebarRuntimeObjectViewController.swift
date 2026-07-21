@@ -106,8 +106,31 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
             userSelection.filter { isExplicitSelection($0.1) }.map(\.0).asSignal(onErrorSignalWith: .empty()),
             userSelection.filter { !isExplicitSelection($0.1) }.map(\.0).debounce(.milliseconds(800), scheduler: MainScheduler.instance).asSignal(onErrorSignalWith: .empty()),
         )
+
+        // Row context menu. Items are rebuilt from `clickedRow` on every
+        // `menuNeedsUpdate` (synchronously — no Driver hop, the menu shows
+        // right after the delegate call returns); an empty item list keeps
+        // AppKit from popping an empty menu on whitespace right-clicks.
+        // `menu.rx.items` + `itemSelected` instead of target/action because
+        // a generic class cannot host `@objc` menu actions.
+        let contextMenu = NSMenu()
+        imageLoadedView.outlineView.menu = contextMenu
+        let contextMenuEntries: Observable<[OpenInNewTabMenuEntry]> = contextMenu.rx.needsUpdate
+            .asObservable()
+            .map { [weak outlineView = imageLoadedView.outlineView] _ -> [OpenInNewTabMenuEntry] in
+                guard let outlineView,
+                      outlineView.clickedRow >= 0,
+                      let cellViewModel = outlineView.item(atRow: outlineView.clickedRow) as? SidebarRuntimeObjectCellViewModel
+                else { return [] }
+                return [OpenInNewTabMenuEntry(cellViewModel: cellViewModel)]
+            }
+        contextMenu.rx.items(source: contextMenuEntries)({ _, _ in }).disposed(by: rx.disposeBag)
+
         let input = ViewModel.Input(
             runtimeObjectClicked: runtimeObjectClicked,
+            runtimeObjectOpenedInNewTab: contextMenu.rx.itemSelected(OpenInNewTabMenuEntry.self)
+                .map(\.item.cellViewModel)
+                .asSignal(onErrorSignalWith: .empty()),
             loadImageClicked: Signal.of(
                 imageNotLoadedView.loadImageButton.rx.click.asSignal(),
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
@@ -240,6 +263,15 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
         return cellViewModel.title.string
     }
+}
+
+/// Row context menu entry carrying the clicked cell for `menu.rx.items` /
+/// `itemSelected`. File-scoped (not nested) because the enclosing view
+/// controller is generic.
+private struct OpenInNewTabMenuEntry: RxMenuItemRepresentable {
+    let cellViewModel: SidebarRuntimeObjectCellViewModel
+
+    var title: String { "Open in New Tab" }
 }
 
 extension SidebarRuntimeObjectViewController {
