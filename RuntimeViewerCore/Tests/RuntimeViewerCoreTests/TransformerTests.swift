@@ -4,7 +4,7 @@ import Semantic
 @testable import RuntimeViewerCore
 
 /// The Swift-side transformer template engine moved library-side
-/// (MachOSwiftSection's `SemanticTransformer` module), where its behavior is
+/// (MachOSwiftSection's `OutputTransformer` module), where its behavior is
 /// exhaustively unit tested (`TransformerModuleTests`,
 /// `EnumLayoutCommentTemplateTests`). This package still owns the ObjC-side
 /// modules (`CType`, `ObjCIvarOffset`) and the aggregate persistence

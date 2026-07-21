@@ -1106,7 +1106,7 @@ extension RuntimeSwiftSection {
         )
 
         // The transformer templates render library-side
-        // (`SemanticTransformer` + the closure factories in
+        // (`OutputTransformer` + the closure factories in
         // `SwiftDeclarationRendering`); this side only hands the settings
         // over. Reinstalled only on change, because the installed closures
         // are identity-compared by the configuration's `Equatable` (a fresh
