@@ -56,8 +56,8 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.title = documentState.runtimeEngine.source.description
         contentWindow.titleVisibility = .hidden
         contentWindow.toolbar = toolbarController.toolbar
-        contentWindow.addTitlebarAccessoryViewController(tabBarAccessoryController)
         contentWindow.setFrame(.init(origin: .zero, size: .init(width: 1280, height: 800)), display: true)
+        contentWindow.addTitlebarAccessoryViewController(tabBarAccessoryController)
         contentWindow.box.centerInScreen()
         contentWindow.identifier = .makeIdentifier(of: Self.self)
         contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
