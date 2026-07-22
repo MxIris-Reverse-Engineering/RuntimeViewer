@@ -14,10 +14,10 @@ import RuntimeViewerArchitectures
 /// close / creation are surfaced as signals the window controller forwards to
 /// `MainViewModel`, which turns them into `SelectionRoute`s.
 final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
-    private static let tabBarHeight: CGFloat = 28
+    private static let tabBarHeight: CGFloat = 30
 
     private let tabsControl = TabsControl().then {
-        $0.style = TabsControl.DefaultStyle(tabButtonWidth: .full)
+        $0.style = TabsControl.SystemStyle.init()
     }
 
     private let addTabButton = NSButton().then {
@@ -63,6 +63,14 @@ final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
     override init(nibName: NSNib.Name?, bundle: Bundle?) {
         super.init(nibName: nibName, bundle: bundle)
         layoutAttribute = .bottom
+        // A bottom accessory is force-sized to AppKit's standard height the
+        // moment its view is installed — 36pt under Liquid Glass, 28pt before
+        // it. Opting out here (it must happen before the view loads) is what
+        // makes the frame set in `viewDidLoad` stick.
+        automaticallyAdjustsSize = false
+        // Drives the height while the window is in full screen; the frame set in
+        // `viewDidLoad` covers every other state.
+        fullScreenMinHeight = Self.tabBarHeight
     }
 
     @available(*, unavailable)
@@ -72,17 +80,19 @@ final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
 
     // MARK: - View
 
-    override func loadView() {
-        let containerView = NSView(frame: .init(x: 0, y: 0, width: 640, height: Self.tabBarHeight))
-        view = containerView
+    /// `NSTitlebarAccessoryViewController` vends the root view itself, and sizes
+    /// the titlebar slot from that view's *frame* — a height constraint on it is
+    /// not an input, it just loses to the required autoresizing constraint AppKit
+    /// derives from the frame (and logs a conflict). Assigning the frame once
+    /// here is enough: it survives window resizes and `isHidden` cycles.
+    override func viewDidLoad() {
+        super.viewDidLoad()
 
-        containerView.hierarchy {
+        view.frame.size.height = Self.tabBarHeight
+
+        view.hierarchy {
             tabsControl
             addTabButton
-        }
-
-        containerView.snp.makeConstraints { make in
-            make.height.equalTo(Self.tabBarHeight)
         }
 
         addTabButton.snp.makeConstraints { make in
