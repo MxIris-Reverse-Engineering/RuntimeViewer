@@ -336,7 +336,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             documentState.$activeTabIndex.asDriver()
         ) { tabs, activeIndex in
             TabBarSnapshot(
-                items: tabs.map { TabBarItem(title: $0.title, kind: $0.object?.kind) },
+                items: tabs.map { TabBarItem(id: $0.id, title: $0.title, kind: $0.object?.kind) },
                 activeIndex: activeIndex
             )
         }

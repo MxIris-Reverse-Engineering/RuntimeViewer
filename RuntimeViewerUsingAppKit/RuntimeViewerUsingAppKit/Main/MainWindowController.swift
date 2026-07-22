@@ -63,6 +63,7 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         contentWindow.setFrameAutosaveName("com.JH.RuntimeViewer.\(Self.self).autosaveName")
         contentWindow.animationBehavior = .documentWindow
         contentWindow.toolbarStyle = .unified
+        contentWindow.titlebarSeparatorStyle = .none
     }
 
     func setupBindings(for viewModel: MainViewModel) {

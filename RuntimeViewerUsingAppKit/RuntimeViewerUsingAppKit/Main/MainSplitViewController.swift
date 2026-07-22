@@ -30,18 +30,21 @@ final class MainSplitViewController: NSSplitViewController {
             $0.minimumThickness = Self.sidebarMinimumWidth
             $0.maximumThickness = NSSplitViewItem.unspecifiedDimension
             $0.holdingPriority = .init(261)
+            $0.titlebarSeparatorStyle = .none
         }
 
         splitViewItems[safe: 1]?.do {
             $0.minimumThickness = Self.contentMinimumWidth
             $0.maximumThickness = NSSplitViewItem.unspecifiedDimension
             $0.holdingPriority = .init(250)
+            $0.titlebarSeparatorStyle = .none
         }
 
         splitViewItems[safe: 2]?.do {
             $0.minimumThickness = Self.inspectorMinimumWidth
             $0.maximumThickness = NSSplitViewItem.unspecifiedDimension
             $0.holdingPriority = .init(261)
+            $0.titlebarSeparatorStyle = .none
         }
 
         let autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName"

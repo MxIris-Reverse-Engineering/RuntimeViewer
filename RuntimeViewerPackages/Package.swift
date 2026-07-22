@@ -120,7 +120,7 @@ let usingSystemUXKit = envEnable("USING_SYSTEM_UXKIT", default: true)
 
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let UIFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "TabsControl"]
+let UIFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "TabBar"]
 
 if usingSystemUXKit {
     sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
@@ -182,7 +182,7 @@ let package = Package(
         .package(
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.13.2",
+                from: "0.14.0",
                 traits: UIFoundationTraits,
             ),
         ),

@@ -5,7 +5,7 @@ import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-/// Hosts the content tab bar (`TabsControl`) as a full-width titlebar accessory
+/// Hosts the content tab bar (`TabBar`) as a full-width titlebar accessory
 /// below the toolbar (Safari-style). Owned and driven by `MainWindowController`
 /// off `MainViewModel` output — a dumb view controller with no business logic,
 /// mirroring how `MainToolbarController` hosts the toolbar items.
@@ -14,10 +14,12 @@ import RuntimeViewerArchitectures
 /// close / creation are surfaced as signals the window controller forwards to
 /// `MainViewModel`, which turns them into `SelectionRoute`s.
 final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
-    private static let tabBarHeight: CGFloat = 30
+    private static let topSpacing: CGFloat = 8
+    private static let bottomSpacing: CGFloat = 8
+    private static let tabBarHeight: CGFloat = 30 + topSpacing + bottomSpacing
 
-    private let tabsControl = TabsControl().then {
-        $0.style = TabsControl.SystemStyle.init()
+    private let tabBar = TabBar().then {
+        $0.style = TabBar.SystemStyle.init()
     }
 
     private let addTabButton = NSButton().then {
@@ -32,23 +34,30 @@ final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
         .withSymbolConfiguration(.init(pointSize: 9, weight: .medium))
 
     /// Current tab rows the data source reads from. The `representedObject`
-    /// handed to `TabsControl` is the row index into this array; a full reload
-    /// on every snapshot keeps indices fresh.
+    /// handed to `TabBar` is the row itself, which carries its tab's
+    /// `DocumentTab.id` and so survives a reload that renumbers everything.
+    ///
+    /// Handing over the row *index* instead would leave `TabBar` unable to
+    /// tell one tab from another: closing a middle tab renumbers every row
+    /// behind it, so the indices describe a set of tabs that no longer exists
+    /// and the control falls back to matching by position — which cannot animate
+    /// an insertion into the middle of the strip.
     private var items: [TabBarItem] = []
 
     /// Guards the selection feedback loop: `selectItemAtIndex(_:)` fires
-    /// `tabsControlDidChangeSelection`, which must be ignored while applying a
+    /// `tabBarDidChangeSelection`, which must be ignored while applying a
     /// state-driven snapshot.
     private var isApplyingSnapshot = false
 
-    /// Guards against `TabsControl`'s own post-close neighbour selection.
-    /// After `didCloseItem`, `TabsControl.closeTab(_:)` continues in the same
-    /// call stack and auto-selects the *left* neighbour, firing
-    /// `tabsControlDidChangeSelection` before the state-driven snapshot
-    /// arrives (snapshot delivery is async). Forwarding that synthetic event
-    /// would emit a spurious `switchTab` that overrides the close route's
-    /// right-neighbour activation. Set on close, cleared on the next runloop
-    /// pass — the synthetic selection is always synchronous with the close.
+    /// Guards against a post-close neighbour selection announced by the tab bar.
+    ///
+    /// Belt and braces since UIFoundation 0.14: `applySnapshot(_:)` re-selects
+    /// from inside `didCloseItem`, and the bar reads that as the host taking
+    /// the selection over, so it no longer moves to the *left* neighbour behind
+    /// the close route's right-neighbour activation. Forwarding such an event
+    /// would emit a spurious `switchTab`. Set on close, cleared on the next
+    /// runloop pass — the snapshot itself is delivered synchronously, RxSwift's
+    /// `MainScheduler` running inline when it is already on the main thread.
     private var isHandlingClose = false
 
     // MARK: - Outputs to the window controller
@@ -91,7 +100,7 @@ final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
         view.frame.size.height = Self.tabBarHeight
 
         view.hierarchy {
-            tabsControl
+            tabBar
             addTabButton
         }
 
@@ -101,92 +110,99 @@ final class TabBarAccessoryController: NSTitlebarAccessoryViewController {
             make.width.equalTo(28)
         }
 
-        tabsControl.snp.makeConstraints { make in
-            make.top.bottom.leading.equalToSuperview()
+        tabBar.snp.makeConstraints { make in
+            make.top.equalToSuperview().inset(Self.topSpacing)
+            make.bottom.equalToSuperview().inset(Self.bottomSpacing)
+            make.leading.equalToSuperview()
             make.trailing.equalTo(addTabButton.snp.leading)
         }
 
-        tabsControl.dataSource = self
-        tabsControl.delegate = self
+        tabBar.dataSource = self
+        tabBar.delegate = self
     }
 
     // MARK: - Snapshot
 
     func applySnapshot(_ snapshot: TabBarSnapshot) {
         // The window controller may drive the first snapshot before the
-        // accessory's view (and therefore the TabsControl data source) has
+        // accessory's view (and therefore the TabBar data source) has
         // loaded; force-load so `reloadTabs()` is not a no-op.
         loadViewIfNeeded()
         items = snapshot.items
         isApplyingSnapshot = true
-        tabsControl.reloadTabs()
+        tabBar.reloadTabs(animated: true)
         if snapshot.activeIndex >= 0, snapshot.activeIndex < items.count {
-            tabsControl.selectItemAtIndex(snapshot.activeIndex)
+            tabBar.selectItemAtIndex(snapshot.activeIndex)
         }
         isApplyingSnapshot = false
     }
 
     private func item(from representedObject: Any) -> (index: Int, model: TabBarItem)? {
-        guard let index = representedObject as? Int, items.indices.contains(index) else { return nil }
-        return (index, items[index])
+        guard let model = representedObject as? TabBarItem,
+              let index = items.firstIndex(where: { $0.id == model.id })
+        else { return nil }
+        return (index, model)
     }
 }
 
-// MARK: - TabsControl.DataSource
+// MARK: - TabBar.DataSource
 
-extension TabBarAccessoryController: TabsControl.DataSource {
-    func tabsControlNumberOfTabs(_ control: TabsControl) -> Int {
+extension TabBarAccessoryController: TabBar.DataSource {
+    func tabBarNumberOfTabs(_ tabBar: TabBar) -> Int {
         items.count
     }
 
-    func tabsControl(_ control: TabsControl, itemAtIndex index: Int) -> Any {
-        index
+    func tabBar(_ tabBar: TabBar, itemAtIndex index: Int) -> Any {
+        items[index]
     }
 
-    func tabsControl(_ control: TabsControl, titleForItem item: Any) -> String {
-        self.item(from: item)?.model.title ?? ""
+    // Read straight off the represented object rather than looking it back up: the row *is* the item
+    // now, and a button still showing a tab that has already left `items` must keep its title until
+    // the reload retires it.
+    func tabBar(_ tabBar: TabBar, titleForItem item: Any) -> String {
+        (item as? TabBarItem)?.title ?? ""
     }
 
-    func tabsControl(_ control: TabsControl, iconForItem item: Any) -> NSImage? {
-        guard let kind = self.item(from: item)?.model.kind else { return nil }
+    func tabBar(_ tabBar: TabBar, iconForItem item: Any) -> NSImage? {
+        guard let kind = (item as? TabBarItem)?.kind else { return nil }
         return RuntimeObjectIcon.icon(for: kind, size: 16)
     }
 
-    func tabsControl(_ control: TabsControl, closeIconForItem item: Any) -> NSImage? {
+    func tabBar(_ tabBar: TabBar, closeIconForItem item: Any) -> NSImage? {
         closeIcon
     }
 
-    func tabsControl(_ control: TabsControl, closePositionForItem item: Any) -> TabsControl.ClosePosition {
+    func tabBar(_ tabBar: TabBar, closePositionForItem item: Any) -> TabBar.ClosePosition {
         .left
     }
 }
 
-// MARK: - TabsControl.Delegate
+// MARK: - TabBar.Delegate
 
-extension TabBarAccessoryController: TabsControl.Delegate {
-    func tabsControl(_ control: TabsControl, canSelectItem item: Any) -> Bool {
+extension TabBarAccessoryController: TabBar.Delegate {
+    func tabBar(_ tabBar: TabBar, canSelectItem item: Any) -> Bool {
         true
     }
 
-    func tabsControl(_ control: TabsControl, canCloseItem item: Any) -> Bool {
+    func tabBar(_ tabBar: TabBar, canCloseItem item: Any) -> Bool {
         true
     }
 
-    func tabsControl(_ control: TabsControl, canReorderItem item: Any) -> Bool {
+    func tabBar(_ tabBar: TabBar, canReorderItem item: Any) -> Bool {
         // Phase 2 — drag reorder maps to `.moveTab`.
         false
     }
 
-    func tabsControl(_ control: TabsControl, canEditTitleOfItem item: Any) -> Bool {
+    func tabBar(_ tabBar: TabBar, canEditTitleOfItem item: Any) -> Bool {
         false
     }
 
-    func tabsControlDidChangeSelection(_ control: TabsControl, item: Any?) {
+    func tabBarDidChangeSelection(_ tabBar: TabBar, item: Any?) {
         guard !isApplyingSnapshot, !isHandlingClose, let item, let index = self.item(from: item)?.index else { return }
         tabSelectedRelay.accept(index)
     }
 
-    func tabsControl(_ control: TabsControl, didCloseItem item: Any) {
+    func tabBar(_ tabBar: TabBar, didCloseItem item: Any) {
         guard let index = self.item(from: item)?.index else { return }
         isHandlingClose = true
         tabClosedRelay.accept(index)
