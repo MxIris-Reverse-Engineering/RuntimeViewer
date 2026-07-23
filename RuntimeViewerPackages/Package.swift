@@ -233,7 +233,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxAppKit",
-                from: "0.5.0",
+                from: "0.5.4",
             ),
         ),
         
