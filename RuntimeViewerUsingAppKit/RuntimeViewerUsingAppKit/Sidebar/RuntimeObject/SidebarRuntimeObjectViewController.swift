@@ -277,7 +277,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     /// the base never needs to know which items a subclass added.
     func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [SidebarRuntimeObjectMenuItem] {
         [
-            SidebarRuntimeObjectMenuItem(title: "Open in New Tab") { [weak self] in
+            SidebarRuntimeObjectMenuItem(title: "Open in New Tab", image: SFSymbols(name: RuntimeViewerSymbols.tabbarTopRectangle).nsImage) { [weak self] in
                 guard let self else { return }
                 openInNewTabRelay.accept(cellViewModel)
             },
