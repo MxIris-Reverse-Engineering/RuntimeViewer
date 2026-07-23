@@ -27,14 +27,6 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         openQuicklyActionBar.do {
             $0.contentSource = self
         }
-
-        outlineView.do {
-            $0.menu = NSMenu().then {
-                $0.addItem(withTitle: "Add Item to Bookmark", action: #selector(addToBookmarkMenuItemAction(_:)), keyEquivalent: "").then {
-                    $0.image = SFSymbols(systemName: .bookmark).nsuiImgae
-                }
-            }
-        }
     }
 
     override func setupBindings(for viewModel: SidebarRuntimeObjectListViewModel) {
@@ -98,11 +90,15 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         ) {}
     }
 
-    @objc private func addToBookmarkMenuItemAction(_ sender: NSMenuItem) {
-        guard outlineView.hasValidClickedRow, let cellViewModel = outlineView.itemAtClickedRow as? SidebarRuntimeObjectCellViewModel else { return }
-        addToBookmarkRelay.accept(cellViewModel)
-        SystemHUD.default.configuration = .addToBookmarkHUDConfiguration
-        SystemHUD.default.show(delay: 1)
+    override func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [SidebarRuntimeObjectMenuItem] {
+        super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow) + [
+            SidebarRuntimeObjectMenuItem(title: "Add Item to Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImgae) { [weak self] in
+                guard let self else { return }
+                addToBookmarkRelay.accept(cellViewModel)
+                SystemHUD.default.configuration = .addToBookmarkHUDConfiguration
+                SystemHUD.default.show(delay: 1)
+            },
+        ]
     }
 
     override func responds(to aSelector: Selector!) -> Bool {

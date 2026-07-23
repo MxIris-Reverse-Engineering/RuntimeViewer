@@ -12,16 +12,10 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
+
         imageLoadedView.emptyLabel.do {
             $0.font = .systemFont(ofSize: 18, weight: .regular)
             $0.textColor = .secondaryLabelColor
-        }
-        
-        outlineView.do {
-            $0.menu = NSMenu().then {
-                $0.delegate = self
-            }
         }
     }
     
@@ -42,25 +36,19 @@ final class SidebarRuntimeObjectBookmarkViewController: SidebarRuntimeObjectView
         imageLoadedView.emptyLabel.stringValue = "No Bookmarks"
     }
     
-    @objc private func removeBookmarkMenuItemAction(_ sender: NSMenuItem) {
-        guard outlineView.hasValidClickedRow, let index = sender.representedObject as? Int else { return }
-        removeBookmarkRelay.accept(index)
-    }
-}
-
-extension SidebarRuntimeObjectBookmarkViewController: NSMenuDelegate {
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        guard outlineView.hasValidClickedRow else { return }
-        
-        if outlineView.parent(forItem: outlineView.itemAtClickedRow) == nil, let index = outlineView.rootIndex(forRow: outlineView.clickedRow) {
-            menu.removeAllItems()
-            menu.addItem(withTitle: "Remove Bookmark", action: #selector(removeBookmarkMenuItemAction(_:)), keyEquivalent: "").then {
-                $0.image = SFSymbols(systemName: .bookmark).nsuiImgae
-                $0.representedObject = index
-            }
-        } else {
-            menu.removeAllItems()
+    override func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [SidebarRuntimeObjectMenuItem] {
+        var items = super.contextMenuItems(for: cellViewModel, clickedRow: clickedRow)
+        // Only root-level bookmark rows can be removed; nested specialization
+        // children have no standalone bookmark to delete.
+        if outlineView.parent(forItem: cellViewModel) == nil, let index = outlineView.rootIndex(forRow: clickedRow) {
+            items.append(
+                SidebarRuntimeObjectMenuItem(title: "Remove Bookmark", image: SFSymbols(systemName: .bookmark).nsuiImgae) { [weak self] in
+                    guard let self else { return }
+                    removeBookmarkRelay.accept(index)
+                }
+            )
         }
+        return items
     }
 }
 
