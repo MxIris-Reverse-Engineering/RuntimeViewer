@@ -96,6 +96,13 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     @Mutex
     private var typeNameByMangledName: [String: SwiftDeclaration.TypeName] = [:]
 
+    /// Protocol counterpart of `typeNameByMangledName`:
+    /// `mangleAsString(protocolName.node)` → the originating `ProtocolName`.
+    /// Lets a jump target that mangles to a protocol recover its
+    /// `ProtocolName` in `O(1)` for `makeRuntimeObject(forMangledProtocolName:)`.
+    @Mutex
+    private var protocolNameByMangledName: [String: SwiftDeclaration.ProtocolName] = [:]
+
     /// Per-image sub-indexers registered via `addSubIndexer`. Empty on a
     /// section's own indexer; on the `RuntimeSwiftSectionFactory` aggregate it
     /// holds every loaded image's indexer, so the query methods fan out across
@@ -140,6 +147,11 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         // Mirrors `RuntimeObjCInterfaceIndexer.prepare()`.
         var subclassTable: [String: OrderedSet<String>] = [:]
         var typeNameTable: [String: SwiftDeclaration.TypeName] = [:]
+        var protocolNameTable: [String: SwiftDeclaration.ProtocolName] = [:]
+        for (protocolName, _) in upstream.allProtocolDefinitions {
+            guard let key = try? await mangleAsString(protocolName.node) else { continue }
+            protocolNameTable[key] = protocolName
+        }
         for (typeName, typeDefinition) in upstream.allTypeDefinitions {
             // Record `mangledName -> TypeName` for every type, regardless of
             // whether it is a class. `RuntimeSwiftSection.makeRuntimeObject`
@@ -170,6 +182,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         }
         subclassesBySuperclassMangledName = subclassTable
         typeNameByMangledName = typeNameTable
+        protocolNameByMangledName = protocolNameTable
     }
 
     // MARK: - Relationship Query
@@ -225,6 +238,22 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         for subIndexer in subIndexers {
             if let typeName = subIndexer.typeName(forMangledName: mangledName) {
                 return typeName
+            }
+        }
+        return nil
+    }
+
+    /// The `ProtocolName` a mangled protocol-name string maps to, or `nil`
+    /// when no indexer in this aggregate names that protocol. Fans out across
+    /// this indexer's own image and every registered sub-indexer, mirroring
+    /// `typeName(forMangledName:)`.
+    func protocolName(forMangledName mangledName: String) -> SwiftDeclaration.ProtocolName? {
+        if let protocolName = protocolNameByMangledName[mangledName] {
+            return protocolName
+        }
+        for subIndexer in subIndexers {
+            if let protocolName = subIndexer.protocolName(forMangledName: mangledName) {
+                return protocolName
             }
         }
         return nil

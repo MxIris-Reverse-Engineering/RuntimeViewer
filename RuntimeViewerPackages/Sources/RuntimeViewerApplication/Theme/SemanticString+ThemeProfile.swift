@@ -51,6 +51,22 @@ extension SemanticString {
 
         let allComponents = self.components
 
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        // Swift interfaces carry a span identity (`component.identifier`, the
+        // referenced type's mangled name) on every token of a type reference —
+        // module, dots, and the type name alike. Pre-resolve each identity to
+        // one shared `RuntimeObject` so the whole `Module.Type` span links to
+        // the same jump target and reads as a single link run; the span's kind
+        // comes from its first `.type` token. ObjC/C interfaces have no span
+        // identity, so they stay on the per-token, string-keyed path below.
+        let linkTargetsByIdentifier: [String: RuntimeObject]
+        if case .swift = runtimeObjectName.kind {
+            linkTargetsByIdentifier = resolveSwiftLinkTargets(in: allComponents, runtimeObjectName: runtimeObjectName)
+        } else {
+            linkTargetsByIdentifier = [:]
+        }
+        #endif
+
         var fullString = ""
         fullString.reserveCapacity(allComponents.count * 20)
 
@@ -74,7 +90,11 @@ extension SemanticString {
             var attributes = cachedAttributes(for: type)
 
             #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-            if let targetKind = resolveTargetKind(type: type, runtimeObjectName: runtimeObjectName) {
+            if case .swift = runtimeObjectName.kind {
+                if let identifier = component.identifier, let linkTarget = linkTargetsByIdentifier[identifier] {
+                    attributes[.link] = linkTarget
+                }
+            } else if let targetKind = resolveTargetKind(type: type, runtimeObjectName: runtimeObjectName) {
                 attributes[.link] = RuntimeObject(
                     name: string,
                     displayName: string,
@@ -98,6 +118,44 @@ extension SemanticString {
 
         return attributedString
     }
+
+    #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+    /// Builds one `RuntimeObject` per Swift type-reference span, keyed by the
+    /// span's mangled-name identity. A span becomes a jump target only when it
+    /// contains a `.type` token (so plain-`.standard` spans — e.g. typealias
+    /// references — get no link); its `name` is the mangled identity the engine
+    /// resolves cross-image, its `displayName` the fully-printed qualified name.
+    private func resolveSwiftLinkTargets(
+        in components: [AtomicComponent],
+        runtimeObjectName: RuntimeObject
+    ) -> [String: RuntimeObject] {
+        var kindByIdentifier: [String: RuntimeObjectKind] = [:]
+        var displayNameByIdentifier: [String: String] = [:]
+
+        for component in components {
+            guard let identifier = component.identifier else { continue }
+            displayNameByIdentifier[identifier, default: ""] += component.string
+            if kindByIdentifier[identifier] == nil,
+               let kind = resolveTargetKind(type: component.type, runtimeObjectName: runtimeObjectName) {
+                kindByIdentifier[identifier] = kind
+            }
+        }
+
+        var result: [String: RuntimeObject] = [:]
+        result.reserveCapacity(kindByIdentifier.count)
+        for (identifier, kind) in kindByIdentifier {
+            result[identifier] = RuntimeObject(
+                name: identifier,
+                displayName: displayNameByIdentifier[identifier] ?? identifier,
+                kind: kind,
+                secondaryKind: nil,
+                imagePath: runtimeObjectName.imagePath,
+                children: []
+            )
+        }
+        return result
+    }
+    #endif
 
     @inline(__always)
     private func resolveTargetKind(

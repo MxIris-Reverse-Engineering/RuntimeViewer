@@ -547,9 +547,17 @@ public actor RuntimeEngine {
 
         switch name.kind {
         case .swift:
-            let swiftSection = await swiftSectionFactory.existingSection(for: name.imagePath)
-            try await swiftSection?.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
-            return try? await swiftSection?.interface(for: name)
+            if let swiftSection = await swiftSectionFactory.existingSection(for: name.imagePath) {
+                try await swiftSection.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
+                if let interface = try? await swiftSection.interface(for: name) {
+                    return interface
+                }
+            }
+            // The clicked type reference is not defined in the document's own
+            // image (a stdlib / cross-framework / ObjC-imported reference). Its
+            // mangled name still identifies the target uniquely, so resolve it
+            // against every indexed image before giving up.
+            return try await resolveSwiftReferenceInterface(mangledName: name.name, options: options)
         case .c,
              .objc:
             let objcSection = await objcSectionFactory.existingSection(for: name.imagePath)
@@ -572,6 +580,94 @@ public actor RuntimeEngine {
         }
 
         return rawInterface
+    }
+
+    /// Resolves a Swift type/protocol reference — identified only by its
+    /// mangled name — to the interface of its authoritative definition, no
+    /// matter which indexed image owns it. Backs Jump to Definition on a
+    /// Swift type token whose defining image differs from the document's.
+    ///
+    /// Three arms, tried in order:
+    /// 1. A Swift nominal type in another indexed image (`indexedType`).
+    /// 2. A Swift protocol in another indexed image (`indexedProtocol`).
+    /// 3. An Objective-C-imported reference (`__C` module) — routed into the
+    ///    ObjC arm so `NSObject`-style references reachable from a Swift
+    ///    interface become cross-language jumps.
+    ///
+    /// Each arm rebuilds the target as its defining section's authoritative
+    /// `RuntimeObject` (correct `imagePath` / `displayName` / `kind`) so the
+    /// resulting navigation push lands on a real sidebar/tab entry. Returns
+    /// `nil` when no indexed image defines the reference — the UI then shows
+    /// its "not found" HUD.
+    private func resolveSwiftReferenceInterface(mangledName: String, options: RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface? {
+        if let matched = await swiftSectionFactory.indexedType(forCandidateID: mangledName),
+           let section = await swiftSectionFactory.existingSection(for: matched.entry.machO.imagePath),
+           let object = await section.makeRuntimeObject(forMangledTypeName: mangledName) {
+            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
+            if let interface = try? await section.interface(for: object) {
+                return interface
+            }
+        }
+
+        if let matched = await swiftSectionFactory.indexedProtocol(forCandidateID: mangledName),
+           let section = await swiftSectionFactory.existingSection(for: matched.machO.imagePath),
+           let object = await section.makeRuntimeObject(forMangledProtocolName: mangledName) {
+            try await section.updateConfiguration(using: options.swiftInterfaceOptions, transformer: options.transformer.swift)
+            if let interface = try? await section.interface(for: object) {
+                return interface
+            }
+        }
+
+        if let objcReference = Self.objcReference(forSwiftMangledName: mangledName) {
+            let objcObject = RuntimeObject(name: objcReference.name, displayName: objcReference.name, kind: objcReference.kind, secondaryKind: nil, imagePath: "", children: [])
+            let objcTransformer = options.transformer.objc
+            switch objcReference.kind {
+            case .objc(.type(.class)):
+                return try? await objcSectionFactory.section(for: .class(objcReference.name))?.interface(for: objcObject, using: options.objcHeaderOptions, transformer: objcTransformer)
+            case .objc(.type(.protocol)):
+                return try? await objcSectionFactory.section(for: .protocol(objcReference.name))?.interface(for: objcObject, using: options.objcHeaderOptions, transformer: objcTransformer)
+            default:
+                return nil
+            }
+        }
+
+        return nil
+    }
+
+    /// Extracts an Objective-C class/protocol reference from a Swift mangled
+    /// name whose nominal node lives in the `__C` (Objective-C) module.
+    /// Returns `nil` for anything that is not an ObjC-imported class or
+    /// protocol — the fallback then declines rather than fabricating a target.
+    private static func objcReference(forSwiftMangledName mangledName: String) -> (name: String, kind: RuntimeObjectKind)? {
+        guard let node = try? demangleAsNode(mangledName, isType: true),
+              let nominal = firstObjCNominalNode(in: node),
+              let identifier = nominal.children.first(where: { $0.kind == .identifier })?.text
+        else { return nil }
+        switch nominal.kind {
+        case .protocol:
+            return (identifier, .objc(.type(.protocol)))
+        case .class:
+            return (identifier, .objc(.type(.class)))
+        default:
+            return nil
+        }
+    }
+
+    /// Depth-first search for the first nominal node (`class` / `structure` /
+    /// `enum` / `protocol` / `typeAlias`) whose module child is the ObjC
+    /// module. Used only on the click path, so the linear walk is fine.
+    private static func firstObjCNominalNode(in node: Node) -> Node? {
+        let nominalKinds: Set<Node.Kind> = [.class, .structure, .enum, .protocol, .typeAlias]
+        if nominalKinds.contains(node.kind),
+           node.children.first(where: { $0.kind == .module })?.text == objcModule {
+            return node
+        }
+        for child in node.children {
+            if let found = firstObjCNominalNode(in: child) {
+                return found
+            }
+        }
+        return nil
     }
 }
 

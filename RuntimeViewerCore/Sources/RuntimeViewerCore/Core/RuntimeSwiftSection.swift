@@ -564,6 +564,26 @@ extension RuntimeSwiftSection {
         )
     }
 
+    /// Materialize a Swift `RuntimeObject` for a protocol whose mangled name
+    /// is known. The counterpart of `makeRuntimeObject(forMangledTypeName:)`
+    /// for the protocol table, so a jump target that resolves to a protocol
+    /// (conformance clauses, generic constraints) surfaces in the same shape
+    /// as the sidebar's protocol entries. `displayName` uses the
+    /// fully-qualified `name`; only `(imagePath, name, kind)` participate in
+    /// the object's key, so this stays interchangeable with the section's own
+    /// registration regardless of whether it was a root or nested protocol.
+    func makeRuntimeObject(forMangledProtocolName mangledName: String) -> RuntimeObject? {
+        guard let protocolName = indexer.protocolName(forMangledName: mangledName) else { return nil }
+        return RuntimeObject(
+            name: mangledName,
+            displayName: protocolName.name,
+            kind: protocolName.runtimeObjectKind,
+            secondaryKind: nil,
+            imagePath: imagePath,
+            children: []
+        )
+    }
+
     /// Build the mangledID → indexed type mapping this section contributes
     /// to the factory's cross-image lookup table. Called once per section
     /// immediately after registration; the factory merges the result with
@@ -575,6 +595,18 @@ extension RuntimeSwiftSection {
         for (typeName, typeDefinition) in indexer.allTypeDefinitions {
             guard let mangled = try? mangleAsString(typeName.node) else { continue }
             result[mangled] = (typeName, MachOIndexedValue(machO: machO, value: typeDefinition))
+        }
+        return result
+    }
+
+    /// Protocol counterpart of `candidateIDMapping()`. Kept in a separate
+    /// table so a protocol mangled name never collides with (or masks) a
+    /// nominal-type candidate consumed by generic specialization.
+    fileprivate func protocolCandidateIDMapping() -> [String: RuntimeSwiftSectionFactory.IndexedProtocolEntry] {
+        var result: [String: RuntimeSwiftSectionFactory.IndexedProtocolEntry] = [:]
+        for (protocolName, _) in indexer.allProtocolDefinitions {
+            guard let mangled = try? mangleAsString(protocolName.node) else { continue }
+            result[mangled] = (protocolName, machO)
         }
         return result
     }
@@ -1315,6 +1347,15 @@ actor RuntimeSwiftSectionFactory {
         entry: MachOIndexedValue<MachOImage, TypeDefinition>
     )
 
+    /// Pair of (originating protocolName, defining image) produced by
+    /// `RuntimeSwiftSection.protocolCandidateIDMapping()`. Only the image is
+    /// needed to locate the defining section on a jump; `protocolName` is
+    /// kept symmetric with `IndexedTypeEntry` for diagnostics.
+    typealias IndexedProtocolEntry = (
+        protocolName: SwiftDeclaration.ProtocolName,
+        machO: MachOImage
+    )
+
     let indexer: RuntimeSwiftInterfaceIndexer
 
     private var sections: [String: RuntimeSwiftSection] = [:]
@@ -1329,6 +1370,12 @@ actor RuntimeSwiftSectionFactory {
     /// dylibs (e.g. interposed builds), the section that registered first
     /// owns the canonical entry.
     private var indexedTypeByCandidateID: [String: IndexedTypeEntry] = [:]
+
+    /// Cross-image protocol mangled name → defining image, kept separate from
+    /// `indexedTypeByCandidateID` so a protocol candidate never masks a
+    /// nominal-type candidate consumed by generic specialization. Same
+    /// first-write-wins, per-image-eviction lifecycle as the type table.
+    private var indexedProtocolByCandidateID: [String: IndexedProtocolEntry] = [:]
 
     init() {
         self.indexer = RuntimeSwiftInterfaceIndexer(machO: .current())
@@ -1359,6 +1406,12 @@ actor RuntimeSwiftSectionFactory {
         indexedTypeByCandidateID[candidateID]
     }
 
+    /// O(1) lookup of the protocol backing a mangled protocol-name string.
+    /// Returns `nil` when the protocol's defining image is not indexed.
+    func indexedProtocol(forCandidateID candidateID: String) -> IndexedProtocolEntry? {
+        indexedProtocolByCandidateID[candidateID]
+    }
+
     func section(for imagePath: String, progressContinuation: LoadingEventContinuation? = nil) async throws -> (isExisted: Bool, section: RuntimeSwiftSection) {
         if let section = sections[imagePath] {
             #log(.debug, "Using cached Swift section for: \(imagePath, privacy: .public)")
@@ -1380,11 +1433,15 @@ actor RuntimeSwiftSectionFactory {
         indexedTypeByCandidateID = indexedTypeByCandidateID.filter { _, value in
             value.entry.machO.imagePath != imagePath
         }
+        indexedProtocolByCandidateID = indexedProtocolByCandidateID.filter { _, value in
+            value.machO.imagePath != imagePath
+        }
     }
 
     func removeAllSections() {
         sections.removeAll()
         indexedTypeByCandidateID.removeAll()
+        indexedProtocolByCandidateID.removeAll()
     }
 
     private func registerCandidateIDs(from section: RuntimeSwiftSection) async {
@@ -1392,6 +1449,12 @@ actor RuntimeSwiftSectionFactory {
         for (id, value) in mapping {
             if indexedTypeByCandidateID[id] == nil {
                 indexedTypeByCandidateID[id] = value
+            }
+        }
+        let protocolMapping = await section.protocolCandidateIDMapping()
+        for (id, value) in protocolMapping {
+            if indexedProtocolByCandidateID[id] == nil {
+                indexedProtocolByCandidateID[id] = value
             }
         }
     }
