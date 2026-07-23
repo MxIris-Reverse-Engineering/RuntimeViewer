@@ -29,7 +29,9 @@ struct NavigationHistorySnapshot {
     let items: [NavigationHistoryItem]
 
     /// Mirrors `DocumentState.selectionIndex`. `-1` when the history is
-    /// empty.
+    /// empty. `items.count` (one past the last entry) encodes an empty tab
+    /// hovering above the timeline: nothing is shown, and the cursor entry
+    /// itself is the nearest backward row.
     let currentIndex: Int
 
     /// Icon edge length for menu rows. Deliberately smaller than
@@ -43,8 +45,8 @@ struct NavigationHistorySnapshot {
     /// where a single click of the back button would land (Safari
     /// ordering).
     var backwardItems: [NavigationHistoryItem] {
-        guard currentIndex > 0, currentIndex < items.count else { return [] }
-        return Array(items[..<currentIndex].reversed())
+        guard currentIndex > 0 else { return [] }
+        return Array(items.prefix(currentIndex).reversed())
     }
 
     /// Entries reachable by going forward, nearest first.

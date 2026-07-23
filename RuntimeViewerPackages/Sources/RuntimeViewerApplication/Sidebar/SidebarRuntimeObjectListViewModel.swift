@@ -128,24 +128,16 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
             .disposed(by: rx.disposeBag)
 
         // Visual selection follows whatever the document is currently
-        // inspecting at the cursor. The sidebar row click path pushes
-        // onto the history (selectionRouter `.push`), and toolbar
-        // previous/next move the cursor without mutating the stack —
-        // both end up as a new `selectedRuntimeObject` value here, so
-        // tracking the cursor covers the sidebar click, the
-        // specialization-completion `.selectAtRoot`, and toolbar
-        // navigation in one place.
-        Observable.combineLatest(
-            documentState.$selectionStack.asObservable(),
-            documentState.$selectionIndex.asObservable()
-        )
-        .compactMap { stack, index -> RuntimeObject? in
-            guard index >= 0, index < stack.count else { return nil }
-            return stack[index]
-        }
-        .distinctUntilChanged()
-        .bind(to: pendingSelectRelay)
-        .disposed(by: rx.disposeBag)
+        // showing. `selectedRuntimeObject` is the display layer's single
+        // source of truth — sidebar clicks, toolbar previous/next, history
+        // menu jumps, specialization completion, and tab switches all land
+        // as a new value here, so one subscription covers them all.
+        documentState.$selectedRuntimeObject
+            .asObservable()
+            .compactMap { $0 }
+            .distinctUntilChanged()
+            .bind(to: pendingSelectRelay)
+            .disposed(by: rx.disposeBag)
 
         let pendingResolved: Signal<CellLookup> = pendingSelectRelay
             .asObservable()

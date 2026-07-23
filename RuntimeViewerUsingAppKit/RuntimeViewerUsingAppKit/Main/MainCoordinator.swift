@@ -151,8 +151,9 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             inspectorCoordinator.contextTrigger(.root(.object(object)))
             // Sidebar visual sync is handled inside
             // `SidebarRuntimeObjectListViewModel` by observing
-            // `documentState.$selectionStack` directly — no coordinator
-            // routing is needed for a pure UI scroll-and-highlight.
+            // `documentState.$selectedRuntimeObject` directly — no
+            // coordinator routing is needed for a pure UI
+            // scroll-and-highlight.
         case .push(let object):
             contentCoordinator.contextTrigger(.next(object))
             inspectorCoordinator.contextTrigger(.next(.object(object)))
@@ -186,19 +187,20 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 sidebarCoordinator.contextTrigger(.back)
             }
         case .newTab:
-            // New empty tab inherits the current image; the shared history was
-            // cleared, so the content / inspector panes show the placeholder.
-            // The sidebar is untouched (tabs do not carry an image selection).
+            // New empty tab inherits the current image; the timeline survives
+            // (only its forward branch was dropped), but nothing is shown, so
+            // the content / inspector panes show the placeholder. The sidebar
+            // is untouched (tabs do not carry an image selection).
             contentCoordinator.contextTrigger(.placeholder)
             inspectorCoordinator.contextTrigger(.placeholder)
         case .openInNewTab(let object):
-            // New tab already showing `object`; the shared history was reset to
-            // `[object]`, so bind both panes to it (same as `.selectAtRoot`).
+            // New tab already showing `object`, which was also recorded on the
+            // timeline; bind both panes to it.
             contentCoordinator.contextTrigger(.root(object))
             inspectorCoordinator.contextTrigger(.root(.object(object)))
         case .switchTab, .closeTab:
-            // The active tab changed and the shared history was rebound to the
-            // new tab's object. Re-enter both panes for the new
+            // The active tab changed and its object was recorded on the
+            // timeline. Re-enter both panes for the new
             // `selectedRuntimeObject`, or fall back to the placeholder for an
             // empty tab.
             if documentState.selectedRuntimeObject != nil {

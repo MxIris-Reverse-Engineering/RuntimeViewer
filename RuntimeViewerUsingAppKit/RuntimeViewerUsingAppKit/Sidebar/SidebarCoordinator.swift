@@ -40,8 +40,8 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
         case .selectedObject, .selectedNode:
             // iOS-only cases; on macOS the runtime-object list scrolls to
             // and highlights the root selection by observing
-            // `documentState.$selectionStack` directly, and image switches
-            // flow through `SelectionRoute.switchImage`.
+            // `documentState.$selectedRuntimeObject` directly, and image
+            // switches flow through `SelectionRoute.switchImage`.
             return .none()
         }
     }

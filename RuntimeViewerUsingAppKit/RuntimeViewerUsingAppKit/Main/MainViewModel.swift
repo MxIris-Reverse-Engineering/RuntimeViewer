@@ -211,13 +211,8 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         input.backgroundIndexingClick.emit(with: self) { $0.router.trigger(.backgroundIndexing(sender: $1)) }.disposed(by: rx.disposeBag)
 
-        let selectedRuntimeObjectObservable: Observable<RuntimeObject?> = Observable.combineLatest(
-            documentState.$selectionStack.asObservable(),
-            documentState.$selectionIndex.asObservable()
-        ).map { stack, index in
-            guard index >= 0, index < stack.count else { return nil }
-            return stack[index]
-        }
+        let selectedRuntimeObjectObservable: Observable<RuntimeObject?> =
+            documentState.$selectedRuntimeObject.asObservable()
 
         let selectedRuntimeObjectSignal = selectedRuntimeObjectObservable
             .asSignal(onErrorSignalWith: .empty())
@@ -358,10 +353,18 @@ final class MainViewModel: ViewModel<MainRoute> {
                 .map { $0?.displayName ?? "" }
                 .asDriver(onErrorJustReturn: ""),
             sharingServiceData: sharingServiceData,
-            isSavable: documentState.$selectionStack.asDriver().map { !$0.isEmpty },
+            isSavable: documentState.$selectedRuntimeObject.asDriver().map { $0 != nil },
             isSidebarBackHidden: documentState.$currentImageNode.asDriver().map { $0 == nil },
             isNavigationHidden: documentState.$selectionStack.asDriver().map { $0.isEmpty },
-            canGoPrevious: documentState.$selectionIndex.asDriver().map { $0 > 0 },
+            // On an empty tab (`selectedRuntimeObject == nil` over a
+            // non-empty timeline) the first `.backward` returns to the
+            // cursor entry itself, so previous stays enabled from index 0.
+            canGoPrevious: Driver.combineLatest(
+                documentState.$selectionIndex.asDriver(),
+                documentState.$selectedRuntimeObject.asDriver()
+            ).map { index, selected in
+                selected == nil ? index >= 0 : index > 0
+            },
             canGoNext: Driver.combineLatest(
                 documentState.$selectionStack.asDriver(),
                 documentState.$selectionIndex.asDriver()
@@ -370,8 +373,9 @@ final class MainViewModel: ViewModel<MainRoute> {
             },
             navigationHistory: Driver.combineLatest(
                 documentState.$selectionStack.asDriver(),
-                documentState.$selectionIndex.asDriver()
-            ).map { stack, index in
+                documentState.$selectionIndex.asDriver(),
+                documentState.$selectedRuntimeObject.asDriver()
+            ).map { stack, index, selected in
                 NavigationHistorySnapshot(
                     items: stack.enumerated().map { entryIndex, runtimeObject in
                         NavigationHistoryItem(
@@ -380,7 +384,9 @@ final class MainViewModel: ViewModel<MainRoute> {
                             icon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: NavigationHistorySnapshot.iconSize)
                         )
                     },
-                    currentIndex: index
+                    // An empty tab hovers just above the cursor: the cursor
+                    // entry itself becomes the nearest backward row.
+                    currentIndex: selected == nil && index >= 0 ? index + 1 : index
                 )
             },
             runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
