@@ -39,7 +39,7 @@ class ContentTextViewController: UIKitViewController<ContentTextViewModel> {
         let output = viewModel.transform(input)
 
         output.attributedString.drive(textView.rx.attributedText).disposed(by: rx.disposeBag)
-        output.runtimeObjectName.drive(navigationItem.rx.title).disposed(by: rx.disposeBag)
+        output.selectedRuntimeObjectName.drive(navigationItem.rx.title).disposed(by: rx.disposeBag)
     }
 }
 

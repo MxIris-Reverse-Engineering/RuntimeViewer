@@ -97,7 +97,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         public let attributedString: Driver<NSAttributedString>
         public let theme: Driver<ThemeProfile>
         public let imageNameOfRuntimeObject: Driver<String?>
-        public let runtimeObjectName: Driver<String>
+        public let selectedRuntimeObjectName: Driver<String>
         public let runtimeObjectNotFound: Signal<Void>
     }
 
@@ -142,7 +142,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             attributedString: $attributedString.asDriver().compactMap { $0 },
             theme: $theme.asDriver(),
             imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver(),
-            runtimeObjectName: $runtimeObject.asDriver().map { $0.displayName },
+            selectedRuntimeObjectName: documentState.$selectedRuntimeObject.asDriver().map { $0?.displayName ?? "" },
             runtimeObjectNotFound: runtimeObjectNotFoundRelay.asSignal()
         )
     }
