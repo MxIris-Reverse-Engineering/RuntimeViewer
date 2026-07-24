@@ -909,7 +909,7 @@ extension RuntimeSwiftSection {
         switch runtimeArgument {
         case .candidate(let runtimeCandidate):
             let matched = try matchUpstreamCandidate(runtimeCandidate, in: parameter)
-            return (.candidate(matched), matched.typeName.node)
+            return (.candidate(matched), matched.typeName.node.materialize())
         case .boundGeneric(let runtimeBase, let innerRuntimeArguments):
             guard depth < Self.maxSpecializationDepth else {
                 throw RuntimeEngine.EngineError.boundGenericInnerFailed(
@@ -996,7 +996,7 @@ extension RuntimeSwiftSection {
         case .class: boundKind = .boundGenericClass
         case .enum: boundKind = .boundGenericEnum
         }
-        let baseNode = wrappedAsType(base.typeName.node)
+        let baseNode = wrappedAsType(base.typeName.node.materialize())
         let normalizedInners = innerNodes.map(wrappedAsType)
         let typeList = Node.create(kind: .typeList, children: normalizedInners)
         let boundNode = Node.create(kind: boundKind, children: [baseNode, typeList])
