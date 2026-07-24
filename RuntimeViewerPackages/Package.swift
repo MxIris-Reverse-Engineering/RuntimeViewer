@@ -180,6 +180,11 @@ let package = Package(
         ),
         
         .package(
+            local: .package(
+                path: "../../UIFoundation",
+                isRelative: true,
+                isEnabled: true,
+            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
                 from: "0.14.0",
