@@ -71,12 +71,12 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             let viewModel = GenerationOptionsViewModel(documentState: documentState, router: self)
             viewController.loadViewIfNeeded()
             viewController.setupBindings(for: viewModel)
-            return .uxPopover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
+            return .uxPopover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient, animates: true)
         case .mcpStatus(let sender):
             let viewController = MCPStatusPopoverViewController()
             let viewModel = MCPStatusPopoverViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
-            return .uxPopover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
+            return .uxPopover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient, animates: true)
         case .backgroundIndexing(let sender):
             let viewController = BackgroundIndexingPopoverViewController()
             let viewModel = BackgroundIndexingPopoverViewModel(
@@ -84,7 +84,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 router: self
             )
             viewController.setupBindings(for: viewModel)
-            return .uxPopover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
+            return .uxPopover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient, animates: true)
         case .attachToProcess:
             let viewController = attachToProcessViewController
             let viewModel = AttachToProcessViewModel(documentState: documentState, router: self)
