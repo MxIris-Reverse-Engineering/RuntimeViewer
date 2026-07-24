@@ -270,3 +270,8 @@ extension SwiftSetting {
     static let nonisolatedNonsendingByDefault: Self = .enableUpcomingFeature("NonisolatedNonsendingByDefault") // SE-0461, Swift 6.2,  SwiftPM 6.2+
     static let immutableWeakCaptures: Self = .enableUpcomingFeature("ImmutableWeakCaptures") // SE-0481, Swift 6.2,  SwiftPM 6.2+
 }
+
+// NOTE: This branch intentionally diverges from main in this manifest so that
+// SwiftPM's content-hash-keyed manifest cache cannot serve an evaluation made
+// in the main checkout (where relative local-dependency candidates resolve to
+// sibling checkouts) to builds running in this worktree, or vice versa.
