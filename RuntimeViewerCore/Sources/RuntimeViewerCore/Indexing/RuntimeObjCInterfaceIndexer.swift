@@ -605,6 +605,17 @@ public final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     public func addSubIndexer(_ subIndexer: RuntimeObjCInterfaceIndexer) {
         _subIndexers.withLock { $0.append(subIndexer) }
     }
+
+    /// Detaches a per-image indexer registered by `addSubIndexer(_:)`. No-op
+    /// when it was never registered.
+    ///
+    /// The inverse was missing, so registration pinned every per-image indexer
+    /// for the aggregate's lifetime and `RuntimeObjCSectionFactory.removeSection`
+    /// reclaimed nothing. Mirrors
+    /// `RuntimeSwiftInterfaceIndexer.removeSubIndexer(_:)`.
+    public func removeSubIndexer(_ subIndexer: RuntimeObjCInterfaceIndexer) {
+        _subIndexers.withLock { $0.removeAll { $0 === subIndexer } }
+    }
 }
 
 // MARK: - Events

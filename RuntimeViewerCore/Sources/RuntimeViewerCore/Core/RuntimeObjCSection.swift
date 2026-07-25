@@ -584,10 +584,18 @@ actor RuntimeObjCSectionFactory {
     }
 
     func removeSection(for imagePath: String) {
-        sections.removeValue(forKey: imagePath)
+        // Detach the per-image indexer from the aggregate as well: the
+        // `addSubIndexer` registration above, not the `sections` entry, is what
+        // keeps the image's indexed state alive.
+        if let section = sections.removeValue(forKey: imagePath) {
+            objcInterfaceIndexer.removeSubIndexer(section.objcIndexer)
+        }
     }
 
     func removeAllSections() {
+        for section in sections.values {
+            objcInterfaceIndexer.removeSubIndexer(section.objcIndexer)
+        }
         sections.removeAll()
     }
 }

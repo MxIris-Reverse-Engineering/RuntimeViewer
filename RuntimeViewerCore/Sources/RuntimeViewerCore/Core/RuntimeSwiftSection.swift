@@ -1427,7 +1427,14 @@ actor RuntimeSwiftSectionFactory {
     }
 
     func removeSection(for imagePath: String) {
-        sections.removeValue(forKey: imagePath)
+        // Detach the per-image indexer from the aggregate first. `setupForFactory`
+        // registered it via `indexer.addSubIndexer`, and that registration — not
+        // the `sections` entry — is what keeps the image's declaration graph (and
+        // the `NodeStore` its definitions reference) alive. Dropping only the
+        // `sections` entry reclaimed nothing.
+        if let section = sections.removeValue(forKey: imagePath) {
+            indexer.removeSubIndexer(section.indexer)
+        }
         // Drop any mangledID entries originating from this image so a
         // subsequent `addSubIndexer`-driven re-register can repopulate them.
         indexedTypeByCandidateID = indexedTypeByCandidateID.filter { _, value in
@@ -1439,6 +1446,9 @@ actor RuntimeSwiftSectionFactory {
     }
 
     func removeAllSections() {
+        for section in sections.values {
+            indexer.removeSubIndexer(section.indexer)
+        }
         sections.removeAll()
         indexedTypeByCandidateID.removeAll()
         indexedProtocolByCandidateID.removeAll()
