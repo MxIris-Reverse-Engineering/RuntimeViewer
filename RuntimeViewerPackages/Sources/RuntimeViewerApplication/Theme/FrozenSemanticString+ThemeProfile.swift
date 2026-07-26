@@ -10,7 +10,7 @@ import Semantic
 import RuntimeViewerCore
 import UIFoundation
 
-extension SemanticString {
+extension FrozenSemanticString {
     public func attributedString(
         for provider: ThemeProfile,
         runtimeObjectName: RuntimeObject
@@ -49,61 +49,59 @@ extension SemanticString {
             return attrs
         }
 
-        let allComponents = self.components
-
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        // Swift interfaces carry a span identity (`component.identifier`, the
-        // referenced type's mangled name) on every token of a type reference —
-        // module, dots, and the type name alike. Pre-resolve each identity to
-        // one shared `RuntimeObject` so the whole `Module.Type` span links to
-        // the same jump target and reads as a single link run; the span's kind
-        // comes from its first `.type` token. ObjC/C interfaces have no span
+        // Swift interfaces carry a span identity (the referenced type's
+        // mangled name) on every token of a type reference — module, dots,
+        // and the type name alike. Pre-resolve each identity to one shared
+        // `RuntimeObject` so the whole `Module.Type` span links to the same
+        // jump target and reads as a single link run; the span's kind comes
+        // from its first `.type` token. ObjC/C interfaces have no span
         // identity, so they stay on the per-token, string-keyed path below.
         let linkTargetsByIdentifier: [String: RuntimeObject]
         if case .swift = runtimeObjectName.kind {
-            linkTargetsByIdentifier = resolveSwiftLinkTargets(in: allComponents, runtimeObjectName: runtimeObjectName)
+            linkTargetsByIdentifier = resolveSwiftLinkTargets(runtimeObjectName: runtimeObjectName)
         } else {
             linkTargetsByIdentifier = [:]
         }
         #endif
 
-        var fullString = ""
-        fullString.reserveCapacity(allComponents.count * 20)
+        // The frozen form stores the complete text once — no per-token
+        // concatenation pass is needed.
+        let fullString = text
 
         struct PendingAttribute {
             let range: NSRange
             let attributes: [NSAttributedString.Key: Any]
         }
         var pendingAttributes: [PendingAttribute] = []
-        pendingAttributes.reserveCapacity(allComponents.count)
+        pendingAttributes.reserveCapacity(spans.count)
 
-        for component in allComponents {
-            let string = component.string
-            let type = component.type
-            let startIndex = fullString.utf16.count
-
-            fullString += string
-
-            let length = fullString.utf16.count - startIndex
-            let range = NSRange(location: startIndex, length: length)
+        var utf16Location = 0
+        enumerateSpans { spanText, type, identifier in
+            let utf16Length = spanText.utf16.count
+            let range = NSRange(location: utf16Location, length: utf16Length)
+            utf16Location += utf16Length
 
             var attributes = cachedAttributes(for: type)
 
             #if canImport(AppKit) && !targetEnvironment(macCatalyst)
             if case .swift = runtimeObjectName.kind {
-                if let identifier = component.identifier, let linkTarget = linkTargetsByIdentifier[identifier] {
+                if let identifier, let linkTarget = linkTargetsByIdentifier[identifier] {
                     attributes[.link] = linkTarget
                 }
             } else if let targetKind = resolveTargetKind(type: type, runtimeObjectName: runtimeObjectName) {
+                let tokenString = String(spanText)
                 attributes[.link] = RuntimeObject(
-                    name: string,
-                    displayName: string,
+                    name: tokenString,
+                    displayName: tokenString,
                     kind: targetKind,
                     secondaryKind: runtimeObjectName.secondaryKind,
                     imagePath: runtimeObjectName.imagePath,
                     children: runtimeObjectName.children
                 )
             }
+            #else
+            _ = identifier
             #endif
 
             pendingAttributes.append(PendingAttribute(range: range, attributes: attributes))
@@ -126,17 +124,16 @@ extension SemanticString {
     /// references — get no link); its `name` is the mangled identity the engine
     /// resolves cross-image, its `displayName` the fully-printed qualified name.
     private func resolveSwiftLinkTargets(
-        in components: [AtomicComponent],
         runtimeObjectName: RuntimeObject
     ) -> [String: RuntimeObject] {
         var kindByIdentifier: [String: RuntimeObjectKind] = [:]
         var displayNameByIdentifier: [String: String] = [:]
 
-        for component in components {
-            guard let identifier = component.identifier else { continue }
-            displayNameByIdentifier[identifier, default: ""] += component.string
+        enumerateSpans { spanText, type, identifier in
+            guard let identifier else { return }
+            displayNameByIdentifier[identifier, default: ""] += spanText
             if kindByIdentifier[identifier] == nil,
-               let kind = resolveTargetKind(type: component.type, runtimeObjectName: runtimeObjectName) {
+               let kind = resolveTargetKind(type: type, runtimeObjectName: runtimeObjectName) {
                 kindByIdentifier[identifier] = kind
             }
         }
