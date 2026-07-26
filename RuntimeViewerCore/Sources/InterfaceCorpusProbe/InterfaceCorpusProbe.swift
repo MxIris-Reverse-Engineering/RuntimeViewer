@@ -159,24 +159,24 @@ struct InterfaceCorpusProbe {
                     continue
                 }
                 var interfaceByteCount = 0
-                for component in interface.interfaceString.components {
-                    let utf8View = component.string.utf8
-                    let componentByteCount = utf8View.count
-                    interfaceByteCount += componentByteCount
-                    if component.type == .comment {
-                        measurement.commentUTF8ByteCount += componentByteCount
+                interface.interfaceString.enumerateSpans { spanText, type, identifier in
+                    let utf8View = spanText.utf8
+                    let spanByteCount = utf8View.count
+                    interfaceByteCount += spanByteCount
+                    if type == .comment {
+                        measurement.commentUTF8ByteCount += spanByteCount
                     }
                     for byte in utf8View where byte == 0x0A {
                         measurement.newlineCount += 1
                     }
                     measurement.tokenCount += 1
-                    if let identifier = component.identifier {
+                    if let identifier {
                         measurement.identifierTokenCount += 1
                         measurement.distinctIdentifiers.insert(identifier)
                     }
-                    if componentByteCount > 15 {
+                    if spanByteCount > 15 {
                         measurement.heapStringTokenCount += 1
-                        measurement.heapStringUTF8ByteCount += componentByteCount
+                        measurement.heapStringUTF8ByteCount += spanByteCount
                     }
                 }
                 measurement.totalUTF8ByteCount += interfaceByteCount
