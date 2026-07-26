@@ -133,6 +133,16 @@ let package = Package(
             ),
         ),
         .package(
+            local: .package(
+                path: "../../swift-semantic-string",
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
+                from: "0.1.5",
+            ),
+        ),
+        .package(
             url: "https://github.com/MxIris-Library-Forks/Asynchrone",
             from: "0.23.0-fork.1",
         ),
@@ -243,6 +253,17 @@ let package = Package(
             dependencies: [
                 .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
                 .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
+            ],
+        ),
+        // Measurement probe for the global-search corpus design: prints every
+        // runtime object's interface for the given images with maximal
+        // generation options and reports plain-text size, comment share, and
+        // print time. Lives only on the interface-corpus-probe branch.
+        .executableTarget(
+            name: "InterfaceCorpusProbe",
+            dependencies: [
+                "RuntimeViewerCore",
+                .product(name: "Semantic", package: "swift-semantic-string"),
             ],
         ),
         .testTarget(
