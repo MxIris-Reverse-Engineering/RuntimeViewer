@@ -34,6 +34,19 @@ struct InterfaceCorpusProbe {
         var totalUTF8ByteCount = 0
         var commentUTF8ByteCount = 0
         var newlineCount = 0
+        /// Number of flattened `AtomicComponent`s across all printed interfaces.
+        /// This is the `N` in the SemanticString per-token memory models
+        /// (existential element ~40+48 B, cached flat component ~stride B).
+        var tokenCount = 0
+        /// Tokens carrying a non-nil span `identifier`.
+        var identifierTokenCount = 0
+        /// Tokens whose string exceeds the 15-byte inline small-string limit
+        /// and therefore owns a heap allocation, plus their total UTF-8 bytes.
+        var heapStringTokenCount = 0
+        var heapStringUTF8ByteCount = 0
+        /// Distinct span identifiers seen in this image's interfaces; sized to
+        /// evaluate an interning table for the arena-storage design.
+        var distinctIdentifiers: Set<String> = []
         var objectiveCUTF8ByteCount = 0
         var swiftUTF8ByteCount = 0
         var cUTF8ByteCount = 0
@@ -63,6 +76,12 @@ struct InterfaceCorpusProbe {
         let imagePaths = argumentImagePaths.isEmpty ? defaultImagePaths : argumentImagePaths
 
         let generationOptions = RuntimeObjectInterface.GenerationOptions.mcp
+
+        print("=== memory layout (arm64) ===")
+        print("AtomicComponent:                size \(MemoryLayout<AtomicComponent>.size), stride \(MemoryLayout<AtomicComponent>.stride), alignment \(MemoryLayout<AtomicComponent>.alignment)")
+        print("SemanticType:                   size \(MemoryLayout<SemanticType>.size), stride \(MemoryLayout<SemanticType>.stride)")
+        print("any SemanticStringComponent:    size \(MemoryLayout<any SemanticStringComponent>.size), stride \(MemoryLayout<any SemanticStringComponent>.stride)")
+        print("SemanticString:                 size \(MemoryLayout<SemanticString>.size), stride \(MemoryLayout<SemanticString>.stride)")
 
         let engine = RuntimeEngine(source: .local)
         do {
@@ -150,6 +169,15 @@ struct InterfaceCorpusProbe {
                     for byte in utf8View where byte == 0x0A {
                         measurement.newlineCount += 1
                     }
+                    measurement.tokenCount += 1
+                    if let identifier = component.identifier {
+                        measurement.identifierTokenCount += 1
+                        measurement.distinctIdentifiers.insert(identifier)
+                    }
+                    if componentByteCount > 15 {
+                        measurement.heapStringTokenCount += 1
+                        measurement.heapStringUTF8ByteCount += componentByteCount
+                    }
                 }
                 measurement.totalUTF8ByteCount += interfaceByteCount
                 measurement.printedInterfaceCount += 1
@@ -214,6 +242,12 @@ struct InterfaceCorpusProbe {
         print("  kind split:       objc \(formatByteCount(measurement.objectiveCUTF8ByteCount)), swift \(formatByteCount(measurement.swiftUTF8ByteCount)), c \(formatByteCount(measurement.cUTF8ByteCount))")
         print("  child-object part:\(formatByteCount(measurement.childObjectUTF8ByteCount)) (\(percentage(measurement.childObjectUTF8ByteCount, of: measurement.totalUTF8ByteCount)))")
         print("  avg per interface:\(formatByteCount(measurement.totalUTF8ByteCount / interfaceCount))")
+        let tokenCount = max(measurement.tokenCount, 1)
+        print("tokens:             \(measurement.tokenCount) (avg \(String(format: "%.1f", Double(measurement.totalUTF8ByteCount) / Double(tokenCount))) B/token)")
+        print("  with identifier:  \(measurement.identifierTokenCount) (\(percentage(measurement.identifierTokenCount, of: measurement.tokenCount))), \(measurement.distinctIdentifiers.count) distinct")
+        print("  heap strings:     \(measurement.heapStringTokenCount) (\(percentage(measurement.heapStringTokenCount, of: measurement.tokenCount))), \(formatByteCount(measurement.heapStringUTF8ByteCount))")
+        print("  flat-array cost:  \(formatByteCount(measurement.tokenCount * MemoryLayout<AtomicComponent>.stride)) (tokens x stride)")
+        print("  boxed-tree cost:  \(formatByteCount(measurement.tokenCount * (MemoryLayout<any SemanticStringComponent>.stride + 48))) (existential + malloc box, leaf lower bound)")
         print("largest interfaces:")
         for entry in measurement.largestInterfaces {
             print("  \(formatByteCount(entry.byteCount))  \(entry.objectDisplayName)")
@@ -228,12 +262,23 @@ struct InterfaceCorpusProbe {
         let totalFailedCount = measurements.reduce(0) { $0 + $1.failedInterfaceCount }
         let totalPrintSeconds = measurements.reduce(0) { $0 + $1.printSeconds }
 
+        let totalTokenCount = measurements.reduce(0) { $0 + $1.tokenCount }
+        let totalIdentifierTokenCount = measurements.reduce(0) { $0 + $1.identifierTokenCount }
+        let totalHeapStringTokenCount = measurements.reduce(0) { $0 + $1.heapStringTokenCount }
+        let totalHeapStringByteCount = measurements.reduce(0) { $0 + $1.heapStringUTF8ByteCount }
+        let unionedDistinctIdentifiers = measurements.reduce(into: Set<String>()) { $0.formUnion($1.distinctIdentifiers) }
+
         print("")
         print("=== cumulative (\(measurements.count) images) ===")
         print("interfaces:         \(totalInterfaceCount) printed, \(totalFailedCount) failed")
         print("corpus size:        \(formatByteCount(totalByteCount))")
         print("  comment bytes:    \(formatByteCount(totalCommentByteCount)) (\(percentage(totalCommentByteCount, of: totalByteCount)))")
         print("  code-only bytes:  \(formatByteCount(totalByteCount - totalCommentByteCount))")
+        print("tokens:             \(totalTokenCount)")
+        print("  with identifier:  \(totalIdentifierTokenCount) (\(percentage(totalIdentifierTokenCount, of: totalTokenCount))), \(unionedDistinctIdentifiers.count) distinct")
+        print("  heap strings:     \(totalHeapStringTokenCount) (\(percentage(totalHeapStringTokenCount, of: totalTokenCount))), \(formatByteCount(totalHeapStringByteCount))")
+        print("  flat-array cost:  \(formatByteCount(totalTokenCount * MemoryLayout<AtomicComponent>.stride))")
+        print("  boxed-tree cost:  \(formatByteCount(totalTokenCount * (MemoryLayout<any SemanticStringComponent>.stride + 48)))")
         print("print time:         \(formatSeconds(totalPrintSeconds))")
     }
 
