@@ -187,7 +187,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.14.0",
+                from: "0.14.1",
                 traits: UIFoundationTraits,
             ),
         ),
