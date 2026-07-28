@@ -1,6 +1,7 @@
 # Global Search 设计文档
 
-- **日期**: 2026-07-26
+- **日期**: 2026-07-26(2026-07-27 按审查意见修订,见
+  `Documentations/Reviews/2026-07-27-global-search-design-review.md`)
 - **状态**: 设计定稿,待实现
 - **前置**:
   - 语料探针实测(本仓库 `feature/interface-corpus-probe` 分支,`RuntimeViewerCore/Sources/InterfaceCorpusProbe/`)
@@ -72,11 +73,31 @@ actor RuntimeInterfaceCorpusStore {
   `removeAllSections()` / `RuntimeEngine.stop()`(`releaseIndexedSections`)
   时同步清掉对应 image 的语料。node-store 分支刚打通的释放路径是现成挂载点。
 - 设置总开关关闭时整体清空。
+- **BuildState 语义**:取消(订阅归零/驱逐/引擎停止)→ 条目移除,回到未构建
+  (不记 failed);构建抛错 → `failed(message)`,不自动重试,任一触发源再次
+  命中该 image 时 failed → pending 重新排队;覆盖率 UI 将 failed 单列并提供
+  手动重试。单个对象打印失败不整体 failed——跳过并计数,summary 报告跳过数
+  (部分成功仍记 built)。
+- **驻留预算与 LRU**:store 维护 Frozen 总驻留字节数,硬上限 ~256 MB(约 8
+  个 SwiftUI 级重框架);超限按"最久未被搜索命中"整 image 驱逐回未构建,下次
+  触发源事件或搜索发现缺口时重新排队。always-index 列表配置很大时,串行
+  `.utility` 队列 + 覆盖率 UI 保证冷启动补队是可见、可控的后台负载。
 
 ### 3. 语料生成:canonical 选项 + 旁路打印
 
-- **canonical options 固定为 `GenerationOptions.mcp`**(全 strip 关、全注释开),
-  与用户显示选项完全解耦——用户改显示选项不触发语料重建。
+- **canonical options = `.mcp` 的 strip/注释开关 + 用户当前 `settings.transformer`**。
+  strip/注释开关固定全开(全 strip 关、全注释开),用户改这些显示开关不触发
+  语料重建。transformer 不能固定用默认值:`.mcp` 的 `transformer` 字段落在
+  `Transformer.Configuration.default`,而显示端用的是用户设置——若语料用默认
+  transformer,用户自定义后会"所见搜不到"(CType 还改写声明正文的 C 类型
+  拼写与语义类型,波及 symbolsOnly 域)、snippet 与 content 视图不一致、二次
+  定位整行必 miss。因此 canonical 跟随用户 transformer,**Transformer 设置
+  变更列为触发源 4**(见 §4):全量驱逐重建(连续调整按 ~2 s debounce 合并);
+  store 记录构建时的 transformer 指纹,远程场景下配置随
+  `BuildInterfaceCorpusRequest` 过线。
+  - 长期方向(独立计划,不阻塞本 feature):Transformer 改为渲染期
+    SemanticString pass(缓存/语料存纯默认 canonical,按 component payload
+    重渲染),落地后本触发源与重建成本整体消失。
 - Section 层新增**旁路打印路径**(Swift / ObjC 各一):用 canonical options 打印
   → `frozen()` → 返回;**不写 `interfaceByObject`、不动
   `lastTransformerConfiguration`**(避免污染 display 缓存或触发其驱逐逻辑)。
@@ -91,7 +112,9 @@ actor RuntimeInterfaceCorpusStore {
 `registerSharedHandlers` 加一行,proxy 链自动透传):
 
 - `BuildInterfaceCorpusRequest: RuntimeEngineProgressRequest`
-  (`imagePath`;Progress = `(built: Int, total: Int)`;Response = 统计)
+  (`imagePath` + transformer 配置;Progress = 具名 struct `BuildProgress
+  { built: Int, total: Int }`——协议要求 `Progress: Codable & Sendable`,
+  tuple 不满足 Codable;Response = 统计)
 - `SearchInterfacesRequest: RuntimeEngineProgressRequest`(见 §5)
 
 app 侧新增 `GlobalSearchCorpusCoordinator`(RuntimeViewerApplication,
@@ -102,9 +125,16 @@ app 侧新增 `GlobalSearchCorpusCoordinator`(RuntimeViewerApplication,
   1. `backgroundIndexingManager.events` 的 `.taskFinished(result: .completed)`
      → 该 image 排队;
   2. `imageDidLoadPublisher`(用户显式点开 image)→ 排队并置顶;
-  3. 设置开关 off→on → 对所有已索引 image 补队。
-- 队列串行(并发 1)、`.utility` 优先级——打印是分钟级重活,不与交互抢
-  QoS;引擎切换/文档关闭时取消在途构建。
+  3. 设置开关 off→on → 对所有已索引 image 补队;
+  4. `settings.transformer` 变更(~2 s debounce)→ 全量驱逐 + 重建(见 §3)。
+- **构建队列与去重归 engine 侧 store**(`.local` 是进程级共享单例,多
+  document 场景必须全局仲裁):store 内部串行(并发 1)、`.utility` 优先级
+  ——打印是分钟级重活,不与交互抢 QoS。同一 image 重复入队按
+  `buildStateByImagePath` 去重(pending/building 时为 no-op),多 document
+  重复触发天然幂等。
+- **取消按订阅引用计数**:coordinator 的每次 Build 请求只是"订阅"该 image
+  的构建;文档关闭/引擎切换取消的是自己的订阅,engine 侧构建任务仅在最后一个
+  订阅者退订时取消——避免文档 A 关闭砍掉文档 B 正在等的语料。
 - 独立于背景索引 coordinator 的理由:背景索引管"让 image 有索引",语料管
   "让已索引 image 可搜",生命周期与取消语义都不同,揉在一起会把两套队列
   状态机搅在一处。
@@ -117,12 +147,15 @@ app 侧新增 `GlobalSearchCorpusCoordinator`(RuntimeViewerApplication,
 query: String
 options: { caseSensitive: Bool, matchMode: contains | wholeWord,
            scope: all | excludeComments | commentsOnly | symbolsOnly }
-resultLimit: Int        // 默认 1000,超限 truncated
+resultLimit: Int        // 默认 1000;全局(跨 image)收集上限,语义见下
 ```
 
 - Progress = `[GlobalSearchMatch]` 增量批次(按 image 粒度推送,UI 边搜边出);
   Response = `GlobalSearchSummary`(总命中、扫描 image 数、truncated 标志、
   未建语料的已索引 image 列表——UI 据此提示覆盖率)。
+- **truncated 语义**:达到 `resultLimit` 后停止收集,**继续扫描仅计数**
+  (全量扫描 <100 ms,计数成本可忽略),"总命中"为真实总数——UI 呈现
+  "共 N 条,展示前 1000 条"。
 - `GlobalSearchMatch`(Codable,过线的只有它,不含 Frozen 本体):
 
 ```
@@ -131,7 +164,9 @@ imagePath: String
 lineNumber: Int
 lineText: String            // 命中行截断 snippet
 matchRangeInLine: Range     // UTF-16 offset,UI 高亮用
-semanticKind: 枚举(comment / typeName / member / function / plainText …)
+semanticKind: 枚举——swift-semantic-string `SemanticType` 的 Codable 镜像
+              (standard / comment / keyword / variable / numeric / argument /
+               error / type / member / function / other)
 ```
 
 - **匹配算法**:对每个 entry 在 `frozen.text` 的 UTF-8 上做 ASCII case-folding
@@ -139,6 +174,16 @@ semanticKind: 枚举(comment / typeName / member / function / plainText …)
   语义类别 → scope 过滤;行号/行文本由命中偏移向两侧找 `\n`。27 MB 全量扫
   预算 < 100 ms,取消检查按 entry 粒度。
 - wholeWord 以标识符字符类([A-Za-z0-9_$])边界判定。
+- **scope → semanticKind 映射**(闭合定义,Phase 1 单测按此断言):
+
+| scope | 命中的 semanticKind |
+|---|---|
+| all | 全部 |
+| excludeComments | 除 comment 外全部 |
+| commentsOnly | 仅 comment |
+| symbolsOnly | type / member / function / variable / argument |
+
+  keyword、standard、numeric、error、other 不属于 symbols。
 - 正则模式**不进 v1**(留 Phase 3;text 是现成 String,后续加 `Regex` 直搜即可)。
 
 ### 6. UI(MVVM-C,AppKit)
@@ -156,12 +201,17 @@ semanticKind: 枚举(comment / typeName / member / function / plainText …)
   `DifferentiableBox` lazy 模式(CLAUDE.md 表格规则 9 的适用场景)。
 - **跳转**:选中结果 → `documentState.selectionRouter.trigger(.selectAtRoot(object))`
   (或 `.openInNewTab`);随后 content 内**二次定位**:把
-  `(query, lineText, matchRangeInLine)` 作为 pending highlight 传给 content
-  (经 documentState 一次性握手字段),content 渲染完成后在显示文本中定位并
-  scroll + 闪烁高亮。
-- **显示选项差异 fallback**:语料按全开生成,用户显示选项可能关掉了命中所在
-  注释——二次定位 miss 时降级为:跳到对象 + find bar 预填 query,并提示
-  "命中位于注释,受当前 Generation Options 影响未显示"。
+  `(query, lineNumber, lineText, matchRangeInLine)` 作为 pending highlight 传给
+  content(经 documentState 一次性握手字段),content 渲染完成后按优先级定位
+  并 scroll + 闪烁高亮:
+  1. 整行匹配:查找与 `lineText` 完全相等的行,多行相等取行号最接近
+     `lineNumber` 的一行,行内套用 `matchRangeInLine`;
+  2. query 降级匹配:整行 miss(显示 strip 选项与 canonical 不同)时按搜索
+     同规则查找 `query`,多处命中取行号最接近 `lineNumber` 的一处;
+  3. 完全 miss → fallback(下条)。
+- **显示选项差异 fallback**:语料按注释全开生成,用户显示选项可能关掉了命中
+  所在内容——二次定位完全 miss 时降级为:跳到对象 + find bar 预填 query,并
+  提示"命中内容受当前 Generation Options 影响未显示"。
 
 ### 7. 一致性与边界
 
@@ -182,6 +232,7 @@ semanticKind: 枚举(comment / typeName / member / function / plainText …)
 | 项 | 预算 | 依据 |
 |---|---|---|
 | 语料驻留(重度 session,~AppKit+SwiftUI 级) | ≤ ~60 MB | 27.3 MB 文本 × ~2(Frozen span 开销) |
+| 语料驻留硬上限(多 image session) | 256 MB,LRU 整 image 驱逐 | 约 8 个 SwiftUI 级重框架,见 §2 |
 | 单次全量搜索延迟 | < 100 ms + IPC | 27 MB 顺序扫描,arm64 GB/s 级 |
 | 语料构建(后台,串行 .utility) | AppKit ~11 s、SwiftUI ~2 min | 探针实测,打印耗时持平于 display 路径 |
 | 构建期间峰值增量 | 单对象级(旁路不缓存 SemanticString) | O1/O2 已消除装箱驻留 |
@@ -190,12 +241,16 @@ semanticKind: 枚举(comment / typeName / member / function / plainText …)
 
 - **Phase 1(Core)**:`RuntimeInterfaceCorpusStore` + 旁路打印路径 +
   `BuildInterfaceCorpusRequest` / `SearchInterfacesRequest` + 驱逐挂点。
-  单测:构建/驱逐/重建;匹配正确性(大小写、wholeWord、scope 四档、行号/
-  snippet/range);取消;limit/truncated;远程 dispatch 形态(local 即可覆盖协议面)。
+  单测:构建/驱逐/重建;failed 语义(构建抛错 → failed、触发源重排队、单对象
+  失败跳过计数);匹配正确性(大小写、wholeWord、scope 四档按 §5 映射表、行号/
+  snippet/range);取消(引用计数:双订阅者单退订不取消);limit/truncated
+  (真实总数继续计数);LRU 驱逐;远程 dispatch 形态(local 即可覆盖协议面)。
+  性能:构建与搜索加 signpost,搜索延迟基线(AppKit+SwiftUI 级 <100 ms)入
+  perf test 或 Instruments 手动清单。
 - **Phase 2(App)**:`GlobalSearchCorpusCoordinator` + Settings 开关 +
-  `GlobalSearchViewModel` / ViewController / `MainRoute.globalSearch` +
-  跳转与二次定位。探针改造为 corpus builder 的 e2e 校验(语料字节与探针输出
-  一致)。
+  Transformer 变更触发源(debounce 驱逐重建)+ `GlobalSearchViewModel` /
+  ViewController / `MainRoute.globalSearch` + 跳转与二次定位(含降级链)。
+  探针改造为 corpus builder 的 e2e 校验(语料字节与探针输出一致)。
 - **Phase 3(后续,不阻塞 v1)**:结构化符号索引(声明模型直查、按 kind 精确
   过滤、地址精确反查 `RuntimeMemberAddress`)、正则匹配、语料磁盘持久化
   (image UUID 键,剔除地址列)。
@@ -208,3 +263,5 @@ semanticKind: 枚举(comment / typeName / member / function / plainText …)
    Phase 1 落地后按实际体感调。
 3. Settings 开关默认值:建议默认开(仅在已索引 image 上工作,增量成本与
    背景索引同源)。
+4. 驻留硬上限(256 MB)与 Transformer debounce(~2 s)的默认值——Phase 1
+   落地后按实测调。
