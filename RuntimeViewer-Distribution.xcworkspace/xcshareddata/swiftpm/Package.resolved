@@ -140,8 +140,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
-        "revision" : "d83be31cca95efe72e39f914d35f1c4da799777e",
-        "version" : "0.50.100"
+        "revision" : "4374bafbe4c628c05e068382a12467e7971b29ac",
+        "version" : "0.51.101"
       }
     },
     {
@@ -158,8 +158,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "3adc360a9f3da7b848512ef410bec54fb2d351b8",
-        "version" : "0.13.0"
+        "revision" : "3396cfd7332d40edb6aa3b0600758916701a8be4",
+        "version" : "0.14.1"
       }
     },
     {
@@ -437,8 +437,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "6c7afe5e2cf288fd89a0f8b13fec9c862ff6e6e9",
-        "version" : "0.4.3"
+        "revision" : "04c959b1b5f2cc8c9baca522cd0fedabb45f73a0",
+        "version" : "0.4.5"
       }
     },
     {
@@ -635,8 +635,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
       "state" : {
-        "revision" : "afc9407fe0de9e6cded644464d3ece3896624996",
-        "version" : "0.1.5"
+        "revision" : "86954af3a5e58924615d0db8af8e74244bd67a61",
+        "version" : "0.1.6"
       }
     },
     {
@@ -716,8 +716,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "a880804c17de6177df1f4f7beba61f87579c309f",
-        "version" : "0.14.0"
+        "revision" : "3d54f6fad1f00764bb21e4cc9cb22e0b4317515f",
+        "version" : "0.15.0"
       }
     },
     {
@@ -726,7 +726,7 @@
       "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
       "state" : {
         "branch" : "main",
-        "revision" : "57e86a21d9c079c860e65de1ac0b96cac82689bc"
+        "revision" : "e95846dc7424a7ec4b70155b2f1f04a49c6a01ad"
       }
     },
     {
