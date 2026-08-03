@@ -111,6 +111,12 @@ extension Settings {
         /// resolve to a loaded image are silently skipped (no-op, not
         /// marked failed).
         ///
+        /// `isEnabled` is the per-row on/off switch: a disabled entry is
+        /// skipped at dispatch time but kept in the list, so the user can
+        /// pause an image without deleting the row. Disabling follows the
+        /// same semantics as removing the row — an already-running batch
+        /// finishes naturally; only future dispatches are suppressed.
+        ///
         /// `followDependencies` opts the entry into the BFS dependency
         /// expansion that main-executable batches use; when false (the
         /// default) the batch is constrained to the resolved image alone,
@@ -124,6 +130,9 @@ extension Settings {
         @Codable
         @MemberInit
         public struct AlwaysIndexEntry: Equatable {
+            @Default(true)
+            public var isEnabled: Bool
+
             @Default("")
             public var identifier: String
 

@@ -55,8 +55,8 @@ struct IndexingSettingsView: View {
 }
 
 /// Editor section for `Settings.Indexing.custom`. Renders the custom toggle,
-/// each entry as an editable row (identifier field, Follow Dependencies
-/// switch, delete button), plus a trailing Add button. The list is
+/// each entry as an editable row (enable switch, identifier field, labeled
+/// Recursive switch, delete button), plus a trailing Add button. The list is
 /// order-preserving — duplicate / blank entries are accepted and only
 /// filtered at the resolution step in the coordinator.
 private struct AlwaysIndexSection: View {
@@ -72,7 +72,22 @@ private struct AlwaysIndexSection: View {
                 .disabled(!masterEnabled)
 
             ForEach(entries.indices, id: \.self) { index in
+                let entryEnabled = entries.indices.contains(index) ? entries[index].isEnabled : false
                 HStack {
+                    Toggle(
+                        "Index This Image",
+                        isOn: Binding(
+                            get: { entries.indices.contains(index) ? entries[index].isEnabled : false },
+                            set: { newValue in
+                                guard entries.indices.contains(index) else { return }
+                                entries[index].isEnabled = newValue
+                            }
+                        )
+                    )
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+                    .help("Index this image. When off, the entry is kept in the list but skipped; a batch already running finishes naturally.")
                     TextField(
                         "imagePath or imageName",
                         text: Binding(
@@ -85,8 +100,12 @@ private struct AlwaysIndexSection: View {
                     )
                     .labelsHidden()
                     .textFieldStyle(.roundedBorder)
+                    .disabled(entryFieldsDisabled || !entryEnabled)
+                    Text("Recursive")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                     Toggle(
-                        "Follow Dependencies",
+                        "Recursive",
                         isOn: Binding(
                             get: { entries.indices.contains(index) ? entries[index].followDependencies : false },
                             set: { newValue in
@@ -98,6 +117,8 @@ private struct AlwaysIndexSection: View {
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .labelsHidden()
+                    .help("Recursively index the image's dependency closure using the Heuristic Discovery depth above. When off, only the image itself is indexed.")
+                    .disabled(entryFieldsDisabled || !entryEnabled)
                     Button {
                         guard entries.indices.contains(index) else { return }
                         entries.remove(at: index)
@@ -119,7 +140,7 @@ private struct AlwaysIndexSection: View {
         } header: {
             Text("Always Index")
         } footer: {
-            Text("Images listed here are indexed in the background whenever a document opens, the runtime engine changes, or this list changes. Each entry may be a full path (starting with \"/\") or just the image's file name (matched against loaded images by last path component). Entries that don't match any loaded image are silently skipped. Enable Follow Dependencies on a row to also index the image's full dependency closure using the depth above; otherwise only the image itself is indexed.")
+            Text("Images listed here are indexed in the background whenever a document opens, the runtime engine changes, or this list changes. Each entry may be a full path (starting with \"/\") or just the image's file name (matched against loaded images by last path component). Entries that don't match any loaded image are silently skipped. The leading switch enables or disables the row without deleting it — a disabled row is skipped, and a batch already running finishes naturally. The Recursive switch additionally indexes the image's full dependency closure using the Heuristic Discovery depth above; when off, only the image itself is indexed.")
         }
     }
 }
