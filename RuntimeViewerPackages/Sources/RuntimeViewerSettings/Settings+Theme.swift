@@ -144,7 +144,13 @@ extension Settings.Theme.Preset {
             light: .rgb(1, 1, 1),
             dark: .rgb(0.1251632571, 0.1258862913, 0.1465735137)
         ),
-        selection: .solid(.rgb(0.3904261589, 0.4343567491, 0.5144847631)),
+        // Light mirrors Xcode's own selection fill; a single shade cannot serve
+        // both appearances here, since the dark value sits at 1.06:1 against
+        // light-mode comment text and swallows it whole.
+        selection: .adaptive(
+            light: .rgb(0.780392, 0.858824, 1),
+            dark: .rgb(0.3904261589, 0.4343567491, 0.5144847631)
+        ),
         text: .adaptive(
             light: .rgb(0, 0, 0),
             dark: .rgb(1, 1, 1)
