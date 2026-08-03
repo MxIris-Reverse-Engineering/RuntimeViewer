@@ -293,13 +293,28 @@ public final class RuntimeBackgroundIndexingCoordinator {
             await oldEngine.backgroundIndexingManager.cancelAllBatches()
         }
 
-        // 3) Drop UI state — the old engine's batches and history no longer apply.
-        //    Also reset the coalescing state so that any flush task currently
-        //    sleeping out the 16ms window sees clean buffers when it wakes.
-        staging.clearForEngineSwap()
+        // 3) Archive, then drop, the active UI state. The old engine's
+        //    still-running batches were just cancelled on its manager, but
+        //    the event pump is already stopped, so their `.batchCancelled`
+        //    events can never arrive — synthesize the same terminal snapshot
+        //    `finalize` would have emitted and land it in history. Finalized
+        //    batches whose history hop was still waiting on the coalesce
+        //    window are archived as-is. History itself survives the swap:
+        //    entries are pure value snapshots with session-unique UUID ids,
+        //    and the popover history reads as "what this document indexed
+        //    this session", not as engine-scoped state. Only the user's
+        //    Clear History empties it. Active batches must leave
+        //    `batchesRelay` before any of them appears in `historyRelay` —
+        //    see the ordering note on `flushPendingUpdates`.
+        let drained = staging.drainForEngineSwap()
         batchesRelay.accept([])
-        historyRelay.accept([])
         refreshAggregate(batches: [])
+        for batch in drained.pendingHistory {
+            appendToHistory(batch)
+        }
+        for batch in drained.activeBatches {
+            appendToHistory(Self.cancelledSwapSnapshot(of: batch))
+        }
 
         // 4) Switch the captured engine reference.
         engine = newEngine
@@ -317,6 +332,20 @@ public final class RuntimeBackgroundIndexingCoordinator {
         // `documentDidOpen()` also triggers the always-index list.
         documentDidOpen()
         #endif
+    }
+
+    /// Mirrors `RuntimeBackgroundIndexingManager.finalize(id:cancelled:)` for
+    /// batches whose real `.batchCancelled` event can never be observed —
+    /// the pump is stopped before the old manager processes the swap's
+    /// `cancelAllBatches`.
+    private static func cancelledSwapSnapshot(of batch: RuntimeIndexingBatch) -> RuntimeIndexingBatch {
+        var archived = batch
+        archived.isFinished = true
+        archived.isCancelled = true
+        for itemIndex in archived.items.indices where !archived.items[itemIndex].state.isTerminal {
+            archived.items[itemIndex].state = .cancelled
+        }
+        return archived
     }
 }
 
@@ -390,6 +419,12 @@ extension RuntimeBackgroundIndexingCoordinator {
     /// `lastKnownCustomEntries` as still-pending so the next fullReload
     /// retry can pick them up.
     ///
+    /// `isEnabled` is the per-row switch: disabled entries are skipped at
+    /// dispatch time with the same semantics as a removed row — an
+    /// already-running batch finishes naturally, only future dispatches
+    /// are suppressed. Re-enabling flips entry equality, which resets the
+    /// dispatched gate in `handleSettingsChange` so the entry re-dispatches.
+    ///
     /// `followDependencies` controls the per-entry depth: when false, the
     /// batch is pinned to `depth: 0` so the BFS only emits the resolved
     /// image itself; when true, the heuristic sub-mode's `depth` is reused
@@ -404,14 +439,14 @@ extension RuntimeBackgroundIndexingCoordinator {
     private func startAlwaysIndexBatches() {
         let entries = currentIndexingSettings().custom.entries
         guard !entries.isEmpty else { return }
-        // Gate: only process entries we haven't dispatched yet this session.
-        // The reload pump re-enters here after every fullReload, including
-        // ones our own batch finishes emit; without this filter we'd start
-        // a fresh zero-item batch for each already-dispatched identifier,
-        // which finishes immediately, fires reloadData, re-enters here,
-        // loops forever.
+        // Gate: only process enabled entries we haven't dispatched yet this
+        // session. The reload pump re-enters here after every fullReload,
+        // including ones our own batch finishes emit; without this filter
+        // we'd start a fresh zero-item batch for each already-dispatched
+        // identifier, which finishes immediately, fires reloadData,
+        // re-enters here, loops forever.
         let pendingEntries = entries.filter {
-            !dispatchedAlwaysIndexIdentifiers.contains($0.identifier)
+            $0.isEnabled && !dispatchedAlwaysIndexIdentifiers.contains($0.identifier)
         }
         guard !pendingEntries.isEmpty else { return }
         Task { [weak self, engine] in
@@ -504,8 +539,8 @@ extension RuntimeBackgroundIndexingCoordinator {
             _ = snapshot.heuristic.depth
             _ = snapshot.custom.isEnabled
             // Track custom entries too so the observation re-fires when the
-            // user adds / edits / removes a row or flips the per-row
-            // followDependencies toggle in Settings UI.
+            // user adds / edits / removes a row or flips a per-row toggle
+            // (isEnabled / followDependencies) in Settings UI.
             _ = snapshot.custom.entries
         } onChange: { [weak self] in
             // onChange fires off the main actor synchronously after any mutation.
@@ -604,14 +639,16 @@ extension RuntimeBackgroundIndexingCoordinator {
 
         // Entry list changes: trigger always-index when content actually
         // changed and both master + custom are enabled. Adding / editing
-        // entries (or flipping a per-row followDependencies toggle) kicks
-        // off batches for the new content; removing entries is silent —
-        // already-running batches keep running unless the user cancels
-        // them from the popover. Toggling followDependencies on an existing
-        // entry also kicks off a new batch: Manager dedup is by
-        // `rootImagePath`, so the existing depth=0 batch stays the in-flight
-        // winner until it finishes. The depth change picks up on the next
-        // start (e.g. document reopen).
+        // entries (or flipping a per-row toggle) kicks off batches for the
+        // new content; removing entries — and disabling a row via its
+        // isEnabled switch — is silent: already-running batches keep
+        // running unless the user cancels them from the popover, and
+        // `startAlwaysIndexBatches` skips disabled rows on future
+        // dispatches. Toggling followDependencies on an existing entry
+        // also kicks off a new batch: Manager dedup is by `rootImagePath`,
+        // so the existing depth=0 batch stays the in-flight winner until
+        // it finishes. The depth change picks up on the next start (e.g.
+        // document reopen).
         let previousEntries = lastKnownCustomEntries
         let latestEntries = indexing.custom.entries
         let entriesChanged = latestEntries != previousEntries
@@ -802,15 +839,22 @@ extension RuntimeBackgroundIndexingCoordinator {
             )
         }
 
-        func clearForEngineSwap() {
+        /// Atomically drains everything the engine swap needs to archive —
+        /// the still-active batches plus the finalized batches whose history
+        /// hop was waiting on the coalesce window — then resets all staging
+        /// state. One lock acquisition so a concurrent event can't slip a
+        /// batch in between the read and the clear.
+        func drainForEngineSwap() -> (activeBatches: [RuntimeIndexingBatch], pendingHistory: [RuntimeIndexingBatch]) {
             lock.lock()
             defer { lock.unlock() }
+            let drained = (activeBatches: stagedBatches, pendingHistory: pendingHistoryAdditions)
             stagedBatches.removeAll()
             pendingHistoryAdditions.removeAll()
             hasPendingActiveChange = false
             pendingAggregateRefresh = false
             hasScheduledFlush = false
             documentBatchIDs.removeAll()
+            return drained
         }
 
         func clearPendingHistory() {

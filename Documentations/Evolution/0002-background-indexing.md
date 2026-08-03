@@ -3,7 +3,7 @@
 - **状态**: Accepted
 - **作者**: JH
 - **日期**: 2026-04-24
-- **最后更新**: 2026-04-29
+- **最后更新**: 2026-08-03
 
 ## 摘要
 
@@ -856,3 +856,5 @@ RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift
 | 2026-04-28 | **撤销**:`DocumentState.runtimeEngine` 视为可变;coordinator 通过 RxSwift `documentState.$runtimeEngine.skip(1)` 订阅响应 source switch | 2026-04-24 假设"不可变"与代码现状(`MainCoordinator.swift:34` 在 `.main(...)` 时改写)长期不一致 → ultrareview N2 / implementation-review I3 报告 toolbar 静默断连。Coordinator `engine: var`,`handleEngineSwap(to:)` 取消旧 manager doc batches、停旧 pumps、清 relays、切引用、重启 pumps、若 isEnabled 重发 main exec batch |
 | 2026-04-28 | `DylibPathResolver.pathExists` 兼顾文件系统与 `DyldUtilities.isInDyldSharedCache`,**字面匹配,不规范化** | ultrareview N4:Apple Silicon 上 `/usr/lib/lib*` / 系统 framework 无磁盘文件,纯 `fileExists` 拒绝全部 → batch 充满 "path unresolved" 红 ✗ 误报。规范化 macOS versioned ↔ unversioned 风险高(install name 与 cache 形式不一定按规则映射,iOS 还要分支),不如让真实失败显式呈现。`/usr/lib/libobjc.A.dylib` 这类无歧义路径在两平台都直接命中 |
 | 2026-04-29 | **修订替代方案 E**:不再把失败批次保留于 `batchesRelay`;Coordinator 新增 `historyRelay`,所有 finalized 批次(成功 / 失败 / 取消)统一归入 history;弹出框新增 `HISTORY` 顶层 section(默认折叠),`Clear Failed` 按钮替换为 `Clear History` | 用户反馈:目前弹出框只能看到"正在跑的"和"失败留存的",看不到一次会话里完整的索引历史。同一 relay 既存活跃又存失败的设计语义混在一起,扩展成"完整历史"会让 active 概念被污染 —— 拆成两个 relay 是更干净的演化。toolbar `hasFailures` 红点在实现期被砍掉(`BackgroundIndexingToolbarItem` 是静态 IconButton),`AggregateState.hasAnyFailure` 不再有消费方,弹出框 ViewModel 的 `hasAnyFailure` Output 同步下线,改为 `hasAnyHistory`。`BackgroundIndexingNode` 加 `.section(SectionKind, batches:)` case,identifier kind-only 保住 section 展开状态 |
+| 2026-08-03 | **Always Index 行级开关与 Recursive 标签**:`AlwaysIndexEntry` 新增 `@Default(true) isEnabled`;Settings UI 每行改为「启用开关 + 输入框 + `Recursive` 标签开关 + 删除」布局,两个开关均带 `.help()` tooltip;`startAlwaysIndexBatches` 派发时跳过 `isEnabled == false` 的条目 | 用户反馈:原每行唯一的开关绑定 `followDependencies`(递归索引依赖闭包)却因 `labelsHidden()` 无任何可见说明,易被误认为"是否索引该条目";且暂停某个镜像只能整行删除。行开关关闭语义与删除行一致 —— 在跑批次自然跑完,仅抑制后续派发;重新打开时 entries 的 `Equatable` 变化会重置 dispatched gate 自动重新派发。`@Default(true)` 保证旧持久化数据解码为启用,无迁移成本 |
+| 2026-08-03 | **修订 2026-04-28 engine swap 决策**:`handleEngineSwap` 不再清 `historyRelay`,历史跨源切换保留;`StagingStore.clearForEngineSwap` 改为原子 `drainForEngineSwap`,swap 时把等待 coalesce 窗口的已完结批次原样落入 history,仍在跑的批次经 `cancelledSwapSnapshot` 合成为已取消快照(镜像 manager `finalize` 语义:`isFinished`/`isCancelled` 置位,非 terminal item 置 `.cancelled`)后落入 history;仅用户 Clear History 清空 | 用户反馈:切换源后弹出框的索引历史被清空。原设计认为"旧引擎的批次和历史不再适用",但 history 条目是纯值快照(UUID id,无引擎引用),语义上是"本 Document 会话索引过什么"而非引擎状态。swap 时在跑批次的 `.batchCancelled` 事件因 pump 已停永不到达,不合成快照就会凭空消失;`batchesRelay` 先清空再落 history,维持 `flushPendingUpdates` 的 active-then-history 顺序约束 |
