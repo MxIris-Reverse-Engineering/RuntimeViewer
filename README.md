@@ -1,11 +1,22 @@
 <p align="center">
-  <img width="30%" src="Resources/AppIcon.png">
+  <img width="180" src="Resources/AppIcon.png" alt="Runtime Viewer app icon">
 </p>
 
 <h1 align="center">Runtime Viewer</h1>
 
 <p align="center">
   A modern alternative to RuntimeBrowser for inspecting Objective-C and Swift runtime interfaces
+</p>
+
+<p align="center">
+  <a href="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/latest"><img src="https://img.shields.io/github/v/release/MxIris-Reverse-Engineering/RuntimeViewer?include_prereleases&sort=semver" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%2015%2B-lightgrey" alt="Platform macOS 15+">
+  <img src="https://img.shields.io/badge/Swift-6.2-orange" alt="Swift 6.2">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/MxIris-Reverse-Engineering/RuntimeViewer" alt="MIT License"></a>
+</p>
+
+<p align="center">
+  <img src="Resources/Screenshots/Overview.png" alt="Runtime Viewer inspecting DVTFoundation, WebKit, and Catalyst UIKitCore side by side">
 </p>
 
 ## Powered By
@@ -75,6 +86,35 @@ If Catalyst or code-injected applications don't appear in the directory list, tr
 
 ## Screenshots
 
-![Screenshot 1](./Resources/Screenshot-001.png)
-![Screenshot 2](./Resources/Screenshot-002.png)
-![Screenshot 3](./Resources/Screenshot-003.png)
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="Resources/Screenshots/ObjCInterface.png" alt="Objective-C class interface with ivar offsets and subclass inspector">
+      <p><b>Objective-C Interfaces</b><br>Headers reconstructed straight from Mach-O, annotated with ivar offsets and IMP addresses. The inspector lists every subclass found in the image.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="Resources/Screenshots/Protocols.png" alt="Objective-C protocol with conforming types listed in the inspector">
+      <p><b>Protocols &amp; Conforming Types</b><br>Browse protocol declarations with their required and optional members, and jump to every type that conforms to them.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="Resources/Screenshots/SwiftTypeLayout.png" alt="Specialized Swift generic struct annotated with type layout and field offsets">
+      <p><b>Swift Interfaces &amp; Type Layout</b><br>Swift types come with size, stride, alignment, extra inhabitant counts, and per-field offsets rendered inline as comments.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="Resources/Screenshots/GenericSpecialization.png" alt="Specialize dialog with a searchable type picker for a generic parameter">
+      <p><b>Generic Specialization</b><br>Bind concrete types to generic parameters through a searchable picker that respects the parameter's protocol constraints.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="Resources/Screenshots/DyldSharedCache.png" alt="Dyld shared cache tree with the export wizard's image selection step">
+      <p><b>Dyld Shared Cache &amp; Export</b><br>Browse the shared cache as a file tree, then export interfaces for any subset of its 3,000+ images through the multi-step wizard.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="Resources/Screenshots/TabsAndHistory.png" alt="Tabbed windows with the navigation history back menu open">
+      <p><b>Tabs &amp; Navigation History</b><br>Open runtime objects in tabs and retrace your path with Xcode-style back/forward navigation history.</p>
+    </td>
+  </tr>
+</table>
