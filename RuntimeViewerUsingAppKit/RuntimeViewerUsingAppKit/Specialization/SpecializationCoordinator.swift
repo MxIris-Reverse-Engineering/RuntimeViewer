@@ -113,7 +113,8 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
             relativeTo: anchor.bounds,
             of: anchor,
             preferredEdge: .minY,
-            behavior: .transient
+            behavior: .transient,
+            animates: true
         )
     }
 
