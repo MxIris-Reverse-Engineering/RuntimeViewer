@@ -4,33 +4,8 @@
 import PackageDescription
 import Foundation
 
-let localEnvironment: [String: String] = {
-    let localEnvironmentFilePath = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()
-        .appendingPathComponent(".package.env")
-        .path
-    guard FileManager.default.fileExists(atPath: localEnvironmentFilePath),
-          let contents = try? String(contentsOfFile: localEnvironmentFilePath, encoding: .utf8)
-    else {
-        return [:]
-    }
-    var environment: [String: String] = [:]
-    for line in contents.components(separatedBy: .newlines) {
-        let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-        if trimmedLine.isEmpty || trimmedLine.hasPrefix("#") {
-            continue
-        }
-        let parts = trimmedLine.split(separator: "=", maxSplits: 1)
-        guard parts.count == 2 else { continue }
-        let key = parts[0].trimmingCharacters(in: .whitespaces)
-        let value = parts[1].trimmingCharacters(in: .whitespaces)
-        environment[key] = value
-    }
-    return environment
-}()
-
 func envEnable(_ key: String, default defaultValue: Bool = false) -> Bool {
-    let value = localEnvironment[key] ?? Context.environment[key]
+    let value = Context.environment[key]
     guard let value else {
         return defaultValue
     }
@@ -183,7 +158,6 @@ let package = Package(
             local: .package(
                 path: "../../UIFoundation",
                 isRelative: true,
-                isEnabled: true,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
