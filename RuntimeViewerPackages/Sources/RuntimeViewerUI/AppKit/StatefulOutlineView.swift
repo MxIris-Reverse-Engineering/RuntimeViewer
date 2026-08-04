@@ -46,6 +46,18 @@ open class StatefulOutlineView: OutlineView {
     private var expansionAutosaveObservers: [NSObjectProtocol] = []
     private var isApplyingExpansionAutosave = false
 
+    /// Whether a coalesced autosave flush is already queued on the main
+    /// queue. Expand/collapse notifications arrive once per item — an
+    /// option-click "expand all" posts one per descendant — and each used
+    /// to trigger a full row walk plus a `UserDefaults` write, turning
+    /// the burst into O(rows²). One queued flush per burst keeps the
+    /// total cost at a single O(rows) walk.
+    private var isExpansionPersistScheduled = false
+
+    /// Number of persist walks actually performed. Regression seam for
+    /// the coalescing behavior (see `StatefulOutlineViewAutosaveTests`).
+    package private(set) var expansionAutosavePersistCount = 0
+
     open func beginFiltering() {
         guard filteringState == .idle else { return }
         saveExpansionState()
@@ -185,16 +197,36 @@ open class StatefulOutlineView: OutlineView {
             object: self,
             queue: .main
         ) { [weak self] _ in
-            self?.persistExpansionStateIfNeeded()
+            self?.scheduleExpansionPersist()
         }
         let didCollapse = center.addObserver(
             forName: NSOutlineView.itemDidCollapseNotification,
             object: self,
             queue: .main
         ) { [weak self] _ in
-            self?.persistExpansionStateIfNeeded()
+            self?.scheduleExpansionPersist()
         }
         expansionAutosaveObservers = [didExpand, didCollapse]
+    }
+
+    /// Coalesces a burst of expand/collapse notifications into one
+    /// persist walk on the next main-queue turn. The full precondition
+    /// set re-runs at flush time because the state can change within the
+    /// coalescing window (a filter starting, the autosave name clearing).
+    /// Best-effort by design: a flush pending when the view deallocates
+    /// is dropped, losing at most the burst from the final runloop turn.
+    private func scheduleExpansionPersist() {
+        guard !isApplyingExpansionAutosave,
+              filteringState == .idle,
+              expansionAutosaveUserDefaultsKey != nil,
+              persistentObjectForExpansion != nil,
+              !isExpansionPersistScheduled else { return }
+        isExpansionPersistScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isExpansionPersistScheduled = false
+            self.persistExpansionStateIfNeeded()
+        }
     }
 
     private func persistExpansionStateIfNeeded() {
@@ -205,6 +237,7 @@ open class StatefulOutlineView: OutlineView {
               let key = expansionAutosaveUserDefaultsKey,
               let persistentObjectForExpansion else { return }
 
+        expansionAutosavePersistCount += 1
         var persistentObjects: [String] = []
         let totalRows = numberOfRows
         for rowIndex in 0 ..< totalRows {
