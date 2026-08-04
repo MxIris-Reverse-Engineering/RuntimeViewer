@@ -110,6 +110,17 @@ struct ContentTextPipelineTests {
 
     @Test("recreating the view model for the same object renders from the cache without a new fetch")
     func navigationRevisitRendersFromCache() async throws {
+        // The interface cache listens for `.fullReload` broadcasts on the
+        // shared local engine; a concurrent suite broadcasting one (the
+        // real-engine flush test) would flush this cache between the two
+        // view models and turn the "no second fetch" assertion flaky.
+        // Hold the cross-suite lock (see SharedLocalEngineTestLock.swift).
+        try await withSharedLocalEngineLock {
+            try await runNavigationRevisitRendersFromCache()
+        }
+    }
+
+    private func runNavigationRevisitRendersFromCache() async throws {
         let fetchRecorder = InterfaceFetchRecorder()
         let fixtureRuntimeObject = makeRuntimeObject()
         let documentState = withLiveDependencyContext { DocumentState() }

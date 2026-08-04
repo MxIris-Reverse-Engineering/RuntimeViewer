@@ -15,6 +15,15 @@ import Testing
 @Suite("RuntimeInterfaceCache", .serialized)
 @MainActor
 struct RuntimeInterfaceCacheTests {
+    /// Every cache in this suite subscribes to the shared local engine's
+    /// data-change channel; its one-shot startup `.fullReload` broadcast
+    /// would flush whichever test's cache it happens to land in. The
+    /// per-test async init waits that traffic out (see
+    /// SharedLocalEngineTestLock.swift).
+    init() async {
+        await ensureSharedLocalEngineSettled()
+    }
+
     // MARK: - Hit / miss basics
 
     @Test("a repeated lookup for the same key costs one fetch")
@@ -126,26 +135,32 @@ struct RuntimeInterfaceCacheTests {
 
     @Test("a dataChangePublisher event flushes the cache")
     func dataChangeEventFlushesCache() async throws {
-        let fetchRecorder = FetchRecorder()
-        let documentState = DocumentState()
-        let interfaceCache = makeCache(documentState: documentState, fetchRecorder: fetchRecorder)
-        let fixtureObject = makeRuntimeObject(named: "CacheFixtureAlpha")
+        // This test broadcasts on the process-shared engine — every other
+        // live subscriber in the test process hears the `.fullReload` —
+        // so it must hold the cross-suite lock (see
+        // SharedLocalEngineTestLock.swift).
+        try await withSharedLocalEngineLock {
+            let fetchRecorder = FetchRecorder()
+            let documentState = DocumentState()
+            let interfaceCache = makeCache(documentState: documentState, fetchRecorder: fetchRecorder)
+            let fixtureObject = makeRuntimeObject(named: "CacheFixtureAlpha")
 
-        _ = try await interfaceCache.interface(for: fixtureObject, options: .init())
-        #expect(fetchRecorder.totalFetchCount == 1)
-
-        // Broadcasts `.fullReload` through the real engine → RxCombine →
-        // main-actor invalidation wiring the cache installs in its init.
-        await documentState.runtimeEngine.reloadData(isReloadImageNodes: false)
-
-        // The broadcast hops engine Task → Combine subject → main-actor
-        // task, so poll: a lookup stays a cache hit until the flush lands,
-        // then refetches exactly once.
-        let refetchedAfterFlush = try await pollUntil(timeout: .seconds(10)) {
             _ = try await interfaceCache.interface(for: fixtureObject, options: .init())
-            return fetchRecorder.totalFetchCount == 2
+            #expect(fetchRecorder.totalFetchCount == 1)
+
+            // Broadcasts `.fullReload` through the real engine → RxCombine →
+            // main-actor invalidation wiring the cache installs in its init.
+            await documentState.runtimeEngine.reloadData(isReloadImageNodes: false)
+
+            // The broadcast hops engine Task → Combine subject → main-actor
+            // task, so poll: a lookup stays a cache hit until the flush lands,
+            // then refetches exactly once.
+            let refetchedAfterFlush = try await pollUntil(timeout: .seconds(10)) {
+                _ = try await interfaceCache.interface(for: fixtureObject, options: .init())
+                return fetchRecorder.totalFetchCount == 2
+            }
+            #expect(refetchedAfterFlush, "the data-change broadcast never flushed the cache")
         }
-        #expect(refetchedAfterFlush, "the data-change broadcast never flushed the cache")
     }
 
     @Test("a fetch that started before a flush cannot repopulate the cache")

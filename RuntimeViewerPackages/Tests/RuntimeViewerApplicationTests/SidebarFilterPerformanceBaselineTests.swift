@@ -295,6 +295,17 @@ struct SidebarFilterPerformanceBaselineTests {
 
     @Test("view model end-to-end: seeded reload and debounced search")
     func viewModelEndToEndSearch() async throws {
+        // The seeded view model subscribes to the shared local engine's
+        // data-change broadcasts; a concurrent suite firing a real
+        // `.fullReload` (the interface-cache flush test) would reload the
+        // fixture and reset the search state mid-assertion. Hold the
+        // cross-suite lock (see SharedLocalEngineTestLock.swift).
+        try await withSharedLocalEngineLock {
+            try await runViewModelEndToEndSearch()
+        }
+    }
+
+    private func runViewModelEndToEndSearch() async throws {
         let localRuntimeEngine = RuntimeEngine.local
 
         // Wait for the local engine to publish the test process's image list.
