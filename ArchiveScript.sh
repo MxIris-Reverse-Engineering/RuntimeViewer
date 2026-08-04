@@ -399,7 +399,7 @@ fi
 if $UPLOAD_TO_GITHUB; then
     log "Uploading GitHub Release"
     GH_ARGS=(release create "$VERSION_TAG" \
-        --title "RuntimeViewer $VERSION_TAG")
+        --title "$VERSION_TAG")
     [[ "$CHANNEL" == "beta" ]] && GH_ARGS+=(--prerelease)
     if [[ -n "$RELEASE_NOTES" && -f "$RELEASE_NOTES" ]]; then
         GH_ARGS+=(--notes-file "$RELEASE_NOTES")
