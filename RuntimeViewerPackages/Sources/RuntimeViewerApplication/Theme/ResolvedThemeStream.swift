@@ -26,10 +26,18 @@ public final class ResolvedThemeStream {
     public let observable: Observable<ResolvedTheme>
 
     private init() {
+        // Resolve the Settings instance once, outside the tracking closure:
+        // the tracking bridge re-runs `access` on a bare main-queue hop
+        // (task-locals lost), so a `@Dependency` resolution inside the
+        // closure re-resolves against the ambient default context — in a
+        // test process that is `.test`, which silently swaps in a different
+        // Settings instance and kills the tracking chain after the first
+        // re-arm. See `Observable.tracking`'s documentation.
+        @Dependency(\.settings) var settings
+        let trackedSettings = settings
         observable = Observable<ResolvedTheme>
             .tracking {
-                @Dependency(\.settings) var settings
-                return ResolvedTheme(settings: settings)
+                ResolvedTheme(settings: trackedSettings)
             }
             .distinctUntilChanged()
             .share(replay: 1, scope: .forever)

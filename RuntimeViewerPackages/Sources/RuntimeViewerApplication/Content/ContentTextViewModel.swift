@@ -7,13 +7,29 @@ import AppKit
 import UIKit
 #endif
 
+import os
+import Semantic
 import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import MemberwiseInit
 import Dependencies
 
+/// Signpost intervals for the two content-pipeline phases so Instruments
+/// (Logging template) can attribute fetch vs. build wall time. Mirrors the
+/// TypePicker precedent (`Specialization.TypePicker`).
+private let contentTextSignposter = OSSignposter(
+    subsystem: "com.RuntimeViewer.RuntimeViewerApplication",
+    category: "Content.TextPipeline"
+)
+
 public final class ContentTextViewModel: ViewModel<ContentRoute> {
+    /// Fetches the theme-independent interface of a runtime object.
+    /// Injectable so tests can count fetches and simulate failures; the
+    /// default implementation forwards to the document's current runtime
+    /// engine at call time (the engine can be swapped mid-document).
+    typealias InterfaceProvider = @Sendable (RuntimeObject, RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface?
+
     @Observed
     public private(set) var theme: ThemeProfile
 
@@ -26,19 +42,35 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
     public private(set) var attributedString: NSAttributedString?
 
-    public init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<ContentRoute>) {
+    public convenience init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<ContentRoute>) {
+        self.init(runtimeObject: runtimeObject, documentState: documentState, router: router, interfaceProvider: nil)
+    }
+
+    init(
+        runtimeObject: RuntimeObject,
+        documentState: DocumentState,
+        router: any Router<ContentRoute>,
+        interfaceProvider: InterfaceProvider?
+    ) {
         self.runtimeObject = runtimeObject
         self.theme = ResolvedTheme.fallback
         super.init(documentState: documentState, router: router)
 
         self.imageNameOfRuntimeObject = runtimeObject.imageName
 
+        let resolvedInterfaceProvider: InterfaceProvider = interfaceProvider ?? { [documentState] runtimeObject, options in
+            try await documentState.runtimeEngine.interface(for: runtimeObject, options: options)
+        }
+
         let transformerObservable: Observable<Transformer.Configuration>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        // The Settings instance is resolved once out here (base-class
+        // `@Dependency`), never inside the tracking closure — the re-arm
+        // hop loses the dependency context; see `ResolvedThemeStream`.
+        let trackedSettings = settings
         transformerObservable = Observable<Transformer.Configuration>
             .tracking {
-                @Dependency(\.settings) var settings
-                return settings.transformer
+                trackedSettings.transformer
             }
             .share(replay: 1, scope: .whileConnected)
         #else
@@ -63,25 +95,75 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .bind(to: $theme)
             .disposed(by: rx.disposeBag)
 
+        // ── Fetch half (theme-independent) ──────────────────────────────
+        // Only object / generation-option / transformer changes reach the
+        // engine; theme and font-size changes never trigger an XPC
+        // round-trip — they replay the latest fetched interface into the
+        // render half below.
+        //
         // Capture the document-scoped dependencies instead of `self`: the
         // `Observable.async` Task keeps running briefly after disposal
         // (cancellation is cooperative), so an `unowned self` here aborts in
         // `swift_unknownObjectUnownedLoadStrong` whenever the ViewModel is
         // rebound away (tab switch / close) mid-generation.
-        Observable.combineLatest($runtimeObject, appDefaults.$options, themeObservable, transformerObservable)
-            .flatMapLatest { [documentState = self.documentState, _commonLoading = self._commonLoading] runtimeObject, options, theme, transformer in
+        let interfaceStream = Observable
+            .combineLatest(
+                $runtimeObject,
+                appDefaults.$options.distinctUntilChanged(),
+                transformerObservable.distinctUntilChanged()
+            )
+            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer -> Observable<(interfaceString: SemanticString, runtimeObject: RuntimeObject)?> in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 return Observable.async {
-                    try await documentState.runtimeEngine.interface(for: runtimeObject, options: mergedOptions).map { ($0.interfaceString, theme, runtimeObject) }
+                    let fetchInterval = contentTextSignposter.beginInterval("content.interfaceFetch", id: contentTextSignposter.makeSignpostID())
+                    defer { contentTextSignposter.endInterval("content.interfaceFetch", fetchInterval) }
+                    return try await resolvedInterfaceProvider(runtimeObject, mergedOptions).map {
+                        (interfaceString: $0.interfaceString, runtimeObject: runtimeObject)
+                    }
                 }
                 .trackActivity(_commonLoading)
+                // The catch must live on this inner sequence: one failed
+                // fetch surfaces as a single nil emission while the outer
+                // subscription stays alive for subsequent object / options /
+                // theme changes. A trailing `catchAndReturn` on the outer
+                // chain would complete the whole pipeline on first error and
+                // permanently freeze this tab's content.
+                .catchAndReturn(nil)
             }
-            .catchAndReturn(nil)
+            .share(replay: 1, scope: .whileConnected)
+
+        // ── Render half (theme-dependent, off-main) ─────────────────────
+        // Rebuilds the attributed string whenever the fetched interface or
+        // the theme changes. The build runs on a background scheduler;
+        // `flatMapLatest` drops a superseded build's emission, so a burst of
+        // font-size clicks only publishes the newest result.
+        Observable
+            .combineLatest(interfaceStream, themeObservable)
+            .flatMapLatest { interfacePair, theme -> Observable<NSAttributedString?> in
+                Observable.just(())
+                    .observe(on: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
+                    .map { Self.renderAttributedString(for: interfacePair, theme: theme) }
+            }
             .observeOnMainScheduler()
-            .map { $0.map { $0.attributedString(for: $1, runtimeObjectName: $2) } }
             .bind(to: $attributedString)
             .disposed(by: rx.disposeBag)
+    }
+
+    /// Builds the display-ready attributed string for a fetched interface.
+    ///
+    /// `nonisolated`: invoked on the render half's background scheduler.
+    /// Safe off the main thread — `ResolvedTheme`'s color/font lookups are
+    /// init-time-precomputed read-only tables, and the builder allocates
+    /// only immutable font/color/string values, returning an immutable copy.
+    nonisolated static func renderAttributedString(
+        for interfacePair: (interfaceString: SemanticString, runtimeObject: RuntimeObject)?,
+        theme: ThemeProfile
+    ) -> NSAttributedString? {
+        guard let interfacePair else { return nil }
+        let buildInterval = contentTextSignposter.beginInterval("content.attributedStringBuild", id: contentTextSignposter.makeSignpostID())
+        defer { contentTextSignposter.endInterval("content.attributedStringBuild", buildInterval) }
+        return interfacePair.interfaceString.attributedString(for: theme, runtimeObjectName: interfacePair.runtimeObject)
     }
 
     @MemberwiseInit(.public)
