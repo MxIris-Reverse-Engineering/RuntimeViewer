@@ -125,6 +125,29 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         }
     }
 
+    /// Pure-value replica of `currentAndChildrenNames`, computed straight
+    /// from a `RuntimeObject` tree so callers can match against the
+    /// haystack without materializing a cell view model first (Open
+    /// Quickly matches all rows this way, then materializes cells only
+    /// for hits).
+    ///
+    /// Byte-for-byte parity with the instance property is a hard
+    /// contract: fuzzy highlight ranges are computed against this string
+    /// and later mapped by the materialized cell against ITS haystack.
+    /// Both sides therefore sort children by `displayName` and join with
+    /// single spaces — change one and you must change the other (pinned
+    /// by `OpenQuicklyLazyConstructionTests`).
+    static func haystack(for runtimeObject: RuntimeObject) -> String {
+        let sortedChildren = runtimeObject.children.sorted { leftChild, rightChild in
+            leftChild.displayName < rightChild.displayName
+        }
+        let childrenNames = sortedChildren.map { haystack(for: $0) }.joined(separator: " ")
+        if childrenNames.isEmpty {
+            return runtimeObject.displayName
+        }
+        return "\(runtimeObject.displayName) \(childrenNames)"
+    }
+
     @Dependency(\.appDefaults)
     private var appDefaults
 

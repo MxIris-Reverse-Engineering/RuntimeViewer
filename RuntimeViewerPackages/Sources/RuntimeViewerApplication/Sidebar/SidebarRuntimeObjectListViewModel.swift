@@ -3,13 +3,35 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import MemberwiseInit
 
-public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
+// Not `final`: tests subclass this to seed a canned object list through
+// the real `reloadData` path (mirroring `SidebarRuntimeObjectViewModel`,
+// which is subclassable for the same reason).
+public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     public typealias CellLookup = (cell: SidebarRuntimeObjectCellViewModel, ancestors: [SidebarRuntimeObjectCellViewModel])
 
     @Observed public private(set) var searchStringForOpenQuickly: String = ""
-    @Observed public private(set) var nodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var filteredNodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var isFilteringForOpenQuickly: Bool = false
+
+    /// Sorted top-level objects backing Open Quickly. Rows materialize
+    /// into cell view models lazily (see `openQuicklyCellViewModel(at:)`),
+    /// so a reload no longer eagerly constructs a second full copy of the
+    /// sidebar's cell view models on the main thread — the legacy path
+    /// paid N cell constructions (icons, attributed titles, child trees)
+    /// per image load for a list most sessions never open.
+    private var openQuicklyRuntimeObjects: [RuntimeObject] = []
+
+    /// Haystack strings aligned index-for-index with
+    /// `openQuicklyRuntimeObjects`. Computed off-main by the first query
+    /// after a reload, then reused for every subsequent keystroke.
+    private var openQuicklyHaystacksCache: [String]?
+
+    /// Cell view models materialized so far, keyed by row index into
+    /// `openQuicklyRuntimeObjects`. Only rows some query has actually
+    /// matched exist here; repeat matches across keystrokes reuse the
+    /// same instance so DifferenceKit sees stable row identities.
+    /// Internal (not private) so tests can pin the lazy contract.
+    private(set) var openQuicklyCellViewModelsByRowIndex: [Int: SidebarRuntimeObjectCellViewModel] = [:]
 
     /// Latest non-nil root object the document is inspecting, waiting to
     /// be resolved to a concrete cell once it appears in `nodes`. Driven
@@ -93,17 +115,40 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
             self.currentOpenQuicklyFilterTask = nil
             self.currentOpenQuicklyFilterGeneration &+= 1
             self.searchStringForOpenQuickly = ""
-            self.nodesForOpenQuickly = nodes.map { $0.runtimeObject }.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: true) }
+            // `nodes` is already name-sorted (`isSorted == true`), so the
+            // Open Quickly row order comes for free. Everything derived
+            // from the previous object list is invalidated together.
+            self.openQuicklyRuntimeObjects = self.nodes.map(\.runtimeObject)
+            self.openQuicklyHaystacksCache = nil
+            self.openQuicklyCellViewModelsByRowIndex = [:]
             self.filteredNodesForOpenQuickly = []
         }
     }
 
+    /// Returns the row's cell view model, materializing it on first use.
+    /// Construction is the expensive part of the legacy reload (icons +
+    /// attributed title + child tree), so it is deferred to rows a query
+    /// actually surfaces and amortized across keystrokes by the cache.
+    @MainActor
+    private func openQuicklyCellViewModel(at rowIndex: Int) -> SidebarRuntimeObjectCellViewModel {
+        if let materializedCellViewModel = openQuicklyCellViewModelsByRowIndex[rowIndex] {
+            return materializedCellViewModel
+        }
+        let cellViewModel = SidebarRuntimeObjectCellViewModel(
+            runtimeObject: openQuicklyRuntimeObjects[rowIndex],
+            forOpenQuickly: true
+        )
+        openQuicklyCellViewModelsByRowIndex[rowIndex] = cellViewModel
+        return cellViewModel
+    }
+
     /// Open Quickly filter pass: fuzzy-match off-main, apply on main iff
     /// still current. Mirrors the sidebar's `scheduleRefilter()` but over
-    /// the flat `nodesForOpenQuickly` array with the fixed Open Quickly
-    /// configuration. Only the displayed top-level rows receive highlight
-    /// updates — the legacy path also cascaded highlights into never-shown
-    /// child cells, which was pure waste.
+    /// the flat value-array of top-level objects with the fixed Open
+    /// Quickly configuration. Matching runs against pure haystack strings
+    /// (computed off-main and cached per reload); only matched rows are
+    /// materialized into cell view models, so a keystroke costs
+    /// O(matches) main-thread work instead of O(all rows).
     @MainActor
     private func scheduleOpenQuicklyRefilter(query: String) {
         currentOpenQuicklyFilterTask?.cancel()
@@ -115,9 +160,10 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
             if isFilteringForOpenQuickly {
                 isFilteringForOpenQuickly = false
             }
-            // Clear stale highlights so the next search starts clean;
-            // the guarded didSet makes rows without a highlight free.
-            for cellViewModel in nodesForOpenQuickly {
+            // Clear stale highlights so the next search starts clean.
+            // Only materialized rows can carry one, and the guarded
+            // didSet makes already-clean rows free.
+            for cellViewModel in openQuicklyCellViewModelsByRowIndex.values {
                 cellViewModel.filterResult = nil
             }
             filteredNodesForOpenQuickly = []
@@ -129,23 +175,34 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
         }
 
         let context = FilterContext(query: query, isCaseInsensitive: false, mode: .fuzzySearch)
-        let cellViewModels = nodesForOpenQuickly
-        let haystacks = cellViewModels.map(\.filterableString)
+        let runtimeObjects = openQuicklyRuntimeObjects
+        let cachedHaystacks = openQuicklyHaystacksCache
         currentOpenQuicklyFilterTask = Task { @MainActor [weak self] in
+            let haystacks: [String]
+            if let cachedHaystacks {
+                haystacks = cachedHaystacks
+            } else {
+                let computedHaystacks = await Self.computeHaystacksOffMain(for: runtimeObjects)
+                guard !Task.isCancelled, let self, self.currentOpenQuicklyFilterGeneration == generation else { return }
+                self.openQuicklyHaystacksCache = computedHaystacks
+                haystacks = computedHaystacks
+            }
             let verdicts = await Self.matchOffMain(context: context, haystacks: haystacks)
             guard !Task.isCancelled, let self else { return }
             guard self.currentOpenQuicklyFilterGeneration == generation else { return }
 
-            var isMatchedByIndex = [Bool](repeating: false, count: cellViewModels.count)
+            var matchedRowIndices = Set<Int>(minimumCapacity: verdicts.count)
             var filteredCellViewModels: [SidebarRuntimeObjectCellViewModel] = []
             filteredCellViewModels.reserveCapacity(verdicts.count)
             for verdict in verdicts {
-                isMatchedByIndex[verdict.haystackIndex] = true
-                let cellViewModel = cellViewModels[verdict.haystackIndex]
+                matchedRowIndices.insert(verdict.haystackIndex)
+                let cellViewModel = self.openQuicklyCellViewModel(at: verdict.haystackIndex)
                 cellViewModel.filterResult = verdict.result
                 filteredCellViewModels.append(cellViewModel)
             }
-            for (cellViewModelIndex, cellViewModel) in cellViewModels.enumerated() where !isMatchedByIndex[cellViewModelIndex] {
+            // Un-highlight previously materialized rows that missed this
+            // query; rows never materialized never had a highlight.
+            for (rowIndex, cellViewModel) in self.openQuicklyCellViewModelsByRowIndex where !matchedRowIndices.contains(rowIndex) {
                 cellViewModel.filterResult = nil
             }
             self.filteredNodesForOpenQuickly = filteredCellViewModels
@@ -157,6 +214,13 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
     /// concurrent executor, keeping the scoring off the main thread.
     private nonisolated static func matchOffMain(context: FilterContext, haystacks: [String]) async -> [FilterMatchVerdict] {
         FilterEngine.match(context, haystacks: haystacks)
+    }
+
+    /// Off-main haystack computation — building 10k+ tree haystacks is
+    /// the other expensive half of the legacy eager reload. Pure value
+    /// work over the captured `RuntimeObject` array.
+    private nonisolated static func computeHaystacksOffMain(for runtimeObjects: [RuntimeObject]) async -> [String] {
+        runtimeObjects.map { SidebarRuntimeObjectCellViewModel.haystack(for: $0) }
     }
 
     public func transform(_ input: Input) -> Output {
