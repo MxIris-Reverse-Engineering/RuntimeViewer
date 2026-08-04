@@ -24,6 +24,16 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     @Observed
     public private(set) var isFiltering: Bool = false
 
+    /// In-flight root filter pass. Cancelled and superseded by every new
+    /// (coalesced) query so a slow older match can never overwrite a
+    /// newer query's results.
+    private var currentRootFilterTask: Task<Void, Never>?
+
+    /// Generation guard for `currentRootFilterTask` — also bumped when
+    /// `$nodes` is rebuilt, so verdicts computed against a discarded cell
+    /// tree are never applied.
+    private var currentRootFilterGeneration: Int = 0
+
     public init(documentState: DocumentState, router: any Router<SidebarRootRoute>, nodesSource: Observable<[RuntimeImageNode]>) {
         self.nodesSource = nodesSource
 
@@ -75,6 +85,69 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         $nodes
             .bind(to: $filteredNodes)
             .disposed(by: rx.disposeBag)
+
+        // A rebuilt image tree invalidates any in-flight filter pass —
+        // its verdicts belong to cells that are no longer on screen (the
+        // `$nodes → $filteredNodes` bind above already reset the list,
+        // matching the legacy behavior of dropping the visual filter on
+        // an image-list rebuild).
+        $nodes
+            .asObservable()
+            .skip(1)
+            .subscribeOnNextMainActor { [weak self] _ in
+                guard let self else { return }
+                currentRootFilterTask?.cancel()
+                currentRootFilterTask = nil
+                currentRootFilterGeneration &+= 1
+            }
+            .disposed(by: rx.disposeBag)
+    }
+
+    /// Root filter pass: snapshot the cell tree on the main actor,
+    /// compute verdicts (aggregate-name construction + matching) on the
+    /// global executor, then apply on the main actor iff still current.
+    /// The legacy path ran the whole cascade synchronously on the main
+    /// thread per (never actually delayed) keystroke.
+    @MainActor
+    private func scheduleRootRefilter(query: String) {
+        currentRootFilterTask?.cancel()
+        currentRootFilterGeneration &+= 1
+        let generation = currentRootFilterGeneration
+
+        if query.isEmpty {
+            currentRootFilterTask = nil
+            if isFiltering {
+                isFiltering = false
+            }
+            SidebarRootFilterPipeline.resetToUnfiltered(nodes)
+            filteredNodes = nodes
+            return
+        }
+
+        if !isFiltering {
+            isFiltering = true
+        }
+
+        let cells = nodes
+        let snapshotForest = SidebarRootFilterPipeline.snapshot(of: cells)
+        currentRootFilterTask = Task { @MainActor [weak self] in
+            let forestVerdict = await Self.computeVerdictsOffMain(for: snapshotForest, query: query)
+            guard !Task.isCancelled, let self else { return }
+            guard self.currentRootFilterGeneration == generation else { return }
+            guard let filteredCells = SidebarRootFilterPipeline.apply(forestVerdict, to: cells) else { return }
+            self.filteredNodes = filteredCells
+            self.currentRootFilterTask = nil
+        }
+    }
+
+    /// Hop for the verdict computation: `nonisolated async` runs on the
+    /// global concurrent executor, keeping the recursive aggregate-name
+    /// construction and ICU `contains` matching off the main thread.
+    private nonisolated static func computeVerdictsOffMain(
+        for forest: [SidebarRootFilterPipeline.SnapshotNode],
+        query: String
+    ) async -> SidebarRootFilterPipeline.ForestVerdict {
+        SidebarRootFilterPipeline.verdicts(for: forest, query: query)
     }
 
     @MemberwiseInit(.public)
@@ -137,22 +210,9 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
                         .delay(.milliseconds(150))
                 }
             }
-            .emitOnNextMainActor { [weak self] filter in
+            .emitOnNextMainActor { [weak self] query in
                 guard let self else { return }
-                for node in nodes {
-                    node.filter = filter
-                }
-                if filter.isEmpty {
-                    if isFiltering {
-                        isFiltering = false
-                    }
-                    filteredNodes = nodes
-                } else {
-                    if !isFiltering {
-                        isFiltering = true
-                    }
-                    filteredNodes = nodes.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
-                }
+                scheduleRootRefilter(query: query)
             }.disposed(by: rx.disposeBag)
 
         return Output(
