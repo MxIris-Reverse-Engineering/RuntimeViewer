@@ -4,7 +4,7 @@ import MetaCodable
 extension RuntimeObjectInterface {
     @Codable
     @MemberInit
-    public struct GenerationOptions: Sendable, Equatable {
+    public struct GenerationOptions: Sendable, Equatable, Hashable {
         @Default(ObjCGenerationOptions.default)
         public var objcHeaderOptions: ObjCGenerationOptions
 

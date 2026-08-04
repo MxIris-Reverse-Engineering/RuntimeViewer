@@ -26,9 +26,16 @@ private let contentTextSignposter = OSSignposter(
 public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// Fetches the theme-independent interface of a runtime object.
     /// Injectable so tests can count fetches and simulate failures; the
-    /// default implementation forwards to the document's current runtime
-    /// engine at call time (the engine can be swapped mid-document).
+    /// default implementation routes through the document's
+    /// `RuntimeInterfaceCache`, which reads the current runtime engine at
+    /// call time (the engine can be swapped mid-document) and flushes
+    /// itself on engine swaps and data-change events.
     typealias InterfaceProvider = @Sendable (RuntimeObject, RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface?
+
+    /// Single fetch path shared by the content pipeline's fetch half and
+    /// the link-resolution flows in `transform(_:)`, so an injected test
+    /// provider observes every fetch this ViewModel performs.
+    private let interfaceProvider: InterfaceProvider
 
     @Observed
     public private(set) var theme: ThemeProfile
@@ -54,13 +61,15 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     ) {
         self.runtimeObject = runtimeObject
         self.theme = ResolvedTheme.fallback
+        let interfaceCache = documentState.interfaceCache
+        self.interfaceProvider = interfaceProvider ?? { [interfaceCache] runtimeObject, options in
+            try await interfaceCache.interface(for: runtimeObject, options: options)
+        }
         super.init(documentState: documentState, router: router)
 
         self.imageNameOfRuntimeObject = runtimeObject.imageName
 
-        let resolvedInterfaceProvider: InterfaceProvider = interfaceProvider ?? { [documentState] runtimeObject, options in
-            try await documentState.runtimeEngine.interface(for: runtimeObject, options: options)
-        }
+        let resolvedInterfaceProvider = self.interfaceProvider
 
         let transformerObservable: Observable<Transformer.Configuration>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
@@ -186,12 +195,21 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     public func transform(_ input: Input) -> Output {
         let runtimeObjectNotFoundRelay = PublishRelay<Void>()
         
+        // Both link flows resolve through the shared `interfaceProvider`
+        // with the same merged options the destination ContentTextViewModel
+        // will fetch with, so the resolution fetch warms the cache entry the
+        // post-push display fetch then hits — one engine round-trip per link
+        // click instead of two. Which object the engine resolves does not
+        // depend on the options; they only shape the generated text.
         input.runtimeObjectClicked
-            .flatMapLatest { [documentState = self.documentState, _commonLoading = self._commonLoading] runtimeObject in
-                Observable.async {
-                    try await documentState.runtimeEngine.interface(for: runtimeObject, options: .init())
+            .flatMapLatest { [weak self] runtimeObject -> Signal<RuntimeObjectInterface?> in
+                guard let self else { return .empty() }
+                let interfaceProvider = self.interfaceProvider
+                let mergedOptions = self.currentMergedGenerationOptions
+                return Observable.async {
+                    try await interfaceProvider(runtimeObject, mergedOptions)
                 }
-                .trackActivity(_commonLoading)
+                .trackActivity(self._commonLoading)
                 .asSignal(onErrorJustReturn: nil)
             }
             .emit(with: self) { target, interface in
@@ -204,11 +222,14 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .disposed(by: rx.disposeBag)
 
         input.runtimeObjectOpenedInNewTab
-            .flatMapLatest { [documentState = self.documentState, _commonLoading = self._commonLoading] runtimeObject in
-                Observable.async {
-                    try await documentState.runtimeEngine.interface(for: runtimeObject, options: .init())
+            .flatMapLatest { [weak self] runtimeObject -> Signal<RuntimeObjectInterface?> in
+                guard let self else { return .empty() }
+                let interfaceProvider = self.interfaceProvider
+                let mergedOptions = self.currentMergedGenerationOptions
+                return Observable.async {
+                    try await interfaceProvider(runtimeObject, mergedOptions)
                 }
-                .trackActivity(_commonLoading)
+                .trackActivity(self._commonLoading)
                 .asSignal(onErrorJustReturn: nil)
             }
             .emit(with: self) { target, interface in

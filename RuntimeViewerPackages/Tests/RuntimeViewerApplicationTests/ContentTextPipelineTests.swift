@@ -106,6 +106,62 @@ struct ContentTextPipelineTests {
         withExtendedLifetime(mockRouter) {}
     }
 
+    // MARK: - Navigation revisits render from the interface cache
+
+    @Test("recreating the view model for the same object renders from the cache without a new fetch")
+    func navigationRevisitRendersFromCache() async throws {
+        let fetchRecorder = InterfaceFetchRecorder()
+        let fixtureRuntimeObject = makeRuntimeObject()
+        let documentState = withLiveDependencyContext { DocumentState() }
+        // One shared cache fed by a counting fetcher, with both view models
+        // routed through it — the same shape `ContentCoordinator` produces
+        // when navigation rebinds `ContentTextViewModel` onto one document.
+        let interfaceCache = RuntimeInterfaceCache(documentState: documentState) { runtimeObject, _ in
+            _ = fetchRecorder.recordFetch()
+            return RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
+        }
+        let cacheProvider: ContentTextViewModel.InterfaceProvider = { runtimeObject, options in
+            try await interfaceCache.interface(for: runtimeObject, options: options)
+        }
+
+        let firstMockRouter = MockRouter<ContentRoute>()
+        var firstViewModel: ContentTextViewModel? = withLiveDependencyContext {
+            ContentTextViewModel(
+                runtimeObject: fixtureRuntimeObject,
+                documentState: documentState,
+                router: firstMockRouter,
+                interfaceProvider: cacheProvider
+            )
+        }
+        let firstRendered = try await pollUntil(timeout: .seconds(10)) {
+            firstViewModel?.attributedString != nil
+        }
+        #expect(firstRendered, "the first view model never rendered")
+        #expect(fetchRecorder.fetchCount == 1)
+
+        // Navigate away: the coordinator drops the old view model…
+        firstViewModel = nil
+
+        // …and navigating back binds a fresh one for the same object.
+        let secondMockRouter = MockRouter<ContentRoute>()
+        let secondViewModel = withLiveDependencyContext {
+            ContentTextViewModel(
+                runtimeObject: fixtureRuntimeObject,
+                documentState: documentState,
+                router: secondMockRouter,
+                interfaceProvider: cacheProvider
+            )
+        }
+        let secondRendered = try await pollUntil(timeout: .seconds(10)) {
+            secondViewModel.attributedString != nil
+        }
+        #expect(secondRendered, "the revisiting view model never rendered")
+        #expect(fetchRecorder.fetchCount == 1, "a navigation revisit must render from the cache, not refetch")
+
+        withExtendedLifetime(firstMockRouter) {}
+        withExtendedLifetime(secondMockRouter) {}
+    }
+
     // MARK: - Render helper equivalence (pins the PR2 restyle baseline)
 
     @Test("renderAttributedString matches a direct builder invocation and returns an immutable string")

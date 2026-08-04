@@ -231,7 +231,12 @@ final class MainViewModel: ViewModel<MainRoute> {
                 guard let self else { return }
                 Task {
                     do {
-                        let semanticString = try await self.documentState.runtimeEngine.interface(for: runtimeObject, options: self.appDefaults.options)?.interfaceString
+                        // Fetch through the interface cache with the same
+                        // merged options as the content pane, so saving the
+                        // visible object is a cache hit and the written text
+                        // matches what the pane displays (the transformer
+                        // configuration participates in both).
+                        let semanticString = try await self.documentState.interfaceCache.interface(for: runtimeObject, options: self.currentMergedGenerationOptions)?.interfaceString
                         try semanticString?.string.write(to: url, atomically: true, encoding: .utf8)
                     } catch {
                         self.errorRelay.accept(error)
@@ -263,7 +268,10 @@ final class MainViewModel: ViewModel<MainRoute> {
                     Task { [weak self] in
                         guard let self else { return }
                         do {
-                            let semanticString = try await documentState.runtimeEngine.interface(for: runtimeObjectType, options: self.appDefaults.options)?.interfaceString
+                            // Same cache + merged options as the save flow:
+                            // sharing the visible object costs no engine
+                            // round-trip and yields the displayed text.
+                            let semanticString = try await documentState.interfaceCache.interface(for: runtimeObjectType, options: self.currentMergedGenerationOptions)?.interfaceString
                             completion(semanticString?.string.data(using: .utf8), nil)
                         } catch {
                             completion(nil, error)

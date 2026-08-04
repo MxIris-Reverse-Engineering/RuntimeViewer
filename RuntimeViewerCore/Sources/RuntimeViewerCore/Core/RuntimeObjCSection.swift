@@ -13,7 +13,7 @@ typealias LoadingEventContinuation = AsyncThrowingStream<RuntimeObjectsLoadingEv
 
 @Codable
 @MemberInit
-public struct ObjCGenerationOptions: Sendable, Equatable {
+public struct ObjCGenerationOptions: Sendable, Equatable, Hashable {
     @Default(false)
     public var stripProtocolConformance: Bool
     @Default(false)
