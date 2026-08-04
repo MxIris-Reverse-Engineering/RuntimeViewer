@@ -122,13 +122,19 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         }
         .disposed(by: rx.disposeBag)
 
+        // Keystroke coalescing: non-empty queries wait 150 ms (cancelled by
+        // the next keystroke via `flatMapLatest`), clearing applies
+        // immediately. NOTE: this must be `delay`, not `debounce` — on a
+        // single-element `.just` sequence, `debounce` flushes the pending
+        // element the moment the source completes, so the previous
+        // `.just(...).debounce(500ms)` never delayed anything.
         input.searchString
             .flatMapLatest { filter -> Signal<String> in
                 if filter.isEmpty {
                     return .just(filter)
                 } else {
                     return .just(filter)
-                        .debounce(.milliseconds(500))
+                        .delay(.milliseconds(150))
                 }
             }
             .emitOnNextMainActor { [weak self] filter in

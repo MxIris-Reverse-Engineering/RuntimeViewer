@@ -17,6 +17,17 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
     /// external imperative call.
     private let pendingSelectRelay = PublishRelay<RuntimeObject>()
 
+    /// In-flight Open Quickly fuzzy match. Cancelled and superseded by
+    /// every new (debounced) query so two searches never mutate the same
+    /// cell view models concurrently, and a slow older match can never
+    /// overwrite a newer query's results.
+    private var currentOpenQuicklyFilterTask: Task<Void, Never>?
+
+    /// Generation guard for `currentOpenQuicklyFilterTask` — also bumped
+    /// when `nodesForOpenQuickly` is rebuilt, so a match computed against
+    /// a discarded node array is never applied.
+    private var currentOpenQuicklyFilterGeneration: Int = 0
+
     override var isSorted: Bool { true }
 
     public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
@@ -78,10 +89,74 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
         try Task.checkCancellation()
 
         await MainActor.run {
+            self.currentOpenQuicklyFilterTask?.cancel()
+            self.currentOpenQuicklyFilterTask = nil
+            self.currentOpenQuicklyFilterGeneration &+= 1
             self.searchStringForOpenQuickly = ""
             self.nodesForOpenQuickly = nodes.map { $0.runtimeObject }.sorted().map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: true) }
             self.filteredNodesForOpenQuickly = []
         }
+    }
+
+    /// Open Quickly filter pass: fuzzy-match off-main, apply on main iff
+    /// still current. Mirrors the sidebar's `scheduleRefilter()` but over
+    /// the flat `nodesForOpenQuickly` array with the fixed Open Quickly
+    /// configuration. Only the displayed top-level rows receive highlight
+    /// updates — the legacy path also cascaded highlights into never-shown
+    /// child cells, which was pure waste.
+    @MainActor
+    private func scheduleOpenQuicklyRefilter(query: String) {
+        currentOpenQuicklyFilterTask?.cancel()
+        currentOpenQuicklyFilterGeneration &+= 1
+        let generation = currentOpenQuicklyFilterGeneration
+
+        if query.isEmpty {
+            currentOpenQuicklyFilterTask = nil
+            if isFilteringForOpenQuickly {
+                isFilteringForOpenQuickly = false
+            }
+            // Clear stale highlights so the next search starts clean;
+            // the guarded didSet makes rows without a highlight free.
+            for cellViewModel in nodesForOpenQuickly {
+                cellViewModel.filterResult = nil
+            }
+            filteredNodesForOpenQuickly = []
+            return
+        }
+
+        if !isFilteringForOpenQuickly {
+            isFilteringForOpenQuickly = true
+        }
+
+        let context = FilterContext(query: query, isCaseInsensitive: false, mode: .fuzzySearch)
+        let cellViewModels = nodesForOpenQuickly
+        let haystacks = cellViewModels.map(\.filterableString)
+        currentOpenQuicklyFilterTask = Task { @MainActor [weak self] in
+            let verdicts = await Self.matchOffMain(context: context, haystacks: haystacks)
+            guard !Task.isCancelled, let self else { return }
+            guard self.currentOpenQuicklyFilterGeneration == generation else { return }
+
+            var isMatchedByIndex = [Bool](repeating: false, count: cellViewModels.count)
+            var filteredCellViewModels: [SidebarRuntimeObjectCellViewModel] = []
+            filteredCellViewModels.reserveCapacity(verdicts.count)
+            for verdict in verdicts {
+                isMatchedByIndex[verdict.haystackIndex] = true
+                let cellViewModel = cellViewModels[verdict.haystackIndex]
+                cellViewModel.filterResult = verdict.result
+                filteredCellViewModels.append(cellViewModel)
+            }
+            for (cellViewModelIndex, cellViewModel) in cellViewModels.enumerated() where !isMatchedByIndex[cellViewModelIndex] {
+                cellViewModel.filterResult = nil
+            }
+            self.filteredNodesForOpenQuickly = filteredCellViewModels
+            self.currentOpenQuicklyFilterTask = nil
+        }
+    }
+
+    /// Hop for the fuzzy matcher: `nonisolated async` runs on the global
+    /// concurrent executor, keeping the scoring off the main thread.
+    private nonisolated static func matchOffMain(context: FilterContext, haystacks: [String]) async -> [FilterMatchVerdict] {
+        FilterEngine.match(context, haystacks: haystacks)
     }
 
     public func transform(_ input: Input) -> Output {
@@ -92,27 +167,16 @@ public final class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewMo
         }
         .disposed(by: rx.disposeBag)
 
+        // A live-stream debounce (unlike the sidebar's per-element delay):
+        // 150 ms of typing silence triggers one match. Short window on
+        // purpose — the match runs off-main and stale passes are cancelled
+        // by `scheduleOpenQuicklyRefilter`.
         input.searchStringForOpenQuickly
             .skip(1)
-            .debounce(.milliseconds(500))
-            .emitOnNextMainActor { [weak self] filter in
+            .debounce(.milliseconds(150))
+            .emitOnNextMainActor { [weak self] query in
                 guard let self else { return }
-                if filter.isEmpty {
-                    if isFilteringForOpenQuickly {
-                        isFilteringForOpenQuickly = false
-                    }
-                    filteredNodesForOpenQuickly = []
-                } else {
-                    if !isFilteringForOpenQuickly {
-                        isFilteringForOpenQuickly = true
-                    }
-                    Task.detached {
-                        let filteredNodesForOpenQuickly = await FilterEngine.filter(filter, items: self.nodesForOpenQuickly, mode: .fuzzySearch, isCaseInsensitive: false)
-                        await MainActor.run {
-                            self.filteredNodesForOpenQuickly = filteredNodesForOpenQuickly
-                        }
-                    }
-                }
+                scheduleOpenQuicklyRefilter(query: query)
             }
             .disposed(by: rx.disposeBag)
 
