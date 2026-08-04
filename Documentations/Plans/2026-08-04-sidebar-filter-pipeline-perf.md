@@ -82,8 +82,8 @@
 
 - **回归断言已翻转**：`SidebarFilterPerformanceBaselineTests` 现在钉死"keystroke 只允许重建高亮真实变化的行"。任何让计数回升的改动都会被测试抓住。
 - **跟进（未做，按测量再决定）**：
-  1. Open Quickly 的 `nodesForOpenQuickly` 仍在主线程 eager 构建第二份 N 个 cellVM（现约 250 ms/10k，debug）；如需进一步压缩镜像加载时间，考虑延迟构建或复用 sidebar 那份。
+  1. ~~Open Quickly 的 `nodesForOpenQuickly` 仍在主线程 eager 构建第二份 N 个 cellVM（现约 250 ms/10k，debug）~~ —— **已落地**：改为纯值 haystack 匹配 + 命中行惰性物化，见 `2026-08-04-openquickly-root-outline-perf.md`。
   2. TypePicker 的 debounce 仍是 500 ms（真 debounce，生效中）；如要与 sidebar 的 150 ms 手感对齐，单独一行改动。
   3. fuzzy 宽查询 ↔ 清空的 10k 次合法高亮重建（~200 ms debug）如成为可感知瓶颈，方案是把高亮 `NSAttributedString` 构建挪进 verdict 阶段（后台），apply 只做赋值——需要先给 cellVM 的 title 通道设计后台构建协议，勿轻做。
-  4. 根侧边栏（`SidebarRootViewModel`）过滤仍在主线程（量级小 + 有缓存 + 本次修好了合并窗口）；如 shared cache 镜像树继续膨胀，可复用本管线。
-  5. 内容区渲染管线优化（2026-05-17 计划的 PR1/PR2）仍待批准，与本次无关但同属"流畅度卖点"主线。
+  4. ~~根侧边栏（`SidebarRootViewModel`）过滤仍在主线程~~ —— **已落地**：`SidebarRootFilterPipeline` 三段式后台过滤，见 `2026-08-04-openquickly-root-outline-perf.md`。
+  5. 内容区渲染管线优化（2026-05-17 计划的 PR1/PR2）—— PR1 已另行落地（`2026-08-04-content-text-pipeline-pr1.md`），PR2/PR3 按度量门控。
