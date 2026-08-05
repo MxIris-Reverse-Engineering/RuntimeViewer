@@ -521,6 +521,17 @@ buttonStack.snp.makeConstraints { make in
 }
 ```
 
+### Diagnosing UI Flicker
+
+**Measure the frames before changing anything.** Flicker is a one-to-three-frame artifact; reading the code and reasoning about what "should" happen has repeatedly produced confident, wrong answers here. Ask for a screen recording, export **every** frame with `AVAssetReader` (time-point sampling is too coarse and misses the artifact outright), then pixel-diff consecutive frames and report changed-pixel count plus the y-range of the changed rows. Which pixels changed on which frame is the thing inference cannot give you.
+
+Two causes account for every flicker found so far — check them first:
+
+- **A highlight goes grey and then comes back.** `NSTableRowView.isEmphasized` is false whenever the owning table view is not the first responder, which draws the selection in the inactive grey. A click that moves focus into a click-to-navigate list greys out the selection in whatever view the user is actually watching, for focus the app hands straight back. Set `refusesFirstResponder = true` on lists whose only interaction is "click a row to go somewhere" (see the Inspector's Relationships / Specializations tables). Mouse clicks, row selection and `itemClicked` all keep working.
+- **A scroll result and a selection/content result land on different frames.** `NSOutlineView` materializes a row view only as the row scrolls into view, and applies the emphasized selection style after that. **Always scroll a row into view before selecting it** — never the reverse — and force the layout that the raw clip-view scroll would otherwise defer. `SidebarRuntimeObjectViewController.selectRowBringingIntoView(_:)` is the reference implementation; route new call sites through it rather than pairing `selectRowIndexes` with `scrollRowToVisible` by hand.
+
+Full write-up, including the frame table that pinned it down: `Documentations/ResolvedIssues/2026-08-05-sidebar-selection-highlight-flicker.md`.
+
 ### RxSwift Subscription Style
 
 **Always use trailing-closure variants** (NOT `.emit(onNext:)` / `.drive(onNext:)` / `.subscribe(onNext:)` label syntax):
