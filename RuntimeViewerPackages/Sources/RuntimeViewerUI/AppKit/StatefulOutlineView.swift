@@ -140,8 +140,17 @@ open class StatefulOutlineView: OutlineView {
         let row = row(forItem: selectedItem)
         guard row >= 0 else { return }
 
+        // Scroll before selecting. A row view is materialized as its row is
+        // scrolled into view, and the emphasized (accent-colored) selection
+        // style is applied on a pass after that — so selecting first draws the
+        // row once with the inactive grey highlight and flips it on the next
+        // frame. Forcing the layout closes the gap the raw clip-view scroll
+        // leaves behind, so the row view exists when the selection lands.
+        if !box.visibleRowIndexes.contains(row) {
+            box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
+            layoutSubtreeIfNeeded()
+        }
         selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
     }
 
     // MARK: - Reload
