@@ -50,4 +50,13 @@ public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRun
         self.runtimeObject = runtimeObject
         super.init(documentState: documentState, router: router)
     }
+
+    /// Point the tab at another object. Unlike the class-hierarchy and
+    /// relationships tabs this needs no placeholder: the specialized children
+    /// are already in memory on the `RuntimeObject`, so `$runtimeObject` maps
+    /// straight to the new rows with no fetch in between.
+    public func update(for runtimeObject: RuntimeObject) {
+        guard self.runtimeObject != runtimeObject else { return }
+        self.runtimeObject = runtimeObject
+    }
 }

@@ -27,6 +27,11 @@ final class InspectorClassViewController: UXEffectViewController<InspectorClassV
 
         let input = InspectorClassViewModel.Input()
         let output = viewModel.transform(input)
-        output.classHierarchy.drive(classHierarchyView.contentView.rx.stringValue).disposed(by: rx.disposeBag)
+
+        output.hierarchyState.driveOnNext { [weak self] hierarchyState in
+            guard let self else { return }
+            classHierarchyView.apply(hierarchyState)
+        }
+        .disposed(by: rx.disposeBag)
     }
 }

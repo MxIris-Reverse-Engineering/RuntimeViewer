@@ -12,6 +12,8 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
     
     private let (scrollView, tableView): (SelfSizingScrollView, SelfSizingTableView) = SelfSizingTableView.scrollableTableView()
 
+    private let skeletonPlaceholderView = SkeletonPlaceholderView.runtimeObjectList()
+
     override var contentViewUsingSafeArea: Bool { true }
 
     override func viewDidLoad() {
@@ -21,6 +23,7 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
             headerLabel
             scrollView
             emptyLabel
+            skeletonPlaceholderView
         }
 
         headerLabel.snp.makeConstraints { make in
@@ -37,6 +40,15 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
             make.center.equalTo(scrollView)
             make.leading.greaterThanOrEqualToSuperview().offset(16)
             make.trailing.lessThanOrEqualToSuperview().offset(-16)
+        }
+
+        skeletonPlaceholderView.snp.makeConstraints { make in
+            make.top.equalTo(headerLabel.snp.bottom).offset(12)
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
+            // Preference, not requirement: in a pane too short for the whole
+            // placeholder it is better to let it run past the bottom edge than
+            // to break a required constraint.
+            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide).priority(.high)
         }
 
         tableView.do {
@@ -91,7 +103,16 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
         )
         let output = viewModel.transform(input)
 
-        output.rows
+        // Bound before the visibility binding below so that when a query
+        // finishes, the table already holds the new rows by the time the
+        // placeholder is taken down. `compactMap` drops the `.loading` state
+        // entirely: the stale rows stay in the (hidden) table rather than
+        // being reloaded away and reloaded back.
+        output.state
+            .compactMap { state -> [InspectorRelationshipsCellViewModel]? in
+                guard case .loaded(let rows) = state else { return nil }
+                return rows
+            }
             .drive(tableView.rx.items) { (tableView: NSTableView, _: NSTableColumn?, _: Int, cellViewModel: InspectorRelationshipsCellViewModel) -> NSView? in
                 let cellView = tableView.box.makeView(ofClass: RuntimeObjectCellView<InspectorRelationshipsCellViewModel>.self) {
                     .init(contentInsets: .init(top: 0, left: 4, bottom: 0, right: 4))
@@ -101,9 +122,22 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
             }
             .disposed(by: rx.disposeBag)
 
+        output.state.driveOnNext { [weak self] state in
+            guard let self else { return }
+            switch state {
+            case .loading:
+                skeletonPlaceholderView.isPresentingPlaceholder = true
+                scrollView.isHidden = true
+                emptyLabel.isHidden = true
+            case .loaded(let rows):
+                skeletonPlaceholderView.isPresentingPlaceholder = false
+                scrollView.isHidden = rows.isEmpty
+                emptyLabel.isHidden = !rows.isEmpty
+            }
+        }
+        .disposed(by: rx.disposeBag)
+
         output.sectionTitle.drive(headerLabel.rx.stringValue).disposed(by: rx.disposeBag)
         output.emptyMessage.drive(emptyLabel.rx.stringValue).disposed(by: rx.disposeBag)
-        output.isEmpty.not().drive(emptyLabel.rx.isHidden).disposed(by: rx.disposeBag)
-        output.isEmpty.drive(scrollView.rx.isHidden).disposed(by: rx.disposeBag)
     }
 }
