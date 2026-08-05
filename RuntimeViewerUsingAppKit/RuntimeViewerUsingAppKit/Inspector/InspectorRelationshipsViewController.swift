@@ -59,6 +59,12 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
             $0.usesAutomaticRowHeights = true
             $0.style = .inset
             $0.intercellSpacing = .init(width: 0, height: 10)
+            // Clicking a row navigates away immediately, so keyboard focus
+            // here has nothing to act on. Taking first responder would only
+            // make the sidebar draw its selection unemphasized for the ~50ms
+            // until the new selection lands — a grey blink on the row the
+            // user is looking at, for focus the app hands straight back.
+            $0.refusesFirstResponder = true
         }
 
         scrollView.do {

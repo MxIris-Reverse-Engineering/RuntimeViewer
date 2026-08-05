@@ -57,6 +57,10 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             $0.allowsEmptySelection = true
             $0.usesAutomaticRowHeights = true
             $0.style = .sourceList
+            // Same reasoning as the Relationships list: clicking a row
+            // navigates away, so taking first responder only costs the
+            // sidebar its emphasized selection for a few frames.
+            $0.refusesFirstResponder = true
         }
 
         scrollView.do {
