@@ -116,7 +116,10 @@ extension SemanticString {
         }
         attributedString.endEditing()
 
-        return attributedString
+        // Immutable exit: the content pipeline builds this string on a
+        // background scheduler and hands it to the main thread, so the
+        // mutable builder instance must not escape.
+        return attributedString.copy() as! NSAttributedString
     }
 
     #if canImport(AppKit) && !targetEnvironment(macCatalyst)

@@ -384,6 +384,12 @@ extension SidebarRuntimeObjectViewController {
                 systemSymbolName: "textformat",
                 toolTip: "Case Insensitive",
             )
+            // Case-insensitive search is the default. FilterEngine used to
+            // invert this flag (state .off accidentally meant insensitive);
+            // now that the engine honors it, the button starts .on so the
+            // effective default behavior is unchanged and the highlighted
+            // state finally tells the truth.
+            searchCaseInsensitiveButton.state = .on
 
             hierarchy {
                 scrollView

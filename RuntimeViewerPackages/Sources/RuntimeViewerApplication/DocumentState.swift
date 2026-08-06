@@ -136,6 +136,14 @@ public final class DocumentState {
     /// a new engine via the `$runtimeEngine` subscription on every source
     /// switch — see that property's doc comment for the swap contract.
     public private(set) lazy var backgroundIndexingCoordinator = RuntimeBackgroundIndexingCoordinator(documentState: self)
+
+    /// Per-Document interface cache. Content navigation (push, tab switch,
+    /// back/forward) rebinds `ContentTextViewModel` and used to re-fetch
+    /// the interface over XPC on every rebind; routing single-object
+    /// fetches through this cache makes revisits render from memory. See
+    /// `RuntimeInterfaceCache` for the invalidation contract (engine swaps
+    /// and `dataChangePublisher` events flush it).
+    public private(set) lazy var interfaceCache = RuntimeInterfaceCache(documentState: self)
 }
 
 private final class SelectionRouter: Router {
