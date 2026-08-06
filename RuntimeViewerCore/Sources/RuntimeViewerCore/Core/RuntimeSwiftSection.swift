@@ -909,7 +909,7 @@ extension RuntimeSwiftSection {
         switch runtimeArgument {
         case .candidate(let runtimeCandidate):
             let matched = try matchUpstreamCandidate(runtimeCandidate, in: parameter)
-            return (.candidate(matched), matched.typeName.node)
+            return (.candidate(matched), matched.typeName.node.materialize())
         case .boundGeneric(let runtimeBase, let innerRuntimeArguments):
             guard depth < Self.maxSpecializationDepth else {
                 throw RuntimeEngine.EngineError.boundGenericInnerFailed(
@@ -996,7 +996,7 @@ extension RuntimeSwiftSection {
         case .class: boundKind = .boundGenericClass
         case .enum: boundKind = .boundGenericEnum
         }
-        let baseNode = wrappedAsType(base.typeName.node)
+        let baseNode = wrappedAsType(base.typeName.node.materialize())
         let normalizedInners = innerNodes.map(wrappedAsType)
         let typeList = Node.create(kind: .typeList, children: normalizedInners)
         let boundNode = Node.create(kind: boundKind, children: [baseNode, typeList])
@@ -1427,7 +1427,14 @@ actor RuntimeSwiftSectionFactory {
     }
 
     func removeSection(for imagePath: String) {
-        sections.removeValue(forKey: imagePath)
+        // Detach the per-image indexer from the aggregate first. `setupForFactory`
+        // registered it via `indexer.addSubIndexer`, and that registration — not
+        // the `sections` entry — is what keeps the image's declaration graph (and
+        // the `NodeStore` its definitions reference) alive. Dropping only the
+        // `sections` entry reclaimed nothing.
+        if let section = sections.removeValue(forKey: imagePath) {
+            indexer.removeSubIndexer(section.indexer)
+        }
         // Drop any mangledID entries originating from this image so a
         // subsequent `addSubIndexer`-driven re-register can repopulate them.
         indexedTypeByCandidateID = indexedTypeByCandidateID.filter { _, value in
@@ -1439,6 +1446,9 @@ actor RuntimeSwiftSectionFactory {
     }
 
     func removeAllSections() {
+        for section in sections.values {
+            indexer.removeSubIndexer(section.indexer)
+        }
         sections.removeAll()
         indexedTypeByCandidateID.removeAll()
         indexedProtocolByCandidateID.removeAll()
