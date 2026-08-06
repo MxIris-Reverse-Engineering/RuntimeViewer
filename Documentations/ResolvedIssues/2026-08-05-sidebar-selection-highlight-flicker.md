@@ -66,6 +66,37 @@ Inspector 的 Subclasses / Conforming Types 和 Specializations 都是「点一�
 
 ---
 
+## 后续（2026-08-06）：Inspector 自己那一帧灰色高亮
+
+上面第二条修的是**别人**（sidebar）被连累变灰。修完之后，Inspector 列表**自己**还会闪一下：点中的那一行会以未激活灰色画出来一帧，然后整个面板被导航后的新内容替换掉。
+
+同样是逐帧量出来的。用户 4.48 s 的录屏共 183 帧，全程只有**第 100 帧**（pts 2.450 s → 2.467 s，正好一帧 16.7 ms）出现高亮：
+
+| 帧 | 时间 | Inspector 内容 | 点中行 |
+|---|---|---|---|
+| 099 | 2.417s | Conforming Types / `_NSQuickActionTouchBarPicker` | 无高亮 |
+| 100 | 2.450s | 同上 | **`srgb(60,60,60)` 灰色高亮** |
+| 101 | 2.467s | 已换成 Subclasses | 无高亮 |
+
+高亮取色是中性灰而非主题强调色（该配色下 `selectedContentBackgroundColor` = `srgb(39,93,96)` 青色），说明 `refusesFirstResponder` 起作用了 —— 表格确实没拿到 first responder，所以画的是未激活色。
+
+**关键点：`refusesFirstResponder` 只挡焦点，不挡选中。** AppKit 照样会选中被点的行并把它画出来，只是画成灰的。这两件事要分开修：
+
+- `refusesFirstResponder = true` —— 让 sidebar 保住它的强调色高亮（上面第二条）
+- `selectionHighlightStyle = .none` —— 让 Inspector 列表自己不画高亮（本条）
+
+两个 Inspector 导航列表都改用了 `SelfSizingTableView.scrollableNavigationListTableView()`，这两个属性由该工厂统一设置。安全性依据：
+
+- `itemClicked()` 走的是 `clickedRow`（table 的 target/action），与选中状态无关，点击导航不受影响；
+- 全仓库没有任何地方读这两个表的 `selectedRow` / `modelSelected` / `itemSelected`；
+- 项目里本就有这个惯用法（`SpecializationViewController`、`BatchExportingImageSelectionViewController`、`BatchExportingCompletionViewController` 三处）。
+
+**写法注意**：`selectionHighlightStyle` 必须写在 `style` 之后 —— 设置 `NSTableView.style` 会重置前者。
+
+**横向排查**：全仓库用 `itemClicked()` / `modelDoubleClicked()` 的列表共四处。除这两个外，`SpecializationTypePickerViewController` 是带搜索框的选择器 popover（高亮是"当前候选项"的有效反馈，且它是独立 popover，不牵连任何人），`SidebarRootViewController` 的选中代表当前状态本身 —— 两者都**不**改。
+
+---
+
 ## 下次遇到「闪烁」先查这两条
 
 1. **高亮变灰再变回来** → 焦点被别的控件抢走又还回来了。查那个控件是不是「点一下就跳走」的导航列表；是的话让它 `refusesFirstResponder`。
