@@ -104,17 +104,55 @@ class TabViewController: UXViewController {
         get { tabView.selectedTabViewItem.map { tabView.indexOfTabViewItem($0) } ?? NSNotFound }
     }
 
-    func setTabViewItems(_ tabViewItems: [TabViewItem]) {
+    /// Reconcile the tab strip against `tabViewItems`, keeping every view
+    /// controller that survives the change.
+    ///
+    /// This used to remove every tab item and add the new set back.
+    /// `NSTabView` installs the selected item's view as soon as the selection
+    /// moves, so a full teardown swapped the visible view several times
+    /// within a single runloop pass — a visible flash every time the
+    /// inspected object's kind changed the tab set (selecting a protocol
+    /// after a class drops the Hierarchy tab, for instance). Reconciling in
+    /// place means an unchanged tab keeps its view throughout, and only the
+    /// tabs that genuinely appear or disappear cost anything.
+    func setTabViewItems(_ tabViewItems: [TabViewItem], selectedIndex: Int) {
         segmentedControl.segmentCount = tabViewItems.count
         for (index, tabViewItem) in tabViewItems.enumerated() {
             segmentedControl.setImage(tabViewItem.normalSymbol.nsuiImgae, forSegment: index)
             segmentedControl.setAlternateImage(tabViewItem.selectedSymbol.nsuiImgae, forSegment: index)
-            tabView.addTabViewItem(.init(viewController: tabViewItem.viewController))
         }
+
+        let targetViewControllers = tabViewItems.map(\.viewController)
+
+        // Move to the target tab before removing anything: removing the
+        // selected item makes `NSTabView` fall back to a neighbour on its
+        // own, installing a view that is about to be replaced anyway.
+        if targetViewControllers.indices.contains(selectedIndex),
+           let existingIndex = indexOfTabViewItem(for: targetViewControllers[selectedIndex]) {
+            tabView.selectTabViewItem(at: existingIndex)
+        }
+
+        for existingItem in tabView.tabViewItems {
+            guard !targetViewControllers.contains(where: { $0 === existingItem.viewController }) else { continue }
+            tabView.removeTabViewItem(existingItem)
+        }
+
+        for (targetIndex, viewController) in targetViewControllers.enumerated() {
+            if let existingIndex = indexOfTabViewItem(for: viewController) {
+                guard existingIndex != targetIndex else { continue }
+                let existingItem = tabView.tabViewItems[existingIndex]
+                tabView.removeTabViewItem(existingItem)
+                tabView.insertTabViewItem(existingItem, at: targetIndex)
+            } else {
+                tabView.insertTabViewItem(.init(viewController: viewController), at: targetIndex)
+            }
+        }
+
+        selectedTabViewItemIndex = selectedIndex
     }
 
-    func removeAllTabViewItems() {
-        tabView.tabViewItems.forEach { tabView.removeTabViewItem($0) }
+    private func indexOfTabViewItem(for viewController: NSViewController) -> Int? {
+        tabView.tabViewItems.firstIndex { $0.viewController === viewController }
     }
 }
 
@@ -144,9 +182,7 @@ extension Transition where ViewController: TabViewController {
                 completion?()
                 return
             }
-            viewController.removeAllTabViewItems()
-            viewController.setTabViewItems(tabViewItems)
-            viewController.selectedTabViewItemIndex = initialIndex
+            viewController.setTabViewItems(tabViewItems, selectedIndex: initialIndex)
             completion?()
         }
     }

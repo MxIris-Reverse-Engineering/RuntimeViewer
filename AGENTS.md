@@ -341,6 +341,41 @@ private let requestDirectorySelectionRelay = PublishRelay<Void>()
 
 **Dependency injection**: `@Dependency(\.appDefaults) var appDefaults`
 
+**Async content — one state enum, never `isLoading` + `content` side by side.** When a pane's content comes from an `async` engine call, model loading and content as a *single* `@Observed` value:
+
+```swift
+public enum HierarchyState { case loading, loaded(String) }
+
+$runtimeObject
+    .flatMapLatest { runtimeObject in
+        Observable<HierarchyState>.async { .loaded(try await ...) }
+            .withLoadingPlaceholder(
+                .loading,
+                appearsAfter: LoadingPlaceholderTiming.appearsAfter,
+                staysAtLeast: LoadingPlaceholderTiming.staysAtLeast
+            )
+    }
+    .observeOnMainScheduler()
+    .bind(to: $hierarchyState)
+```
+
+Two independent drivers let the view observe "not loading" together with the *previous* object's content — a visible flash. One enum makes that state unrepresentable. `flatMapLatest` also drops the in-flight call when the selection moves on; a bare `Task { }` does not, so a slow result can land on top of a newer one.
+
+**Never emit the loading state with a bare `startWith`.** Use `withLoadingPlaceholder(_:appearsAfter:staysAtLeast:)` (RuntimeViewerArchitectures) with the shared `LoadingPlaceholderTiming` values, so the placeholder does not become the flicker it was meant to hide: work faster than `appearsAfter` shows no placeholder at all, and a placeholder that does appear stays up for `staysAtLeast` instead of blinking for a frame. Engine calls that hit a warm cache return in single-digit milliseconds, so this is the common case, not the edge case.
+
+Build the pipeline in `init` and return `$state.asDriver()` from `transform`, the way `ContentTextViewModel` does. Values that build AppKit objects (cell ViewModels, `NSImage`, `NSAttributedString`) are mapped **after** `observeOnMainScheduler()`; only plain model data crosses back from the background.
+
+**Reusable panes: keep the ViewModel, swap the object.** A pane that shows a series of objects (Inspector tabs, Content text) must not build a fresh ViewModel and call `setupBindings(for:)` per object. `setupBindings` resets `rx.disposeBag`, which tears down `tableView.rx.items` and installs a *new* RxAppKit adapter starting from an empty item list — the table blanks on the spot. Instead give the ViewModel an `update(for:)` that assigns the new object to an `@Observed` property the pipeline is already keyed on, and have the coordinator hold the ViewModel:
+
+```swift
+public func update(for runtimeObject: RuntimeObject) {
+    guard self.runtimeObject != runtimeObject else { return }
+    self.runtimeObject = runtimeObject
+}
+```
+
+The identity guard matters: re-entering the same object (a `.back` route from a tab close or a history cursor move) must not refetch, or the loading placeholder flashes over content that is already correct.
+
 ### ViewController Conventions
 
 **Base classes**: `AppKitViewController<VM>` (simple) or `UXKitViewController<VM>` (with contentView support).
@@ -412,6 +447,24 @@ override func setupBindings(for viewModel: MyViewModel) {
   borderPositions = .all   // ← otherwise the previous 3 lines are ignored
   ```
 
+**Loading placeholders** — use `SkeletonPlaceholderView` (RuntimeViewerUI), driven by the state enum from **ViewModel Conventions** above:
+
+```swift
+private let skeletonPlaceholderView = SkeletonPlaceholderView.runtimeObjectList()   // or .classHierarchy()
+
+case .loading:
+    skeletonPlaceholderView.isPresentingPlaceholder = true
+    scrollView.isHidden = true
+case .loaded(let rows):
+    skeletonPlaceholderView.isPresentingPlaceholder = false
+    scrollView.isHidden = rows.isEmpty
+```
+
+- It **replaces** content, it does not overlay it: while it is presented the call site MUST hide the real subviews, otherwise the previous object's data shows through the gaps between bars. Hiding alone is not always enough — a hidden `NSView` still contributes its size to Auto Layout, so also clear stale text (or put the two in an `NSStackView`, which detaches hidden arranged subviews).
+- `isPresentingPlaceholder` owns both `isHidden` and the pulse animation; never set `isHidden` directly.
+- Add a preset (`classHierarchy` / `runtimeObjectList`) rather than composing `Row`/`Bar` at the call site. Use `Bar.Width.points` when the host container hugs its content (there is no width to take a fraction of), `.fraction` when the container's width is externally fixed.
+- Do **not** use `NSView.showSkeleton(using:)` for this. That one is a translucent shimmer *overlay* — stale content remains visible underneath and its 0.35s fade-in itself reads as a flash.
+
 **View initialization** — `.then {}` returns the configured object (for assignment):
 ```swift
 let titleLabel = Label("Export").then {
@@ -467,6 +520,17 @@ buttonStack.snp.makeConstraints { make in
     make.trailing.bottom.equalToSuperview().inset(20)
 }
 ```
+
+### Diagnosing UI Flicker
+
+**Measure the frames before changing anything.** Flicker is a one-to-three-frame artifact; reading the code and reasoning about what "should" happen has repeatedly produced confident, wrong answers here. Ask for a screen recording, export **every** frame with `AVAssetReader` (time-point sampling is too coarse and misses the artifact outright), then pixel-diff consecutive frames and report changed-pixel count plus the y-range of the changed rows. Which pixels changed on which frame is the thing inference cannot give you.
+
+Two causes account for every flicker found so far — check them first:
+
+- **A highlight goes grey and then comes back.** `NSTableRowView.isEmphasized` is false whenever the owning table view is not the first responder, which draws the selection in the inactive grey. A click that moves focus into a click-to-navigate list greys out the selection in whatever view the user is actually watching, for focus the app hands straight back. Build lists whose only interaction is "click a row to go somewhere" (the Inspector's Relationships / Specializations panes) with `SelfSizingTableView.scrollableNavigationListTableView()`, which sets `refusesFirstResponder` alongside the `selectionHighlightStyle = .none` that suppresses the list's *own* highlight — see the navigation-list notes under *NSTableView / NSOutlineView Rx Data Source*. Mouse clicks, row selection and `itemClicked` all keep working.
+- **A scroll result and a selection/content result land on different frames.** `NSOutlineView` materializes a row view only as the row scrolls into view, and applies the emphasized selection style after that. **Always scroll a row into view before selecting it** — never the reverse — and force the layout that the raw clip-view scroll would otherwise defer. `SidebarRuntimeObjectViewController.selectRowBringingIntoView(_:)` is the reference implementation; route new call sites through it rather than pairing `selectRowIndexes` with `scrollRowToVisible` by hand.
+
+Full write-up, including the frame table that pinned it down: `Documentations/ResolvedIssues/2026-08-05-sidebar-selection-highlight-flicker.md`.
 
 ### RxSwift Subscription Style
 
