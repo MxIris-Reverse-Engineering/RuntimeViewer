@@ -10,7 +10,7 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
     
     private let emptyLabel = Label(wrappingLabelWithString: "")
     
-    private let (scrollView, tableView): (SelfSizingScrollView, SelfSizingTableView) = SelfSizingTableView.scrollableTableView()
+    private let (scrollView, tableView) = SelfSizingTableView.scrollableNavigationListTableView()
 
     override var contentViewUsingSafeArea: Bool { true }
 
@@ -40,21 +40,7 @@ final class InspectorRelationshipsViewController: UXEffectViewController<Inspect
         }
 
         tableView.do {
-            $0.backgroundColor = .clear
-            $0.headerView = nil
-            $0.allowsMultipleSelection = false
-            $0.allowsEmptySelection = true
-            $0.usesAutomaticRowHeights = true
-            $0.style = .inset
             $0.intercellSpacing = .init(width: 0, height: 10)
-        }
-
-        scrollView.do {
-            $0.isHiddenVisualEffectView = true
-            $0.autohidesScrollers = true
-            $0.backgroundColor = .clear
-            $0.minimumContentSize.height = 80
-            $0.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         }
 
         headerLabel.do {

@@ -10,7 +10,7 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
 
     private let headerLabel = Label()
     private let emptyLabel = Label()
-    private let (scrollView, tableView): (SelfSizingScrollView, SelfSizingTableView) = SelfSizingTableView.scrollableTableView()
+    private let (scrollView, tableView) = SelfSizingTableView.scrollableNavigationListTableView()
     private let addSpecializationButton = PushButton(
         title: "+ Add Specialization",
         titleFont: .systemFont(ofSize: 13)
@@ -48,23 +48,6 @@ final class InspectorSwiftSpecializationViewController: UXEffectViewController<I
             make.trailing.equalTo(view.safeAreaLayoutGuide).inset(8)
             make.leading.greaterThanOrEqualToSuperview()
             make.bottom.lessThanOrEqualToSuperview().offset(-8)
-        }
-
-        tableView.do {
-            $0.backgroundColor = .clear
-            $0.headerView = nil
-            $0.allowsMultipleSelection = false
-            $0.allowsEmptySelection = true
-            $0.usesAutomaticRowHeights = true
-            $0.style = .sourceList
-        }
-
-        scrollView.do {
-            $0.isHiddenVisualEffectView = true
-            $0.autohidesScrollers = true
-            $0.backgroundColor = .clear
-            $0.minimumContentSize.height = 80
-            $0.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         }
 
         headerLabel.do {
