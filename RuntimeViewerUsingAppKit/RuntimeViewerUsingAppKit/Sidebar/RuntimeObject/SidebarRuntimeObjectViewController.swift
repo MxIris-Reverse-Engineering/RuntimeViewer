@@ -42,6 +42,28 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         imageLoadedView.outlineView
     }
 
+    /// Move the visual selection to `row`, bringing it on screen first.
+    ///
+    /// The order matters. `NSOutlineView` materializes a row view only as the
+    /// row is scrolled into view, and applies the emphasized (accent-colored)
+    /// selection style on a pass after that. Selecting before scrolling
+    /// therefore draws the row once with the inactive grey highlight and flips
+    /// it to the accent color on the next frame — a visible blink every time
+    /// the sidebar has to travel to reach the object, which is exactly what
+    /// happens when a selection arrives from the Inspector or the history.
+    ///
+    /// Scrolling first — and forcing the layout the raw clip-view scroll would
+    /// otherwise defer — means the row view already exists when the selection
+    /// lands, so selection and emphasis are drawn in the same pass.
+    func selectRowBringingIntoView(_ row: Int) {
+        guard row >= 0, row < outlineView.numberOfRows else { return }
+        if !outlineView.visibleRowIndexes.contains(row) {
+            outlineView.box.scrollRowToVisible(row, animated: false, scrollPosition: .centeredVertically)
+            outlineView.layoutSubtreeIfNeeded()
+        }
+        outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 

@@ -42,25 +42,30 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
 
     private var preferredTabKind: TabKind?
 
-    // MARK: - Reused tab view controllers
+    // MARK: - Reused tab view controllers and ViewModels
     //
-    // Each tab kind has a single, lazily-initialized view controller instance
-    // that is reused across every `update(for:preferredTabKind:)` call. When
-    // the new `RuntimeObject` produces the same `TabConfiguration` as the
-    // previous one (the common case — both are classes, both are protocols,
-    // etc.), we only rebind the existing view controllers to a fresh
-    // ViewModel via `setupBindings(for:)` and leave the `NSTabView` items
-    // untouched. That avoids the visible 1-frame swap caused by
-    // `removeAllTabViewItems` / `addTabViewItem` re-selecting the first tab
-    // mid-transition.
+    // Each tab kind has a single, lazily-initialized view controller *and* a
+    // single ViewModel, both reused across every
+    // `update(for:preferredTabKind:)` call. `setupBindings(for:)` therefore
+    // runs exactly once per tab; afterwards a new `RuntimeObject` is pushed
+    // into the existing ViewModel through `update(for:)`.
     //
-    // Only when the configuration actually changes (e.g. selecting a Swift
-    // generic-class after an ObjC class flips `needsSpecialization`) do we
-    // rebuild the tab items in `TabViewController`.
+    // Rebinding per object was the direct cause of the Inspector flashing on
+    // every selection change: `setupBindings(for:)` resets `rx.disposeBag`,
+    // which tears down the `tableView.rx.items` binding and installs a fresh
+    // RxAppKit adapter whose item list starts out empty — so the list blanked
+    // on the spot and only refilled once the (cross-image, and therefore
+    // slow) query came back. Keeping the binding alive means the only thing
+    // that ever reaches the view is a state change from the ViewModel, which
+    // carries its own loading placeholder.
 
     private lazy var classViewController = InspectorClassViewController()
     private lazy var relationshipsViewController = InspectorRelationshipsViewController()
     private lazy var specializationViewController = InspectorSwiftSpecializationViewController()
+
+    private var classViewModel: InspectorClassViewModel?
+    private var relationshipsViewModel: InspectorRelationshipsViewModel?
+    private var specializationViewModel: InspectorSwiftSpecializationViewModel?
 
     init(documentState: DocumentState) {
         self.documentState = documentState
@@ -74,16 +79,14 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
 
     /// Apply a new `RuntimeObject` to the existing tab view controllers.
     ///
-    /// Hot path (same `TabConfiguration` as last time): only rebind the
-    /// per-tab ViewModels; the `NSTabView` is not touched, so there is no
-    /// visible flash from `setTabViewItems` re-selecting a tab mid-rebuild.
+    /// Hot path (same `TabConfiguration` as last time): only push the object
+    /// into the per-tab ViewModels; the `NSTabView` is not touched.
     ///
     /// Cold path (configuration changed — different `RuntimeObject.kind`,
-    /// generic-ness, etc.): rebind the relevant ViewModels and then trigger
-    /// a `Transition.set` on `TabViewController` to rebuild its tab items.
-    /// This still goes through the original transition flow (and its
-    /// `removeAllTabViewItems` + `setTabViewItems` sequence), so the
-    /// short-lived flash remains for kind transitions only.
+    /// generic-ness, etc.): additionally trigger a `Transition.set` on
+    /// `TabViewController`, which reconciles the tab items in place — tabs
+    /// that survive keep their view, so only the appearing/disappearing ones
+    /// actually change.
     func update(for runtimeObject: RuntimeObject, preferredTabKind: TabKind?) {
         let newConfiguration = TabConfiguration.compute(for: runtimeObject)
         let configurationChanged = newConfiguration != tabConfiguration
@@ -92,7 +95,7 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
         self.tabConfiguration = newConfiguration
         self.preferredTabKind = preferredTabKind
 
-        rebindTabViewControllers(for: runtimeObject)
+        updateTabViewControllers(for: runtimeObject)
 
         if configurationChanged {
             contextTrigger(.initial)
@@ -124,18 +127,38 @@ final class InspectorRuntimeObjectCoordinator: ViewCoordinator<InspectorRuntimeO
         }
     }
 
-    private func rebindTabViewControllers(for runtimeObject: RuntimeObject) {
+    /// Point every tab the new configuration needs at `runtimeObject`. Tabs
+    /// the configuration leaves out are skipped: they are off screen, so
+    /// refreshing them would only cost a query nobody is waiting for. They
+    /// catch up the next time they are needed, because `update(for:)` is
+    /// driven by the object and not by a subscription.
+    private func updateTabViewControllers(for runtimeObject: RuntimeObject) {
         if tabConfiguration.needsClassHierarchy {
-            let viewModel = InspectorClassViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
-            classViewController.setupBindings(for: viewModel)
+            if let classViewModel {
+                classViewModel.update(for: runtimeObject)
+            } else {
+                let viewModel = InspectorClassViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+                classViewController.setupBindings(for: viewModel)
+                classViewModel = viewModel
+            }
         }
         if tabConfiguration.needsRelationships {
-            let viewModel = InspectorRelationshipsViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
-            relationshipsViewController.setupBindings(for: viewModel)
+            if let relationshipsViewModel {
+                relationshipsViewModel.update(for: runtimeObject)
+            } else {
+                let viewModel = InspectorRelationshipsViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+                relationshipsViewController.setupBindings(for: viewModel)
+                relationshipsViewModel = viewModel
+            }
         }
         if tabConfiguration.needsSpecialization {
-            let viewModel = InspectorSwiftSpecializationViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
-            specializationViewController.setupBindings(for: viewModel)
+            if let specializationViewModel {
+                specializationViewModel.update(for: runtimeObject)
+            } else {
+                let viewModel = InspectorSwiftSpecializationViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
+                specializationViewController.setupBindings(for: viewModel)
+                specializationViewModel = viewModel
+            }
         }
     }
 
