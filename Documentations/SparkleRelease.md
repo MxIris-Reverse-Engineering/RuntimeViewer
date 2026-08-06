@@ -128,6 +128,58 @@ Sparkle never downgrades, so:
   on the good version stop seeing the broken update offer; already-upgraded
   users need the hotfix.
 
+## Recovering when CI publishes but the appcast push fails
+
+A tag-triggered run checks out a detached HEAD, and the `main` ruleset forbids
+direct pushes, so `ArchiveScript.sh` routes the appcast through a branch and a
+pull request. That push is the last thing the run does, which means it can fail
+*after* the GitHub Release is already live: the archive is built, notarized, and
+uploaded, but the feed still advertises the previous version, so no installed
+client is ever offered the update.
+
+Seen on `v2.1.0-RC.2` (2026-08-05), where GitHub answered the branch push with a
+bare `500 Internal Server Error`. The ruleset had not changed since April and
+`v2.1.0-RC.1` had gone through the same path two days earlier, so treat a 500
+here as a GitHub-side hiccup, not a misconfiguration.
+
+**Do not re-run the release job to recover the feed.** Nothing about the build
+was wrong, and a re-run costs a full rebuild plus another notarization round
+trip. Regenerate the appcast locally from the archive that was already
+published:
+
+```bash
+gh release download <tag> --pattern "RuntimeViewer-macOS.zip" --dir /tmp/appcast-staging
+
+/path/to/Sparkle/bin/generate_appcast /tmp/appcast-staging \
+    -o docs/appcast.xml \
+    --download-url-prefix "https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/download/<tag>/" \
+    --release-notes-url-prefix "https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/tag/" \
+    --channel beta            # omit for a stable release
+```
+
+The arguments must match what `ArchiveScript.sh` passes, or the entry will point
+to the wrong URL or land in the wrong channel. `generate_appcast` reads the
+private key from the login Keychain, so this only works on a machine that has
+it — see **EdDSA key management** above.
+
+Then check the result before pushing:
+
+- The regenerated `<item>` must carry the CI build's `sparkle:version`, which
+  comes from the archive's `CFBundleVersion` — not from the local clock.
+- `pubDate` records when `generate_appcast` ran, so it will say "now" rather
+  than when the release went out. Hand-correct it to the release timestamp.
+- Verify the signature against the key embedded in the shipped app, not against
+  the Keychain that just produced it — see the next section. A signature that
+  only validates against itself proves nothing.
+
+Commit `docs/appcast.xml` to `main` (a maintainer with ruleset bypass can push
+directly), then confirm GitHub Pages actually serves it — the feed clients read
+is the Pages copy, which lags the commit by a build:
+
+```bash
+curl -s https://mxiris-reverse-engineering.github.io/RuntimeViewer/appcast.xml | head -20
+```
+
 ## Verifying a signed archive locally
 
 ```bash
@@ -137,6 +189,21 @@ Sparkle never downgrades, so:
 Prints the EdDSA signature. Use this if you ever need to hand-edit an
 `<item>`'s `sparkle:edSignature` (e.g., after recovering the key from
 backup).
+
+This proves the archive and the signature agree, but not that clients will
+accept them — it signs with whatever key the Keychain holds. To check the
+signature against the key the shipped app actually trusts, read `SUPublicEDKey`
+out of the archive and verify with it directly:
+
+```bash
+ditto -x -k RuntimeViewer-macOS.zip /tmp/verify-app
+/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" /tmp/verify-app/RuntimeViewer.app/Contents/Info.plist
+```
+
+Then verify the enclosure's `sparkle:edSignature` against that key with any
+Ed25519 implementation (CryptoKit's `Curve25519.Signing.PublicKey` over the raw
+archive bytes is enough). This is the check that catches a signing key that has
+drifted from the one baked into the build.
 
 ## Where things live
 
