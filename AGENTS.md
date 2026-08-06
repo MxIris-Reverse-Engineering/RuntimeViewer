@@ -519,6 +519,15 @@ private let (scrollView, tableView): (ScrollView, SingleColumnTableView) = Singl
 ```
 For multi-column tables, use `NSTableView.scrollableTableView()` and add columns yourself. `SingleColumnTableView` already installs the default column.
 
+**Navigation lists** — when a list's only interaction is "click a row to go somewhere" (the Inspector's Relationships and Specializations panes), build it with `SelfSizingTableView.scrollableNavigationListTableView()` instead. It applies two settings that fix **different** flickers, and both are load-bearing:
+
+- `refusesFirstResponder = true` leaves keyboard focus where it was. `NSTableRowView.isEmphasized` is false whenever the owning table view is not first responder, so a click that takes focus — only for the app to hand it straight back — repaints the selection of the view the user is actually watching (the sidebar) in the inactive grey.
+- `selectionHighlightStyle = .none` removes *this* list's own highlight. Refusing first responder blocks focus, not selection: AppKit still selects the clicked row and paints it in the unemphasized grey for the frame before the navigation replaces the list.
+
+Assign `selectionHighlightStyle` **after** `style` — setting `NSTableView.style` resets it, so the reverse order silently does nothing.
+
+Reach for the factory only where nothing reads the selection. `itemClicked()` reports `clickedRow` and is unaffected, but `itemSelected()` / `modelSelected()` / `selectedRow` are: a picker popover whose highlight marks the current candidate (`SpecializationTypePickerViewController`), or a list whose selection *is* the state (`SidebarRootViewController`), must keep its own highlight.
+
 **2. Items / nodes binding** — drive `tableView.rx.items` (or `outlineView.rx.nodes`) with the model driver and a cell-builder closure:
 ```swift
 output.candidates
