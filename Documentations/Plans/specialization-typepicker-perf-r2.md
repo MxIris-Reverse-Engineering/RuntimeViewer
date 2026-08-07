@@ -3,7 +3,7 @@
 - **Status**: In Progress (Phase 0 → Phase 1 → Phase 2 sequential)
 - **Author**: JH (auto-piloted from ralplan consensus)
 - **Date**: 2026-05-18
-- **Related**: Evolution proposal `Documentations/Evolution/0004-differentiable-box-lazy-cellvm.md` (Draft → Accepted on landing)
+- **Related**: Evolution proposal `Documentations/Evolutions/0004-differentiable-box-lazy-cellvm.md` (Draft → Accepted on landing)
 - **Supersedes**: r1 (in-conversation only; never written to disk)
 
 ## Problem

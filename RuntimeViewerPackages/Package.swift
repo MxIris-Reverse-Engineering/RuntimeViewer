@@ -161,7 +161,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.14.1",
+                from: "0.15.1",
                 traits: UIFoundationTraits,
             ),
         ),
@@ -242,7 +242,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.1.4",
+                from: "0.1.5",
             ),
         ),
         
@@ -257,7 +257,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
-                from: "0.3.3",
+                from: "0.5.0",
             ),
         ),
 

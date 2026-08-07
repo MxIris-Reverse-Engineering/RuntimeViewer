@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**目标:** 按 [0002-background-indexing.md](../Evolution/0002-background-indexing.md) 构建可选的后台索引功能 —— 一个每 `RuntimeEngine` 一份的 Swift Concurrency `RuntimeBackgroundIndexingManager` actor、Settings 控件以及一个 Toolbar 弹出框。
+**目标:** 按 [0002-background-indexing.md](../Evolutions/0002-background-indexing.md) 构建可选的后台索引功能 —— 一个每 `RuntimeEngine` 一份的 Swift Concurrency `RuntimeBackgroundIndexingManager` actor、Settings 控件以及一个 Toolbar 弹出框。
 
 **架构:** 所有核心逻辑置于 `RuntimeViewerCore`（带 `Runtime` 前缀）；coordinator 置于 `RuntimeViewerApplication`（带 `Runtime` 前缀）；UI 置于 `RuntimeViewerUsingAppKit`；Settings UI 置于 `RuntimeViewerSettingsUI`（后两者均不带前缀）。所有任务调度采用 Swift Concurrency；RxSwift 仅用于 coordinator 中的 UI 绑定。
 
@@ -3342,7 +3342,7 @@ gh pr create --title "feat: background indexing" --body "$(cat <<'EOF'
 - [ ] Manual QA checklist in `Documentations/Plans/2026-04-24-background-indexing-plan.md` (Task 25) executed end-to-end.
 
 ## Design
-See [0002-background-indexing.md](../Evolution/0002-background-indexing.md).
+See [0002-background-indexing.md](../Evolutions/0002-background-indexing.md).
 EOF
 )"
 ```
@@ -3417,6 +3417,6 @@ EOF
 
 ### 文档同步
 
-- `Documentations/Evolution/0002-background-indexing.md`:第 174 / 148 行附近的协议 / manager 段落、第 261 行 coordinator 职责、新增场景 G、假设 #1 撤销 + #4 新增、决策日志 2026-04-28 三条
+- `Documentations/Evolutions/0002-background-indexing.md`:第 174 / 148 行附近的协议 / manager 段落、第 261 行 coordinator 职责、新增场景 G、假设 #1 撤销 + #4 新增、决策日志 2026-04-28 三条
 - `Documentations/Reviews/2026-04-26-background-indexing-implementation-review.md`:I3 标已修
 - `Documentations/Reviews/2026-04-26-background-indexing-ultrareview.md`:N1 / N2 / N4 标已修

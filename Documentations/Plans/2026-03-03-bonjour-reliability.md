@@ -13,7 +13,7 @@
 ### Task 1: Write evolution document
 
 **Files:**
-- Create: `Documentations/Evolution/2026-03-03-bonjour-reliability.md`
+- Create: `Documentations/Evolutions/2026-03-03-bonjour-reliability.md`
 
 **Step 1: Create evolution document**
 
@@ -125,7 +125,7 @@ Failed Bonjour connections are retried up to 3 times with 2s/4s/8s delays.
 **Step 2: Commit**
 
 ```bash
-git add Documentations/Evolution/2026-03-03-bonjour-reliability.md
+git add Documentations/Evolutions/2026-03-03-bonjour-reliability.md
 git commit -m "docs: add Bonjour reliability evolution document"
 ```
 

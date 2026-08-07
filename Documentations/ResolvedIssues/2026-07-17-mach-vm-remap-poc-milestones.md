@@ -11,6 +11,7 @@
 - 硬件：Apple Silicon（arm64e），Mac13,1
 - 系统：macOS 26.5.2 (25F84)
 - 安全：SIP disabled；AMFI 全局 disabled（不影响本次实验，仅避免签名侧噪音）
+  - **2026-08-06 更正**：到 macOS 26.6，同一台机器上库校验已重新生效，不能再当作机器级前提。见 [2026-08-06-library-validation-blocks-dlopen-injection.md](2026-08-06-library-validation-blocks-dlopen-injection.md)。
 - 目标进程：`/usr/libexec/sharingd`（当前实验会话 pid 32991；每次 kill 后 launchd 重启）
 - 注入器：独立 CLI（POC 目录 `scratchpad/remaptest/`），Apple Development 签名 + hardened runtime
 - Sandbox profile：`/System/Library/Sandbox/Profiles/com.apple.sharingd.sb` 关键规则同 Round 1（`(deny file-map-executable)` + 5 个系统白名单）

@@ -49,27 +49,12 @@ public enum SandboxProbe {
         isMachLookupBlocked(pid: pid, globalName: RuntimeViewerMachServiceName)
     }
 
-    /// Whether `pid`'s sandbox would deny mapping `path` as executable — i.e.
-    /// whether a `dlopen(path)` inside that process would be refused by seatbelt
-    /// at the `file-map-executable` predicate.
-    ///
-    /// This is the decisive question for picking between the dlopen and
-    /// mach_vm_remap injection paths: strict seatbelt daemons (sharingd,
-    /// rapportd, and their kin) `(deny default)` `file-map-executable` for
-    /// anything outside a hard-coded system whitelist, and no sandbox extension
-    /// unlocks that predicate. Only the remap path bypasses it, so any target
-    /// that answers `true` here must be attached via remap.
-    ///
-    /// Returns `false` for an unsandboxed process, and also on probe failure so
-    /// the dlopen default is preserved.
-    public static func isFileMapExecutableBlocked(pid: Int32, path: String) -> Bool {
-        let result = path.withCString { pathPointer in
-            "file-map-executable".withCString { operationPointer in
-                RVSandboxCheckPath(pid, operationPointer, pathPointer)
-            }
-        }
-        return result > 0
-    }
+    // Whether a target would refuse a `dlopen` — the `file-map-executable`
+    // seatbelt predicate and AMFI library validation both answer that — is not
+    // probed here. It decides between the dlopen and mach_vm_remap injection
+    // paths, and that decision belongs to the daemon that performs the
+    // injection: see `InjectionStrategy` in swift-helper-service. Keeping a
+    // second copy of the rule on this side is how the two halves drift apart.
 }
 
 #endif

@@ -11,7 +11,7 @@
 
 **2026-04-28 更新 — 修复状态:**
 
-- ✅ **N1 RuntimeEngine ↔ Manager 循环引用** — 已修。协议恢复 `: AnyObject, Sendable`,manager 改 `private unowned let engine`。生产上 engine 强持 manager,unowned 反向引用安全(engine deinit 同步释放 manager)。测试加 `keep(_:)` helper 兜住平行 local mock 的 ARC 寿命。详见 [plan post-review fixes](../Plans/2026-04-24-background-indexing-plan.md#post-review-fixes-2026-04-28) 与 [Evolution 0002](../Evolution/0002-background-indexing.md) 决策日志 2026-04-28
+- ✅ **N1 RuntimeEngine ↔ Manager 循环引用** — 已修。协议恢复 `: AnyObject, Sendable`,manager 改 `private unowned let engine`。生产上 engine 强持 manager,unowned 反向引用安全(engine deinit 同步释放 manager)。测试加 `keep(_:)` helper 兜住平行 local mock 的 ARC 寿命。详见 [plan post-review fixes](../Plans/2026-04-24-background-indexing-plan.md#post-review-fixes-2026-04-28) 与 [Evolution 0002](../Evolutions/0002-background-indexing.md) 决策日志 2026-04-28
 - ✅ **N2 source switch staleness** — 已修(同 implementation-review I3)。Coordinator 通过 RxSwift `documentState.$runtimeEngine.skip(1)` 响应 swap。详见上
 - ✅ **N4 DylibPathResolver 拒绝 dyld shared cache** — 已修。`DyldUtilities.isInDyldSharedCache(_:)` 加 Set-cache 字面查询,`DylibPathResolver.pathExists` 兼顾文件系统与 cache。**字面匹配,不规范化** —— 与本审查建议的方向一致(让真实失败显式呈现);用户明确选 "字面匹配" 是因为 macOS 上 versioned ↔ unversioned 的规范化在 install name 形式不一致时有误导风险,iOS 不需要规范化。详见 Evolution 0002 假设 #4 与决策日志 2026-04-28(N4)
 - ✅ **N3 manager dedup** — 已修。`startBatch` 在 expand 前后两次扫 `activeBatches`,命中 `!isFinished && rootImagePath == 入参` 即返回旧 ID;reason 判别式不参与比较,所以 `.appLaunch` ↔ `.imageLoaded(path:)` 折叠到一个 batch。Coordinator 的 `handleImageLoaded` 注释同步更新。新增两条 manager 测试(同 root 跨 reason 命中、batch finalize 后允许新批次)

@@ -25,8 +25,6 @@ extension FileOperationRequest: RuntimeRequest {}
 
 extension InjectApplicationRequest: RuntimeRequest {}
 
-extension InjectApplicationViaRemapRequest: RuntimeRequest {}
-
 extension RegisterInjectedEndpointRequest: RuntimeRequest {}
 
 extension FetchAllInjectedEndpointsRequest: RuntimeRequest {}

@@ -1,7 +1,7 @@
 # Background Indexing Evolution & Plan — 第二轮审查
 
 审查对象:
-- [0002-background-indexing.md](../Evolution/0002-background-indexing.md)
+- [0002-background-indexing.md](../Evolutions/0002-background-indexing.md)
 - [2026-04-24-background-indexing-plan.md](../Plans/2026-04-24-background-indexing-plan.md)
 
 承接 [2026-04-24-background-indexing-review.md](2026-04-24-background-indexing-review.md) (该文件已闭环,本轮在新文件中开新一轮 issue)。

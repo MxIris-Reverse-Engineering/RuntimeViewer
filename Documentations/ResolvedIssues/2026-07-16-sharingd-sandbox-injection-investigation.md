@@ -37,6 +37,8 @@ Debug-arm64e 全量构建通过，零新增 warning。
 
 **结论 1**：不是 payload 签名的问题。AMFI/library-validation 在这台机器上已全局关闭（`amfid` 日志明写 `library validation is globally disabled`），签名根本没被检查到。真正拦下 dlopen 的是 seatbelt sandbox。
 
+> **2026-08-06 更正**：「library validation 全局关闭」这条**已不再成立**。同一台机器、同样 SIP disabled、boot-args 同样没有 `amfi_get_out_of_my_way`，到 macOS 26.6 上库校验实测在拦：带 `CS_REQUIRE_LV` 的进程（Music / Finder / Safari / Mail / Xcode 等所有 Apple App）会以 "different Team IDs" 拒绝我们的 dev 签名 payload。本文对 **sharingd** 的结论仍然正确——它不带 `REQUIRE_LV`，拦它的确实是 seatbelt——但不要把这条推广成机器级事实。详见 [2026-08-06-library-validation-blocks-dlopen-injection.md](2026-08-06-library-validation-blocks-dlopen-injection.md)。
+
 ### 实验 2 — 尝试 `sandbox_extension_issue_file_to_process`
 
 - IDA 反编译 Xcode 的 `DVTInstrumentsFoundation`，`-[RemoteBundleLoader scheduleLibraryLoad:...]` 使用 `sandbox_extension_issue_file_to_process`（把 token 绑定到目标进程的 audit token），class `APP_SANDBOX_READ`，flag `SANDBOX_EXTENSION_DEFAULT`。

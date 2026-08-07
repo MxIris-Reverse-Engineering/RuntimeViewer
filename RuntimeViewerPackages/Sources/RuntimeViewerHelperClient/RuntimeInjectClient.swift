@@ -67,27 +67,21 @@ public final class RuntimeInjectClient: @unchecked Sendable {
 
     // MARK: - Injection
 
-    public func injectApplication(pid: pid_t, dylibURL: URL) async throws {
-        try await helperServiceManager.ensureConnectedToTool()
-        try await helperServiceManager.helperClient.sendToTool(
-            request: InjectApplicationRequest(pid: pid, dylibURL: dylibURL)
-        )
-    }
-
-    /// Inject `payloadURL` into `pid` via MachInjector's mach_vm_remap path,
-    /// invoking `entrySymbol` on a fresh pthread inside the target.
+    /// Injects `dylibURL` into `pid`.
     ///
-    /// The dlopen-based ``injectApplication(pid:dylibURL:)`` cannot reach
-    /// strict-seatbelt daemons (sharingd, rapportd) whose sandbox profile
-    /// denies `file-map-executable`; use this variant when
-    /// ``RuntimeViewerCommunication/SandboxProbe/isFileMapExecutableBlocked(pid:path:)``
-    /// answers `true` for the target. See ``MachInjectorRemap`` for the payload
-    /// entry-symbol contract (the payload must expose a `void *(*)(void *)`
-    /// entry because dyld's constructor pass is not run for remapped images).
-    public func injectApplicationViaRemap(pid: pid_t, payloadURL: URL, entrySymbol: String) async throws {
+    /// How it gets loaded — a `dlopen` inside the target, or a `mach_vm_remap`
+    /// projection of the payload's segments — is decided by the daemon, which
+    /// probes the target's sandbox and code-signing status. Deliberately not
+    /// decided here: the two halves would drift apart, and the app cannot see
+    /// anything the daemon cannot.
+    ///
+    /// `remapEntrySymbol` is used only if the daemon takes the remap path,
+    /// where dyld's constructor pass never runs and an exported
+    /// `void *(*)(void *)` entry is the only way in.
+    public func injectApplication(pid: pid_t, dylibURL: URL, remapEntrySymbol: String? = nil) async throws {
         try await helperServiceManager.ensureConnectedToTool()
         try await helperServiceManager.helperClient.sendToTool(
-            request: InjectApplicationViaRemapRequest(pid: pid, payloadURL: payloadURL, entrySymbol: entrySymbol)
+            request: InjectApplicationRequest(pid: pid, dylibURL: dylibURL, remapEntrySymbol: remapEntrySymbol)
         )
     }
 

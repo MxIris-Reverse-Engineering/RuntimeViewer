@@ -848,7 +848,7 @@ do { ... } catch {
 ## Documentation
 
 - Design documents and implementation plans: `Documentations/Plans/`
-- Evolution proposals: `Documentations/Evolution/`
+- Evolution proposals: `Documentations/Evolutions/`
 
 ## Key Source Locations
 
