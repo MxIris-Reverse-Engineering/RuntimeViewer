@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 6.2, RxSwift / RxCocoa / RxAppKit (staged-changeset diffing), `@Observable` state, AppKit `NSOutlineView` with `OutlineNodeType` / `Differentiable` from `RxAppKit`.
 
-**Spec:** `Documentations/Evolution/0002-background-indexing.md` (2026-04-29 revisions — new History section, Alternative E revision, decision log entry).
+**Spec:** `Documentations/Evolutions/0002-background-indexing.md` (2026-04-29 revisions — new History section, Alternative E revision, decision log entry).
 
 ---
 
@@ -24,7 +24,7 @@ The working tree at plan-write time contains **pre-existing uncommitted changes*
 
 Default recommendation: **option 1**. Verify they build cleanly first.
 
-The 0002 spec edits (`M Documentations/Evolution/0002-background-indexing.md`) ARE part of this feature — they should land in Task 1's commit so the spec and implementation arrive together.
+The 0002 spec edits (`M Documentations/Evolutions/0002-background-indexing.md`) ARE part of this feature — they should land in Task 1's commit so the spec and implementation arrive together.
 
 ---
 
@@ -36,7 +36,7 @@ The 0002 spec edits (`M Documentations/Evolution/0002-background-indexing.md`) A
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingNode.swift` | Modify | Add `.section(SectionKind, batches:)` case + identifier + `OutlineNodeType.children` branch |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewModel.swift` | Modify | Combine active+history into section-grouped `nodes`; rename `clearFailed`/`hasAnyFailure` to `clearHistory`/`hasAnyHistory` |
 | `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/BackgroundIndexing/BackgroundIndexingPopoverViewController.swift` | Modify | Replace `clearFailedButton` with `clearHistoryButton`; add `SectionHeaderCellView`; cell-provider branch for `.section`; section-aware expansion; updated empty-state binding |
-| `Documentations/Evolution/0002-background-indexing.md` | Modify (already done) | Spec revisions land with Task 1 commit |
+| `Documentations/Evolutions/0002-background-indexing.md` | Modify (already done) | Spec revisions land with Task 1 commit |
 
 **Build target:** `RuntimeViewerUsingAppKit` (Debug). Workspace: `../MxIris-Reverse-Engineering.xcworkspace` (verified to exist; required per project CLAUDE.md to pick up local SPM checkouts).
 
@@ -203,7 +203,7 @@ Expected: BUILD SUCCEEDED. If unavailable, fall back to `xcodebuild -workspace .
 The 0002 spec edits land here so the design and implementation introduce the history concept together.
 
 ```bash
-git add Documentations/Evolution/0002-background-indexing.md \
+git add Documentations/Evolutions/0002-background-indexing.md \
         RuntimeViewerPackages/Sources/RuntimeViewerApplication/BackgroundIndexing/RuntimeBackgroundIndexingCoordinator.swift
 git commit -m "$(cat <<'EOF'
 feat(background-indexing): add coordinator-level history relay
@@ -886,7 +886,7 @@ Expected: BUILD SUCCEEDED.
 
 - [ ] **Step 2: Run the app and verify the smoke checklist**
 
-Launch the built app via `xcodebuildmcp run` (or open from Xcode). Walk through the checklist from `Documentations/Evolution/0002-background-indexing.md` — the verification path was added with the 2026-04-29 design revision. Specifically:
+Launch the built app via `xcodebuildmcp run` (or open from Xcode). Walk through the checklist from `Documentations/Evolutions/0002-background-indexing.md` — the verification path was added with the 2026-04-29 design revision. Specifically:
 
 1. Open Settings → Indexing → enable Background Indexing (depth ≥ 1).
 2. Open a Document. The auto-launched `.appLaunch` batch appears under `ACTIVE`.

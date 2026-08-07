@@ -1,7 +1,7 @@
 # Background Indexing Evolution & Plan — 审查闭环记录
 
 审查对象:
-- [0002-background-indexing.md](../Evolution/0002-background-indexing.md)(原 `Plans/2026-04-24-background-indexing-design.md`,已挪至 Evolution 并改成演进文档格式)
+- [0002-background-indexing.md](../Evolutions/0002-background-indexing.md)(原 `Plans/2026-04-24-background-indexing-design.md`,已挪至 Evolution 并改成演进文档格式)
 - [2026-04-24-background-indexing-plan.md](../Plans/2026-04-24-background-indexing-plan.md)
 
 本文件现为闭环记录:列出审查中发现的问题,并标注每项是否已在 evolution 0002 / plan 中落实。

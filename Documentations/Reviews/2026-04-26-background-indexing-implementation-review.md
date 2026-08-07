@@ -2,7 +2,7 @@
 
 审查对象:
 - 分支 `feature/runtime-background-indexing` 上完整的 29 个 commit(Task 0–Task 24)
-- [0002-background-indexing.md](../Evolution/0002-background-indexing.md)
+- [0002-background-indexing.md](../Evolutions/0002-background-indexing.md)
 - [2026-04-24-background-indexing-plan.md](../Plans/2026-04-24-background-indexing-plan.md)
 - 承接 [2026-04-24](2026-04-24-background-indexing-review.md) / [2026-04-25](2026-04-25-background-indexing-review.md) / [2026-04-26](2026-04-26-background-indexing-review.md) 三轮 plan / evolution 审查(均已闭环)
 
@@ -12,7 +12,7 @@
 
 **2026-04-28 更新 — 修复状态:**
 
-- ✅ **I3 source-switch staleness** — 已修。Coordinator 通过 RxSwift 订阅 `documentState.$runtimeEngine.skip(1)`,变化时 cancel 旧 pumps、cancel 旧 doc batches、清 relays、切引用、重启 pumps、若 isEnabled 重发 main exec batch。详见 [plan post-review fixes](../Plans/2026-04-24-background-indexing-plan.md#post-review-fixes-2026-04-28) 与 [Evolution 0002](../Evolution/0002-background-indexing.md) 假设 #1 / 场景 G / 决策日志 2026-04-28
+- ✅ **I3 source-switch staleness** — 已修。Coordinator 通过 RxSwift 订阅 `documentState.$runtimeEngine.skip(1)`,变化时 cancel 旧 pumps、cancel 旧 doc batches、清 relays、切引用、重启 pumps、若 isEnabled 重发 main exec batch。详见 [plan post-review fixes](../Plans/2026-04-24-background-indexing-plan.md#post-review-fixes-2026-04-28) 与 [Evolution 0002](../Evolutions/0002-background-indexing.md) 假设 #1 / 场景 G / 决策日志 2026-04-28
 - ⏳ **I1 (manager dedup)、I2 (loadImageForBackgroundIndexing 不发 imageDidLoadSubject 的 doc/test)、I4 (prioritize doc)、I6 (NSTableCellView 复用)、所有 Minor M1–M10** — 未处理,follow-up
 - ⏳ **I5 (path normalization 不对称)** — 仅 iOS Simulator 激活,绑 iOS Simulator 支持工作,本轮不修
 
