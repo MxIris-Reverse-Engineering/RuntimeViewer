@@ -485,8 +485,17 @@ public final class RuntimeEngineManager {
     private static func pollUntilPeerAnswers(engine: RuntimeEngine, timeout: TimeInterval) async -> Bool {
         let (stream, continuation) = AsyncStream<Bool>.makeStream()
 
-        let probeTask = Task {
+        // `engine` is captured weakly on purpose. As the comment above says, a
+        // stuck probe is abandoned rather than awaited, and `probeTask.cancel()`
+        // below cannot interrupt an XPC send that ignores cancellation — so this
+        // task can outlive the poll indefinitely. Holding the engine strongly
+        // there would pin it (and everything it indexed) for the rest of the
+        // process; weakly, the abandoned probe simply exits once the manager
+        // releases the engine. The engine stays alive for the duration of a
+        // normal poll because the caller is awaiting this function.
+        let probeTask = Task { [weak engine] in
             while !Task.isCancelled {
+                guard let engine else { return }
                 if (try? await engine.requestEngineList(timeout: 3)) != nil {
                     continuation.yield(true)
                     return

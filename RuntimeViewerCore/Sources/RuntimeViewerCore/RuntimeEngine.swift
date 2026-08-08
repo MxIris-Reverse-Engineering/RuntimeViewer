@@ -343,7 +343,28 @@ public actor RuntimeEngine {
         connectionStateCancellable = nil
         connection?.stop()
         stateSubject.send(.disconnected(error: nil))
+        releaseIndexedSections()
         #log(.info, "RuntimeEngine stopped")
+    }
+
+    /// Drops every per-image section this engine indexed, releasing the
+    /// declaration graphs (and the `NodeStore`s their definitions reference).
+    ///
+    /// A stopped engine is normally deallocated right after, which would free
+    /// this anyway — but "normally" is doing a lot of work: anything that
+    /// outlives the stop while holding the engine (an abandoned probe task, a
+    /// suspended request) would otherwise keep the *entire* indexed graph of
+    /// every image the user ever opened resident. Releasing explicitly bounds
+    /// that damage to the engine object itself. The factories are actors, so
+    /// this hops off the synchronous `stop()`; the tasks capture only the
+    /// factories, never `self`.
+    private func releaseIndexedSections() {
+        let swiftSectionFactory = swiftSectionFactory
+        let objcSectionFactory = objcSectionFactory
+        Task {
+            await swiftSectionFactory.removeAllSections()
+            await objcSectionFactory.removeAllSections()
+        }
     }
 
     /// Defensive backstop for paths that drop an engine without calling `stop()`.

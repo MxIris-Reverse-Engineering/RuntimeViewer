@@ -282,4 +282,19 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         upstream.addSubIndexer(subIndexer.upstream)
         _subIndexers.withLock { $0.append(subIndexer) }
     }
+
+    /// Detach a per-image indexer registered by `addSubIndexer(_:)`, undoing
+    /// both halves of that registration. No-op when it was never registered.
+    ///
+    /// Without this inverse, registration was permanent: the aggregate — which
+    /// lives as long as its `RuntimeSwiftSectionFactory`, i.e. as long as the
+    /// owning `RuntimeEngine` — kept every per-image indexer and its entire
+    /// declaration graph alive, so `RuntimeSwiftSectionFactory.removeSection`
+    /// could drop its `sections` entry and still reclaim nothing. Detaching here
+    /// releases the last reference, letting the sub-indexer deinit and evict its
+    /// `SymbolIndexStore` entry.
+    func removeSubIndexer(_ subIndexer: RuntimeSwiftInterfaceIndexer) {
+        upstream.removeSubIndexer(subIndexer.upstream)
+        _subIndexers.withLock { $0.removeAll { $0 === subIndexer } }
+    }
 }
