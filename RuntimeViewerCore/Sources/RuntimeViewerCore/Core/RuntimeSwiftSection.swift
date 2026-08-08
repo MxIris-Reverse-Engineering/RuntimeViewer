@@ -17,8 +17,8 @@ import MetaCodable
 
 @Codable
 @MemberInit
-public struct SwiftGenerationOptions: Sendable, Equatable {
-    public enum MemberSortOrder: String, Codable, Sendable, Equatable, CaseIterable {
+public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
+    public enum MemberSortOrder: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
         case byCategory
         case byOffset
     }

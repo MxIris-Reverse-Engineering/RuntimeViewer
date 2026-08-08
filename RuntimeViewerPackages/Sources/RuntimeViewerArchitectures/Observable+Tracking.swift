@@ -29,6 +29,14 @@ extension Observable {
     ///   beforehand), tracking will silently stop firing. When the dependency
     ///   isn't obvious at the call site, touch it explicitly inside `access`
     ///   (`_ = settings.theme`) so the contract survives refactors.
+    ///
+    /// - Important: Never resolve a `@Dependency` **inside** `access`. The
+    ///   re-arm after each change runs on a bare `DispatchQueue.main.async`
+    ///   hop, which drops task-local values — the resolution then falls back
+    ///   to the ambient default context (`.test` in a test process), silently
+    ///   swaps in a different instance, and the tracking chain dies after the
+    ///   first re-arm because it now observes the wrong object. Resolve the
+    ///   dependency once at arm time and capture the instance instead.
     public static func tracking(
         _ access: @escaping () -> Element
     ) -> Observable<Element> {

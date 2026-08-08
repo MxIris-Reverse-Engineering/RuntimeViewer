@@ -1,9 +1,17 @@
 # ContentTextViewController AttributedString 性能优化
 
 **Date**: 2026-05-17
-**Status**: ⏳ Pending Approval
+**Status**: ✅ PR0 + PR1 已落地；PR2 / PR3 按度量门控，未启动
 **Branch (proposed)**: 待人工指定
 **Author**: ralplan 共识规划（Planner → Architect → Critic）
+
+> **落地记录（2026-08-04）**：PR0（工具栏字号 throttle）已随 TS.4 修复先行落地
+> （`MainViewModel.fontSizeThrottleMilliseconds`）。PR1（管线拆分 + 后台构建）
+> 的实际落地与本计划的差异、三个 Open Questions 的答案、以及顺带修复的
+> 管线一错即死 / tracking 依赖上下文两个 bug，见
+> [2026-08-04-content-text-pipeline-pr1.md](2026-08-04-content-text-pipeline-pr1.md)。
+> PR2（`.semanticType` 增量重涂）与 PR3 维持度量门控，signpost
+> `Content.TextPipeline` 已就位。
 
 ---
 

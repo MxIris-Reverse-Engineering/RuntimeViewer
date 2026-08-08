@@ -1,5 +1,6 @@
 import Foundation
 import FoundationToolbox
+import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerSettings
 
@@ -48,6 +49,22 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
     public init(documentState: DocumentState, router: any Router<Route>) {
         self.documentState = documentState
         self.router = router
+    }
+
+    /// The generation options a single-object interface fetch should use
+    /// right now: the stored options merged with the live transformer
+    /// configuration, exactly as the content pipeline's fetch half merges
+    /// them. Every fetch that should share a `RuntimeInterfaceCache` entry
+    /// with the content pane must use these options so the cache keys line
+    /// up (and so exported text matches what the pane displays).
+    public var currentMergedGenerationOptions: RuntimeObjectInterface.GenerationOptions {
+        var mergedOptions = appDefaults.options
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        mergedOptions.transformer = settings.transformer
+        #else
+        mergedOptions.transformer = .init()
+        #endif
+        return mergedOptions
     }
 }
 
