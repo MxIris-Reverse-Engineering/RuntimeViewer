@@ -241,6 +241,7 @@ final class MyConsumer {
 - `DebugMenuController` — installs the Debug menu and owns the Export Logs flow
 - `HelperServiceVersionChecker` — runs the helper version probe and presents reinstall alerts
 - `UpdaterService` — owns the Sparkle updater lifecycle
+- `WindowLifecycleController` — answers `applicationShouldHandleReopen` / `applicationShouldTerminateAfterLastWindowClosed`
 
 AppDelegate then reduces to:
 

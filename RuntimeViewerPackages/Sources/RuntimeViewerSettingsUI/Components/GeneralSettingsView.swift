@@ -19,6 +19,14 @@ struct GeneralSettingsView: View {
             }
 
             Section {
+                Toggle("Quit After Closing Last Window", isOn: $settings.terminatesAfterLastWindowClosed)
+            } header: {
+                Text("Windows")
+            } footer: {
+                Text("When off, the app keeps running with no window open and clicking its Dock icon opens a new window. When on, closing the last window quits the app.")
+            }
+
+            Section {
                 LabeledContent("Sidebar Max Expansion Depth") {
                     Stepper(
                         "",
