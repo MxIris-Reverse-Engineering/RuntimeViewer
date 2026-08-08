@@ -64,6 +64,10 @@ The MCP bridge starts automatically on app launch; check the toolbar status indi
 
 Runtime Viewer discovers other instances on the local network via Bonjour. On iOS, allow the local-network permission when prompted. Remote engines appear in the toolbar source switcher grouped by host.
 
+### Window Behavior
+
+Closing the last window leaves Runtime Viewer running, and clicking its Dock icon opens a new window. To have the app quit together with its last window instead, enable **Settings → General → Quit After Closing Last Window**.
+
 ### Updates
 
 Runtime Viewer uses [Sparkle](https://sparkle-project.org/) for automatic updates.

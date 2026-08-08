@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.tabMenuController) private var tabMenuController
     @Dependency(\.updaterService) private var updaterService
     @Dependency(\.simulatorInstallerWindowController) private var simulatorInstallerWindowController
+    @Dependency(\.windowLifecycleController) private var windowLifecycleController
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         #if RUNTIMEVIEWER_ARM64E
@@ -42,7 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        false
+        windowLifecycleController.shouldTerminateAfterLastWindowClosed
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        windowLifecycleController.handleReopen(for: sender)
     }
 
     @IBAction func showSettings(_ sender: Any?) {

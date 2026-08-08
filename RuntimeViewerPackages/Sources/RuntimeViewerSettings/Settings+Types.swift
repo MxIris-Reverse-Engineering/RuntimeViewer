@@ -26,6 +26,15 @@ extension Settings {
         @Default(3)
         public var sidebarMaxExpansionDepth: Int
 
+        /// Whether closing the last window quits the app.
+        ///
+        /// Off by default: the app stays resident with no window open, and a
+        /// Dock icon click reopens a document window. Turning it on makes the
+        /// app behave like a single-purpose utility that exits with its last
+        /// window.
+        @Default(false)
+        public var terminatesAfterLastWindowClosed: Bool
+
         public static let `default` = Self()
     }
 
