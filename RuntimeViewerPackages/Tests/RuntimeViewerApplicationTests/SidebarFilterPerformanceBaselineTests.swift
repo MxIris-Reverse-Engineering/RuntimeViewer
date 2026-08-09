@@ -500,10 +500,14 @@ struct SidebarFilterPerformanceBaselineTests {
     }
 }
 
-/// Counts `$title` relay emissions across a set of cell view models.
+/// Counts `$appearance` relay emissions across a set of cell view models.
 /// `@Observed` is backed by a `BehaviorRelay`, so every `filterResult`
-/// didSet that rebuilds the attributed title lands here synchronously —
-/// the counts asserted above are exact, not scheduler-delayed.
+/// didSet that changes the published appearance lands here synchronously —
+/// the counts asserted above are exact, not scheduler-delayed. Since
+/// proposal 0005 the appearance is a single deduplicated stream: an
+/// emission during a filter pass means the attributed title actually
+/// changed (icons are untouched by filtering), so the counter still
+/// measures exactly the title rebuilds the suite pins.
 @MainActor
 private final class TitleRebuildCounter {
     private(set) var titleRebuildCount = 0
@@ -512,8 +516,8 @@ private final class TitleRebuildCounter {
 
     init(observing cellViewModels: [SidebarRuntimeObjectCellViewModel]) {
         for cellViewModel in cellViewModels {
-            cellViewModel.$title
-                .skip(1) // BehaviorRelay replays the current title on subscribe
+            cellViewModel.$appearance
+                .skip(1) // BehaviorRelay replays the current appearance on subscribe
                 .subscribeOnNext { [weak self] _ in
                     guard let self else { return }
                     titleRebuildCount += 1

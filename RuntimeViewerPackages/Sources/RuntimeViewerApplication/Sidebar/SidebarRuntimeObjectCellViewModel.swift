@@ -229,34 +229,44 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         }
     }
 
+    /// Replaces only the title within the current appearance. The icons keep
+    /// their existing references, so the `publishAppearance` equality check
+    /// reduces to comparing the two attributed titles.
     private func rebuildTitleForFilterResult() {
-        if let filterResult {
-            let title = NSMutableAttributedString {
-                AText(runtimeObject.displayName)
-                    .font(.systemFont(ofSize: fontSize))
-                    .foregroundColor(forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor)
-                    .alignment(.left)
-                    .lineBreakeMode(.byTruncatingTail)
-            }
+        var rebuiltAppearance = appearance
+        rebuiltAppearance.title = composedTitle()
+        publishAppearance(rebuiltAppearance)
+    }
 
-            guard let range = currentAndChildrenNames.ranges(of: runtimeObject.displayName).first else {
-                self.title = title
-                return
-            }
-
-            let currentNSRange = NSRange(currentAndChildrenNames.integerRange(from: range))
-
-            for resultNSRange in filterResult.ranges {
-                guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { continue }
-                title.addAttributes([
-                    .foregroundColor: NSUIColor.labelColor,
-                    .font: NSUIFont.systemFont(ofSize: fontSize, weight: .semibold),
-                ], range: resultNSRange)
-            }
-            self.title = title
-        } else {
-            title = defaultAttributedTitle()
+    /// The display title under the current `filterResult`: the fuzzy-highlight
+    /// rendition when a result is active, the plain default title otherwise.
+    private func composedTitle() -> NSAttributedString {
+        guard let filterResult else {
+            return defaultAttributedTitle()
         }
+
+        let title = NSMutableAttributedString {
+            AText(runtimeObject.displayName)
+                .font(.systemFont(ofSize: fontSize))
+                .foregroundColor(forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor)
+                .alignment(.left)
+                .lineBreakeMode(.byTruncatingTail)
+        }
+
+        guard let range = currentAndChildrenNames.ranges(of: runtimeObject.displayName).first else {
+            return title
+        }
+
+        let currentNSRange = NSRange(currentAndChildrenNames.integerRange(from: range))
+
+        for resultNSRange in filterResult.ranges {
+            guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { continue }
+            title.addAttributes([
+                .foregroundColor: NSUIColor.labelColor,
+                .font: NSUIFont.systemFont(ofSize: fontSize, weight: .semibold),
+            ], range: resultNSRange)
+        }
+        return title
     }
 
     var filterableString: String {
@@ -271,20 +281,10 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         forOpenQuickly ? SidebarRuntimeObjectCellViewModel.openQuicklyFontSize : SidebarRuntimeObjectCellViewModel.normalFontSize
     }
 
+    /// All visual state in one stream: one subject + lock per row instead of
+    /// five, and every refresh publishes atomically (proposal 0005).
     @Observed
-    public private(set) var primaryIcon: NSUIImage = .init()
-
-    @Observed
-    public private(set) var secondaryIcon: NSUIImage?
-
-    @Observed
-    public private(set) var tertiaryIcon: NSUIImage?
-
-    @Observed
-    public private(set) var title: NSAttributedString = .init()
-
-    @Observed
-    public private(set) var subtitle: NSAttributedString?
+    public private(set) var appearance = RuntimeObjectCellAppearance()
 
     @NSAttributedStringBuilder
     private func defaultAttributedTitle() -> NSAttributedString {
@@ -362,26 +362,35 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
     /// Recompute icons and the highlighted name. Called whenever
     /// `runtimeObject` changes (e.g. a new specialized child arrives,
-    /// flipping the parent's `properties` bookkeeping).
+    /// flipping the parent's `properties` bookkeeping). Composes the full
+    /// appearance and publishes it as one event.
     private func refreshAppearance() {
         let iconSize = forOpenQuickly ? 24 : RuntimeObjectIcon.defaultIconSize
-        primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize)
-        secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) }
+        var refreshedAppearance = RuntimeObjectCellAppearance(
+            primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
+            secondaryIcon: runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) },
+            title: composedTitle()
+        )
 
         if runtimeObject.properties.contains(.isGeneric) {
-            tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
+            refreshedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
         }
 
         if runtimeObject.properties.contains(.isSpecialized) {
-            tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
+            refreshedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
         }
 
-        if let filterResult {
-            // Trigger didSet to reapply highlight ranges over the new displayName.
-            self.filterResult = filterResult
-        } else {
-            title = defaultAttributedTitle()
-        }
+        publishAppearance(refreshedAppearance)
+    }
+
+    /// Equal-value updates are dropped so a refresh that changes nothing (a
+    /// splice that leaves this row's display state untouched, or a filter
+    /// pass re-delivering the same highlight) emits no event. Icons come from
+    /// `RuntimeObjectIcon`'s cache, so unchanged icons are pointer-equal and
+    /// the comparison cost concentrates on the attributed title.
+    private func publishAppearance(_ newAppearance: RuntimeObjectCellAppearance) {
+        guard newAppearance != appearance else { return }
+        appearance = newAppearance
     }
 }
 
@@ -395,10 +404,7 @@ extension SidebarRuntimeObjectCellViewModel: Differentiable {
 }
 
 extension SidebarRuntimeObjectCellViewModel: RuntimeObjectCellDisplayable {
-    public var primaryIconDriver: Driver<NSUIImage> { $primaryIcon.asDriver() }
-    public var secondaryIconDriver: Driver<NSUIImage?> { $secondaryIcon.asDriver() }
-    public var tertiaryIconDriver: Driver<NSUIImage?> { $tertiaryIcon.asDriver() }
-    public var titleDriver: Driver<NSAttributedString> { $title.asDriver() }
+    public var appearanceDriver: Driver<RuntimeObjectCellAppearance> { $appearance.asDriver() }
 }
 
 #endif

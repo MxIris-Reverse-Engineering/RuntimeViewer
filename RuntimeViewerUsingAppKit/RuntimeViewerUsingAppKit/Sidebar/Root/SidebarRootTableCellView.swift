@@ -13,7 +13,11 @@ final class SidebarRootTableCellView: ImageTextTableCellView {
     func bind(to viewModel: SidebarRootCellViewModel) {
         rx.disposeBag = DisposeBag()
 
-        viewModel.$icon.asDriver().drive(_imageView.rx.image).disposed(by: rx.disposeBag)
-        viewModel.$name.asDriver().drive(_textField.rx.attributedStringValue).disposed(by: rx.disposeBag)
+        viewModel.$appearance.asDriver().driveOnNext { [weak self] appearance in
+            guard let self else { return }
+            _imageView.image = appearance.icon
+            _textField.attributedStringValue = appearance.name
+        }
+        .disposed(by: rx.disposeBag)
     }
 }

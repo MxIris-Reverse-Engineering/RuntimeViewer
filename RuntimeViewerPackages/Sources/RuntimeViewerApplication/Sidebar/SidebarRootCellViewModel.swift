@@ -49,22 +49,33 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
     }
 
 
-    @Observed
-    public private(set) var icon: NSUIImage?
+    /// Both display outlets in one stream: the image list keeps ~13k of these
+    /// rows resident, so per-row Rx fixed cost matters (proposal 0005).
+    public struct Appearance: Equatable {
+        public var icon: NSUIImage?
+        public var name: NSAttributedString
+
+        public init(icon: NSUIImage?, name: NSAttributedString) {
+            self.icon = icon
+            self.name = name
+        }
+    }
 
     @Observed
-    public private(set) var name: NSAttributedString
+    public private(set) var appearance: Appearance
 
     public init(node: RuntimeImageNode) {
         self.node = node
-        self.name = NSAttributedString {
-            AText(node.name)
-                .foregroundColor(.labelColor)
-                .font(.systemFont(ofSize: 13))
-                .alignment(.left)
-                .lineBreakeMode(.byTruncatingTail)
-        }
-        self.icon = node.icon
+        self.appearance = Appearance(
+            icon: node.icon,
+            name: NSAttributedString {
+                AText(node.name)
+                    .foregroundColor(.labelColor)
+                    .font(.systemFont(ofSize: 13))
+                    .alignment(.left)
+                    .lineBreakeMode(.byTruncatingTail)
+            }
+        )
     }
 
     public func makeIterator() -> Iterator {
