@@ -148,9 +148,6 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         return "\(runtimeObject.displayName) \(childrenNames)"
     }
 
-    @Dependency(\.appDefaults)
-    private var appDefaults
-
     private var filterContextStorage = FilterContext()
 
     /// The active text-filter context. Setting a *different* context

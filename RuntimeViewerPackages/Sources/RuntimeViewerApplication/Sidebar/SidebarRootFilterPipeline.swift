@@ -59,6 +59,11 @@ enum SidebarRootFilterPipeline {
     /// nodes; a cancelled run returns `.empty`, which callers must
     /// discard (they already do via their generation guard).
     static func verdicts(for forest: [SnapshotNode], query: String) -> ForestVerdict {
+        // Contract tripwire: an empty query would clear the whole tree
+        // (`localizedCaseInsensitiveContains("")` is false for every
+        // haystack). The sole caller's empty-query fast path upholds this
+        // today; a second call site is where it would silently break.
+        assert(!query.isEmpty, "empty queries take the resetToUnfiltered fast path, never verdicts(for:query:)")
         var topVerdicts: [VerdictNode] = []
         topVerdicts.reserveCapacity(forest.count)
         var topAggregates: [String] = []
