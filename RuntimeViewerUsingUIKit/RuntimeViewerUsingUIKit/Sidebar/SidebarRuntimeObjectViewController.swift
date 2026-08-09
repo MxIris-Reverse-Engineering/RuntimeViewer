@@ -63,7 +63,12 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageLoadErrorView.loadImageButton.rx.tap.asSignal()
             ).merge(),
             searchString: imageLoadedView.searchBar.rx.text.asDriver().filterNil(),
-            isSearchCaseInsensitive: .just(false)
+            // `true` under FilterEngine's honest semantics means
+            // case-insensitive — the platform default. The engine's
+            // pre-2026-08 implementation had the flag inverted, so this
+            // constant used to be `false` for the same effective behavior;
+            // it must flip together with any future semantic change.
+            isSearchCaseInsensitive: .just(true)
         )
 
         let output = viewModel.transform(input)
