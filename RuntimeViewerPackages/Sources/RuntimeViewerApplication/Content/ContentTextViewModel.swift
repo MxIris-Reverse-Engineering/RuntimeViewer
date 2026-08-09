@@ -147,12 +147,26 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         // the theme changes. The build runs on a background scheduler;
         // `flatMapLatest` drops a superseded build's emission, so a burst of
         // font-size clicks only publishes the newest result.
+        //
+        // One scheduler for the pipeline's lifetime: the convenience
+        // initializer allocates a fresh DispatchQueue, so constructing it
+        // inside the closure would churn a queue per emission.
+        let renderScheduler = ConcurrentDispatchQueueScheduler(qos: .userInitiated)
         Observable
             .combineLatest(interfaceStream, themeObservable)
-            .flatMapLatest { interfacePair, theme -> Observable<NSAttributedString?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] interfacePair, theme -> Observable<NSAttributedString?> in
+                // Tracked so the indicator covers click → new text on
+                // screen: with a warm interface cache the fetch half is
+                // near-instant, and theme / font-size changes skip it
+                // entirely — without this, every visible wait would fall in
+                // an untracked gap. No dark gap between the halves either:
+                // the fetch's element propagates here (incrementing the
+                // activity) before its `Observable.async` completes and
+                // decrements.
                 Observable.just(())
-                    .observe(on: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
+                    .observe(on: renderScheduler)
                     .map { Self.renderAttributedString(for: interfacePair, theme: theme) }
+                    .trackActivity(_commonLoading)
             }
             .observeOnMainScheduler()
             .bind(to: $attributedString)
