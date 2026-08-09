@@ -117,6 +117,32 @@ enum SidebarRuntimeObjectFilterPipeline {
         return orderedFilteredIndices
     }
 
+    // MARK: - Identity fast path (main actor)
+
+    /// Installs the "no filtering" outcome on every cell — the exact result
+    /// `snapshot` → `verdicts` → `apply` produces for an empty query with an
+    /// inactive scope, minus the snapshot forest. The identity outcome needs
+    /// no haystacks, so this never touches `currentAndChildrenNames` — whose
+    /// per-cell cache is cold right after a reload, making the skipped
+    /// snapshot a full bottom-up haystack build over the tree.
+    @MainActor
+    static func resetToUnfiltered(
+        _ cells: [SidebarRuntimeObjectCellViewModel],
+        context: FilterContext,
+        scope: RuntimeObjectScope
+    ) {
+        for cell in cells {
+            let unfilteredChildren = cell.unfilteredChildren
+            resetToUnfiltered(unfilteredChildren, context: context, scope: scope)
+            cell.applyFilterOutcome(
+                context: context,
+                scope: scope,
+                result: nil,
+                filteredChildren: unfilteredChildren
+            )
+        }
+    }
+
     // MARK: - Apply (main actor)
 
     /// Installs the verdict forest onto the live cell tree and returns the

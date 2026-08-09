@@ -429,20 +429,21 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             isFiltering = shouldFilter
         }
 
-        let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: nodes, scope: activeScope)
-
         // Fast path — an empty query with an inactive scope is the
         // identity filter; apply synchronously so clearing the search
-        // never flashes stale results. Cheap: no matching runs, and the
-        // guarded didSets skip every unchanged row.
+        // never flashes stale results. Runs before the snapshot: the
+        // identity outcome needs no haystacks, and right after a reload the
+        // haystack caches are cold, so building a snapshot forest here
+        // would pay a full O(nodes) bottom-up name build just to discard
+        // it. The guarded didSets still skip every unchanged row.
         if !shouldFilter {
             currentFilterTask = nil
-            let verdictForest = SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context)
-            if let filtered = SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: nodes, context: context, scope: activeScope) {
-                filteredNodes = filtered
-            }
+            SidebarRuntimeObjectFilterPipeline.resetToUnfiltered(nodes, context: context, scope: activeScope)
+            filteredNodes = nodes
             return
         }
+
+        let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: nodes, scope: activeScope)
 
         currentFilterTask = Task { @MainActor [weak self] in
             let verdictForest = await Self.computeVerdictsOffMain(for: snapshotForest, context: context)
