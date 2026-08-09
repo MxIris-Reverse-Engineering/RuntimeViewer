@@ -225,7 +225,7 @@ actor RuntimeSwiftSection {
         let allChildren = typeChildren + protocolChildren + specializedChildren
 
         var properties: RuntimeObject.Properties = []
-        if typeDefinition.type.contextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
+        if typeDefinition.typeContextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
             properties.insert(.isGeneric)
         }
         let isSpecialized = typeDefinition.isSpecialized
@@ -374,12 +374,12 @@ extension RuntimeSwiftSection {
         guard case .swift(.type(.class)) = object.kind,
               let classDefinitionName = interfaceDefinitionNameByObject[object.key]?.typeName,
               let classDefinition = indexer.allTypeDefinitions[classDefinitionName],
-              case .class(let `class`) = classDefinition.type
+              case .class(let classDescriptor) = classDefinition.typeContextDescriptorWrapper
         else {
             #log(.debug, "No class hierarchy found")
             return []
         }
-        let hierarchy = try ClassHierarchyDumper(machO: machO).dump(for: `class`.descriptor)
+        let hierarchy = try ClassHierarchyDumper(machO: machO).dump(for: classDescriptor)
         #log(.debug, "Class hierarchy: \(hierarchy.count, privacy: .public) levels")
         return hierarchy
     }
@@ -543,7 +543,7 @@ extension RuntimeSwiftSection {
               let typeDefinition = indexer.allTypeDefinitions[typeName]
         else { return nil }
         var properties: RuntimeObject.Properties = []
-        if typeDefinition.type.contextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
+        if typeDefinition.typeContextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
             properties.insert(.isGeneric)
         }
         let isSpecialized = typeDefinition.isSpecialized
@@ -618,7 +618,7 @@ extension RuntimeSwiftSection {
     func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
         do {
             let typeDefinition = try requireGenericTypeDefinition(for: object)
-            let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+            let upstreamRequest = try specializer.makeRequest(for: typeDefinition.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
         } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
             throw Self.translate(error)
@@ -656,7 +656,7 @@ extension RuntimeSwiftSection {
         )
         candidateSpecializer.maxBindingDepth = Self.maxSpecializationDepth
         do {
-            let upstreamRequest = try candidateSpecializer.makeRequest(for: matched.entry.value.type.typeContextDescriptorWrapper)
+            let upstreamRequest = try candidateSpecializer.makeRequest(for: matched.entry.value.typeContextDescriptorWrapper)
             return try makeRuntimeSpecializationRequest(from: upstreamRequest)
         } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
             throw Self.translate(error)
@@ -672,7 +672,7 @@ extension RuntimeSwiftSection {
     ) async throws -> RuntimeObject {
         try Task.checkCancellation()
         let baseTypeDefinition = try requireGenericTypeDefinition(for: object)
-        let upstreamRequest = try specializer.makeRequest(for: baseTypeDefinition.type.typeContextDescriptorWrapper)
+        let upstreamRequest = try specializer.makeRequest(for: baseTypeDefinition.typeContextDescriptorWrapper)
         let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
         try Task.checkCancellation()
         let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
@@ -730,7 +730,7 @@ extension RuntimeSwiftSection {
     ) async throws -> RuntimeSpecializationValidation {
         try Task.checkCancellation()
         let typeDefinition = try requireGenericTypeDefinition(for: object)
-        let upstreamRequest = try specializer.makeRequest(for: typeDefinition.type.typeContextDescriptorWrapper)
+        let upstreamRequest = try specializer.makeRequest(for: typeDefinition.typeContextDescriptorWrapper)
         let resolved = try resolveUpstreamArguments(selection.arguments, against: upstreamRequest)
         try Task.checkCancellation()
         let upstreamSelection = SpecializationSelection(arguments: resolved.arguments)
@@ -944,7 +944,7 @@ extension RuntimeSwiftSection {
             innerSpecializer.maxBindingDepth = Self.maxSpecializationDepth
             let innerRequest: SpecializationRequest
             do {
-                innerRequest = try innerSpecializer.makeRequest(for: innerEntry.value.type.typeContextDescriptorWrapper)
+                innerRequest = try innerSpecializer.makeRequest(for: innerEntry.value.typeContextDescriptorWrapper)
             } catch let error as GenericSpecializer<MachOImage>.SpecializerError {
                 throw Self.translate(error)
             }

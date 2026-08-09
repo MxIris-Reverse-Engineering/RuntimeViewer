@@ -204,8 +204,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
             guard let childKey = try? await mangleAsString(typeName.node) else { continue }
             typeNameTable[childKey] = typeName
 
-            guard case .class(let classWrapper) = typeDefinition.type else { continue }
-            let classDescriptor = classWrapper.descriptor
+            guard case .class(let classDescriptor) = typeDefinition.typeContextDescriptorWrapper else { continue }
             guard let superclassMangled = try? classDescriptor.superclassTypeMangledName(in: machO)
             else { continue }
             // Round-trip through demangle + remangle so the superclass key
