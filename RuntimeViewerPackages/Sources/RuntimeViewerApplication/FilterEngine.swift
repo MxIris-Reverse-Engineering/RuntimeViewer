@@ -100,14 +100,14 @@ enum FilterEngine {
             item.filterContext = context
         }
 
-        let verdicts = match(context, haystacks: items.map(\.filterableString))
-
         guard !context.isEmpty else {
             for item in items {
                 item.filterResult = nil
             }
             return items
         }
+
+        let verdicts = match(context, haystacks: items.map(\.filterableString))
 
         var isMatchedByIndex = [Bool](repeating: false, count: items.count)
         var filteredItems: [Item] = []

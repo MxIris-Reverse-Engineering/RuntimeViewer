@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Dependencies
+import RxSwift
 import RuntimeViewerCore
 import RuntimeViewerSettings
 import RuntimeViewerArchitectures
@@ -65,6 +66,57 @@ struct ContentTextPipelineTests {
         // The view model holds its router unowned — keep the mock alive
         // until every assertion has run.
         withExtendedLifetime(mockRouter) {}
+    }
+
+    // MARK: - The loading indicator must cover the render half
+
+    /// PR #88 review, finding 3: after the fetch/render split, only the
+    /// fetch half was tracked by `_commonLoading` — a theme or font-size
+    /// change re-renders without ever entering a tracked region, so the
+    /// indicator never appears even though the user is waiting on the
+    /// rebuild. This fails against a fetch-only `trackActivity` placement.
+    @Test("font-size change surfaces the loading indicator through the render half")
+    func fontSizeChangeSurfacesLoadingIndicator() async throws {
+        let fixtureRuntimeObject = makeRuntimeObject()
+        let (viewModel, mockRouter) = makeViewModel(
+            runtimeObject: fixtureRuntimeObject,
+            interfaceProvider: { runtimeObject, _ in
+                RuntimeObjectInterface(object: runtimeObject, interfaceString: "class ContentPipelineFixture {}")
+            }
+        )
+
+        let initialRendered = try await pollUntil(timeout: .seconds(10)) {
+            viewModel.attributedString != nil
+        }
+        #expect(initialRendered, "initial fetch never produced an attributed string")
+        let initialAttributedString = try #require(viewModel.attributedString)
+
+        // Record loading emissions only from here on, so the initial
+        // fetch's activity cannot satisfy the assertion.
+        let loadingRecorder = LoadingEmissionRecorder()
+        let subscriptionDisposeBag = DisposeBag()
+        viewModel._commonLoading.asDriver()
+            .driveOnNext { isLoading in
+                loadingRecorder.record(isLoading)
+            }
+            .disposed(by: subscriptionDisposeBag)
+
+        let settings = liveSettings()
+        let originalFontSize = settings.theme.fontSize
+        defer { withLiveDependencyContext { settings.theme.fontSize = originalFontSize } }
+        withLiveDependencyContext { settings.theme.fontSize = originalFontSize + 3 }
+
+        let rebuilt = try await pollUntil(timeout: .seconds(10)) {
+            viewModel.attributedString !== initialAttributedString && viewModel.attributedString != nil
+        }
+        #expect(rebuilt, "font-size change never produced a re-rendered attributed string")
+        let indicatorAppeared = try await pollUntil(timeout: .seconds(5)) {
+            loadingRecorder.sawLoading
+        }
+        #expect(indicatorAppeared, "a theme-only re-render must pass through a tracked region so the indicator can appear")
+
+        withExtendedLifetime(mockRouter) {}
+        withExtendedLifetime(subscriptionDisposeBag) {}
     }
 
     // MARK: - Fetch errors must not kill the pipeline
@@ -254,6 +306,22 @@ struct ContentTextPipelineTests {
     // `Swift.Error` spelled out: an imported module also exports a type
     // named `Error`, which otherwise shadows the standard library protocol.
     private struct StubInterfaceFetchError: Swift.Error {}
+
+    /// Thread-safe recorder for `_commonLoading` emissions (delivered on
+    /// the main thread by the driver, read from the polling loop).
+    private final class LoadingEmissionRecorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storedSawLoading = false
+
+        var sawLoading: Bool {
+            lock.withLock { storedSawLoading }
+        }
+
+        func record(_ isLoading: Bool) {
+            guard isLoading else { return }
+            lock.withLock { storedSawLoading = true }
+        }
+    }
 
     // MARK: - Dependency helpers
 
