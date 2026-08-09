@@ -659,8 +659,13 @@ public actor RuntimeEngine {
     /// name whose nominal node lives in the `__C` (Objective-C) module.
     /// Returns `nil` for anything that is not an ObjC-imported class or
     /// protocol — the fallback then declines rather than fabricating a target.
+    ///
+    /// Demangles transiently: only the identifier text is read out and the
+    /// tree is dropped. `demangleAsNode` would intern every node into the
+    /// library's global cache, which never evicts, so each click on a type
+    /// would leave a whole tree resident for the rest of the process.
     private static func objcReference(forSwiftMangledName mangledName: String) -> (name: String, kind: RuntimeObjectKind)? {
-        guard let node = try? demangleAsNode(mangledName, isType: true),
+        guard let node = try? demangleAsNodeTransient(mangledName, isType: true),
               let nominal = firstObjCNominalNode(in: node),
               let identifier = nominal.children.first(where: { $0.kind == .identifier })?.text
         else { return nil }
