@@ -39,9 +39,7 @@ public final class MCPService {
 
     public var onStateChange: ((MCPServerState) -> Void)?
 
-    private var transport: HTTPSSETransport?
-
-    private var transportTask: Task<Void, Never>?
+    private(set) var transport: HTTPSSETransport?
 
     private var startTask: Task<Void, Never>?
 
@@ -59,15 +57,25 @@ public final class MCPService {
 
     private let portFilePath: String
 
-    private init() {
+    /// True while this instance owns the on-disk port file. A failed-bind
+    /// instance never wrote one, so its `stop()` must not delete the file
+    /// the winning instance's clients rely on (proposal 0006).
+    private var hasWrittenPortFile = false
+
+    private convenience init() {
         let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let runtimeViewerDir = appSupportURL.appendingPathComponent("RuntimeViewer")
+        let runtimeViewerDirectory = appSupportURL.appendingPathComponent("RuntimeViewer")
         do {
-            try FileManager.default.createDirectory(at: runtimeViewerDir, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: runtimeViewerDirectory, withIntermediateDirectories: true)
         } catch {
             #log(.error,"Failed to create app support directory: \(error)")
         }
-        self.portFilePath = runtimeViewerDir.appendingPathComponent(Settings.MCP.portFileName).path
+        self.init(portFilePath: runtimeViewerDirectory.appendingPathComponent(Settings.MCP.portFileName).path)
+    }
+
+    /// Internal seam so tests can point the port file at a scratch location.
+    init(portFilePath: String) {
+        self.portFilePath = portFilePath
     }
 
     isolated deinit {
@@ -91,31 +99,47 @@ public final class MCPService {
         startTask = Task {
             let mcpSettings = settings.mcp
             let port: UInt16 = mcpSettings.useFixedPort ? mcpSettings.fixedPort : 0
-            do {
-                let mcpServer = MCPBridgeServer(documentProvider: documentProvider)
-                let transport = HTTPSSETransport(server: mcpServer, host: "127.0.0.1", port: Int(port))
-                self.transport = transport
-
-                // Run transport in a detached task (run() blocks on the NIO event loop)
-                self.transportTask = Task.detached {
-                    do {
-                        try await transport.run()
-                    } catch {
-                        #log(.error,"MCP transport run failed: \(error)")
-                    }
-                }
-
-                // Wait for server to bind, then write port file
-                try await Task.sleep(for: .milliseconds(500))
-                let boundPort = UInt16(transport.port)
-                writePortFile(port: boundPort)
-                #log(.info,"MCP HTTP+SSE server listening on port \(boundPort)")
-                self.serverState = .running(port: boundPort)
-            } catch {
-                #log(.error,"Failed to start MCP server: \(error)")
-                self.serverState = .stopped
-            }
+            await startTransport(on: port, for: documentProvider)
             observe()
+        }
+    }
+
+    /// Binds the MCP transport on `port` (`0` = ephemeral). Split from
+    /// `start(for:)` so tests can drive the bind path without going through
+    /// settings.
+    ///
+    /// `transport.start()` returns only after the listener is bound, so
+    /// reaching the success path IS the bind confirmation — no fixed sleep,
+    /// and the port file is written only for a listener that actually
+    /// exists. On failure the transport is torn down: its NIO event-loop
+    /// group is created eagerly at init, so a lost bind race (e.g. the
+    /// fixed port is held by another RuntimeViewer instance) must not keep
+    /// `System.coreCount` event loops and their threads resident, and the
+    /// state must report `.stopped` truthfully (proposal 0006).
+    func startTransport(on port: UInt16, for documentProvider: some MCPBridgeDocumentProvider) async {
+        let mcpServer = MCPBridgeServer(documentProvider: documentProvider)
+        let boundTransport = HTTPSSETransport(server: mcpServer, host: "127.0.0.1", port: Int(port))
+        transport = boundTransport
+        do {
+            try await boundTransport.start()
+            guard !Task.isCancelled else {
+                // stop() ran while the bind was in flight and already set the
+                // user-facing state; just release this instance's resources.
+                if transport === boundTransport { transport = nil }
+                try? await boundTransport.stop()
+                return
+            }
+            let boundPort = UInt16(boundTransport.port)
+            writePortFile(port: boundPort)
+            #log(.info,"MCP HTTP+SSE server listening on port \(boundPort)")
+            serverState = .running(port: boundPort)
+        } catch {
+            #log(.error,"Failed to start MCP server: \(error)")
+            if transport === boundTransport { transport = nil }
+            try? await boundTransport.stop()
+            if !Task.isCancelled {
+                serverState = .stopped
+            }
         }
     }
 
@@ -124,8 +148,6 @@ public final class MCPService {
         startTask = nil
         restartTask?.cancel()
         restartTask = nil
-        transportTask?.cancel()
-        transportTask = nil
         if let transport {
             Task.detached {
                 try? await transport.stop()
@@ -134,7 +156,7 @@ public final class MCPService {
         transport = nil
         let isEnabled = settings.mcp.isEnabled
         serverState = isEnabled ? .stopped : .disabled
-        removePortFile()
+        removePortFileIfOwned()
         observeToken?.cancel()
         observeToken = nil
     }
@@ -186,13 +208,16 @@ public final class MCPService {
     private func writePortFile(port: UInt16) {
         do {
             try "\(port)".write(toFile: portFilePath, atomically: true, encoding: .utf8)
+            hasWrittenPortFile = true
             #log(.info,"Wrote MCP HTTP+SSE port \(port) to \(self.portFilePath)")
         } catch {
             #log(.error,"Failed to write port file: \(error)")
         }
     }
 
-    private nonisolated func removePortFile() {
+    private func removePortFileIfOwned() {
+        guard hasWrittenPortFile else { return }
+        hasWrittenPortFile = false
         do {
             try FileManager.default.removeItem(atPath: portFilePath)
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileNoSuchFileError {
