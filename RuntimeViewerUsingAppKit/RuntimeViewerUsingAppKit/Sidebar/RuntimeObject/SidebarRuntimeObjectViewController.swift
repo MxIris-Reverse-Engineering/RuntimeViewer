@@ -290,7 +290,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
         guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
-        return cellViewModel.title.string
+        return cellViewModel.appearance.title.string
     }
 
     /// Context-menu entries for the clicked row. Override point: this base

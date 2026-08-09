@@ -158,6 +158,6 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewContr
     
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
         guard let cellViewModel = item as? SidebarRootCellViewModel else { return nil }
-        return cellViewModel.name.string
+        return cellViewModel.appearance.name.string
     }
 }

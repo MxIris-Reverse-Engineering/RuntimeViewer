@@ -33,40 +33,30 @@ public final class SpecializationTypePickerCellViewModel: NSObject, @unchecked S
     public let candidate: RuntimeSpecializationRequest.Candidate
 
     @Observed
-    public private(set) var primaryIcon: NSUIImage = .init()
-
-    @Observed
-    public private(set) var secondaryIcon: NSUIImage?
-
-    @Observed
-    public private(set) var tertiaryIcon: NSUIImage?
-
-    @Observed
-    public private(set) var title: NSAttributedString = .init()
-
-    @Observed
-    public private(set) var subtitle: NSAttributedString?
+    public private(set) var appearance: RuntimeObjectCellAppearance
 
     public init(candidate: RuntimeSpecializationRequest.Candidate) {
         self.candidate = candidate
-        super.init()
         let iconSize = RuntimeObjectIcon.defaultIconSize
-        primaryIcon = RuntimeObjectIcon.icon(for: candidate.kind.runtimeObjectKind, size: iconSize)
-        secondaryIcon = candidate.isGeneric ? RuntimeObjectIcon.iconForGeneric(size: iconSize) : nil
-        title = NSAttributedString {
-            AText(candidate.displayName)
-                .foregroundColor(.labelColor)
-                .font(.systemFont(ofSize: 12))
-                .alignment(.left)
-                .lineBreakeMode(.byTruncatingTail)
-        }
-        subtitle = NSAttributedString {
-            AText(candidate.imagePath.lastPathComponent)
-                .foregroundColor(.secondaryLabelColor)
-                .font(.systemFont(ofSize: 10))
-                .alignment(.left)
-                .lineBreakeMode(.byTruncatingTail)
-        }
+        self.appearance = RuntimeObjectCellAppearance(
+            primaryIcon: RuntimeObjectIcon.icon(for: candidate.kind.runtimeObjectKind, size: iconSize),
+            secondaryIcon: candidate.isGeneric ? RuntimeObjectIcon.iconForGeneric(size: iconSize) : nil,
+            title: NSAttributedString {
+                AText(candidate.displayName)
+                    .foregroundColor(.labelColor)
+                    .font(.systemFont(ofSize: 12))
+                    .alignment(.left)
+                    .lineBreakeMode(.byTruncatingTail)
+            },
+            subtitle: NSAttributedString {
+                AText(candidate.imagePath.lastPathComponent)
+                    .foregroundColor(.secondaryLabelColor)
+                    .font(.systemFont(ofSize: 10))
+                    .alignment(.left)
+                    .lineBreakeMode(.byTruncatingTail)
+            }
+        )
+        super.init()
     }
 }
 
@@ -92,11 +82,7 @@ extension RuntimeSpecializationRequest.Candidate.Kind {
 // the table's `rx.items` builder closure per render and never participates
 // in the DifferenceKit diff. See CLAUDE.md §9 for the rationale.
 extension SpecializationTypePickerCellViewModel: RuntimeObjectCellDisplayable {
-    public var primaryIconDriver: Driver<NSUIImage> { $primaryIcon.asDriver() }
-    public var secondaryIconDriver: Driver<NSUIImage?> { $secondaryIcon.asDriver() }
-    public var tertiaryIconDriver: Driver<NSUIImage?> { $tertiaryIcon.asDriver() }
-    public var titleDriver: Driver<NSAttributedString> { $title.asDriver() }
-    public var subtitleDriver: Driver<NSAttributedString?> { $subtitle.asDriver() }
+    public var appearanceDriver: Driver<RuntimeObjectCellAppearance> { $appearance.asDriver() }
 }
 
 #endif
