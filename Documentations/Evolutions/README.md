@@ -16,6 +16,7 @@
 | [0002](0002-background-indexing.md) | 后台索引 | Accepted | 针对目标进程已加载镜像的依赖闭包，主动解析 ObjC 与 Swift 元数据。由每个 `RuntimeEngine` 持有的 actor `RuntimeBackgroundIndexingManager` 驱动，Settings 可配置，Toolbar 弹出框展示进度。 |
 | [0003](0003-generic-type-specialization.md) | 泛型类型特化 | In Progress | 用户在 Inspector 的 Specialization tab 为泛型类型选定具体类型组合，特化结果作为 sidebar 子节点呈现，泛型参数被替换且 metadata 字段填上真实数值。 |
 | [0004](0004-differentiable-box-lazy-cellvm.md) | DifferentiableBox 与 Lazy Cell ViewModel 渲染范式 | Draft | 在 `RuntimeViewerArchitectures` 引入 `DifferentiableBox<Model>`，把任意 `Hashable` 领域模型适配为 DifferenceKit 的 `Differentiable`，使表格与大纲视图的 Rx 数据源走「轻量身份元素 + cell 级惰性 ViewModel」。 |
+| [0005](0005-cellvm-appearance-single-observed.md) | 高基数 Cell ViewModel 的 Appearance 单流化 | Implemented | 把 Sidebar 两类高基数 cellVM 上 5 个分立 `@Observed` 外观属性合并为单个 `appearance` 结构体属性，每行 Rx 固定成本（subject + `NSRecursiveLock`）从 5 套降到 1 套。验收全达标：稳态锁 54k→27,341、堆 210→196.7 MiB；全量浏览锁 125,225→42,218、UI/Rx 簇 46.7→17.7 MiB。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
