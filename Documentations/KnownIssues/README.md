@@ -41,3 +41,10 @@ when picking up follow-up work.
   full re-render + autosave per frame; TS.2 editor's Light/Dark variant
   selector hardcoded to `.dark`; TS.3 duplicate-preset names not deduped;
   TS.4 toolbar font-size +/- read-modify-write not coalesced on auto-repeat.
+- [2026-08-09-pr88-review-findings.md](2026-08-09-pr88-review-findings.md) —
+  cross-session adjudication of the PR #88 (`perf/pipeline-optimizations`)
+  review: 7 findings fixed in the same batch (commits recorded per row),
+  PR88.1 retracted as a false positive with the runtime evidence — the
+  RxCocoa-vs-RxAppKit control-property priming boundary (`rx.state` has an
+  initial value, `rx.isCheck` does not) is the part worth remembering — and
+  7 backlog items with pickup conditions.
