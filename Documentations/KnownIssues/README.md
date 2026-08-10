@@ -41,3 +41,18 @@ when picking up follow-up work.
   full re-render + autosave per frame; TS.2 editor's Light/Dark variant
   selector hardcoded to `.dark`; TS.3 duplicate-preset names not deduped;
   TS.4 toolbar font-size +/- read-modify-write not coalesced on auto-repeat.
+- [2026-08-09-pr88-review-findings.md](2026-08-09-pr88-review-findings.md) —
+  adjudications for the first (xhigh) review pass on PR #88
+  (`perf/pipeline-optimizations`), IDs `PR88.<N>`: 7 fixed in-branch, 1 false
+  positive (the RxAppKit `rx.state` no-initial-value premise, refuted at
+  runtime), 7 backlogged (byte-budget-less interface cache, test
+  infrastructure seams, docs placement).
+- [2026-08-10-pr88-max-review-findings.md](2026-08-10-pr88-max-review-findings.md) —
+  adjudications for the second (max) review pass on PR #88 after cross-session
+  re-verification, IDs `PR88R2.<N>` mapping to findings F1–F15: 6 fixed
+  in-branch (expansion-autosave wipe, root-filter stale overwrite, link-jump
+  cache key mismatch, Open Quickly haystack discard / main-thread rebuild /
+  unbounded materialization), 2 downgraded on re-verification (one-tick
+  transformer skew, unreachable applyNodes guard), 1 claim refuted
+  (specialization flushes the whole interface cache, so no dead entries),
+  6 backlogged.
