@@ -7,6 +7,14 @@ import Testing
 /// Regression suite for the residual costs lazy materialization still
 /// carried after PR #88's rewrite.
 ///
+/// - The materialized-row memo was unbounded and cleared only by a reload.
+///   `.fuzzySearch` keeps every non-zero-score haystack, and a haystack is
+///   the object's name plus every descendant's, so a one- or two-character
+///   query matched essentially the whole image and the apply loop built a
+///   cell view model (and, recursively, one per descendant) for every row
+///   in a single main-actor turn — reintroducing the O(N) main-thread cost
+///   the lazy path exists to remove, and retaining all of it for the
+///   document's life.
 /// - A superseded pass threw away a completed haystack build. The
 ///   haystacks depend only on the object list, never on the query, so
 ///   whenever the build outran the 150 ms debounce, continuous typing
@@ -17,6 +25,33 @@ import Testing
 @Suite("OpenQuicklyMaterializationBounds", .serialized)
 @MainActor
 struct OpenQuicklyMaterializationBoundsTests {
+    private static let seededObjectCount = 1_200
+
+    @Test("a query matching every row materializes at most the row cap")
+    func wideQueryStopsAtTheRowCap() async throws {
+        try await withSharedLocalEngineLock {
+            let harness = try await Harness(objectCount: Self.seededObjectCount)
+
+            // Matches every seeded object, which is the shape a one- or
+            // two-character query has against a real image.
+            harness.search("Type")
+
+            let applied = try await pollUntil(timeout: .seconds(20)) {
+                !harness.viewModel.filteredNodesForOpenQuickly.isEmpty
+            }
+            #expect(applied, "the wide query never produced any rows")
+
+            let cap = SidebarRuntimeObjectListViewModel.openQuicklyMaximumMaterializedRows
+            #expect(Self.seededObjectCount > cap, "the fixture must exceed the cap for this to mean anything")
+            #expect(harness.viewModel.filteredNodesForOpenQuickly.count == cap)
+            #expect(
+                harness.viewModel.openQuicklyCellViewModelsByRowIndex.count == cap,
+                "every displayed row is materialized and nothing beyond the cap is"
+            )
+            #expect(harness.viewModel.filteredNodesForOpenQuickly.allSatisfy { $0.filterResult != nil })
+        }
+    }
+
     @Test("a superseded pass still installs the haystack build it completed")
     func supersededPassInstallsItsHaystackBuild() async throws {
         try await withSharedLocalEngineLock {

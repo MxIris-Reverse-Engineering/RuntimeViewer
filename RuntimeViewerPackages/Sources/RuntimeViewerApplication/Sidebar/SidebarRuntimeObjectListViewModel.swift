@@ -58,6 +58,20 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// a discarded node array is never applied.
     private var currentOpenQuicklyFilterGeneration: Int = 0
 
+    /// Upper bound on rows materialized for one query.
+    ///
+    /// `.fuzzySearch` keeps every haystack with a non-zero score, and a
+    /// haystack is the object's name plus every descendant's, so a one- or
+    /// two-character query matches essentially the whole image. Without a
+    /// bound the apply loop constructed a cell view model — and, through
+    /// `rebuildChildren()`, one per descendant, each with icon lookups and
+    /// an attributed title — for every row in a single main-actor turn,
+    /// which is the O(N) main-thread cost lazy materialization exists to
+    /// remove. `FuzzySearchable.fuzzyMatch` returns matches sorted by
+    /// descending weight, so the cap keeps the best ones; the rows it drops
+    /// are the near-zero-score tail nobody scrolls to.
+    static let openQuicklyMaximumMaterializedRows = 500
+
     /// Builds the Open Quickly haystacks for an object list. Injectable so
     /// tests can gate the build and drive supersession deterministically;
     /// the default is pure value work with no reference to the view model.
@@ -250,10 +264,14 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
             guard !Task.isCancelled, let self else { return }
             guard self.currentOpenQuicklyFilterGeneration == generation else { return }
 
-            var matchedRowIndices = Set<Int>(minimumCapacity: verdicts.count)
+            // Verdicts arrive sorted by descending fuzzy weight, so the
+            // prefix is the best-scoring window (see
+            // `openQuicklyMaximumMaterializedRows`).
+            let displayedVerdicts = verdicts.prefix(Self.openQuicklyMaximumMaterializedRows)
+            var matchedRowIndices = Set<Int>(minimumCapacity: displayedVerdicts.count)
             var filteredCellViewModels: [SidebarRuntimeObjectCellViewModel] = []
-            filteredCellViewModels.reserveCapacity(verdicts.count)
-            for verdict in verdicts {
+            filteredCellViewModels.reserveCapacity(displayedVerdicts.count)
+            for verdict in displayedVerdicts {
                 matchedRowIndices.insert(verdict.haystackIndex)
                 let cellViewModel = self.openQuicklyCellViewModel(
                     at: verdict.haystackIndex,
