@@ -84,7 +84,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit",
-                exact: "0.51.101",
+                exact: "0.52.100",
             ),
         ),
         .package(
@@ -94,7 +94,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
-                exact: "0.7.103",
+                exact: "0.8.102",
             ),
         ),
         .package(
@@ -104,7 +104,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                exact: "0.14.1",
+                exact: "0.15.0",
             ),
         ),
         .package(
