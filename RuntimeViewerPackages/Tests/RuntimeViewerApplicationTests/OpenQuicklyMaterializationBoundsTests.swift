@@ -1,0 +1,239 @@
+import Foundation
+import RuntimeViewerArchitectures
+import RuntimeViewerCore
+import Testing
+@testable import RuntimeViewerApplication
+
+/// Regression suite for the residual costs lazy materialization still
+/// carried after PR #88's rewrite.
+///
+/// - A superseded pass threw away a completed haystack build. The
+///   haystacks depend only on the object list, never on the query, so
+///   whenever the build outran the 150 ms debounce, continuous typing
+///   discarded a full build per query and the cache never populated.
+@Suite("OpenQuicklyMaterializationBounds", .serialized)
+@MainActor
+struct OpenQuicklyMaterializationBoundsTests {
+    @Test("a superseded pass still installs the haystack build it completed")
+    func supersededPassInstallsItsHaystackBuild() async throws {
+        try await withSharedLocalEngineLock {
+            let gate = HaystackBuildGate()
+            let harness = try await Harness(objectCount: 64, gate: gate)
+
+            harness.search("Alpha")
+            let firstBuildStarted = try await pollUntil(timeout: .seconds(20)) { gate.startedBuildCount == 1 }
+            #expect(firstBuildStarted, "the first query never started a haystack build")
+
+            // Supersedes the first pass while its build is still gated.
+            harness.search("Alphab")
+            let secondBuildStarted = try await pollUntil(timeout: .seconds(20)) { gate.startedBuildCount == 2 }
+            #expect(secondBuildStarted, "the second query never started its own haystack build")
+
+            // Release ONLY the superseded pass's build. The second pass
+            // stays gated, so a populated cache can only have come from
+            // the pass that was cancelled and out-generationed — the exact
+            // build the old code threw away.
+            gate.releaseNext()
+
+            let cachePopulated = try await pollUntil(timeout: .seconds(20)) {
+                harness.viewModel.openQuicklyHaystacksCache != nil
+            }
+            #expect(
+                cachePopulated,
+                "the superseded pass discarded a completed, query-independent haystack build"
+            )
+
+            // Unblock the still-gated current pass so its continuation is
+            // resumed before the harness goes away.
+            gate.release()
+        }
+    }
+
+}
+
+// MARK: - Harness
+
+extension OpenQuicklyMaterializationBoundsTests {
+    /// Gates every haystack build so a test can hold one open across a
+    /// supersession.
+    fileprivate final class HaystackBuildGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var isOpen = false
+        private var pendingContinuations: [CheckedContinuation<Void, Never>] = []
+        private var startedBuilds = 0
+
+        var startedBuildCount: Int { lock.withLock { startedBuilds } }
+
+        func waitForRelease() async {
+            await withCheckedContinuation { continuation in
+                let shouldResumeImmediately = lock.withLock {
+                    startedBuilds += 1
+                    if isOpen { return true }
+                    pendingContinuations.append(continuation)
+                    return false
+                }
+                if shouldResumeImmediately {
+                    continuation.resume()
+                }
+            }
+        }
+
+        /// Resumes only the earliest gated build, leaving later ones held.
+        /// The superseded-pass test needs this: releasing everything would
+        /// let the *current* pass finish and install the cache itself,
+        /// which the old always-discard code also did — the assertion
+        /// only pins the fix if the superseded build is the sole finisher.
+        func releaseNext() {
+            let continuationToResume = lock.withLock {
+                pendingContinuations.isEmpty ? nil : pendingContinuations.removeFirst()
+            }
+            continuationToResume?.resume()
+        }
+
+        func release() {
+            let continuationsToResume = lock.withLock {
+                isOpen = true
+                let pending = pendingContinuations
+                pendingContinuations = []
+                return pending
+            }
+            continuationsToResume.forEach { $0.resume() }
+        }
+    }
+
+    @MainActor
+    fileprivate struct Harness {
+        let viewModel: SidebarRuntimeObjectListViewModel
+
+        private let searchStringRelay = PublishRelay<String>()
+        private let router: MockRouter<SidebarRuntimeObjectRoute>
+
+        init(
+            objectCount: Int,
+            gate: HaystackBuildGate? = nil,
+            haystackBuilder: SidebarRuntimeObjectListViewModel.HaystackBuilder? = nil
+        ) async throws {
+            let router = MockRouter<SidebarRuntimeObjectRoute>()
+            let seededRuntimeObjects = Self.makeRuntimeObjects(count: objectCount)
+            let builder: SidebarRuntimeObjectListViewModel.HaystackBuilder = { runtimeObjects in
+                if let gate {
+                    await gate.waitForRelease()
+                }
+                if let haystackBuilder {
+                    return await haystackBuilder(runtimeObjects)
+                }
+                return runtimeObjects.map { SidebarRuntimeObjectCellViewModel.haystack(for: $0) }
+            }
+            let imageNode = try await Self.makeImageNode()
+            let documentState = DocumentState()
+            let viewModel = SeededListViewModel(
+                seededRuntimeObjects: seededRuntimeObjects,
+                imageNode: imageNode,
+                documentState: documentState,
+                router: router,
+                haystackBuilder: builder
+            )
+            self.router = router
+            self.viewModel = viewModel
+
+            let reloadFinished = try await pollUntil(timeout: .seconds(30)) {
+                viewModel.loadState == .loaded
+            }
+            #expect(reloadFinished, "seeded reload never reached .loaded; state=\(viewModel.loadState)")
+
+            let input = SidebarRuntimeObjectListViewModel.Input(
+                runtimeObjectClickedForOpenQuickly: .never(),
+                searchStringForOpenQuickly: searchStringRelay.asSignal(),
+                addBookmark: .never()
+            )
+            _ = viewModel.transform(input)
+            // The input stream drops its first element (the search field's
+            // initial value in the real UI), so prime it before querying.
+            searchStringRelay.accept("")
+        }
+
+        func search(_ query: String) {
+            searchStringRelay.accept(query)
+        }
+
+        /// The reload path resolves its objects through a real image node,
+        /// so the fixture borrows a leaf node from the shared local
+        /// engine's image list the way `OpenQuicklyLazyConstructionTests`
+        /// does. Only the node's shape matters — `buildRuntimeObjects()` is
+        /// overridden to return the seeded array.
+        private static func makeImageNode() async throws -> RuntimeImageNode {
+            let localRuntimeEngine = RuntimeEngine.local
+            var imageList: [String] = []
+            let engineReady = try await pollUntil(timeout: .seconds(15)) {
+                imageList = await localRuntimeEngine.imageList
+                return !imageList.isEmpty
+            }
+            #expect(engineReady, "local engine never published an image list")
+            let imagePath = try #require(imageList.first { $0.hasSuffix("/Foundation") } ?? imageList.first)
+
+            let rootImageNode = RuntimeImageNode.rootNode(for: [imagePath], name: "Root")
+            var leafImageNode = rootImageNode
+            while let firstChild = leafImageNode.children.first {
+                leafImageNode = firstChild
+            }
+            // `parent` links are weak and `absolutePath` derives from them
+            // lazily. Materialize it while the root still owns the ancestor
+            // chain — hand back a bare leaf instead and the chain deallocates
+            // behind it, collapsing `path` to "/" and pinning the view model
+            // at `.notLoaded` (`isImageLoaded("/")` is never true).
+            withExtendedLifetime(rootImageNode) {
+                _ = leafImageNode.absolutePath
+            }
+            return leafImageNode
+        }
+
+        private static func makeRuntimeObjects(count: Int) -> [RuntimeObject] {
+            (0 ..< count).map { index in
+                makeRuntimeObject(displayName: "TestFramework.AlphabetGeneratedType\(index)")
+            }
+        }
+
+        static func makeRuntimeObject(displayName: String, children: [RuntimeObject] = []) -> RuntimeObject {
+            RuntimeObject(
+                name: displayName,
+                displayName: displayName,
+                kind: .swift(.type(.class)),
+                secondaryKind: nil,
+                imagePath: "/System/Library/Frameworks/TestFramework.framework/TestFramework",
+                children: children,
+                properties: []
+            )
+        }
+    }
+}
+
+private final class SeededListViewModel: SidebarRuntimeObjectListViewModel {
+    private let seededRuntimeObjects: [RuntimeObject]
+
+    init(
+        seededRuntimeObjects: [RuntimeObject],
+        imageNode: RuntimeImageNode,
+        documentState: DocumentState,
+        router: any Router<SidebarRuntimeObjectRoute>,
+        haystackBuilder: @escaping SidebarRuntimeObjectListViewModel.HaystackBuilder
+    ) {
+        self.seededRuntimeObjects = seededRuntimeObjects
+        super.init(
+            imageNode: imageNode,
+            documentState: documentState,
+            router: router,
+            haystackBuilder: haystackBuilder
+        )
+    }
+
+    override func buildRuntimeObjects() async throws -> [RuntimeObject] {
+        seededRuntimeObjects
+    }
+
+    override func buildRuntimeObjectsStream() -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Error> {
+        AsyncThrowingStream { [seededRuntimeObjects] continuation in
+            continuation.yield(.completed(seededRuntimeObjects))
+            continuation.finish()
+        }
+    }
+}

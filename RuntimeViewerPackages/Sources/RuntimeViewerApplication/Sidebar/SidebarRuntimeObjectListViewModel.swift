@@ -21,10 +21,18 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// per image load for a list most sessions never open.
     private var openQuicklyRuntimeObjects: [RuntimeObject] = []
 
+    /// Bumped every time `openQuicklyRuntimeObjects` is replaced. A
+    /// completed haystack build is keyed to the object list it was built
+    /// from, which the filter generation alone cannot express — that
+    /// counter also moves on every keystroke.
+    private var openQuicklyRuntimeObjectsVersion: Int = 0
+
     /// Haystack strings aligned index-for-index with
     /// `openQuicklyRuntimeObjects`. Computed off-main by the first query
     /// after a reload, then reused for every subsequent keystroke.
-    private var openQuicklyHaystacksCache: [String]?
+    /// Internal (not private) so tests can pin that a superseded pass
+    /// still installs the build it completed.
+    private(set) var openQuicklyHaystacksCache: [String]?
 
     /// Cell view models materialized so far, keyed by row index into
     /// `openQuicklyRuntimeObjects`. Only rows some query has actually
@@ -50,10 +58,35 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// a discarded node array is never applied.
     private var currentOpenQuicklyFilterGeneration: Int = 0
 
+    /// Builds the Open Quickly haystacks for an object list. Injectable so
+    /// tests can gate the build and drive supersession deterministically;
+    /// the default is pure value work with no reference to the view model.
+    typealias HaystackBuilder = @Sendable ([RuntimeObject]) async -> [String]
+
+    private let haystackBuilder: HaystackBuilder
+
     override var isSorted: Bool { true }
 
     public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
+        self.haystackBuilder = Self.defaultHaystackBuilder
         super.init(imageNode: imageNode, documentState: documentState, router: router)
+    }
+
+    init(
+        imageNode: RuntimeImageNode,
+        documentState: DocumentState,
+        router: any Router<SidebarRuntimeObjectRoute>,
+        haystackBuilder: @escaping HaystackBuilder
+    ) {
+        self.haystackBuilder = haystackBuilder
+        super.init(imageNode: imageNode, documentState: documentState, router: router)
+    }
+
+    /// Off-main haystack computation — building 10k+ tree haystacks is
+    /// the other expensive half of the legacy eager reload. Pure value
+    /// work over the captured `RuntimeObject` array.
+    private static let defaultHaystackBuilder: HaystackBuilder = { runtimeObjects in
+        runtimeObjects.map { SidebarRuntimeObjectCellViewModel.haystack(for: $0) }
     }
 
     public static func findCell(
@@ -119,6 +152,7 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
             // Open Quickly row order comes for free. Everything derived
             // from the previous object list is invalidated together.
             self.openQuicklyRuntimeObjects = self.nodes.map(\.runtimeObject)
+            self.openQuicklyRuntimeObjectsVersion &+= 1
             self.openQuicklyHaystacksCache = nil
             self.openQuicklyCellViewModelsByRowIndex = [:]
             self.filteredNodesForOpenQuickly = []
@@ -176,15 +210,33 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
 
         let context = FilterContext(query: query, isCaseInsensitive: false, mode: .fuzzySearch)
         let runtimeObjects = openQuicklyRuntimeObjects
+        let runtimeObjectsVersion = openQuicklyRuntimeObjectsVersion
         let cachedHaystacks = openQuicklyHaystacksCache
+        let haystackBuilder = haystackBuilder
         currentOpenQuicklyFilterTask = Task { @MainActor [weak self] in
             let haystacks: [String]
             if let cachedHaystacks {
                 haystacks = cachedHaystacks
             } else {
-                let computedHaystacks = await Self.computeHaystacksOffMain(for: runtimeObjects)
-                guard !Task.isCancelled, let self, self.currentOpenQuicklyFilterGeneration == generation else { return }
-                self.openQuicklyHaystacksCache = computedHaystacks
+                let computedHaystacks = await haystackBuilder(runtimeObjects)
+                guard let self else { return }
+                // Install before the generation guard: the haystacks depend
+                // only on the object list, never on the query, so a pass
+                // superseded by the next keystroke still produced the
+                // artifact every later pass needs. Discarding it meant that
+                // whenever the build outran the 150 ms debounce, continuous
+                // typing threw away a complete build per query and the cache
+                // was never populated at all.
+                //
+                // The version check is what the generation counter cannot
+                // do: that one also moves on every keystroke, while these
+                // haystacks are only valid for the object list they were
+                // built from — installing them after a reload swapped the
+                // list would misalign every index.
+                if self.openQuicklyRuntimeObjectsVersion == runtimeObjectsVersion {
+                    self.openQuicklyHaystacksCache = computedHaystacks
+                }
+                guard !Task.isCancelled, self.currentOpenQuicklyFilterGeneration == generation else { return }
                 haystacks = computedHaystacks
             }
             let verdicts = await Self.matchOffMain(context: context, haystacks: haystacks)
@@ -216,12 +268,6 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         FilterEngine.match(context, haystacks: haystacks)
     }
 
-    /// Off-main haystack computation — building 10k+ tree haystacks is
-    /// the other expensive half of the legacy eager reload. Pure value
-    /// work over the captured `RuntimeObject` array.
-    private nonisolated static func computeHaystacksOffMain(for runtimeObjects: [RuntimeObject]) async -> [String] {
-        runtimeObjects.map { SidebarRuntimeObjectCellViewModel.haystack(for: $0) }
-    }
 
     public func transform(_ input: Input) -> Output {
         input.addBookmark.emitOnNext { [weak self] viewModel in
