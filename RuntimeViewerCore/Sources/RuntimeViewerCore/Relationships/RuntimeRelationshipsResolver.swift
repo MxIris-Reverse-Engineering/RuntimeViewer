@@ -58,8 +58,8 @@ actor RuntimeRelationshipsResolver {
         //
         // For ObjC class/protocol targets, `object.name` is the raw ObjC
         // class/protocol name (the same string used as the key in
-        // `RuntimeObjCInterfaceIndexer.classes`/`.protocols` and as the
-        // `superclassByClassName` key in `RuntimeObjCInterfaceIndexer`).
+        // `ObjCInterfaceIndexer.classes`/`.protocols` and as the
+        // `superclassByClassName` key in `ObjCInterfaceIndexer`).
         //
         // For Swift class targets, `object.name` is the mangled string
         // produced by `mangleAsString(typeName.node)`, which is the

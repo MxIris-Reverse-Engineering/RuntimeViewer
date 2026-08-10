@@ -84,7 +84,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit",
-                exact: "0.51.101",
+                exact: "0.52.100",
             ),
         ),
         .package(
@@ -94,7 +94,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
-                exact: "0.7.103",
+                exact: "0.8.102",
             ),
         ),
         .package(
@@ -104,7 +104,17 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                exact: "0.14.1",
+                exact: "0.15.0",
+            ),
+        ),
+        .package(
+            local: .package(
+                path: "../../swift-semantic-string",
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
+                from: "0.3.0",
             ),
         ),
         .package(
@@ -173,8 +183,13 @@ let package = Package(
                 "RuntimeViewerCommunication",
                 .product(name: "MachOKit", package: "MachOKit"),
                 .product(name: "MachOObjCSection", package: "MachOObjCSection"),
+                .product(name: "ObjCDeclarationRendering", package: "MachOObjCSection"),
+                .product(name: "ObjCIndexing", package: "MachOObjCSection"),
+                .product(name: "ObjCInterface", package: "MachOObjCSection"),
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
-                .product(name: "OutputTransformer", package: "MachOSwiftSection"),
+                .product(name: "OutputTransformer", package: "swift-semantic-string"),
+                .product(name: "ObjCOutputTransformer", package: "MachOObjCSection"),
+                .product(name: "SwiftOutputTransformer", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclaration", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclarationRendering", package: "MachOSwiftSection"),
                 .product(name: "SwiftIndexing", package: "MachOSwiftSection"),
@@ -225,6 +240,9 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerCore",
                 "RuntimeViewerCommunication",
+                .product(name: "OutputTransformer", package: "swift-semantic-string"),
+                .product(name: "ObjCOutputTransformer", package: "MachOObjCSection"),
+                .product(name: "SwiftOutputTransformer", package: "MachOSwiftSection"),
             ],
         ),
         .testTarget(

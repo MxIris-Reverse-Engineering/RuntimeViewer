@@ -9,34 +9,15 @@ import Semantic
 import Utilities
 import MetaCodable
 
-typealias LoadingEventContinuation = AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
+/// `ObjCGenerationOptions`, the ObjC interface indexer and the whole
+/// `ObjCDumpInfo → SemanticString` renderer now live library-side in
+/// MachOObjCSection. This re-export keeps every existing
+/// `ObjCGenerationOptions` reference in RuntimeViewer compiling unchanged.
+@_exported import ObjCDeclarationRendering
+@_exported import ObjCIndexing
+import ObjCInterface
 
-@Codable
-@MemberInit
-public struct ObjCGenerationOptions: Sendable, Equatable, Hashable {
-    @Default(false)
-    public var stripProtocolConformance: Bool
-    @Default(false)
-    public var stripOverrides: Bool
-    @Default(false)
-    public var stripSynthesizedIvars: Bool
-    @Default(false)
-    public var stripSynthesizedMethods: Bool
-    @Default(false)
-    public var stripCtorMethod: Bool
-    @Default(false)
-    public var stripDtorMethod: Bool
-    @Default(false)
-    public var addIvarOffsetComments: Bool
-    @Default(false)
-    public var addPropertyAttributesComments: Bool
-    @Default(false)
-    public var addMethodIMPAddressComments: Bool
-    @Default(false)
-    public var addPropertyAccessorAddressComments: Bool
-    
-    public static let `default` = Self()
-}
+typealias LoadingEventContinuation = AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.Continuation
 
 @Loggable(.private)
 actor RuntimeObjCSection {
@@ -61,9 +42,9 @@ actor RuntimeObjCSection {
     ///
     /// `nonisolated let` so `RuntimeRelationshipsResolver` and the factory's
     /// aggregate can read its query methods without an actor hop —
-    /// `RuntimeObjCInterfaceIndexer` is `Sendable` and protects its own
-    /// state with `@Mutex`.
-    nonisolated let objcIndexer: RuntimeObjCInterfaceIndexer
+    /// `ObjCInterfaceIndexer` is `Sendable` and protects its own state with
+    /// its own lock.
+    nonisolated let objcIndexer: ObjCInterfaceIndexer
 
     init(imagePath: String, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
@@ -74,8 +55,12 @@ actor RuntimeObjCSection {
         self.machO = machO
         self.imagePath = imagePath
         self.factory = factory
-        self.objcIndexer = RuntimeObjCInterfaceIndexer(machO: machO, imagePath: imagePath)
-        try await objcIndexer.prepare(progressContinuation: progressContinuation)
+        self.objcIndexer = ObjCInterfaceIndexer(
+            machO: machO,
+            imagePath: imagePath,
+            eventHandler: Self.makeEventHandler(forwardingTo: progressContinuation)
+        )
+        try await objcIndexer.prepare()
     }
 
     init(machO: MachOImage, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
@@ -83,8 +68,40 @@ actor RuntimeObjCSection {
         self.machO = machO
         self.imagePath = machO.imagePath
         self.factory = factory
-        self.objcIndexer = RuntimeObjCInterfaceIndexer(machO: machO, imagePath: machO.imagePath)
-        try await objcIndexer.prepare(progressContinuation: progressContinuation)
+        self.objcIndexer = ObjCInterfaceIndexer(
+            machO: machO,
+            imagePath: machO.imagePath,
+            eventHandler: Self.makeEventHandler(forwardingTo: progressContinuation)
+        )
+        try await objcIndexer.prepare()
+    }
+
+    /// Adapts the library's single ``ObjCIndexingEvent`` channel back onto
+    /// RuntimeViewer's loading-progress stream.
+    ///
+    /// Only the `.progress` cases have a counterpart here; the relationship
+    /// events (`subclassIndexed` and friends) are consumed by the indexer's
+    /// own reverse tables, which `RuntimeRelationshipsResolver` queries
+    /// directly, so they need no forwarding.
+    private static func makeEventHandler(
+        forwardingTo progressContinuation: LoadingEventContinuation?
+    ) -> (@Sendable (ObjCIndexingEvent) -> Void)? {
+        guard let progressContinuation else { return nil }
+        return { event in
+            guard case .progress(let phase, let itemDescription, let currentCount, let totalCount) = event else {
+                return
+            }
+            progressContinuation.yield(
+                RuntimeObjectsLoadingEvent.progress(
+                    RuntimeObjectsLoadingProgress(
+                        phase: phase.loadingPhase,
+                        itemDescription: itemDescription,
+                        currentCount: currentCount,
+                        totalCount: totalCount
+                    )
+                )
+            )
+        }
     }
 
     func allObjects() async throws -> [RuntimeObject] {
@@ -119,234 +136,71 @@ actor RuntimeObjCSection {
     func interface(for object: RuntimeObject, using options: ObjCGenerationOptions, transformer: Transformer.ObjCConfiguration) async throws -> RuntimeObjectInterface {
         #log(.debug, "Generating interface for: \(object.name, privacy: .public)")
         let name = object.withImagePath(imagePath)
-        let cTypeReplacements = transformer.cType.isEnabled ? transformer.cType.replacements : [:]
-        let ivarOffsetTransformer = transformer.ivarOffset.isEnabled ? transformer.ivarOffset : nil
-        let objcDumpContext = ObjCDumpContext(machO: machO, options: options, cTypeReplacements: cTypeReplacements) { name, isStruct in
-            guard let name else { return true }
-            if isStruct {
-                return !self.objcIndexer.containsStruct(named: name)
-            } else {
-                return !self.objcIndexer.containsUnion(named: name)
-            }
-        }
-        objcDumpContext.ivarOffsetTransformer = ivarOffsetTransformer
 
+        // The strip switches, the C-type substitution and the rendering all
+        // live in MachOObjCSection's `ObjCInterface`; this section only maps
+        // RuntimeViewer's `Transformer` settings onto that API and wraps the
+        // result back into a `RuntimeObjectInterface`.
+        let builder = ObjCInterfaceBuilder(indexer: objcIndexer, machO: machO)
+        let cTypeReplacements = transformer.cType.isEnabled
+            ? transformer.cType.replacements.reduce(into: [ObjCPrimitiveTypePattern: String]()) { result, pair in
+                guard let pattern = ObjCPrimitiveTypePattern(rawValue: pair.key.rawValue) else { return }
+                result[pattern] = pair.value
+            }
+            : [:]
+        let ivarOffsetCommentBuilder: (@Sendable (Int) -> String)?
+        if transformer.ivarOffset.isEnabled {
+            let module = transformer.ivarOffset
+            ivarOffsetCommentBuilder = { offset in module.transform(.init(offset: offset)) }
+        } else {
+            ivarOffsetCommentBuilder = nil
+        }
+
+        let interfaceString: SemanticString?
         switch name.kind {
         case .objc(.type(.class)):
-            if let classGroup = objcIndexer.classGroup(forName: name.name), let currentClassInfo = classGroup.info.first {
-                let superclassInfos = classGroup.info.dropFirst()
-                var finalClassInfo = classGroup.info.first
-                var needsStripClassProperties: Set<String> = []
-                var needsStripProperties: Set<String> = []
-                var needsStripClassMethods: Set<String> = []
-                var needsStripMethods: Set<String> = []
-                var needsStripIvars: Set<String> = []
-
-                if options.stripCtorMethod {
-                    needsStripMethods.insert(".cxx_construct")
-                }
-
-                if options.stripDtorMethod {
-                    needsStripMethods.insert(".cxx_destruct")
-                }
-
-                if options.stripOverrides {
-                    for superclassInfo in superclassInfos {
-                        needsStripClassProperties.insert(contentsOf: superclassInfo.classProperties.map(\.name))
-                        needsStripProperties.insert(contentsOf: superclassInfo.properties.map(\.name))
-                        needsStripClassMethods.insert(contentsOf: superclassInfo.classMethods.map(\.name))
-                        needsStripMethods.insert(contentsOf: superclassInfo.methods.map(\.name))
-                    }
-                }
-                if options.stripProtocolConformance {
-                    for protocolInfo in currentClassInfo.protocols {
-                        needsStripClassProperties.insert(contentsOf: protocolInfo.classProperties.map(\.name))
-                        needsStripProperties.insert(contentsOf: protocolInfo.properties.map(\.name))
-                        needsStripClassMethods.insert(contentsOf: protocolInfo.classMethods.map(\.name))
-                        needsStripMethods.insert(contentsOf: protocolInfo.methods.map(\.name))
-                    }
-                }
-                if options.stripSynthesizedIvars || options.stripSynthesizedMethods {
-                    var needsStripIvarNames: Set<String> = []
-
-                    for property in currentClassInfo.properties + currentClassInfo.classProperties {
-                        if options.stripSynthesizedMethods {
-                            let propertyName = property.name
-                            if let customGetter = property.customGetter {
-                                if property.isClassProperty {
-                                    needsStripClassMethods.insert(customGetter)
-                                } else {
-                                    needsStripMethods.insert(customGetter)
-                                }
-                            } else {
-                                if property.isClassProperty {
-                                    needsStripClassMethods.insert(propertyName)
-                                } else {
-                                    needsStripMethods.insert(propertyName)
-                                }
-                            }
-
-                            if let customSetter = property.customSetter {
-                                if property.isClassProperty {
-                                    needsStripClassMethods.insert(customSetter)
-                                } else {
-                                    needsStripMethods.insert(customSetter)
-                                }
-                            } else {
-                                let setterMethodName = "set" + propertyName.uppercasedFirst
-                                if property.isClassProperty {
-                                    needsStripClassMethods.insert(setterMethodName)
-                                } else {
-                                    needsStripMethods.insert(setterMethodName)
-                                }
-                            }
-                        }
-
-                        if options.stripSynthesizedIvars, !property.isClassProperty {
-                            if let ivar = property.ivar {
-                                needsStripIvarNames.insert(ivar)
-                            }
-                        }
-                    }
-
-                    if options.stripSynthesizedIvars {
-                        for ivar in currentClassInfo.ivars {
-                            if needsStripIvarNames.contains(ivar.name) {
-                                needsStripIvars.insert(ivar.name)
-                            }
-                        }
-                    }
-                }
-
-                finalClassInfo = ObjCClassInfo(
-                    name: currentClassInfo.name,
-                    version: currentClassInfo.version,
-                    imageName: currentClassInfo.imageName,
-                    instanceSize: currentClassInfo.instanceSize,
-                    superClassName: currentClassInfo.superClassName,
-                    protocols: currentClassInfo.protocols,
-                    ivars: currentClassInfo.ivars.removingAll { needsStripIvars.contains($0.name) },
-                    classProperties: currentClassInfo.classProperties.removingAll { needsStripClassProperties.contains($0.name) },
-                    properties: currentClassInfo.properties.removingAll { needsStripProperties.contains($0.name) },
-                    classMethods: currentClassInfo.classMethods.removingAll { needsStripClassMethods.contains($0.name) },
-                    methods: currentClassInfo.methods.removingAll { needsStripMethods.contains($0.name) }
-                )
-
-                if let finalClassInfo {
-                    if options.addPropertyAccessorAddressComments {
-                        for method in currentClassInfo.methods where method.imp != 0 {
-                            objcDumpContext.methodIMPs[method.name] = method.imp
-                        }
-                        for method in currentClassInfo.classMethods where method.imp != 0 {
-                            objcDumpContext.classMethodIMPs[method.name] = method.imp
-                        }
-                    }
-                    return .init(object: name, interfaceString: finalClassInfo.semanticString(using: objcDumpContext))
-                }
-            }
+            interfaceString = builder.classInterface(
+                named: name.name,
+                options: options,
+                cTypeReplacements: cTypeReplacements,
+                ivarOffsetCommentBuilder: ivarOffsetCommentBuilder
+            )
         case .objc(.type(.protocol)):
-            if let currentProtocolInfo = objcIndexer.protocolGroup(forName: name.name)?.info {
-                var finalProtocolInfo = currentProtocolInfo
-
-                var needsStripClassProperties: Set<String> = []
-                var needsStripClassMethods: Set<String> = []
-                var needsStripProperties: Set<String> = []
-                var needsStripMethods: Set<String> = []
-
-                if options.stripCtorMethod {
-                    needsStripMethods.insert(".cxx_construct")
-                }
-
-                if options.stripDtorMethod {
-                    needsStripMethods.insert(".cxx_destruct")
-                }
-
-                if options.stripProtocolConformance {
-                    for protocolInfo in currentProtocolInfo.protocols {
-                        needsStripClassProperties.insert(contentsOf: protocolInfo.classProperties.map(\.name))
-                        needsStripProperties.insert(contentsOf: protocolInfo.properties.map(\.name))
-                        needsStripClassMethods.insert(contentsOf: protocolInfo.classMethods.map(\.name))
-                        needsStripMethods.insert(contentsOf: protocolInfo.methods.map(\.name))
-
-                        needsStripClassProperties.insert(contentsOf: protocolInfo.optionalClassProperties.map(\.name))
-                        needsStripProperties.insert(contentsOf: protocolInfo.optionalProperties.map(\.name))
-                        needsStripClassMethods.insert(contentsOf: protocolInfo.optionalClassMethods.map(\.name))
-                        needsStripMethods.insert(contentsOf: protocolInfo.optionalMethods.map(\.name))
-                    }
-                }
-
-                if options.stripSynthesizedMethods {
-                    for property in currentProtocolInfo.properties + currentProtocolInfo.classProperties + currentProtocolInfo.optionalProperties + currentProtocolInfo.optionalClassProperties {
-                        let propertyName = property.name
-                        if let customGetter = property.customGetter {
-                            if property.isClassProperty {
-                                needsStripClassMethods.insert(customGetter)
-                            } else {
-                                needsStripMethods.insert(customGetter)
-                            }
-                        } else {
-                            if property.isClassProperty {
-                                needsStripClassMethods.insert(propertyName)
-                            } else {
-                                needsStripMethods.insert(propertyName)
-                            }
-                        }
-
-                        if let customSetter = property.customSetter {
-                            if property.isClassProperty {
-                                needsStripClassMethods.insert(customSetter)
-                            } else {
-                                needsStripMethods.insert(customSetter)
-                            }
-                        } else {
-                            let setterMethodName = "set" + propertyName.uppercasedFirst
-                            if property.isClassProperty {
-                                needsStripClassMethods.insert(setterMethodName)
-                            } else {
-                                needsStripMethods.insert(setterMethodName)
-                            }
-                        }
-                    }
-                }
-
-                finalProtocolInfo = ObjCProtocolInfo(
-                    name: currentProtocolInfo.name,
-                    protocols: currentProtocolInfo.protocols,
-                    classProperties: currentProtocolInfo.classProperties.removingAll { needsStripClassProperties.contains($0.name) },
-                    properties: currentProtocolInfo.properties.removingAll { needsStripProperties.contains($0.name) },
-                    classMethods: currentProtocolInfo.classMethods.removingAll { needsStripClassMethods.contains($0.name) },
-                    methods: currentProtocolInfo.methods.removingAll { needsStripMethods.contains($0.name) },
-                    optionalClassProperties: currentProtocolInfo.optionalClassProperties.removingAll { needsStripClassProperties.contains($0.name) },
-                    optionalProperties: currentProtocolInfo.optionalProperties.removingAll { needsStripProperties.contains($0.name) },
-                    optionalClassMethods: currentProtocolInfo.optionalClassMethods.removingAll { needsStripClassMethods.contains($0.name) },
-                    optionalMethods: currentProtocolInfo.optionalMethods.removingAll { needsStripMethods.contains($0.name) }
-                )
-
-                return .init(object: name, interfaceString: finalProtocolInfo.semanticString(using: objcDumpContext))
-            }
+            interfaceString = builder.protocolInterface(
+                named: name.name,
+                options: options,
+                cTypeReplacements: cTypeReplacements,
+                ivarOffsetCommentBuilder: ivarOffsetCommentBuilder
+            )
         case .objc(.category(.class)):
-            if let categoryInfo = objcIndexer.categoryGroup(forName: name.name)?.info {
-                if options.addPropertyAccessorAddressComments {
-                    for method in categoryInfo.methods where method.imp != 0 {
-                        objcDumpContext.methodIMPs[method.name] = method.imp
-                    }
-                    for method in categoryInfo.classMethods where method.imp != 0 {
-                        objcDumpContext.classMethodIMPs[method.name] = method.imp
-                    }
-                }
-                return .init(object: name, interfaceString: categoryInfo.semanticString(using: objcDumpContext))
-            }
+            interfaceString = builder.categoryInterface(
+                uniqueName: name.name,
+                options: options,
+                cTypeReplacements: cTypeReplacements,
+                ivarOffsetCommentBuilder: ivarOffsetCommentBuilder
+            )
         case .c(.struct):
-            if let interfaceString = objcIndexer.structSemanticString(forName: name.name, context: objcDumpContext) {
-                return .init(object: name, interfaceString: interfaceString)
-            }
+            interfaceString = builder.structInterface(
+                named: name.name,
+                options: options,
+                cTypeReplacements: cTypeReplacements,
+                ivarOffsetCommentBuilder: ivarOffsetCommentBuilder
+            )
         case .c(.union):
-            if let interfaceString = objcIndexer.unionSemanticString(forName: name.name, context: objcDumpContext) {
-                return .init(object: name, interfaceString: interfaceString)
-            }
+            interfaceString = builder.unionInterface(
+                named: name.name,
+                options: options,
+                cTypeReplacements: cTypeReplacements,
+                ivarOffsetCommentBuilder: ivarOffsetCommentBuilder
+            )
         default:
-            break
+            interfaceString = nil
         }
+
+        if let interfaceString {
+            return .init(object: name, interfaceString: interfaceString)
+        }
+
         #log(.default, "Invalid runtime object: \(object.name, privacy: .public) kind: \(String(describing: object.kind), privacy: .public)")
         throw Error.invalidRuntimeObject
     }
@@ -517,16 +371,16 @@ actor RuntimeObjCSectionFactory {
     /// the section is created, so queries against this aggregate fan out
     /// across all loaded ObjC sections. Mirrors `RuntimeSwiftSectionFactory.indexer`.
     ///
-    /// `RuntimeObjCInterfaceIndexer` binds a `MachOImage` at `init`; this
+    /// `ObjCInterfaceIndexer` binds a `MachOImage` at `init`; this
     /// aggregate never parses one of its own (`prepare()` is never called on
     /// it), so it is constructed against the current process image as a
     /// placeholder — mirroring `RuntimeSwiftSectionFactory`'s aggregate,
     /// which is likewise built `in: .current()`.
-    let objcInterfaceIndexer: RuntimeObjCInterfaceIndexer
+    let objcInterfaceIndexer: ObjCInterfaceIndexer
     
     init() {
         let currentMachO = MachOImage.current()
-        objcInterfaceIndexer = RuntimeObjCInterfaceIndexer(machO: currentMachO, imagePath: currentMachO.imagePath)
+        objcInterfaceIndexer = ObjCInterfaceIndexer(machO: currentMachO, imagePath: currentMachO.imagePath)
     }
 
     func existingSection(for imagePath: String) -> RuntimeObjCSection? {
