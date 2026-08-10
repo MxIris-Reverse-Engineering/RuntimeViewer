@@ -13,8 +13,8 @@ import SwiftStdlibToolbox
 /// upstream `MachOSwiftSection` `SwiftDeclarationIndexer` that layers on the
 /// relationship reverse tables backing the Inspector's Relationships tab.
 ///
-/// This is the Swift counterpart of `RuntimeObjCInterfaceIndexer`, but the
-/// two are not built the same way. On the ObjC side `RuntimeObjCInterfaceIndexer`
+/// This is the Swift counterpart of `ObjCInterfaceIndexer`, but the
+/// two are not built the same way. On the ObjC side `ObjCInterfaceIndexer`
 /// *is* the indexer — it parses `MachOObjCSection` / `ObjCDump` itself. On the
 /// Swift side the heavy parsing is already done by the upstream
 /// `SwiftDeclarationIndexer`, which we neither own nor can extend; so this type
@@ -43,19 +43,19 @@ import SwiftStdlibToolbox
 /// `typeName(forMangledName:)`) fan out across `self` plus every registered
 /// sub-indexer — so a query against the `RuntimeSwiftSectionFactory`
 /// aggregate, which holds every per-image indexer, spans all loaded images.
-/// Mirrors `RuntimeObjCInterfaceIndexer`.
+/// Mirrors `ObjCInterfaceIndexer`.
 ///
 /// `@unchecked Sendable`: the `MachOImage` and `SwiftDeclaration.TypeName`
 /// values held here are not themselves `Sendable`, but `machO` / `upstream`
 /// are immutable `let`s and the reverse tables plus `subIndexers` are all
-/// `@Mutex`-guarded — mirroring `RuntimeObjCInterfaceIndexer`.
+/// `@Mutex`-guarded — mirroring `ObjCInterfaceIndexer`.
 @dynamicMemberLookup
 final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
 
     // MARK: - Indexed Image
 
     /// The Mach-O image this indexer parses. Bound at `init`, never
-    /// reassigned — mirrors `RuntimeObjCInterfaceIndexer`, which likewise
+    /// reassigned — mirrors `ObjCInterfaceIndexer`, which likewise
     /// binds its `MachOImage` at construction.
     private let machO: MachOImage
 
@@ -107,7 +107,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// section's own indexer; on the `RuntimeSwiftSectionFactory` aggregate it
     /// holds every loaded image's indexer, so the query methods fan out across
     /// all of them. `@Mutex`-guarded because the factory keeps registering as
-    /// images load. Mirrors `RuntimeObjCInterfaceIndexer.subIndexers`.
+    /// images load. Mirrors `ObjCInterfaceIndexer.subIndexers`.
     @Mutex
     private var subIndexers: [RuntimeSwiftInterfaceIndexer] = []
 
@@ -115,7 +115,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
 
     /// `machO` is bound here and never changes; `eventHandlers` is forwarded
     /// straight to the upstream indexer (`RuntimeSwiftSection` builds the
-    /// progress-event handler). Mirrors `RuntimeObjCInterfaceIndexer.init`,
+    /// progress-event handler). Mirrors `ObjCInterfaceIndexer.init`,
     /// where the image is likewise bound at construction.
     init(machO: MachOImage, eventHandlers: [SwiftIndexEvents.Handler] = []) {
         self.machO = machO
@@ -144,7 +144,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
 
         // Build into locals, then assign through the `@Mutex` once each — so
         // no lock is held across the `await mangleAsString` suspension points.
-        // Mirrors `RuntimeObjCInterfaceIndexer.prepare()`.
+        // Mirrors `ObjCInterfaceIndexer.prepare()`.
         var subclassTable: [String: OrderedSet<String>] = [:]
         var typeNameTable: [String: SwiftDeclaration.TypeName] = [:]
         var protocolNameTable: [String: SwiftDeclaration.ProtocolName] = [:]
@@ -276,7 +276,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// sub-indexer's `upstream` to `upstream.addSubIndexer` so the upstream's
     /// own cross-image lookups (`allAllTypeDefinitions`, …) see it too.
     /// Callers pass `RuntimeSwiftInterfaceIndexer` values and never reach for
-    /// `.upstream`. Mirrors `RuntimeObjCInterfaceIndexer.addSubIndexer(_:)`;
+    /// `.upstream`. Mirrors `ObjCInterfaceIndexer.addSubIndexer(_:)`;
     /// `RuntimeSwiftSectionFactory` calls it as each section is created.
     func addSubIndexer(_ subIndexer: RuntimeSwiftInterfaceIndexer) {
         upstream.addSubIndexer(subIndexer.upstream)
