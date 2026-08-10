@@ -164,7 +164,7 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// attributed title + child tree), so it is deferred to rows a query
     /// actually surfaces and amortized across keystrokes by the cache.
     @MainActor
-    private func openQuicklyCellViewModel(at rowIndex: Int) -> SidebarRuntimeObjectCellViewModel {
+    private func openQuicklyCellViewModel(at rowIndex: Int, haystack: String) -> SidebarRuntimeObjectCellViewModel {
         if let materializedCellViewModel = openQuicklyCellViewModelsByRowIndex[rowIndex] {
             return materializedCellViewModel
         }
@@ -172,6 +172,13 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
             runtimeObject: openQuicklyRuntimeObjects[rowIndex],
             forOpenQuickly: true
         )
+        // Hand over the haystack the off-main pass already built for this
+        // exact object. Stamping `filterResult` on a fresh cell otherwise
+        // triggers `composedTitle()`, whose cold `currentAndChildrenNames`
+        // rebuilds the entire subtree name string on the main actor — the
+        // byte-identical twin of the string one line up, per the parity
+        // contract on `haystack(for:)`.
+        cellViewModel.seedCurrentAndChildrenNames(haystack)
         openQuicklyCellViewModelsByRowIndex[rowIndex] = cellViewModel
         return cellViewModel
     }
@@ -248,7 +255,10 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
             filteredCellViewModels.reserveCapacity(verdicts.count)
             for verdict in verdicts {
                 matchedRowIndices.insert(verdict.haystackIndex)
-                let cellViewModel = self.openQuicklyCellViewModel(at: verdict.haystackIndex)
+                let cellViewModel = self.openQuicklyCellViewModel(
+                    at: verdict.haystackIndex,
+                    haystack: haystacks[verdict.haystackIndex]
+                )
                 cellViewModel.filterResult = verdict.result
                 filteredCellViewModels.append(cellViewModel)
             }

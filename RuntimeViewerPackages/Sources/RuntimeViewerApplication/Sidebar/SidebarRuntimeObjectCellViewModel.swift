@@ -117,6 +117,20 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         return computedNames
     }
 
+    /// Seeds the subtree-haystack cache with a string an off-main pass
+    /// already produced for this object.
+    ///
+    /// `Self.haystack(for:)` and `currentAndChildrenNames` are byte-for-byte
+    /// identical by contract, so Open Quickly can hand a freshly
+    /// materialized cell the string it matched against instead of making
+    /// the cell rebuild the whole subtree on the main actor the moment a
+    /// highlight is stamped on it. No-op once a value is cached, so it can
+    /// never contradict a locally derived haystack.
+    func seedCurrentAndChildrenNames(_ haystack: String) {
+        guard cachedCurrentAndChildrenNames == nil else { return }
+        cachedCurrentAndChildrenNames = haystack
+    }
+
     private func invalidateNamesCacheUpwards() {
         var currentCell: SidebarRuntimeObjectCellViewModel? = self
         while let cell = currentCell {

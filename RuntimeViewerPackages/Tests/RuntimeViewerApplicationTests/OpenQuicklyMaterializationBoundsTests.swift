@@ -11,6 +11,9 @@ import Testing
 ///   haystacks depend only on the object list, never on the query, so
 ///   whenever the build outran the 150 ms debounce, continuous typing
 ///   discarded a full build per query and the cache never populated.
+/// - Stamping a highlight on a freshly materialized cell rebuilt, on the
+///   main actor, the byte-identical twin of the haystack the off-main pass
+///   was still holding.
 @Suite("OpenQuicklyMaterializationBounds", .serialized)
 @MainActor
 struct OpenQuicklyMaterializationBoundsTests {
@@ -49,6 +52,40 @@ struct OpenQuicklyMaterializationBoundsTests {
         }
     }
 
+    @Test("a materialized row reuses the haystack the matching pass computed")
+    func materializedRowReusesThePassHaystack() async throws {
+        try await withSharedLocalEngineLock {
+            // The builder appends a marker the cell could never derive on its
+            // own, so the assertion proves the cell was seeded from the pass's
+            // string rather than rebuilding its own subtree names.
+            let harness = try await Harness(objectCount: 64) { runtimeObjects in
+                runtimeObjects.map { SidebarRuntimeObjectCellViewModel.haystack(for: $0) + " SeedMarker" }
+            }
+
+            harness.search("Type")
+            let applied = try await pollUntil(timeout: .seconds(20)) {
+                !harness.viewModel.filteredNodesForOpenQuickly.isEmpty
+            }
+            #expect(applied, "the query never produced any rows")
+
+            let materializedRow = try #require(harness.viewModel.filteredNodesForOpenQuickly.first)
+            #expect(
+                materializedRow.currentAndChildrenNames.hasSuffix("SeedMarker"),
+                "the materialized row rebuilt its own haystack instead of reusing the pass's"
+            )
+        }
+    }
+
+    @Test("seeding never overwrites a haystack the cell already derived")
+    func seedingDoesNotOverwriteAnExistingHaystack() {
+        let runtimeObject = Harness.makeRuntimeObject(displayName: "TestFramework.GeneratedType0")
+        let cellViewModel = SidebarRuntimeObjectCellViewModel(runtimeObject: runtimeObject, forOpenQuickly: true)
+
+        let derivedHaystack = cellViewModel.currentAndChildrenNames
+        cellViewModel.seedCurrentAndChildrenNames("something else entirely")
+
+        #expect(cellViewModel.currentAndChildrenNames == derivedHaystack)
+    }
 }
 
 // MARK: - Harness
