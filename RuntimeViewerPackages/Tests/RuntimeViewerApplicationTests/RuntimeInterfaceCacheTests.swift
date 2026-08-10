@@ -81,6 +81,43 @@ struct RuntimeInterfaceCacheTests {
         #expect(fetchRecorder.totalFetchCount == 1)
     }
 
+    // MARK: - Link resolution
+
+    /// A link click resolves a *synthetic* target — built at the click site
+    /// from the clicked token, carrying the currently displayed object's
+    /// `imagePath` (and, on the ObjC arm, its `children`) — and the engine
+    /// answers with the defining section's authoritative `RuntimeObject`.
+    /// The push navigates to that resolved object and the destination
+    /// content view model fetches under it, so the entry must be indexed by
+    /// the interface's own object. `RuntimeObject`'s `Hashable` folds in
+    /// `imagePath` and `children`, so storing under the requested object
+    /// instead left the display fetch a guaranteed miss: two full
+    /// generations per link click, plus a dead entry occupying one of the
+    /// sixteen slots — the opposite of the one-round-trip design the link
+    /// flow documents.
+    @Test("a fetch that resolves to a different object caches under the resolved object")
+    func resolvedObjectIsTheCacheKey() async throws {
+        let fetchRecorder = FetchRecorder()
+        let documentState = DocumentState()
+        let clickedToken = makeRuntimeObject(named: "CacheFixtureClickedToken")
+        let resolvedType = makeRuntimeObject(named: "CacheFixtureResolvedType")
+        let interfaceCache = RuntimeInterfaceCache(documentState: documentState) { object, _ in
+            fetchRecorder.recordFetch(of: object.name)
+            return RuntimeObjectInterface(object: resolvedType, interfaceString: "class CacheFixture {}")
+        }
+
+        let resolution = try await interfaceCache.interface(for: clickedToken, options: .init())
+        #expect(resolution?.object == resolvedType)
+        #expect(fetchRecorder.totalFetchCount == 1)
+
+        let display = try await interfaceCache.interface(for: resolvedType, options: .init())
+        #expect(display?.object == resolvedType)
+        #expect(
+            fetchRecorder.totalFetchCount == 1,
+            "the resolution fetch must warm the entry the post-push display fetch hits"
+        )
+    }
+
     // MARK: - Errors and nil results are never cached
 
     @Test("a failed fetch is not cached — the next lookup retries")
