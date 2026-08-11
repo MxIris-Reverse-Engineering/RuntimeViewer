@@ -34,17 +34,26 @@ actor RuntimeObjCSection {
 
     /// Per-image Objective-C interface index: the parsed data store for
     /// this image (classes, protocols, categories, C struct/union
-    /// definitions) plus the inheritance / protocol-adoption reverse
-    /// tables. Constructed in `init` with this image's `MachOImage` and
+    /// definitions). Constructed in `init` with this image's `MachOImage` and
     /// populated by `objcIndexer.prepare()`; afterwards this section only
     /// *reads* it back to translate into `RuntimeViewerCore` domain types
     /// (`RuntimeObject`, `RuntimeObjectInterface`, `RuntimeMemberAddress`).
     ///
-    /// `nonisolated let` so `RuntimeRelationshipsResolver` and the factory's
-    /// aggregate can read its query methods without an actor hop —
-    /// `ObjCInterfaceIndexer` is `Sendable` and protects its own state with
-    /// its own lock.
+    /// Relationships are **not** in here — since MachOObjCSection 0003 the
+    /// library keeps no reverse tables; see `objcRelationshipIndex`.
+    ///
+    /// `nonisolated let` so `RuntimeRelationshipsResolver` can read its query
+    /// methods without an actor hop — `ObjCInterfaceIndexer` is `Sendable` and
+    /// protects its own state with its own lock.
     nonisolated let objcIndexer: ObjCInterfaceIndexer
+
+    /// Inheritance and protocol-adoption reverse tables for this image,
+    /// accumulated from the indexer's event stream during `prepare()`.
+    ///
+    /// `nonisolated let` for the same reason as `objcIndexer`:
+    /// `RuntimeRelationshipsResolver` reads it without an actor hop, and the
+    /// index guards its own state.
+    nonisolated let objcRelationshipIndex: RuntimeObjCRelationshipIndex
 
     init(imagePath: String, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
@@ -55,10 +64,15 @@ actor RuntimeObjCSection {
         self.machO = machO
         self.imagePath = imagePath
         self.factory = factory
+        let objcRelationshipIndex = RuntimeObjCRelationshipIndex()
+        self.objcRelationshipIndex = objcRelationshipIndex
         self.objcIndexer = ObjCInterfaceIndexer(
             machO: machO,
             imagePath: imagePath,
-            eventHandler: Self.makeEventHandler(forwardingTo: progressContinuation)
+            eventHandler: Self.makeEventHandler(
+                recordingInto: objcRelationshipIndex,
+                forwardingTo: progressContinuation
+            )
         )
         try await objcIndexer.prepare()
     }
@@ -68,27 +82,41 @@ actor RuntimeObjCSection {
         self.machO = machO
         self.imagePath = machO.imagePath
         self.factory = factory
+        let objcRelationshipIndex = RuntimeObjCRelationshipIndex()
+        self.objcRelationshipIndex = objcRelationshipIndex
         self.objcIndexer = ObjCInterfaceIndexer(
             machO: machO,
             imagePath: machO.imagePath,
-            eventHandler: Self.makeEventHandler(forwardingTo: progressContinuation)
+            eventHandler: Self.makeEventHandler(
+                recordingInto: objcRelationshipIndex,
+                forwardingTo: progressContinuation
+            )
         )
         try await objcIndexer.prepare()
     }
 
-    /// Adapts the library's single ``ObjCIndexingEvent`` channel back onto
-    /// RuntimeViewer's loading-progress stream.
+    /// Fans the library's single ``ObjCIndexingEvent`` channel out to its two
+    /// consumers: the relationship index, and RuntimeViewer's loading-progress
+    /// stream.
     ///
-    /// Only the `.progress` cases have a counterpart here; the relationship
-    /// events (`subclassIndexed` and friends) are consumed by the indexer's
-    /// own reverse tables, which `RuntimeRelationshipsResolver` queries
-    /// directly, so they need no forwarding.
+    /// **The handler is installed unconditionally**, and the returned closure is
+    /// non-optional on purpose. Since MachOObjCSection 0003 the relationship
+    /// events are the *only* channel carrying inheritance and protocol adoption:
+    /// an indexer built without a handler keeps none of it. Gating installation
+    /// on `progressContinuation` — as this did while the library still owned the
+    /// tables — would leave every image loaded through `_loadImage(at:)` or
+    /// background indexing with an empty Relationships pane and no error to show
+    /// for it. Only the *forwarding* of `.progress` events depends on a stream
+    /// being there to forward to.
     private static func makeEventHandler(
+        recordingInto objcRelationshipIndex: RuntimeObjCRelationshipIndex,
         forwardingTo progressContinuation: LoadingEventContinuation?
-    ) -> (@Sendable (ObjCIndexingEvent) -> Void)? {
-        guard let progressContinuation else { return nil }
+    ) -> @Sendable (ObjCIndexingEvent) -> Void {
         return { event in
-            guard case .progress(let phase, let itemDescription, let currentCount, let totalCount) = event else {
+            objcRelationshipIndex.record(event)
+            guard let progressContinuation,
+                  case .progress(let phase, let itemDescription, let currentCount, let totalCount) = event
+            else {
                 return
             }
             progressContinuation.yield(
@@ -364,24 +392,15 @@ actor RuntimeObjCSection {
 
 @Loggable(.private)
 actor RuntimeObjCSectionFactory {
-    private var sections: [String: RuntimeObjCSection] = [:]
-
-    /// Aggregate Objective-C interface indexer. Each per-image
-    /// `RuntimeObjCSection.objcIndexer` is registered as a sub-indexer when
-    /// the section is created, so queries against this aggregate fan out
-    /// across all loaded ObjC sections. Mirrors `RuntimeSwiftSectionFactory.indexer`.
+    /// Per-image sections, keyed by the dyld-canonical image path.
     ///
-    /// `ObjCInterfaceIndexer` binds a `MachOImage` at `init`; this
-    /// aggregate never parses one of its own (`prepare()` is never called on
-    /// it), so it is constructed against the current process image as a
-    /// placeholder — mirroring `RuntimeSwiftSectionFactory`'s aggregate,
-    /// which is likewise built `in: .current()`.
-    let objcInterfaceIndexer: ObjCInterfaceIndexer
-    
-    init() {
-        let currentMachO = MachOImage.current()
-        objcInterfaceIndexer = ObjCInterfaceIndexer(machO: currentMachO, imagePath: currentMachO.imagePath)
-    }
+    /// There is deliberately no aggregate indexer here, unlike
+    /// `RuntimeSwiftSectionFactory`. One existed until Evolution 0007 and was
+    /// only ever written to — every per-image indexer was registered with it and
+    /// nothing ever queried it, because `RuntimeRelationshipsResolver` fans out
+    /// across images itself. Keeping it alive would only pin each image's index
+    /// state for the engine's lifetime.
+    private var sections: [String: RuntimeObjCSection] = [:]
 
     func existingSection(for imagePath: String) -> RuntimeObjCSection? {
         sections[imagePath]
@@ -408,7 +427,6 @@ actor RuntimeObjCSectionFactory {
         #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
         let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
         sections[imagePath] = section
-        objcInterfaceIndexer.addSubIndexer(section.objcIndexer)
         #log(.debug, "ObjC section created and cached")
         return (false, section)
     }
@@ -429,7 +447,6 @@ actor RuntimeObjCSectionFactory {
             #log(.debug, "Creating ObjC section from MachO: \(machO.imagePath, privacy: .public)")
             let objcSection = try await RuntimeObjCSection(machO: machO, factory: self)
             sections[machO.imagePath] = objcSection
-            objcInterfaceIndexer.addSubIndexer(objcSection.objcIndexer)
             return objcSection
         } catch {
             #log(.error, "Failed to create ObjC section: \(error, privacy: .public)")
