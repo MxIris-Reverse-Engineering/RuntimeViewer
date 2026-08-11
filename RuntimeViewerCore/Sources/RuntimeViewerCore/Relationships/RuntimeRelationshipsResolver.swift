@@ -82,7 +82,7 @@ actor RuntimeRelationshipsResolver {
             if wantsSubclasses {
                 if let objcKey {
                     if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
-                        for reference in objcSection.objcIndexer.subclasses(of: objcKey) {
+                        for reference in objcSection.objcRelationshipIndex.subclasses(of: objcKey) {
                             if let runtimeObject = await materializeRelationshipReference(reference) {
                                 subclasses.append(runtimeObject)
                             }
@@ -103,7 +103,7 @@ actor RuntimeRelationshipsResolver {
             if wantsConformers {
                 if isObjCProtocol {
                     if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
-                        for reference in objcSection.objcIndexer.conformingClasses(toProtocol: object.name) {
+                        for reference in objcSection.objcRelationshipIndex.conformingClasses(toProtocol: object.name) {
                             if let runtimeObject = await materializeRelationshipReference(reference) {
                                 conformers.append(runtimeObject)
                             }
@@ -161,7 +161,7 @@ actor RuntimeRelationshipsResolver {
     /// section. When that lookup fails (e.g. an `@objc(customName)` class
     /// whose raw name isn't a Swift mangling), the entry is dropped rather
     /// than fall back to `.objc(.type(.class))`.
-    private func materializeRelationshipReference(_ reference: ObjCClassReference) async -> RuntimeObject? {
+    private func materializeRelationshipReference(_ reference: RuntimeObjCClassReference) async -> RuntimeObject? {
         if reference.isSwiftStable {
             // The tree is discarded the moment it has been remangled, so
             // demangle it transiently: `demangleAsNode` interns every node it
