@@ -59,8 +59,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "61178c630fccf746bc2c13835dade9a7dfb79613",
-        "version" : "0.7.4"
+        "revision" : "3be067f4280e0764cd4b6cd3ed623698ac981114",
+        "version" : "0.9.0"
       }
     },
     {
@@ -131,8 +131,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "revision" : "e558c427e13f3b7abf97fa4b46e96d65413ff7c4",
-        "version" : "0.4.2"
+        "revision" : "2f5603c11d43fd7e6ac815a6f400fe5c2dcf80de",
+        "version" : "0.5.0"
       }
     },
     {
@@ -212,8 +212,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
       "state" : {
-        "revision" : "3ea7272ab5f5dad0f6313be2d943cde5af08723f",
-        "version" : "0.4.0"
+        "revision" : "8e56152efc97647f3443b13d80c443ba9463d3e9",
+        "version" : "0.5.0"
       }
     },
     {
@@ -473,8 +473,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "f0b834f47f876f41e39a691fb177ff76d3910c49",
-        "version" : "0.1.4"
+        "revision" : "415759aff0d2ea8e88b1331bcace29f25a47c73f",
+        "version" : "0.3.1"
       }
     },
     {
@@ -520,15 +520,6 @@
       "state" : {
         "revision" : "2aed77ae5ec9a86d8fe42c12275e4c2653a286ee",
         "version" : "1.13.1"
-      }
-    },
-    {
-      "identity" : "swift-macro-toolkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/stackotter/swift-macro-toolkit",
-      "state" : {
-        "revision" : "d6ed555bb83c9f21a292e9769952e8f52610a6e2",
-        "version" : "0.9.0"
       }
     },
     {
@@ -698,8 +689,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "revision" : "8c0a1738ba68540e6e911eb409fca8a4603d3efd",
-        "version" : "0.5.103"
+        "revision" : "4f67b80d2d21b0968ec6c6c45aa01389f1f1ed05",
+        "version" : "0.5.104"
       }
     },
     {
@@ -716,8 +707,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "3d54f6fad1f00764bb21e4cc9cb22e0b4317515f",
-        "version" : "0.15.0"
+        "revision" : "33ebdc39d890c26e3773cb5eba2817fe77e1ffee",
+        "version" : "0.15.2"
       }
     },
     {
