@@ -12,8 +12,11 @@ import RuntimeViewerArchitectures
 /// attributed-string build.
 ///
 /// Scope and invalidation:
-/// - One instance per `DocumentState`, keyed by `(object, options)` — the
-///   same pair the fetch half of the content pipeline hands the engine.
+/// - One instance per `DocumentState`, keyed by `(object, options)`. The
+///   object is the one the *returned interface* names, which is not always
+///   the one that was asked about: a link click resolves a synthetic target
+///   into the defining section's authoritative `RuntimeObject`, and it is
+///   that object the navigation and the destination view model then use.
 /// - Any `dataChangePublisher` event and any engine swap flushes the whole
 ///   cache. Both are rare, and a conservative full flush can never serve a
 ///   stale interface after the runtime data set changed (image loads and
@@ -132,12 +135,25 @@ public final class RuntimeInterfaceCache {
         do {
             let interface = try await task.value
             if generation == fetchGeneration {
+                entries[key] = nil
                 if let interface {
-                    entries[key] = .ready(interface)
-                    markRecentlyUsed(key)
+                    // Indexed by the interface's own object, not the
+                    // requested one. A link click asks about a *synthetic*
+                    // target built at the click site from the clicked token
+                    // — it carries the currently displayed object's
+                    // `imagePath`, and on the ObjC arm its `children` — and
+                    // the engine answers with the defining section's
+                    // authoritative `RuntimeObject`. That resolved object is
+                    // what the push navigates to and what the destination
+                    // view model fetches under, and `RuntimeObject`'s
+                    // `Hashable` folds in `imagePath` and `children`, so
+                    // indexing by the request would make the display fetch a
+                    // guaranteed miss and burn a slot on an entry it can
+                    // never match.
+                    let storageKey = Key(object: interface.object, options: options)
+                    entries[storageKey] = .ready(interface)
+                    markRecentlyUsed(storageKey)
                     evictBeyondCapacity()
-                } else {
-                    entries[key] = nil
                 }
             }
             return interface

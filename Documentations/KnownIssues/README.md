@@ -48,3 +48,17 @@ when picking up follow-up work.
   RxCocoa-vs-RxAppKit control-property priming boundary (`rx.state` has an
   initial value, `rx.isCheck` does not) is the part worth remembering — and
   7 backlog items with pickup conditions.
+  adjudications for the first (xhigh) review pass on PR #88
+  (`perf/pipeline-optimizations`), IDs `PR88.<N>`: 7 fixed in-branch, 1 false
+  positive (the RxAppKit `rx.state` no-initial-value premise, refuted at
+  runtime), 7 backlogged (byte-budget-less interface cache, test
+  infrastructure seams, docs placement).
+- [2026-08-10-pr88-max-review-findings.md](2026-08-10-pr88-max-review-findings.md) —
+  adjudications for the second (max) review pass on PR #88 after cross-session
+  re-verification, IDs `PR88R2.<N>` mapping to findings F1–F15: 6 fixed
+  in-branch (expansion-autosave wipe, root-filter stale overwrite, link-jump
+  cache key mismatch, Open Quickly haystack discard / main-thread rebuild /
+  unbounded materialization), 2 downgraded on re-verification (one-tick
+  transformer skew, unreachable applyNodes guard), 1 claim refuted
+  (specialization flushes the whole interface cache, so no dead entries),
+  6 backlogged.

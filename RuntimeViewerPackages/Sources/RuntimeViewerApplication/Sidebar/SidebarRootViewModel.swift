@@ -32,7 +32,11 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
     /// Generation guard for `currentRootFilterTask` — also bumped when
     /// `$nodes` is rebuilt, so verdicts computed against a discarded cell
     /// tree are never applied.
-    private var currentRootFilterGeneration: Int = 0
+    ///
+    /// `package` rather than `private` so `SidebarRootFilterInvalidationTests`
+    /// can pin that the rebuild bumps it *synchronously*; deferring the bump
+    /// is exactly the defect the guard exists to prevent.
+    package private(set) var currentRootFilterGeneration: Int = 0
 
     public init(documentState: DocumentState, router: any Router<SidebarRootRoute>, nodesSource: Observable<[RuntimeImageNode]>) {
         self.nodesSource = nodesSource
@@ -82,25 +86,40 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         self.nodesIndexed = indexedNodes.trackActivity(_commonLoading).asSignal().mapToVoid()
         
         
-        $nodes
-            .bind(to: $filteredNodes)
-            .disposed(by: rx.disposeBag)
-
-        // A rebuilt image tree invalidates any in-flight filter pass —
-        // its verdicts belong to cells that are no longer on screen (the
-        // `$nodes → $filteredNodes` bind above already reset the list,
-        // matching the legacy behavior of dropping the visual filter on
-        // an image-list rebuild).
+        // `$nodes` is fed by the `observe(on: MainScheduler.instance)`
+        // chain above and replayed on this main-actor `init`, so every
+        // delivery is already on the main actor.
         $nodes
             .asObservable()
-            .skip(1)
-            .subscribeOnNextMainActor { [weak self] _ in
-                guard let self else { return }
-                currentRootFilterTask?.cancel()
-                currentRootFilterTask = nil
-                currentRootFilterGeneration &+= 1
+            .subscribeOnNext { [weak self] rebuiltNodes in
+                MainActor.assumeIsolated {
+                    self?.installRebuiltNodes(rebuiltNodes)
+                }
             }
             .disposed(by: rx.disposeBag)
+    }
+
+    /// Installs a rebuilt image tree: drops the visual filter (matching the
+    /// legacy behavior of clearing it on an image-list rebuild) and
+    /// invalidates any in-flight filter pass, whose verdicts belong to
+    /// cells that are no longer on screen.
+    ///
+    /// Both halves must land in the same main-actor turn, which is why this
+    /// is one synchronous step rather than a `bind(to: $filteredNodes)`
+    /// alongside a `subscribeOnNextMainActor` invalidation. The latter
+    /// expands to `Task { @MainActor in … }`, so the cancellation and the
+    /// generation bump were merely *enqueued* while the list swap ran
+    /// synchronously — and a verdict continuation resuming in that window
+    /// passed both guards (`Task.isCancelled` still false, the generation
+    /// still its captured value) and republished the discarded cell tree
+    /// over the fresh one. Nothing reschedules a filter afterwards, so the
+    /// stale rows stayed on screen until the user typed again.
+    @MainActor
+    private func installRebuiltNodes(_ rebuiltNodes: [SidebarRootCellViewModel]) {
+        currentRootFilterTask?.cancel()
+        currentRootFilterTask = nil
+        currentRootFilterGeneration &+= 1
+        filteredNodes = rebuiltNodes
     }
 
     /// Root filter pass: snapshot the cell tree on the main actor,
