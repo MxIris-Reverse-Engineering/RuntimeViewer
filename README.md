@@ -46,9 +46,21 @@
 
 ## Getting Started
 
+### Install Runtime Viewer
+
+Download the macOS release archive from [GitHub Releases](https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/latest), extract it, and move **RuntimeViewer.app** to your Applications folder. GitHub Releases is the official source for prebuilt versions of Runtime Viewer. The project does not publish a Homebrew cask; any such cask is unofficial and unsupported. See [Requirements](#requirements) for supported macOS versions.
+
+### Choose a Runtime Source
+
+Runtime Viewer does not automatically list every application on your Mac. After launching it, choose one of these ways to obtain content:
+
+- Browse the bundled **Local Runtime** source to inspect the local runtime and framework directory.
+- Use **Attach Process** in the toolbar to explicitly attach to a running process. Process attachment requires System Integrity Protection (SIP) to be disabled; see [Requirements](#requirements) and [Troubleshooting](#troubleshooting).
+- Select another Runtime Viewer instance discovered on your local network. See [Connecting to Other Devices](#connecting-to-other-devices) for Bonjour details.
+
 ### Helper Service Installation
 
-On first launch, register the `SMAppService` helper for inter-process communication and code injection. Open **Settings → Helper Service** and click **Install**. After major updates, Runtime Viewer detects version mismatches and prompts for reinstallation automatically.
+To enable inter-process communication and code injection, register the `SMAppService` helper from **Settings → Helper Service** by clicking **Install**. Installing the helper does not install the main app or automatically create connection targets. After major updates, Runtime Viewer detects version mismatches and prompts for reinstallation automatically.
 
 ### MCP Client Configuration
 
@@ -84,6 +96,7 @@ If Catalyst or code-injected applications don't appear in the directory list, tr
 ## Requirements
 
 - **Main application**: macOS 15+
+- **Process attachment**: System Integrity Protection (SIP) disabled
 - **RuntimeViewerCore** (inspection engine): macOS 10.15+, iOS 13+, Mac Catalyst 13+, watchOS 6+, tvOS 13+, visionOS 1+
 - **MCP integration**: macOS 15+
 - **Build toolchain**: Xcode 26.2+ (Swift 5 language mode)
