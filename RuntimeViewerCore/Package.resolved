@@ -1,5 +1,5 @@
 {
-  "originHash" : "ad07950f3a36cd48081d9113d0221bfe898ef384dfe68490dc4fb00453a8921e",
+  "originHash" : "fe284ba261921d24cfbb9ef0fdb25afdd9e70801072c2caba0cb09237a7cc970",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -51,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "revision" : "c65d9c26af12c6d90e114eba6896eb1cf56dd64f",
-        "version" : "0.4.3"
+        "revision" : "2f5603c11d43fd7e6ac815a6f400fe5c2dcf80de",
+        "version" : "0.5.0"
       }
     },
     {
@@ -60,17 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
-        "revision" : "5223d0958aa5aa810e8f77b6c6763f019254a322",
-        "version" : "0.52.100"
-      }
-    },
-    {
-      "identity" : "machokitextensions",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
-      "state" : {
-        "revision" : "fde952e9b9af76e32e179f37098b6d259102769e",
-        "version" : "0.1.0"
+        "revision" : "4374bafbe4c628c05e068382a12467e7971b29ac",
+        "version" : "0.51.101"
       }
     },
     {
@@ -78,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
-        "revision" : "415430845bcafd2309cba7c822e260a3cb811523",
-        "version" : "0.8.102"
+        "revision" : "63e4b8a61d54fe90bb30e87c0c93f6a8b9c181f9",
+        "version" : "0.7.103"
       }
     },
     {
@@ -87,8 +78,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "aa38ff50bcf0ba89173da4ea0a8417c8bc478aa4",
-        "version" : "0.15.0"
+        "revision" : "3396cfd7332d40edb6aa3b0600758916701a8be4",
+        "version" : "0.14.1"
       }
     },
     {
@@ -240,8 +231,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "454ad61ada4a25c43ed74fc8551684fd92e8f8ae",
-        "version" : "0.2.0"
+        "revision" : "415759aff0d2ea8e88b1331bcace29f25a47c73f",
+        "version" : "0.3.1"
       }
     },
     {
