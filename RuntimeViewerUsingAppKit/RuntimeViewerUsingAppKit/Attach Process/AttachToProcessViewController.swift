@@ -8,8 +8,6 @@ import DependenciesMacros
 final class AttachToProcessViewController: UXKitViewController<AttachToProcessViewModel> {
 
     override var shouldDisplayCommonLoading: Bool { true }
-
-    fileprivate static let shared = AttachToProcessViewController()
     
     private let pickerViewController: RunningPickerTabViewController
 
@@ -72,11 +70,4 @@ extension AttachToProcessViewController: RunningPickerTabViewController.Delegate
     func runningPickerTabViewControllerWasCancelled(_ viewController: RunningPickerTabViewController) {
         cancelRelay.accept()
     }
-}
-
-// MARK: - Dependencies
-
-extension DependencyValues {
-    @DependencyEntry(liveValue: MainActor.assumeIsolated { AttachToProcessViewController.shared })
-    var attachToProcessViewController: AttachToProcessViewController
 }
