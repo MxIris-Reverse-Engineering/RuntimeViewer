@@ -22,6 +22,45 @@ all users.
 Release notes live at `Changelogs/<tag>.md` and are picked up automatically by
 `release.yml` when that file exists.
 
+## Pre-flight: the helper daemon protocol version
+
+`RuntimeViewerServiceVersion` in
+`RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeRequestResponse.swift`
+is the **only** signal that makes an installed client replace its privileged
+helper. `HelperServiceManager.checkServiceVersionAndReinstallIfNeeded()`
+compares the running daemon's reported version against this constant on every
+launch and reinstalls only on a mismatch. A new app build ships a new daemon
+binary, but nothing installs it while the version string is unchanged.
+
+So before cutting any release, diff the daemon-side sources against the commit
+that last bumped the constant, and bump it (minor, e.g. `1.4.0` → `1.5.0`)
+whenever anything there changed:
+
+```bash
+# -G, not -S: bumping the value leaves the number of occurrences unchanged, so
+# a pickaxe search walks straight past every bump commit to the one that
+# introduced the constant.
+LAST_BUMP=$(git log -1 --format=%H -G'RuntimeViewerServiceVersion: String = ' \
+    -- RuntimeViewerCore/Sources/RuntimeViewerCommunication/RuntimeRequestResponse.swift)
+
+git diff --stat "$LAST_BUMP"..HEAD -- \
+    RuntimeViewerCore/Sources/RuntimeViewerCommunication \
+    RuntimeViewerPackages/Sources/RuntimeViewerService \
+    RuntimeViewerUsingAppKit/com.JH.RuntimeViewerService \
+    RuntimeViewerServer
+```
+
+Ignore `Package.resolved` churn in that output; judge on source files.
+
+Getting this wrong fails silently in the worst direction: the release notes
+describe a daemon-side fix, the build genuinely contains it, and no installed
+client ever runs it. `v2.1.0-RC.3` shipped exactly that way — the injection
+routing moved into the daemon while the constant stayed at `1.4.0`, so every RC
+user kept running the old helper until `v2.1.0` bumped it to `1.5.0`.
+
+Nothing enforces this, unlike `MARKETING_VERSION`, which `ArchiveScript.sh`
+verifies against `--version-tag`. It is a manual check.
+
 ## Local release (manual)
 
 Substitute the version tag in the example below for whichever release you are
