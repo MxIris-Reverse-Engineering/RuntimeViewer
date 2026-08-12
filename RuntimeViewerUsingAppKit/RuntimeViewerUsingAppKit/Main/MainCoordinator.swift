@@ -9,7 +9,6 @@ import LateResponders
 typealias MainTransition = SceneTransition<MainWindowController, MainSplitViewController>
 
 final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateResponderRegistering {
-    @Dependency(\.attachToProcessViewController) private var attachToProcessViewController
 
     let documentState: DocumentState
 
@@ -86,7 +85,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             viewController.setupBindings(for: viewModel)
             return .uxPopover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient, animates: true)
         case .attachToProcess:
-            let viewController = attachToProcessViewController
+            let viewController = AttachToProcessViewController()
             let viewModel = AttachToProcessViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
             viewController.preferredContentSize = .init(width: 800, height: 600)
