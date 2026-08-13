@@ -52,8 +52,21 @@ struct OpenQuicklyMaterializationBoundsTests {
         }
     }
 
-    @Test("a superseded pass still installs the haystack build it completed")
-    func supersededPassInstallsItsHaystackBuild() async throws {
+    /// Two contracts in one timeline, both about a build that belongs to
+    /// the object list rather than to any one query:
+    ///
+    /// 1. Overlapping passes share it. Sampling the cache at schedule time
+    ///    and never re-reading it made every keystroke landing during the
+    ///    first build start its own full O(N) build of the identical array,
+    ///    and `defaultHaystackBuilder` has no cancellation points, so
+    ///    cancelling the superseded pass freed nothing — the builds simply
+    ///    ran concurrently.
+    /// 2. A superseded pass's completed build is still installed. Discarding
+    ///    it meant that whenever the build outran the debounce, continuous
+    ///    typing threw away a complete build per query and the cache was
+    ///    never populated at all.
+    @Test("overlapping passes share one haystack build, and its result is installed")
+    func overlappingPassesShareOneHaystackBuild() async throws {
         try await withSharedLocalEngineLock {
             let gate = HaystackBuildGate()
             let harness = try await Harness(objectCount: 64, gate: gate)
@@ -62,15 +75,19 @@ struct OpenQuicklyMaterializationBoundsTests {
             let firstBuildStarted = try await pollUntil(timeout: .seconds(20)) { gate.startedBuildCount == 1 }
             #expect(firstBuildStarted, "the first query never started a haystack build")
 
-            // Supersedes the first pass while its build is still gated.
+            // Supersedes the first pass while its build is still gated. Give
+            // it its full debounce window plus margin — a pass that were
+            // going to start its own build would have done so by now.
             harness.search("Alphab")
-            let secondBuildStarted = try await pollUntil(timeout: .seconds(20)) { gate.startedBuildCount == 2 }
-            #expect(secondBuildStarted, "the second query never started its own haystack build")
+            try await Task.sleep(for: .milliseconds(600))
+            #expect(
+                gate.startedBuildCount == 1,
+                "the second query started a redundant build instead of joining the one in flight"
+            )
 
-            // Release ONLY the superseded pass's build. The second pass
-            // stays gated, so a populated cache can only have come from
-            // the pass that was cancelled and out-generationed — the exact
-            // build the old code threw away.
+            // Releasing the single shared build must populate the cache even
+            // though the pass that started it was cancelled and
+            // out-generationed.
             gate.releaseNext()
 
             let cachePopulated = try await pollUntil(timeout: .seconds(20)) {
@@ -78,11 +95,9 @@ struct OpenQuicklyMaterializationBoundsTests {
             }
             #expect(
                 cachePopulated,
-                "the superseded pass discarded a completed, query-independent haystack build"
+                "the shared build's result was discarded with the pass that started it"
             )
 
-            // Unblock the still-gated current pass so its continuation is
-            // resumed before the harness goes away.
             gate.release()
         }
     }
