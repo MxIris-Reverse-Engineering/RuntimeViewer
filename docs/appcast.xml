@@ -11,21 +11,12 @@
         <description>RuntimeViewer release feed</description>
         <language>en</language>
         <item>
-            <title>2.1.0</title>
-            <pubDate>Wed, 12 Aug 2026 03:35:55 +0000</pubDate>
-            <sparkle:version>20260812.02.42</sparkle:version>
-            <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
+            <title>2.1.1</title>
+            <pubDate>Wed, 12 Aug 2026 17:01:46 +0000</pubDate>
+            <sparkle:version>20260812.15.57</sparkle:version>
+            <sparkle:shortVersionString>2.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/download/v2.1.0/RuntimeViewer-macOS.zip" length="56688010" type="application/octet-stream" sparkle:edSignature="M9gPE29/5hZ8GIwASww+gDs5O42kVl1mzsCuvaChkimsAiDAL1aIUFJfpwgLrjOP7r0AMNg7hQ1n0Rzfb32tBQ=="/>
-        </item>
-        <item>
-            <title>2.1.0</title>
-            <pubDate>Tue, 11 Aug 2026 14:53:44 +0000</pubDate>
-            <sparkle:channel>beta</sparkle:channel>
-            <sparkle:version>20260811.14.06</sparkle:version>
-            <sparkle:shortVersionString>2.1.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/download/v2.1.0-RC.3/RuntimeViewer-macOS.zip" length="56688095" type="application/octet-stream" sparkle:edSignature="aWR12Pu5BvG7Za/EGCnDAxFSHM915CXMTwctXGo1YiQF5wnChXAEK/jFcBrktJcNVieVIuI7MpLyz3I/f0CeDA=="/>
+            <enclosure url="https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/releases/download/v2.1.1/RuntimeViewer-macOS.zip" length="56685302" type="application/octet-stream" sparkle:edSignature="QGvK8/L3HeIQ7so8GN/WQMSdy0YFt4C5D2Tm2ywgVY5PCPT9YujjPPdSRcVwCgwidgvGPMIVeFqp98HElxUyBQ=="/>
         </item>
         <item>
             <title>2.0.1</title>
