@@ -26,10 +26,11 @@ public final class ResolvedThemeStream {
     public let observable: Observable<ResolvedTheme>
 
     private init() {
+        @Dependency(\.settings) var settings
+        let trackedSettings = settings
         observable = Observable<ResolvedTheme>
             .tracking {
-                @Dependency(\.settings) var settings
-                return ResolvedTheme(settings: settings)
+                ResolvedTheme(settings: trackedSettings.current)
             }
             .distinctUntilChanged()
             .share(replay: 1, scope: .forever)

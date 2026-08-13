@@ -1,95 +1,64 @@
 import Foundation
 import FoundationToolbox
-import Observation
 import MetaCodable
+import Observation
+#if os(macOS)
+import UIFoundationSettings
+#endif
 
 @Observable
 @Codable
 @Loggable
 public final class Settings {
-    fileprivate static let shared = Settings()
-
-    private static var storage: SettingsStorageStrategy = SettingsFileSystemStorage()
-
     @Default(General.default)
-    public var general: General = .init() {
-        didSet { scheduleAutoSave() }
-    }
+    public var general: General = .init()
 
     @Default(Notifications.default)
-    public var notifications: Notifications = .init() {
-        didSet { scheduleAutoSave() }
-    }
+    public var notifications: Notifications = .init()
 
     @Default(TransformerSettings.default)
-    public var transformer: TransformerSettings = .init() {
-        didSet { scheduleAutoSave() }
-    }
+    public var transformer: TransformerSettings = .init()
 
     @Default(MCP.default)
-    public var mcp: MCP = .init() {
-        didSet { scheduleAutoSave() }
-    }
+    public var mcp: MCP = .init()
 
     @Default(Indexing.default)
-    public var indexing: Indexing = .init() {
-        didSet { scheduleAutoSave() }
-    }
+    public var indexing: Indexing = .init()
 
     @Default(Update.default)
-    public var update: Update = .init() {
-        didSet { scheduleAutoSave() }
-    }
+    public var update: Update = .init()
 
     @Default(Theme.default)
-    public var theme: Theme = .init() {
-        didSet { scheduleAutoSave() }
-    }
+    public var theme: Theme = .init()
 
-    @IgnoreCoding
-    @ObservationIgnored
-    private var saveTask: Task<Void, Error>?
+    internal init() {}
 
-    internal init() {
-        Task {
-            await load()
-        }
-    }
+    #if os(macOS)
+    #if DEBUG
+    private static let applicationDirectoryName = "RuntimeViewer-Debug"
+    #else
+    private static let applicationDirectoryName = "RuntimeViewer"
+    #endif
 
-    private func scheduleAutoSave() {
-        saveTask?.cancel()
+    @MainActor
+    public static let store = SettingsStore(
+        defaultValue: Settings(),
+        storage: FileSystemSettingsStorage(
+            applicationDirectoryName: applicationDirectoryName,
+            fileName: "settings.json"
+        )
+    )
 
-        saveTask = Task {
-            try await Task.sleep(for: .seconds(1))
-
-            await saveNow()
-        }
-    }
-
-    private func saveNow() async {
-        do {
-            let data = try JSONEncoder().encode(self)
-            try await Self.storage.save(data)
-            #log(.debug, "Settings auto-saved successfully.")
-        } catch {
-            #log(.debug, "Failed to save settings: \(error, privacy: .public)")
-        }
-    }
-
-    private func load() async {
-        do {
-            let data = try await Self.storage.load()
-            let decoded = try JSONDecoder().decode(Settings.self, from: data)
-            general = decoded.general
-            notifications = decoded.notifications
-            transformer = decoded.transformer
-            mcp = decoded.mcp
-            indexing = decoded.indexing
-            update = decoded.update
-            theme = decoded.theme
+    @MainActor
+    fileprivate static func load() async {
+        let outcome = await store.load()
+        switch outcome {
+        case .loaded:
             #log(.debug, "Settings loaded successfully.")
-        } catch {
-            #log(.debug, "No saved settings found or load failed, using defaults. (\(error, privacy: .public))")
+        case .noStoredData:
+            #log(.debug, "No saved settings found, using defaults.")
+        case .failed(let error):
+            #log(.debug, "Failed to load settings, using defaults. (\(error, privacy: .public))")
         }
         migrateLegacyThemeProfileIfNeeded()
     }
@@ -104,7 +73,8 @@ public final class Settings {
     /// `theme.fontSize` against the default value — otherwise a user who
     /// explicitly sets the new font size back to the default would have it
     /// silently overwritten by the legacy value on the next launch.
-    private func migrateLegacyThemeProfileIfNeeded() {
+    @MainActor
+    private static func migrateLegacyThemeProfileIfNeeded() {
         let legacyKey = "themeProfile"
         let migrationFlagKey = "didMigrateLegacyThemeProfile"
         let defaults = UserDefaults.standard
@@ -127,9 +97,84 @@ public final class Settings {
         }
 
         if legacy.fontSize >= 8.0, legacy.fontSize <= 32.0 {
-            theme.fontSize = legacy.fontSize
+            store.value.theme.fontSize = legacy.fontSize
         }
         defaults.removeObject(forKey: legacyKey)
+    }
+    #endif
+}
+
+#if os(macOS)
+extension Settings: PersistentSettings {
+    /// Reads every encoded top-level property so `SettingsStore` can register
+    /// one persistence observer without collapsing business observation onto a
+    /// synthetic root value.
+    @MainActor
+    public func accessPersistedValues() {
+        _ = general
+        _ = notifications
+        _ = transformer
+        _ = mcp
+        _ = indexing
+        _ = update
+        _ = theme
+    }
+}
+#endif
+
+/// RuntimeViewer's dependency-injection boundary over the single settings
+/// store owned by ``Settings``.
+///
+/// The dynamic-member surface preserves existing `settings.theme` call sites
+/// while every read and write still reaches the current `@Observable Settings`
+/// object owned by the store. Observation therefore retains the model's
+/// top-level property granularity.
+@MainActor
+@dynamicMemberLookup
+public final class SettingsAccess {
+    fileprivate static let shared = SettingsAccess()
+
+    #if os(macOS)
+    private let store: SettingsStore<Settings>
+    #else
+    private var value = Settings()
+    #endif
+
+    private init() {
+        #if os(macOS)
+        store = Settings.store
+        Task {
+            await Settings.load()
+        }
+        #endif
+    }
+
+    #if os(macOS)
+    init(store: SettingsStore<Settings>) {
+        self.store = store
+    }
+    #endif
+
+    public var current: Settings {
+        get {
+            #if os(macOS)
+            store.value
+            #else
+            value
+            #endif
+        }
+        set {
+            #if os(macOS)
+            store.value = newValue
+            #else
+            value = newValue
+            #endif
+        }
+    }
+
+    public subscript<Value>(dynamicMember keyPath: ReferenceWritableKeyPath<Settings, Value>) -> Value {
+        get { current[keyPath: keyPath] }
+        set { current[keyPath: keyPath] = newValue }
     }
 }
 
@@ -137,6 +182,6 @@ import Dependencies
 import DependenciesMacros
 
 extension DependencyValues {
-    @DependencyEntry(liveValue: Settings.shared, previewValue: Settings())
-    public var settings: Settings
+    @DependencyEntry(liveValue: MainActor.assumeIsolated { SettingsAccess.shared })
+    public var settings: SettingsAccess
 }

@@ -4,6 +4,7 @@ import SwiftUI
 import ServiceManagement
 import RuntimeViewerHelperClient
 import Dependencies
+import UIFoundationSettingsUI
 
 // MARK: - UI Helper Extensions
 

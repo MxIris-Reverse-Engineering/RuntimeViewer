@@ -35,10 +35,13 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
         let transformerObservable: Observable<Transformer.Configuration>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        @Dependency(\.settings) var settings
+        // Resolve the dependency once. `Observable.tracking` re-arms on a
+        // main-queue hop where the dependency context is no longer available.
+        let trackedSettings = settings
         transformerObservable = Observable<Transformer.Configuration>
             .tracking {
-                @Dependency(\.settings) var settings
-                return settings.transformer
+                trackedSettings.transformer
             }
             .share(replay: 1, scope: .whileConnected)
         #else

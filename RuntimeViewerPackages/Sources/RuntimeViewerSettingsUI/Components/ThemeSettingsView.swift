@@ -4,6 +4,7 @@ import AppKit
 import SwiftUI
 import Dependencies
 import RuntimeViewerSettings
+import UIFoundationSettingsUI
 
 struct ThemeSettingsView: View {
     @AppSettings(\.theme)

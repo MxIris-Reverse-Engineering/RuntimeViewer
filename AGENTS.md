@@ -100,8 +100,8 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerService` — XPC service helpers and code injection
 - `RuntimeViewerServiceHelper` — Helper utilities
 - `RuntimeViewerHelperClient` — Helper client for XPC communication
-- `RuntimeViewerSettings` — Settings models and dependency values
-- `RuntimeViewerSettingsUI` — Settings UI (SwiftUI)
+- `RuntimeViewerSettings` — RuntimeViewer's settings schema and dependency boundary over the single `UIFoundationSettings` store
+- `RuntimeViewerSettingsUI` — RuntimeViewer's SwiftUI settings pages hosted by `UIFoundationSettingsUI`
 - `RuntimeViewerCatalystExtensions` — Mac Catalyst support
 
 **RuntimeViewerMCP** (`RuntimeViewerMCP/`) — MCP integration (macOS 15+ only):
@@ -150,7 +150,30 @@ LLM Client
 ### UI Technology Stack
 
 - **AppKit**: All UI components except Settings
-- **SwiftUI**: Settings module only
+- **SwiftUI**: Settings pages only; the window, sidebar, navigation, forms, bindings, and persistence come from UIFoundation's Settings products
+
+### Settings Integration
+
+- `RuntimeViewerSettings.Settings` remains an `@Observable final class`. On macOS it conforms to
+  `PersistentSettings` and owns the application's only `SettingsStore`.
+- Existing service code continues to use `@Dependency(\.settings)` through
+  `SettingsAccess`; every dynamic-member read and write reaches the current object in that same
+  store. Capturing `SettingsAccess` remains valid when `load()` replaces the model.
+- `Settings.accessPersistedValues()` must read every encoded top-level property. UIFoundation's
+  store tracks that method to schedule persistence, while business observers retain top-level
+  property granularity (`theme` changes do not wake `transformer` listeners). Update this method
+  whenever a persisted property is added.
+- SwiftUI pages use the local `AppSettings` typealias, which specializes
+  `UIFoundationSettings.AppSettings` for RuntimeViewer's schema.
+- Keep the persisted location compatible with existing releases:
+  `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json`.
+- The UIFoundation dependency enables the `Settings` trait, exposes both
+  `UIFoundationSettings` and `UIFoundationSettingsUI`, and requires version
+  `0.16.0` or later. That release includes the observable reference-model Store
+  used by RuntimeViewer.
+- UIFoundation's Settings API is macOS-only. Other RuntimeViewer platforms keep
+  the shared schema and an in-memory dependency value, but do not expose the
+  settings window or file persistence.
 
 ## Development Guidelines
 
@@ -913,6 +936,7 @@ Prefer Xcode MCP tools for all Xcode project-level operations:
 ## External Dependencies
 
 Core reverse engineering powered by:
+- [UIFoundation](https://github.com/Mx-Iris/UIFoundation) — shared Settings store, bindings, window, forms, and navigation
 - [MachOKit](https://github.com/MxIris-Reverse-Engineering/MachOKit) — Mach-O binary parsing
 - [MachOObjCSection](https://github.com/MxIris-Reverse-Engineering/MachOObjCSection) — ObjC runtime introspection
 - [MachOSwiftSection](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection) — Swift interface extraction

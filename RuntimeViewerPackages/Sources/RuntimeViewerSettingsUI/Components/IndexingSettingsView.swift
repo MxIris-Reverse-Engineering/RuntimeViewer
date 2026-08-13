@@ -3,6 +3,7 @@
 import SwiftUI
 import Dependencies
 import RuntimeViewerSettings
+import UIFoundationSettingsUI
 
 struct IndexingSettingsView: View {
     @AppSettings(\.indexing)

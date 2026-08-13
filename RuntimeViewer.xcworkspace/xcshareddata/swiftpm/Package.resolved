@@ -59,8 +59,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "4abda76aaaa00ff5f9da86d8c4ed62bc6cfbcbac",
-        "version" : "0.8.0"
+        "revision" : "3be067f4280e0764cd4b6cd3ed623698ac981114",
+        "version" : "0.9.0"
       }
     },
     {
@@ -131,8 +131,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "revision" : "e558c427e13f3b7abf97fa4b46e96d65413ff7c4",
-        "version" : "0.4.2"
+        "revision" : "2f5603c11d43fd7e6ac815a6f400fe5c2dcf80de",
+        "version" : "0.5.0"
       }
     },
     {
@@ -185,8 +185,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
       "state" : {
-        "revision" : "3ea7272ab5f5dad0f6313be2d943cde5af08723f",
-        "version" : "0.4.0"
+        "revision" : "8e56152efc97647f3443b13d80c443ba9463d3e9",
+        "version" : "0.5.0"
       }
     },
     {
@@ -437,8 +437,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "f0b834f47f876f41e39a691fb177ff76d3910c49",
-        "version" : "0.1.4"
+        "revision" : "415759aff0d2ea8e88b1331bcace29f25a47c73f",
+        "version" : "0.3.1"
       }
     },
     {
@@ -559,15 +559,6 @@
       }
     },
     {
-      "identity" : "swift-objc-dump",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-objc-dump",
-      "state" : {
-        "revision" : "641d257d60385b231a608ab8c4ecdf31348c779e",
-        "version" : "0.8.101"
-      }
-    },
-    {
       "identity" : "swift-object-association",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-object-association.git",
@@ -640,21 +631,12 @@
       }
     },
     {
-      "identity" : "swiftui-introspect",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/siteline/swiftui-introspect",
-      "state" : {
-        "revision" : "26986a57e31c813f98262ddb62d4b07d40008535",
-        "version" : "26.0.1"
-      }
-    },
-    {
       "identity" : "swiftyxpc",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "revision" : "8c0a1738ba68540e6e911eb409fca8a4603d3efd",
-        "version" : "0.5.103"
+        "revision" : "4f67b80d2d21b0968ec6c6c45aa01389f1f1ed05",
+        "version" : "0.5.104"
       }
     },
     {
@@ -671,8 +653,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "3d54f6fad1f00764bb21e4cc9cb22e0b4317515f",
-        "version" : "0.15.0"
+        "revision" : "4bde74c69e432e9fa0538c331a308bfc70f84dd0",
+        "version" : "0.16.0"
       }
     },
     {

@@ -95,7 +95,7 @@ let usingSystemUXKit = envEnable("USING_SYSTEM_UXKIT", default: true)
 
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let UIFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "TabBar"]
+let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar"]
 
 if usingSystemUXKit {
     sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
@@ -158,11 +158,17 @@ let package = Package(
             local: .package(
                 path: "../../UIFoundation",
                 isRelative: true,
+                traits: uiFoundationTraits,
+            ),
+            .package(
+                path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("UIFoundation"),
+                isRelative: true,
+                traits: uiFoundationTraits,
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.15.1",
-                traits: UIFoundationTraits,
+                from: "0.16.0",
+                traits: uiFoundationTraits,
             ),
         ),
 
@@ -338,11 +344,6 @@ let package = Package(
         ),
         
         .package(
-            url: "https://github.com/siteline/swiftui-introspect",
-            from: "26.0.1",
-        ),
-
-        .package(
             url: "https://github.com/ChimeHQ/Rearrange",
             from: "2.1.1",
         ),
@@ -395,6 +396,7 @@ let package = Package(
             name: "RuntimeViewerSettings",
             dependencies: [
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "UIFoundationSettings", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
             ],
@@ -407,9 +409,9 @@ let package = Package(
                 "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerSimulatorInstaller", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "UIFoundationSettingsUI", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
-                .product(name: "SwiftUIIntrospect", package: "swiftui-introspect"),
             ],
             resources: [
                 .process("Resources"),
@@ -488,7 +490,10 @@ let package = Package(
 
         .testTarget(
             name: "RuntimeViewerSettingsTests",
-            dependencies: ["RuntimeViewerSettings"],
+            dependencies: [
+                "RuntimeViewerSettings",
+                .product(name: "UIFoundationSettings", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
+            ],
         ),
 
         .testTarget(

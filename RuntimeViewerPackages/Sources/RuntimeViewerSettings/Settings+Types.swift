@@ -7,7 +7,7 @@ extension Settings {
     /// - **system**: uses the system appearance
     /// - **dark**: always uses dark appearance
     /// - **light**: always uses light appearance
-    public enum Appearances: String, Codable {
+    public enum Appearances: String, Codable, Sendable {
         case system
         case light
         case dark
@@ -15,7 +15,7 @@ extension Settings {
 
     @Codable
     @MemberInit
-    public struct General {
+    public struct General: Sendable {
         @Default(Settings.Appearances.system)
         public var appearance: Settings.Appearances
 
@@ -40,7 +40,7 @@ extension Settings {
 
     @Codable
     @MemberInit
-    public struct Notifications {
+    public struct Notifications: Sendable {
         /// Whether notifications are enabled globally
         @Default(true)
         public var isEnabled: Bool
@@ -60,7 +60,7 @@ extension Settings {
 
     @Codable
     @MemberInit
-    public struct MCP {
+    public struct MCP: Sendable {
         /// Whether the MCP server is enabled
         @Default(true)
         public var isEnabled: Bool
@@ -81,7 +81,7 @@ extension Settings {
 
     @Codable
     @MemberInit
-    public struct Indexing {
+    public struct Indexing: Sendable {
         /// Master switch. When off, no background indexing runs regardless of
         /// sub-mode toggles below.
         @Default(false)
@@ -98,7 +98,7 @@ extension Settings {
         /// images loaded after the initial sweep are not auto-indexed.
         @Codable
         @MemberInit
-        public struct Heuristic {
+        public struct Heuristic: Sendable {
             /// Whether heuristic main-executable BFS is enabled.
             @Default(true)
             public var isEnabled: Bool
@@ -138,7 +138,7 @@ extension Settings {
         /// further down the same scope.
         @Codable
         @MemberInit
-        public struct AlwaysIndexEntry: Equatable {
+        public struct AlwaysIndexEntry: Equatable, Sendable {
             @Default(true)
             public var isEnabled: Bool
 
@@ -156,7 +156,7 @@ extension Settings {
         /// changes, or a fullReload fires.
         @Codable
         @MemberInit
-        public struct Custom {
+        public struct Custom: Sendable {
             /// Whether the custom always-index list is honored.
             @Default(true)
             public var isEnabled: Bool

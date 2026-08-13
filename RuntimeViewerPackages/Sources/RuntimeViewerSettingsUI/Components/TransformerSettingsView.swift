@@ -5,6 +5,7 @@ import SwiftUI
 import Dependencies
 import RuntimeViewerSettings
 import RuntimeViewerCore
+import UIFoundationSettingsUI
 
 struct TransformerSettingsView: View {
     @AppSettings(\.transformer)

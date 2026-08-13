@@ -4,7 +4,7 @@ import MetaCodable
 extension Settings {
     @Codable
     @MemberInit
-    public struct Update {
+    public struct Update: Sendable {
         @Default(true)
         public var automaticallyChecks: Bool
 
@@ -30,7 +30,7 @@ extension Settings {
         }
     }
 
-    public enum CheckInterval: String, Codable, CaseIterable {
+    public enum CheckInterval: String, Codable, CaseIterable, Sendable {
         case hourly
         case daily
         case weekly

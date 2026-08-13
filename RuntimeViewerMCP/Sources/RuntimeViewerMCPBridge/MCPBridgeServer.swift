@@ -162,7 +162,7 @@ public actor MCPBridgeServer {
         }
 
         let engine = context.runtimeEngine
-        let options = generationOptions()
+        let options = await generationOptions()
 
         let interface: RuntimeObjectInterface?
         do {
@@ -194,7 +194,7 @@ public actor MCPBridgeServer {
     func typeInterface(windowIdentifier: String, typeName: String, imagePath: String? = nil, imageName: String? = nil) async throws -> MCPTypeInterfaceResponse {
         let context = try await documentProvider.documentContext(forIdentifier: windowIdentifier)
         let engine = context.runtimeEngine
-        let options = generationOptions()
+        let options = await generationOptions()
         let resolvedPaths = try await resolveImagePaths(requestImagePath: imagePath, requestImageName: imageName, selectedImagePath: context.selectedImageNode?.path, engine: engine)
 
         var objectLoadErrors: [(path: String, error: String)] = []
@@ -610,9 +610,10 @@ public actor MCPBridgeServer {
         }
     }
 
-    private func generationOptions() -> RuntimeObjectInterface.GenerationOptions {
+    private func generationOptions() async -> RuntimeObjectInterface.GenerationOptions {
         var options = RuntimeObjectInterface.GenerationOptions.mcp
-        options.transformer = settings.transformer
+        let settingsAccess = settings
+        options.transformer = await MainActor.run { settingsAccess.transformer }
         return options
     }
 

@@ -1,5 +1,5 @@
 {
-  "originHash" : "b2c54d0f48b65942115d5a84f807f55fa80d2b67639bbb17bd553c41811b431c",
+  "originHash" : "a3fde1291c188cb66d8e385673ec7480190e07d56df1adbeca3f480a7c3bc0d6",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -402,8 +402,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "8dc1fbf2f6255a73dec53b4648164884898db4c5",
-        "version" : "1.14.1"
+        "revision" : "9381ab822de01c4e9f3a7eb8eabb6ae808febed3",
+        "version" : "1.15.0"
       }
     },
     {
@@ -524,15 +524,6 @@
       }
     },
     {
-      "identity" : "swiftui-introspect",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/siteline/swiftui-introspect",
-      "state" : {
-        "revision" : "26986a57e31c813f98262ddb62d4b07d40008535",
-        "version" : "26.0.1"
-      }
-    },
-    {
       "identity" : "swiftyxpc",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
@@ -555,8 +546,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "33ebdc39d890c26e3773cb5eba2817fe77e1ffee",
-        "version" : "0.15.2"
+        "revision" : "4bde74c69e432e9fa0538c331a308bfc70f84dd0",
+        "version" : "0.16.0"
       }
     },
     {

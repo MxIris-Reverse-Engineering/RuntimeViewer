@@ -4,6 +4,7 @@ import SwiftUI
 import Dependencies
 import RuntimeViewerSettings
 import RuntimeViewerUI
+import UIFoundationSettingsUI
 
 struct UpdateSettingsView: View {
     @Dependency(\.updaterClient) private var updaterClient

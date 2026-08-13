@@ -676,15 +676,6 @@
       }
     },
     {
-      "identity" : "swiftui-introspect",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/siteline/swiftui-introspect",
-      "state" : {
-        "revision" : "26986a57e31c813f98262ddb62d4b07d40008535",
-        "version" : "26.0.1"
-      }
-    },
-    {
       "identity" : "swiftyxpc",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
@@ -707,8 +698,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "33ebdc39d890c26e3773cb5eba2817fe77e1ffee",
-        "version" : "0.15.2"
+        "revision" : "4bde74c69e432e9fa0538c331a308bfc70f84dd0",
+        "version" : "0.16.0"
       }
     },
     {
