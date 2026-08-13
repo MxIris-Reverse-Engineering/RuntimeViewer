@@ -41,6 +41,18 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// Internal (not private) so tests can pin the lazy contract.
     private(set) var openQuicklyCellViewModelsByRowIndex: [Int: SidebarRuntimeObjectCellViewModel] = [:]
 
+    /// Rows the previous pass highlighted. Clearing stale highlights only
+    /// has to touch these — the materialized-cell map is deliberately kept
+    /// warm across searches, so it accumulates every row any query has ever
+    /// surfaced and sweeping it whole made per-keystroke main-actor cost
+    /// grow with session length.
+    private var highlightedOpenQuicklyRowIndices: Set<Int> = []
+
+    /// Haystack build shared by every pass over the same object list, so
+    /// overlapping keystrokes join one build instead of each starting an
+    /// identical full one. Cleared once the build installs.
+    private var inFlightOpenQuicklyHaystackBuild: (objectListVersion: Int, task: Task<[String], Never>)?
+
     /// Latest non-nil root object the document is inspecting, waiting to
     /// be resolved to a concrete cell once it appears in `nodes`. Driven
     /// by `documentState.$selectionStack` (see `transform`) — never by an
@@ -153,24 +165,25 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         }
     }
 
-    override func reloadData() async throws {
-        try await super.reloadData()
-        try Task.checkCancellation()
-
-        await MainActor.run {
-            self.currentOpenQuicklyFilterTask?.cancel()
-            self.currentOpenQuicklyFilterTask = nil
-            self.currentOpenQuicklyFilterGeneration &+= 1
-            self.searchStringForOpenQuickly = ""
-            // `nodes` is already name-sorted (`isSorted == true`), so the
-            // Open Quickly row order comes for free. Everything derived
-            // from the previous object list is invalidated together.
-            self.openQuicklyRuntimeObjects = self.nodes.map(\.runtimeObject)
-            self.openQuicklyRuntimeObjectsVersion &+= 1
-            self.openQuicklyHaystacksCache = nil
-            self.openQuicklyCellViewModelsByRowIndex = [:]
-            self.filteredNodesForOpenQuickly = []
-        }
+    override func didInstallReloadedNodes() {
+        super.didInstallReloadedNodes()
+        currentOpenQuicklyFilterTask?.cancel()
+        currentOpenQuicklyFilterTask = nil
+        currentOpenQuicklyFilterGeneration &+= 1
+        searchStringForOpenQuickly = ""
+        // `nodes` is already name-sorted (`isSorted == true`), so the
+        // Open Quickly row order comes for free. Everything derived
+        // from the previous object list is invalidated together.
+        openQuicklyRuntimeObjects = nodes.map(\.runtimeObject)
+        openQuicklyRuntimeObjectsVersion &+= 1
+        openQuicklyHaystacksCache = nil
+        // The version bump already makes this build unusable (its indices
+        // address the previous list); drop the reference so it is not held
+        // for the rest of the document's life.
+        inFlightOpenQuicklyHaystackBuild = nil
+        openQuicklyCellViewModelsByRowIndex = [:]
+        highlightedOpenQuicklyRowIndices = []
+        filteredNodesForOpenQuickly = []
     }
 
     /// Returns the row's cell view model, materializing it on first use.
@@ -216,11 +229,11 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
                 isFilteringForOpenQuickly = false
             }
             // Clear stale highlights so the next search starts clean.
-            // Only materialized rows can carry one, and the guarded
-            // didSet makes already-clean rows free.
-            for cellViewModel in openQuicklyCellViewModelsByRowIndex.values {
-                cellViewModel.filterResult = nil
+            // Only the previous pass's matches can carry one.
+            for rowIndex in highlightedOpenQuicklyRowIndices {
+                openQuicklyCellViewModelsByRowIndex[rowIndex]?.filterResult = nil
             }
+            highlightedOpenQuicklyRowIndices = []
             filteredNodesForOpenQuickly = []
             return
         }
@@ -232,36 +245,14 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         let context = FilterContext(query: query, isCaseInsensitive: false, mode: .fuzzySearch)
         let runtimeObjects = openQuicklyRuntimeObjects
         let runtimeObjectsVersion = openQuicklyRuntimeObjectsVersion
-        let cachedHaystacks = openQuicklyHaystacksCache
-        let haystackBuilder = haystackBuilder
         currentOpenQuicklyFilterTask = Task { @MainActor [weak self] in
-            let haystacks: [String]
-            if let cachedHaystacks {
-                haystacks = cachedHaystacks
-            } else {
-                let computedHaystacks = await haystackBuilder(runtimeObjects)
-                guard let self else { return }
-                // Install before the generation guard: the haystacks depend
-                // only on the object list, never on the query, so a pass
-                // superseded by the next keystroke still produced the
-                // artifact every later pass needs. Discarding it meant that
-                // whenever the build outran the 150 ms debounce, continuous
-                // typing threw away a complete build per query and the cache
-                // was never populated at all.
-                //
-                // The version check is what the generation counter cannot
-                // do: that one also moves on every keystroke, while these
-                // haystacks are only valid for the object list they were
-                // built from — installing them after a reload swapped the
-                // list would misalign every index.
-                if self.openQuicklyRuntimeObjectsVersion == runtimeObjectsVersion {
-                    self.openQuicklyHaystacksCache = computedHaystacks
-                }
-                guard !Task.isCancelled, self.currentOpenQuicklyFilterGeneration == generation else { return }
-                haystacks = computedHaystacks
-            }
+            guard let haystacks = await self?.openQuicklyHaystacks(
+                forObjectListVersion: runtimeObjectsVersion,
+                runtimeObjects: runtimeObjects
+            ) else { return }
+            guard !Task.isCancelled, let self, self.currentOpenQuicklyFilterGeneration == generation else { return }
             let verdicts = await Self.matchOffMain(context: context, haystacks: haystacks)
-            guard !Task.isCancelled, let self else { return }
+            guard !Task.isCancelled else { return }
             guard self.currentOpenQuicklyFilterGeneration == generation else { return }
 
             // Verdicts arrive sorted by descending fuzzy weight, so the
@@ -280,14 +271,63 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
                 cellViewModel.filterResult = verdict.result
                 filteredCellViewModels.append(cellViewModel)
             }
-            // Un-highlight previously materialized rows that missed this
-            // query; rows never materialized never had a highlight.
-            for (rowIndex, cellViewModel) in self.openQuicklyCellViewModelsByRowIndex where !matchedRowIndices.contains(rowIndex) {
-                cellViewModel.filterResult = nil
+            // Un-highlight the rows the previous pass lit up that this one
+            // missed. Rows that were never highlighted never had one, so
+            // the warm materialized-cell map does not need sweeping.
+            for rowIndex in self.highlightedOpenQuicklyRowIndices.subtracting(matchedRowIndices) {
+                self.openQuicklyCellViewModelsByRowIndex[rowIndex]?.filterResult = nil
             }
+            self.highlightedOpenQuicklyRowIndices = matchedRowIndices
             self.filteredNodesForOpenQuickly = filteredCellViewModels
             self.currentOpenQuicklyFilterTask = nil
         }
+    }
+
+    /// Returns the haystacks for `runtimeObjects`, joining a build already
+    /// running for the same object list instead of starting a second one.
+    ///
+    /// Sampling `openQuicklyHaystacksCache` at schedule time and never
+    /// re-reading it meant every keystroke landing during the first build
+    /// began its own full O(N) build of the identical array —
+    /// `defaultHaystackBuilder` has no cancellation points, so cancelling
+    /// the superseded pass freed nothing and the builds ran concurrently.
+    /// Sharing one task is the shape `RuntimeInterfaceCache` already uses
+    /// for the same problem.
+    ///
+    /// The task is deliberately unstructured: it must outlive the pass that
+    /// happened to start it, since the artifact belongs to the object list
+    /// rather than to any one query.
+    @MainActor
+    private func openQuicklyHaystacks(
+        forObjectListVersion objectListVersion: Int,
+        runtimeObjects: [RuntimeObject]
+    ) async -> [String] {
+        if let cachedHaystacks = openQuicklyHaystacksCache,
+           openQuicklyRuntimeObjectsVersion == objectListVersion {
+            return cachedHaystacks
+        }
+        if let inFlightBuild = inFlightOpenQuicklyHaystackBuild,
+           inFlightBuild.objectListVersion == objectListVersion {
+            return await inFlightBuild.task.value
+        }
+
+        let haystackBuilder = haystackBuilder
+        let buildTask = Task { await haystackBuilder(runtimeObjects) }
+        inFlightOpenQuicklyHaystackBuild = (objectListVersion, buildTask)
+        let builtHaystacks = await buildTask.value
+
+        // Install even when the pass that started this build was superseded:
+        // the haystacks depend only on the object list, so a later pass would
+        // otherwise rebuild what this one already finished. The version check
+        // is what the generation counter cannot do — that one moves on every
+        // keystroke, while these haystacks stay valid until a reload swaps
+        // the list, and installing them against a swapped list would misalign
+        // every index.
+        if openQuicklyRuntimeObjectsVersion == objectListVersion {
+            openQuicklyHaystacksCache = builtHaystacks
+            inFlightOpenQuicklyHaystackBuild = nil
+        }
+        return builtHaystacks
     }
 
     /// Hop for the fuzzy matcher: `nonisolated async` runs on the global

@@ -50,7 +50,7 @@ dynamicMemberLookup / 自有 ControlProperty **确实不发初值**（同文件
 | ID | 严重度 | 摘要 | 状态与理由 |
 |---|---|---|---|
 | PR88.7 | Minor | `SemanticString+ThemeProfile` 出口处 `.copy()` 对大接口多一次深拷贝 + 瞬时 2× 峰值 | 保留拷贝（跨线程不可变性契约，已有注释）；用现成 `content.attributedStringBuild` signpost 实测大接口占比后再裁决是否优化 |
-| PR88.9 | Minor | `StatefulOutlineView` 展开状态合并持久化在窗口期内被 `beginFiltering` 打断时静默丢弃、不重排 | 后果限于「重启后恢复不到最新展开状态」；改失败重排属小改动，随下一轮 outline 工作拾起 |
+| PR88.9 | Minor | `StatefulOutlineView` 展开状态合并持久化在窗口期内被 `beginFiltering` 打断时静默丢弃、不重排。**另有第二条丢弃路径**（第三轮补注，2026-08-13）：`scheduledExpansionPersistStructureVersion == dataStructureVersion` 守卫失配时同样静默丢弃且不重排（`StatefulOutlineView.swift:309`）——该守卫是第二轮修 `PR88R2.1` 时（`3a99ca68`）才加入的，本条初次登记时并不存在。修法相同（失败时重排一次），但**两条路径都要修**，只修 `filteringState` 那一半等于没修 | 后果限于「重启后恢复不到最新展开状态」；改失败重排属小改动，随下一轮 outline 工作拾起 |
 | PR88.10 | Minor | `RuntimeInterfaceCache` 仅按条数封顶（16），无字节预算/内存压力驱逐 | 稳态基线已降至 239 MB，大接口常驻敏感度上升；建议补字节预算或改 `NSCache`，需要作者对 16 的窗口做实测后定 |
 | PR88.12 | Minor | `SharedLocalEngineTestLock` 启动屏障无 deadline，沙盒环境下整个 target 静默挂死 | 补 deadline + `Issue.record`；测试基建项，随下一轮测试工作拾起 |
 | PR88.13 | Minor | 测试直写进程级 `Settings` / `AppDefaults`（UserDefaults 支撑），跨 suite 可见且崩溃时污染真实偏好 | 正解是注入 `UserDefaults(suiteName:)`；改动面涉及 Settings 依赖注入，单独立项 |

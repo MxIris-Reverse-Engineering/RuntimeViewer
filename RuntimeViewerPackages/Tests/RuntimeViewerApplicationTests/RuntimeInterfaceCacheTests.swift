@@ -118,6 +118,86 @@ struct RuntimeInterfaceCacheTests {
         )
     }
 
+    /// Filing the answer under the resolved object is only half the link
+    /// flow. The *request* key — the synthetic object built at the click
+    /// site — was cleared and never written back, so every later click on
+    /// the same token missed and regenerated the whole interface with
+    /// whatever detail flags the content pane is carrying, while the
+    /// byte-identical answer sat one key over. Back / Forward and "Open in
+    /// New Tab" over one token repeat that forever.
+    @Test("clicking the same type token twice costs one fetch")
+    func repeatedResolutionOfTheSameTokenHitsCache() async throws {
+        let fetchRecorder = FetchRecorder()
+        let documentState = DocumentState()
+        let clickedToken = makeRuntimeObject(named: "CacheFixtureRepeatToken")
+        let resolvedType = makeRuntimeObject(named: "CacheFixtureRepeatType")
+        let interfaceCache = RuntimeInterfaceCache(documentState: documentState) { object, _ in
+            fetchRecorder.recordFetch(of: object.name)
+            return RuntimeObjectInterface(object: resolvedType, interfaceString: "class CacheFixture {}")
+        }
+
+        let firstResolution = try await interfaceCache.interface(for: clickedToken, options: .init())
+        #expect(firstResolution?.object == resolvedType)
+        #expect(fetchRecorder.totalFetchCount == 1)
+
+        let secondResolution = try await interfaceCache.interface(for: clickedToken, options: .init())
+        #expect(secondResolution?.object == resolvedType)
+        #expect(
+            fetchRecorder.totalFetchCount == 1,
+            "a second click on the same token must follow the learned redirect to the resolved object"
+        )
+    }
+
+    /// Two fetches with different request keys can converge on one storage
+    /// key: a link click resolving a synthetic token into O while another
+    /// tab is already fetching O directly. Whichever finishes first stores
+    /// `.ready` there; the other's cleanup must not delete it. An
+    /// unconditional `entries[key] = nil` destroyed the live entry *and*
+    /// stranded its key in `readyKeysByRecency`, where the phantom
+    /// permanently consumed one of the sixteen slots.
+    @Test("a failing fetch does not delete an entry another fetch stored under the same key")
+    func failingFetchLeavesAConvergedEntryIntact() async throws {
+        let fetchRecorder = FetchRecorder()
+        let documentState = DocumentState()
+        let clickedToken = makeRuntimeObject(named: "CacheFixtureConvergedToken")
+        let resolvedType = makeRuntimeObject(named: "CacheFixtureConvergedType")
+        let interfaceCache = RuntimeInterfaceCache(documentState: documentState) { object, _ in
+            fetchRecorder.recordFetch(of: object.name)
+            if object == resolvedType {
+                // The display fetch: outlives the resolution fetch, then fails.
+                try? await Task.sleep(for: .milliseconds(150))
+                throw StubInterfaceFetchError()
+            }
+            // The resolution fetch: converges on the resolved type's key and
+            // finishes first.
+            try? await Task.sleep(for: .milliseconds(30))
+            return RuntimeObjectInterface(object: resolvedType, interfaceString: "class CacheFixture {}")
+        }
+
+        async let displayResult: RuntimeObjectInterface? = interfaceCache.interface(for: resolvedType, options: .init())
+        try await Task.sleep(for: .milliseconds(10))
+        let resolution = try await interfaceCache.interface(for: clickedToken, options: .init())
+        #expect(resolution?.object == resolvedType)
+
+        // `async let` bindings cannot be captured by the `#expect(throws:)`
+        // closure, so the failure is observed directly.
+        var displayFetchThrew = false
+        do {
+            _ = try await displayResult
+        } catch is StubInterfaceFetchError {
+            displayFetchThrew = true
+        }
+        #expect(displayFetchThrew, "the display fetch was set up to fail")
+
+        let fetchCountBeforeReadback = fetchRecorder.totalFetchCount
+        let readback = try await interfaceCache.interface(for: resolvedType, options: .init())
+        #expect(readback?.object == resolvedType)
+        #expect(
+            fetchRecorder.totalFetchCount == fetchCountBeforeReadback,
+            "the entry the resolution fetch stored must survive the other fetch's failure"
+        )
+    }
+
     // MARK: - Errors and nil results are never cached
 
     @Test("a failed fetch is not cached — the next lookup retries")

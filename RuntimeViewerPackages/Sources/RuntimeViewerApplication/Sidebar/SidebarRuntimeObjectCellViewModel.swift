@@ -264,11 +264,18 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
                 .lineBreakeMode(.byTruncatingTail)
         }
 
-        guard let range = currentAndChildrenNames.ranges(of: runtimeObject.displayName).first else {
-            return title
-        }
-
-        let currentNSRange = NSRange(currentAndChildrenNames.integerRange(from: range))
+        // This row's own name is the prefix of its subtree haystack by
+        // construction — `currentAndChildrenNames` builds
+        // "displayName child1 child2 …" and `haystack(for:)` matches it
+        // byte for byte. Searching the haystack for the name rediscovered
+        // offset 0 by scanning the entire subtree string, on every row of
+        // every keystroke; `ranges(of:)` collects *all* occurrences, so it
+        // could not even stop at the first hit.
+        //
+        // Offsets stay in Characters, matching `integerRange(from:)`
+        // (`distance(from:to:)`), so the ranges compared below are
+        // unchanged.
+        let currentNSRange = NSRange(location: 0, length: runtimeObject.displayName.count)
 
         for resultNSRange in filterResult.ranges {
             guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { continue }

@@ -67,6 +67,18 @@ public final class RuntimeInterfaceCache {
     /// (and enter this list) or are removed.
     private var readyKeysByRecency: [Key] = []
 
+    /// Learned redirects from a request key to the key its answer was filed
+    /// under. Filing by `interface.object` is what makes the post-push
+    /// display fetch hit, but it leaves the *request* key holding nothing —
+    /// so without this table a second click on the same type token misses
+    /// forever while its answer sits one key over, and regenerates the whole
+    /// interface with every detail flag the content pane is using.
+    ///
+    /// Redirects outlive their target's eviction. A stale one costs one
+    /// extra dictionary lookup and then misses exactly as it would have
+    /// anyway, and the following store overwrites it.
+    private var storageKeysByRequestKey: [Key: Key] = [:]
+
     /// Bumped by `invalidateAll()`. A fetch only stores its result when the
     /// generation it started under is still current.
     private var generation = 0
@@ -111,11 +123,15 @@ public final class RuntimeInterfaceCache {
         options: RuntimeObjectInterface.GenerationOptions
     ) async throws -> RuntimeObjectInterface? {
         let key = Key(object: object, options: options)
+        // A previous fetch under this request key may have filed its answer
+        // elsewhere (see `storageKeysByRequestKey`); follow the redirect
+        // before declaring a miss.
+        let lookupKey = storageKeysByRequestKey[key] ?? key
 
-        if let entry = entries[key] {
+        if let entry = entries[lookupKey] {
             switch entry {
             case .ready(let interface):
-                markRecentlyUsed(key)
+                markRecentlyUsed(lookupKey)
                 return interface
             case .inFlight(let task):
                 return try await task.value
@@ -125,17 +141,22 @@ public final class RuntimeInterfaceCache {
         let fetchGeneration = generation
         let fetcher = fetcher
         let task = Task { try await fetcher(object, options) }
-        entries[key] = .inFlight(task)
+        // Parked under the redirect target so concurrent callers for the
+        // same object join this fetch instead of starting a second one.
+        // Resolution is deterministic for a given request, so an existing
+        // redirect names the key this fetch is about to store under anyway;
+        // a data change would have flushed the table along with the entries.
+        entries[lookupKey] = .inFlight(task)
 
-        // Only this creator path mutates the entry below: callers that
-        // arrived while the fetch was in flight are awaiting `task.value`
-        // in the branch above and never touch storage, and after a flush
-        // the generation guard keeps this path's hands off whatever a
-        // newer fetch may have stored under the same key.
+        // Storage below is guarded two ways: the generation token keeps a
+        // straggler from resurrecting an entry a flush dropped, and
+        // `clearInFlight(_:ifStillOwnedBy:)` keeps this path from deleting
+        // an entry a *different* request key's fetch legitimately installed
+        // under the same storage key.
         do {
             let interface = try await task.value
             if generation == fetchGeneration {
-                entries[key] = nil
+                clearInFlight(lookupKey, ifStillOwnedBy: task)
                 if let interface {
                     // Indexed by the interface's own object, not the
                     // requested one. A link click asks about a *synthetic*
@@ -153,16 +174,36 @@ public final class RuntimeInterfaceCache {
                     let storageKey = Key(object: interface.object, options: options)
                     entries[storageKey] = .ready(interface)
                     markRecentlyUsed(storageKey)
+                    if storageKey != key {
+                        storageKeysByRequestKey[key] = storageKey
+                    }
                     evictBeyondCapacity()
                 }
             }
             return interface
         } catch {
             if generation == fetchGeneration {
-                entries[key] = nil
+                clearInFlight(lookupKey, ifStillOwnedBy: task)
             }
             throw error
         }
+    }
+
+    /// Removes the in-flight entry only while it is still *this* fetch's.
+    ///
+    /// Two fetches with different request keys can converge on one storage
+    /// key — a link click resolving a synthetic object into O while another
+    /// tab is already fetching O directly. Whichever finishes first stores
+    /// `.ready` under that shared key; an unconditional delete by the other
+    /// would destroy a live entry and strand its key in
+    /// `readyKeysByRecency`, where the phantom permanently consumes an LRU
+    /// slot and can later evict a healthy neighbour.
+    private func clearInFlight(
+        _ key: Key,
+        ifStillOwnedBy task: Task<RuntimeObjectInterface?, Swift.Error>
+    ) {
+        guard case .inFlight(let storedTask) = entries[key], storedTask == task else { return }
+        entries[key] = nil
     }
 
     /// Drops every entry and revokes in-flight fetches' right to store
@@ -172,6 +213,9 @@ public final class RuntimeInterfaceCache {
         generation &+= 1
         entries.removeAll()
         readyKeysByRecency.removeAll()
+        // Redirects describe resolutions made against the old data set; a
+        // reload can move a type to a different image.
+        storageKeysByRequestKey.removeAll()
     }
 
     private func markRecentlyUsed(_ key: Key) {
