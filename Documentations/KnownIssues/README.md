@@ -56,3 +56,16 @@ when picking up follow-up work.
   transformer skew, unreachable applyNodes guard), 1 claim refuted
   (specialization flushes the whole interface cache, so no dead entries),
   6 backlogged.
+- [2026-08-13-pr88-max-review-findings.md](2026-08-13-pr88-max-review-findings.md) —
+  adjudications for the third (max) review pass on PR #88, IDs `PR88R3.<N>`.
+  No finding was a regression this round — every one is an optimization that
+  covered only half its ground. 5 fixed in-branch (link-jump cache misses its
+  own request key; fuzzy-mode title rebuild scanning the whole subtree
+  haystack; Open Quickly haystack builds not deduplicated, per-keystroke sweep
+  of the warm cell cache, and reload invalidation landing outside the turn
+  that installs the nodes), 2 归并被推翻并独立登记 (root pipeline's
+  cancellation check covers nothing — `PR88R2.15(d)`; object pipeline's
+  snapshot descends into scope-pruned subtrees), 1 补注 on `PR88.9` (a second
+  discard path introduced by the `PR88R2.1` fix), 5 false positive / no-fix —
+  including the phantom-LRU-key claim **改判为可达但无害**, whose write-up
+  records that fixing the cache-key finding makes it easier to reach.
