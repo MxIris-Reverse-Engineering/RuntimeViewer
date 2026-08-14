@@ -193,6 +193,38 @@ struct RuntimeInterfaceCacheTests {
         )
     }
 
+    /// Cache identity is `RuntimeObjectKey` — `(imagePath, name, kind)` —
+    /// so the fields a click site cannot know do not split the entry. The
+    /// synthetic link target carries the *displaying* object's `children`
+    /// and a `displayName` assembled from the printed token, and folding
+    /// either into identity made the post-push display fetch a guaranteed
+    /// miss for a type the cache already held.
+    @Test("children and displayName do not split a cache entry")
+    func syntheticTargetSharesTheAuthoritativeObjectsEntry() async throws {
+        let fetchRecorder = FetchRecorder()
+        let documentState = DocumentState()
+        let authoritativeType = makeRuntimeObject(named: "CacheFixtureSharedIdentity")
+        let strayChild = makeRuntimeObject(named: "CacheFixtureStrayChild")
+        let syntheticTarget = RuntimeObject(
+            name: authoritativeType.name,
+            displayName: authoritativeType.displayName + authoritativeType.displayName,
+            kind: authoritativeType.kind,
+            secondaryKind: nil,
+            imagePath: authoritativeType.imagePath,
+            children: [strayChild],
+            properties: []
+        )
+        let interfaceCache = makeCache(documentState: documentState, fetchRecorder: fetchRecorder)
+
+        _ = try await interfaceCache.interface(for: syntheticTarget, options: .init())
+        _ = try await interfaceCache.interface(for: authoritativeType, options: .init())
+
+        #expect(
+            fetchRecorder.totalFetchCount == 1,
+            "a synthetic link target must share the entry of the object it names"
+        )
+    }
+
     /// Two fetches with different request keys can converge on one storage
     /// key: a link click resolving a synthetic token into O while another
     /// tab is already fetching O directly. Whichever finishes first stores

@@ -42,9 +42,25 @@ public final class RuntimeInterfaceCache {
     /// swapped mid-document.
     typealias Fetcher = @Sendable (RuntimeObject, RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface?
 
+    /// Cache identity for one generated interface.
+    ///
+    /// The object half is `RuntimeObjectKey` — `(imagePath, name, kind)` —
+    /// not the whole `RuntimeObject`. It is the identity
+    /// `RuntimeSwiftSection.interfaceByObject` already uses for the very
+    /// interfaces this cache stores, so a finer key here can only produce
+    /// misses the engine itself does not have. `RuntimeObject` additionally
+    /// folds in `children` (recursive), `displayName` and `properties`, so
+    /// the old key walked a whole subtree on every lookup, and a synthetic
+    /// link target carrying the displaying object's `children` could never
+    /// match the authoritative object it resolved to.
     private struct Key: Hashable {
-        let object: RuntimeObject
+        let objectKey: RuntimeObjectKey
         let options: RuntimeObjectInterface.GenerationOptions
+
+        init(object: RuntimeObject, options: RuntimeObjectInterface.GenerationOptions) {
+            self.objectKey = object.key
+            self.options = options
+        }
     }
 
     private enum Entry {
@@ -73,6 +89,12 @@ public final class RuntimeInterfaceCache {
     /// so without this table a second click on the same type token misses
     /// forever while its answer sits one key over, and regenerates the whole
     /// interface with every detail flag the content pane is using.
+    ///
+    /// Only cross-image links reach this table: `RuntimeObjectKey` folds
+    /// identity to `(imagePath, name, kind)`, and the click site can only
+    /// stamp the *displaying* object's `imagePath` onto its synthetic
+    /// target, so a same-image link resolves to its own key and records no
+    /// redirect at all.
     ///
     /// Redirects outlive their target's eviction. A stale one costs one
     /// extra dictionary lookup and then misses exactly as it would have
@@ -162,17 +184,16 @@ public final class RuntimeInterfaceCache {
                 if let interface {
                     // Indexed by the interface's own object, not the
                     // requested one. A link click asks about a *synthetic*
-                    // target built at the click site from the clicked token
-                    // — it carries the currently displayed object's
-                    // `imagePath`, and on the ObjC arm its `children` — and
-                    // the engine answers with the defining section's
+                    // target built at the click site from the clicked token,
+                    // stamped with the currently displayed object's
+                    // `imagePath` because that is all the click site knows,
+                    // and the engine answers with the defining section's
                     // authoritative `RuntimeObject`. That resolved object is
                     // what the push navigates to and what the destination
-                    // view model fetches under, and `RuntimeObject`'s
-                    // `Hashable` folds in `imagePath` and `children`, so
-                    // indexing by the request would make the display fetch a
-                    // guaranteed miss and burn a slot on an entry it can
-                    // never match.
+                    // view model fetches under, so indexing by the request
+                    // would make the display fetch a guaranteed miss for
+                    // every cross-image link and burn a slot on an entry it
+                    // can never match.
                     let storageKey = Key(object: interface.object, options: options)
                     entries[storageKey] = .ready(interface)
                     markRecentlyUsed(storageKey)
