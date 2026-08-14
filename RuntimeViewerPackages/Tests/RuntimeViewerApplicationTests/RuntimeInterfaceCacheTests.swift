@@ -148,6 +148,83 @@ struct RuntimeInterfaceCacheTests {
         )
     }
 
+    /// The redirect is consulted *before* the request key's own entry, and
+    /// it was only ever written, never erased. Once a request starts
+    /// answering to itself — background indexing brings the defining image
+    /// in, so the engine stops forwarding — the fresh, correct interface
+    /// lands under the request key while the old redirect still points one
+    /// key over. The lookup then walks straight past the right answer for
+    /// the rest of the document's life.
+    @Test("a request that starts answering to itself drops its stale redirect")
+    func selfKeyedResolutionClearsStaleRedirect() async throws {
+        let fetchRecorder = FetchRecorder()
+        let documentState = DocumentState()
+        let clickedToken = makeRuntimeObject(named: "CacheFixtureDriftToken")
+        let forwardedType = makeRuntimeObject(named: "CacheFixtureDriftForwarded")
+        let unrelatedType = makeRuntimeObject(named: "CacheFixtureDriftFiller")
+        // Capacity 1 so one unrelated fetch evicts the forwarded entry,
+        // which is what forces the token to be fetched again rather than
+        // served through the redirect.
+        let interfaceCache = RuntimeInterfaceCache(documentState: documentState, capacity: 1) { object, _ in
+            fetchRecorder.recordFetch(of: object.name)
+            // The token's defining image is not indexed on the first ask,
+            // so the engine forwards it; afterwards it answers with the
+            // token itself.
+            let isFirstResolution = fetchRecorder.fetchCount(for: object.name) == 1
+            let resolvedObject = (object == clickedToken && isFirstResolution) ? forwardedType : object
+            return RuntimeObjectInterface(object: resolvedObject, interfaceString: "class CacheFixture {}")
+        }
+
+        let forwardedResolution = try await interfaceCache.interface(for: clickedToken, options: .init())
+        #expect(forwardedResolution?.object == forwardedType)
+
+        // Evict the forwarded entry; the redirect deliberately outlives it.
+        _ = try await interfaceCache.interface(for: unrelatedType, options: .init())
+
+        let selfResolution = try await interfaceCache.interface(for: clickedToken, options: .init())
+        #expect(selfResolution?.object == clickedToken)
+        #expect(fetchRecorder.totalFetchCount == 3)
+
+        let repeatResolution = try await interfaceCache.interface(for: clickedToken, options: .init())
+        #expect(repeatResolution?.object == clickedToken)
+        #expect(
+            fetchRecorder.totalFetchCount == 3,
+            "the stale redirect must not hide the entry the previous fetch just stored under the request key"
+        )
+    }
+
+    /// Cache identity is `RuntimeObjectKey` — `(imagePath, name, kind)` —
+    /// so the fields a click site cannot know do not split the entry. The
+    /// synthetic link target carries the *displaying* object's `children`
+    /// and a `displayName` assembled from the printed token, and folding
+    /// either into identity made the post-push display fetch a guaranteed
+    /// miss for a type the cache already held.
+    @Test("children and displayName do not split a cache entry")
+    func syntheticTargetSharesTheAuthoritativeObjectsEntry() async throws {
+        let fetchRecorder = FetchRecorder()
+        let documentState = DocumentState()
+        let authoritativeType = makeRuntimeObject(named: "CacheFixtureSharedIdentity")
+        let strayChild = makeRuntimeObject(named: "CacheFixtureStrayChild")
+        let syntheticTarget = RuntimeObject(
+            name: authoritativeType.name,
+            displayName: authoritativeType.displayName + authoritativeType.displayName,
+            kind: authoritativeType.kind,
+            secondaryKind: nil,
+            imagePath: authoritativeType.imagePath,
+            children: [strayChild],
+            properties: []
+        )
+        let interfaceCache = makeCache(documentState: documentState, fetchRecorder: fetchRecorder)
+
+        _ = try await interfaceCache.interface(for: syntheticTarget, options: .init())
+        _ = try await interfaceCache.interface(for: authoritativeType, options: .init())
+
+        #expect(
+            fetchRecorder.totalFetchCount == 1,
+            "a synthetic link target must share the entry of the object it names"
+        )
+    }
+
     /// Two fetches with different request keys can converge on one storage
     /// key: a link click resolving a synthetic token into O while another
     /// tab is already fetching O directly. Whichever finishes first stores
