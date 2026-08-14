@@ -163,6 +163,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 // the winner.
             } catch {
                 self.loadState = .loadError(error)
+                self.invalidateNodeDerivedState()
                 #log(.error, "\(error)")
             }
             if self.currentReloadGeneration == myGeneration {
@@ -345,6 +346,12 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             try Task.checkCancellation()
             await MainActor.run {
                 self.loadState = .notLoaded
+                // The reload ends here too. A subclass whose derived state
+                // is keyed on the previous object list must still drop it,
+                // or an Open Quickly pass scheduled before the reload keeps
+                // its generation token valid and publishes rows for an image
+                // the engine no longer reports as loaded.
+                self.invalidateNodeDerivedState()
             }
             return
         }
@@ -393,13 +400,13 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             } else {
                 self.nodes = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
             }
-            self.didInstallReloadedNodes()
+            self.invalidateNodeDerivedState()
             scheduleRefilter()
         }
     }
 
     /// Hook for subclass state derived from `nodes`, called inside the same
-    /// synchronous main-actor block that installs them.
+    /// synchronous main-actor block that settles the load state.
     ///
     /// Invalidating derived state in a *later* `MainActor.run` leaves a
     /// window: `reloadData()` suspends at every one of its `MainActor.run`
@@ -408,8 +415,15 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     /// results built from the pre-reload list. Doing both in one critical
     /// section removes the window rather than narrowing it — the same shape
     /// `installRebuiltNodes(_:)` uses on the root sidebar.
+    ///
+    /// Every terminal outcome of a reload calls this, not only the one that
+    /// installs nodes: `.notLoaded` and `.loadError` end the reload just as
+    /// definitively, and skipping them leaves a filter pass alive against a
+    /// list the document has stopped standing behind. Cancellation is the
+    /// one exception — the reload that superseded this one runs the
+    /// invalidation itself.
     @MainActor
-    func didInstallReloadedNodes() {}
+    func invalidateNodeDerivedState() {}
 
     /// Single entry point for every filter trigger (initial load, search
     /// change, scope change, specialization splice). Snapshots the tree on

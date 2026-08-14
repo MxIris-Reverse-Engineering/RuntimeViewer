@@ -165,8 +165,8 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         }
     }
 
-    override func didInstallReloadedNodes() {
-        super.didInstallReloadedNodes()
+    override func invalidateNodeDerivedState() {
+        super.invalidateNodeDerivedState()
         currentOpenQuicklyFilterTask?.cancel()
         currentOpenQuicklyFilterTask = nil
         currentOpenQuicklyFilterGeneration &+= 1
