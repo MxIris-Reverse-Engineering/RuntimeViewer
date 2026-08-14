@@ -117,20 +117,6 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         return computedNames
     }
 
-    /// Seeds the subtree-haystack cache with a string an off-main pass
-    /// already produced for this object.
-    ///
-    /// `Self.haystack(for:)` and `currentAndChildrenNames` are byte-for-byte
-    /// identical by contract, so Open Quickly can hand a freshly
-    /// materialized cell the string it matched against instead of making
-    /// the cell rebuild the whole subtree on the main actor the moment a
-    /// highlight is stamped on it. No-op once a value is cached, so it can
-    /// never contradict a locally derived haystack.
-    func seedCurrentAndChildrenNames(_ haystack: String) {
-        guard cachedCurrentAndChildrenNames == nil else { return }
-        cachedCurrentAndChildrenNames = haystack
-    }
-
     private func invalidateNamesCacheUpwards() {
         var currentCell: SidebarRuntimeObjectCellViewModel? = self
         while let cell = currentCell {
@@ -145,12 +131,15 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     /// Quickly matches all rows this way, then materializes cells only
     /// for hits).
     ///
-    /// Byte-for-byte parity with the instance property is a hard
-    /// contract: fuzzy highlight ranges are computed against this string
-    /// and later mapped by the materialized cell against ITS haystack.
-    /// Both sides therefore sort children by `displayName` and join with
-    /// single spaces — change one and you must change the other (pinned
-    /// by `OpenQuicklyLazyConstructionTests`).
+    /// What `composedTitle()` depends on is the *prefix*: both this and
+    /// `currentAndChildrenNames` put the node's own `displayName` first, so
+    /// a fuzzy range below `displayName.count` addresses the same
+    /// characters in the title as it does in the haystack it was scored
+    /// against. Byte-for-byte parity between the two builders is no longer
+    /// load-bearing — nothing crosses a range from one to the other — but
+    /// both still sort children by `displayName` and join with single
+    /// spaces, and `OpenQuicklyLazyConstructionTests` keeps them honest so
+    /// the sidebar and Open Quickly rank identical trees identically.
     static func haystack(for runtimeObject: RuntimeObject) -> String {
         let sortedChildren = runtimeObject.children.sorted { leftChild, rightChild in
             leftChild.displayName < rightChild.displayName

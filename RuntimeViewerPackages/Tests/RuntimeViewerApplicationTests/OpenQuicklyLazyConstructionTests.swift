@@ -28,9 +28,8 @@ struct OpenQuicklyLazyConstructionTests {
         let secondChild = makeRuntimeObject(displayName: "TestFramework.Parent.AChild")
         let firstChild = makeRuntimeObject(displayName: "TestFramework.Parent.Child", children: [grandchild])
         // Children intentionally out of display order: both sides must
-        // sort by displayName before joining, or fuzzy highlight ranges
-        // computed against the pure haystack would land on the wrong
-        // characters of the materialized cell's haystack.
+        // sort by displayName before joining, or the sidebar and Open
+        // Quickly would rank the same tree differently.
         let parent = makeRuntimeObject(
             displayName: "TestFramework.Parent",
             children: [firstChild, secondChild]
@@ -41,6 +40,21 @@ struct OpenQuicklyLazyConstructionTests {
             #expect(
                 SidebarRuntimeObjectCellViewModel.haystack(for: runtimeObject) == cellViewModel.currentAndChildrenNames,
                 "haystack diverged for \(runtimeObject.displayName)"
+            )
+            // The live contract behind `composedTitle()`'s constant range:
+            // a fuzzy range below `displayName.count` addresses the same
+            // characters in the rendered title as in the haystack it was
+            // scored against only while the name leads the haystack. The
+            // optimisation that replaced the old `ranges(of:)` search
+            // asserts this offset instead of deriving it, and nothing else
+            // pins it.
+            #expect(
+                SidebarRuntimeObjectCellViewModel.haystack(for: runtimeObject).hasPrefix(runtimeObject.displayName),
+                "haystack does not lead with its own displayName for \(runtimeObject.displayName)"
+            )
+            #expect(
+                cellViewModel.currentAndChildrenNames.hasPrefix(runtimeObject.displayName),
+                "cell haystack does not lead with its own displayName for \(runtimeObject.displayName)"
             )
         }
     }
