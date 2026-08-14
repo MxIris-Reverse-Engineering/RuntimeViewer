@@ -246,6 +246,15 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         let runtimeObjects = openQuicklyRuntimeObjects
         let runtimeObjectsVersion = openQuicklyRuntimeObjectsVersion
         currentOpenQuicklyFilterTask = Task { @MainActor [weak self] in
+            // This body is enqueued while `reloadData()`'s final
+            // `MainActor.run` may already be queued ahead of it, so the
+            // reload can land between scheduling and the first line here and
+            // leave `runtimeObjectsVersion` describing a list that no longer
+            // exists. Checking the generation *before* the haystack call is
+            // what keeps a superseded pass from starting a full O(N) build
+            // over the discarded list and parking it in the shared slot,
+            // where the version guard at the end then also skips the cleanup.
+            guard !Task.isCancelled, self?.currentOpenQuicklyFilterGeneration == generation else { return }
             guard let haystacks = await self?.openQuicklyHaystacks(
                 forObjectListVersion: runtimeObjectsVersion,
                 runtimeObjects: runtimeObjects
