@@ -76,7 +76,9 @@ public final class RuntimeInterfaceCache {
     ///
     /// Redirects outlive their target's eviction. A stale one costs one
     /// extra dictionary lookup and then misses exactly as it would have
-    /// anyway, and the following store overwrites it.
+    /// anyway. The store rewrites it — *including erasing it* when a request
+    /// starts answering to itself, which is the one case where leaving it
+    /// would hide a correct entry instead of merely costing a miss.
     private var storageKeysByRequestKey: [Key: Key] = [:]
 
     /// Bumped by `invalidateAll()`. A fetch only stores its result when the
@@ -176,6 +178,15 @@ public final class RuntimeInterfaceCache {
                     markRecentlyUsed(storageKey)
                     if storageKey != key {
                         storageKeysByRequestKey[key] = storageKey
+                    } else {
+                        // This request now answers to itself. A redirect
+                        // learned earlier would route the lookup above past
+                        // the entry just stored under `key`, leaving a
+                        // correct, freshly stored interface permanently
+                        // unreachable — every later request for it would
+                        // follow the redirect to a key that no longer
+                        // describes it.
+                        storageKeysByRequestKey[key] = nil
                     }
                     evictBeyondCapacity()
                 }
