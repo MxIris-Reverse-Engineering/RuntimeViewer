@@ -6,7 +6,7 @@ package final class SettingsWindowController: UIFoundationSettingsUI.SettingsWin
     fileprivate static let shared = SettingsWindowController()
 
     private init() {
-        super.init {
+        super.init(configuration: SettingsConfiguration(sidebarIconSize: 15)) {
             SettingsPage("General", id: "general", plainSymbol: "gearshape") {
                 GeneralSettingsView()
             }

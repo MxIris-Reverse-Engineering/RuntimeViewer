@@ -174,6 +174,11 @@ LLM Client
 - UIFoundation's Settings API is macOS-only. Other RuntimeViewer platforms keep
   the shared schema and an in-memory dependency value, but do not expose the
   settings window or file persistence.
+- The settings window passes `sidebarIconSize: 15` through
+  the top-level `SettingsConfiguration`. This matches the pre-migration glyph size: the old
+  20-point icon frame applied 2.5 points of padding on each side. Until that Configuration API is
+  included in a tagged UIFoundation release, local validation must enable the sibling UIFoundation
+  checkout.
 
 ## Development Guidelines
 

@@ -3,7 +3,7 @@
 - **状态**: Implemented
 - **作者**: JH
 - **日期**: 2026-08-13
-- **最后更新**: 2026-08-13
+- **最后更新**: 2026-08-14
 
 ## 摘要
 
@@ -131,6 +131,9 @@ Store 观察 class 模型的 `accessPersistedValues()`。
   `AppSettings` 也直接绑定同一个 `Settings.store`。
 - 设置窗口改为 UIFoundation 的 `SettingsWindowController`，八个业务页面以 `SettingsPage` 注册；本地
   window/sidebar/form/icon 壳层、全局 `NSSplitViewItem` swizzling 与 `SwiftUIIntrospect` 已删除。
+- 设置窗口通过顶层 `SettingsConfiguration` 把 sidebar 图标统一设为 15 pt，恢复迁移前
+  `20 pt frame - 2 × 2.5 pt padding` 得到的实际 glyph 尺寸，同时继续使用无底板、无阴影的
+  `.plainSymbol`。
 - 新增三个回归测试：旧 payload 的缺失字段兼容、dependency 动态成员写入触发 store 自动保存，以及
   `transformer` 监听不响应 `theme` 修改但响应真正的 Transformer 修改。
 - `RuntimeViewerPackages` 全部 57 个测试通过；`RuntimeViewerMCP` 独立编译通过。
@@ -144,6 +147,12 @@ Store 观察 class 模型的 `accessPersistedValues()`。
 `MachOSwiftSection` 与 `swift-semantic-string` 都声明 `OutputTransformer` target。这个既有冲突与本次
 Settings 迁移无关；项目规定的本地多仓库构建和 Distribution workspace 构建均不受影响并已通过。
 
+2026-08-14 的 sidebar 图标修正依赖尚未发布的 `SettingsConfiguration`，因此本轮只能用
+本地 UIFoundation 验证该调用。当前独立本地 package 图又停在另一处既有错配：`RuntimeViewerCore` 仍向
+`MachOSwiftSection` 请求已经移走的 `OutputTransformer` product；上级多仓库 workspace 的 lockfile 则仍是
+不含 `Settings` trait 的 UIFoundation 0.15.1。最小下游 package 已编译通过完全相同的 initializer 调用，
+整仓构建要等依赖图与 UIFoundation 发布版本同步后再恢复。
+
 ## 决策日志
 
 | 日期 | 决策 | 说明 |
@@ -152,3 +161,5 @@ Settings 迁移无关；项目规定的本地多仓库构建和 Distribution wor
 | 2026-08-13 | Accepted → In Progress | 用户明确批准直接实施；改动放在独立 feature branch。 |
 | 2026-08-13 | Implemented | 持久化、binding 与设置窗口均已接入 UIFoundation；回归测试及本地/Distribution 构建通过。 |
 | 2026-08-13 | Design amended | 值类型根 Store 会把所有监听合并到 `value`；按用户意见恢复 `@Observable class Settings`，由 UIFoundation Store 通过显式属性触达统一保存，从而保留业务属性级监听。 |
+| 2026-08-14 | Post-migration correction | 迁移后 `.plainSymbol` 从原先带 padding 的 15 pt 实际 glyph 放大到 20 pt；改由 UIFoundation 的统一 `Configuration` 显式传 15 pt。新 API 发布前，本分支的验证使用本地 UIFoundation checkout。 |
+| 2026-08-14 | API naming correction | UIFoundation 把三个呈现入口共用的配置从 window controller namespace 提升为顶层 `SettingsConfiguration`；RuntimeViewer 调用点同步写出新类型名。 |
