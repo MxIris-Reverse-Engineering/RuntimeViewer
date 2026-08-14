@@ -69,3 +69,16 @@ when picking up follow-up work.
   discard path introduced by the `PR88R2.1` fix), 5 false positive / no-fix —
   including the phantom-LRU-key claim **改判为可达但无害**, whose write-up
   records that fixing the cache-key finding makes it easier to reach.
+- [2026-08-14-pr88-max-review-pass4-findings.md](2026-08-14-pr88-max-review-pass4-findings.md) —
+  adjudications for the fourth (max) review pass on PR #88, IDs `PR88R4.<N>`.
+  Every real finding this round sits inside the two commits written to fix the
+  *third* pass (`37c7a47d`, `91e2169d`), which never got re-reviewed. 5 fixed
+  in-branch (reload invalidation skipped on the `.notLoaded` / `.loadError`
+  outcomes; a superseded Open Quickly pass rebuilding haystacks for a
+  discarded object list; a stale redirect hiding a correct cache entry; the
+  interface cache keyed by the whole recursive `RuntimeObject` instead of
+  `RuntimeObjectKey`; dead haystack seeding), 1 test gap recorded honestly
+  (`PR88R4.2`), 2 adjudicated away on adversarial re-review — the
+  `ResolvedThemeStream` `.forever` claim **改判为既存问题且后果不成立**, and
+  the Open Quickly 500-row cap **判为重报 `PR88R2.11`**. Also carries the
+  AGENTS.md §9 and Evolution 0005 corrections this batch made.

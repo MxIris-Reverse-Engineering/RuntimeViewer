@@ -648,7 +648,14 @@ let rowClicked: Signal<Candidate> = tableView.rx
 2. The data set is large enough that eager construction is visible in Instruments (typically N >= 1k, confirmed by a signpost baseline).
 3. There is no per-row UI state that cannot be derived from the model (expanded/collapsed flag, multi-select checkmark, drag-preview metadata). If you need such state, build a local `struct` conforming to `Differentiable` directly — do NOT add mutable fields onto `DifferentiableBox`.
 
-Sidebar / Inspector cellViewModels (e.g. `SidebarRuntimeObjectCellViewModel`, `InspectorSwiftSpecializationCellViewModel`) own filter-aware attributed names or async metadata loading, so they must stay eager — lazy reconstruction would drop their subscription identity. The `SpecializationTypePicker` popover is the canonical lazy case (10k+ candidates when a generic parameter has no constraint).
+**Two different things get called "lazy" here, and the eligibility tree above governs only the first:**
+
+- **Stateless lazy (`DifferentiableBox`)** — the driver array carries identity boxes and the cellViewModel is rebuilt inside the cell builder on *every* render, so nothing survives between renders. That is why the three conditions are absolute: a cellViewModel with post-init `@Observed` mutation or an Rx subscription would silently lose it. The `SpecializationTypePicker` popover is the canonical case (10k+ candidates when a generic parameter has no constraint).
+- **Lazily materialized behind a warm cache** — the driver array still carries fully-built cellViewModels, but each is constructed on first match and kept in a map for the rest of the session, so subscription identity and post-init state survive. Open Quickly uses this to avoid building a cellViewModel per row of a 14k-object image; see `SidebarRuntimeObjectListViewModel.openQuicklyCellViewModel(at:)`.
+
+`SidebarRuntimeObjectCellViewModel` owns filter-aware attributed names, so it fails the eligibility tree and must never take the first form — but it is the type Open Quickly materializes lazily in the second form, precisely because the cache means it is never *re*constructed. Inspector cellViewModels (`InspectorSwiftSpecializationCellViewModel`, `InspectorRelationshipsCellViewModel`) stay eager on both counts: their row counts are low enough that neither form pays for itself.
+
+Reach for either form only once eager 1:1 construction is measurably hurting — both trade a memo, and the invalidation it needs, for the allocation they save.
 
 ```swift
 // ViewModel — driver element is a value-type identity box, not the cellViewModel

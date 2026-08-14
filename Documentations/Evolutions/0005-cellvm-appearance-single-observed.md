@@ -130,3 +130,23 @@ cell view 的 `bind(to:)` 单订阅、单闭包内更新全部 outlet。订阅�
 - 测试：`TitleRebuildCounter` 改观察 `$appearance`（去重语义下计数含义不变，精确计数全部保持）；新增 `SidebarCellAppearanceTests`（一次过渡恰一事件、等值重放零事件、display-neutral splice 零事件——最后一项还消除了旧实现的冗余重绘）。
 
 **验收复测（2026-08-09，用户实例，同款负载：五镜像索引 + SwiftUI 全量拖拽浏览）**：浏览增量与基线完全同构（`SidebarRuntimeObjectCellViewModel` 恰为 6,895 个），两条浏览验收线全部达标——`NSRecursiveLock` 125,225 → **42,218**（9.5 MiB，验收线 ≤45k），UI/Rx 簇 46.7 → **17.7 MiB**（验收线 ≤32）。全量浏览后堆存活 242 MiB、footprint 346 MB（含 59 MB 待回收页）、索引峰值 789 MB。heap 中 `BehaviorSubject<SidebarRootCellViewModel.Appearance>` 13,189 / `BehaviorSubject<RuntimeObjectCellAppearance>` 6,896，与行数一一对应，单流化按设计生效。
+
+## 与提案的差异（2026-08-14 补记）
+
+第四轮 code review 发现落地内容与本提案的「非目标」一节直接冲突，按「提案是决策快照、
+不回头修改正文」的规则，差异登记于此，正文保持原貌。
+
+- **非目标写「**不**触碰 `SpecializationTypePickerCellViewModel`」，实际改了。** 落地记录
+  的改动清单把它与两个 Inspector cellVM 一并列入「协议 conformer 连带单流化」。原因是
+  `RuntimeObjectCellDisplayable` 从 4 个分立 driver 收敛为 1 个 `appearanceDriver` 之后，
+  所有 conformer 必须同批改造，否则不编译——即协议收敛这一步把「低基数 cellVM 不动」这条
+  非目标变成了不可能。提案写非目标时未预见到这一点。
+- **非目标写「**不**处理低基数 cellVM（Inspector 各 tab、popover 等）」，同上，实际一并改了。**
+  同一个原因。
+- **落地记录称改动清单「与提案方案一致」，这句话不准确。** 括号里的「另含协议收敛的连带面」
+  提示了这件事，但不足以让读者意识到它推翻了两条非目标。
+
+影响：一个只读到「非目标」一节的读者会以为这三个 cellVM 未被触碰，从而对它们早已被移除的
+per-outlet driver 作出错误推断。上述三点即为更正。
+
+本节不改变提案状态（仍为 `Implemented`），也不改变已落地的代码。
