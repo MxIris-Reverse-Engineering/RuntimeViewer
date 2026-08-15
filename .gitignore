@@ -19,3 +19,4 @@ DerivedData
 .derived-data-log-*
 .omc
 *.env
+RuntimeViewer.xcworkspace/xcshareddata/swiftpm
