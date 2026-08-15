@@ -593,6 +593,28 @@ minimap 默认关,因为它是唯一会占走文本宽度的一项,而内容面�
 
 修复前后:margin 6pt → 36pt,行号图层 0×0 → 8×15 且 `contents != nil`。
 
+### 工具栏穿透:滚动视图在里面,安全区到不了它(2026-08-15)
+
+内容面板故意把顶边压到父视图顶部(而不是安全区),这样文本能滚到工具栏底下、拿到 macOS 26 的
+scroll edge 模糊。`NSTextView` 那条路白拿这个效果:滚动视图**就是**面板自己的视图,AppKit 按
+安全区自动给它 content insets。
+
+`SourceEditorView` 是普通视图,**真正的滚动视图埋在它里面**,而且 `installScrollView()` 里
+明确调了 `setAutomaticallyAdjustsContentInsets:` 关掉自动调整,改由它自己用
+`defaultScrollViewContentInsets + additionalScrollViewContentInsets` 算。结果是安全区传不进去:
+首几行正文和 sticky header 直接画在工具栏上,而不是从工具栏下面滚过去。
+
+修法是把 `additionalScrollViewContentInsets.top` 设成 editor view 自己的 `safeAreaInsets.top`
+(工具栏压住它的高度),在 `viewDidLayout()` 里每次重读——工具栏、全屏、窗口 chrome 都会改它,
+而这些都不会给内容面板发通知。
+
+实测(带 toolbar 的 `.fullSizeContentView` 窗口,安全区 66pt):
+
+| | 设置前 | 设置后 |
+|---|---|---|
+| `scrollView.contentInsets.top` | 0 | 66 |
+| sticky header 在窗口中的 y | 582(紧贴顶部,在工具栏下面被压住) | 516 |
+
 ### sticky header 只有一行,是框架的设计,不是配置问题(2026-08-15)
 
 用户报告:一条源码行软换行成好几行时,sticky header 只显示第一行、右边被裁掉。
@@ -610,6 +632,15 @@ minimap 默认关,因为它是唯一会占走文本宽度的一项,而内容面�
 Xcode 自己也是这个行为。要改只能深入私有布局(拿到 `StickyHeaderStackView.headers`、
 在框架自己的 `layout()` 之后重排 line layer 并撑高 header view),脆弱且每次滚动都要跟框架抢,
 **未做**。
+
+**尚未查清的小差异:** Xcode 的 sticky header 尾部有淡出/缩小(截图里看起来像省略号),
+我们这边是硬切——放大到像素看,文字亮度一直到裁切边界都没变。框架里做这件事的是
+`headerLineLayer` 内 `enumerateSubstringsInRange:` 块里调的
+`configureCharacter(at:opacity:maximumFontSize:)`,`maxWidth` 由
+`StickyHeaderView.drawingWidth(editor:)` 给(该函数 nil 分支是 `brk`,即强制解包,
+我们没崩说明取到了正常值)。**没找到是什么条件把这段跳过了**,而不是"确认不支持"。
+二进制里没有省略号字面量,sticky header 地址区间内也没有 `setLineBreakMode:` /
+`setTruncationMode:` 调用,所以那个"省略号"很可能就是被缩到极小的最后几个字符。
 
 **已知的框架侧小泄漏:** 每次重装 minimap 会多留 8 个图层
 (`MinimapFindResultHighlightsLayer` 与 `MinimapRangeHighlightsLayer` 各 4 个),8 轮实测严格
@@ -777,5 +808,6 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 附加显示能力落地（原落地步骤 A 的主体） | 折叠 / sticky header / minimap / 行号 / scope guides 五项接入，各自一个 Settings 开关。三个 `install*` 反汇编确认无前置依赖，折叠所需的 `FoldableLanguageService` 由 `SourceModelLanguageService` 现成 conform。查明 `install*` 不幂等（会重复注册 margin accessory 与 event consumer）而 `uninstall*` 与 `show/hideScopeGuides` 幂等，故 bridge 保存已应用状态、只在翻转时调用。 |
 | 2026-08-15 | 结构性验证可以离屏做 | 「离屏判据不可靠」那条只针对渲染结果。装没装上是视图/图层树里有没有那个类，与 `cacheDisplay` 无关，8 轮全开/全关的计数 harness 是可信证据。顺带测出框架侧小泄漏：重装 minimap 每次多留 8 个高亮图层，严格线性，不为此绕开框架 API。 |
 | 2026-08-15 | 行号一直没显示，真因是缺字体 | 此前记为「已完成」是错的——只验证了 gutter 视图存在，没验证行号有没有像素。`lineNumberFont` 为 nil 时行号图层测得 0×0、gutter 塌成 6pt，看起来像功能没接上。`.xccolortheme` 没有 gutter 键，字体只能由调用方传，故 `applyTheme` 增加 `lineNumberFont` 参数；改字体后还要再调一次 `enableLineNumbers()` 才会重绘。 |
+| 2026-08-15 | 工具栏穿透需要显式传 content inset | `SourceEditorView` 把真正的滚动视图埋在里面，且 `installScrollView()` 关掉了 `automaticallyAdjustsContentInsets`，安全区传不进去，正文和 sticky header 画到了工具栏上。改为在 `viewDidLayout()` 把 editor view 的 `safeAreaInsets.top` 写进 `additionalScrollViewContentInsets.top`。这是 `NSTextView` 路径白拿、这里必须自己接的一项。 |
 | 2026-08-15 | sticky header 单行是框架设计 | `headerLineLayer` 给 line layer 传的宽度是 `nil`（指令级确认），即不限宽不换行；`StickyHeaderViewContents` 也只有一个 line layer。溢出尾部的淡出才是 `maxWidth` 的用途。Xcode 同行为，不改。 |
 | 2026-08-15 | 设置面板文案更正（原落地步骤 D） | 「语法着色来自 Xcode 自己的 tokenizer，比内置视图不准」在语义高亮落地后已不成立，改为说明着色同样来自运行时元数据，并写明唯一例外是跨两段语义 run 的 token 保留框架自己的判断。 |

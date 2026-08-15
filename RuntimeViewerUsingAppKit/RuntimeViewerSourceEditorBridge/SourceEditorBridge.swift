@@ -183,6 +183,11 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         }
     }
 
+    func applyTopContentInset(_ topInset: CGFloat) {
+        guard sourceEditorView.additionalScrollViewContentInsets.top != topInset else { return }
+        sourceEditorView.additionalScrollViewContentInsets.top = topInset
+    }
+
     func scrollToCharacterIndex(_ characterIndex: Int) {
         // TODO: needs SourceEditorView's scroll-to-position API reconstructed; the display
         // path works without it, so it is left unimplemented rather than half-guessed.

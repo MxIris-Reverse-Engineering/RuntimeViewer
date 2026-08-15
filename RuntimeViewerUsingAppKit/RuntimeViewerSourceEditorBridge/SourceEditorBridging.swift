@@ -86,6 +86,19 @@ protocol SourceEditorBridging: NSObjectProtocol {
     ///   bridge side would be a second implementation of the framework's own parser.
     func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont)
 
+    /// Insets the scrolled content by `topInset` without moving the editor view.
+    ///
+    /// The content pane deliberately extends under the window's toolbar so text scrolls beneath
+    /// it. With `NSTextView` that came for free: the scroll view was the pane's own view, and
+    /// AppKit adjusted its content insets from the safe area. Here the scroll view is buried
+    /// inside `SourceEditorView`, which switches that adjustment off and drives the insets
+    /// itself — so without this the first lines and the sticky header are drawn over the
+    /// toolbar instead of under it.
+    ///
+    /// - Parameter topInset: usually the editor view's own `safeAreaInsets.top`, which is
+    ///   exactly the height the toolbar overlaps it by.
+    func applyTopContentInset(_ topInset: CGFloat)
+
     /// Scrolls so that `characterIndex` — a UTF-16 offset into the source last passed to
     /// `setSource(_:languageIdentifier:)` — is visible.
     func scrollToCharacterIndex(_ characterIndex: Int)

@@ -238,6 +238,13 @@ extension SourceEditor.TextAttributeOverrideProvider {
     get
     set
   }
+  // Added on top of `defaultScrollViewContentInsets` to make the scroll view's content insets.
+  // `installScrollView()` turns `automaticallyAdjustsContentInsets` off on the scroll view it
+  // builds, so the safe area does not reach it on its own — this is the way in.
+  public var additionalScrollViewContentInsets: AppKit.NSEdgeInsets {
+    get
+    set
+  }
   // Nil until a gutter is installed; that is also what turns line numbers on.
   public var gutter: SourceEditor.SourceEditorGutter? {
     get

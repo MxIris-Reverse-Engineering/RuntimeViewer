@@ -75,9 +75,26 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
             bridge.editorView
         }
 
+        // Top goes to the superview, not the safe area, so text scrolls under the toolbar the
+        // way it does in the `NSTextView` pane. What that pane got for free — AppKit deriving
+        // the scroll view's content insets from the safe area — has to be handed over
+        // explicitly here, in `viewDidLayout`, because the scroll view is buried inside
+        // `SourceEditorView` and it turns that adjustment off.
         bridge.editorView.snp.makeConstraints { make in
-            make.top.leading.trailing.bottom.equalTo(view.safeAreaLayoutGuide)
+            make.top.equalToSuperview()
+            make.leading.trailing.bottom.equalTo(view.safeAreaLayoutGuide)
         }
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+
+        guard let bridge else { return }
+        // The editor view's own safe area is exactly how far the toolbar overlaps it, which is
+        // also what has to come off the scrolled content. Re-read every layout rather than
+        // stored: it changes with the toolbar, full-screen and window chrome, and none of that
+        // arrives as a notification the content pane sees.
+        bridge.applyTopContentInset(bridge.editorView.safeAreaInsets.top)
     }
 
     override func setupBindings(for viewModel: ContentTextViewModel) {
