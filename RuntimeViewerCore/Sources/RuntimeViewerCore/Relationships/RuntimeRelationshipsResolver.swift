@@ -58,8 +58,8 @@ actor RuntimeRelationshipsResolver {
         //
         // For ObjC class/protocol targets, `object.name` is the raw ObjC
         // class/protocol name (the same string used as the key in
-        // `RuntimeObjCInterfaceIndexer.classes`/`.protocols` and as the
-        // `superclassByClassName` key in `RuntimeObjCInterfaceIndexer`).
+        // `ObjCInterfaceIndexer.classes`/`.protocols` and as the
+        // `superclassByClassName` key in `ObjCInterfaceIndexer`).
         //
         // For Swift class targets, `object.name` is the mangled string
         // produced by `mangleAsString(typeName.node)`, which is the
@@ -82,7 +82,7 @@ actor RuntimeRelationshipsResolver {
             if wantsSubclasses {
                 if let objcKey {
                     if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
-                        for reference in objcSection.objcIndexer.subclasses(of: objcKey) {
+                        for reference in objcSection.objcRelationshipIndex.subclasses(of: objcKey) {
                             if let runtimeObject = await materializeRelationshipReference(reference) {
                                 subclasses.append(runtimeObject)
                             }
@@ -103,7 +103,7 @@ actor RuntimeRelationshipsResolver {
             if wantsConformers {
                 if isObjCProtocol {
                     if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
-                        for reference in objcSection.objcIndexer.conformingClasses(toProtocol: object.name) {
+                        for reference in objcSection.objcRelationshipIndex.conformingClasses(toProtocol: object.name) {
                             if let runtimeObject = await materializeRelationshipReference(reference) {
                                 conformers.append(runtimeObject)
                             }
@@ -161,7 +161,7 @@ actor RuntimeRelationshipsResolver {
     /// section. When that lookup fails (e.g. an `@objc(customName)` class
     /// whose raw name isn't a Swift mangling), the entry is dropped rather
     /// than fall back to `.objc(.type(.class))`.
-    private func materializeRelationshipReference(_ reference: ObjCClassReference) async -> RuntimeObject? {
+    private func materializeRelationshipReference(_ reference: RuntimeObjCClassReference) async -> RuntimeObject? {
         if reference.isSwiftStable {
             // `demangleAsNode` / `mangleAsString` each ship a sync and an async
             // overload; the compiler picks the async one inside this `async`
