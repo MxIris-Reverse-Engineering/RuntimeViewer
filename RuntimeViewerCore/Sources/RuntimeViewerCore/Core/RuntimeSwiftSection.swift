@@ -154,7 +154,7 @@ actor RuntimeSwiftSection {
         self.machO = machO
         #log(.debug, "Creating Swift Interface Components")
         let eventHandlers: [SwiftIndexEvents.Handler] = progressContinuation.map { [ProgressEventHandler(continuation: $0)] } ?? []
-        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, eventHandlers: eventHandlers)
+        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: imagePath, eventHandlers: eventHandlers)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
         // `prepare()` runs the upstream extraction and then builds the
         // relationship reverse tables — that work now lives in
@@ -1378,7 +1378,8 @@ actor RuntimeSwiftSectionFactory {
     private var indexedProtocolByCandidateID: [String: IndexedProtocolEntry] = [:]
 
     init() {
-        self.indexer = RuntimeSwiftInterfaceIndexer(machO: .current())
+        let machO = MachOImage.current()
+        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: machO.imagePath)
     }
 
     func existingSection(for imagePath: String) -> RuntimeSwiftSection? {
@@ -1426,8 +1427,16 @@ actor RuntimeSwiftSectionFactory {
         return (false, section)
     }
 
+    /// Drop an image's section, detaching its indexer from the aggregate first.
+    ///
+    /// The detach is what actually frees memory: `indexer` outlives every
+    /// section, so dropping the `sections` entry alone leaves the image's whole
+    /// declaration graph reachable through `indexer.subIndexers`. See
+    /// `RuntimeSwiftInterfaceIndexer.removeSubIndexer(_:)`.
     func removeSection(for imagePath: String) {
-        sections.removeValue(forKey: imagePath)
+        if let section = sections.removeValue(forKey: imagePath) {
+            indexer.removeSubIndexer(section.indexer)
+        }
         // Drop any mangledID entries originating from this image so a
         // subsequent `addSubIndexer`-driven re-register can repopulate them.
         indexedTypeByCandidateID = indexedTypeByCandidateID.filter { _, value in
@@ -1439,6 +1448,9 @@ actor RuntimeSwiftSectionFactory {
     }
 
     func removeAllSections() {
+        for section in sections.values {
+            indexer.removeSubIndexer(section.indexer)
+        }
         sections.removeAll()
         indexedTypeByCandidateID.removeAll()
         indexedProtocolByCandidateID.removeAll()

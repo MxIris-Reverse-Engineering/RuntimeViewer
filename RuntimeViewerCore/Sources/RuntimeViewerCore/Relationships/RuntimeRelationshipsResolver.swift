@@ -78,48 +78,46 @@ actor RuntimeRelationshipsResolver {
         var subclasses: OrderedSet<RuntimeObject> = []
         var conformers: OrderedSet<RuntimeObject> = []
 
-        for imagePath in await indexedImagePaths() {
-            if wantsSubclasses {
-                if let objcKey {
-                    if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
-                        for reference in objcSection.objcRelationshipIndex.subclasses(of: objcKey) {
-                            if let runtimeObject = await materializeRelationshipReference(reference) {
-                                subclasses.append(runtimeObject)
-                            }
-                        }
-                    }
-                }
-                if let swiftMangledKey {
-                    if let swiftSection = await swiftSectionFactory.existingSection(for: imagePath) {
-                        for childMangled in swiftSection.indexer.subclasses(of: swiftMangledKey) {
-                            if let runtimeObject = await swiftSection.makeRuntimeObject(forMangledTypeName: childMangled) {
-                                subclasses.append(runtimeObject)
-                            }
-                        }
+        // One query per side, not one per image.
+        //
+        // Each factory's `indexer` is the cross-image aggregate every per-image
+        // indexer registers with, so a single call already spans every loaded
+        // image. This used to walk `indexedImagePaths()` and ask each image
+        // separately — hundreds of iterations and two actor hops apiece to get
+        // "nothing" from almost all of them — because Evolution 0007 had removed
+        // the ObjC aggregate. 0008 restores it and reads it from here.
+        if wantsSubclasses {
+            if let objcKey {
+                for reference in await objcSectionFactory.indexer.subclasses(of: objcKey) {
+                    if let runtimeObject = await materializeObjCReference(reference) {
+                        subclasses.append(runtimeObject)
                     }
                 }
             }
-
-            if wantsConformers {
-                if isObjCProtocol {
-                    if let objcSection = await objcSectionFactory.existingSection(for: imagePath) {
-                        for reference in objcSection.objcRelationshipIndex.conformingClasses(toProtocol: object.name) {
-                            if let runtimeObject = await materializeRelationshipReference(reference) {
-                                conformers.append(runtimeObject)
-                            }
-                        }
+            if let swiftMangledKey {
+                for reference in await swiftSectionFactory.indexer.subclasses(of: swiftMangledKey) {
+                    if let runtimeObject = await materializeSwiftReference(reference) {
+                        subclasses.append(runtimeObject)
                     }
                 }
-                if isSwiftProtocol {
-                    if let swiftSection = await swiftSectionFactory.existingSection(for: imagePath) {
-                        // Swift protocols are stored in the indexer under their demangled name
-                        // (e.g. "Foundation.LocalizedError"); RuntimeObject.displayName carries
-                        // exactly that string.
-                        for mangled in swiftSection.indexer.conformingTypes(of: object.displayName) {
-                            if let runtimeObject = await swiftSection.makeRuntimeObject(forMangledTypeName: mangled) {
-                                conformers.append(runtimeObject)
-                            }
-                        }
+            }
+        }
+
+        if wantsConformers {
+            if isObjCProtocol {
+                for reference in await objcSectionFactory.indexer.conformingClasses(toProtocol: object.name) {
+                    if let runtimeObject = await materializeObjCReference(reference) {
+                        conformers.append(runtimeObject)
+                    }
+                }
+            }
+            if isSwiftProtocol {
+                // Swift protocols are stored in the indexer under their demangled name
+                // (e.g. "Foundation.LocalizedError"); RuntimeObject.displayName carries
+                // exactly that string.
+                for reference in await swiftSectionFactory.indexer.conformingTypes(of: object.displayName) {
+                    if let runtimeObject = await materializeSwiftReference(reference) {
+                        conformers.append(runtimeObject)
                     }
                 }
             }
@@ -134,25 +132,7 @@ actor RuntimeRelationshipsResolver {
         return RuntimeRelationships(subclasses: sortedSubclasses, conformingTypes: sortedConformers)
     }
 
-    /// Every image path with *both* an ObjC and a Swift section cached —
-    /// the indexed-image universe a relationships query unions over. This
-    /// is the set form of the per-path predicate
-    /// `RuntimeEngine.isImageIndexed(path:)` evaluates: an image counts as
-    /// indexed only once both sections exist.
-    ///
-    /// Both factories key their caches by the dyld-canonical path (every
-    /// `section(for:)` call site patches the path first), so the two key
-    /// sets intersect directly with no further normalization. Deriving the
-    /// set here is what lets `relationships(for:)` drop its
-    /// `loadedImagePaths` parameter — the resolver no longer depends on the
-    /// engine to enumerate loaded images.
-    private func indexedImagePaths() async -> Set<String> {
-        let objcImagePaths = await objcSectionFactory.cachedImagePaths
-        let swiftImagePaths = await swiftSectionFactory.cachedImagePaths
-        return objcImagePaths.intersection(swiftImagePaths)
-    }
-
-    /// Materialize a per-image `ObjCClassReference` into the `RuntimeObject`
+    /// Materialize an `RuntimeObjCClassReference` into the `RuntimeObject`
     /// the relationships query should surface. Bridged classes
     /// (`isSwiftStable == true`) are materialized as Swift `RuntimeObject`s
     /// (`kind == .swift(.type(.class))`) per AC6, by demangling the raw
@@ -161,7 +141,15 @@ actor RuntimeRelationshipsResolver {
     /// section. When that lookup fails (e.g. an `@objc(customName)` class
     /// whose raw name isn't a Swift mangling), the entry is dropped rather
     /// than fall back to `.objc(.type(.class))`.
-    private func materializeRelationshipReference(_ reference: RuntimeObjCClassReference) async -> RuntimeObject? {
+    ///
+    /// Note the indexed-image predicate this no longer applies. The walk this
+    /// replaced unioned over images with *both* sections cached, so an image
+    /// holding only one contributed nothing; an aggregate query instead sees
+    /// every indexer that registered. In practice `RuntimeEngine` creates the
+    /// two sections together, so the sets coincide — and where they would not,
+    /// dropping a relationship the user can see for a bookkeeping reason was
+    /// never the intent. The equivalence snapshot covers the practical case.
+    private func materializeObjCReference(_ reference: RuntimeObjCClassReference) async -> RuntimeObject? {
         if reference.isSwiftStable {
             // `demangleAsNode` / `mangleAsString` each ship a sync and an async
             // overload; the compiler picks the async one inside this `async`
@@ -176,5 +164,21 @@ actor RuntimeRelationshipsResolver {
         }
         guard let objcSection = await objcSectionFactory.existingSection(for: reference.imagePath) else { return nil }
         return await objcSection.makeRuntimeObject(forClassName: reference.className)
+    }
+
+    /// Materialize a `RuntimeSwiftTypeReference` through the section for the
+    /// image that named the type.
+    ///
+    /// Routing through `reference.imagePath` is what keeps the aggregate query
+    /// honest: `RuntimeSwiftSection.makeRuntimeObject(forMangledTypeName:)`
+    /// stamps its *own* `imagePath` onto the object it builds, so materializing
+    /// a cross-image result through the wrong section would label the type with
+    /// an image that does not define it. The per-image walk this replaced got
+    /// that right implicitly by only ever asking an image about its own types;
+    /// the reference now carries the image so it stays right explicitly.
+    /// Mirrors `materializeObjCReference(_:)`.
+    private func materializeSwiftReference(_ reference: RuntimeSwiftTypeReference) async -> RuntimeObject? {
+        guard let swiftSection = await swiftSectionFactory.existingSection(for: reference.imagePath) else { return nil }
+        return await swiftSection.makeRuntimeObject(forMangledTypeName: reference.mangledName)
     }
 }
