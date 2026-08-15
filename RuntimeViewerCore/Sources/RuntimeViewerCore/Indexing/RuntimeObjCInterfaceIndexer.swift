@@ -142,7 +142,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     ///
     /// Built in `init` and never reassigned — see the type's docs for why that
     /// matters here specifically.
-    let upstream: ObjCInterfaceIndexer
+    let upstream: ObjCInterfaceIndexer<MachOImage>
 
     /// Transparent read-through to `upstream`: any property this wrapper does
     /// not declare itself resolves against `ObjCInterfaceIndexer`, so
@@ -151,7 +151,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// without spelling out `.upstream`. Methods are not key-path-expressible,
     /// so the upstream methods the codebase needs are exposed as explicit
     /// wrapper methods below. Mirrors `RuntimeSwiftInterfaceIndexer`.
-    subscript<Value>(dynamicMember keyPath: KeyPath<ObjCInterfaceIndexer, Value>) -> Value {
+    subscript<Value>(dynamicMember keyPath: KeyPath<ObjCInterfaceIndexer<MachOImage>, Value>) -> Value {
         upstream[keyPath: keyPath]
     }
 
@@ -228,15 +228,15 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// `@dynamicMemberLookup` forwards property *reads* only, so the upstream
     /// methods the codebase needs are wrapped explicitly. Mirrors
     /// `RuntimeSwiftInterfaceIndexer.updateConfiguration`.
-    func classGroup(forName name: String) -> ObjCInterfaceIndexer.ObjCClassGroup? {
+    func classGroup(forName name: String) -> ObjCInterfaceIndexer<MachOImage>.ObjCClassGroup? {
         upstream.classGroup(forName: name)
     }
 
-    func protocolGroup(forName name: String) -> ObjCInterfaceIndexer.ObjCProtocolGroup? {
+    func protocolGroup(forName name: String) -> ObjCInterfaceIndexer<MachOImage>.ObjCProtocolGroup? {
         upstream.protocolGroup(forName: name)
     }
 
-    func categoryGroup(forName uniqueName: String) -> ObjCInterfaceIndexer.ObjCCategoryGroup? {
+    func categoryGroup(forName uniqueName: String) -> ObjCInterfaceIndexer<MachOImage>.ObjCCategoryGroup? {
         upstream.categoryGroup(forName: uniqueName)
     }
 
