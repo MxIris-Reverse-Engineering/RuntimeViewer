@@ -85,6 +85,39 @@ struct RuntimeObjCClassReference: Hashable, Sendable {
 /// call, which is what lets `RuntimeRelationshipsResolver` stop walking images
 /// itself. Mirrors `RuntimeSwiftInterfaceIndexer`.
 ///
+/// ## Where this and the Swift side deliberately differ
+///
+/// Evolution 0008 asks these two types to correspond member for member, with
+/// every departure written down. The current list, and why each one is not
+/// something to iron out:
+///
+/// - **`prepare()` takes no progress continuation; the Swift one does.** ObjC
+///   progress arrives through the same `eventHandler` as the relationship
+///   events, so it is supplied once at `init`. The Swift upstream reports
+///   progress through `eventHandlers` *and* the wrapper emits an extra
+///   `indexingSwiftSubclasses` phase around its own table build, which happens
+///   in `prepare()`. Unifying that means changing when Swift reports progress,
+///   which is a user-visible change and not this proposal's business.
+/// - **`conformingClasses(toProtocol:)` vs `conformingTypes(of:)`.** Only
+///   classes adopt Objective-C protocols; any nominal type can conform to a
+///   Swift one. The names say which, and flattening them would make one of the
+///   two lie.
+/// - **The tables live in a separate object here.** The event handler must
+///   capture its destination before `self` exists; the Swift side builds its
+///   tables after `upstream.prepare()` returns and can store them inline.
+/// - **No `machO` stored here.** The Swift wrapper re-reads its image during
+///   `prepare()` to resolve superclass mangled names; this one hands `machO` to
+///   `upstream` at `init` and never needs it again.
+/// - **No `imagePath` stored here.** Each relationship event carries the path
+///   the library was constructed with, so references are already stamped by the
+///   time they arrive. The Swift wrapper has to keep it to stamp its own — and
+///   must be given the dyld-canonical one, not `machO.imagePath`; see its `init`.
+///
+/// Extra members on the Swift side (`typeName(forMangledName:)`,
+/// `protocolName(forMangledName:)`, `updateConfiguration`) are forwarding or
+/// lookup helpers with no Objective-C counterpart to mirror, not asymmetries in
+/// the relationship layer itself.
+///
 /// `@unchecked Sendable`: `upstream` and `relationshipTables` are immutable
 /// `let`s that guard their own state, and `subIndexers` is `@Mutex`-guarded.
 @dynamicMemberLookup
