@@ -4,6 +4,7 @@ import DependenciesMacros
 import FoundationToolbox
 import OSLog
 import RuntimeViewerArchitectures
+import RuntimeViewerSettings
 
 /// Brings up Xcode's private `SourceEditor` framework at runtime and hands back a bridge
 /// object that can drive it.
@@ -20,20 +21,6 @@ import RuntimeViewerArchitectures
 @Loggable(.private)
 final class SourceEditorLoader {
     fileprivate static let shared = SourceEditorLoader()
-
-    /// Deliberately not in dependency order. `loadFrameworks(from:)` sweeps to a fixed point
-    /// instead of following a hand-maintained topological sort, so a future Xcode reshuffling
-    /// the graph cannot silently break loading. The order below is alphabetical for reading.
-    ///
-    /// This is the display-path subset. `SymbolCache`, `SymbolCacheSupport` and
-    /// `SymbolCacheIndexing` serve indexing and code completion, and loading without them is
-    /// verified to work.
-    private static let requiredFrameworkNames = [
-        "SourceEditor",
-        "SourceModel",
-        "SourceModelSupport",
-        "_CodeCompletionFoundation",
-    ]
 
     private static let bridgeBundleName = "RuntimeViewerSourceEditorBridge.bundle"
 
@@ -71,15 +58,11 @@ final class SourceEditorLoader {
 
     private init() {}
 
-    /// Opt-in switch. There is no Settings UI for it yet — the integration is experimental
-    /// and, until the app's own `ThemeProfile` is translated into `.xccolortheme` form, it
-    /// ignores the configured colors.
-    ///
-    ///     defaults write dev.mxiris.RuntimeViewer RuntimeViewerUsesExperimentalSourceEditor -bool YES
-    ///
-    /// Check this *before* `isAvailable`, so opting out also skips the `dlopen` work.
+    /// Whether the user asked for it — see Settings › Editor. Check this *before*
+    /// `isAvailable`, so leaving it off also skips the `dlopen` work.
     var isEnabledByUser: Bool {
-        UserDefaults.standard.bool(forKey: "RuntimeViewerUsesExperimentalSourceEditor")
+        @Dependency(\.settings) var settings
+        return settings.editor.usesSourceEditor
     }
 
     /// Whether a bridge can be created. Resolves on first call and is cached — including the
@@ -100,7 +83,8 @@ final class SourceEditorLoader {
     }
 
     /// Reads one of the `.xccolortheme` files the framework ships in its own resources.
-    /// RuntimeViewer's own themes are not yet translated into this format.
+    /// `SourceEditorThemeConversion` uses one as the base to overwrite with the app's own
+    /// theme, so the many keys a `ThemeProfile` has no opinion about stay valid.
     func builtInThemeDictionary(named themeName: String) -> NSDictionary? {
         guard case .ready(let frameworksDirectory, _) = resolvedState() else { return nil }
         let themeURL = frameworksDirectory
@@ -122,9 +106,8 @@ final class SourceEditorLoader {
     }
 
     private func resolve() -> State {
-        let candidates = candidateFrameworkDirectories()
-        guard let frameworksDirectory = candidates.first(where: containsAllRequiredFrameworks) else {
-            return .unavailable(.frameworksNotFound(searched: candidates.map(\.path)))
+        guard let frameworksDirectory = XcodeSourceEditorLocator.frameworksDirectory() else {
+            return .unavailable(.frameworksNotFound(searched: XcodeSourceEditorLocator.candidateDirectories().map(\.path)))
         }
 
         if let failure = loadFrameworks(from: frameworksDirectory) {
@@ -151,43 +134,16 @@ final class SourceEditorLoader {
         return .ready(frameworksDirectory: frameworksDirectory, bridgeClass: bridgeClass)
     }
 
-    /// Embedded copies win over Xcode's. That ordering is what lets a build that ships the
-    /// frameworks and a build that borrows them from Xcode share one code path.
-    private func candidateFrameworkDirectories() -> [URL] {
-        var directories: [URL] = []
-
-        if let embedded = Bundle.main.privateFrameworksURL {
-            directories.append(embedded)
-        }
-        if let installedXcode = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.dt.Xcode") {
-            directories.append(installedXcode.appending(path: "Contents/SharedFrameworks"))
-        }
-        directories.append(URL(fileURLWithPath: "/Applications/Xcode.app/Contents/SharedFrameworks"))
-
-        var seenPaths = Set<String>()
-        return directories.filter { seenPaths.insert($0.standardizedFileURL.path).inserted }
-    }
-
-    private func containsAllRequiredFrameworks(in directory: URL) -> Bool {
-        Self.requiredFrameworkNames.allSatisfy { name in
-            FileManager.default.fileExists(atPath: binaryURL(of: name, in: directory).path)
-        }
-    }
-
-    private func binaryURL(of frameworkName: String, in directory: URL) -> URL {
-        directory.appending(path: "\(frameworkName).framework/Versions/A/\(frameworkName)")
-    }
-
     /// - Returns: the failure, or `nil` on success.
     private func loadFrameworks(from directory: URL) -> Unavailability? {
-        var pending = Self.requiredFrameworkNames
+        var pending = XcodeSourceEditorLocator.requiredFrameworkNames
         var lastFailedName = ""
         var lastFailureReason = ""
 
         while !pending.isEmpty {
             var stillPending: [String] = []
             for name in pending {
-                let path = binaryURL(of: name, in: directory).path
+                let path = XcodeSourceEditorLocator.binaryURL(of: name, in: directory).path
                 if dlopen(path, RTLD_LAZY | RTLD_GLOBAL) == nil {
                     lastFailedName = name
                     lastFailureReason = dlerror().map { String(cString: $0) } ?? "unknown dlopen failure"

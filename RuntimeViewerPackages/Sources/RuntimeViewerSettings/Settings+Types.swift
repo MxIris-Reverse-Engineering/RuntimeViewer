@@ -40,6 +40,24 @@ extension Settings {
 
     @Codable
     @MemberInit
+    public struct Editor: Sendable {
+        /// Renders interfaces with Xcode's own source editor instead of the built-in
+        /// `NSTextView`, which brings code folding, sticky headers, a find bar, scope guides
+        /// and ⌘-hover underlining, and scrolls large interfaces without dropping frames.
+        ///
+        /// Off by default, and deliberately so while two things remain true: the editor
+        /// colors text from its own lexical tokenizer rather than the semantic tokens the
+        /// generator produces, and it needs Xcode installed. Whenever it cannot be loaded the
+        /// app falls back to `NSTextView` silently — this switch expresses a preference, not
+        /// a guarantee.
+        @Default(false)
+        public var usesSourceEditor: Bool
+
+        public static let `default` = Self()
+    }
+
+    @Codable
+    @MemberInit
     public struct Notifications: Sendable {
         /// Whether notifications are enabled globally
         @Default(true)

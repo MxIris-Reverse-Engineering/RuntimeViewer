@@ -60,6 +60,11 @@ private let persistedProperties: [PersistedProperty] = [
         matches: { $0.general.sidebarMaxExpansionDepth == 7 }
     ),
     PersistedProperty(
+        encodedKey: "editor",
+        apply: { $0.editor.usesSourceEditor = true },
+        matches: { $0.editor.usesSourceEditor }
+    ),
+    PersistedProperty(
         encodedKey: "notifications",
         apply: { $0.notifications.showOnDisconnect.toggle() },
         matches: { $0.notifications.showOnDisconnect != Settings.Notifications().showOnDisconnect }

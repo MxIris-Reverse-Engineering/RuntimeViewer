@@ -493,30 +493,52 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
    保持语义精度；⌘⇧-click 开新 tab 的语义一并保留。
 5. **在真实 App 内复测内存**。spike 的离屏测量得出 SourceEditor ≈ TextKit 2 的 2.8 倍，
    但绝对值不可信。若真实环境下确认显著劣化，需重新评估方案取舍。**未做。**
-6. **主题转换**。当前使用框架自带的 Default (Dark)/(Light)，只跟随明暗，**忽略用户在设置里
-   配置的配色**。需要把 `ThemeProfile` 转成 `.xccolortheme` 等价 dictionary。**未做。**
-7. **语义 token 注入**。见下方「已知妥协」。**未做。**
+6. ~~**主题转换**~~ —— **已完成**。`SourceEditorThemeConversion` 把 `ThemeProfile` 渲染成
+   `.xccolortheme` dictionary，**以框架自带主题为底再覆盖**（该格式约五十个键，多数在
+   `ThemeProfile` 里没有对应物；从一份完整字典出发，未映射的键仍然有效，Xcode 以后加键也不会
+   开天窗）。已实测覆盖生效。**两个不查就会错的点**：
+   - **颜色分量必须是 calibrated / Generic RGB，不是 sRGB。** 框架用等价于
+     `NSColor(calibratedRed:green:blue:alpha:)` 的方式解析 `"r g b a"`。实测同一个三元组：
+     按 sRGB 解析渲染成 0.420/0.886/0.459，按 calibrated 解析渲染成 0.404/0.886/0.518 ——
+     肉眼可辨，而且不会报任何错。
+   - 嵌套字典必须整体替换后写回，且颜色/字体值是字符串（`"r g b a"` / `"字体名 - 字号"`）。
+7. **语义 token 注入**。见下方「已知妥协」。**未做，可行性已查清。**
 8. 逐项启用附加能力（折叠、sticky header、查找栏），每项单独验证。**未做。**
-9. 加上 `com.apple.security.cs.disable-library-validation` entitlement 并走一次公证。**未做。**
+9. ~~加上 `com.apple.security.cs.disable-library-validation` entitlement~~ —— **已加**，
+   公证尚未走过。
 
 ### 已知妥协：当前语法高亮是词法的，不是语义的
 
 「非目标」一节写明不用 `SourceModel` 的词法高亮替换现有语义高亮。当前实现**并未做到这一点**：
 `SourceEditorDataSource` 接收纯文本并自行 tokenize，因此走这条路径时看到的是词法着色。
 
-要喂进自己的语义 token，需要实现 `SourceEditorSyntaxTokenProvider`
-（`enumerateSyntaxTokensOnLine` / `syntaxTypeAtPosition` 两个重载），而 data source 是通过
-`SourceEditorLanguage.langServiceClass` 拿到 `SourceEditorLanguageService` 的 —— 也就是说要
-重建整个 language service 类，比现有接口子集大一个量级。
+因此当前实现**做成 opt-in 开关而非替换默认实现**（Settings › Editor，默认关闭），默认仍是
+`NSTextView` 那条语义高亮路径。在语义 token 注入完成之前不应设为默认 —— 否则用户打开开关
+得到的是「更好的编辑器 + 更差的高亮」。设置面板里如实写明了这一点。
 
-因此当前实现**做成 opt-in 开关而非替换默认实现**，默认仍是 `NSTextView` 那条语义高亮路径：
+### 语义 token 注入的可行性（已查清，未实现）
 
-```
-defaults write dev.JH.RuntimeViewer RuntimeViewerUsesExperimentalSourceEditor -bool YES
-```
+**值得做。** Xcode 主题的 token 分类本身就是语义级的：`identifier.class` / `identifier.type` /
+`identifier.function` / `identifier.variable` / `identifier.constant` / `identifier.macro`，
+每类还分 `.system`（SDK 符号）与非 system。这正是词法扫描器只能猜、而 MachOSwiftSection 的
+语义 token 确切知道的信息 —— 注入之后着色会**比现在的 `NSTextView` 路径更细**，而不只是持平。
 
-在语义 token 注入完成、且主题转换补齐之前，不应把它设为默认，也不应提供正式设置项 ——
-否则用户打开开关得到的是「更好的编辑器 + 更差的高亮」。
+**路径清楚，但工作量比现有接口子集大一个量级：**
+
+- `SourceEditorSyntaxTokenProvider` 是要实现的目标协议（3 个 requirement：
+  `enumerateSyntaxTokensOnLine`、`syntaxTypeAtPosition` 的两个重载）。
+- 它由 `SourceEditorLanguageService` 继承。**后者是 protocol 而非 class**（这是好消息，
+  不需要子类化），但有 **48 个 requirement**，且含一个 `init(language:buffer:)`。
+- 接入点已找到：`SourceEditorDataSource` 有一个
+  `init(languageService:language:usingMutableString:name:formattingOptions:)`，
+  可以直接传入自己的 language service，不必经由 `SourceEditorLanguage.langServiceClass`。
+- 连带需要为若干类型补上不透明声明（`SourceEditorBuffer`、`CodeStructure`、`Landmark`、
+  `SourceEditorNavigationTarget`、`SourceEditorRefactorAction` 等）。内容视图是只读的，
+  没有诊断/补全/重构，多数 requirement 可以返回 `nil` / `[]` / `false` 或空实现。
+- **`SourceEditorTokenType` 届时必须补全所有 case 且顺序正确** —— 现在它声明为空枚举，
+  因为只做透传；一旦要**构造**该类型的值，resilient 枚举的 case 索引就来自声明顺序，
+  空枚举的取巧做法失效。取 case 顺序的可行办法是反编译「token 类型 → `xcode.syntax.*` 键」
+  的映射函数，其 switch 的分支顺序即声明顺序。
 
 **收尾时必须判断两件事**（结果写进决策日志）：
 
@@ -534,3 +556,5 @@ defaults write dev.JH.RuntimeViewer RuntimeViewerUsesExperimentalSourceEditor -b
 | 2026-08-15 | 落地步骤 1 完成 | `dlopen` + install-name 复用验证通过。同时证实此前标为「推测」的加载顺序问题真实存在（`SymbolCacheSupport` → `SymbolCacheIndexing`），改用不动点循环加载而非手工拓扑序；最小框架集合从 7 个收窄到 4 个。 |
 | 2026-08-15 | entitlement 判断修正 | 原文断言库校验会拒绝加载 Apple 签名的框架，因而必须加 entitlement。该断言无法在本机验证——开发机已关闭库校验。按规则 Apple 签名的代码本应豁免，但改为「照加、代价为零」而非「已证明必需」。 |
 | 2026-08-15 | 记录已知妥协 | 首个可用版本的语法高亮是词法的，与「非目标」一节的要求不符。因此做成 opt-in 开关而非替换默认实现，并把语义 token 注入列为落地步骤。 |
+| 2026-08-15 | 主题转换完成 | 开关改为正式设置项（Settings › Editor），不再走隐藏的 UserDefaults 键；`ThemeProfile` 已能渲染成 `.xccolortheme`。实测查明颜色分量必须按 calibrated RGB 写入，按 sRGB 写会静默偏色。 |
+| 2026-08-15 | 语义 token 注入定性为「值得做」 | 查明 Xcode 的 token 分类本身是语义级的，注入后着色会优于现有 `NSTextView` 路径而非持平；`SourceEditorLanguageService` 是 protocol（48 个 requirement）而非 class，且 `SourceEditorDataSource` 有直接接收 language service 的 initializer。工作量比现有接口子集大一个量级，单独排期。 |

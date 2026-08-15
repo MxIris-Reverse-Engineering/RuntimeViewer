@@ -13,6 +13,9 @@ public final class Settings {
     @Default(General.default)
     public var general: General = .init()
 
+    @Default(Editor.default)
+    public var editor: Editor = .init()
+
     @Default(Notifications.default)
     public var notifications: Notifications = .init()
 
@@ -60,6 +63,7 @@ extension Settings: PersistentSettings {
     @MainActor
     public func accessPersistedValues() {
         _ = general
+        _ = editor
         _ = notifications
         _ = transformer
         _ = mcp

@@ -34,18 +34,34 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         return viewController
     }()
 
-    private lazy var textViewController: UXKitViewController<ContentTextViewModel> = makeTextViewController()
+    /// Which content view is in use. Recorded so that flipping Settings › Editor swaps the
+    /// view on the next selection rather than only after the scene has been left and
+    /// re-entered, which from the user's side would look like the setting did nothing.
+    private enum EditorKind {
+        case textView
+        case sourceEditor
+    }
+
+    private var currentEditorKind: EditorKind?
+
+    private lazy var textViewController: UXKitViewController<ContentTextViewModel> = makeTextViewController(kind: desiredEditorKind())
+
+    /// Anything that stops the Xcode-backed editor from loading — the setting being off, no
+    /// Xcode installed, an arm64e build, a missing bridge bundle — resolves to the
+    /// `NSTextView` implementation, which is the shipping behaviour.
+    private func desiredEditorKind() -> EditorKind {
+        @Dependency(\.sourceEditorLoader) var sourceEditorLoader
+        guard sourceEditorLoader.isEnabledByUser, sourceEditorLoader.isAvailable else { return .textView }
+        return .sourceEditor
+    }
 
     /// Both content views bind the same `ContentTextViewModel`, so choosing between them is
-    /// the whole of the switch. Anything that stops the Xcode-backed one from loading — no
-    /// Xcode installed, an arm64e build, a missing bridge bundle — lands on the `NSTextView`
-    /// implementation, which is the shipping behaviour.
-    private func makeTextViewController() -> UXKitViewController<ContentTextViewModel> {
-        @Dependency(\.sourceEditorLoader) var sourceEditorLoader
-        guard sourceEditorLoader.isEnabledByUser, sourceEditorLoader.isAvailable else {
-            return ContentTextViewController()
+    /// the whole of the switch.
+    private func makeTextViewController(kind: EditorKind) -> UXKitViewController<ContentTextViewModel> {
+        switch kind {
+        case .textView: ContentTextViewController()
+        case .sourceEditor: ContentSourceEditorViewController()
         }
-        return ContentSourceEditorViewController()
     }
 
     /// Object the text scene is currently bound to. `.back` re-entries
@@ -91,21 +107,30 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
     }
 
     private func enterTextScene(for runtimeObject: RuntimeObject, forceRebind: Bool) -> ContentTransition {
-        rebindTextViewController(for: runtimeObject, forceRebind: forceRebind)
-        guard !isCurrentTextScene else { return .none() }
+        let didReplaceViewController = rebindTextViewController(for: runtimeObject, forceRebind: forceRebind)
+        // A replacement has to be installed even when the text scene is already showing:
+        // otherwise the freshly built view controller is bound but never displayed.
+        guard !isCurrentTextScene || didReplaceViewController else { return .none() }
         currentScene = .text
         return .set([textViewController], animated: false)
     }
 
-    private func rebindTextViewController(for runtimeObject: RuntimeObject, forceRebind: Bool) {
-        if !isCurrentTextScene {
-            textViewController = makeTextViewController()
+    /// - Returns: whether the view controller itself was replaced.
+    @discardableResult
+    private func rebindTextViewController(for runtimeObject: RuntimeObject, forceRebind: Bool) -> Bool {
+        let desiredKind = desiredEditorKind()
+        var didReplaceViewController = false
+        if !isCurrentTextScene || currentEditorKind != desiredKind {
+            textViewController = makeTextViewController(kind: desiredKind)
+            currentEditorKind = desiredKind
             boundRuntimeObject = nil
+            didReplaceViewController = true
         }
-        guard forceRebind || boundRuntimeObject != runtimeObject else { return }
+        guard forceRebind || boundRuntimeObject != runtimeObject else { return didReplaceViewController }
         boundRuntimeObject = runtimeObject
         let viewModel = ContentTextViewModel(runtimeObject: runtimeObject, documentState: documentState, router: self)
         textViewController.setupBindings(for: viewModel)
         textViewController.loadViewIfNeeded()
+        return didReplaceViewController
     }
 }

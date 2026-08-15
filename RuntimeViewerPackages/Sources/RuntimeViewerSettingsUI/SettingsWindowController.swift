@@ -10,6 +10,9 @@ package final class SettingsWindowController: UIFoundationSettingsUI.SettingsWin
             SettingsPage("General", id: "general", plainSymbol: "gearshape") {
                 GeneralSettingsView()
             }
+            SettingsPage("Editor", id: "editor", plainSymbol: "text.alignleft") {
+                EditorSettingsView()
+            }
             SettingsPage("Theme", id: "theme", plainSymbol: "paintpalette") {
                 ThemeSettingsView()
             }

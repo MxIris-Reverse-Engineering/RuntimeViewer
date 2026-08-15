@@ -36,6 +36,10 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
     /// one, so the appearance switch has to be observed rather than overridden.
     private var effectiveAppearanceObservation: NSKeyValueObservation?
 
+    /// Held because the theme has to be re-applied on an appearance change too, and that
+    /// notification carries no theme with it.
+    private var currentTheme: ThemeProfile?
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -44,7 +48,7 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
 
         effectiveAppearanceObservation = view.observe(\.effectiveAppearance) { [weak self] _, _ in
             MainActor.assumeIsolated {
-                self?.applyBuiltInTheme()
+                self?.applyCurrentTheme()
             }
         }
 
@@ -74,9 +78,10 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
             }
             .disposed(by: rx.disposeBag)
 
-        output.theme.driveOnNext { [weak self] _ in
+        output.theme.driveOnNext { [weak self] theme in
             guard let self else { return }
-            applyBuiltInTheme()
+            currentTheme = theme
+            applyCurrentTheme()
         }
         .disposed(by: rx.disposeBag)
 
@@ -89,15 +94,22 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
         .disposed(by: rx.disposeBag)
     }
 
-    /// Uses the theme Xcode ships rather than translating RuntimeViewer's own `ThemeProfile`
-    /// into `.xccolortheme` form. Until that translation exists, the editor ignores the app's
-    /// configured colors and follows light/dark only.
-    private func applyBuiltInTheme() {
+    /// Renders the app's configured theme into `.xccolortheme` form, using the framework's own
+    /// theme as the base so the many keys `ThemeProfile` has no opinion about stay valid.
+    ///
+    /// The base still tracks light/dark, which matters for exactly those unmapped keys —
+    /// invisibles, current-line highlight, markup colors.
+    private func applyCurrentTheme() {
         guard let bridge else { return }
         let isDark = view.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        let themeName = isDark ? "Default (Dark)" : "Default (Light)"
-        guard let dictionary = sourceEditorLoader.builtInThemeDictionary(named: themeName) else { return }
-        bridge.applyTheme(name: themeName, dictionary: dictionary, fontSizeModifier: 0)
+        let baseThemeName = isDark ? "Default (Dark)" : "Default (Light)"
+        guard let baseTheme = sourceEditorLoader.builtInThemeDictionary(named: baseThemeName) else { return }
+
+        let dictionary = currentTheme.flatMap {
+            SourceEditorThemeConversion.themeDictionary(from: $0, basedOn: baseTheme)
+        } ?? baseTheme
+
+        bridge.applyTheme(name: baseThemeName, dictionary: dictionary, fontSizeModifier: 0)
     }
 
     private static func languageIdentifier(for kind: RuntimeObjectKind) -> String {
