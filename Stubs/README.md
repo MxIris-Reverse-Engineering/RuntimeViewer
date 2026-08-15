@@ -30,6 +30,12 @@ required, and no Apple binary is redistributed.
 ./Generate.sh /Applications/Xcode-beta.app        # or point at a specific one
 ```
 
+`--full` writes every exported symbol instead of the ones listed in `UsedSymbols.txt`. That is
+a step on the way to re-deriving those lists — link the bridge against the full stubs, read its
+undefined symbols, write them back, regenerate without `--full` — and **not a state to commit**:
+the three trimmed `.tbd` files total around 8 KB, the full ones 1.1 MB. Check `git diff --stat`
+before committing; it has been left in the full state once already.
+
 ## Editing the `.swiftinterface`
 
 **Start from a RuntimeViewer dump of the framework, not from `nm`.** Exporting

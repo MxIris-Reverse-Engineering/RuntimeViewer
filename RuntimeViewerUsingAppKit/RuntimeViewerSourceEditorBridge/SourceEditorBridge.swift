@@ -13,6 +13,34 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
     private let semanticNodeTypeAdjuster = SemanticNodeTypeAdjuster()
 
+    /// A gutter has to exist before there are any line numbers to show — the view ships
+    /// without one — and it also draws the active-line emphasis, so it stays installed
+    /// whether or not the numbers are wanted.
+    private let gutter = SourceEditorGutter()
+
+    /// What `applyDisplayOptions` last put into effect, so a settings change that moves one
+    /// toggle does not re-run the other four. That is not just tidiness: `installMinimap()`
+    /// and its siblings register margin accessories and event consumers unconditionally, so
+    /// calling one twice installs the same overlay twice.
+    ///
+    /// The initial value must describe the view as `init` leaves it, not what a fresh
+    /// `SourceEditorView` looks like — the gutter below turns line numbers on.
+    private var appliedDisplayOptions = DisplayOptions(
+        showsLineNumbers: true,
+        showsFoldingRibbon: false,
+        showsStickyHeaders: false,
+        showsMinimap: false,
+        showsScopeGuides: false
+    )
+
+    private struct DisplayOptions: Equatable {
+        var showsLineNumbers: Bool
+        var showsFoldingRibbon: Bool
+        var showsStickyHeaders: Bool
+        var showsMinimap: Bool
+        var showsScopeGuides: Bool
+    }
+
     weak var navigationDelegate: SourceEditorBridgingNavigationDelegate?
 
     var editorView: NSView { sourceEditorView }
@@ -25,9 +53,6 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         sourceEditorView.enableCmdClickMultiCursor = false
         sourceEditorView.isEditingEnabled = false
 
-        // A gutter has to be installed before line numbers exist at all; the view ships
-        // without one.
-        let gutter = SourceEditorGutter()
         gutter.enableLineNumbers()
         gutter.emphasizeActiveLines = true
         sourceEditorView.gutter = gutter
@@ -77,6 +102,66 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // drives what the editor paints behind text, this drives the view itself, and a
         // mismatch shows up as a differently-coloured band past the end of the document.
         sourceEditorView.backgroundColor = backgroundColor
+    }
+
+    func applyDisplayOptions(
+        showsLineNumbers: Bool,
+        showsFoldingRibbon: Bool,
+        showsStickyHeaders: Bool,
+        showsMinimap: Bool,
+        showsScopeGuides: Bool
+    ) {
+        let options = DisplayOptions(
+            showsLineNumbers: showsLineNumbers,
+            showsFoldingRibbon: showsFoldingRibbon,
+            showsStickyHeaders: showsStickyHeaders,
+            showsMinimap: showsMinimap,
+            showsScopeGuides: showsScopeGuides
+        )
+        guard options != appliedDisplayOptions else { return }
+        let previousOptions = appliedDisplayOptions
+        appliedDisplayOptions = options
+
+        if options.showsLineNumbers != previousOptions.showsLineNumbers {
+            if options.showsLineNumbers {
+                gutter.enableLineNumbers()
+            } else {
+                gutter.disableLineNumbers()
+            }
+        }
+
+        if options.showsFoldingRibbon != previousOptions.showsFoldingRibbon {
+            if options.showsFoldingRibbon {
+                sourceEditorView.installFoldingRibbon()
+            } else {
+                sourceEditorView.uninstallFoldingRibbon()
+            }
+        }
+
+        if options.showsStickyHeaders != previousOptions.showsStickyHeaders {
+            if options.showsStickyHeaders {
+                sourceEditorView.installStickyHeaders()
+            } else {
+                sourceEditorView.uninstallStickyHeaders()
+            }
+        }
+
+        if options.showsMinimap != previousOptions.showsMinimap {
+            if options.showsMinimap {
+                sourceEditorView.installMinimap()
+            } else {
+                sourceEditorView.uninstallMinimap()
+            }
+        }
+
+        // Called unconditionally, unlike the pairs above: both sides read the flag they are
+        // about to write and do nothing when it did not change, so this is the one option
+        // whose real state does not have to be tracked to stay correct.
+        if options.showsScopeGuides {
+            sourceEditorView.showScopeGuides()
+        } else {
+            sourceEditorView.hideScopeGuides()
+        }
     }
 
     func scrollToCharacterIndex(_ characterIndex: Int) {

@@ -42,16 +42,35 @@ extension Settings {
     @MemberInit
     public struct Editor: Sendable {
         /// Renders interfaces with Xcode's own source editor instead of the built-in
-        /// `NSTextView`, which brings code folding, sticky headers, a find bar, scope guides
+        /// `NSTextView`, which brings code folding, sticky headers, a minimap, scope guides
         /// and ⌘-hover underlining, and scrolls large interfaces without dropping frames.
         ///
-        /// Off by default, and deliberately so while two things remain true: the editor
-        /// colors text from its own lexical tokenizer rather than the semantic tokens the
-        /// generator produces, and it needs Xcode installed. Whenever it cannot be loaded the
+        /// Off by default because it needs Xcode installed. Whenever it cannot be loaded the
         /// app falls back to `NSTextView` silently — this switch expresses a preference, not
         /// a guarantee.
         @Default(false)
         public var usesSourceEditor: Bool
+
+        /// Everything below drives Xcode's editor only. The built-in `NSTextView` has no
+        /// gutter, ribbon or minimap to turn on, so with `usesSourceEditor` off these are
+        /// stored but not read — which is why the Settings pane disables them rather than
+        /// hiding them.
+        @Default(true)
+        public var showsLineNumbers: Bool
+
+        @Default(true)
+        public var showsFoldingRibbon: Bool
+
+        @Default(true)
+        public var showsStickyHeaders: Bool
+
+        /// Off by default: it is the only one of these that takes width away from the text,
+        /// and the content pane is already the narrowest of three.
+        @Default(false)
+        public var showsMinimap: Bool
+
+        @Default(true)
+        public var showsScopeGuides: Bool
 
         public static let `default` = Self()
     }

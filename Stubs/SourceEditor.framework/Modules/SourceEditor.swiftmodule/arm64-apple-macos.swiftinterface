@@ -249,6 +249,27 @@ extension SourceEditor.TextAttributeOverrideProvider {
   }
   public func addEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
   public func removeEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
+  // The optional margins and overlays. Each pair takes no arguments and builds whatever it
+  // needs from the view's own state, so nothing has to be configured before calling them.
+  //
+  // The `install` half is NOT idempotent: `installMinimap()` skips building a second minimap
+  // but goes on to register it as a margin accessory and an event consumer a second time.
+  // The `uninstall` half is — each one returns early when its object is nil — but the caller
+  // tracks state anyway rather than relying on that asymmetry.
+  public func installFoldingRibbon()
+  public func uninstallFoldingRibbon()
+  public func installStickyHeaders()
+  public func uninstallStickyHeaders()
+  public func installMinimap()
+  public func uninstallMinimap()
+  public var isMinimapShown: Swift.Bool {
+    get
+  }
+  // Genuinely idempotent, unlike the pairs above: both read the old flag and skip the work
+  // when it did not change. `areScopeGuidesShown` is a stored property with no exported
+  // accessor, so these two functions are the only way in.
+  public func showScopeGuides()
+  public func hideScopeGuides()
   public func positionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?
   // `final`: direct symbol only, unlike positionAtPoint which has a dispatch thunk.
   public final func closestPositionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?

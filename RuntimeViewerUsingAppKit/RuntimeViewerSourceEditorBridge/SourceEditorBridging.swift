@@ -52,6 +52,30 @@ protocol SourceEditorBridging: NSObjectProtocol {
     /// Set alongside the theme, whose background key covers the text area.
     func applyBackgroundColor(_ backgroundColor: NSColor)
 
+    /// Turns the editor's optional margins and overlays on or off.
+    ///
+    /// Passed as one call rather than five properties because it is driven by an observation
+    /// of Settings, which re-runs on any change and cannot say which value moved. The bridge
+    /// diffs against what it last applied, so calling this with unchanged values does nothing.
+    ///
+    /// - Parameters:
+    ///   - showsLineNumbers: the gutter's line numbers. The gutter itself stays installed
+    ///     either way — it is also what draws the active-line emphasis.
+    ///   - showsFoldingRibbon: the fold arrows between the gutter and the text. Folding needs
+    ///     a language service that can name foldable ranges, which is what the `"swift"` and
+    ///     `"objc"` identifiers get; any other language shows a ribbon with nothing in it.
+    ///   - showsStickyHeaders: pins the enclosing declarations to the top while scrolling.
+    ///   - showsMinimap: the document overview down the right edge. Off by default — it is
+    ///     the only one of these that takes width away from the text.
+    ///   - showsScopeGuides: the vertical indent guides.
+    func applyDisplayOptions(
+        showsLineNumbers: Bool,
+        showsFoldingRibbon: Bool,
+        showsStickyHeaders: Bool,
+        showsMinimap: Bool,
+        showsScopeGuides: Bool
+    )
+
     /// Applies a theme built from `.xccolortheme`-equivalent plist contents. Xcode ships
     /// `Default (Dark).xccolortheme` and `Default (Light).xccolortheme` in the framework's
     /// own resources, which is what `SourceEditorThemeLocating` reaches for.

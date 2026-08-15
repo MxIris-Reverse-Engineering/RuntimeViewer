@@ -2,6 +2,7 @@ import AppKit
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
+import RuntimeViewerSettings
 import RuntimeViewerUI
 import Semantic
 
@@ -21,6 +22,8 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
 
     @Dependency(\.sourceEditorLoader) private var sourceEditorLoader
 
+    @Dependency(\.settings) private var settings
+
     private lazy var bridge: SourceEditorBridging? = sourceEditorLoader.makeBridge()
 
     /// The string currently handed to the editor. ⌘-click reports a UTF-16 range into this
@@ -39,6 +42,11 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
     /// notification carries no theme with it.
     private var currentTheme: ThemeProfile?
 
+    /// Keeps the editor's margins and overlays following Settings › Editor. The observation
+    /// re-runs on any change to `settings.editor` without saying which value moved, which is
+    /// why the bridge takes all five at once and diffs them itself.
+    private var displayOptionsObserveToken: ObserveToken?
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -49,6 +57,18 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
             MainActor.assumeIsolated {
                 self?.applyCurrentTheme()
             }
+        }
+
+        displayOptionsObserveToken = SwiftNavigation.observe { [weak self] in
+            guard let self else { return }
+            let editorSettings = settings.editor
+            bridge.applyDisplayOptions(
+                showsLineNumbers: editorSettings.showsLineNumbers,
+                showsFoldingRibbon: editorSettings.showsFoldingRibbon,
+                showsStickyHeaders: editorSettings.showsStickyHeaders,
+                showsMinimap: editorSettings.showsMinimap,
+                showsScopeGuides: editorSettings.showsScopeGuides
+            )
         }
 
         contentView.hierarchy {

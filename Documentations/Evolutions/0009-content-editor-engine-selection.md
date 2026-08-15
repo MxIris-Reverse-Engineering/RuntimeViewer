@@ -504,7 +504,9 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 1. **`dlopen` 加载路径** —— 结论见「运行时加载策略」。install-name 复用成立；加载顺序有影响，
    已改为不动点循环；最小框架集合 4 个。
 2. **stub framework 与接口子集** —— 仓库内 `Stubs/`，含 `Generate.sh` / `AuditMembers.sh` /
-   `AuditClasses.sh` / `Trim.py`。三个 `.tbd` 裁剪后合计约 16 KB。
+   `AuditClasses.sh` / `Trim.py`。三个 `.tbd` 裁剪后合计约 8 KB —— 未裁剪是 1.1 MB，
+   所以**提交前务必确认落盘的是裁剪版**：`refresh-stubs.sh` 中途会写一遍全量 stub 用来
+   重算已用符号，停在那一步就会把 1 MB 的文件提交进仓库（曾经发生过一次，已修）。
 3. **可选加载 bundle 接入 `ContentCoordinator`** —— `RuntimeViewerSourceEditorBridge` bundle
    target，`SourceEditorLoader` 负责定位与降级，两个内容视图绑定同一个 ViewModel。
 4. **⌘-click 跳转** —— 目标从生成侧 `.link` attribute 读取；⌘⇧-click 开新 tab 保留。
@@ -514,6 +516,8 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 8. **正式设置项** —— Settings › Editor，`Settings.Editor.usesSourceEditor`，默认关闭。
 9. **entitlement** —— `com.apple.security.cs.disable-library-validation` 已加。
 10. **内存实测** —— 见下。spike 那个「2.8 倍」是离屏测量的假象,已作废。
+11. **附加显示能力** —— 代码折叠、sticky header、minimap、行号、scope guides，五项都是
+    Settings › Editor 里的独立开关。见下。
 
 ### 内存:SourceEditor 的开销可忽略(2026-08-15 实机测量)
 
@@ -534,12 +538,50 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 spike 阶段那个「SourceEditor ≈ TextKit 2 的 2.8 倍」是离屏窗口无内存压力、缓存从不回收导致的,
 两边绝对值都不可用 —— 与本次「离屏判据不可靠」的教训是同一回事。
 
+### 附加显示能力:五个开关,一次调用(2026-08-15)
+
+`SourceEditorView` 上每项能力都是一对无参方法,自己从视图现有状态构造所需的一切 ——
+反汇编确认 `installMinimap()` / `installStickyHeaders()` / `installFoldingRibbon()` 都不依赖
+任何预先配置。折叠还需要 language service 能报告可折叠区间,而 `SourceModelLanguageService`
+本身就 conform `FoldableLanguageService`,所以现成可用。
+
+| 设置项 | 入口 | 默认 |
+|---|---|---|
+| Line Numbers | `SourceEditorGutter.enableLineNumbers()` / `disableLineNumbers()` | 开 |
+| Code Folding Ribbon | `installFoldingRibbon()` / `uninstallFoldingRibbon()` | 开 |
+| Sticky Headers | `installStickyHeaders()` / `uninstallStickyHeaders()` | 开 |
+| Minimap | `installMinimap()` / `uninstallMinimap()` | **关** |
+| Scope Guides | `showScopeGuides()` / `hideScopeGuides()` | 开 |
+
+minimap 默认关,因为它是唯一会占走文本宽度的一项,而内容面板本来就是三栏里最窄的。
+
+**`install*` 不是幂等的,必须自己记状态。** `installMinimap()` 在已有 minimap 时会跳过创建,
+但仍然继续把它作为 margin accessory 和 event consumer 再注册一遍。所以 bridge 保存
+`appliedDisplayOptions`,只在真正翻转时调用对应的一半。`uninstall*` 反而是幂等的(各自对 nil
+提前返回),`showScopeGuides` / `hideScopeGuides` 也是(都会先读旧标志、没变就什么都不做)
+—— 唯独 scope guides 因此可以无条件调用,不必跟踪真实状态。
+
+`appliedDisplayOptions` 的**初值必须描述 `init()` 之后的视图,而不是一个全新的
+`SourceEditorView`** —— `init()` 会装 gutter 并开行号,所以 `showsLineNumbers` 初值是 `true`。
+
+传参方式是一次五个 `Bool`,而不是五个属性:驱动它的是对 Settings 的 observation,重跑时并不
+知道是哪个值动了,所以由 bridge 自己做 diff。
+
+**验证方式:遍历视图与图层树数点,不是看截图。** 这是结构性问题(某个类在不在树里),
+离屏完全可靠 —— 与「颜色结论必须看实机」的教训不冲突,那条针对的是渲染。harness 跑 8 轮
+全开/全关,确认五项都能装上、都能拆干净、重复装不会叠第二份。
+
+**已知的框架侧小泄漏:** 每次重装 minimap 会多留 8 个图层
+(`MinimapFindResultHighlightsLayer` 与 `MinimapRangeHighlightsLayer` 各 4 个),8 轮实测严格
+线性(4→8→…→32)。推测是 `MinimapConfig.layoutVisualizations` 挂在视图的 `let minimapConfig`
+上、`uninstallMinimap()` 不清它。每个 bridge 实例各有自己的 config,所以不跨标签页累积,
+量级也只是每次开关 8 个图层 —— 记录在案,不为此绕开框架 API。
+
 ### 未完成
 
-**A. 逐项启用附加能力**，每项单独验证。入口已定位，都在 `SourceEditorView` 上：
-`installFoldingRibbon()`（代码折叠）、`installStickyHeaders()`、`installMinimap()`。
-另有 `areInvisiblesShown` / `areScopeGuidesShown` / `lineWrappingStyle` / `overscroll`。
-查找栏走 `makeTextFindPanel()` / `present(_:)`。
+**A. 查找栏与其余显示项。** 查找栏走 `makeTextFindPanel()` / `present(_:)`,是这里面唯一还需要
+接 UI 的一项。另有 `areInvisiblesShown` / `lineWrappingStyle` / `overscroll`,对只读接口的价值
+存疑,未做。
 
 **B. 系统符号与工程符号的颜色区分。** 主题里 `identifier.class` 与 `identifier.class.system`
 是两个键，但 `ThemeProfile` 只有 7 种样式、没有这一维，现在两者同色。要区分必须先给
@@ -547,12 +589,9 @@ spike 阶段那个「SourceEditor ≈ TextKit 2 的 2.8 倍」是离屏窗口无
 
 **C. 走一次公证**，确认 entitlement 不影响 notarization。
 
-**D. 设置面板文案需更新。** `EditorSettingsView` 里仍写着「语法着色来自 Xcode 自己的
-tokenizer，比内置视图不准」——语义高亮落地后这句话已不成立。
+**D. 分支尚未推送，未开 PR。** `main` 受保护必须走 PR。
 
-**E. 分支尚未推送，未开 PR。** 六个提交，`main` 受保护必须走 PR。
-
-**F. 配套实现说明未写。** 提案头部「配套文档」仍是「待定」。按项目文档约定，落地时应登记
+**E. 配套实现说明未写。** 提案头部「配套文档」仍是「待定」。按项目文档约定，落地时应登记
 实现说明的链接；本提案正文已承载了绝大部分内容，需判断是否还要单独成篇（判据：是否存在
 「下次维护会踩、但代码本身看不出来」的决策——`Stubs/README.md` 已覆盖接口重建那部分）。
 
@@ -695,3 +734,6 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 纠正：dump 才是权威来源 | 上面几条「无法从导出符号恢复」的结论是错的——RuntimeViewer 自己的 per-type dump 直接给出超类、枚举 case 顺序与 PWT 偏移。今后重建接口一律先查 dump，`nm` 反推只作为没有 dump 时的退路。 |
 | 2026-08-15 | 补第三条接口重建规律 | 类的超类写错（把 NSObject 派生类声明成 Swift 根类）只在**释放时**崩，构造与调用全程正常，实例活到进程结束就完全不显形。判据是 `_OBJC_CLASS_$` 符号，已固化为 `Stubs/AuditClasses.sh`。实测确认 `@objc deinit` 不是判据也不能修复。 |
 | 2026-08-15 | 行号与背景修复 | 行号需要显式安装 `SourceEditorGutter` 并 `enableLineNumbers()`（视图默认不带 gutter）；背景另需设 `SourceEditorView.backgroundColor` 与容器背景，主题字典的背景键只管文本区。当前行高亮色由背景色推导，因为 `ThemeProfile` 没有这一项。 |
+| 2026-08-15 | 附加显示能力落地（原落地步骤 A 的主体） | 折叠 / sticky header / minimap / 行号 / scope guides 五项接入，各自一个 Settings 开关。三个 `install*` 反汇编确认无前置依赖，折叠所需的 `FoldableLanguageService` 由 `SourceModelLanguageService` 现成 conform。查明 `install*` 不幂等（会重复注册 margin accessory 与 event consumer）而 `uninstall*` 与 `show/hideScopeGuides` 幂等，故 bridge 保存已应用状态、只在翻转时调用。 |
+| 2026-08-15 | 结构性验证可以离屏做 | 「离屏判据不可靠」那条只针对渲染结果。装没装上是视图/图层树里有没有那个类，与 `cacheDisplay` 无关，8 轮全开/全关的计数 harness 是可信证据。顺带测出框架侧小泄漏：重装 minimap 每次多留 8 个高亮图层，严格线性，不为此绕开框架 API。 |
+| 2026-08-15 | 设置面板文案更正（原落地步骤 D） | 「语法着色来自 Xcode 自己的 tokenizer，比内置视图不准」在语义高亮落地后已不成立，改为说明着色同样来自运行时元数据，并写明唯一例外是跨两段语义 run 的 token 保留框架自己的判断。 |
