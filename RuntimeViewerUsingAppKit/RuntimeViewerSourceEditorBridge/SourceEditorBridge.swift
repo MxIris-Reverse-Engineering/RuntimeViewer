@@ -11,25 +11,35 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
     private let commandClickNavigator = CommandClickNavigator()
 
+    private let semanticColorProvider: SemanticColorProvider
+
     weak var navigationDelegate: SourceEditorBridgingNavigationDelegate?
 
     var editorView: NSView { sourceEditorView }
 
     override init() {
+        // A gutter has to be installed before line numbers exist at all; the view ships
+        // without one. It doubles as the source of a `LayoutOverrideProviderPriority`, whose
+        // cases cannot be named safely — see the note on that type in the interface.
+        let gutter = SourceEditorGutter()
+        gutter.enableLineNumbers()
+        gutter.emphasizeActiveLines = true
+        semanticColorProvider = SemanticColorProvider(priority: gutter.priority)
+
         super.init()
 
-        sourceEditorView.do {
-            // Defaults to true, in which case the view takes ⌘-click as a multi-cursor
-            // gesture and consumes it before any event consumer is offered the event.
-            $0.enableCmdClickMultiCursor = false
-            $0.isEditingEnabled = false
-        }
+        // Defaults to true, in which case the view takes ⌘-click as a multi-cursor
+        // gesture and consumes it before any event consumer is offered the event.
+        sourceEditorView.enableCmdClickMultiCursor = false
+        sourceEditorView.isEditingEnabled = false
+        sourceEditorView.gutter = gutter
 
         commandClickNavigator.bridge = self
         sourceEditorView.addEventConsumer(commandClickNavigator)
+        sourceEditorView.layoutManager.addLayoutOverrideProvider(semanticColorProvider)
     }
 
-    func setSource(_ source: String, languageIdentifier: String) {
+    func setSource(_ source: NSAttributedString, languageIdentifier: String) {
         let language: SourceEditorLanguage? =
             switch languageIdentifier {
             case "swift": SourceModelEditorLanguage.swift
@@ -37,8 +47,12 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
             default: nil
             }
 
+        // The framework tokenizes plain text, so it only ever sees the string. The colors
+        // the generator resolved from runtime metadata are applied on top, by line, through
+        // the override provider.
+        semanticColorProvider.load(from: source)
         sourceEditorView.dataSource = SourceEditorDataSource(
-            usingMutableString: NSMutableString(string: source),
+            usingMutableString: NSMutableString(string: source.string),
             language: language,
             formattingOptions: SourceEditorFormattingOptions()
         )
@@ -49,6 +63,13 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         let theme = SourceEditorTheme(name: name, dictionary: themeDictionary, fontSizeModifier: fontSizeModifier)
         sourceEditorView.colorTheme = theme
         sourceEditorView.fontTheme = theme
+    }
+
+    func applyBackgroundColor(_ backgroundColor: NSColor) {
+        // Set alongside the theme's own background key rather than instead of it: the theme
+        // drives what the editor paints behind text, this drives the view itself, and a
+        // mismatch shows up as a differently-coloured band past the end of the document.
+        sourceEditorView.backgroundColor = backgroundColor
     }
 
     func scrollToCharacterIndex(_ characterIndex: Int) {
@@ -103,9 +124,105 @@ extension SourceEditorBridge {
     }
 }
 
-// MARK: - Convenience
+// MARK: - Semantic Coloring
 
-extension NSObjectProtocol {
-    /// Local stand-in for FrameworkToolbox's `do`, which the bundle does not link.
-    fileprivate func `do`(_ body: (Self) -> Void) { body(self) }
+extension SourceEditorBridge {
+    /// Paints the generator's colors over the framework's own syntax coloring.
+    ///
+    /// The framework colors from a lexical scan of the plain text, which cannot tell a class
+    /// name from any other identifier — `NSString` comes out as plain text. RuntimeViewer
+    /// already knows what every identifier is, because the interface was rendered from runtime
+    /// metadata, and that knowledge is carried in the attributed string's color runs. This
+    /// replays those runs.
+    ///
+    /// Overriding attributes is far cheaper than the alternative of supplying a whole
+    /// `SourceEditorLanguageService`, which is a 48-requirement protocol; this route needs two
+    /// methods, one of which has a default implementation.
+    fileprivate final class SemanticColorProvider: NSObject, TextAttributeOverrideProvider {
+        /// Indexed by line. Each entry holds column ranges relative to that line's start,
+        /// which is the coordinate space `textAttributeOverridesForLine` works in.
+        private var overridesByLine: [[SourceEditorTextAttributeOverride]] = []
+
+        /// Taken from the gutter rather than constructed — see `SourceEditorBridge.init`.
+        /// Ordering only matters between providers anyway: these overrides apply on top of the
+        /// framework's syntax coloring wherever they sit in the list.
+        let priority: LayoutOverrideProviderPriority
+
+        init(priority: LayoutOverrideProviderPriority) {
+            self.priority = priority
+            super.init()
+        }
+
+        func load(from attributedString: NSAttributedString) {
+            let text = attributedString.string as NSString
+
+            // Both bounds per line: where it starts, and how long its *content* is. The
+            // content length excludes the line terminator, and that distinction is not
+            // cosmetic — the framework traps on a column range that runs past the end of the
+            // line ("specified column range out of bounds"), so a run that swallowed the
+            // trailing newline would take the app down.
+            var lineStarts: [Int] = []
+            var lineContentLengths: [Int] = []
+            text.enumerateSubstrings(in: NSRange(location: 0, length: text.length), options: [.byLines, .substringNotRequired]) { _, range, _, _ in
+                lineStarts.append(range.location)
+                lineContentLengths.append(range.length)
+            }
+            if lineStarts.isEmpty {
+                lineStarts = [0]
+                lineContentLengths = [0]
+            }
+            var overridesByLine: [[SourceEditorTextAttributeOverride]] = Array(repeating: [], count: lineStarts.count)
+
+            attributedString.enumerateAttributes(in: NSRange(location: 0, length: attributedString.length)) { attributes, range, _ in
+                guard let foregroundColor = attributes[.foregroundColor] else { return }
+                let overrideAttributes: [NSAttributedString.Key: Any] = [.foregroundColor: foregroundColor]
+
+                // A run can straddle line boundaries; split it so every piece is expressed in
+                // its own line's columns.
+                var lineIndex = Self.lineIndex(containing: range.location, in: lineStarts)
+                var remaining = range
+                while remaining.length > 0, lineIndex < lineStarts.count {
+                    let lineStart = lineStarts[lineIndex]
+                    let lineContentEnd = lineStart + lineContentLengths[lineIndex]
+                    let pieceStart = max(remaining.location, lineStart)
+                    let pieceEnd = min(remaining.location + remaining.length, lineContentEnd)
+                    if pieceEnd > pieceStart {
+                        overridesByLine[lineIndex].append(
+                            SourceEditorTextAttributeOverride(
+                                range: (pieceStart - lineStart) ..< (pieceEnd - lineStart),
+                                attr: overrideAttributes
+                            )
+                        )
+                    }
+                    // Advance past this line including its terminator, so the next iteration
+                    // starts at the following line rather than re-clipping the same piece.
+                    let nextLineStart = lineIndex + 1 < lineStarts.count ? lineStarts[lineIndex + 1] : text.length
+                    let consumedTo = min(remaining.location + remaining.length, nextLineStart)
+                    remaining = NSRange(location: consumedTo, length: remaining.location + remaining.length - consumedTo)
+                    lineIndex += 1
+                }
+            }
+
+            self.overridesByLine = overridesByLine
+        }
+
+        func textAttributeOverridesForLine(_ line: Int, in layoutManager: SourceEditorLayoutManager) -> [SourceEditorTextAttributeOverride] {
+            guard line >= 0, line < overridesByLine.count else { return [] }
+            return overridesByLine[line]
+        }
+
+        private static func lineIndex(containing characterIndex: Int, in lineStarts: [Int]) -> Int {
+            var low = 0
+            var high = lineStarts.count - 1
+            while low < high {
+                let middle = (low + high + 1) / 2
+                if lineStarts[middle] <= characterIndex {
+                    low = middle
+                } else {
+                    high = middle - 1
+                }
+            }
+            return low
+        }
+    }
 }

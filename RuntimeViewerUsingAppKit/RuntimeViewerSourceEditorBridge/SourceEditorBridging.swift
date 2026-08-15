@@ -26,9 +26,19 @@ protocol SourceEditorBridging: NSObjectProtocol {
 
     /// Replaces the displayed source.
     ///
+    /// Takes the attributed string rather than plain text because its color runs carry what
+    /// the framework's own tokenizer cannot work out — the framework scans text lexically and
+    /// so cannot tell `NSString` from any other identifier, while these colors came from the
+    /// runtime metadata the interface was rendered from. They are painted over the framework's
+    /// coloring.
+    ///
     /// - Parameter languageIdentifier: `"swift"` or `"objc"`. Any other value renders the
-    ///   text without syntax highlighting rather than failing.
-    func setSource(_ source: String, languageIdentifier: String)
+    ///   text without the framework's own syntax highlighting rather than failing.
+    func setSource(_ source: NSAttributedString, languageIdentifier: String)
+
+    /// The editor view's own background, which is what shows past the end of the document.
+    /// Set alongside the theme, whose background key covers the text area.
+    func applyBackgroundColor(_ backgroundColor: NSColor)
 
     /// Applies a theme built from `.xccolortheme`-equivalent plist contents. Xcode ships
     /// `Default (Dark).xccolortheme` and `Default (Light).xccolortheme` in the framework's

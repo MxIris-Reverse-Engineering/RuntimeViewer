@@ -91,6 +91,92 @@ extension SourceEditor.SourceEditorViewEventConsumer {
 public enum SourceEditorTokenType {
 }
 
+// !!! NEVER CONSTRUCT OR PATTERN-MATCH A VALUE OF THIS TYPE. !!!
+//
+// The framework's enum really does have these three cases, but their declaration order is not
+// recoverable from the exports — and for a resilient enum, both the case indices and the
+// implicit raw values come from that order. The cases exist here only so the type is
+// inhabited; writing `.high`, or `init(rawValue: 2)`, would compile and then silently mean
+// whichever case actually sits at that position.
+//
+// Get a value by reading one off a framework object instead, e.g. `SourceEditorGutter.priority`.
+public enum LayoutOverrideProviderPriority : Swift.Int {
+  case low
+  case medium
+  case high
+}
+
+public protocol LayoutOverrideProvider : AnyObject {
+  var priority: SourceEditor.LayoutOverrideProviderPriority { get }
+}
+
+public struct SourceEditorTextAttributeOverride {
+  // `range` is in columns, relative to the start of the line it was returned for.
+  public init(range: Swift.Range<Swift.Int>, attr: [Foundation.NSAttributedString.Key : Any])
+  public var range: Swift.Range<Swift.Int> {
+    get
+  }
+  public var attr: [Foundation.NSAttributedString.Key : Any] {
+    get
+  }
+}
+
+// The cheap way to color text ourselves. The alternative — supplying a whole
+// `SourceEditorLanguageService`, which is what the framework's own syntax coloring goes
+// through — is a 48-requirement protocol; this one has two, and the second has a default.
+//
+// Registration is via `SourceEditorLayoutManager.addLayoutOverrideProvider(_:)`: the layout
+// manager sorts a provider into its buckets by dynamic cast, which is how the framework's own
+// `SourceEditorLineAnnotationManager` (conforming to both protocols) is installed.
+public protocol TextAttributeOverrideProvider : SourceEditor.LayoutOverrideProvider {
+  func textAttributeOverridesForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [SourceEditor.SourceEditorTextAttributeOverride]
+  func pasteboardTextAttributeOverridesForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [SourceEditor.SourceEditorTextAttributeOverride]
+}
+
+extension SourceEditor.TextAttributeOverrideProvider {
+  public func pasteboardTextAttributeOverridesForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [SourceEditor.SourceEditorTextAttributeOverride]
+}
+
+// A native Swift class, not an NSObject subclass — the framework exports no ObjC class symbol
+// for it. Declaring the wrong superclass here compiles and then dispatches into garbage.
+@_hasMissingDesignatedInitializers public class SourceEditorLayoutManager {
+  // `final`: direct symbols only.
+  public final func addLayoutOverrideProvider(_ provider: SourceEditor.LayoutOverrideProvider)
+  public final func removeLayoutOverrideProvider(_ provider: SourceEditor.LayoutOverrideProvider)
+  deinit
+}
+
+// The `: NSObject` here is load-bearing, and the symptom of dropping it is nasty. The
+// framework exports `_OBJC_CLASS_$__TtC12SourceEditor18SourceEditorGutter`, so this class is
+// NSObject-rooted and must be released through the Objective-C dealloc chain. Declared as its
+// own root it constructs fine, answers every call fine, and then crashes when it is
+// *deallocated* — which is why a gutter kept alive for the process's lifetime hides the bug
+// entirely. Adding `@objc deinit` does NOT fix it; only the superclass does.
+// `SourceEditorLayoutManager` has no such symbol and is correctly a native Swift class.
+@_hasMissingDesignatedInitializers @objc public class SourceEditorGutter : ObjectiveC.NSObject {
+  @objc override dynamic public init()
+  // Read to obtain a LayoutOverrideProviderPriority without constructing one — see the note
+  // on that type. `final`: direct symbol only.
+  public final var priority: SourceEditor.LayoutOverrideProviderPriority {
+    get
+  }
+  public func enableLineNumbers()
+  public func disableLineNumbers()
+  public var lineNumbersEnabled: Swift.Bool {
+    get
+    set
+  }
+  public var emphasizeActiveLines: Swift.Bool {
+    get
+    set
+  }
+  public var lineNumberFont: AppKit.NSFont? {
+    get
+    set
+  }
+  @objc deinit
+}
+
 @_hasMissingDesignatedInitializers public class SourceEditorTheme : SourceEditor.SourceEditorColorTheme, SourceEditor.SourceEditorFontTheme {
   // `dictionary` takes .xccolortheme plist contents. The framework ships Default (Dark)
   // and Default (Light) under its own Resources directory.
@@ -144,6 +230,19 @@ public enum SourceEditorTokenType {
   public var isEditingEnabled: Swift.Bool {
     get
     set
+  }
+  public var backgroundColor: AppKit.NSColor {
+    get
+    set
+  }
+  // Nil until a gutter is installed; that is also what turns line numbers on.
+  public var gutter: SourceEditor.SourceEditorGutter? {
+    get
+    set
+  }
+  // `final`: direct symbol only.
+  public final var layoutManager: SourceEditor.SourceEditorLayoutManager {
+    get
   }
   public func addEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
   public func removeEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)

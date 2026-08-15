@@ -74,7 +74,7 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
             .driveOnNext { [weak self] attributedString, runtimeObject in
                 guard let self else { return }
                 displayedAttributedString = attributedString
-                bridge?.setSource(attributedString.string, languageIdentifier: Self.languageIdentifier(for: runtimeObject.kind))
+                bridge?.setSource(attributedString, languageIdentifier: Self.languageIdentifier(for: runtimeObject.kind))
             }
             .disposed(by: rx.disposeBag)
 
@@ -110,6 +110,13 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
         } ?? baseTheme
 
         bridge.applyTheme(name: baseThemeName, dictionary: dictionary, fontSizeModifier: 0)
+
+        // The theme covers the text area; these cover everything around it — the area past
+        // the end of the document, and the container behind the editor.
+        if let backgroundColor = currentTheme?.backgroundColor {
+            bridge.applyBackgroundColor(backgroundColor)
+            (contentView as? UXView)?.backgroundColor = backgroundColor
+        }
     }
 
     private static func languageIdentifier(for kind: RuntimeObjectKind) -> String {
