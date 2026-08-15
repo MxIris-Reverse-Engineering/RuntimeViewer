@@ -33,6 +33,23 @@ struct RelationshipsEquivalenceSnapshotTests {
     private static let subclassAnchors = ["NSObject"]
     private static let protocolAnchors = ["NSCoding", "NSCopying"]
 
+    /// Swift anchor, matched on `displayName` rather than `name` — the latter is
+    /// a mangled string whose spelling is a Swift-version detail, while
+    /// `Foundation.FormatStyle` is public API.
+    ///
+    /// **Added because the three anchors above could not see a whole half of the
+    /// system.** They are all Objective-C, so a change that dropped every Swift
+    /// relationship left this suite green: verified by deliberately reintroducing
+    /// exactly that regression, which cost 768 results across 112 targets and was
+    /// caught only by two `RelationshipsTests` cases that happened to pick Swift
+    /// anchors — and which reported it as `anchor == nil`, i.e. as if the test
+    /// fixture were missing rather than the data.
+    ///
+    /// `FormatStyle` is a good anchor for the job: 44 conformers, all of them
+    /// inside the two images this suite loads, and they are Swift structs and
+    /// enums, so they can only arrive through the Swift materialization path.
+    private static let swiftProtocolAnchors = ["Foundation.FormatStyle"]
+
     @Test("Relationships output matches the pre-migration baseline")
     func matchesBaseline() async throws {
         let engine = RuntimeEngine(source: .local, engineID: "test-rel-equivalence-snapshot")
@@ -63,6 +80,67 @@ struct RelationshipsEquivalenceSnapshotTests {
         try compare(report, againstSnapshotNamed: "relationships-baseline.txt")
     }
 
+    /// The Swift half of the same guarantee, in its own baseline file so the
+    /// Objective-C one keeps the provenance it was captured with (before the
+    /// library pin moved at all).
+    @Test("Swift relationships output matches the pre-migration baseline")
+    func swiftOutputMatchesBaseline() async throws {
+        let engine = RuntimeEngine(source: .local, engineID: "test-rel-equivalence-snapshot-swift")
+        try await engine.connect()
+        try await engine.loadImage(at: Anchors.libobjcPath)
+        try await engine.loadImage(at: Anchors.foundationPath)
+
+        var report = ""
+        for protocolDisplayName in Self.swiftProtocolAnchors {
+            let anchor = try #require(
+                await findObject(displayName: protocolDisplayName, kind: .swift(.type(.protocol)), in: engine),
+                "Anchor protocol \(protocolDisplayName) not found in the loaded images."
+            )
+            let relationships = try await engine.relationships(for: anchor)
+            report += render(section: "conformers of \(protocolDisplayName)", objects: relationships.conformingTypes)
+        }
+
+        try compare(report, againstSnapshotNamed: "relationships-swift-baseline.txt")
+    }
+
+    /// Structural backstop that names no type at all.
+    ///
+    /// The baselines above pin exact output, which makes them precise and also
+    /// makes them go stale: an OS update that renames or removes an anchor turns
+    /// a real regression into indistinguishable churn. This asserts only that the
+    /// Swift path produces *something*, which is the property the imagePath
+    /// regression actually violated, and it keeps holding when the specific
+    /// conformers change.
+    @Test("The Swift relationship path yields results at all")
+    func swiftRelationshipPathIsNotEmpty() async throws {
+        let engine = RuntimeEngine(source: .local, engineID: "test-rel-swift-nonempty")
+        try await engine.connect()
+        try await engine.loadImage(at: Anchors.libobjcPath)
+        try await engine.loadImage(at: Anchors.foundationPath)
+
+        var swiftResultCount = 0
+        for imagePath in await engine.loadedImagePaths {
+            for object in try await engine.objects(in: imagePath) {
+                switch object.kind {
+                case .swift(.type(.class)), .swift(.type(.protocol)):
+                    let relationships = try await engine.relationships(for: object)
+                    swiftResultCount += relationships.subclasses.count + relationships.conformingTypes.count
+                default:
+                    break
+                }
+            }
+        }
+
+        #expect(
+            swiftResultCount > 0,
+            """
+            Every Swift relationship query came back empty. The Objective-C \
+            baseline cannot see this: it stayed green through a regression that \
+            dropped 768 Swift results.
+            """
+        )
+    }
+
     // MARK: - Rendering
 
     /// One line per entry: `kind|displayName|imagePath`.
@@ -77,6 +155,22 @@ struct RelationshipsEquivalenceSnapshotTests {
             rendered += "\(object.kind)|\(object.displayName)|\(object.imagePath)\n"
         }
         return rendered + "\n"
+    }
+
+    /// Swift types are addressed by `displayName` because `name` carries the
+    /// mangled spelling; see `swiftProtocolAnchors`.
+    private func findObject(
+        displayName: String,
+        kind: RuntimeObjectKind,
+        in engine: RuntimeEngine
+    ) async -> RuntimeObject? {
+        for imagePath in await engine.loadedImagePaths {
+            guard let objects = try? await engine.objects(in: imagePath) else { continue }
+            if let match = objects.first(where: { $0.displayName == displayName && $0.kind == kind }) {
+                return match
+            }
+        }
+        return nil
     }
 
     private func findObject(
