@@ -90,12 +90,17 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
         super.viewDidLayout()
 
         guard let bridge else { return }
-        // The editor view's own safe area is exactly how far the toolbar overlaps it, which is
-        // also what has to come off the scrolled content. Re-read every layout rather than
-        // stored: it changes with the toolbar, full-screen and window chrome, and none of that
-        // arrives as a notification the content pane sees.
-        bridge.applyTopContentInset(bridge.editorView.safeAreaInsets.top)
+        // **`view`, not `bridge.editorView`.** The editor view reads a zero safe area here —
+        // AppKit resolves it against the controller's view, and nothing re-derives it for a
+        // descendant that happens to extend past it. Asking the editor view directly returns
+        // the right answer only when it is a direct subview of the window's content view,
+        // which is true of a test harness and not of this pane.
+        //
+        // Re-read every layout rather than stored: it moves with the toolbar, full screen and
+        // window chrome, none of which reaches the content pane as a notification.
+        bridge.applyTopContentInset(view.safeAreaInsets.top)
     }
+
 
     override func setupBindings(for viewModel: ContentTextViewModel) {
         super.setupBindings(for: viewModel)

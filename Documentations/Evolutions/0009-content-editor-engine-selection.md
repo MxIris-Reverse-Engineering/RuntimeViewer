@@ -604,9 +604,14 @@ scroll edge 模糊。`NSTextView` 那条路白拿这个效果:滚动视图**就�
 `defaultScrollViewContentInsets + additionalScrollViewContentInsets` 算。结果是安全区传不进去:
 首几行正文和 sticky header 直接画在工具栏上,而不是从工具栏下面滚过去。
 
-修法是把 `additionalScrollViewContentInsets.top` 设成 editor view 自己的 `safeAreaInsets.top`
-(工具栏压住它的高度),在 `viewDidLayout()` 里每次重读——工具栏、全屏、窗口 chrome 都会改它,
-而这些都不会给内容面板发通知。
+修法是在 `viewDidLayout()` 里把 `additionalScrollViewContentInsets.top` 设成
+**view controller 的 `view.safeAreaInsets.top`**,每次布局重读——工具栏、全屏、窗口 chrome
+都会改它,而这些都不会给内容面板发通知。
+
+**必须取 `view`,不能取 `bridge.editorView`。** 后者在真实层级里读出来是 0:AppKit 是对着
+controller 的 view 解析安全区的,不会为一个恰好越过它的后代重新推导。只有当那个视图**直接**
+挂在 window 的 content view 上时,问它才拿得到正确值——测试 harness 就是这种结构,
+所以 harness 量到 66、实机是 0,差点把这条结论带偏。
 
 实测(带 toolbar 的 `.fullSizeContentView` 窗口,安全区 66pt):
 

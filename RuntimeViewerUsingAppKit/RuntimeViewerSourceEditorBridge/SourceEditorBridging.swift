@@ -95,8 +95,9 @@ protocol SourceEditorBridging: NSObjectProtocol {
     /// itself — so without this the first lines and the sticky header are drawn over the
     /// toolbar instead of under it.
     ///
-    /// - Parameter topInset: usually the editor view's own `safeAreaInsets.top`, which is
-    ///   exactly the height the toolbar overlaps it by.
+    /// - Parameter topInset: the hosting **view controller's** `view.safeAreaInsets.top`, which
+    ///   is the height the toolbar overlaps the pane by. Not the editor view's own — that reads
+    ///   zero once it is nested a few levels down.
     func applyTopContentInset(_ topInset: CGFloat)
 
     /// Scrolls so that `characterIndex` — a UTF-16 offset into the source last passed to
