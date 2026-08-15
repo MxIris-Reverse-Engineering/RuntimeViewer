@@ -84,7 +84,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit",
-                exact: "0.51.101",
+                exact: "0.52.101",
             ),
         ),
         .package(
@@ -94,7 +94,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
-                exact: "0.7.103",
+                exact: "0.8.104",
             ),
         ),
         .package(
@@ -104,7 +104,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                exact: "0.14.1",
+                exact: "0.15.2",
             ),
         ),
         .package(
@@ -117,11 +117,11 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/apple/swift-collections",
-            from: "1.5.1",
+            from: "1.6.0",
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox",
-            from: "0.7.1",
+            from: "0.9.0",
         ),
         .package(
             local: .package(
@@ -174,7 +174,6 @@ let package = Package(
                 .product(name: "MachOKit", package: "MachOKit"),
                 .product(name: "MachOObjCSection", package: "MachOObjCSection"),
                 .product(name: "MachOSwiftSection", package: "MachOSwiftSection"),
-                .product(name: "OutputTransformer", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclaration", package: "MachOSwiftSection"),
                 .product(name: "SwiftDeclarationRendering", package: "MachOSwiftSection"),
                 .product(name: "SwiftIndexing", package: "MachOSwiftSection"),
