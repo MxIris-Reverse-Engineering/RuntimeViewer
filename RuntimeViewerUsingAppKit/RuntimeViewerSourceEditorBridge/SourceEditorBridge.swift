@@ -30,7 +30,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         showsFoldingRibbon: false,
         showsStickyHeaders: false,
         showsMinimap: false,
-        showsScopeGuides: false
+        showsScopeGuides: false,
+        showsInvisibles: false
     )
 
     private struct DisplayOptions: Equatable {
@@ -39,6 +40,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         var showsStickyHeaders: Bool
         var showsMinimap: Bool
         var showsScopeGuides: Bool
+        var showsInvisibles: Bool
     }
 
     weak var navigationDelegate: SourceEditorBridgingNavigationDelegate?
@@ -96,6 +98,13 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         sourceEditorView.colorTheme = theme
         sourceEditorView.fontTheme = theme
         applyLineNumberFont(lineNumberFont)
+
+        // `showInvisibles()` copies the colour out of whatever theme was current when it ran,
+        // so a theme applied afterwards leaves the invisible glyphs in the old one. Re-running
+        // it is the only way to refresh them; it is a no-op when they are off.
+        if appliedDisplayOptions.showsInvisibles {
+            sourceEditorView.showInvisibles()
+        }
     }
 
     /// **Without this the gutter is empty and 6pt wide, which reads as "line numbers do not
@@ -128,14 +137,16 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         showsFoldingRibbon: Bool,
         showsStickyHeaders: Bool,
         showsMinimap: Bool,
-        showsScopeGuides: Bool
+        showsScopeGuides: Bool,
+        showsInvisibles: Bool
     ) {
         let options = DisplayOptions(
             showsLineNumbers: showsLineNumbers,
             showsFoldingRibbon: showsFoldingRibbon,
             showsStickyHeaders: showsStickyHeaders,
             showsMinimap: showsMinimap,
-            showsScopeGuides: showsScopeGuides
+            showsScopeGuides: showsScopeGuides,
+            showsInvisibles: showsInvisibles
         )
         guard options != appliedDisplayOptions else { return }
         let previousOptions = appliedDisplayOptions
@@ -173,6 +184,14 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
             }
         }
 
+        if options.showsInvisibles != previousOptions.showsInvisibles {
+            if options.showsInvisibles {
+                sourceEditorView.showInvisibles()
+            } else {
+                sourceEditorView.hideInvisibles()
+            }
+        }
+
         // Called unconditionally, unlike the pairs above: both sides read the flag they are
         // about to write and do nothing when it did not change, so this is the one option
         // whose real state does not have to be tracked to stay correct.
@@ -184,8 +203,12 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     }
 
     func applyTopContentInset(_ topInset: CGFloat) {
-        guard sourceEditorView.additionalScrollViewContentInsets.top != topInset else { return }
-        sourceEditorView.additionalScrollViewContentInsets.top = topInset
+        // **`default`, not `additional`.** The scroll view's insets are the sum of the two, but
+        // `additional` is the find panel's own channel: presenting it writes the panel's height
+        // straight into `additional.top`, which silently threw away the toolbar inset that used
+        // to live there and left the panel itself flush against the window's top edge.
+        guard sourceEditorView.defaultScrollViewContentInsets.top != topInset else { return }
+        sourceEditorView.defaultScrollViewContentInsets.top = topInset
     }
 
     func scrollToCharacterIndex(_ characterIndex: Int) {

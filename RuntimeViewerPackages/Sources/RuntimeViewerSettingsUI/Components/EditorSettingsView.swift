@@ -45,6 +45,7 @@ struct EditorSettingsView: View {
                 Toggle("Sticky Headers", isOn: $settings.showsStickyHeaders)
                 Toggle("Minimap", isOn: $settings.showsMinimap)
                 Toggle("Scope Guides", isOn: $settings.showsScopeGuides)
+                Toggle("Invisibles", isOn: $settings.showsInvisibles)
             } header: {
                 Text("Display")
             } footer: {

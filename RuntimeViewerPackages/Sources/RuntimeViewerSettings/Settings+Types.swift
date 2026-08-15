@@ -72,6 +72,12 @@ extension Settings {
         @Default(true)
         public var showsScopeGuides: Bool
 
+        /// Off by default — a glyph on every space is a strong preference, and Xcode ships it
+        /// off too. It earns its place on deeply nested Swift declarations, where the exact
+        /// indentation is what tells the nesting levels apart.
+        @Default(false)
+        public var showsInvisibles: Bool
+
         public static let `default` = Self()
     }
 

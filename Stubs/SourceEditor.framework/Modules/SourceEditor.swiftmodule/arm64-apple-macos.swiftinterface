@@ -245,6 +245,10 @@ extension SourceEditor.TextAttributeOverrideProvider {
     get
     set
   }
+  public var defaultScrollViewContentInsets: AppKit.NSEdgeInsets {
+    get
+    set
+  }
   // Nil until a gutter is installed; that is also what turns line numbers on.
   public var gutter: SourceEditor.SourceEditorGutter? {
     get
@@ -277,6 +281,12 @@ extension SourceEditor.TextAttributeOverrideProvider {
   // accessor, so these two functions are the only way in.
   public func showScopeGuides()
   public func hideScopeGuides()
+  // `showInvisibles()` reads the view's current `colorTheme`, casts it to the framework's
+  // `ShowInvisiblesTheme` and hands that to the layout manager — `SourceEditorTheme` conforms,
+  // so nothing has to be supplied the way the gutter's font does. It captures the theme at the
+  // time of the call, though, so a later theme change means calling it again.
+  public func showInvisibles()
+  public func hideInvisibles()
   public func positionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?
   // `final`: direct symbol only, unlike positionAtPoint which has a dispatch thunk.
   public final func closestPositionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?

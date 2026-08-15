@@ -67,7 +67,8 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
                 showsFoldingRibbon: editorSettings.showsFoldingRibbon,
                 showsStickyHeaders: editorSettings.showsStickyHeaders,
                 showsMinimap: editorSettings.showsMinimap,
-                showsScopeGuides: editorSettings.showsScopeGuides
+                showsScopeGuides: editorSettings.showsScopeGuides,
+                showsInvisibles: editorSettings.showsInvisibles
             )
         }
 

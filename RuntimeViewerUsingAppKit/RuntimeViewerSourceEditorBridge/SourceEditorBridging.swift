@@ -68,12 +68,14 @@ protocol SourceEditorBridging: NSObjectProtocol {
     ///   - showsMinimap: the document overview down the right edge. Off by default — it is
     ///     the only one of these that takes width away from the text.
     ///   - showsScopeGuides: the vertical indent guides.
+    ///   - showsInvisibles: draws a glyph for every space, tab and line ending.
     func applyDisplayOptions(
         showsLineNumbers: Bool,
         showsFoldingRibbon: Bool,
         showsStickyHeaders: Bool,
         showsMinimap: Bool,
-        showsScopeGuides: Bool
+        showsScopeGuides: Bool,
+        showsInvisibles: Bool
     )
 
     /// Applies a theme built from `.xccolortheme`-equivalent plist contents. Xcode ships
@@ -94,6 +96,9 @@ protocol SourceEditorBridging: NSObjectProtocol {
     /// inside `SourceEditorView`, which switches that adjustment off and drives the insets
     /// itself — so without this the first lines and the sticky header are drawn over the
     /// toolbar instead of under it.
+    ///
+    /// The find panel is laid out relative to this too, so setting it also keeps ⌘F from
+    /// opening flush against the window's top edge.
     ///
     /// - Parameter topInset: the hosting **view controller's** `view.safeAreaInsets.top`, which
     ///   is the height the toolbar overlaps the pane by. Not the editor view's own — that reads

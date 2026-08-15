@@ -553,8 +553,24 @@ spike 阶段那个「SourceEditor ≈ TextKit 2 的 2.8 倍」是离屏窗口无
 | Sticky Headers | `installStickyHeaders()` / `uninstallStickyHeaders()` | 开 |
 | Minimap | `installMinimap()` / `uninstallMinimap()` | **关** |
 | Scope Guides | `showScopeGuides()` / `hideScopeGuides()` | 开 |
+| Invisibles | `showInvisibles()` / `hideInvisibles()` | 关 |
 
 minimap 默认关,因为它是唯一会占走文本宽度的一项,而内容面板本来就是三栏里最窄的。
+invisibles 默认关(Xcode 同样默认关),它在嵌套很深的 Swift 声明里有用——缩进的精确层数
+就是区分嵌套层级的东西。
+
+**invisibles 不需要额外喂东西**,和 gutter 字体那个坑不同:`showInvisibles()` 自己读视图当前的
+`colorTheme`、动态转型成 `ShowInvisiblesTheme` 再交给 layout manager,而 `SourceEditorTheme`
+本身就 conform 该协议(有 conformance descriptor 为证),颜色取 `DVTSourceTextInvisiblesColor`
+——正好是我们不覆盖、原样保留 Xcode 基础主题的那批键之一。
+**但它在调用时把主题拷走了**,所以之后换主题(明暗切换)必须重调一次 `showInvisibles()`,
+否则不可见字符还是旧主题的颜色。
+
+### 查找栏:框架自带 ⌘F,只是位置要靠 content inset
+
+不用做任何事就有查找栏——框架注册了默认 key binding,标准的 `performFindPanelAction:`
+(sender 的 `tag` 是 `NSTextFinder.Action`,`showFindInterface` = 1)就能拉起。
+它的位置问题见上一节的 `default` / `additional` 之辨。
 
 **`install*` 不是幂等的,必须自己记状态。** `installMinimap()` 在已有 minimap 时会跳过创建,
 但仍然继续把它作为 margin accessory 和 event consumer 再注册一遍。所以 bridge 保存
@@ -604,9 +620,19 @@ scroll edge 模糊。`NSTextView` 那条路白拿这个效果:滚动视图**就�
 `defaultScrollViewContentInsets + additionalScrollViewContentInsets` 算。结果是安全区传不进去:
 首几行正文和 sticky header 直接画在工具栏上,而不是从工具栏下面滚过去。
 
-修法是在 `viewDidLayout()` 里把 `additionalScrollViewContentInsets.top` 设成
+修法是在 `viewDidLayout()` 里把 `defaultScrollViewContentInsets.top` 设成
 **view controller 的 `view.safeAreaInsets.top`**,每次布局重读——工具栏、全屏、窗口 chrome
 都会改它,而这些都不会给内容面板发通知。
+
+**必须写 `default`,不能写 `additional`。** 滚动视图的 content insets 是两者之和,
+但 `additional` 是**查找面板自己的通道**:`present(_:)` 会把面板高度直接写进
+`additional.top`,把我们放在那里的工具栏偏移无声地冲掉,同时面板自己也会贴到窗口顶边。
+实测(安全区 66,面板高 28):
+
+| 写入的字段 | 按 ⌘F 前 `contentInsets.top` | 按 ⌘F 后 | 查找栏在编辑器内的 y |
+|---|---|---|---|
+| `additional` | 66 | **28**(66 被冲掉) | 0(贴顶,压在工具栏下) |
+| `default` | 66 | 94(66 + 28) | **66**(工具栏下沿) |
 
 **必须取 `view`,不能取 `bridge.editorView`。** 后者在真实层级里读出来是 0:AppKit 是对着
 controller 的 view 解析安全区的,不会为一个恰好越过它的后代重新推导。只有当那个视图**直接**
@@ -655,9 +681,8 @@ Xcode 自己也是这个行为。要改只能深入私有布局(拿到 `StickyHe
 
 ### 未完成
 
-**A. 查找栏与其余显示项。** 查找栏走 `makeTextFindPanel()` / `present(_:)`,是这里面唯一还需要
-接 UI 的一项。另有 `areInvisiblesShown` / `lineWrappingStyle` / `overscroll`,对只读接口的价值
-存疑,未做。
+**A. 其余显示项。** `lineWrappingStyle` / `overscroll`,对只读接口的价值存疑,未做。
+（查找栏与 invisibles 已完成,见上。）
 
 **B. 系统符号与工程符号的颜色区分。** 主题里 `identifier.class` 与 `identifier.class.system`
 是两个键，但 `ThemeProfile` 只有 7 种样式、没有这一维，现在两者同色。要区分必须先给
@@ -814,5 +839,7 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 结构性验证可以离屏做 | 「离屏判据不可靠」那条只针对渲染结果。装没装上是视图/图层树里有没有那个类，与 `cacheDisplay` 无关，8 轮全开/全关的计数 harness 是可信证据。顺带测出框架侧小泄漏：重装 minimap 每次多留 8 个高亮图层，严格线性，不为此绕开框架 API。 |
 | 2026-08-15 | 行号一直没显示，真因是缺字体 | 此前记为「已完成」是错的——只验证了 gutter 视图存在，没验证行号有没有像素。`lineNumberFont` 为 nil 时行号图层测得 0×0、gutter 塌成 6pt，看起来像功能没接上。`.xccolortheme` 没有 gutter 键，字体只能由调用方传，故 `applyTheme` 增加 `lineNumberFont` 参数；改字体后还要再调一次 `enableLineNumbers()` 才会重绘。 |
 | 2026-08-15 | 工具栏穿透需要显式传 content inset | `SourceEditorView` 把真正的滚动视图埋在里面，且 `installScrollView()` 关掉了 `automaticallyAdjustsContentInsets`，安全区传不进去，正文和 sticky header 画到了工具栏上。改为在 `viewDidLayout()` 把 editor view 的 `safeAreaInsets.top` 写进 `additionalScrollViewContentInsets.top`。这是 `NSTextView` 路径白拿、这里必须自己接的一项。 |
+| 2026-08-15 | content inset 必须写 `default` 而非 `additional` | `additional` 是查找面板自己的通道，`present(_:)` 把面板高度写进去、冲掉我们放的工具栏偏移，面板也因此贴到窗口顶边。改写 `default` 后两者相加，⌘F 打开时面板落在工具栏下沿。这条是实测翻的案——先前从反汇编读成"两者相加所以互不影响"，是错的。 |
+| 2026-08-15 | 加入 invisibles 开关 | 深层嵌套的 Swift 声明里缩进层数就是信息。`showInvisibles()` 自带主题（`SourceEditorTheme` conform `ShowInvisiblesTheme`），无需像 gutter 字体那样额外喂；但它拷走调用时的主题，换主题后必须重调。 |
 | 2026-08-15 | sticky header 单行是框架设计 | `headerLineLayer` 给 line layer 传的宽度是 `nil`（指令级确认），即不限宽不换行；`StickyHeaderViewContents` 也只有一个 line layer。溢出尾部的淡出才是 `maxWidth` 的用途。Xcode 同行为，不改。 |
 | 2026-08-15 | 设置面板文案更正（原落地步骤 D） | 「语法着色来自 Xcode 自己的 tokenizer，比内置视图不准」在语义高亮落地后已不成立，改为说明着色同样来自运行时元数据，并写明唯一例外是跨两段语义 run 的 token 保留框架自己的判断。 |
