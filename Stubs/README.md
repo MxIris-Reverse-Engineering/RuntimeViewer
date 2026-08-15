@@ -27,8 +27,16 @@ required, and no Apple binary is redistributed.
 
 ## Editing the `.swiftinterface`
 
-The interface is a *subset*: only what the bridge actually calls. Three rules decide how each
-declaration must be written, and all three are mechanical — ask the binary, don't guess.
+**Start from a RuntimeViewer dump of the framework, not from `nm`.** Exporting
+`SourceEditor.framework` with this app produces one `.swiftinterface` per type, and those files
+already answer everything below directly: superclasses, enum cases *in declaration order*,
+protocol requirements *with their witness-table offsets*, struct field layouts, initializer
+signatures. Copying a declaration out of the dump takes a moment; deriving the same facts from
+the symbol table takes an afternoon and gets some of them wrong.
+
+The interface here is a *subset*: only what the bridge actually calls. Three rules decide how
+each declaration must be written. All three are answered by the dump; the scripts beside this
+file re-derive two of them from the binary, for when no dump is at hand.
 
 **1. `final` or not, decided by the exported symbol form.** A member reached through a
 dispatch thunk is declared plainly; a member the framework exports only as a direct symbol
@@ -55,6 +63,9 @@ constructs fine, answers every call fine, and only crashes when it is **dealloca
 emits native release for a root class it believes it owns, while the real object needs the
 Objective-C `dealloc` chain. The crash is a jump to a garbage address with no usable
 backtrace, and an instance kept alive for the lifetime of the process hides it completely.
+
+The dump states it outright — `class SourceEditorGutter: __C.NSObject` — so read it there.
+Without one, the exported ObjC class symbol is a usable proxy:
 
 ```sh
 printf '%s\n' SourceEditor.SourceEditorGutter | ./AuditClasses.sh

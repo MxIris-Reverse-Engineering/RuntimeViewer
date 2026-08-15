@@ -91,15 +91,8 @@ extension SourceEditor.SourceEditorViewEventConsumer {
 public enum SourceEditorTokenType {
 }
 
-// !!! NEVER CONSTRUCT OR PATTERN-MATCH A VALUE OF THIS TYPE. !!!
-//
-// The framework's enum really does have these three cases, but their declaration order is not
-// recoverable from the exports — and for a resilient enum, both the case indices and the
-// implicit raw values come from that order. The cases exist here only so the type is
-// inhabited; writing `.high`, or `init(rawValue: 2)`, would compile and then silently mean
-// whichever case actually sits at that position.
-//
-// Get a value by reading one off a framework object instead, e.g. `SourceEditorGutter.priority`.
+// Case order copied from the dump, which prints it — a resilient enum takes both its case
+// indices and its implicit raw values from declaration order, so this cannot be guessed.
 public enum LayoutOverrideProviderPriority : Swift.Int {
   case low
   case medium
@@ -155,8 +148,7 @@ extension SourceEditor.TextAttributeOverrideProvider {
 // `SourceEditorLayoutManager` has no such symbol and is correctly a native Swift class.
 @_hasMissingDesignatedInitializers @objc public class SourceEditorGutter : ObjectiveC.NSObject {
   @objc override dynamic public init()
-  // Read to obtain a LayoutOverrideProviderPriority without constructing one — see the note
-  // on that type. `final`: direct symbol only.
+  // `final`: direct symbol only.
   public final var priority: SourceEditor.LayoutOverrideProviderPriority {
     get
   }

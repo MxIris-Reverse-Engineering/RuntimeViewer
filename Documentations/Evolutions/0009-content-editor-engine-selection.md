@@ -160,7 +160,20 @@ dataSource.tokenRangeAtPosition(_:) -> (SourceEditorTokenType?, Range<SourceEdit
 
 另外 `enableCmdClickMultiCursor` 默认为 `true`，会把 ⌘-click 当作多光标手势吃掉，必须设为 `false`。
 
-### 重建接口的三条机械规律
+### 重建接口：先查 dump，不要从符号表反推
+
+用 RuntimeViewer 自己导出的 dump（`/Volumes/RE/SourceEdit/Xcode/26.5/<Framework>/SwiftInterfaces/`，
+每个类型一份 `.swiftinterface`）**直接给出**下面三条规律的答案：超类、枚举 case 的声明顺序、
+protocol requirement 及其 PWT 偏移，另加 struct 字段布局与 initializer 完整签名。
+
+本次落地时没有先查 dump，改从 `nm -gU` + demangle 反推，代价是两个错误结论：把 NSObject
+派生的 `SourceEditorGutter` 声明成 Swift 根类（只在释放时崩，查了一下午），以及断言
+`LayoutOverrideProviderPriority` 的 case 顺序不可恢复（dump 第一行就写着 low/medium/high）。
+
+**注意版本错配**：现有 dump 出自 Xcode 26.5.0，而实际链接与运行时加载的是 26.6，
+`SourceEditor` 二进制 UUID 不同。已核对的声明两版一致，对不上时以会被实际加载的二进制为准。
+
+### 重建接口的三条机械规律（dump 均可直接回答）
 
 1. **protocol requirement 顺序** —— RuntimeViewer 自己导出的 dump 已带 PWT（protocol witness
    table）偏移，且按 witness table 顺序排列（`0x8, 0x10, 0x18…`）。照抄即可；**偏移出现跳跃
@@ -168,7 +181,7 @@ dataSource.tokenRangeAtPosition(_:) -> (SourceEditorTokenType?, Range<SourceEdit
 
 2. **类的超类必须写对，尤其是「是否 NSObject 派生」** —— 这条是三条里最难查的。写错了对象**构造正常、调用全部正常，只在释放时崩**：Swift 对它认为的根类走原生 release，而真实对象需要走 ObjC dealloc 链。崩溃表现为跳到垃圾地址、没有可用调用栈；只要那个实例活到进程结束，这个 bug 就完全不显形（本次就是这样在一次「通过」的 spike 里潜伏下来的）。
 
-   判据是框架有没有导出 `_OBJC_CLASS_$__TtC…` 符号，`Stubs/AuditClasses.sh` 直接回答。
+   dump 里直接写着（`class SourceEditorGutter: __C.NSObject`）。没有 dump 时的退路是看框架有没有导出 `_OBJC_CLASS_$__TtC…` 符号，`Stubs/AuditClasses.sh` 回答这个。
 
    **不要用 `@objc deinit` 当判据。** Darwin 上每个 Swift 类的 deinit 都暴露成 `dealloc`，真实的 `.swiftinterface`（如 SwiftUI 的）里大量没有继承任何东西的类也带 `@objc deinit`，它不携带信息。已实测：给一个超类写错的类加上 `@objc deinit` **不能**阻止崩溃，只有改对超类才行。
 
@@ -533,9 +546,8 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 
 - **列范围必须落在该行的内容长度内**（不含行尾换行符）。越界不是被忽略，而是框架直接
   `fatalError("specified column range out of bounds")`。
-- `LayoutOverrideProviderPriority` 的 case 声明顺序无法从导出符号恢复，而 resilient 枚举的
-  case 索引与隐式 raw value 都来自该顺序。**不要写 case 名，也不要 `init(rawValue:)`** ——
-  从框架对象上读一个现成的值（本实现取 `SourceEditorGutter.priority`）。
+- `LayoutOverrideProviderPriority` 的 case 声明顺序**必须照抄 dump**（`low` / `medium` / `high`）。
+  resilient 枚举的 case 索引与隐式 raw value 都来自声明顺序，顺序写错会静默取到别的 case。
 
 ### 已知妥协（已解决，保留记录）：首个版本的语法高亮是词法的
 
@@ -589,5 +601,6 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 主题转换完成 | 开关改为正式设置项（Settings › Editor），不再走隐藏的 UserDefaults 键；`ThemeProfile` 已能渲染成 `.xccolortheme`。实测查明颜色分量必须按 calibrated RGB 写入，按 sRGB 写会静默偏色。 |
 | 2026-08-15 | 语义 token 注入定性为「值得做」 | 查明 Xcode 的 token 分类本身是语义级的，注入后着色会优于现有 `NSTextView` 路径而非持平；`SourceEditorLanguageService` 是 protocol（48 个 requirement）而非 class，且 `SourceEditorDataSource` 有直接接收 language service 的 initializer。工作量比现有接口子集大一个量级，单独排期。 |
 | 2026-08-15 | 语义高亮完成，成本远低于预估 | 找到 `TextAttributeOverrideProvider`（2 个 requirement，其一有默认实现），可直接把生成侧的 `NSAttributedString` 颜色覆盖上去，无需重建 language service。上一行的排期判断作废。 |
+| 2026-08-15 | 纠正：dump 才是权威来源 | 上面几条「无法从导出符号恢复」的结论是错的——RuntimeViewer 自己的 per-type dump 直接给出超类、枚举 case 顺序与 PWT 偏移。今后重建接口一律先查 dump，`nm` 反推只作为没有 dump 时的退路。 |
 | 2026-08-15 | 补第三条接口重建规律 | 类的超类写错（把 NSObject 派生类声明成 Swift 根类）只在**释放时**崩，构造与调用全程正常，实例活到进程结束就完全不显形。判据是 `_OBJC_CLASS_$` 符号，已固化为 `Stubs/AuditClasses.sh`。实测确认 `@objc deinit` 不是判据也不能修复。 |
 | 2026-08-15 | 行号与背景修复 | 行号需要显式安装 `SourceEditorGutter` 并 `enableLineNumbers()`（视图默认不带 gutter）；背景另需设 `SourceEditorView.backgroundColor` 与容器背景，主题字典的背景键只管文本区。当前行高亮色由背景色推导，因为 `ThemeProfile` 没有这一项。 |

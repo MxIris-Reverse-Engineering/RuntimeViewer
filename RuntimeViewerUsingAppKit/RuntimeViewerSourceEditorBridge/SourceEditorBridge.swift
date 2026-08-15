@@ -11,27 +11,25 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
     private let commandClickNavigator = CommandClickNavigator()
 
-    private let semanticColorProvider: SemanticColorProvider
+    private let semanticColorProvider = SemanticColorProvider()
 
     weak var navigationDelegate: SourceEditorBridgingNavigationDelegate?
 
     var editorView: NSView { sourceEditorView }
 
     override init() {
-        // A gutter has to be installed before line numbers exist at all; the view ships
-        // without one. It doubles as the source of a `LayoutOverrideProviderPriority`, whose
-        // cases cannot be named safely — see the note on that type in the interface.
-        let gutter = SourceEditorGutter()
-        gutter.enableLineNumbers()
-        gutter.emphasizeActiveLines = true
-        semanticColorProvider = SemanticColorProvider(priority: gutter.priority)
-
         super.init()
 
         // Defaults to true, in which case the view takes ⌘-click as a multi-cursor
         // gesture and consumes it before any event consumer is offered the event.
         sourceEditorView.enableCmdClickMultiCursor = false
         sourceEditorView.isEditingEnabled = false
+
+        // A gutter has to be installed before line numbers exist at all; the view ships
+        // without one.
+        let gutter = SourceEditorGutter()
+        gutter.enableLineNumbers()
+        gutter.emphasizeActiveLines = true
         sourceEditorView.gutter = gutter
 
         commandClickNavigator.bridge = self
@@ -143,15 +141,9 @@ extension SourceEditorBridge {
         /// which is the coordinate space `textAttributeOverridesForLine` works in.
         private var overridesByLine: [[SourceEditorTextAttributeOverride]] = []
 
-        /// Taken from the gutter rather than constructed — see `SourceEditorBridge.init`.
-        /// Ordering only matters between providers anyway: these overrides apply on top of the
-        /// framework's syntax coloring wherever they sit in the list.
-        let priority: LayoutOverrideProviderPriority
-
-        init(priority: LayoutOverrideProviderPriority) {
-            self.priority = priority
-            super.init()
-        }
+        /// These colors are the point of the feature, so nothing else should be able to take
+        /// them back. The framework's own gutter sits at `.low`.
+        let priority: LayoutOverrideProviderPriority = .high
 
         func load(from attributedString: NSAttributedString) {
             let text = attributedString.string as NSString
