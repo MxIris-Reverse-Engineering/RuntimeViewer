@@ -46,10 +46,11 @@ struct EditorSettingsView: View {
                 Toggle("Minimap", isOn: $settings.showsMinimap)
                 Toggle("Scope Guides", isOn: $settings.showsScopeGuides)
                 Toggle("Invisibles", isOn: $settings.showsInvisibles)
+                Toggle("Mark Separators", isOn: $settings.showsMarkSeparators)
             } header: {
                 Text("Display")
             } footer: {
-                Text("Changes apply immediately. Sticky headers pin the enclosing declarations to the top of the view while scrolling; the folding ribbon draws the arrows that collapse a declaration.")
+                Text("Changes apply immediately. Sticky headers pin the enclosing declarations to the top of the view while scrolling; the folding ribbon draws the arrows that collapse a declaration. Mark separators draw a rule at every MARK comment, and have nothing to draw until generated interfaces contain them.")
             }
             .disabled(!isSourceEditorInstalled || !settings.usesSourceEditor)
 

@@ -69,13 +69,16 @@ protocol SourceEditorBridging: NSObjectProtocol {
     ///     the only one of these that takes width away from the text.
     ///   - showsScopeGuides: the vertical indent guides.
     ///   - showsInvisibles: draws a glyph for every space, tab and line ending.
+    ///   - showsMarkSeparators: draws a rule across the text at every `// MARK:` line. Does
+    ///     nothing until the interface generator emits them.
     func applyDisplayOptions(
         showsLineNumbers: Bool,
         showsFoldingRibbon: Bool,
         showsStickyHeaders: Bool,
         showsMinimap: Bool,
         showsScopeGuides: Bool,
-        showsInvisibles: Bool
+        showsInvisibles: Bool,
+        showsMarkSeparators: Bool
     )
 
     /// Applies a theme built from `.xccolortheme`-equivalent plist contents. Xcode ships

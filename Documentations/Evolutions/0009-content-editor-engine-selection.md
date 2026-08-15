@@ -554,6 +554,7 @@ spike 阶段那个「SourceEditor ≈ TextKit 2 的 2.8 倍」是离屏窗口无
 | Minimap | `installMinimap()` / `uninstallMinimap()` | **关** |
 | Scope Guides | `showScopeGuides()` / `hideScopeGuides()` | 开 |
 | Invisibles | `showInvisibles()` / `hideInvisibles()` | 关 |
+| Mark Separators | `showMarkSeparators()` / `hideMarkSeparators()` | 开 |
 
 minimap 默认关,因为它是唯一会占走文本宽度的一项,而内容面板本来就是三栏里最窄的。
 invisibles 默认关(Xcode 同样默认关),它在嵌套很深的 Swift 声明里有用——缩进的精确层数
@@ -841,5 +842,6 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 工具栏穿透需要显式传 content inset | `SourceEditorView` 把真正的滚动视图埋在里面，且 `installScrollView()` 关掉了 `automaticallyAdjustsContentInsets`，安全区传不进去，正文和 sticky header 画到了工具栏上。改为在 `viewDidLayout()` 把 editor view 的 `safeAreaInsets.top` 写进 `additionalScrollViewContentInsets.top`。这是 `NSTextView` 路径白拿、这里必须自己接的一项。 |
 | 2026-08-15 | content inset 必须写 `default` 而非 `additional` | `additional` 是查找面板自己的通道，`present(_:)` 把面板高度写进去、冲掉我们放的工具栏偏移，面板也因此贴到窗口顶边。改写 `default` 后两者相加，⌘F 打开时面板落在工具栏下沿。这条是实测翻的案——先前从反汇编读成"两者相加所以互不影响"，是错的。 |
 | 2026-08-15 | 加入 invisibles 开关 | 深层嵌套的 Swift 声明里缩进层数就是信息。`showInvisibles()` 自带主题（`SourceEditorTheme` conform `ShowInvisiblesTheme`），无需像 gutter 字体那样额外喂；但它拷走调用时的主题，换主题后必须重调。 |
+| 2026-08-15 | 加入 mark separators 开关 | 生成器目前不输出 `// MARK:`，所以这一项现在什么都不画；默认开是因为它无害（没有 MARK 就没有可画的位置），等生成器开始输出时自动生效，不用再改一次设置。实现与 scope guides 同形：两半都写同一个惰性创建的 controller 的同一个标志再请求布局，故幂等、无需跟踪状态。 |
 | 2026-08-15 | sticky header 单行是框架设计 | `headerLineLayer` 给 line layer 传的宽度是 `nil`（指令级确认），即不限宽不换行；`StickyHeaderViewContents` 也只有一个 line layer。溢出尾部的淡出才是 `maxWidth` 的用途。Xcode 同行为，不改。 |
 | 2026-08-15 | 设置面板文案更正（原落地步骤 D） | 「语法着色来自 Xcode 自己的 tokenizer，比内置视图不准」在语义高亮落地后已不成立，改为说明着色同样来自运行时元数据，并写明唯一例外是跨两段语义 run 的 token 保留框架自己的判断。 |

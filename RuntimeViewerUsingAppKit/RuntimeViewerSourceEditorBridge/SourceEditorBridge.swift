@@ -31,7 +31,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         showsStickyHeaders: false,
         showsMinimap: false,
         showsScopeGuides: false,
-        showsInvisibles: false
+        showsInvisibles: false,
+        showsMarkSeparators: false
     )
 
     private struct DisplayOptions: Equatable {
@@ -41,6 +42,7 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         var showsMinimap: Bool
         var showsScopeGuides: Bool
         var showsInvisibles: Bool
+        var showsMarkSeparators: Bool
     }
 
     weak var navigationDelegate: SourceEditorBridgingNavigationDelegate?
@@ -138,7 +140,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         showsStickyHeaders: Bool,
         showsMinimap: Bool,
         showsScopeGuides: Bool,
-        showsInvisibles: Bool
+        showsInvisibles: Bool,
+        showsMarkSeparators: Bool
     ) {
         let options = DisplayOptions(
             showsLineNumbers: showsLineNumbers,
@@ -146,7 +149,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
             showsStickyHeaders: showsStickyHeaders,
             showsMinimap: showsMinimap,
             showsScopeGuides: showsScopeGuides,
-            showsInvisibles: showsInvisibles
+            showsInvisibles: showsInvisibles,
+            showsMarkSeparators: showsMarkSeparators
         )
         guard options != appliedDisplayOptions else { return }
         let previousOptions = appliedDisplayOptions
@@ -190,6 +194,14 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
             } else {
                 sourceEditorView.hideInvisibles()
             }
+        }
+
+        // Idempotent, like the scope guides below — both write the same flag on the same
+        // lazily-created controller — so this needs no state tracking either.
+        if options.showsMarkSeparators {
+            sourceEditorView.showMarkSeparators()
+        } else {
+            sourceEditorView.hideMarkSeparators()
         }
 
         // Called unconditionally, unlike the pairs above: both sides read the flag they are

@@ -78,6 +78,12 @@ extension Settings {
         @Default(false)
         public var showsInvisibles: Bool
 
+        /// Draws a rule at every `// MARK:` line. On by default and harmless while the
+        /// interface generator emits none — there is simply nothing to draw a rule at — so
+        /// the separators appear on their own once it starts.
+        @Default(true)
+        public var showsMarkSeparators: Bool
+
         public static let `default` = Self()
     }
 

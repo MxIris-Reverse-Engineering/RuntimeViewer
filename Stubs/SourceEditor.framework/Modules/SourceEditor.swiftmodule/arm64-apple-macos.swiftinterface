@@ -287,6 +287,10 @@ extension SourceEditor.TextAttributeOverrideProvider {
   // time of the call, though, so a later theme change means calling it again.
   public func showInvisibles()
   public func hideInvisibles()
+  // Draws a rule across the text at every `// MARK:` line. Idempotent: both write the same
+  // flag on a lazily-created controller and then ask the layout manager for a pass.
+  public func showMarkSeparators()
+  public func hideMarkSeparators()
   public func positionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?
   // `final`: direct symbol only, unlike positionAtPoint which has a dispatch thunk.
   public final func closestPositionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?

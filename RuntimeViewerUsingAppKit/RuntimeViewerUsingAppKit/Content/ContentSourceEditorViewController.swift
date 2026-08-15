@@ -44,7 +44,7 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
 
     /// Keeps the editor's margins and overlays following Settings › Editor. The observation
     /// re-runs on any change to `settings.editor` without saying which value moved, which is
-    /// why the bridge takes all five at once and diffs them itself.
+    /// why the bridge takes them all at once and diffs them itself.
     private var displayOptionsObserveToken: ObserveToken?
 
     override func viewDidLoad() {
@@ -68,7 +68,8 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
                 showsStickyHeaders: editorSettings.showsStickyHeaders,
                 showsMinimap: editorSettings.showsMinimap,
                 showsScopeGuides: editorSettings.showsScopeGuides,
-                showsInvisibles: editorSettings.showsInvisibles
+                showsInvisibles: editorSettings.showsInvisibles,
+                showsMarkSeparators: editorSettings.showsMarkSeparators
             )
         }
 
