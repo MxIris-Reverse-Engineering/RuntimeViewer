@@ -79,7 +79,12 @@ protocol SourceEditorBridging: NSObjectProtocol {
     /// Applies a theme built from `.xccolortheme`-equivalent plist contents. Xcode ships
     /// `Default (Dark).xccolortheme` and `Default (Light).xccolortheme` in the framework's
     /// own resources, which is what `SourceEditorThemeLocating` reaches for.
-    func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int)
+    ///
+    /// - Parameter lineNumberFont: the gutter's font, which the theme dictionary has no key
+    ///   for. It is passed separately rather than derived from the dictionary because the app
+    ///   already holds the resolved `NSFont`, and re-parsing `"SFMono-Regular - 12.0"` on the
+    ///   bridge side would be a second implementation of the framework's own parser.
+    func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont)
 
     /// Scrolls so that `characterIndex` — a UTF-16 offset into the source last passed to
     /// `setSource(_:languageIdentifier:)` — is visible.

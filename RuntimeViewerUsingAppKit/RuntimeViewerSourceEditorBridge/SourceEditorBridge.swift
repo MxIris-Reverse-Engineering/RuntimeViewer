@@ -90,11 +90,30 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         sourceEditorView.dataSource = dataSource
     }
 
-    func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int) {
+    func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont) {
         guard let themeDictionary = dictionary as? [String: AnyHashable] else { return }
         let theme = SourceEditorTheme(name: name, dictionary: themeDictionary, fontSizeModifier: fontSizeModifier)
         sourceEditorView.colorTheme = theme
         sourceEditorView.fontTheme = theme
+        applyLineNumberFont(lineNumberFont)
+    }
+
+    /// **Without this the gutter is empty and 6pt wide, which reads as "line numbers do not
+    /// work" rather than as a missing font.** The gutter sizes each number by laying the digits
+    /// out in a text layer using the font stored on its content view, and that font starts nil
+    /// — `enableLineNumbers()` only flips a flag. Every layer then measures 0×0, the margin
+    /// collapses to the divider, and nothing is drawn. No theme key covers it either: the
+    /// `.xccolortheme` format has no gutter entry at all.
+    private func applyLineNumberFont(_ lineNumberFont: NSFont) {
+        guard gutter.lineNumberFont != lineNumberFont else { return }
+        gutter.lineNumberFont = lineNumberFont
+
+        // The setter drops the cached digit sizes but does not schedule a redisplay; the
+        // private method that does is only reachable through these two, which write the flag
+        // and then refresh. Calling it while numbers are off would turn them back on.
+        if appliedDisplayOptions.showsLineNumbers {
+            gutter.enableLineNumbers()
+        }
     }
 
     func applyBackgroundColor(_ backgroundColor: NSColor) {

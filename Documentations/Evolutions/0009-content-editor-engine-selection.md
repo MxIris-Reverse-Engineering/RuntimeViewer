@@ -510,7 +510,8 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 3. **可选加载 bundle 接入 `ContentCoordinator`** —— `RuntimeViewerSourceEditorBridge` bundle
    target，`SourceEditorLoader` 负责定位与降级，两个内容视图绑定同一个 ViewModel。
 4. **⌘-click 跳转** —— 目标从生成侧 `.link` attribute 读取；⌘⇧-click 开新 tab 保留。
-5. **行号** —— 需显式安装 `SourceEditorGutter` 并 `enableLineNumbers()`（视图默认不带 gutter）。
+5. **行号** —— 需显式安装 `SourceEditorGutter`、`enableLineNumbers()`（视图默认不带 gutter），
+   **并且必须设 `lineNumberFont`**，否则行号图层全是 0×0、gutter 塌成 6pt。见下。
 6. **主题转换** —— `SourceEditorThemeConversion`，28 个语法键全部写入。
 7. **语义高亮** —— 走 `SourceModelLanguageService.nodeTypeAdjuster` 改写解析器节点类型。
 8. **正式设置项** —— Settings › Editor，`Settings.Editor.usesSourceEditor`，默认关闭。
@@ -570,6 +571,45 @@ minimap 默认关,因为它是唯一会占走文本宽度的一项,而内容面�
 **验证方式:遍历视图与图层树数点,不是看截图。** 这是结构性问题(某个类在不在树里),
 离屏完全可靠 —— 与「颜色结论必须看实机」的教训不冲突,那条针对的是渲染。harness 跑 8 轮
 全开/全关,确认五项都能装上、都能拆干净、重复装不会叠第二份。
+
+### 行号:光 `enableLineNumbers()` 不够,还要给字体(2026-08-15)
+
+**`SourceEditorGutter.lineNumberFont` 不设,行号就一个都不显示** —— 而且症状不像缺字体,
+像功能没接上:gutter 只有 6pt 宽(只剩那条分隔线),144 个行号图层全是 **0×0**。
+
+成因链:`enableLineNumbers()` 只写一个 `Bool` 再刷新;行号尺寸由
+`SourceEditorGutterMarginContentView.layerSizeForDigits(_:)` 算,它把 `"000…"` 放进一个
+`SourceEditorFontSmoothingTextLayer`、用**存在 content view 上的字体**排版后读回尺寸。
+那个字体初值是 nil,唯一写入口就是 `gutter.lineNumberFont` 的 setter。字体为 nil ⇒ 测得 0×0
+⇒ margin 塌成分隔线宽度。
+
+`.xccolortheme` 里**没有任何 gutter 相关的键**(整份文件只有 syntax colors/fonts、背景、选中、
+当前行、插入点、invisibles),所以这个字体只能由调用方显式给。因此 `applyTheme` 多带一个
+`lineNumberFont` 参数,用主题的正文字体 —— 由 App 侧传已解析好的 `NSFont`,而不是让 bridge
+去二次解析 `"SFMono-Regular - 12.0"`。
+
+改完字体还要**再调一次 `enableLineNumbers()`**:setter 只清掉尺寸缓存,不安排重绘;真正重绘的
+`updateLineNumberDisplay()` 是私有的、没有 dispatch thunk,只能通过 enable/disable 这一对进去。
+
+修复前后:margin 6pt → 36pt,行号图层 0×0 → 8×15 且 `contents != nil`。
+
+### sticky header 只有一行,是框架的设计,不是配置问题(2026-08-15)
+
+用户报告:一条源码行软换行成好几行时,sticky header 只显示第一行、右边被裁掉。
+
+**查证到指令级:** `StickyHeaderContentProvider.headerLineLayer(forLine:headerState:maxWidth:)`
+在造完 line layer 后调用 `SourceEditorLineLayer.layoutAndSizeToWidth(_:minLineHeight:)`,
+传的宽度是 **nil**(`mov x0, #0x0` / `mov w1, #0x1`,即 `Optional<CGFloat>.none`),
+`minLineHeight` 是 0。宽度为 nil 就是「不限宽、不换行」。那个 `maxWidth` 参数另有用途 ——
+函数里 `enumerateSubstringsInRange:` + `configureCharacter(at:opacity:maximumFontSize:)`
+是给溢出尾部做淡出/缩小的。
+
+结构上也只支持一行:`StickyHeaderViewContents` 只有一个 `line: SourceEditorLineLayer?`。
+实测复现:正文首行 line layer 高 75pt(5 个 fragment),对应的 `StickyHeaderView` 高 18pt。
+
+Xcode 自己也是这个行为。要改只能深入私有布局(拿到 `StickyHeaderStackView.headers`、
+在框架自己的 `layout()` 之后重排 line layer 并撑高 header view),脆弱且每次滚动都要跟框架抢,
+**未做**。
 
 **已知的框架侧小泄漏:** 每次重装 minimap 会多留 8 个图层
 (`MinimapFindResultHighlightsLayer` 与 `MinimapRangeHighlightsLayer` 各 4 个),8 轮实测严格
@@ -736,4 +776,6 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 行号与背景修复 | 行号需要显式安装 `SourceEditorGutter` 并 `enableLineNumbers()`（视图默认不带 gutter）；背景另需设 `SourceEditorView.backgroundColor` 与容器背景，主题字典的背景键只管文本区。当前行高亮色由背景色推导，因为 `ThemeProfile` 没有这一项。 |
 | 2026-08-15 | 附加显示能力落地（原落地步骤 A 的主体） | 折叠 / sticky header / minimap / 行号 / scope guides 五项接入，各自一个 Settings 开关。三个 `install*` 反汇编确认无前置依赖，折叠所需的 `FoldableLanguageService` 由 `SourceModelLanguageService` 现成 conform。查明 `install*` 不幂等（会重复注册 margin accessory 与 event consumer）而 `uninstall*` 与 `show/hideScopeGuides` 幂等，故 bridge 保存已应用状态、只在翻转时调用。 |
 | 2026-08-15 | 结构性验证可以离屏做 | 「离屏判据不可靠」那条只针对渲染结果。装没装上是视图/图层树里有没有那个类，与 `cacheDisplay` 无关，8 轮全开/全关的计数 harness 是可信证据。顺带测出框架侧小泄漏：重装 minimap 每次多留 8 个高亮图层，严格线性，不为此绕开框架 API。 |
+| 2026-08-15 | 行号一直没显示，真因是缺字体 | 此前记为「已完成」是错的——只验证了 gutter 视图存在，没验证行号有没有像素。`lineNumberFont` 为 nil 时行号图层测得 0×0、gutter 塌成 6pt，看起来像功能没接上。`.xccolortheme` 没有 gutter 键，字体只能由调用方传，故 `applyTheme` 增加 `lineNumberFont` 参数；改字体后还要再调一次 `enableLineNumbers()` 才会重绘。 |
+| 2026-08-15 | sticky header 单行是框架设计 | `headerLineLayer` 给 line layer 传的宽度是 `nil`（指令级确认），即不限宽不换行；`StickyHeaderViewContents` 也只有一个 line layer。溢出尾部的淡出才是 `maxWidth` 的用途。Xcode 同行为，不改。 |
 | 2026-08-15 | 设置面板文案更正（原落地步骤 D） | 「语法着色来自 Xcode 自己的 tokenizer，比内置视图不准」在语义高亮落地后已不成立，改为说明着色同样来自运行时元数据，并写明唯一例外是跨两段语义 run 的 token 保留框架自己的判断。 |

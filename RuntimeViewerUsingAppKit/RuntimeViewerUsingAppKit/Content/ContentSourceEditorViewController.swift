@@ -137,7 +137,10 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
             SourceEditorThemeConversion.themeDictionary(from: $0, basedOn: baseTheme)
         } ?? baseTheme
 
-        bridge.applyTheme(name: baseThemeName, dictionary: dictionary, fontSizeModifier: 0)
+        // The gutter has no theme key of its own, so its font is passed alongside. Same font
+        // as the text, which is what makes a number line up with the row it labels.
+        let lineNumberFont = currentTheme?.font(for: .standard) ?? .monospacedSystemFont(ofSize: 12, weight: .regular)
+        bridge.applyTheme(name: baseThemeName, dictionary: dictionary, fontSizeModifier: 0, lineNumberFont: lineNumberFont)
 
         // The theme covers the text area; these cover everything around it — the area past
         // the end of the document, and the container behind the editor.
