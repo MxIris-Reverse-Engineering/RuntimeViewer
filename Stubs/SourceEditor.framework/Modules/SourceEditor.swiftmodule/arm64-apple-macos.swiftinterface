@@ -1,0 +1,154 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.2
+// swift-module-flags: -target arm64-apple-macos14.0 -enable-library-evolution -swift-version 5 -module-name SourceEditor
+//
+// A hand-written subset of Xcode's private SourceEditor module. See ../../../../README.md
+// for the two rules that decide how each declaration must be written, and for the audit
+// script that answers them from the binary instead of by guesswork.
+import AppKit
+import CoreGraphics
+import Foundation
+import Swift
+import _Concurrency
+import _StringProcessing
+
+// Declared empty on purpose. We never conform anything on our side to these, so no witness
+// table is emitted here and requirement order cannot matter. SourceEditorTheme's own
+// conformances live inside the framework.
+public protocol SourceEditorLanguage {
+}
+
+public protocol SourceEditorColorTheme {
+}
+
+public protocol SourceEditorFontTheme {
+}
+
+public struct SourceEditorFormattingOptions {
+  public init()
+}
+
+public struct SourceEditorPosition {
+  public init(line: Swift.Int, col: Swift.Int)
+  public var line: Swift.Int {
+    get
+    set
+  }
+  public var col: Swift.Int {
+    get
+    set
+  }
+}
+
+// Comparable is required: the framework hands back Range<SourceEditorPosition>.
+extension SourceEditor.SourceEditorPosition : Swift.Equatable {
+}
+
+extension SourceEditor.SourceEditorPosition : Swift.Hashable {
+}
+
+extension SourceEditor.SourceEditorPosition : Swift.Comparable {
+}
+
+public enum SourceEditorEventConsumerPriority {
+  case highest
+  case high
+  case standard
+  case low
+  case lowest
+}
+
+// Requirement order follows the PWT offsets in the dump (0x8, 0x10, 0x18, ...).
+// A gap in that sequence would mean a requirement is missing here.
+//
+// This — not SourceEditorViewCodeNavigationHandler — is the real ⌘-click entry point.
+// That handler is only ever read by the framework's Vi*CommandHandler types, i.e. it is
+// Vim-mode-only; SourceEditorView.mouseDown(with:) offers the event to the registered
+// event consumers and otherwise falls through to its selection controller.
+public protocol SourceEditorViewEventConsumer : AnyObject {
+  func handleMouseEvent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  func handleKeyEvent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  func handleKeyEquivalent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  func handleFlagsChanged(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView)
+  var consumerPriority: SourceEditor.SourceEditorEventConsumerPriority { get }
+  func didAddToSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
+  func willRemoveFromSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
+}
+
+extension SourceEditor.SourceEditorViewEventConsumer {
+  public func handleMouseEvent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  public func handleKeyEvent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  public func handleKeyEquivalent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  public func handleFlagsChanged(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView)
+  public var consumerPriority: SourceEditor.SourceEditorEventConsumerPriority { get }
+  public func didAddToSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
+  public func willRemoveFromSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
+}
+
+// Declared with no cases: token types are only ever passed back to us and handed straight
+// on, never matched. Adding cases later means copying all of them in declaration order,
+// since a resilient enum's case indices come from that order.
+public enum SourceEditorTokenType {
+}
+
+@_hasMissingDesignatedInitializers public class SourceEditorTheme : SourceEditor.SourceEditorColorTheme, SourceEditor.SourceEditorFontTheme {
+  // `dictionary` takes .xccolortheme plist contents. The framework ships Default (Dark)
+  // and Default (Light) under its own Resources directory.
+  public init(name: Swift.String, dictionary: [Swift.String : Swift.AnyHashable], fontSizeModifier: Swift.Int)
+  deinit
+}
+
+@_hasMissingDesignatedInitializers public class SourceEditorDataSource {
+  public init(usingMutableString: Foundation.NSMutableString, language: SourceEditor.SourceEditorLanguage?, formattingOptions: SourceEditor.SourceEditorFormattingOptions)
+  // `final`: direct symbols only, no dispatch thunk.
+  public final var string: Swift.String {
+    get
+    set
+  }
+  // `final`: direct symbol only.
+  public final func tokenRangeAtPosition(_ position: SourceEditor.SourceEditorPosition) -> (SourceEditor.SourceEditorTokenType?, Swift.Range<SourceEditor.SourceEditorPosition>)?
+  // `final`: direct symbol only. Maps a line range to a UTF-16 character range, which is
+  // how a SourceEditorPosition is turned back into an offset into the string we supplied.
+  public final func characterRangeForLineRange(_ lineRange: Foundation.NSRange) -> Foundation.NSRange
+  deinit
+}
+
+@_hasMissingDesignatedInitializers @objc public class SourceEditorContentView : AppKit.NSView {
+  @objc deinit
+}
+
+@_hasMissingDesignatedInitializers @objc public class SourceEditorView : AppKit.NSView {
+  // `final`: a stored `let` in the framework, so only a direct symbol is exported.
+  public final var contentView: SourceEditor.SourceEditorContentView {
+    get
+  }
+  @objc override dynamic public init(frame: CoreGraphics.CGRect)
+  public var dataSource: SourceEditor.SourceEditorDataSource {
+    get
+    set
+  }
+  public var colorTheme: SourceEditor.SourceEditorColorTheme {
+    get
+    set
+  }
+  public var fontTheme: SourceEditor.SourceEditorFontTheme {
+    get
+    set
+  }
+  // Defaults to true, which makes the view treat ⌘-click as a multi-cursor gesture and
+  // swallow it before any event consumer sees it. Must be turned off.
+  public var enableCmdClickMultiCursor: Swift.Bool {
+    get
+    set
+  }
+  public var isEditingEnabled: Swift.Bool {
+    get
+    set
+  }
+  public func addEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
+  public func removeEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
+  public func positionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?
+  // `final`: direct symbol only, unlike positionAtPoint which has a dispatch thunk.
+  public final func closestPositionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?
+  @objc deinit
+}

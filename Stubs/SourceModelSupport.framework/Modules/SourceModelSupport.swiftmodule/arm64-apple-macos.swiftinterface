@@ -1,0 +1,16 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.2
+// swift-module-flags: -target arm64-apple-macos14.0 -enable-library-evolution -swift-version 5 -module-name SourceModelSupport
+//
+// Only reason this module is here: it supplies ready-made SourceEditorLanguage instances,
+// so we need neither a hand-built language nor anything from SourceModel directly.
+import Foundation
+import SourceEditor
+import Swift
+import _Concurrency
+import _StringProcessing
+
+public struct SourceModelEditorLanguage : SourceEditor.SourceEditorLanguage {
+  public static let swift: SourceModelSupport.SourceModelEditorLanguage
+  public static let objc: SourceModelSupport.SourceModelEditorLanguage
+}
