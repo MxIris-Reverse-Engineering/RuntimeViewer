@@ -276,7 +276,7 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     /// fan out into it. `RuntimeObjCSectionFactory` calls it as each section is
     /// created. Mirrors `RuntimeSwiftInterfaceIndexer.addSubIndexer(_:)`.
     func addSubIndexer(_ subIndexer: RuntimeObjCInterfaceIndexer) {
-        _subIndexers.withLock { $0.append(subIndexer) }
+        subIndexers.append(subIndexer)
     }
 
     /// Detach a previously registered per-image indexer.
@@ -291,10 +291,15 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
     ///
     /// Identity comparison, not equality: two indexers over the same image are
     /// still two indexers.
+    ///
+    /// A plain mutation rather than `withLock`: `@Mutex` generates a `_modify`
+    /// accessor that takes the lock, yields the storage inout, and releases it
+    /// afterwards, so `removeAll` already runs inside the critical section.
+    /// Reach for `withLock` only when a critical section has to span more than
+    /// one operation — `RuntimeSwiftInterfaceIndexer` does, because it undoes an
+    /// upstream registration in the same breath.
     func removeSubIndexer(_ subIndexer: RuntimeObjCInterfaceIndexer) {
-        _subIndexers.withLock { subIndexers in
-            subIndexers.removeAll { $0 === subIndexer }
-        }
+        subIndexers.removeAll { $0 === subIndexer }
     }
 }
 
@@ -312,6 +317,14 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
 /// Two independent `@Mutex` properties rather than one lock over both: every
 /// event touches exactly one of the tables, so there is no invariant spanning
 /// them and nothing that needs to observe both at one instant.
+///
+/// `fold(_:)` mutates them through plain subscript assignment rather than
+/// `withLock`. That is not a shortcut: `@Mutex` generates a `_modify` accessor
+/// which locks, yields the storage inout, and unlocks in a `defer`, so the whole
+/// read-modify-write of `table[key, default: []].append(…)` happens inside the
+/// critical section. Wrapping it in `withLock` as well would take the lock
+/// twice — and, because `OrderedSet.append` returns `(inserted:index:)`, would
+/// hand back a value nobody wants, which is what the compiler was warning about.
 ///
 /// `@unchecked Sendable`: both stored properties are `@Mutex`-guarded. The lock
 /// is not optional — the library promises the *order* of events but explicitly
@@ -342,7 +355,7 @@ final class RuntimeObjCRelationshipTables: @unchecked Sendable {
                 imagePath: imagePath,
                 isSwiftStable: isSwiftStable
             )
-            _subclassesByClassName.withLock { $0[superclass, default: []].append(reference) }
+            subclassesByClassName[superclass, default: []].append(reference)
 
         case .conformanceIndexed(let className, let protocolName, let imagePath, let isSwiftStable):
             let reference = RuntimeObjCClassReference(
@@ -350,7 +363,7 @@ final class RuntimeObjCRelationshipTables: @unchecked Sendable {
                 imagePath: imagePath,
                 isSwiftStable: isSwiftStable
             )
-            _conformingClassesByProtocolName.withLock { $0[protocolName, default: []].append(reference) }
+            conformingClassesByProtocolName[protocolName, default: []].append(reference)
 
         case .categoryConformanceIndexed(let targetClassName, let protocolName, let imagePath, let targetIsSwiftStable):
             // `imagePath` is the image declaring the *category*, not the one
@@ -361,7 +374,7 @@ final class RuntimeObjCRelationshipTables: @unchecked Sendable {
                 imagePath: imagePath,
                 isSwiftStable: targetIsSwiftStable
             )
-            _conformingClassesByProtocolName.withLock { $0[protocolName, default: []].append(reference) }
+            conformingClassesByProtocolName[protocolName, default: []].append(reference)
         }
     }
 

@@ -86,16 +86,24 @@ actor RuntimeRelationshipsResolver {
         // separately — hundreds of iterations and two actor hops apiece to get
         // "nothing" from almost all of them — because Evolution 0007 had removed
         // the ObjC aggregate. 0008 restores it and reads it from here.
+        //
+        // No `await` on the aggregate reads: both factories hold their `indexer`
+        // as a `Sendable let`, which is implicitly nonisolated, and the query
+        // methods are synchronous. So these cross no actor boundary at all —
+        // which is the point, and is why the indexers guard themselves with
+        // `@Mutex` rather than by being actors. The `await`s that remain are on
+        // `materializeXxxReference`, which does hop, because it has to reach the
+        // section actor that owns the image.
         if wantsSubclasses {
             if let objcKey {
-                for reference in await objcSectionFactory.indexer.subclasses(of: objcKey) {
+                for reference in objcSectionFactory.indexer.subclasses(of: objcKey) {
                     if let runtimeObject = await materializeObjCReference(reference) {
                         subclasses.append(runtimeObject)
                     }
                 }
             }
             if let swiftMangledKey {
-                for reference in await swiftSectionFactory.indexer.subclasses(of: swiftMangledKey) {
+                for reference in swiftSectionFactory.indexer.subclasses(of: swiftMangledKey) {
                     if let runtimeObject = await materializeSwiftReference(reference) {
                         subclasses.append(runtimeObject)
                     }
@@ -105,7 +113,7 @@ actor RuntimeRelationshipsResolver {
 
         if wantsConformers {
             if isObjCProtocol {
-                for reference in await objcSectionFactory.indexer.conformingClasses(toProtocol: object.name) {
+                for reference in objcSectionFactory.indexer.conformingClasses(toProtocol: object.name) {
                     if let runtimeObject = await materializeObjCReference(reference) {
                         conformers.append(runtimeObject)
                     }
@@ -115,7 +123,7 @@ actor RuntimeRelationshipsResolver {
                 // Swift protocols are stored in the indexer under their demangled name
                 // (e.g. "Foundation.LocalizedError"); RuntimeObject.displayName carries
                 // exactly that string.
-                for reference in await swiftSectionFactory.indexer.conformingTypes(of: object.displayName) {
+                for reference in swiftSectionFactory.indexer.conformingTypes(of: object.displayName) {
                     if let runtimeObject = await materializeSwiftReference(reference) {
                         conformers.append(runtimeObject)
                     }
