@@ -61,9 +61,6 @@ public actor MCPBridgeServer {
     private let documentProvider: MCPBridgeDocumentProvider
     private var objectsLoadedPaths: Set<String> = []
 
-    @Dependency(\.settings)
-    private var settings
-
     public init(documentProvider: MCPBridgeDocumentProvider) {
         self.documentProvider = documentProvider
     }
@@ -612,8 +609,16 @@ public actor MCPBridgeServer {
 
     private func generationOptions() async -> RuntimeObjectInterface.GenerationOptions {
         var options = RuntimeObjectInterface.GenerationOptions.mcp
-        let settingsAccess = settings
-        options.transformer = await MainActor.run { settingsAccess.transformer }
+        // Resolve the dependency on the main actor rather than on this one.
+        // `\.settings` builds its live value behind `MainActor.assumeIsolated`,
+        // so resolving it from this actor's executor would abort the process
+        // whenever this is the first access to the key. Resolving inside the
+        // hop keeps `withDependencies` overrides working: `MainActor.run` stays
+        // in the same task, so the task-local dependency context carries over.
+        options.transformer = await MainActor.run {
+            @Dependency(\.settings) var settings
+            return settings.transformer
+        }
         return options
     }
 
