@@ -4,7 +4,7 @@ Hand-written link stubs for the private Swift frameworks that ship inside Xcode
 (`Xcode.app/Contents/SharedFrameworks/`). They exist so `RuntimeViewerSourceEditorBridge`
 can be compiled and linked without Apple's binaries being present in this repository.
 
-Nothing here is Apple-authored: each framework directory holds two text files.
+Nothing here is Apple-authored. Each Swift framework directory holds two text files:
 
 ```
 SourceEditor.framework/
@@ -14,7 +14,12 @@ SourceEditor.framework/
         └── arm64-apple-macos.swiftinterface    # hand-written subset of the real module
 ```
 
-The frameworks enable library evolution, so a `.swiftinterface` is all the compiler needs —
+`SourceModel` is the exception: its surface is Objective-C, so it is stubbed with a hand-written
+header and a module map instead of a `.swiftinterface`. Only the two classes the bridge needs
+are declared — the source model item whose node type gets rewritten, and the registry that maps
+a node type name to its id.
+
+The Swift frameworks enable library evolution, so a `.swiftinterface` is all the compiler needs —
 it compiles the interface into its module cache on demand. No binary `.swiftmodule` is
 required, and no Apple binary is redistributed.
 

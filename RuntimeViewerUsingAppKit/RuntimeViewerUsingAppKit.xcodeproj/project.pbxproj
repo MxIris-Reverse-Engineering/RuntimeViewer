@@ -1058,6 +1058,8 @@
 					SourceEditor,
 					"-framework",
 					SourceModelSupport,
+					"-framework",
+					SourceModel,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1091,6 +1093,8 @@
 					SourceEditor,
 					"-framework",
 					SourceModelSupport,
+					"-framework",
+					SourceModel,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1124,6 +1128,8 @@
 					SourceEditor,
 					"-framework",
 					SourceModelSupport,
+					"-framework",
+					SourceModel,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";

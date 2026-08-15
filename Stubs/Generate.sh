@@ -31,7 +31,7 @@ shared_frameworks="$xcode_path/Contents/SharedFrameworks"
 
 tapi="$(xcrun -f tapi)"
 
-for framework in SourceEditor SourceModelSupport; do
+for framework in SourceEditor SourceModelSupport SourceModel; do
     binary="$shared_frameworks/$framework.framework/Versions/A/$framework"
     [ -f "$binary" ] || { echo "missing $binary" >&2; exit 1; }
 

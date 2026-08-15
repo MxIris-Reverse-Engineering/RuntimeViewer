@@ -18,6 +18,12 @@ import _StringProcessing
 public protocol SourceEditorLanguage {
 }
 
+// Declared empty on purpose: we only ever receive one of these and downcast it to the concrete
+// SourceModelLanguageService. Nothing conforms on our side, so no witness table is emitted here
+// and the real protocol's 48 requirements are irrelevant.
+public protocol SourceEditorLanguageService : AnyObject {
+}
+
 public protocol SourceEditorColorTheme {
 }
 
@@ -188,6 +194,11 @@ extension SourceEditor.TextAttributeOverrideProvider {
   // `final`: direct symbol only. Maps a line range to a UTF-16 character range, which is
   // how a SourceEditorPosition is turned back into an offset into the string we supplied.
   public final func characterRangeForLineRange(_ lineRange: Foundation.NSRange) -> Foundation.NSRange
+  // `final`: direct symbol only. Non-optional despite the dump showing `lazy var … ?` — that
+  // question mark is the lazy *storage*, while the exported getter returns the value.
+  public final var languageService: SourceEditor.SourceEditorLanguageService {
+    get
+  }
   deinit
 }
 

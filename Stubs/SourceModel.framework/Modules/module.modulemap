@@ -1,0 +1,4 @@
+framework module SourceModel {
+    umbrella header "SourceModel.h"
+    export *
+}

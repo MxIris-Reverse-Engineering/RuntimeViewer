@@ -46,6 +46,24 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     @Observed
     public private(set) var imageNameOfRuntimeObject: String?
 
+    /// The rendered interface, carrying both forms of the same generation.
+    ///
+    /// They travel together rather than as two `@Observed` properties because a consumer that
+    /// needs both must never see one updated ahead of the other — the semantic runs would
+    /// describe a different object than the text on screen.
+    public struct RenderedInterface {
+        /// Semantic runs from the generator: what each identifier actually *is*, which no
+        /// amount of scanning the rendered text can recover.
+        public let semanticString: SemanticString
+
+        /// The same content with the theme's colors and fonts applied, plus the `.link`
+        /// attributes that carry jump targets.
+        public let attributedString: NSAttributedString
+    }
+
+    @Observed
+    public private(set) var renderedInterface: RenderedInterface?
+
     @Observed
     public private(set) var attributedString: NSAttributedString?
 
@@ -159,7 +177,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         let renderScheduler = ConcurrentDispatchQueueScheduler(qos: .userInitiated)
         Observable
             .combineLatest(interfaceStream, themeObservable)
-            .flatMapLatest { [_commonLoading = self._commonLoading] interfacePair, theme -> Observable<NSAttributedString?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] interfacePair, theme -> Observable<RenderedInterface?> in
                 // Tracked so the indicator covers click → new text on
                 // screen: with a warm interface cache the fetch half is
                 // near-instant, and theme / font-size changes skip it
@@ -170,12 +188,36 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 // decrements.
                 Observable.just(())
                     .observe(on: renderScheduler)
-                    .map { Self.renderAttributedString(for: interfacePair, theme: theme) }
+                    .map { Self.renderInterface(for: interfacePair, theme: theme) }
                     .trackActivity(_commonLoading)
             }
             .observeOnMainScheduler()
+            .bind(to: $renderedInterface)
+            .disposed(by: rx.disposeBag)
+
+        // Kept as its own property so existing consumers are untouched; it is strictly derived.
+        $renderedInterface
+            .map { $0?.attributedString }
             .bind(to: $attributedString)
             .disposed(by: rx.disposeBag)
+    }
+
+    /// Builds both forms of a fetched interface in one pass, so the semantic runs and the
+    /// attributed text a consumer receives always describe the same generation.
+    ///
+    /// `nonisolated` for the same reason as ``renderAttributedString(for:theme:)``, which it
+    /// delegates the theming pass to: this runs on the render half's background scheduler.
+    nonisolated static func renderInterface(
+        for interfacePair: (interfaceString: SemanticString, runtimeObject: RuntimeObject)?,
+        theme: ThemeProfile
+    ) -> RenderedInterface? {
+        guard let interfacePair,
+              let attributedString = renderAttributedString(for: interfacePair, theme: theme)
+        else { return nil }
+        return RenderedInterface(
+            semanticString: interfacePair.interfaceString,
+            attributedString: attributedString
+        )
     }
 
     /// Builds the display-ready attributed string for a fetched interface.
@@ -204,6 +246,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     }
 
     public struct Output {
+        public let renderedInterface: Driver<RenderedInterface>
         public let attributedString: Driver<NSAttributedString>
         public let theme: Driver<ThemeProfile>
         public let imageNameOfRuntimeObject: Driver<String?>
@@ -261,6 +304,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .disposed(by: rx.disposeBag)
 
         return Output(
+            renderedInterface: $renderedInterface.asDriver().compactMap { $0 },
             attributedString: $attributedString.asDriver().compactMap { $0 },
             theme: $theme.asDriver(),
             imageNameOfRuntimeObject: $imageNameOfRuntimeObject.asDriver(),

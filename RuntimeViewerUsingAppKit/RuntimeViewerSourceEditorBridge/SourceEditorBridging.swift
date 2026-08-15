@@ -24,17 +24,29 @@ protocol SourceEditorBridging: NSObjectProtocol {
     /// Receives the ⌘-click notifications. Held weakly.
     var navigationDelegate: SourceEditorBridgingNavigationDelegate? { get set }
 
-    /// Replaces the displayed source.
+    /// Replaces the displayed source, together with what each range of it actually is.
     ///
-    /// Takes the attributed string rather than plain text because its color runs carry what
-    /// the framework's own tokenizer cannot work out — the framework scans text lexically and
-    /// so cannot tell `NSString` from any other identifier, while these colors came from the
-    /// runtime metadata the interface was rendered from. They are painted over the framework's
-    /// coloring.
+    /// The framework parses plain text, so it cannot tell `NSString` from any other identifier
+    /// — nothing in the text says it is a class. RuntimeViewer does know, because the interface
+    /// was rendered from runtime metadata, and passing that knowledge in lets the editor's own
+    /// parse be corrected rather than having colors painted over a wrong one. That distinction
+    /// matters beyond color: token ranges, delimiter matching and structural selection all read
+    /// the parse.
     ///
-    /// - Parameter languageIdentifier: `"swift"` or `"objc"`. Any other value renders the
-    ///   text without the framework's own syntax highlighting rather than failing.
-    func setSource(_ source: NSAttributedString, languageIdentifier: String)
+    /// - Parameters:
+    ///   - languageIdentifier: `"swift"` or `"objc"`. Any other value renders the text without
+    ///     the framework's own parse rather than failing.
+    ///   - semanticRanges: UTF-16 ranges into `source`, parallel to `semanticNodeTypeNames`.
+    ///   - semanticNodeTypeNames: the framework's node type names, which are also the theme's
+    ///     syntax keys — `"xcode.syntax.identifier.class"` and friends. Passed as names rather
+    ///     than numbers because the numeric ids are assigned in registration order and are not
+    ///     stable between versions.
+    func setSource(
+        _ source: String,
+        languageIdentifier: String,
+        semanticRanges: [NSValue],
+        semanticNodeTypeNames: [String]
+    )
 
     /// The editor view's own background, which is what shows past the end of the document.
     /// Set alongside the theme, whose background key covers the text area.

@@ -12,64 +12,82 @@ import Semantic
 /// dictionary means the unmapped keys keep working, and a future Xcode adding a key does not
 /// produce a theme with a hole in it.
 enum SourceEditorThemeConversion {
-    /// Maps `SemanticType` onto the syntax categories Xcode's theme defines.
+    /// The app's theme resolves every `SemanticType` to one of seven text styles, so seven
+    /// colors are all there are to distribute. The editor's theme has twenty-eight syntax keys.
     ///
-    /// The mapping is lossy in both directions and deliberately so:
+    /// **Every one of the twenty-eight is written.** A key left unset keeps its color from
+    /// Xcode's own theme, and the result reads as two themes at once — that is what made
+    /// SDK classes purple while classes from the inspected image followed the configured theme.
+    /// Each key is listed here against the `SemanticType` that stands for its style; several
+    /// keys share a style, which is correct, because the app's theme genuinely cannot tell
+    /// those cases apart.
+    private static let styleRepresentativeByThemeKey: [String: SemanticType] = [
+        // Plain text and things the app's theme has no opinion about.
+        "xcode.syntax.plain": .standard,
+        "xcode.syntax.string": .standard,
+        "xcode.syntax.url": .standard,
+
+        "xcode.syntax.keyword": .keyword,
+        "xcode.syntax.attribute": .keyword,
+        "xcode.syntax.preprocessor": .keyword,
+
+        "xcode.syntax.comment": .comment,
+        "xcode.syntax.comment.doc": .comment,
+        "xcode.syntax.comment.doc.keyword": .comment,
+        "xcode.syntax.mark": .comment,
+        "xcode.syntax.markup.aside.kind": .comment,
+        "xcode.syntax.markup.code": .comment,
+
+        "xcode.syntax.number": .numeric,
+        "xcode.syntax.character": .numeric,
+
+        // Names of things, as used rather than declared.
+        "xcode.syntax.identifier.class": .type(.class, .name),
+        "xcode.syntax.identifier.class.system": .type(.class, .name),
+        "xcode.syntax.identifier.type": .type(.class, .name),
+        "xcode.syntax.identifier.type.system": .type(.class, .name),
+
+        // Declarations, which is also where the app's theme files plain variables.
+        "xcode.syntax.declaration.type": .variable,
+        "xcode.syntax.declaration.other": .variable,
+        "xcode.syntax.identifier.variable": .variable,
+        "xcode.syntax.identifier.variable.system": .variable,
+        "xcode.syntax.identifier.constant": .variable,
+        "xcode.syntax.identifier.constant.system": .variable,
+        "xcode.syntax.identifier.function": .variable,
+        "xcode.syntax.identifier.function.system": .variable,
+
+        // Nothing this app renders is a macro, so the pair is free to carry the error color —
+        // which otherwise has no key of its own.
+        "xcode.syntax.identifier.macro": .error,
+        "xcode.syntax.identifier.macro.system": .error,
+    ]
+
+    /// The key a range of a given semantic type should be *assigned*.
     ///
-    /// - Xcode distinguishes project symbols from SDK ones (`identifier.type` versus
-    ///   `identifier.type.system`); `SemanticType` does not, so both get the project color.
-    /// - `SemanticType.error` has no Xcode counterpart and falls back to plain text.
-    /// - Declaration context maps onto `declaration.type` / `declaration.other`, which is what
-    ///   Xcode uses to color the name in a declaration differently from a use of it.
-    ///
-    /// It exists as a table rather than a `switch` because the syntax-token injection work
-    /// tracked in proposal 0009 needs the same mapping in the other direction.
+    /// One key per style, deliberately: assigning two types that share a style to two different
+    /// keys would be indistinguishable on screen while making the node types disagree with what
+    /// the theme says. The name is also the framework's node type name, so this same table
+    /// tells `SemanticNodeTypeAdjuster` what to retype a node to — that is the point of it being
+    /// a table rather than a `switch`.
     static func syntaxColorKey(for semanticType: SemanticType) -> String {
         switch semanticType {
-        case .standard, .other:
-            "xcode.syntax.plain"
         case .comment:
             "xcode.syntax.comment"
         case .keyword:
             "xcode.syntax.keyword"
-        case .variable:
-            "xcode.syntax.identifier.variable"
         case .numeric:
             "xcode.syntax.number"
-        case .argument:
-            "xcode.syntax.identifier.variable"
         case .error:
+            "xcode.syntax.identifier.macro"
+        case .variable, .function(.declaration), .member(.declaration), .type(_, .declaration):
+            "xcode.syntax.declaration.other"
+        case .type(_, .name), .function(.name), .member(.name):
+            "xcode.syntax.identifier.class"
+        case .standard, .argument, .other:
             "xcode.syntax.plain"
-        case .type(let typeKind, let context):
-            switch context {
-            case .declaration:
-                "xcode.syntax.declaration.type"
-            case .name:
-                typeKind == .class ? "xcode.syntax.identifier.class" : "xcode.syntax.identifier.type"
-            }
-        case .member(let context):
-            context == .declaration ? "xcode.syntax.declaration.other" : "xcode.syntax.identifier.variable"
-        case .function(let context):
-            context == .declaration ? "xcode.syntax.declaration.other" : "xcode.syntax.identifier.function"
         }
     }
-
-    /// Every `SemanticType` that carries a distinct color, so the conversion covers the whole
-    /// enum rather than whichever cases happened to come to mind. `SemanticType` is not
-    /// `CaseIterable` — it has associated values — so the product is spelled out here.
-    private static let allSemanticTypes: [SemanticType] = {
-        var types: [SemanticType] = [.standard, .comment, .keyword, .variable, .numeric, .argument, .error, .other]
-        for typeKind in SemanticType.TypeKind.allCases {
-            for context in SemanticType.Context.allCases {
-                types.append(.type(typeKind, context))
-            }
-        }
-        for context in SemanticType.Context.allCases {
-            types.append(.member(context))
-            types.append(.function(context))
-        }
-        return types
-    }()
 
     /// - Parameter baseTheme: one of the framework's own `.xccolortheme` dictionaries.
     /// - Returns: `nil` if `baseTheme` is not shaped like a theme, in which case the caller
@@ -82,8 +100,7 @@ enum SourceEditorThemeConversion {
               let syntaxFonts = baseSyntaxFonts.mutableCopy() as? NSMutableDictionary
         else { return nil }
 
-        for semanticType in allSemanticTypes {
-            let key = syntaxColorKey(for: semanticType)
+        for (key, semanticType) in styleRepresentativeByThemeKey {
             syntaxColors[key] = themeString(for: themeProfile.color(for: semanticType))
             syntaxFonts[key] = themeString(for: themeProfile.font(for: semanticType))
         }

@@ -549,33 +549,59 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 - `LayoutOverrideProviderPriority` 的 case 声明顺序**必须照抄 dump**（`low` / `medium` / `high`）。
   resilient 枚举的 case 索引与隐式 raw value 都来自声明顺序，顺序写错会静默取到别的 case。
 
-### 语言服务路线（未采用，但已完整摸清）
+### 语义高亮：改写解析器的节点类型，而不是覆盖渲染结果
 
-比「颜色覆盖」更彻底的做法是提供自己的 `SourceEditorLanguageService`，让框架的整套机制都拿到
-语义信息（`tokenRangeAtPosition` 变语义级 → ⌘-click 取词更准；省掉每次切换对象时遍历
-attributed string 的开销；分隔符高亮、结构选择等一并受益）。
+首个版本用 `TextAttributeOverrideProvider` 在渲染结果上盖颜色。**已改为走框架自己的扩展点**：
+`SourceModelLanguageService.nodeTypeAdjuster`。语言服务会把每个解析出的节点交给 adjuster，
+允许它改写节点类型 —— 这正是 Xcode 用索引数据升级词法解析的机制。
 
-**不能靠继承 `GenericLanguageService` 实现。** 它对 `SourceEditorLanguageService` 与
-`SourceEditorSyntaxTokenProvider` 的 conformance 都是空 extension，witness 全部来自协议扩展的
-默认实现 —— 而协议扩展默认是**静态派发**，子类覆写不会被调用。它自己的 vtable 里只有
-`indentLine`。要控制 token 必须由我们自己的类型直接 conform。
+**为什么不能继承 `GenericLanguageService`**：它对两个协议的 conformance 都是空 extension，
+witness 全部来自协议扩展的默认实现，而扩展默认是静态派发，子类覆写永远不会被调用；它自己的
+vtable 里只有 `indentLine`。（`SourceModelLanguageService` 不同，`syntaxTypeAtPosition` 有
+vtable 槽，继承它是可行的——但用 adjuster 更省。）
 
-而直接 conform 比看上去便宜得多（**这些数字来自 dump，不是从符号表估的**）：
+**关键发现：节点类型名就是主题的语法键。** `SMSourceNodeTypes` 是按名字注册的运行时表，
+枚举一遍即可得到 `xcode.syntax.identifier.class`(23)、`.class.system`(29)、`.type`(26) 等 128 项。
+所以把节点类型改成对应 id，主题就按语义上色，且**按名字查 id 跨版本稳**（id 依注册顺序分配）。
 
-| 项 | 结论 |
-|---|---|
-| `SourceEditorLanguageService` | 48 个 requirement，**46 个有默认实现**，只需实现 `init(language:buffer:)` 与 `indentLine` |
-| `SourceEditorSyntaxTokenProvider` | 3 个 requirement，全部有默认实现 —— 覆写它们就是注入语义 token 的入口 |
-| 语言对象 | 不必自己实现 `SourceEditorLanguage`：`GenericLanguage` 是具体类，`init(name:identifier:languageService:lineDataFactory:editableRangeSnapshot:)` 可直接传入我们的 service 类型 |
-| 语义表达力 | `SourceEditorTokenData.uiKind` 返回 `SourceEditorTokenType.UIKind`，含 `className` / `typeName` 等，且每个带 `Scope`（`.project` / `.external`）—— 正好对应主题里 `identifier.class` 与 `identifier.class.system` 的区分 |
+接入点很小：`SourceEditorDataSource.languageService`（`lazy var`，读一次即创建）转型为
+`SourceModelLanguageService`，设上 adjuster 即可，不需要子类化，也不需要重建那 48 个
+requirement 的语言服务协议。ObjC 侧 `SMSourceModelItem` / `SMSourceNodeTypes` 用一份手写头
+加 modulemap 引入（`Stubs/SourceModel.framework/`），无需重建 Swift 接口。
 
-**真正的成本不在这 2 个方法，而在把这一片接口铺出来**：协议本身 48 条签名 + 46 条默认实现，
-连带 `SourceEditorBuffer`、`CodeStructure`、`Landmark`、`SourceEditorRefactorAction` 等十余个
-不透明类型，外加自建的 token data 类型与 `UIKind` / `Scope` / `FontTraits` 三个枚举（case 顺序
-照抄 dump）。数百行，全部机械。
+收益不止颜色：`tokenRangeAtPosition` 也变成语义级，⌘-click 取词随之更准。
 
-**结论：暂不做。** 可见收益（颜色）已由 `TextAttributeOverrideProvider` 以约 60 行拿到；这条路线
-的增量收益主要是 ⌘-click 取词精度与省掉一次遍历。已确认它不是死路，随时可以单独排期。
+**两条实测得出的规则：**
+
+- **只有当某个语义 run 完整包含该节点时才改写。** 解析器的节点边界与生成侧的 run 边界不一致 ——
+  ObjC 方法声明里会出现一个跨越「参数类型 + 参数名」的节点。按「节点首字符所在 run」判定会把
+  类型色染到参数名上。代价是少数跨 run 的节点保持框架原判，不会被错标。
+- **不要覆写带默认实现的 requirement。** `invalidateCache()` 有默认实现，用空实现覆写它没有
+  好处（本次实测它并非渲染不更新的原因，但默认实现属于框架的内部约定，无理由不要接管）。
+
+### 主题转换必须写满全部 28 个语法键
+
+`.xccolortheme` 的 `DVTSourceTextSyntaxColors` 有 28 个键；**只写一部分，剩下的会保留 Xcode
+自带主题的颜色**，结果是同一个面板里混着两套主题（工程内的类跟随用户配色，SDK 的类是 Xcode 的紫色）。
+
+而 `ThemeProfile` 只解析出 **7 种文本样式**（text / keyword / typeName / declaration /
+comment / number / error），所以这是一个 28 → 7 的多对一映射，必须：
+
+- **一个样式只指派一个键**用于改写节点类型。把同属一个样式的两个 `SemanticType` 映射到两个
+  不同的键，屏幕上看不出差别，却会让节点类型和主题各说各话。
+- 早期版本把 `.variable`（declaration 组）与 `.member(.name)`（typeName 组）映射到了同一个
+  `identifier.variable` 键，后写者覆盖前者，属性名于是显示为类型色。分组现在照抄
+  `ResolvedTheme.style(for:)`。
+- 系统符号与工程符号（`.system` 后缀那一族）不再有颜色区分 —— `ThemeProfile` 没有这一维，
+  强行保留只会让一半颜色不听设置。要区分需先给主题模型加一档。
+
+### 离屏渲染判据不可靠，实机为准
+
+本次改动的可见效果**三次被离屏 harness 判成失败，而实机是好的**。离屏窗口的渲染路径与真实
+窗口不同，`cacheDisplay(in:to:)` 取到的位图既有色彩空间转换、也不保证与屏幕一致。
+
+离屏检查可以用来证伪机制是否接通（是否崩溃、adjuster 是否被调用、token 类型是否变化），
+**但不要用它判定「颜色对不对」** —— 那必须看实机截图。
 
 ### 已知妥协（已解决，保留记录）：首个版本的语法高亮是词法的
 
@@ -629,6 +655,9 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 主题转换完成 | 开关改为正式设置项（Settings › Editor），不再走隐藏的 UserDefaults 键；`ThemeProfile` 已能渲染成 `.xccolortheme`。实测查明颜色分量必须按 calibrated RGB 写入，按 sRGB 写会静默偏色。 |
 | 2026-08-15 | 语义 token 注入定性为「值得做」 | 查明 Xcode 的 token 分类本身是语义级的，注入后着色会优于现有 `NSTextView` 路径而非持平；`SourceEditorLanguageService` 是 protocol（48 个 requirement）而非 class，且 `SourceEditorDataSource` 有直接接收 language service 的 initializer。工作量比现有接口子集大一个量级，单独排期。 |
 | 2026-08-15 | 语义高亮完成，成本远低于预估 | 找到 `TextAttributeOverrideProvider`（2 个 requirement，其一有默认实现），可直接把生成侧的 `NSAttributedString` 颜色覆盖上去，无需重建 language service。上一行的排期判断作废。 |
+| 2026-08-15 | 语义高亮改走 nodeTypeAdjuster | 放弃 `TextAttributeOverrideProvider` 的颜色覆盖，改为通过 `SourceModelLanguageService.nodeTypeAdjuster` 改写解析器节点类型——框架自身的扩展点。收益扩展到 `tokenRangeAtPosition` 等依赖解析结果的行为。查明继承 `GenericLanguageService` 不可行（conformance 由协议扩展默认实现见证，静态派发）。 |
+| 2026-08-15 | 主题必须写满 28 个键 | 只写部分键会让未写的键保留 Xcode 自带颜色，同一面板混着两套主题。同时修正多个 `SemanticType` 映射到同一键导致的覆盖：分组改为照抄 `ResolvedTheme.style(for:)`。 |
+| 2026-08-15 | 记录离屏判据不可靠 | 离屏 harness 三次把实际正常的效果判成失败。今后颜色类结论一律以实机截图为准，离屏只用于证伪机制是否接通。 |
 | 2026-08-15 | 纠正：dump 才是权威来源 | 上面几条「无法从导出符号恢复」的结论是错的——RuntimeViewer 自己的 per-type dump 直接给出超类、枚举 case 顺序与 PWT 偏移。今后重建接口一律先查 dump，`nm` 反推只作为没有 dump 时的退路。 |
 | 2026-08-15 | 补第三条接口重建规律 | 类的超类写错（把 NSObject 派生类声明成 Swift 根类）只在**释放时**崩，构造与调用全程正常，实例活到进程结束就完全不显形。判据是 `_OBJC_CLASS_$` 符号，已固化为 `Stubs/AuditClasses.sh`。实测确认 `@objc deinit` 不是判据也不能修复。 |
 | 2026-08-15 | 行号与背景修复 | 行号需要显式安装 `SourceEditorGutter` 并 `enableLineNumbers()`（视图默认不带 gutter）；背景另需设 `SourceEditorView.backgroundColor` 与容器背景，主题字典的背景键只管文本区。当前行高亮色由背景色推导，因为 `ThemeProfile` 没有这一项。 |

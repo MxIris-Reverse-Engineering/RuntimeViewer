@@ -6,6 +6,7 @@
 // so we need neither a hand-built language nor anything from SourceModel directly.
 import Foundation
 import SourceEditor
+import SourceModel
 import Swift
 import _Concurrency
 import _StringProcessing
@@ -13,4 +14,28 @@ import _StringProcessing
 public struct SourceModelEditorLanguage : SourceEditor.SourceEditorLanguage {
   public static let swift: SourceModelSupport.SourceModelEditorLanguage
   public static let objc: SourceModelSupport.SourceModelEditorLanguage
+}
+
+// The hook Xcode itself uses to turn a lexical parse into a semantic one: the language service
+// hands every parsed node to its adjuster, which may retype it. Retyping is what separates
+// `NSString` coloured as a plain identifier from `NSString` coloured as a class.
+//
+// Requirement order follows the PWT offsets in the dump (0x8, 0x10). `invalidateCache` has a
+// default implementation, so only `adjustNodeType(for:)` has to be written.
+public protocol SourceModelNodeTypeAdjuster {
+  func adjustNodeType(for item: SourceModel.SMSourceModelItem)
+  func invalidateCache()
+}
+
+extension SourceModelSupport.SourceModelNodeTypeAdjuster {
+  public func invalidateCache()
+}
+
+// NSObject-rooted — see rule 3 in ../README.md; getting this wrong crashes only on dealloc.
+@_hasMissingDesignatedInitializers @objc public class SourceModelLanguageService : ObjectiveC.NSObject {
+  public var nodeTypeAdjuster: SourceModelSupport.SourceModelNodeTypeAdjuster? {
+    get
+    set
+  }
+  @objc deinit
 }
