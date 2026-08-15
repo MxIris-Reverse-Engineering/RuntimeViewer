@@ -513,30 +513,46 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 7. **语义高亮** —— 走 `SourceModelLanguageService.nodeTypeAdjuster` 改写解析器节点类型。
 8. **正式设置项** —— Settings › Editor，`Settings.Editor.usesSourceEditor`，默认关闭。
 9. **entitlement** —— `com.apple.security.cs.disable-library-validation` 已加。
+10. **内存实测** —— 见下。spike 那个「2.8 倍」是离屏测量的假象,已作废。
+
+### 内存:SourceEditor 的开销可忽略(2026-08-15 实机测量)
+
+运行中的 App(已启用 SourceEditor、浏览 AppKit)按 `heap` 归因:
+
+| | |
+|---|---|
+| 进程 phys_footprint | 1081 MB(峰值 1532 MB) |
+| 其中堆 | 686 MB / 450 万个对象 |
+| **SourceEditor + SourceModel 的全部对象** | **2.0 MB / 19978 个,占堆 0.3%** |
+
+它只为可见行保留图层(`SourceEditorLineLayer` 139 个 ≈ 一屏行数),解析器的规则表是一次性
+常量。**采纳方案 B 不需要为内存付代价。**
+
+进程总量由 RuntimeViewer 自身的模型数据构成(`Node`、`StringStorage`、`MachOSymbols.Symbol`
+等),与本提案无关;针对它的优化在另一条未合并的分支上,故此处不作结论。
+
+spike 阶段那个「SourceEditor ≈ TextKit 2 的 2.8 倍」是离屏窗口无内存压力、缓存从不回收导致的,
+两边绝对值都不可用 —— 与本次「离屏判据不可靠」的教训是同一回事。
 
 ### 未完成
 
-**A. 在真实 App 内复测内存。** spike 的离屏测量得出 SourceEditor ≈ TextKit 2 的 2.8 倍，
-但两边绝对值都异常，不可用。用户已口头反馈「内存没问题，它优化得很好」，但**没有量过**。
-若确认显著劣化，需重新评估方案取舍。
-
-**B. 逐项启用附加能力**，每项单独验证。入口已定位，都在 `SourceEditorView` 上：
+**A. 逐项启用附加能力**，每项单独验证。入口已定位，都在 `SourceEditorView` 上：
 `installFoldingRibbon()`（代码折叠）、`installStickyHeaders()`、`installMinimap()`。
 另有 `areInvisiblesShown` / `areScopeGuidesShown` / `lineWrappingStyle` / `overscroll`。
 查找栏走 `makeTextFindPanel()` / `present(_:)`。
 
-**C. 系统符号与工程符号的颜色区分。** 主题里 `identifier.class` 与 `identifier.class.system`
+**B. 系统符号与工程符号的颜色区分。** 主题里 `identifier.class` 与 `identifier.class.system`
 是两个键，但 `ThemeProfile` 只有 7 种样式、没有这一维，现在两者同色。要区分必须先给
 `Settings.Theme.Preset` 加一档（例如 `systemTypeName`），属于主题模型的改动，需单独决定。
 
-**D. 走一次公证**，确认 entitlement 不影响 notarization。
+**C. 走一次公证**，确认 entitlement 不影响 notarization。
 
-**E. 设置面板文案需更新。** `EditorSettingsView` 里仍写着「语法着色来自 Xcode 自己的
+**D. 设置面板文案需更新。** `EditorSettingsView` 里仍写着「语法着色来自 Xcode 自己的
 tokenizer，比内置视图不准」——语义高亮落地后这句话已不成立。
 
-**F. 分支尚未推送，未开 PR。** 六个提交，`main` 受保护必须走 PR。
+**E. 分支尚未推送，未开 PR。** 六个提交，`main` 受保护必须走 PR。
 
-**G. 配套实现说明未写。** 提案头部「配套文档」仍是「待定」。按项目文档约定，落地时应登记
+**F. 配套实现说明未写。** 提案头部「配套文档」仍是「待定」。按项目文档约定，落地时应登记
 实现说明的链接；本提案正文已承载了绝大部分内容，需判断是否还要单独成篇（判据：是否存在
 「下次维护会踩、但代码本身看不出来」的决策——`Stubs/README.md` 已覆盖接口重建那部分）。
 
