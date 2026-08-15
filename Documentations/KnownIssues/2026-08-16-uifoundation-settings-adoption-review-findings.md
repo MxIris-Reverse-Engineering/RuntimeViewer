@@ -4,7 +4,7 @@
 **Branch reviewed:** `feature/uifoundation-settings-adoption` @ PR [#99](https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/pull/99) (base `next`)
 **Method:** `/code-review` (10 finder angles + sweep), then per-finding adjudication against the four questions in AGENTS.md
 **Scope:** 31 files changed since the merge base, 552 insertions / 518 deletions
-**Companion proposal:** [`Evolutions/0007-uifoundation-settings-adoption.md`](../Evolutions/0007-uifoundation-settings-adoption.md)
+**Companion proposal:** [`Evolutions/0011-uifoundation-settings-adoption.md`](../Evolutions/0011-uifoundation-settings-adoption.md)
 
 本轮共 14 条 findings。11 条已在本批次修复，1 条判定为**误报**，2 条**延后**（由 `main` 上已有的提交解决）。
 `US.1` 与 `US.2` 是合并阻塞项，两者都需要 UIFoundation 出新版本——为此发布了
@@ -69,9 +69,9 @@
 
 ---
 
-## Deferred
+## Resolved upstream（原判 Deferred，rebase 到 `next` 后已消除）
 
-| ID | Title | Where | 裁决理由 |
+| ID | Title | Where | 裁决理由与结果 |
 |---|---|---|---|
-| **US.12** | `@_exported import OutputTransformer` 保留，但声明该 product 的依赖边被删了 | `RuntimeViewerCore/Package.swift`、`Transformer/Transformer.swift` | 现象属实，但**基线也是如此、且 main 上有更完整的解法**。`main` 的 `0cb669c`（升级 MachOSwiftSection 0.15.2 并拆包，`Transformer.swift` 同时 re-export `OutputTransformer` 与 `SwiftOutputTransformer`）是完整版；本分支的 `8982027` 只删了 product 行没动源码。而且 `main` 自己的 `RuntimeViewerCore` 也没有声明这两个 product，同样依赖隐式传递解析。**结论：不在本 PR 处理**，等 `main` 并入 `next` 自然解决。若要收紧成显式声明，另开 PR。 |
-| **US.11** | AGENTS.md 与提案自相矛盾，且提案状态标为 `Implemented` | `AGENTS.md`、`Evolutions/0007` | 已随 US.1 一并修正（版本改 0.17.0、删掉「等发布后再验证」的措辞、已知限制重写）。保留条目是因为**根因未除**：本分支目前远端 pin 与本地 sibling checkout 两端都编不过（见提案「已知限制」），所以 `Implemented` 的状态要到 `main` 并入 `next` 之后才真正成立。 |
+| **US.12** | `@_exported import OutputTransformer` 保留，但声明该 product 的依赖边被删了 | `RuntimeViewerCore/Package.swift`、`Transformer/Transformer.swift` | 现象属实，但**基线也是如此**：`main` 自己的 `RuntimeViewerCore` 同样没有声明这些 product，一样靠隐式传递解析。当时的裁决是不在本 PR 处理。**2026-08-16 rebase 到 `next` 后已彻底解决，且比 main 的做法更好**——`next` 显式声明了三者（`OutputTransformer` 来自 swift-semantic-string，`ObjCOutputTransformer` 来自 MachOObjCSection，`SwiftOutputTransformer` 来自 MachOSwiftSection），`Transformer.swift` 也 re-export 三者，不再有任何隐式传递 import。本分支那个只删 product 行的 `8982027` 因此作废，rebase 时已丢弃。 |
+| **US.11** | AGENTS.md 与提案自相矛盾，且提案状态标为 `Implemented` | `AGENTS.md`、`Evolutions/0011` | 已随 US.1 一并修正（版本改 0.17.0、删掉「等发布后再验证」的措辞、已知限制重写）。当时保留条目是因为根因未除：分支彼时远端 pin 与本地 sibling checkout 两端都编不过。**rebase 到 `next` 后两端都通了**（`next` 的 `42267d4` 重 pin MachOSwiftSection 0.15.0，并显式声明上述 product），`Implemented` 现在名实相符。 |

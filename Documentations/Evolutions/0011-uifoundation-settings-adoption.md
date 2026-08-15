@@ -1,4 +1,4 @@
-# 0007 - RuntimeViewer 接入 UIFoundation Settings
+# 0011 - RuntimeViewer 接入 UIFoundation Settings
 
 - **状态**: Implemented
 - **作者**: JH
@@ -143,23 +143,28 @@ Store 观察 class 模型的 `accessPersistedValues()`。
 
 ## 已知限制
 
+截至 2026-08-16 rebase 到 `next` 之后，本节此前记录的两项限制均已消除，保留在此作为处置记录。
+
 **UIFoundation 版本（已解决）。** 2026-08-14 的 sidebar 图标修正用到了当时尚未发布的
 `SettingsConfiguration`，而版本下限仍写着 `0.16.0`——那个 tag 并不含这个类型，导致任何没有启用本地
 UIFoundation checkout 的构建（CI、全新 clone，以及本分支自己重 pin 的 Distribution workspace）都编不过。
 UIFoundation `0.17.0` 已发布并同时包含 `SettingsConfiguration` 和设置窗口的位置恢复修复，下限与三份
 lockfile 均已提到 0.17.0。
 
-**依赖图冲突（本分支仍在，需靠 main 解决）。** 直接用 SwiftPM 把 `RuntimeViewerPackages` 切到全远端
-依赖时，依赖图在进入源码编译前就会报 `MachOSwiftSection`（0.14.1）与 `swift-semantic-string` 都声明
-`OutputTransformer` target。这与 Settings 迁移无关：`main` 上的 `0cb669c`（升级到 MachOSwiftSection
-0.15.2 及其拆出的包，并把 `Transformer.swift` 改为同时 re-export `OutputTransformer` 与
-`SwiftOutputTransformer`）已经解决了它，但该提交尚未进入 `next`，因此也不在本分支上。
+**依赖图冲突（已由 `next` 解决）。** 此前直接用 SwiftPM 切到全远端依赖时，依赖图在进入源码编译前就会
+报 `MachOSwiftSection`（0.14.1）与 `swift-semantic-string` 都声明 `OutputTransformer` target；而改用本地
+兄弟仓库同样不通，因为本地 MachOKit / MachOSwiftSection 已经走在当时的 `next` 前面（`MachOExtensions`
+模块已不存在）。两端都编不过，且都与 Settings 迁移无关。
 
-在本分支上，用本地兄弟仓库构建同样不通——本地 MachOKit / MachOSwiftSection 已经走在 `next` 前面
-（`MachOExtensions` 模块已不存在）。也就是说本分支目前两端都编不过，且两端都不是本次改动造成的。
-2026-08-16 的验证是在一份把 `main` 合进来的一次性副本上做的：`RuntimeViewerSettings` /
-`RuntimeViewerSettingsUI` / `RuntimeViewerApplication` / `RuntimeViewerMCPBridge` 与 macOS App target
-全部编译通过，设置持久化测试全绿。**本分支合入前需要先把 `main` 并进 `next`。**
+`next` 的 `42267d4`（重 pin MachOSwiftSection 0.15.0）与 `889f1bd` 一线的改动已经解决它，并且做法比
+`main` 更彻底——三个 product 全部显式声明（`OutputTransformer` 来自 swift-semantic-string，
+`ObjCOutputTransformer` 来自 MachOObjCSection，`SwiftOutputTransformer` 来自 MachOSwiftSection），不再
+依赖隐式传递 import。本分支原有的 `build(core): stop requesting removed OutputTransformer product` 因此
+作废，rebase 时已丢弃。
+
+**编号变更。** 本提案起草时占用 `0007`，与 `next` 上的
+[`0007-objc-relationship-index-returns-to-application.md`](0007-objc-relationship-index-returns-to-application.md)
+撞号。合流时本篇改号为 `0011`（`0005` / `0009` / `0010` 分别被其它未合入分支占用）。
 
 ## 决策日志
 

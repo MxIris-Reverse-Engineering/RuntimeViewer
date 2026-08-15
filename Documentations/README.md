@@ -18,7 +18,7 @@
 
 ## 提案（Evolutions）
 
-见 [`Evolutions/README.md`](Evolutions/README.md)。当前 7 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧。
+见 [`Evolutions/README.md`](Evolutions/README.md)。当前 9 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、接入 UIFoundation Settings。
 
 ## 设计与实现计划（Plans，归档）
 
