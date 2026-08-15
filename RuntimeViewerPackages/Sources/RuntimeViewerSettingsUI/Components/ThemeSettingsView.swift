@@ -225,6 +225,7 @@ private struct ThemeDetailsView: View {
     private static let slots: [Slot] = [
         Slot(title: "Background", keyPath: \.background, supportsTraits: false),
         Slot(title: "Selection", keyPath: \.selection, supportsTraits: false),
+        Slot(title: "Current Line", keyPath: \.currentLineHighlight, supportsTraits: false),
         Slot(title: "Text", keyPath: \.text, supportsTraits: true),
         Slot(title: "Keyword", keyPath: \.keyword, supportsTraits: true),
         Slot(title: "Type Name", keyPath: \.typeName, supportsTraits: true),

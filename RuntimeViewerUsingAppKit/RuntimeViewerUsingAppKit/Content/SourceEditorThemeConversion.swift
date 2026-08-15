@@ -110,31 +110,9 @@ enum SourceEditorThemeConversion {
         converted["DVTSourceTextBackground"] = themeString(for: themeProfile.backgroundColor)
         converted["DVTSourceTextSelectionColor"] = themeString(for: themeProfile.selectionBackgroundColor)
         converted["DVTSourceTextInsertionPointColor"] = themeString(for: themeProfile.color(for: .standard))
-
-        // `ThemeProfile` has no current-line color, and leaving the base theme's would put an
-        // Xcode-coloured band across a differently-coloured background. Deriving it from the
-        // background keeps the band subtle and in-family whatever the preset.
-        if let currentLineColor = currentLineHighlightColor(basedOn: themeProfile.backgroundColor) {
-            converted["DVTSourceTextCurrentLineHighlightColor"] = themeString(for: currentLineColor)
-        }
+        converted["DVTSourceTextCurrentLineHighlightColor"] = themeString(for: themeProfile.currentLineHighlightColor)
 
         return converted
-    }
-
-    /// A slightly lifted (or, on a light background, slightly dropped) version of the editor
-    /// background — the same relationship Xcode's own themes use between the two.
-    private static func currentLineHighlightColor(basedOn backgroundColor: NSColor) -> NSColor? {
-        guard let genericRGBColor = backgroundColor.usingColorSpace(.genericRGB) else { return nil }
-        let brightness = 0.299 * genericRGBColor.redComponent
-            + 0.587 * genericRGBColor.greenComponent
-            + 0.114 * genericRGBColor.blueComponent
-        let delta: CGFloat = brightness < 0.5 ? 0.05 : -0.05
-        return NSColor(
-            calibratedRed: min(max(genericRGBColor.redComponent + delta, 0), 1),
-            green: min(max(genericRGBColor.greenComponent + delta, 0), 1),
-            blue: min(max(genericRGBColor.blueComponent + delta, 0), 1),
-            alpha: genericRGBColor.alphaComponent
-        )
     }
 
     /// `"red green blue alpha"`, components in 0…1.

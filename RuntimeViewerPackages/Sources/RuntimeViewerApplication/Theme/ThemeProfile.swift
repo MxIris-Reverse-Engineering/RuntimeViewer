@@ -16,6 +16,10 @@ import RuntimeViewerCore
 public protocol ThemeProfile {
     var selectionBackgroundColor: NSUIColor { get }
     var backgroundColor: NSUIColor { get }
+
+    /// Fill behind the line the caret is on. Only the Xcode-backed content view draws it; the
+    /// built-in `NSTextView` has no current-line highlight to colour.
+    var currentLineHighlightColor: NSUIColor { get }
     var fontSize: CGFloat { get }
     func font(for type: SemanticType) -> NSUIFont
     func color(for type: SemanticType) -> NSUIColor

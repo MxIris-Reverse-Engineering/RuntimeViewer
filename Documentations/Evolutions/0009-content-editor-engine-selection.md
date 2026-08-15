@@ -672,6 +672,7 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 主题转换完成 | 开关改为正式设置项（Settings › Editor），不再走隐藏的 UserDefaults 键；`ThemeProfile` 已能渲染成 `.xccolortheme`。实测查明颜色分量必须按 calibrated RGB 写入，按 sRGB 写会静默偏色。 |
 | 2026-08-15 | 语义 token 注入定性为「值得做」 | 查明 Xcode 的 token 分类本身是语义级的，注入后着色会优于现有 `NSTextView` 路径而非持平；`SourceEditorLanguageService` 是 protocol（48 个 requirement）而非 class，且 `SourceEditorDataSource` 有直接接收 language service 的 initializer。工作量比现有接口子集大一个量级，单独排期。 |
 | 2026-08-15 | 语义高亮完成，成本远低于预估 | 找到 `TextAttributeOverrideProvider`（2 个 requirement，其一有默认实现），可直接把生成侧的 `NSAttributedString` 颜色覆盖上去，无需重建 language service。上一行的排期判断作废。 |
+| 2026-08-15 | 当前行高亮改为主题正式一项 | 原本由背景色推导（亮度判明暗、±0.05），是 0009 引入的临时做法。现新增 `Settings.Theme.Preset.currentLineHighlight` 槽，贯通 `ThemeProfile` / `ResolvedTheme` / 设置面板「Current Line」行。该槽带 `@Default`，否则已保存的自定义 preset 会因缺键解码失败。仅 SourceEditor 路径会绘制它——`NSTextView` 没有当前行高亮。 |
 | 2026-08-15 | 语义高亮改走 nodeTypeAdjuster | 放弃 `TextAttributeOverrideProvider` 的颜色覆盖，改为通过 `SourceModelLanguageService.nodeTypeAdjuster` 改写解析器节点类型——框架自身的扩展点。收益扩展到 `tokenRangeAtPosition` 等依赖解析结果的行为。查明继承 `GenericLanguageService` 不可行（conformance 由协议扩展默认实现见证，静态派发）。 |
 | 2026-08-15 | 主题必须写满 28 个键 | 只写部分键会让未写的键保留 Xcode 自带颜色，同一面板混着两套主题。同时修正多个 `SemanticType` 映射到同一键导致的覆盖：分组改为照抄 `ResolvedTheme.style(for:)`。 |
 | 2026-08-15 | 记录离屏判据不可靠 | 离屏 harness 三次把实际正常的效果判成失败。今后颜色类结论一律以实机截图为准，离屏只用于证伪机制是否接通。 |

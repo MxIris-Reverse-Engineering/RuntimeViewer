@@ -25,6 +25,7 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
 
     public let backgroundColor: NSUIColor
     public let selectionBackgroundColor: NSUIColor
+    public let currentLineHighlightColor: NSUIColor
 
     private let colorByStyle: [Settings.Theme.Style: NSUIColor]
     private let fontByStyle: [Settings.Theme.Style: NSUIFont]
@@ -34,6 +35,7 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
         self.fontSize = fontSize
         self.backgroundColor = preset.background.nsuiColor
         self.selectionBackgroundColor = preset.selection.nsuiColor
+        self.currentLineHighlightColor = preset.currentLineHighlight.nsuiColor
 
         let textStyles: [Settings.Theme.Style] = [
             preset.text,

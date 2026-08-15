@@ -64,6 +64,15 @@ extension Settings.Theme {
         // enclosing scope).
         public var background: Settings.Theme.Style
         public var selection: Settings.Theme.Style
+
+        /// Fill behind the line the caret is on.
+        ///
+        /// Carries a default, unlike the slots above, because presets saved before this slot
+        /// existed must keep decoding — a required slot here would make every stored custom
+        /// preset fail to load. The default is Xcode's own pair, which reads as a barely
+        /// lifted background rather than a band.
+        @Default(Settings.Theme.Style.xcodeCurrentLineHighlight)
+        public var currentLineHighlight: Settings.Theme.Style
         public var text: Settings.Theme.Style
         public var keyword: Settings.Theme.Style
         public var typeName: Settings.Theme.Style
@@ -151,6 +160,7 @@ extension Settings.Theme.Preset {
             light: .rgb(0.780392, 0.858824, 1),
             dark: .rgb(0.3904261589, 0.4343567491, 0.5144847631)
         ),
+        currentLineHighlight: .xcodeCurrentLineHighlight,
         text: .adaptive(
             light: .rgb(0, 0, 0),
             dark: .rgb(1, 1, 1)
@@ -177,5 +187,16 @@ extension Settings.Theme.Preset {
             dark: .rgb(1, 0.9160019755, 0.5006220341)
         ),
         error: .solid(.rgb(0.831372549, 0.1019607843, 0.1019607843))
+    )
+}
+
+extension Settings.Theme.Style {
+    /// Xcode's own current-line fill, used as the default for presets that predate the slot.
+    ///
+    /// Both values sit a hair off their matching background rather than being a distinct
+    /// colour: the point is to locate the caret's line, not to draw attention to it.
+    public static let xcodeCurrentLineHighlight = Settings.Theme.Style.adaptive(
+        light: .rgb(0.909804, 0.94902, 1),
+        dark: .rgb(0.138526, 0.146864, 0.169283)
     )
 }
