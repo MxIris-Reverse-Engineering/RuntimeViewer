@@ -56,7 +56,7 @@ extension Settings {
         public static let `default` = Self()
     }
 
-    public typealias TransformerSettings = RuntimeViewerCore.Transformer.Configuration
+    public typealias TransformerSettings = OutputTransformer.Transformer.Configuration
 
     @Codable
     @MemberInit

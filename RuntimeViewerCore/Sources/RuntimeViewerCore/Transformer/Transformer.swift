@@ -1,18 +1,23 @@
 import Foundation
 import MetaCodable
+@_exported public import OutputTransformer
+@_exported public import SwiftOutputTransformer
 
-/// The Swift-side transformer template mechanism (the `Transformer` namespace:
-/// comment token templates, presets, the `Module` protocol, and
-/// `SwiftConfiguration`) moved library-side into MachOSwiftSection's
-/// `OutputTransformer` module, so the templates render inside the library
-/// and RuntimeViewer keeps only the settings UI. This re-export keeps every
-/// existing `Transformer.…` reference compiling unchanged.
+/// The Swift-side transformer template mechanism (comment token templates,
+/// presets, and `SwiftConfiguration`) moved library-side, so the templates
+/// render inside the library and RuntimeViewer keeps only the settings UI. It
+/// arrives from two packages: the shared `Transformer` namespace and the
+/// `Module` protocol live in swift-semantic-string's `OutputTransformer`, while
+/// the Swift-specific modules live in MachOSwiftSection's
+/// `SwiftOutputTransformer`. Splitting them is what lets the ObjC-side modules
+/// extend the same namespace without a consumer having to qualify every
+/// reference. These re-exports keep every existing `Transformer.…` reference
+/// compiling unchanged.
 ///
 /// The ObjC-side modules (`CType`, `ObjCIvarOffset`) and the aggregate
 /// persistence `Configuration` remain here for now (declared as extensions of
 /// the imported namespace), pending a library-side home for the ObjC
 /// rendering pipeline.
-@_exported import OutputTransformer
 
 // MARK: - ObjC Configuration
 

@@ -1,6 +1,5 @@
 import Foundation
 import MachOKit
-import MachOExtensions
 import Semantic
 import ObjCDump
 import ObjCTypeDecodeKit
