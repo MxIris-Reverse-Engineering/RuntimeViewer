@@ -35,13 +35,18 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
 
         let transformerObservable: Observable<Transformer.Configuration>
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-        @Dependency(\.settings) var settings
         // Resolve the dependency once. `Observable.tracking` re-arms on a
         // main-queue hop where the dependency context is no longer available.
+        // This is `ViewModel`'s own `settings`, already resolved by `super.init`
+        // above — declaring a second local one here would only shadow it.
         let trackedSettings = settings
         transformerObservable = Observable<Transformer.Configuration>
             .tracking {
-                trackedSettings.transformer
+                // Main-actor isolated state read from `tracking`'s synchronous
+                // first access — see the matching note in `ResolvedThemeStream`.
+                MainActor.assumeIsolated {
+                    trackedSettings.transformer
+                }
             }
             .share(replay: 1, scope: .whileConnected)
         #else

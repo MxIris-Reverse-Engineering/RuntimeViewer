@@ -30,7 +30,15 @@ public final class ResolvedThemeStream {
         let trackedSettings = settings
         observable = Observable<ResolvedTheme>
             .tracking {
-                ResolvedTheme(settings: trackedSettings.current)
+                // `tracking` runs this synchronously on whichever thread
+                // subscribes, and `SettingsAccess` is main-actor isolated, so
+                // reading it from anywhere else races Observation's registrar.
+                // Every subscriber attaches on the main thread today; assert
+                // that rather than leave it to the `@preconcurrency` import,
+                // which silences the diagnostic without making it true.
+                MainActor.assumeIsolated {
+                    ResolvedTheme(settings: trackedSettings.current)
+                }
             }
             .distinctUntilChanged()
             .share(replay: 1, scope: .forever)
