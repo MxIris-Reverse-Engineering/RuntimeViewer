@@ -549,6 +549,34 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 - `LayoutOverrideProviderPriority` 的 case 声明顺序**必须照抄 dump**（`low` / `medium` / `high`）。
   resilient 枚举的 case 索引与隐式 raw value 都来自声明顺序，顺序写错会静默取到别的 case。
 
+### 语言服务路线（未采用，但已完整摸清）
+
+比「颜色覆盖」更彻底的做法是提供自己的 `SourceEditorLanguageService`，让框架的整套机制都拿到
+语义信息（`tokenRangeAtPosition` 变语义级 → ⌘-click 取词更准；省掉每次切换对象时遍历
+attributed string 的开销；分隔符高亮、结构选择等一并受益）。
+
+**不能靠继承 `GenericLanguageService` 实现。** 它对 `SourceEditorLanguageService` 与
+`SourceEditorSyntaxTokenProvider` 的 conformance 都是空 extension，witness 全部来自协议扩展的
+默认实现 —— 而协议扩展默认是**静态派发**，子类覆写不会被调用。它自己的 vtable 里只有
+`indentLine`。要控制 token 必须由我们自己的类型直接 conform。
+
+而直接 conform 比看上去便宜得多（**这些数字来自 dump，不是从符号表估的**）：
+
+| 项 | 结论 |
+|---|---|
+| `SourceEditorLanguageService` | 48 个 requirement，**46 个有默认实现**，只需实现 `init(language:buffer:)` 与 `indentLine` |
+| `SourceEditorSyntaxTokenProvider` | 3 个 requirement，全部有默认实现 —— 覆写它们就是注入语义 token 的入口 |
+| 语言对象 | 不必自己实现 `SourceEditorLanguage`：`GenericLanguage` 是具体类，`init(name:identifier:languageService:lineDataFactory:editableRangeSnapshot:)` 可直接传入我们的 service 类型 |
+| 语义表达力 | `SourceEditorTokenData.uiKind` 返回 `SourceEditorTokenType.UIKind`，含 `className` / `typeName` 等，且每个带 `Scope`（`.project` / `.external`）—— 正好对应主题里 `identifier.class` 与 `identifier.class.system` 的区分 |
+
+**真正的成本不在这 2 个方法，而在把这一片接口铺出来**：协议本身 48 条签名 + 46 条默认实现，
+连带 `SourceEditorBuffer`、`CodeStructure`、`Landmark`、`SourceEditorRefactorAction` 等十余个
+不透明类型，外加自建的 token data 类型与 `UIKind` / `Scope` / `FontTraits` 三个枚举（case 顺序
+照抄 dump）。数百行，全部机械。
+
+**结论：暂不做。** 可见收益（颜色）已由 `TextAttributeOverrideProvider` 以约 60 行拿到；这条路线
+的增量收益主要是 ⌘-click 取词精度与省掉一次遍历。已确认它不是死路，随时可以单独排期。
+
 ### 已知妥协（已解决，保留记录）：首个版本的语法高亮是词法的
 
 「非目标」一节写明不用 `SourceModel` 的词法高亮替换现有语义高亮。当前实现**并未做到这一点**：
