@@ -1,11 +1,26 @@
 # 0007 - ObjC 关系索引归还应用侧
 
-- **状态**: In Progress（代码完成、测试通过；合入 main 阻塞于 MachOSwiftSection 的 pin，见「落地记录」）
+- **状态**: 部分 Implemented，部分被 [0008](0008-symmetric-objc-and-swift-index-layers.md) 取代
+  - **渲染与解析层搬进库** —— Implemented，随 `6cf23b0` 合入 `next`，**保留**
+  - **关系索引的重建方式**（`RuntimeObjCRelationshipIndex`、删除工厂聚合、resolver 逐 image 遍历）
+    —— **被 0008 取代**，实现已于 `801be38` 移除
 - **作者**: JH
 - **日期**: 2026-08-10
 - **关联提案**: MachOObjCSection [0003 - ObjC 关系反向表移出索引层，归还应用](https://github.com/MxIris-Reverse-Engineering/MachOObjCSection/blob/main/Documentations/Evolutions/0003-objc-relationship-tables-return-to-application.md)
   —— **本提案是它的下游适配**，库侧的设计论证不在此重复
-- **实现分支 / PR**: 待定（依赖 MachOObjCSection `0.8.103` 发版）
+- **实现分支 / PR**: `next`（[PR #102](https://github.com/MxIris-Reverse-Engineering/RuntimeViewer/pull/102) 合入 `6cf23b0`）
+
+> **本文按项目约定保持原貌，不回改以符合最终实现。** 下面正文描述的关系索引方案已不是代码的
+> 现状，它记录的是当时的决策与理由，包括那个被 0008 判定为"应该由类型系统排除、而非由注释警告"
+> 的 handler 安装风险——0008 的动机四正是从这里来的。
+>
+> 两点当时的判断已被事实修正，记在这里而不改正文：
+>
+> 1. **头部原写"合入 main 阻塞于 MachOSwiftSection 的 pin"**。该阻塞已解除：MachOObjCSection
+>    `0.8.103` / `0.8.104` 与 MachOSwiftSection `0.15.1`（其 `e95942c8` 去掉了 exact 锁）均已发布。
+> 2. **本分支的 pin 与其代码互相矛盾**：`Package.swift` 要求 `exact: 0.8.103`，`Package.resolved`
+>    却停在 `0.8.102`，而 `0.8.102` 里 `subclasses(of:)` 与 `ObjCClassReference` 仍然存在——移除
+>    反向表的 `0b2a2f5` 要到 `0.8.103` 才进去。合并时已按 0008 统一到 `0.8.104` / `0.15.1`。
 
 ## 摘要
 
