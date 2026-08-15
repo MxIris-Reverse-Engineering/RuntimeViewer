@@ -21,6 +21,11 @@ RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerC
 // to load when run from Xcode against a release-built helper.
 RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelperPlugin
 
+// SourceEditor bridge bundle (RuntimeViewerSourceEditorBridge target).
+// Holds the only code that links Xcode's private SourceEditor framework; the app loads it
+// by path at runtime. One identifier across all configurations, same reasoning as above.
+RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerSourceEditorBridge
+
 // XPC server framework (RuntimeViewerServer / RuntimeViewerMobileServer targets)
 RUNTIME_VIEWER_SERVER_BUNDLE_IDENTIFIER = com.MxIris.RuntimeViewerServer
 

@@ -34,7 +34,19 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
         return viewController
     }()
 
-    private lazy var textViewController: ContentTextViewController = .init()
+    private lazy var textViewController: UXKitViewController<ContentTextViewModel> = makeTextViewController()
+
+    /// Both content views bind the same `ContentTextViewModel`, so choosing between them is
+    /// the whole of the switch. Anything that stops the Xcode-backed one from loading — no
+    /// Xcode installed, an arm64e build, a missing bridge bundle — lands on the `NSTextView`
+    /// implementation, which is the shipping behaviour.
+    private func makeTextViewController() -> UXKitViewController<ContentTextViewModel> {
+        @Dependency(\.sourceEditorLoader) var sourceEditorLoader
+        guard sourceEditorLoader.isEnabledByUser, sourceEditorLoader.isAvailable else {
+            return ContentTextViewController()
+        }
+        return ContentSourceEditorViewController()
+    }
 
     /// Object the text scene is currently bound to. `.back` re-entries
     /// (cursor moves, tab routes) skip rebinding when the object is unchanged:
@@ -87,7 +99,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     private func rebindTextViewController(for runtimeObject: RuntimeObject, forceRebind: Bool) {
         if !isCurrentTextScene {
-            textViewController = .init()
+            textViewController = makeTextViewController()
             boundRuntimeObject = nil
         }
         guard forceRebind || boundRuntimeObject != runtimeObject else { return }
