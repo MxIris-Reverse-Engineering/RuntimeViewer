@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.debugMenuController) private var debugMenuController
     @Dependency(\.helperServiceVersionChecker) private var helperServiceVersionChecker
     @Dependency(\.mcpService) private var mcpService
+    @Dependency(\.settingsLifecycleController) private var settingsLifecycleController
     @Dependency(\.tabMenuController) private var tabMenuController
     @Dependency(\.updaterService) private var updaterService
     @Dependency(\.simulatorInstallerWindowController) private var simulatorInstallerWindowController
@@ -25,12 +26,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSToolbarItemViewerOverflowFix.install()
 
+        settingsLifecycleController.loadOnLaunch()
         appearanceController.start()
         debugMenuController.install()
         tabMenuController.install()
         mcpService.start(for: AppMCPBridgeDocumentProvider())
         updaterService.start()
         helperServiceVersionChecker.checkOnLaunch()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        settingsLifecycleController.shouldTerminate(sender)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
