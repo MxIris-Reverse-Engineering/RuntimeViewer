@@ -1,5 +1,5 @@
 {
-  "originHash" : "a3fde1291c188cb66d8e385673ec7480190e07d56df1adbeca3f480a7c3bc0d6",
+  "originHash" : "642ac2278ccafe94bf48f84c085183884e1639bb448f2eb13c1199572beccdf2",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -546,8 +546,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "4bde74c69e432e9fa0538c331a308bfc70f84dd0",
-        "version" : "0.16.0"
+        "revision" : "0b323b0b4019ff9828786f2f97fbe23c97c59004",
+        "version" : "0.17.0"
       }
     },
     {
