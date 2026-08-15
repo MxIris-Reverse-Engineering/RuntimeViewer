@@ -499,35 +499,52 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
 
 仅方案 B 需要；方案 A 按各项能力独立排期，不在此展开。
 
-1. ~~**验证 `dlopen` 加载路径**~~ —— **已完成（2026-08-15）**，结论见「运行时加载策略」。
-2. ~~建立 stub framework 与接口子集，纳入构建；补齐 `.tbd` 生成脚本~~ —— **已完成**。
-   仓库内 `Stubs/`，含 `Generate.sh`（tapi stubify + 裁剪）、`AuditMembers.sh`（查符号形式）、
-   `Trim.py`。裁剪后两个 `.tbd` 合计不到 5 KB，只保留实际引用的 42 + 4 个符号。
-3. ~~把编辑器实现隔离进可选加载 bundle，接入 `ContentCoordinator`~~ —— **已完成**。
-   新增 `RuntimeViewerSourceEditorBridge` bundle target（照搬既有
-   `RuntimeViewerCatalystHelperPlugin` 的形态），`SourceEditorLoader` 负责定位与降级，
-   `ContentSourceEditorViewController` 与 `ContentTextViewController` 绑定同一个
-   `ContentTextViewModel`，因此二选一就是全部切换成本。
-4. ~~⌘-click 跳转~~ —— **已完成**。跳转目标仍从生成侧的 `.link` attribute 读取，
-   保持语义精度；⌘⇧-click 开新 tab 的语义一并保留。
-5. **在真实 App 内复测内存**。spike 的离屏测量得出 SourceEditor ≈ TextKit 2 的 2.8 倍，
-   但绝对值不可信。若真实环境下确认显著劣化，需重新评估方案取舍。**未做。**
-6. ~~**主题转换**~~ —— **已完成**。`SourceEditorThemeConversion` 把 `ThemeProfile` 渲染成
-   `.xccolortheme` dictionary，**以框架自带主题为底再覆盖**（该格式约五十个键，多数在
-   `ThemeProfile` 里没有对应物；从一份完整字典出发，未映射的键仍然有效，Xcode 以后加键也不会
-   开天窗）。已实测覆盖生效。**两个不查就会错的点**：
-   - **颜色分量必须是 calibrated / Generic RGB，不是 sRGB。** 框架用等价于
-     `NSColor(calibratedRed:green:blue:alpha:)` 的方式解析 `"r g b a"`。实测同一个三元组：
-     按 sRGB 解析渲染成 0.420/0.886/0.459，按 calibrated 解析渲染成 0.404/0.886/0.518 ——
-     肉眼可辨，而且不会报任何错。
-   - 嵌套字典必须整体替换后写回，且颜色/字体值是字符串（`"r g b a"` / `"字体名 - 字号"`）。
-7. ~~**语义 token 注入**~~ —— **已完成，且比预想便宜得多**。见下方。
-8. 逐项启用附加能力（折叠、sticky header、查找栏），每项单独验证。**未做**（`installMinimap()` /
-   `installStickyHeaders()` / `installFoldingRibbon()` 三个入口已定位）。
-9. ~~加上 `com.apple.security.cs.disable-library-validation` entitlement~~ —— **已加**，
-   公证尚未走过。
+### 已完成（2026-08-15，分支 `feature/source-editor-integration`）
 
-### 语义高亮：走 `TextAttributeOverrideProvider`，不必重建 language service
+1. **`dlopen` 加载路径** —— 结论见「运行时加载策略」。install-name 复用成立；加载顺序有影响，
+   已改为不动点循环；最小框架集合 4 个。
+2. **stub framework 与接口子集** —— 仓库内 `Stubs/`，含 `Generate.sh` / `AuditMembers.sh` /
+   `AuditClasses.sh` / `Trim.py`。三个 `.tbd` 裁剪后合计约 16 KB。
+3. **可选加载 bundle 接入 `ContentCoordinator`** —— `RuntimeViewerSourceEditorBridge` bundle
+   target，`SourceEditorLoader` 负责定位与降级，两个内容视图绑定同一个 ViewModel。
+4. **⌘-click 跳转** —— 目标从生成侧 `.link` attribute 读取；⌘⇧-click 开新 tab 保留。
+5. **行号** —— 需显式安装 `SourceEditorGutter` 并 `enableLineNumbers()`（视图默认不带 gutter）。
+6. **主题转换** —— `SourceEditorThemeConversion`，28 个语法键全部写入。
+7. **语义高亮** —— 走 `SourceModelLanguageService.nodeTypeAdjuster` 改写解析器节点类型。
+8. **正式设置项** —— Settings › Editor，`Settings.Editor.usesSourceEditor`，默认关闭。
+9. **entitlement** —— `com.apple.security.cs.disable-library-validation` 已加。
+
+### 未完成
+
+**A. 在真实 App 内复测内存。** spike 的离屏测量得出 SourceEditor ≈ TextKit 2 的 2.8 倍，
+但两边绝对值都异常，不可用。用户已口头反馈「内存没问题，它优化得很好」，但**没有量过**。
+若确认显著劣化，需重新评估方案取舍。
+
+**B. 逐项启用附加能力**，每项单独验证。入口已定位，都在 `SourceEditorView` 上：
+`installFoldingRibbon()`（代码折叠）、`installStickyHeaders()`、`installMinimap()`。
+另有 `areInvisiblesShown` / `areScopeGuidesShown` / `lineWrappingStyle` / `overscroll`。
+查找栏走 `makeTextFindPanel()` / `present(_:)`。
+
+**C. 系统符号与工程符号的颜色区分。** 主题里 `identifier.class` 与 `identifier.class.system`
+是两个键，但 `ThemeProfile` 只有 7 种样式、没有这一维，现在两者同色。要区分必须先给
+`Settings.Theme.Preset` 加一档（例如 `systemTypeName`），属于主题模型的改动，需单独决定。
+
+**D. 走一次公证**，确认 entitlement 不影响 notarization。
+
+**E. 设置面板文案需更新。** `EditorSettingsView` 里仍写着「语法着色来自 Xcode 自己的
+tokenizer，比内置视图不准」——语义高亮落地后这句话已不成立。
+
+**F. 分支尚未推送，未开 PR。** 六个提交，`main` 受保护必须走 PR。
+
+**G. 配套实现说明未写。** 提案头部「配套文档」仍是「待定」。按项目文档约定，落地时应登记
+实现说明的链接；本提案正文已承载了绝大部分内容，需判断是否还要单独成篇（判据：是否存在
+「下次维护会踩、但代码本身看不出来」的决策——`Stubs/README.md` 已覆盖接口重建那部分）。
+
+### 【已被取代】语义高亮的第一版：`TextAttributeOverrideProvider`
+
+> 保留作记录。这一版**能出正确颜色，但它是在错误的解析结果上盖颜色** —— `tokenRangeAtPosition`
+> 仍是词法的，⌘-click 取词不受益，且每次切换对象都要遍历整个 attributed string。
+> 现行做法见下一节。
 
 首个版本的高亮是词法的（`NSString` 这类类型名不着色，因为词法扫描器不知道它是个类型）。
 原以为只能实现 48 个 requirement 的 `SourceEditorLanguageService`，实际有一条便宜得多的路：
