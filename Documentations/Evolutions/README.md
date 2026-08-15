@@ -20,6 +20,7 @@
 | [0007](0007-objc-relationship-index-returns-to-application.md) | ObjC 关系索引归还应用侧 | 部分被 0008 取代 | MachOObjCSection 0003 的下游适配：渲染与解析层搬进库（**保留**），关系表改由应用从 `ObjCIndexingEvent` 事件流重建（**已被 0008 取代**）。 |
 | [0008](0008-symmetric-objc-and-swift-index-layers.md) | ObjC 与 Swift 索引层的对称化 | Implemented | `RuntimeObjCInterfaceIndexer` 回到与 `RuntimeSwiftInterfaceIndexer` 同构的形态：包装库侧 upstream、eager 反向表、`addSubIndexer` / `removeSubIndexer` 聚合、由 factory 持有聚合器，`RuntimeRelationshipsResolver` 从遍历所有 image 退回成查两次聚合器。取代 0007 的关系索引设计。 |
 | [0009](0009-content-editor-engine-selection.md) | 内容视图编辑器选型：继续 NSTextView 还是改用 Xcode SourceEditor | Accepted | 采纳方案 B：运行时 `dlopen` Xcode 私有 `SourceEditor` 框架，编辑器代码隔离在可选加载的 bridge bundle 内，`ContentSourceEditorViewController` 与现有 `NSTextView` 实现绑定同一 ViewModel 以便随时降级。当前为 opt-in 开关，语法高亮暂为词法级、主题转换未做。 |
+| [0010](0010-interface-snapshot-export.md) | 把接口导出成图片 | Draft | 把当前接口渲染成带主题配色的 PNG。需拍板渲染路径：自己排版生成侧已有的 `NSAttributedString`（不依赖 Xcode），还是借 `SourceEditorView` 的截图 API（所见即所得，但底层是已知不可靠的 `cacheDisplay`）。 |
 | [0011](0011-uifoundation-settings-adoption.md) | RuntimeViewer 接入 UIFoundation Settings | Implemented | 保留 RuntimeViewer 业务设置模型与页面，采用 UIFoundation 的持久化 store、属性包装器、设置窗口和导航，并删除重复壳层。原以 `0007` 起草，与本分支的 `0007` 撞号，合流时改为 `0011`。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
@@ -27,9 +28,8 @@
 > **编号占用提醒**：`0007` 曾在两条 feature 分支上各被用过一次，2026-08-16 合流时已解决——
 > `feature/objc-rendering-and-indexing` 的 `0007-objc-relationship-index-returns-to-application.md`
 > 保留 `0007`，`feature/uifoundation-settings-adoption` 的那篇改号为 `0011`。
-> 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`），
-> `0010` 在 `feature/source-editor-integration`。**新提案从 `0012` 起编号**，
-> 不要只看本分支已有的文件挑下一个空号。
+> 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`）。
+> **新提案从 `0012` 起编号**，不要只看本分支已有的文件挑下一个空号。
 
 ## 与 `Plans/` 的关系
 
