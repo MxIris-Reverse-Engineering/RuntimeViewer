@@ -4,6 +4,7 @@
 
 | 目录 | 用途 |
 |------|------|
+| [`Visions/`](Visions/) | **愿景** —— 一个方向的边界与取舍原则，统领多个提案。不做具体决定，具体做什么写在提案里 |
 | [`Evolutions/`](Evolutions/) | **提案** —— 今后所有新功能与架构改动的唯一入口，一次改动一份文件，见 [提案索引](Evolutions/README.md) |
 | [`Plans/`](Plans/) | 提案制确立前的设计与实现计划，同一件事常拆成 `-design` / `-plan` 两份。保留归档，不再新增 |
 | [`ResolvedIssues/`](ResolvedIssues/) | 已定位并修复的疑难问题纪要，含根因与验证过程 |
@@ -15,6 +16,10 @@
 - [`CommunicationAndEngineArchitecture.md`](CommunicationAndEngineArchitecture.md) —— `RuntimeViewerCommunication` 的连接实现，以及 `RuntimeEngineManager` / `ProxyServer` 的整体架构。
 - [`EngineMirroringWalkthrough.md`](EngineMirroringWalkthrough.md) —— 跨主机 RuntimeEngine 共享系统的只读走读：四类 engine 集合如何拼合、Bonjour 如何建立管理通道、runtime 数据如何流经 proxy 层。读 `RuntimeEngineManager.swift` 等源码前建议先看。
 - [`SparkleRelease.md`](SparkleRelease.md) —— 发布流程、EdDSA 密钥管理与应急处理手册。
+
+## 愿景（Visions）
+
+- [`CodeViewEngine.md`](Visions/CodeViewEngine.md) —— **自建代码视图引擎**。把 interface 显示出来的那一层要往哪走：抄 SourceEditor 的架构而不是它的 API，自己写一台按行分层的只读视口引擎，语义由生成侧直供。统领 0009、0010 及后续的布局核心、边栏、折叠、查找等提案。
 
 ## 提案（Evolutions）
 
