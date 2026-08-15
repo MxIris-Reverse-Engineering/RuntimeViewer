@@ -1,6 +1,6 @@
 # 0008 - ObjC 与 Swift 索引层的对称化
 
-- **状态**: Accepted
+- **状态**: Implemented（验收标准 6「内存」实测无差异，动机三已作废，见「落地记录」）
 - **作者**: JH
 - **日期**: 2026-08-15
 - **实现分支**: `next`（worktree `.claude/worktrees/RuntimeViewer`）
@@ -74,7 +74,19 @@ func record(_ event: ObjCIndexingEvent) {
 
 而且事件数组比它折叠成的表**更大**：表做了按 key 聚合和 `OrderedSet` 去重，事件数组没有。
 
-> **待测量**：以上是从代码结构得出的推断，尚未实测。落地时需要给出 AppKit 或同量级 image 在"索引后未查询关系"状态下，`pendingEvents` 与折叠后表的实际字节数对比。若实测表明差距可忽略，本条动机作废，但第一、二、四条仍然成立。
+> **已测量（2026-08-15）——这条动机不成立，见「落地记录」。**
+>
+> 实测结果是两种方案的进程 footprint **分辨不出差异**：三次重复测量各自的波动范围
+> （0007 为 [133.08, 138.80] MB，0008 为 [133.42, 137.61] MB）几乎完全重叠，均值只差
+> 0.51 MB。事件数组相对于索引数据总量（约 135 MB）太小，被噪声淹没。
+>
+> 上面关于"代价常驻、收益一次性"的结构描述本身没有错——`pendingEvents` 确实到首次查询才释放
+> ——但它带来的**内存收益小到测不出来**，因此不构成做这次改动的理由。按本提案自己定的规矩，
+> 本条动机作废。第一、二、四条（对称性、遍历退化、handler 可遗漏）不依赖它，仍然成立，
+> 并且足以支撑本提案。
+>
+> 即时折叠仍然保留，但理由改为它更简单：`prepare()` 返回即表完整，没有第二个步骤可以忘记，
+> 也没有"查询发生在走查中途"这个需要单独处理的时序（0007 为此写了一段专门的分支）。
 
 ### 四、"忘了装 handler" 是设计问题，不是文档问题
 
@@ -162,7 +174,12 @@ final class RuntimeObjCInterfaceIndexer: @unchecked Sendable {
 
 要点：
 
-1. **事件直接折叠，不留 `pendingEvents`。** 折叠在锁内进行，代价是热路径上两次字典查找加一次 `OrderedSet.append`——即库移除反向表之前它自己做的那份工作。这是对第三点动机的直接兑现。
+1. **事件直接折叠，不留 `pendingEvents`。** 折叠在锁内进行，代价是热路径上两次字典查找加一次 `OrderedSet.append`——即库移除反向表之前它自己做的那份工作。
+
+   > **落地后修正**：本条原写作"对第三点动机（内存）的直接兑现"。动机三经实测不成立（见该节与「落地记录」），
+   > 因此保留即时折叠的理由改为**它更简单**：`prepare()` 返回即表完整，没有第二个步骤可以忘记，
+   > 也不存在"查询发生在走查中途"这一需要单独分支处理的时序。这不是事后找补——它本来就是折叠方案
+   > 附带的性质，只是当初把内存当成了主要论据。
 2. **顺序保证不受影响。** 库承诺发射顺序稳定但不承诺执行线程，所以折叠必须在锁内。锁内折叠与 0007 的锁内 append 一样是串行的，`OrderedSet` 的插入顺序仍然等于事件到达顺序。
 3. **`upstream` 用 `let` 且在 `init` 内构造**，handler 无从遗漏（动机第四点）。
 4. **`RuntimeObjCClassReference` 保持 internal、非 Codable。** 与 0007 一致：关系引用不跨进程，跨 XPC 的是已物化的 `RuntimeObject`。
@@ -299,6 +316,70 @@ if wantsSubclasses, let objcKey {
 8. 测内存与后台索引耗时，数值记入落地记录。
 9. 更新 0007 头部，登记「关系索引部分被 0008 取代」。
 
-## 落地记录
+## 落地记录（2026-08-15，分支 `next`）
 
-（待填）
+### 提交
+
+| commit | 内容 |
+|---|---|
+| `84b3e58` | 本提案落盘并接受 |
+| `6cf23b0` | 合并 `feature/objc-rendering-and-indexing`，pin 推进到 0.8.104 / 0.15.1 |
+| `801be38` | 对称化本体 |
+| `3421d87` | 两侧差异的说明落成文字 |
+
+### 验收标准结果
+
+| # | 标准 | 结果 |
+|---|---|---|
+| 1 | 基线逐条等价 | ✅ `RelationshipsEquivalenceSnapshotTests` 通过，基线未改动 |
+| 2 | 三条性质各有测试 | ✅ 迁移至 `RuntimeObjCRelationshipTablesTests`（测 `fold(_:)`） |
+| 3 | 无 progress stream 路径 | ✅ `RelationshipsWithoutProgressStreamTests` 通过 |
+| 4 | 两侧公开成员对应 | ✅ 5 处差异，逐条写入 `RuntimeObjCInterfaceIndexer` 的 doc comment |
+| 5 | 拆卸后聚合器不再持有 | ✅ 新增 `IndexAggregateLifecycleTests`（3 例，ObjC + Swift） |
+| 6 | 内存不高于 0007 | ⚠️ **测不出差异**，见下 |
+| 7 | 远端 pin 干净 resolve | ✅ `USING_LOCAL_DEPENDENCIES` 未设时 resolve + build + 394 测试全过 |
+
+### 验收标准 6：结论是「测不出来」
+
+加载 libobjc + Foundation + AppKit + CoreFoundation（5735 个对象），索引完成后**不查询关系**，
+测 `phys_footprint` 相对进程基线的增量，各重复三次：
+
+| | run 1 | run 2 | run 3 | 均值 | 范围 |
+|---|---|---|---|---|---|
+| 0007（事件队列） | 137.16 | 138.80 | 133.08 | 136.35 | [133.08, 138.80] |
+| 0008（即时折叠） | 133.42 | 137.61 | 136.50 | 135.84 | [133.42, 137.61] |
+
+单位 MB。两组范围几乎完全重叠，均值差 0.51 MB，**远小于各自 4 MB 以上的组内波动**。
+
+第一次测量得到 137.16 vs 133.42（差 3.73 MB）看起来像是收益，重复之后才看出那是噪声。
+**只跑一次就会得出错误结论**，这一点值得记下来。
+
+要真正量出事件数组本身的大小，需要对该数组插桩，而不是测整个进程 footprint——索引数据总量
+（约 135 MB）比事件数组大一个量级以上，后者在前者的波动里没有信号。本提案没有做这个插桩：
+动机三既然作废，它就不再是决策依据，为一个已经不影响结论的数字加插桩没有价值。
+
+**这不影响本提案的其余部分。** 动机一（两侧不对称）、二（关系查询退化成 N 次 per-image 查找）、
+四（handler 可被遗漏）都不依赖内存论证，且都已在实现中兑现。
+
+### 实现过程中发现的问题
+
+**`machO.imagePath` 与 factory 的缓存键不是同一个字符串。** 两个 factory 都按
+`DyldUtilities.patchImagePathForDyld` 产出的 dyld-canonical path 建键，而 `machO.imagePath`
+是 dyld 报告的原始路径。原先的 per-image 走查全程只用 canonical path，所以从未暴露；改成聚合
+查询后，引用需要自带来源 image，一旦用 `machO.imagePath` 打标，`existingSection(for:)` 就找不
+到对应 section，**所有 Swift 关系结果被静默丢弃**。
+
+表现为 `RelationshipsTests` 两例失败（`anchor == nil`），而 ObjC 侧一切正常——因为
+`RuntimeObjCInterfaceIndexer` 一直是显式接收 canonical `imagePath` 的。修法即对称化本身：
+`RuntimeSwiftInterfaceIndexer` 也改为 `init(machO:imagePath:)`。
+
+这是一个只有端到端测试能抓到的错误：类型正确、编译通过、单元测试全绿，只是结果为空。
+
+### 尚未接通的部分
+
+`removeSection` / `removeAllSections` 在本分支**没有任何生产调用方**——把 teardown 接进
+`RuntimeEngine.stop()` 的是 `feature/node-store-adoption` 的 `f41648a`。因此本提案加的 detach
+逻辑正确但尚未被触发，目前只有 `IndexAggregateLifecycleTests` 在验证它。
+
+这不改变「聚合器有加无减不允许存在」的结论：等 #101 落地时 teardown 一接上，detach 立即生效，
+而不是到那时才发现没有逆操作。

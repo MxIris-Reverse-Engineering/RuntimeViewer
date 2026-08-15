@@ -18,7 +18,7 @@
 | [0004](0004-differentiable-box-lazy-cellvm.md) | DifferentiableBox 与 Lazy Cell ViewModel 渲染范式 | Draft | 在 `RuntimeViewerArchitectures` 引入 `DifferentiableBox<Model>`，把任意 `Hashable` 领域模型适配为 DifferenceKit 的 `Differentiable`，使表格与大纲视图的 Rx 数据源走「轻量身份元素 + cell 级惰性 ViewModel」。 |
 | [0006](0006-mcp-transport-bind-failure-teardown.md) | MCP Transport 绑定失败的资源回收与状态如实化 | Implemented | 绑定失败改为显式 `start()` 判定：失败即回收 transport（线程 56→0）、`serverState` 如实 `.stopped`、端口文件带所有权守卫不误删他人文件。残余 5.57 MiB 为上游 SwiftMCP adapter↔engine 引用环，与线程数硬编码一并列为上游跟进项。 |
 | [0007](0007-objc-relationship-index-returns-to-application.md) | ObjC 关系索引归还应用侧 | 部分被 0008 取代 | MachOObjCSection 0003 的下游适配：渲染与解析层搬进库（**保留**），关系表改由应用从 `ObjCIndexingEvent` 事件流重建（**已被 0008 取代**）。 |
-| [0008](0008-symmetric-objc-and-swift-index-layers.md) | ObjC 与 Swift 索引层的对称化 | Accepted | `RuntimeObjCInterfaceIndexer` 回到与 `RuntimeSwiftInterfaceIndexer` 同构的形态：包装库侧 upstream、eager 反向表、`addSubIndexer` / `removeSubIndexer` 聚合、由 factory 持有聚合器，`RuntimeRelationshipsResolver` 从遍历所有 image 退回成查两次聚合器。取代 0007 的关系索引设计。 |
+| [0008](0008-symmetric-objc-and-swift-index-layers.md) | ObjC 与 Swift 索引层的对称化 | Implemented | `RuntimeObjCInterfaceIndexer` 回到与 `RuntimeSwiftInterfaceIndexer` 同构的形态：包装库侧 upstream、eager 反向表、`addSubIndexer` / `removeSubIndexer` 聚合、由 factory 持有聚合器，`RuntimeRelationshipsResolver` 从遍历所有 image 退回成查两次聚合器。取代 0007 的关系索引设计。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 

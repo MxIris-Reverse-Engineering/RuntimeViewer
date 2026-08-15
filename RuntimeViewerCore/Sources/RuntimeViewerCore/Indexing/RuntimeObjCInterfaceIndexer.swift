@@ -54,13 +54,22 @@ struct RuntimeObjCClassReference: Hashable, Sendable {
 ///
 /// ## Tables are folded as events arrive
 ///
-/// `RuntimeObjCRelationshipTables.fold(_:)` applies each event immediately instead of
-/// queueing it for a later replay. Deferring would move a few dictionary
-/// operations off the parse path, but it keeps the raw event array resident
-/// until something queries the image — and most images are never queried, while
-/// background indexing indexes them all. Folding also makes `prepare()`'s
-/// return the point at which the tables are complete, with no second step to
-/// forget.
+/// `RuntimeObjCRelationshipTables.fold(_:)` applies each event immediately
+/// instead of queueing it for a replay on first query, which is what 0007 did.
+///
+/// The reason is that it is simpler, not that it is smaller. `prepare()`
+/// returning is the moment the tables are complete: there is no second step to
+/// forget, and no "a query arrived mid-walk" case to get right — 0007 needed a
+/// dedicated branch for that, because materializing released the queue and any
+/// later event had to be folded in directly instead.
+///
+/// Evolution 0008 originally argued the deferred queue also cost resident
+/// memory. That was measured and it does not, to any degree this can detect:
+/// three repetitions per side put the two within 0.51 MB of each other on a
+/// ~135 MB working set, well inside each side's own 4 MB spread. The first
+/// single-run comparison suggested a 3.7 MB saving and was noise. See the
+/// proposal's landing notes; the claim is retracted there rather than restated
+/// here.
 ///
 /// ## Equivalence with the library's former tables
 ///
