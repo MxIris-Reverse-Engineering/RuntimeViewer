@@ -35,6 +35,16 @@ when picking up follow-up work.
   sidebar because Case-2 cleanup only matches by ownership, not by `engineID`
   prefix. Companion architecture walkthrough at
   [`Documentations/EngineMirroringWalkthrough.md`](../EngineMirroringWalkthrough.md).
+- [2026-08-16-uifoundation-settings-adoption-review-findings.md](2026-08-16-uifoundation-settings-adoption-review-findings.md) —
+  `/code-review` pass on `feature/uifoundation-settings-adoption` (PR #99).
+  Fourteen findings, adjudicated one by one: eleven fixed in the same batch
+  (two of them Blockers — the branch could not compile against its own
+  declared dependency graph, and the settings window had stopped restoring its
+  position — both requiring UIFoundation 0.17.0), US.6 ruled a **false
+  positive** (non-macOS persistence: nothing off macOS writes a setting, so
+  restoring it would be dead code), and US.11 / US.12 **deferred** to the
+  `main` → `next` merge that already carries the `OutputTransformer`
+  dependency fix.
 - [2026-06-25-theme-settings-panel-review-findings.md](2026-06-25-theme-settings-panel-review-findings.md) —
   `/code-review` pass on `feature/theme-settings-panel` (PR #80). Four issues
   on the Theme settings UI: TS.1 ColorPicker / Name field write storm causing

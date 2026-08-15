@@ -3,7 +3,7 @@
 - **状态**: Implemented
 - **作者**: JH
 - **日期**: 2026-08-13
-- **最后更新**: 2026-08-14
+- **最后更新**: 2026-08-16
 
 ## 摘要
 
@@ -143,15 +143,23 @@ Store 观察 class 模型的 `accessPersistedValues()`。
 
 ## 已知限制
 
-直接用 SwiftPM 把 `RuntimeViewerPackages` 切到全远端依赖时，依赖图在进入源码编译前会报告
-`MachOSwiftSection` 与 `swift-semantic-string` 都声明 `OutputTransformer` target。这个既有冲突与本次
-Settings 迁移无关；项目规定的本地多仓库构建和 Distribution workspace 构建均不受影响并已通过。
+**UIFoundation 版本（已解决）。** 2026-08-14 的 sidebar 图标修正用到了当时尚未发布的
+`SettingsConfiguration`，而版本下限仍写着 `0.16.0`——那个 tag 并不含这个类型，导致任何没有启用本地
+UIFoundation checkout 的构建（CI、全新 clone，以及本分支自己重 pin 的 Distribution workspace）都编不过。
+UIFoundation `0.17.0` 已发布并同时包含 `SettingsConfiguration` 和设置窗口的位置恢复修复，下限与三份
+lockfile 均已提到 0.17.0。
 
-2026-08-14 的 sidebar 图标修正依赖尚未发布的 `SettingsConfiguration`，因此本轮只能用
-本地 UIFoundation 验证该调用。当前独立本地 package 图又停在另一处既有错配：`RuntimeViewerCore` 仍向
-`MachOSwiftSection` 请求已经移走的 `OutputTransformer` product；上级多仓库 workspace 的 lockfile 则仍是
-不含 `Settings` trait 的 UIFoundation 0.15.1。最小下游 package 已编译通过完全相同的 initializer 调用，
-整仓构建要等依赖图与 UIFoundation 发布版本同步后再恢复。
+**依赖图冲突（本分支仍在，需靠 main 解决）。** 直接用 SwiftPM 把 `RuntimeViewerPackages` 切到全远端
+依赖时，依赖图在进入源码编译前就会报 `MachOSwiftSection`（0.14.1）与 `swift-semantic-string` 都声明
+`OutputTransformer` target。这与 Settings 迁移无关：`main` 上的 `0cb669c`（升级到 MachOSwiftSection
+0.15.2 及其拆出的包，并把 `Transformer.swift` 改为同时 re-export `OutputTransformer` 与
+`SwiftOutputTransformer`）已经解决了它，但该提交尚未进入 `next`，因此也不在本分支上。
+
+在本分支上，用本地兄弟仓库构建同样不通——本地 MachOKit / MachOSwiftSection 已经走在 `next` 前面
+（`MachOExtensions` 模块已不存在）。也就是说本分支目前两端都编不过，且两端都不是本次改动造成的。
+2026-08-16 的验证是在一份把 `main` 合进来的一次性副本上做的：`RuntimeViewerSettings` /
+`RuntimeViewerSettingsUI` / `RuntimeViewerApplication` / `RuntimeViewerMCPBridge` 与 macOS App target
+全部编译通过，设置持久化测试全绿。**本分支合入前需要先把 `main` 并进 `next`。**
 
 ## 决策日志
 
@@ -163,3 +171,4 @@ Settings 迁移无关；项目规定的本地多仓库构建和 Distribution wor
 | 2026-08-13 | Design amended | 值类型根 Store 会把所有监听合并到 `value`；按用户意见恢复 `@Observable class Settings`，由 UIFoundation Store 通过显式属性触达统一保存，从而保留业务属性级监听。 |
 | 2026-08-14 | Post-migration correction | 迁移后 `.plainSymbol` 从原先带 padding 的 15 pt 实际 glyph 放大到 20 pt；改由 UIFoundation 的统一 `Configuration` 显式传 15 pt。新 API 发布前，本分支的验证使用本地 UIFoundation checkout。 |
 | 2026-08-14 | API naming correction | UIFoundation 把三个呈现入口共用的配置从 window controller namespace 提升为顶层 `SettingsConfiguration`；RuntimeViewer 调用点同步写出新类型名。 |
+| 2026-08-16 | Review follow-up | PR #99 的 `/code-review` 产出 14 条 findings，逐条裁决记录在 [`KnownIssues/2026-08-16-uifoundation-settings-adoption-review-findings.md`](../KnownIssues/2026-08-16-uifoundation-settings-adoption-review-findings.md)。11 条已修（版本下限、窗口位置、加载/落盘时机、actor 隔离、平台守卫、持久化测试等），1 条判为误报（非 macOS 持久化），2 条延后（`OutputTransformer` 依赖声明由 main 解决）。UIFoundation 0.17.0 为此发布。 |

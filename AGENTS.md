@@ -162,23 +162,39 @@ LLM Client
 - `Settings.accessPersistedValues()` must read every encoded top-level property. UIFoundation's
   store tracks that method to schedule persistence, while business observers retain top-level
   property granularity (`theme` changes do not wake `transformer` listeners). Update this method
-  whenever a persisted property is added.
+  whenever a persisted property is added — an omission fails quietly, because the property is still
+  encoded whenever *another* property triggers a write, so only a session that changes nothing else
+  loses the edit. `SettingsPersistenceTests` enforces this: one test changes each property on its
+  own and asserts it reaches storage, another compares the covered list against the encoded
+  payload's top-level keys, so a new property fails the suite until both places know about it.
+- `SettingsLifecycleController` owns both ends of the lifecycle. Loading is not a side effect of
+  resolving `@Dependency(\.settings)` — call `load()` at launch before anything reads a value — and
+  quitting goes through `applicationShouldTerminate` returning `.terminateLater` so `flush()` can
+  outrun the store's one-second auto-save debounce. Do not move the flush to
+  `applicationWillTerminate`; it cannot await.
 - SwiftUI pages use the local `AppSettings` typealias, which specializes
   `UIFoundationSettings.AppSettings` for RuntimeViewer's schema.
 - Keep the persisted location compatible with existing releases:
   `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json`.
 - The UIFoundation dependency enables the `Settings` trait, exposes both
   `UIFoundationSettings` and `UIFoundationSettingsUI`, and requires version
-  `0.16.0` or later. That release includes the observable reference-model Store
-  used by RuntimeViewer.
-- UIFoundation's Settings API is macOS-only. Other RuntimeViewer platforms keep
-  the shared schema and an in-memory dependency value, but do not expose the
-  settings window or file persistence.
+  `0.17.0` or later. `0.16.0` carries the observable reference-model store but
+  *not* `SettingsConfiguration`, which landed after that tag; `0.17.0` is the
+  first release with both, plus the window frame restoration below.
+- UIFoundation's Settings API is macOS-only, so `SettingsAccess` keeps an
+  in-memory `Settings` on the other platforms and its `load()` / `flush()` are
+  no-ops there. That costs nothing today because nothing off macOS *writes* a
+  setting — the SwiftUI pages are the only writers and they are macOS-only, so
+  a file would only ever have held defaults. Adding a settings UI to another
+  platform means giving it real storage first, or the edits will vanish
+  silently.
 - The settings window passes `sidebarIconSize: 15` through
   the top-level `SettingsConfiguration`. This matches the pre-migration glyph size: the old
-  20-point icon frame applied 2.5 points of padding on each side. Until that Configuration API is
-  included in a tagged UIFoundation release, local validation must enable the sibling UIFoundation
-  checkout.
+  20-point icon frame applied 2.5 points of padding on each side.
+- The window restores its own frame; do not add a `center()` call. UIFoundation
+  centres it only when there is nothing stored to restore, and registering the
+  autosave name is itself what applies a stored frame — so centring afterwards
+  silently discards the position the user chose.
 
 ## Development Guidelines
 
