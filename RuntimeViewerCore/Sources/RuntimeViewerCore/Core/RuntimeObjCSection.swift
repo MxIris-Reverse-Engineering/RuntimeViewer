@@ -193,7 +193,13 @@ actor RuntimeObjCSection {
                                     needsStripMethods.insert(customSetter)
                                 }
                             } else {
-                                let setterMethodName = "set" + propertyName.uppercasedFirst
+                                // A setter takes an argument, so its selector ends
+                                // in a colon. These names are matched against
+                                // `ObjCMethodInfo.name`, which holds the full
+                                // selector — without the colon nothing ever
+                                // matched, and a zero-argument method named
+                                // `setFoo` matched in the accessor's place.
+                                let setterMethodName = "set" + propertyName.uppercasedFirst + ":"
                                 if property.isClassProperty {
                                     needsStripClassMethods.insert(setterMethodName)
                                 } else {
@@ -299,7 +305,9 @@ actor RuntimeObjCSection {
                                 needsStripMethods.insert(customSetter)
                             }
                         } else {
-                            let setterMethodName = "set" + propertyName.uppercasedFirst
+                            // Same selector rule as the class branch above: a
+                            // setter's selector ends in a colon.
+                            let setterMethodName = "set" + propertyName.uppercasedFirst + ":"
                             if property.isClassProperty {
                                 needsStripClassMethods.insert(setterMethodName)
                             } else {
