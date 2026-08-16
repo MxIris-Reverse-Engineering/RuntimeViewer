@@ -211,6 +211,7 @@ When adding new features, you **MUST** follow these rules:
 5. **Swift Language Mode**: All packages use `swiftLanguageModes: [.v5]`
 6. **Singletons go through `@Dependency`**：每个项目 singleton 都声明为 `fileprivate static let shared`，并通过 `extension DependencyValues` 中的 `@DependencyEntry` 暴露。调用方统一使用 `@Dependency(\.xxx)`；禁止 `public static let shared`，也禁止在定义文件外调用 `Foo.shared.bar()`。详见 Code Style 下的 **Singletons & Dependency Injection**。
 7. **AppDelegate stays thin**: AppDelegate is a dispatch shell, not a service container. Every non-trivial lifecycle responsibility (appearance, debug menu, update checking, version probes, etc.) lives in its own `@MainActor` controller class under `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/`, registered via `@Dependency` per rule #6. See **AppDelegate Convention** under Code Style.
+8. **Single-object interface fetches go through the document's interface cache**: fetch one object's interface via `documentState.interfaceCache.interface(for:options:)` with `ViewModel.currentMergedGenerationOptions` as the options — never bare `appDefaults.options` and never `runtimeEngine.interface(...)` directly — so cache keys line up with the content pane and exported text matches what it displays. Bulk consumers (interface export, MCP tools) deliberately bypass the cache and call the engine directly; do not route them through it. See `Documentations/Plans/2026-08-04-navigation-interface-cache.md`.
 
 ## Code Style
 
@@ -790,7 +791,14 @@ let rowClicked: Signal<Candidate> = tableView.rx
 2. The data set is large enough that eager construction is visible in Instruments (typically N >= 1k, confirmed by a signpost baseline).
 3. There is no per-row UI state that cannot be derived from the model (expanded/collapsed flag, multi-select checkmark, drag-preview metadata). If you need such state, build a local `struct` conforming to `Differentiable` directly — do NOT add mutable fields onto `DifferentiableBox`.
 
-Sidebar / Inspector cellViewModels (e.g. `SidebarRuntimeObjectCellViewModel`, `InspectorSwiftSpecializationCellViewModel`) own filter-aware attributed names or async metadata loading, so they must stay eager — lazy reconstruction would drop their subscription identity. The `SpecializationTypePicker` popover is the canonical lazy case (10k+ candidates when a generic parameter has no constraint).
+**Two different things get called "lazy" here, and the eligibility tree above governs only the first:**
+
+- **Stateless lazy (`DifferentiableBox`)** — the driver array carries identity boxes and the cellViewModel is rebuilt inside the cell builder on *every* render, so nothing survives between renders. That is why the three conditions are absolute: a cellViewModel with post-init `@Observed` mutation or an Rx subscription would silently lose it. The `SpecializationTypePicker` popover is the canonical case (10k+ candidates when a generic parameter has no constraint).
+- **Lazily materialized behind a warm cache** — the driver array still carries fully-built cellViewModels, but each is constructed on first match and kept in a map for the rest of the session, so subscription identity and post-init state survive. Open Quickly uses this to avoid building a cellViewModel per row of a 14k-object image; see `SidebarRuntimeObjectListViewModel.openQuicklyCellViewModel(at:)`.
+
+`SidebarRuntimeObjectCellViewModel` owns filter-aware attributed names, so it fails the eligibility tree and must never take the first form — but it is the type Open Quickly materializes lazily in the second form, precisely because the cache means it is never *re*constructed. Inspector cellViewModels (`InspectorSwiftSpecializationCellViewModel`, `InspectorRelationshipsCellViewModel`) stay eager on both counts: their row counts are low enough that neither form pays for itself.
+
+Reach for either form only once eager 1:1 construction is measurably hurting — both trade a memo, and the invalidation it needs, for the allocation they save.
 
 ```swift
 // ViewModel — driver element is a value-type identity box, not the cellViewModel

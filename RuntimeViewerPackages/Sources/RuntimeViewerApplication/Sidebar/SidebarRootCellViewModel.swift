@@ -33,48 +33,49 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
         return children.sorted { $0.node.name < $1.node.name }
     }()
 
-    public private(set) lazy var currentAndChildrenNames: String = {
-        let childrenNames = _children.map { $0.currentAndChildrenNames }.joined(separator: " ")
-        if childrenNames.isEmpty {
-            return node.name
-        } else {
-            return "\(node.name) \(childrenNames)"
-        }
-    }()
+    /// The unfiltered child list. The root filter pipeline
+    /// (`SidebarRootFilterPipeline`) snapshots and re-applies against this
+    /// array so an active filter never hides nodes from its own
+    /// recomputation. Filtering itself has no mutating cascade anymore —
+    /// the pipeline computes every level off-main and installs the
+    /// results through `applyFilterOutcome(filteredChildren:)`.
+    var unfilteredChildren: [SidebarRootCellViewModel] { _children }
 
-    var filter: String = "" {
-        didSet {
-            if filter.isEmpty {
-                _children.forEach { $0.filter = filter }
-                _filteredChildren = _children
-            } else if node.name.localizedCaseInsensitiveContains(filter) {
-                // Node itself matches - show all children unfiltered
-                _children.forEach { $0.filter = "" }
-                _filteredChildren = _children
-            } else {
-                // Node doesn't match - filter children recursively
-                _children.forEach { $0.filter = filter }
-                _filteredChildren = _children.filter { $0.currentAndChildrenNames.localizedCaseInsensitiveContains(filter) }
-            }
+    /// Single entry point for the root filter pipeline's main-actor apply
+    /// step: installs the pre-computed filtered children without any
+    /// cascade or string matching.
+    func applyFilterOutcome(filteredChildren: [SidebarRootCellViewModel]) {
+        _filteredChildren = filteredChildren
+    }
+
+
+    /// Both display outlets in one stream: the image list keeps ~13k of these
+    /// rows resident, so per-row Rx fixed cost matters (proposal 0005).
+    public struct Appearance: Equatable {
+        public var icon: NSUIImage?
+        public var name: NSAttributedString
+
+        public init(icon: NSUIImage?, name: NSAttributedString) {
+            self.icon = icon
+            self.name = name
         }
     }
-    
-    @Observed
-    public private(set) var icon: NSUIImage?
 
     @Observed
-    public private(set) var name: NSAttributedString
+    public private(set) var appearance: Appearance
 
     public init(node: RuntimeImageNode) {
         self.node = node
-        self.name = NSAttributedString {
-            AText(node.name)
-                .foregroundColor(.labelColor)
-                .font(.systemFont(ofSize: 13))
-                .alignment(.left)
-                .lineBreakeMode(.byTruncatingTail)
-        }
-        self.icon = node.icon
+        self.appearance = Appearance(
+            icon: node.icon,
+            name: NSAttributedString {
+                AText(node.name)
+                    .foregroundColor(.labelColor)
+                    .font(.systemFont(ofSize: 13))
+                    .alignment(.left)
+                    .lineBreakeMode(.byTruncatingTail)
+            }
+        )
     }
 
     public func makeIterator() -> Iterator {

@@ -92,6 +92,17 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     /// clear `currentReloadTask` or leave the successor in place).
     private var currentReloadGeneration: Int = 0
 
+    /// In-flight off-main filter pass. `scheduleRefilter` cancels this
+    /// before starting a new one so rapid triggers (keystroke bursts,
+    /// scope edits, splices) never race each other's apply step.
+    private var currentFilterTask: Task<Void, Never>?
+
+    /// Monotonic token bumped by every `scheduleRefilter` call. The apply
+    /// step re-checks it after the background match so verdicts computed
+    /// against a superseded tree (newer search, reload, or splice) are
+    /// discarded instead of applied to mismatched cells.
+    private var currentFilterGeneration: Int = 0
+
     public init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         let imagePath = imageNode.path
         self.runtimeEngine = documentState.runtimeEngine
@@ -152,6 +163,8 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 // the winner.
             } catch {
                 self.loadState = .loadError(error)
+                self.nodes = []
+                self.invalidateNodeDerivedState()
                 #log(.error, "\(error)")
             }
             if self.currentReloadGeneration == myGeneration {
@@ -196,13 +209,21 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     public func transform(_ input: Input) -> Output {
 //        input.isSearchCaseInsensitive.drive($isSearchCaseInsensitive).disposed(by: rx.disposeBag)
 
+        // Keystroke coalescing: non-empty queries wait 150 ms (cancelled by
+        // the next keystroke via `flatMapLatest`), clearing applies
+        // immediately. NOTE: this must be `delay`, not `debounce` — on a
+        // single-element `.just` sequence, `debounce` flushes the pending
+        // element the moment the source completes, so the previous
+        // `.just(...).debounce(500ms)` never delayed anything. The window
+        // can be short because the matching itself runs off-main and stale
+        // passes are cancelled.
         Driver.combineLatest(input.searchString, input.isSearchCaseInsensitive)
             .flatMapLatest { searchString, isSearchCaseInsensitive -> Driver<(String, Bool)> in
                 if searchString.isEmpty {
                     return .just((searchString, isSearchCaseInsensitive))
                 } else {
                     return .just((searchString, isSearchCaseInsensitive))
-                        .debounce(.milliseconds(500))
+                        .delay(.milliseconds(150))
                 }
             }
             .driveOnNextMainActor { [weak self] searchString, isSearchCaseInsensitive in
@@ -211,7 +232,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
                 self.searchString = searchString
                 self.isSearchCaseInsensitive = isSearchCaseInsensitive
-                rebuildFilteredNodes()
+                scheduleRefilter()
             }
             .disposed(by: rx.disposeBag)
 
@@ -220,7 +241,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             .skip(1) // initial value already covered by `nodes` reload
             .driveOnNextMainActor { [weak self] _ in
                 guard let self else { return }
-                rebuildFilteredNodes()
+                scheduleRefilter()
             }
             .disposed(by: rx.disposeBag)
 
@@ -326,6 +347,18 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             try Task.checkCancellation()
             await MainActor.run {
                 self.loadState = .notLoaded
+                // The reload ends here too. A subclass whose derived state
+                // is keyed on the previous object list must still drop it,
+                // or an Open Quickly pass scheduled before the reload keeps
+                // its generation token valid and publishes rows for an image
+                // the engine no longer reports as loaded.
+                //
+                // The node list has to go with it. The hook re-derives from
+                // `nodes`, and only the success path assigns them, so
+                // leaving the previous load's cells in place makes the
+                // invalidation re-seed the very index it just cleared.
+                self.nodes = []
+                self.invalidateNodeDerivedState()
             }
             return
         }
@@ -374,32 +407,51 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             } else {
                 self.nodes = runtimeObjects.map { SidebarRuntimeObjectCellViewModel(runtimeObject: $0, forOpenQuickly: false) }
             }
-            rebuildFilteredNodes()
+            self.invalidateNodeDerivedState()
+            scheduleRefilter()
         }
     }
 
-    /// Apply the scope pre-filter and then the text filter, publishing the
-    /// result to `filteredNodes`. Centralized so every call site (initial
-    /// load, search-string change, scope change, specialization splice) hits
-    /// the same ordering.
+    /// Hook for subclass state derived from `nodes`, called inside the same
+    /// synchronous main-actor block that settles the load state.
     ///
-    /// Three passes:
-    /// 1. Push the active scope into every cell in the tree so each cell's
-    ///    `_filteredChildren` excludes children that fail the scope. The
-    ///    cell-level scope filter is what keeps a node's expansion clean —
-    ///    without it, a parent that passes via `matchesScopeRecursively`
-    ///    would still show every sibling under it, including those that
-    ///    fail the scope.
-    /// 2. Filter the top-level `nodes` array by `matchesScopeRecursively`
-    ///    so parents whose hits live only in descendants are still
-    ///    surfaced.
-    /// 3. Run the text filter via `FilterEngine.filter`. Always invoked —
-    ///    even with an empty search string — because it cascades the
-    ///    `filter` value through child cells and clears stale
-    ///    `filterResult` highlighting from a previous search.
+    /// Invalidating derived state in a *later* `MainActor.run` leaves a
+    /// window: `reloadData()` suspends at every one of its `MainActor.run`
+    /// blocks, so an in-flight pass can resume between the install and the
+    /// invalidation, find its generation token still current, and publish
+    /// results built from the pre-reload list. Doing both in one critical
+    /// section removes the window rather than narrowing it — the same shape
+    /// `installRebuiltNodes(_:)` uses on the root sidebar.
+    ///
+    /// Every terminal outcome of a reload calls this, not only the one that
+    /// installs nodes: `.notLoaded` and `.loadError` end the reload just as
+    /// definitively, and skipping them leaves a filter pass alive against a
+    /// list the document has stopped standing behind. Cancellation is the
+    /// one exception — the reload that superseded this one runs the
+    /// invalidation itself.
     @MainActor
-    private func rebuildFilteredNodes() {
-        let scope = scope
+    func invalidateNodeDerivedState() {}
+
+    /// Single entry point for every filter trigger (initial load, search
+    /// change, scope change, specialization splice). Snapshots the tree on
+    /// the main actor, runs the matching off-main via
+    /// `SidebarRuntimeObjectFilterPipeline`, and applies the outcome back
+    /// on the main actor iff no newer trigger superseded it. The apply
+    /// step's guarded didSets make untouched rows free, so one keystroke
+    /// costs O(matches) main-thread work instead of O(nodes) attributed-
+    /// title rebuilds.
+    @MainActor
+    func scheduleRefilter() {
+        currentFilterTask?.cancel()
+        currentFilterGeneration &+= 1
+        let generation = currentFilterGeneration
+
+        let context = FilterContext(
+            query: searchString,
+            isCaseInsensitive: isSearchCaseInsensitive,
+            mode: appDefaults.filterMode
+        )
+        let activeScope = scope
 
         // Drive `isFiltering` off the union of text + scope. This flag
         // controls the outline view's beginFiltering / endFiltering
@@ -407,35 +459,46 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         // surfaces matching descendants automatically. Must be set
         // *before* `filteredNodes` is reassigned so `didChangeFiltering`
         // (`withLatestFrom($isFiltering)`) sees the new value.
-        let shouldFilter = !searchString.isEmpty || scope.isActive
+        let shouldFilter = !context.query.isEmpty || activeScope.isActive
         if shouldFilter != isFiltering {
             isFiltering = shouldFilter
         }
 
-        // Pass 1: cascade scope into every cell so deeper levels rebuild
-        // their `_filteredChildren` before the top-level filter reads them.
-        for cell in nodes {
-            cell.applyScopeRecursively(scope)
+        // Fast path — an empty query with an inactive scope is the
+        // identity filter; apply synchronously so clearing the search
+        // never flashes stale results. Runs before the snapshot: the
+        // identity outcome needs no haystacks, and right after a reload the
+        // haystack caches are cold, so building a snapshot forest here
+        // would pay a full O(nodes) bottom-up name build just to discard
+        // it. The guarded didSets still skip every unchanged row.
+        if !shouldFilter {
+            currentFilterTask = nil
+            SidebarRuntimeObjectFilterPipeline.resetToUnfiltered(nodes, context: context, scope: activeScope)
+            filteredNodes = nodes
+            return
         }
 
-        // Pass 2: prune top-level by matchesScopeRecursively (a parent
-        // survives if itself or any descendant passes the scope).
-        let scoped: [SidebarRuntimeObjectCellViewModel]
-        if scope.isActive {
-            scoped = nodes.filter { $0.matchesScopeRecursively(scope) }
-        } else {
-            scoped = nodes
-        }
+        let snapshotForest = SidebarRuntimeObjectFilterPipeline.snapshot(of: nodes, scope: activeScope)
 
-        // Pass 3: text filter — FilterEngine handles an empty search by
-        // clearing every item's `filterResult` and cascading the empty
-        // filter through child cells.
-        filteredNodes = FilterEngine.filter(
-            searchString,
-            items: scoped,
-            mode: appDefaults.filterMode,
-            isCaseInsensitive: isSearchCaseInsensitive
-        )
+        currentFilterTask = Task { @MainActor [weak self] in
+            let verdictForest = await Self.computeVerdictsOffMain(for: snapshotForest, context: context)
+            guard !Task.isCancelled, let self else { return }
+            guard self.currentFilterGeneration == generation else { return }
+            if let filtered = SidebarRuntimeObjectFilterPipeline.apply(verdictForest, to: self.nodes, context: context, scope: activeScope) {
+                self.filteredNodes = filtered
+            }
+            self.currentFilterTask = nil
+        }
+    }
+
+    /// Hop for the matching recursion: `nonisolated async` runs on the
+    /// global concurrent executor, keeping fuzzy scoring off the main
+    /// thread while the caller awaits.
+    private nonisolated static func computeVerdictsOffMain(
+        for snapshotForest: [SidebarRuntimeObjectFilterPipeline.SnapshotNode],
+        context: FilterContext
+    ) async -> SidebarRuntimeObjectFilterPipeline.ForestVerdict {
+        SidebarRuntimeObjectFilterPipeline.verdicts(for: snapshotForest, context: context)
     }
 
     /// Splice a newly specialized child into the existing sidebar tree without
@@ -457,7 +520,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             return
         }
         nodes = nodes
-        rebuildFilteredNodes()
+        scheduleRefilter()
         // `nodes`/`filteredNodes` re-emissions above are no-ops for the
         // outline view (same `SidebarRuntimeObjectCellViewModel` instance in
         // both snapshots → DifferenceKit's `isContentEqual` always true →

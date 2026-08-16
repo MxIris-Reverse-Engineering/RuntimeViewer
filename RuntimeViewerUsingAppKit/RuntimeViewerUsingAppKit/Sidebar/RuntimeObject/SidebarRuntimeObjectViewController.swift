@@ -290,7 +290,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     func outlineView(_ outlineView: NSOutlineView, typeSelectStringFor tableColumn: NSTableColumn?, item: Any) -> String? {
         guard let cellViewModel = item as? SidebarRuntimeObjectCellViewModel else { return nil }
-        return cellViewModel.title.string
+        return cellViewModel.appearance.title.string
     }
 
     /// Context-menu entries for the clicked row. Override point: this base
@@ -384,6 +384,12 @@ extension SidebarRuntimeObjectViewController {
                 systemSymbolName: "textformat",
                 toolTip: "Case Insensitive",
             )
+            // Case-insensitive search is the default. FilterEngine used to
+            // invert this flag (state .off accidentally meant insensitive);
+            // now that the engine honors it, the button starts .on so the
+            // effective default behavior is unchanged and the highlighted
+            // state finally tells the truth.
+            searchCaseInsensitiveButton.state = .on
 
             hierarchy {
                 scrollView

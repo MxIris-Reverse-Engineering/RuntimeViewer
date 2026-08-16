@@ -3,7 +3,7 @@ import FoundationToolbox
 import Ifrit
 import FuzzySearch
 
-public enum FilterMode: Int, CaseIterable, Codable, CustomStringConvertible {
+public enum FilterMode: Int, CaseIterable, Codable, CustomStringConvertible, Sendable {
     case fuzzySearch
     case ifrit
 
@@ -17,76 +17,126 @@ public enum FilterMode: Int, CaseIterable, Codable, CustomStringConvertible {
     }
 }
 
-enum FilterEngine {
-    @dynamicMemberLookup
-    private struct FuzzySearchableBox<Item: FilterableItem>: FuzzySearchable {
-        let wrappedValue: Item
+/// Everything a text-filter pass depends on, bundled so conformers can
+/// guard their didSet cascades with a single equality check ("query text
+/// unchanged but case toggle flipped" must still re-filter).
+struct FilterContext: Equatable, Sendable {
+    var query: String = ""
+    var isCaseInsensitive: Bool = false
+    var mode: FilterMode?
 
-        init(_ wrappedValue: Item) {
-            self.wrappedValue = wrappedValue
+    var isEmpty: Bool { query.isEmpty }
+}
+
+/// One match produced by `FilterEngine.match`: which haystack matched and
+/// the highlight ranges to render. Verdicts come back in display order
+/// (fuzzy modes sort by score, plain contains preserves input order), so
+/// callers can build their filtered arrays by straight index mapping.
+struct FilterMatchVerdict {
+    let haystackIndex: Int
+    let result: FuzzyFilterResult?
+}
+
+enum FilterEngine {
+    /// String-only adapter so the pure `match` path can reuse the
+    /// FuzzySearch collection algorithm without touching any cell
+    /// view model state.
+    private struct FuzzySearchableHaystack: FuzzySearchable {
+        let haystackIndex: Int
+        let fuzzyStringToMatch: String
+    }
+
+    /// Pure matching core: no side effects, safe to call from any thread.
+    /// An empty query is the identity filter — every haystack "matches"
+    /// with no highlight, in input order — so callers can run one code
+    /// path for both searching and clearing.
+    static func match(_ context: FilterContext, haystacks: [String]) -> [FilterMatchVerdict] {
+        guard !context.isEmpty else {
+            return haystacks.indices.map { FilterMatchVerdict(haystackIndex: $0, result: nil) }
         }
 
-        var fuzzyStringToMatch: String { wrappedValue.filterableString }
-
-        subscript<Value>(dynamicMember keyPath: KeyPath<Item, Value>) -> Value {
-            wrappedValue[keyPath: keyPath]
+        switch context.mode {
+        case .fuzzySearch:
+            let searchables = haystacks.enumerated().map { haystackIndex, haystack in
+                FuzzySearchableHaystack(haystackIndex: haystackIndex, fuzzyStringToMatch: haystack)
+            }
+            return searchables.fuzzyMatch(context.query).map { matched in
+                FilterMatchVerdict(haystackIndex: matched.item.haystackIndex, result: matched.result)
+            }
+        case .ifrit:
+            let fuse = Fuse()
+            let sortedResults = fuse.searchSync(context.query, in: haystacks.map { [FuseProp($0)] })
+                .map { FuzzySrchResultWrapper($0) }
+                .sorted()
+            return sortedResults.map { result in
+                FilterMatchVerdict(haystackIndex: result.index, result: result)
+            }
+        case .none:
+            // `isCaseInsensitive == true` really means case-insensitive
+            // matching now. The pre-2026-08 implementation had the branch
+            // inverted; the sidebar's toggle default flipped to `.on` in
+            // the same change so the effective default behavior
+            // (case-insensitive) is preserved.
+            let compareOptions: String.CompareOptions = context.isCaseInsensitive ? [.caseInsensitive] : []
+            return haystacks.indices.compactMap { haystackIndex in
+                guard haystacks[haystackIndex].range(of: context.query, options: compareOptions) != nil else {
+                    return nil
+                }
+                return FilterMatchVerdict(haystackIndex: haystackIndex, result: nil)
+            }
         }
     }
 
-    static func filter<Item: FilterableItem>(_ filter: String, items: [Item], mode: FilterMode?, isCaseInsensitive: Bool) -> [Item] {
+    /// Mutating convenience over `match` for single-level item lists: keeps
+    /// each item's stored `filterContext` in sync (conformers guard their
+    /// own cascades), assigns `filterResult` for matches, resets it for
+    /// misses, and returns the matched items in display order. Conformers
+    /// are expected to make a redundant `filterResult = nil` assignment
+    /// cheap (see `SidebarRuntimeObjectCellViewModel`), so a keystroke that
+    /// changes nothing rebuilds nothing.
+    @discardableResult
+    static func filter<Item: FilterableItem>(context: FilterContext, items: [Item]) -> [Item] {
         for item in items {
-            item.filter = filter
-            item.isCaseInsensitive = isCaseInsensitive
-            item.filterResult = nil
+            item.filterContext = context
         }
-        guard !filter.isEmpty else {
+
+        guard !context.isEmpty else {
             for item in items {
                 item.filterResult = nil
             }
             return items
         }
 
-        switch mode {
-        case .fuzzySearch:
-            let results = items.map { FuzzySearchableBox($0) }.fuzzyMatch(filter)
-            var filteredItems: [Item] = []
-            for result in results {
-                let item = result.item.wrappedValue
-                item.filterResult = result.result
-                filteredItems.append(item)
-            }
-            return filteredItems
-        case .ifrit:
-            let fuse = Fuse()
-            let results = fuse.searchSync(filter, in: items.map { [FuseProp($0.filterableString)] }).map { FuzzySrchResultWrapper($0) }.sorted()
-            var filteredItems: [Item] = []
-            for result in results {
-                let item = items[result.index]
-                item.filterResult = result
-                filteredItems.append(item)
-            }
-            return filteredItems
-        case .none:
-            return items.filter {
-                if isCaseInsensitive {
-                    $0.filterableString.contains(filter)
-                } else {
-                    $0.filterableString.localizedCaseInsensitiveContains(filter)
-                }
-            }
+        let verdicts = match(context, haystacks: items.map(\.filterableString))
+
+        var isMatchedByIndex = [Bool](repeating: false, count: items.count)
+        var filteredItems: [Item] = []
+        filteredItems.reserveCapacity(verdicts.count)
+        for verdict in verdicts {
+            isMatchedByIndex[verdict.haystackIndex] = true
+            let item = items[verdict.haystackIndex]
+            item.filterResult = verdict.result
+            filteredItems.append(item)
         }
+        for (itemIndex, item) in items.enumerated() where !isMatchedByIndex[itemIndex] {
+            item.filterResult = nil
+        }
+        return filteredItems
     }
 }
 
 protocol FilterableItem: AnyObject {
-    var filter: String { set get }
+    var filterContext: FilterContext { set get }
     var filterResult: FuzzyFilterResult? { set get }
     var filterableString: String { get }
-    var isCaseInsensitive: Bool { set get }
 }
 
 protocol FuzzyFilterResult {
     var ranges: [NSRange] { get }
+
+    /// Relevance score for ordering the results of the *same* query; higher
+    /// is better. Not comparable across queries or across `FilterMode`s.
+    var relevanceWeight: Double { get }
 }
 
 @dynamicMemberLookup
@@ -115,10 +165,17 @@ extension FuzzySrchResultWrapper: FuzzyFilterResult {
     var ranges: [NSRange] {
         wrappedValue.results.flatMap { $0.ranges.map { NSRange($0) } }
     }
+
+    /// Ifrit reports a *diff* score where lower is closer, and
+    /// `comparableDefinition` sorts on it ascending; negate so the
+    /// protocol's "higher is better" holds in both modes.
+    var relevanceWeight: Double { -wrappedValue.diffScore }
 }
 
 extension FuzzySearchResult: FuzzyFilterResult {
     var ranges: [NSRange] {
         parts
     }
+
+    var relevanceWeight: Double { Double(weight) }
 }

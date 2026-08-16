@@ -72,8 +72,8 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UIKitViewContr
         output.nodes.drive(collectionView.rx.nodes(source:)) { (collectionView: UICollectionView, indexPath: IndexPath, viewModel: SidebarRootCellViewModel, cell: UICollectionViewListCell) in
             var content = cell.defaultContentConfiguration()
             content.textProperties.allowsDefaultTighteningForTruncation = false
-            content.attributedText = viewModel.name
-            content.image = viewModel.icon
+            content.attributedText = viewModel.appearance.name
+            content.image = viewModel.appearance.icon
             cell.contentConfiguration = content
             cell.indentationWidth = 8
         }

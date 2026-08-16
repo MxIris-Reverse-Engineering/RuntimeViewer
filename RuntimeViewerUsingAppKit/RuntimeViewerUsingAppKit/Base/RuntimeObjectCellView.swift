@@ -107,17 +107,25 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
     func bind(to viewModel: ViewModel) {
         rx.disposeBag = DisposeBag()
 
-        viewModel.primaryIconDriver.drive(primaryIconImageView.rx.image).disposed(by: rx.disposeBag)
+        viewModel.appearanceDriver.driveOnNext { [weak self] appearance in
+            guard let self else { return }
+            apply(appearance)
+        }
+        .disposed(by: rx.disposeBag)
+    }
 
-        viewModel.secondaryIconDriver.drive(secondaryIconImageView.rx.image).disposed(by: rx.disposeBag)
-        viewModel.secondaryIconDriver.map { $0 == nil }.drive(secondaryIconImageView.rx.isHidden).disposed(by: rx.disposeBag)
+    private func apply(_ appearance: RuntimeObjectCellAppearance) {
+        primaryIconImageView.image = appearance.primaryIcon
 
-        viewModel.tertiaryIconDriver.drive(tertiaryIconImageView.rx.image).disposed(by: rx.disposeBag)
-        viewModel.tertiaryIconDriver.map { $0 == nil }.drive(tertiaryIconImageView.rx.isHidden).disposed(by: rx.disposeBag)
+        secondaryIconImageView.image = appearance.secondaryIcon
+        secondaryIconImageView.isHidden = appearance.secondaryIcon == nil
 
-        viewModel.titleDriver.drive(titleLabel.rx.attributedStringValue).disposed(by: rx.disposeBag)
+        tertiaryIconImageView.image = appearance.tertiaryIcon
+        tertiaryIconImageView.isHidden = appearance.tertiaryIcon == nil
 
-        viewModel.subtitleDriver.map { $0 ?? NSAttributedString() }.drive(subtitleLabel.rx.attributedStringValue).disposed(by: rx.disposeBag)
-        viewModel.subtitleDriver.map { $0 == nil }.drive(subtitleLabel.rx.isHidden).disposed(by: rx.disposeBag)
+        titleLabel.attributedStringValue = appearance.title
+
+        subtitleLabel.attributedStringValue = appearance.subtitle ?? NSAttributedString()
+        subtitleLabel.isHidden = appearance.subtitle == nil
     }
 }

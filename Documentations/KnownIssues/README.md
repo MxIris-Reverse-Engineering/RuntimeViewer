@@ -51,3 +51,58 @@ when picking up follow-up work.
   full re-render + autosave per frame; TS.2 editor's Light/Dark variant
   selector hardcoded to `.dark`; TS.3 duplicate-preset names not deduped;
   TS.4 toolbar font-size +/- read-modify-write not coalesced on auto-repeat.
+- [2026-08-09-pr88-review-findings.md](2026-08-09-pr88-review-findings.md) —
+  adjudications for the first (xhigh) review pass on PR #88
+  (`perf/pipeline-optimizations`), IDs `PR88.<N>`: 7 fixed in-branch, 1 false
+  positive (the RxAppKit `rx.state` no-initial-value premise, refuted at
+  runtime), 7 backlogged (byte-budget-less interface cache, test
+  infrastructure seams, docs placement).
+- [2026-08-10-pr88-max-review-findings.md](2026-08-10-pr88-max-review-findings.md) —
+  adjudications for the second (max) review pass on PR #88 after cross-session
+  re-verification, IDs `PR88R2.<N>` mapping to findings F1–F15: 6 fixed
+  in-branch (expansion-autosave wipe, root-filter stale overwrite, link-jump
+  cache key mismatch, Open Quickly haystack discard / main-thread rebuild /
+  unbounded materialization), 2 downgraded on re-verification (one-tick
+  transformer skew, unreachable applyNodes guard), 1 claim refuted
+  (specialization flushes the whole interface cache, so no dead entries),
+  6 backlogged.
+- [2026-08-13-pr88-max-review-findings.md](2026-08-13-pr88-max-review-findings.md) —
+  adjudications for the third (max) review pass on PR #88, IDs `PR88R3.<N>`.
+  No finding was a regression this round — every one is an optimization that
+  covered only half its ground. 5 fixed in-branch (link-jump cache misses its
+  own request key; fuzzy-mode title rebuild scanning the whole subtree
+  haystack; Open Quickly haystack builds not deduplicated, per-keystroke sweep
+  of the warm cell cache, and reload invalidation landing outside the turn
+  that installs the nodes), 2 归并被推翻并独立登记 (root pipeline's
+  cancellation check covers nothing — `PR88R2.15(d)`; object pipeline's
+  snapshot descends into scope-pruned subtrees), 1 补注 on `PR88.9` (a second
+  discard path introduced by the `PR88R2.1` fix), 5 false positive / no-fix —
+  including the phantom-LRU-key claim **改判为可达但无害**, whose write-up
+  records that fixing the cache-key finding makes it easier to reach.
+- [2026-08-14-pr88-max-review-pass4-findings.md](2026-08-14-pr88-max-review-pass4-findings.md) —
+  adjudications for the fourth (max) review pass on PR #88, IDs `PR88R4.<N>`.
+  Every real finding this round sits inside the two commits written to fix the
+  *third* pass (`37c7a47d`, `91e2169d`), which never got re-reviewed. 5 fixed
+  in-branch (reload invalidation skipped on the `.notLoaded` / `.loadError`
+  outcomes; a superseded Open Quickly pass rebuilding haystacks for a
+  discarded object list; a stale redirect hiding a correct cache entry; the
+  interface cache keyed by the whole recursive `RuntimeObject` instead of
+  `RuntimeObjectKey`; dead haystack seeding), 1 test gap recorded honestly
+  (`PR88R4.2`), 2 adjudicated away on adversarial re-review — the
+  `ResolvedThemeStream` `.forever` claim **改判为既存问题且后果不成立**, and
+  the Open Quickly 500-row cap **判为重报 `PR88R2.11`**. Also carries the
+  AGENTS.md §9 and Evolution 0005 corrections this batch made.
+  (`PR88R4.7` was later overturned — see the 2026-08-16 file.)
+- [2026-08-16-pr100-review-findings.md](2026-08-16-pr100-review-findings.md) —
+  adjudications for the fifth review pass on the same branch, now PR #100, IDs
+  `PR100.<N>`. Only 8 of 15 findings were new; 4 were re-reports of already
+  adjudicated entries. 4 fixed in-branch (Open Quickly's row cap truncating a
+  tie of equally-scoring matches by name order; the root sidebar left wedged in
+  filtering mode after a tree rebuild; the `.notLoaded` / `.loadError` outcomes
+  re-seeding derived state from the previous load; the untested `.loadError`
+  arm). Two adjudications changed direction: `PR88R4.7` is **overturned** —
+  `fuzzyMatch` freezes its score once the pattern is consumed, so "sorted by
+  weight" carries no discrimination — and this round's own proposal to narrow
+  the `.specializationAdded` cache flush was **withdrawn** once
+  `RuntimeSwiftSection.specialize` was read past its dispatch shell.
+  3 recorded as latent/unreachable with the change that would activate each.

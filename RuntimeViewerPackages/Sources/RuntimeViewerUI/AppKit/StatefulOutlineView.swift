@@ -46,6 +46,42 @@ open class StatefulOutlineView: OutlineView {
     private var expansionAutosaveObservers: [NSObjectProtocol] = []
     private var isApplyingExpansionAutosave = false
 
+    /// Whether a coalesced autosave flush is already queued on the main
+    /// queue. Expand/collapse notifications arrive once per item — an
+    /// option-click "expand all" posts one per descendant — and each used
+    /// to trigger a full row walk plus a `UserDefaults` write, turning
+    /// the burst into O(rows²). One queued flush per burst keeps the
+    /// total cost at a single O(rows) walk.
+    private var isExpansionPersistScheduled = false
+
+    /// Monotonic counter of structural data changes, bumped by every
+    /// `NSOutlineView` entry point that can replace or reshape the item
+    /// tree. A queued persist samples it at schedule time and refuses to
+    /// flush against a different value.
+    ///
+    /// Without that check the coalescing window is long enough for a tree
+    /// rebuild to land between the expand and the walk. The rebuilt tree
+    /// comes back fully collapsed — the sidebar maps every `$nodes`
+    /// emission through a fresh cell view model and its `Differentiable`
+    /// conformance resolves `differenceIdentifier` to `self`, so every row
+    /// is a new item — and the walk then wrote an empty array over the
+    /// user's saved state. `restoreExpansionFromAutosave()` runs once per
+    /// document, so nothing recovers it.
+    ///
+    /// Expand / collapse notifications are delivered synchronously
+    /// (`NotificationCenter` runs the block inline when the observer queue
+    /// is the posting queue), so the sample always describes the tree the
+    /// user acted on.
+    private var dataStructureVersion = 0
+
+    /// `dataStructureVersion` sampled when the pending persist was
+    /// scheduled; nil when no flush is queued.
+    private var scheduledExpansionPersistStructureVersion: Int?
+
+    /// Number of persist walks actually performed. Regression seam for
+    /// the coalescing behavior (see `StatefulOutlineViewAutosaveTests`).
+    package private(set) var expansionAutosavePersistCount = 0
+
     open func beginFiltering() {
         guard filteringState == .idle else { return }
         saveExpansionState()
@@ -160,6 +196,7 @@ open class StatefulOutlineView: OutlineView {
         isReloadingData = true
         defer { isReloadingData = false }
 
+        dataStructureVersion &+= 1
         super.reloadData()
 
         switch filteringState {
@@ -172,6 +209,44 @@ open class StatefulOutlineView: OutlineView {
             restoreSelectedItem()
             filteringState = .idle
         }
+    }
+
+    // The incremental counterparts of `reloadData()`. A diffing adapter
+    // reaches for these whenever it can — RxAppKit only falls back to
+    // `reloadData()` when the changeset carries `elementUpdated` entries or
+    // exceeds its animation threshold — so hooking the full-reload path
+    // alone would miss the common tree replacement.
+
+    open override func insertItems(
+        at indexes: IndexSet,
+        inParent parent: Any?,
+        withAnimation animationOptions: NSTableView.AnimationOptions = []
+    ) {
+        dataStructureVersion &+= 1
+        super.insertItems(at: indexes, inParent: parent, withAnimation: animationOptions)
+    }
+
+    open override func removeItems(
+        at indexes: IndexSet,
+        inParent parent: Any?,
+        withAnimation animationOptions: NSTableView.AnimationOptions = []
+    ) {
+        dataStructureVersion &+= 1
+        super.removeItems(at: indexes, inParent: parent, withAnimation: animationOptions)
+    }
+
+    open override func moveItem(at fromIndex: Int, inParent oldParent: Any?, to toIndex: Int, inParent newParent: Any?) {
+        dataStructureVersion &+= 1
+        super.moveItem(at: fromIndex, inParent: oldParent, to: toIndex, inParent: newParent)
+    }
+
+    open override func reloadItem(_ item: Any?, reloadChildren: Bool) {
+        // `reloadChildren: false` only re-reads one row's display values;
+        // the subtree, and therefore the expansion state, is untouched.
+        if reloadChildren {
+            dataStructureVersion &+= 1
+        }
+        super.reloadItem(item, reloadChildren: reloadChildren)
     }
 
     // MARK: - Expansion Autosave
@@ -194,26 +269,57 @@ open class StatefulOutlineView: OutlineView {
             object: self,
             queue: .main
         ) { [weak self] _ in
-            self?.persistExpansionStateIfNeeded()
+            self?.scheduleExpansionPersist()
         }
         let didCollapse = center.addObserver(
             forName: NSOutlineView.itemDidCollapseNotification,
             object: self,
             queue: .main
         ) { [weak self] _ in
-            self?.persistExpansionStateIfNeeded()
+            self?.scheduleExpansionPersist()
         }
         expansionAutosaveObservers = [didExpand, didCollapse]
+    }
+
+    /// Coalesces a burst of expand/collapse notifications into one
+    /// persist walk on the next main-queue turn. The full precondition
+    /// set re-runs at flush time because the state can change within the
+    /// coalescing window (a filter starting, the autosave name clearing).
+    /// Best-effort by design: a flush pending when the view deallocates
+    /// is dropped, losing at most the burst from the final runloop turn.
+    private func scheduleExpansionPersist() {
+        guard !isApplyingExpansionAutosave,
+              filteringState == .idle,
+              expansionAutosaveUserDefaultsKey != nil,
+              persistentObjectForExpansion != nil,
+              !isExpansionPersistScheduled else { return }
+        isExpansionPersistScheduled = true
+        scheduledExpansionPersistStructureVersion = dataStructureVersion
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isExpansionPersistScheduled = false
+            defer { self.scheduledExpansionPersistStructureVersion = nil }
+            self.persistExpansionStateIfNeeded()
+        }
     }
 
     private func persistExpansionStateIfNeeded() {
         // Skip during filter-induced expand/collapse churn and during programmatic
         // restore; only user-driven changes in the idle state should be persisted.
+        //
+        // The structure version must still match the one sampled at schedule
+        // time: the walk below describes whatever tree is installed *now*,
+        // and persisting a tree the user never acted on destroys their saved
+        // state. Note the guard is on the data changing, not on the walk
+        // coming back empty — collapsing every row is a legitimate way to
+        // persist an empty set.
         guard !isApplyingExpansionAutosave,
               filteringState == .idle,
+              scheduledExpansionPersistStructureVersion == dataStructureVersion,
               let key = expansionAutosaveUserDefaultsKey,
               let persistentObjectForExpansion else { return }
 
+        expansionAutosavePersistCount += 1
         var persistentObjects: [String] = []
         let totalRows = numberOfRows
         for rowIndex in 0 ..< totalRows {

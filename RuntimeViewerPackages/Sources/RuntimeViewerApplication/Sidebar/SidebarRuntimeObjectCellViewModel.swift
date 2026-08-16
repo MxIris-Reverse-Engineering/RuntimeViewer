@@ -79,6 +79,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         set {
             _children = newValue
             _filteredChildren = newValue
+            invalidateNamesCacheUpwards()
         }
     }
 
@@ -88,49 +89,104 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
     private var _children: [SidebarRuntimeObjectCellViewModel] = []
 
-    /// Computed (not cached) so it always reflects the current subtree. Used
-    /// only as a filter haystack; updates are infrequent (debounced search)
-    /// so the recomputation cost is acceptable in exchange for eliminating
-    /// the lazy-cache invalidation problem when children change.
+    /// The unfiltered child list. The filter pipeline snapshots and
+    /// re-applies against this array so the active filter never hides
+    /// nodes from its own recomputation.
+    var unfilteredChildren: [SidebarRuntimeObjectCellViewModel] { _children }
+
+    /// Cached subtree haystack. Invalidated (upwards through the ancestor
+    /// chain, since every ancestor's haystack embeds this subtree's names)
+    /// whenever `_children` changes — the only mutation points are
+    /// `rebuildChildren()` and the `children` setter, both main-actor.
+    private var cachedCurrentAndChildrenNames: String?
+
+    /// Filter haystack: this node's display name plus every descendant's,
+    /// so a parent whose match lives in a descendant still surfaces.
     public var currentAndChildrenNames: String {
+        if let cachedCurrentAndChildrenNames {
+            return cachedCurrentAndChildrenNames
+        }
         let childrenNames = _children.map { $0.currentAndChildrenNames }.joined(separator: " ")
+        let computedNames: String
         if childrenNames.isEmpty {
-            return runtimeObject.displayName
+            computedNames = runtimeObject.displayName
         } else {
-            return "\(runtimeObject.displayName) \(childrenNames)"
+            computedNames = "\(runtimeObject.displayName) \(childrenNames)"
+        }
+        cachedCurrentAndChildrenNames = computedNames
+        return computedNames
+    }
+
+    private func invalidateNamesCacheUpwards() {
+        var currentCell: SidebarRuntimeObjectCellViewModel? = self
+        while let cell = currentCell {
+            cell.cachedCurrentAndChildrenNames = nil
+            currentCell = cell.parent
         }
     }
 
-    @Dependency(\.appDefaults)
-    private var appDefaults
+    /// Pure-value replica of `currentAndChildrenNames`, computed straight
+    /// from a `RuntimeObject` tree so callers can match against the
+    /// haystack without materializing a cell view model first (Open
+    /// Quickly matches all rows this way, then materializes cells only
+    /// for hits).
+    ///
+    /// What `composedTitle()` depends on is the *prefix*: both this and
+    /// `currentAndChildrenNames` put the node's own `displayName` first, so
+    /// a fuzzy range below `displayName.count` addresses the same
+    /// characters in the title as it does in the haystack it was scored
+    /// against. Byte-for-byte parity between the two builders is no longer
+    /// load-bearing — nothing crosses a range from one to the other — but
+    /// both still sort children by `displayName` and join with single
+    /// spaces, and `OpenQuicklyLazyConstructionTests` keeps them honest so
+    /// the sidebar and Open Quickly rank identical trees identically.
+    static func haystack(for runtimeObject: RuntimeObject) -> String {
+        let sortedChildren = runtimeObject.children.sorted { leftChild, rightChild in
+            leftChild.displayName < rightChild.displayName
+        }
+        let childrenNames = sortedChildren.map { haystack(for: $0) }.joined(separator: " ")
+        if childrenNames.isEmpty {
+            return runtimeObject.displayName
+        }
+        return "\(runtimeObject.displayName) \(childrenNames)"
+    }
 
-    var isCaseInsensitive: Bool = false
+    private var filterContextStorage = FilterContext()
 
-    var filter: String = "" {
-        didSet { applyFilter() }
+    /// The active text-filter context. Setting a *different* context
+    /// re-derives `_filteredChildren` (which cascades into descendants via
+    /// `FilterEngine.filter`); setting an equal context is free. The filter
+    /// pipeline writes the storage directly through
+    /// `applyFilterOutcome(...)` because it delivers the cascade's results
+    /// itself.
+    var filterContext: FilterContext {
+        get { filterContextStorage }
+        set {
+            guard filterContextStorage != newValue else { return }
+            filterContextStorage = newValue
+            applyLocalFilter()
+        }
     }
 
     /// Scope filter applied to `_children` before the text filter runs.
-    /// Pushed down from `SidebarRuntimeObjectViewModel` whenever the user
-    /// edits the scope popover. The scope itself does not cascade through
-    /// this setter — callers responsible for tree-wide propagation use
-    /// `applyScopeRecursively(_:)` so every descendant ends up with the
-    /// same value before any parent's `_filteredChildren` is read.
-    var scope: RuntimeObjectScope = .init() {
-        didSet {
-            guard oldValue != scope else { return }
-            applyFilter()
-        }
-    }
+    /// Plain storage: tree-wide propagation is owned by the filter
+    /// pipeline's apply step (`applyFilterOutcome`), which visits every
+    /// cell anyway; this stored copy only feeds `applyLocalFilter()` on
+    /// the splice path.
+    var scope: RuntimeObjectScope = .init()
 
-    private func applyFilter() {
+    /// Re-derives `_filteredChildren` from the stored scope + filter
+    /// context. Only invoked for cell-local mutations (children rebuilt
+    /// after a specialization splice); bulk filtering goes through the
+    /// pipeline's `applyFilterOutcome` instead.
+    private func applyLocalFilter() {
         let scopeFiltered: [SidebarRuntimeObjectCellViewModel]
         if scope.isActive {
             scopeFiltered = _children.filter { $0.matchesScopeRecursively(scope) }
         } else {
             scopeFiltered = _children
         }
-        _filteredChildren = FilterEngine.filter(filter, items: scopeFiltered, mode: appDefaults.filterMode, isCaseInsensitive: isCaseInsensitive)
+        _filteredChildren = FilterEngine.filter(context: filterContextStorage, items: scopeFiltered)
     }
 
     /// Returns `true` if this cell or any of its descendants pass `scope`.
@@ -146,47 +202,78 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         return false
     }
 
-    /// Push `newScope` into this cell and every descendant depth-first.
-    /// Each cell's own `_filteredChildren` rebuild happens via the
-    /// `scope` didSet, so after this call returns the entire subtree
-    /// reflects the new scope consistently.
-    func applyScopeRecursively(_ newScope: RuntimeObjectScope) {
-        for child in _children {
-            child.applyScopeRecursively(newScope)
-        }
-        scope = newScope
+    /// Single entry point for the filter pipeline's main-actor apply step:
+    /// synchronizes the stored context/scope WITHOUT re-triggering the
+    /// local cascade (the pipeline already computed every level), installs
+    /// the pre-ordered filtered children, and updates the highlight.
+    func applyFilterOutcome(
+        context: FilterContext,
+        scope: RuntimeObjectScope,
+        result: FuzzyFilterResult?,
+        filteredChildren: [SidebarRuntimeObjectCellViewModel]
+    ) {
+        filterContextStorage = context
+        self.scope = scope
+        _filteredChildren = filteredChildren
+        filterResult = result
     }
 
     var filterResult: FuzzyFilterResult? {
         didSet {
-            if let filterResult {
-                let title = NSMutableAttributedString {
-                    AText(runtimeObject.displayName)
-                        .font(.systemFont(ofSize: fontSize))
-                        .foregroundColor(forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor)
-                        .alignment(.left)
-                        .lineBreakeMode(.byTruncatingTail)
-                }
-
-                guard let range = currentAndChildrenNames.ranges(of: runtimeObject.displayName).first else {
-                    self.title = title
-                    return
-                }
-
-                let currentNSRange = NSRange(currentAndChildrenNames.integerRange(from: range))
-
-                for resultNSRange in filterResult.ranges {
-                    guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { continue }
-                    title.addAttributes([
-                        .foregroundColor: NSUIColor.labelColor,
-                        .font: NSUIFont.systemFont(ofSize: fontSize, weight: .semibold),
-                    ], range: resultNSRange)
-                }
-                self.title = title
-            } else {
-                title = defaultAttributedTitle()
-            }
+            // nil -> nil is the overwhelmingly common per-keystroke case
+            // (rows that neither had nor gained a highlight); skipping it
+            // is what keeps a filter pass from rebuilding every row's
+            // attributed title. See SidebarFilterPerformanceBaselineTests.
+            if oldValue == nil, filterResult == nil { return }
+            rebuildTitleForFilterResult()
         }
+    }
+
+    /// Replaces only the title within the current appearance. The icons keep
+    /// their existing references, so the `publishAppearance` equality check
+    /// reduces to comparing the two attributed titles.
+    private func rebuildTitleForFilterResult() {
+        var rebuiltAppearance = appearance
+        rebuiltAppearance.title = composedTitle()
+        publishAppearance(rebuiltAppearance)
+    }
+
+    /// The display title under the current `filterResult`: the fuzzy-highlight
+    /// rendition when a result is active, the plain default title otherwise.
+    private func composedTitle() -> NSAttributedString {
+        guard let filterResult else {
+            return defaultAttributedTitle()
+        }
+
+        let title = NSMutableAttributedString {
+            AText(runtimeObject.displayName)
+                .font(.systemFont(ofSize: fontSize))
+                .foregroundColor(forOpenQuickly ? .secondaryLabelColor : .tertiaryLabelColor)
+                .alignment(.left)
+                .lineBreakeMode(.byTruncatingTail)
+        }
+
+        // This row's own name is the prefix of its subtree haystack by
+        // construction — `currentAndChildrenNames` builds
+        // "displayName child1 child2 …" and `haystack(for:)` matches it
+        // byte for byte. Searching the haystack for the name rediscovered
+        // offset 0 by scanning the entire subtree string, on every row of
+        // every keystroke; `ranges(of:)` collects *all* occurrences, so it
+        // could not even stop at the first hit.
+        //
+        // Offsets stay in Characters, matching `integerRange(from:)`
+        // (`distance(from:to:)`), so the ranges compared below are
+        // unchanged.
+        let currentNSRange = NSRange(location: 0, length: runtimeObject.displayName.count)
+
+        for resultNSRange in filterResult.ranges {
+            guard resultNSRange.location >= currentNSRange.location, NSMaxRange(resultNSRange) <= NSMaxRange(currentNSRange) else { continue }
+            title.addAttributes([
+                .foregroundColor: NSUIColor.labelColor,
+                .font: NSUIFont.systemFont(ofSize: fontSize, weight: .semibold),
+            ], range: resultNSRange)
+        }
+        return title
     }
 
     var filterableString: String {
@@ -201,20 +288,10 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         forOpenQuickly ? SidebarRuntimeObjectCellViewModel.openQuicklyFontSize : SidebarRuntimeObjectCellViewModel.normalFontSize
     }
 
+    /// All visual state in one stream: one subject + lock per row instead of
+    /// five, and every refresh publishes atomically (proposal 0005).
     @Observed
-    public private(set) var primaryIcon: NSUIImage = .init()
-
-    @Observed
-    public private(set) var secondaryIcon: NSUIImage?
-
-    @Observed
-    public private(set) var tertiaryIcon: NSUIImage?
-
-    @Observed
-    public private(set) var title: NSAttributedString = .init()
-
-    @Observed
-    public private(set) var subtitle: NSAttributedString?
+    public private(set) var appearance = RuntimeObjectCellAppearance()
 
     @NSAttributedStringBuilder
     private func defaultAttributedTitle() -> NSAttributedString {
@@ -261,7 +338,8 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             leftChild.runtimeObject.displayName < rightChild.runtimeObject.displayName
         }
         _children = rebuiltChildren
-        applyFilter()
+        invalidateNamesCacheUpwards()
+        applyLocalFilter()
     }
 
     /// Returns a RuntimeObject tree that reflects the current child viewmodels,
@@ -291,26 +369,35 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
     /// Recompute icons and the highlighted name. Called whenever
     /// `runtimeObject` changes (e.g. a new specialized child arrives,
-    /// flipping the parent's `properties` bookkeeping).
+    /// flipping the parent's `properties` bookkeeping). Composes the full
+    /// appearance and publishes it as one event.
     private func refreshAppearance() {
         let iconSize = forOpenQuickly ? 24 : RuntimeObjectIcon.defaultIconSize
-        primaryIcon = RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize)
-        secondaryIcon = runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) }
+        var refreshedAppearance = RuntimeObjectCellAppearance(
+            primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
+            secondaryIcon: runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) },
+            title: composedTitle()
+        )
 
         if runtimeObject.properties.contains(.isGeneric) {
-            tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
+            refreshedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
         }
 
         if runtimeObject.properties.contains(.isSpecialized) {
-            tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
+            refreshedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
         }
 
-        if let filterResult {
-            // Trigger didSet to reapply highlight ranges over the new displayName.
-            self.filterResult = filterResult
-        } else {
-            title = defaultAttributedTitle()
-        }
+        publishAppearance(refreshedAppearance)
+    }
+
+    /// Equal-value updates are dropped so a refresh that changes nothing (a
+    /// splice that leaves this row's display state untouched, or a filter
+    /// pass re-delivering the same highlight) emits no event. Icons come from
+    /// `RuntimeObjectIcon`'s cache, so unchanged icons are pointer-equal and
+    /// the comparison cost concentrates on the attributed title.
+    private func publishAppearance(_ newAppearance: RuntimeObjectCellAppearance) {
+        guard newAppearance != appearance else { return }
+        appearance = newAppearance
     }
 }
 
@@ -324,10 +411,7 @@ extension SidebarRuntimeObjectCellViewModel: Differentiable {
 }
 
 extension SidebarRuntimeObjectCellViewModel: RuntimeObjectCellDisplayable {
-    public var primaryIconDriver: Driver<NSUIImage> { $primaryIcon.asDriver() }
-    public var secondaryIconDriver: Driver<NSUIImage?> { $secondaryIcon.asDriver() }
-    public var tertiaryIconDriver: Driver<NSUIImage?> { $tertiaryIcon.asDriver() }
-    public var titleDriver: Driver<NSAttributedString> { $title.asDriver() }
+    public var appearanceDriver: Driver<RuntimeObjectCellAppearance> { $appearance.asDriver() }
 }
 
 #endif
