@@ -3,7 +3,7 @@ import Foundation
 import Dependencies
 import RxSwift
 import RuntimeViewerCore
-import RuntimeViewerSettings
+@testable import RuntimeViewerSettings
 import RuntimeViewerArchitectures
 import Semantic
 import Testing
@@ -24,6 +24,36 @@ import Testing
 @Suite("ContentTextPipeline", .serialized)
 @MainActor
 struct ContentTextPipelineTests {
+    /// In-memory settings for this suite, injected in place of the live ones.
+    ///
+    /// **Not a convenience — the live value writes to the developer's own
+    /// settings file.** `Settings.store` picks its directory at compile time
+    /// (`#if DEBUG` → `RuntimeViewer-Debug`), and `swift test` builds in Debug,
+    /// so the live `SettingsAccess` in a test run is backed by the very
+    /// `~/Library/Application Support/RuntimeViewer-Debug/settings.json` the
+    /// Debug app uses. Nothing in a test process calls `load()` — loading is a
+    /// deliberate step in `SettingsLifecycleController`, not a side effect of
+    /// resolving `@Dependency(\.settings)` — so that store holds a *default*
+    /// `Settings`. Writing `theme.fontSize` below would then trip the store's
+    /// one-second auto-save and flush those defaults over the real file,
+    /// silently resetting the developer's Debug settings. It has happened.
+    ///
+    /// **`static`, and it has to be.** swift-testing builds a fresh suite value
+    /// per `@Test`, so a stored property would hand each case its own store —
+    /// and `ResolvedThemeStream.shared`, the singleton the render half observes,
+    /// captures `@Dependency(\.settings)` once in its `init` into a `let` that
+    /// its `.forever`-scoped `observable` closes over. Whichever case resolves
+    /// it first wins; every later case would then write to a store nothing is
+    /// watching, and its re-render assertion would hang until the timeout.
+    /// One store per process keeps the singleton's capture and the assertions'
+    /// writes pointed at the same object.
+    ///
+    /// `makeViewModel` creates the view model inside
+    /// `withLiveDependencyContext`, so the pipeline inherits this instance and
+    /// observes the writes the assertions make.
+    @MainActor
+    private static let testSettings = SettingsAccess.preview
+
     // MARK: - Theme-only changes must not re-fetch
 
     @Test("font-size change re-renders without re-fetching the interface")
@@ -328,15 +358,23 @@ struct ContentTextPipelineTests {
     /// Forces the live dependency context: the pipeline resolves
     /// `\.settings` / `\.resolvedThemeStream` internally, and those entries
     /// declare no test value.
+    ///
+    /// `\.settings` is then overridden back to an in-memory store. The live
+    /// context is what the other entries need, but for this one it resolves to
+    /// the real settings file — see ``testSettings``. Keep the override here
+    /// rather than at the call sites: every path into the pipeline goes through
+    /// this helper, so one omission at a call site would quietly reconnect the
+    /// real file.
     private func withLiveDependencyContext<Result>(_ operation: () throws -> Result) rethrows -> Result {
         try withDependencies {
             $0.context = .live
+            $0.settings = Self.testSettings
         } operation: {
             try operation()
         }
     }
 
-    private func liveSettings() -> Settings {
+    private func liveSettings() -> SettingsAccess {
         withLiveDependencyContext {
             @Dependency(\.settings) var settings
             return settings
