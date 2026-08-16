@@ -163,6 +163,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 // the winner.
             } catch {
                 self.loadState = .loadError(error)
+                self.nodes = []
                 self.invalidateNodeDerivedState()
                 #log(.error, "\(error)")
             }
@@ -351,6 +352,12 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 // or an Open Quickly pass scheduled before the reload keeps
                 // its generation token valid and publishes rows for an image
                 // the engine no longer reports as loaded.
+                //
+                // The node list has to go with it. The hook re-derives from
+                // `nodes`, and only the success path assigns them, so
+                // leaving the previous load's cells in place makes the
+                // invalidation re-seed the very index it just cleared.
+                self.nodes = []
                 self.invalidateNodeDerivedState()
             }
             return
