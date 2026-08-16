@@ -65,13 +65,18 @@ final class SourceEditorLoader {
     /// that the caller waits on the same work the task is already doing.
     private var isPrewarming = false
 
+    @Dependency(\.settings) private var settings
+
+    /// Held for the lifetime of the process: the editor can be switched on at any point, and the
+    /// stored value only arrives some time after launch.
+    private var settingsObserveToken: ObserveToken?
+
     private init() {}
 
     /// Whether the user asked for it — see Settings › Editor. Check this *before*
     /// `isAvailable`, so leaving it off also skips the `dlopen` work.
     var isEnabledByUser: Bool {
-        @Dependency(\.settings) var settings
-        return settings.editor.usesSourceEditor
+        settings.editor.usesSourceEditor
     }
 
     /// Whether a bridge can be created. Resolves on first call and is cached — including the
@@ -101,16 +106,34 @@ final class SourceEditorLoader {
     /// All of it moves off the main thread cleanly — the loading is plain dyld and `NSBundle`
     /// work — leaving only the view construction, which is `NSView` and has to stay here.
     ///
+    /// Prewarms as soon as the editor is switched on: at launch once the stored settings have
+    /// been read, or the moment the user turns it on in Settings.
+    ///
+    /// **Observing is the point, not a nicety.** `SettingsLifecycleController.loadOnLaunch()` is
+    /// `Task { await settings.load() }`, so anything that reads a setting synchronously after it
+    /// — as this used to, from `applicationDidFinishLaunching` — reads the *default*, and the
+    /// editor's master switch defaults to off. The prewarm then declined to run at all. That is
+    /// what a Time Profiler trace of the first selection actually showed: the whole 81 ms
+    /// `dlopen` on the main thread with no worker thread doing the same work, which is the
+    /// signature of a prewarm that never started rather than one that started late.
+    ///
+    /// `SettingsStore` is `@Observable` and `value` is one of its tracked properties, so
+    /// replacing the model at the end of `load()` re-runs this.
+    func startPrewarmingWhenEnabled() {
+        guard settingsObserveToken == nil else { return }
+        settingsObserveToken = SwiftNavigation.observe { [weak self] in
+            guard let self, settings.editor.usesSourceEditor else { return }
+            prewarm()
+        }
+    }
+
     /// Does nothing when the editor is switched off in Settings, so a user who never turns it on
     /// never loads Xcode's frameworks.
     ///
-    /// **This has to win a race, so it runs at `userInitiated`.** A first attempt used
-    /// `Task.detached(priority: .utility)` and lost it: a Time Profiler trace of the first
-    /// selection showed the full 81 ms `dlopen` on the *main* thread, with no worker thread doing
-    /// the same work — the prewarm had not even reached `dlopen` by the time the user clicked.
-    /// Launch is the busiest moment the app has, and background-priority work gets pushed behind
-    /// all of it. Losing the race is not a correctness problem (the click just does the work
-    /// itself, as it did before) but it makes the prewarm pointless.
+    /// Runs at `userInitiated` because it is racing the user's first click, and launch — the
+    /// busiest stretch the app has — is exactly what it has to get in front of. Losing that race
+    /// is not a correctness problem (the click does the work itself, as it did before) but it
+    /// makes the prewarm pointless.
     func prewarm() {
         guard isEnabledByUser, !isPrewarming, case .notAttempted = state else { return }
         isPrewarming = true

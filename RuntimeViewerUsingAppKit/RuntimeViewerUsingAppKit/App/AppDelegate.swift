@@ -28,10 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSToolbarItemViewerOverflowFix.install()
 
         settingsLifecycleController.loadOnLaunch()
-        // Straight after the settings load, which it reads to decide whether to load at all, and
-        // ahead of everything else here: it is racing the user's first click, and the rest of
-        // launch is what it has to get in front of.
-        sourceEditorLoader.prewarm()
+        sourceEditorLoader.startPrewarmingWhenEnabled()
         appearanceController.start()
         debugMenuController.install()
         tabMenuController.install()

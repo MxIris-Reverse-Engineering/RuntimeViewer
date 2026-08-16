@@ -748,17 +748,29 @@ layoutBounds.origin.x = 布局起点 + accessoryMargins.left + contentMargins.le
 `dlopen`/`Bundle.load` 幂等且线程安全,最坏是同步侧等在后台已在做的那份工作上;
 落定时若 `state` 已被同步路径填好就不覆盖。
 
-**第一版预热输了这场比赛(2026-08-16,Time Profiler 实测)。** 用户复测仍然卡,trace 显示
-81ms 的 `dlopen` **整条在主线程上**,且没有任何工作线程在做同一件事 —— 预热那时连 `dlopen`
-都还没进去。触发点是 `ContentCoordinator.desiredEditorKind()` → `SourceEditorLoader.isAvailable`,
-比 `lazy var bridge` 更早:决定用哪个编辑器就得先知道能不能用。
+**第一版预热根本没跑(2026-08-16,Time Profiler 实测)。** 用户复测仍然卡,trace 显示 81ms 的
+`dlopen` **整条在主线程上**,且没有任何工作线程在做同一件事。触发点是
+`ContentCoordinator.desiredEditorKind()` → `SourceEditorLoader.isAvailable`,比 `lazy var bridge`
+更早:决定用哪个编辑器就得先知道能不能用。
 
-第一版写的是 `Task.detached(priority: .utility)` 并放在 `applicationDidFinishLaunching` 末尾。
-启动是 app 最忙的一段,后台优先级的活会被排到全部启动工作之后。改成
-`DispatchQueue.global(qos: .userInitiated)`,并提到 `loadOnLaunch()` 之后立即调用。
-输掉比赛不是正确性问题(点击自己把活干了,和没预热一样),但预热就白做了。
+**真因是设置读得太早。** `SettingsLifecycleController.loadOnLaunch()` 是
+`Task { await settings.load() }`,而第一版预热在 `applicationDidFinishLaunching` 里**同步**读
+`settings.editor.usesSourceEditor` —— 那时存储还没读回来,拿到的是默认值,而编辑器主开关**默认关**,
+于是 `guard isEnabledByUser` 直接 return,一个框架都没加载。
 
-日志里因此区分 `prewarmed` 与 `on demand` —— 除了这行日志,app 的行为看不出发生的是哪一种。
+这条差点被误判成调度问题:第一版写的是 `Task.detached(priority: .utility)` 并挂在
+`applicationDidFinishLaunching` 末尾,「启动最忙、后台优先级被推迟」听上去足以解释,
+把它提前并升到 `userInitiated` 也确实是对的改动 —— **但那不是病因**。
+分辨两者的证据就在 trace 里:预热若只是**开始得晚**,应当能在某个工作线程上看到它自己那份
+`dlopen`;**一个都没有**,说明它压根没启动。
+
+因此改成观察设置而不是读一次:`startPrewarmingWhenEnabled()` 用 `SwiftNavigation.observe`
+盯 `settings.editor.usesSourceEditor`,`SettingsStore` 是 `@Observable` 且 `value` 是被追踪的属性,
+`load()` 末尾替换 model 会重新触发。附带好处是用户在设置里**当场打开**开关也会立刻预热,
+而不必等下次启动。
+
+日志里因此区分 `prewarmed` 与 `on demand` —— 除了这行日志,app 的行为看不出发生的是哪一种,
+上面那次误判正是因为没有这个信号。
 
 trace 里同一次点击的其余成本:`makeBridge()`(构造 `SourceEditorView`)7ms、
 `ContentSourceEditorViewController` 的 `setupBindings` + `viewDidLoad` 12ms、转场 13ms、
@@ -936,4 +948,4 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 设置面板文案更正（原落地步骤 D） | 「语法着色来自 Xcode 自己的 tokenizer，比内置视图不准」在语义高亮落地后已不成立，改为说明着色同样来自运行时元数据，并写明唯一例外是跨两段语义 run 的 token 保留框架自己的判断。 |
 | 2026-08-16 | 折叠列与正文的空隙自己补 | ribbon 的 `leadingInset`（macOS 26 起 4pt）全加在朝向行号的一侧，正文一侧不留白。Xcode 从前靠 `additionalLeftPadding = round(字号/2)` 补，而 macOS 26 给它加了「必须存在 gutter annotation」的前置条件，我们这个视图恒为 0。改写 `SourceEditorContentView.contentMargins.left`——框架自己从不写它，但写它也不触发重排，故放在 `applyTheme` 里紧挨 theme 赋值之前，由 theme 赋值刷新。沿用 Xcode 那条公式，间距随字号走。 |
 | 2026-08-16 | 首次打开慢是 dlopen，加预热 | 分段实测：`dlopen` 60ms + bundle 1ms + 建视图 9ms + 首帧 12ms 全是一次性，`setSource` 冷热都是 8–9ms，所以卡的不是解析器预热。加载全程可离开主线程（后台 63.5ms 期间主线程照常跑 runloop），故 `SourceEditorLoader.prewarm()` 在后台做 dlopen + bundle load、回主线程落定，AppDelegate 启动时调用；`NSView` 构造仍留在主线程。不加锁——两条路径的加载都是幂等且线程安全的。 |
-| 2026-08-16 | 预热改到 `userInitiated` 并提前调用 | 第一版（`Task.detached(priority: .utility)`，放在 `applicationDidFinishLaunching` 末尾）在实测 trace 里输掉了比赛：81ms 的 `dlopen` 整条落在主线程，且没有工作线程在做同一件事——启动期后台优先级的活被排到了全部启动工作之后。改成 `DispatchQueue.global(qos: .userInitiated)` 并紧跟 `loadOnLaunch()`。日志区分 `prewarmed` / `on demand`，否则无从判断预热有没有命中。 |
+| 2026-08-16 | 预热改成观察设置 | 第一版预热**一次都没跑过**：`loadOnLaunch()` 是 `Task { await settings.load() }`，而预热在 `applicationDidFinishLaunching` 里同步读开关，读到的是默认值，主开关默认关，`guard` 直接 return。曾误判为「后台优先级被启动挤掉」——分辨证据是 trace 里连一个工作线程的 `dlopen` 都没有，晚开始应当看得见。改用 `SwiftNavigation.observe` 盯设置（`SettingsStore` 是 `@Observable`，`load()` 替换 model 会重新触发），顺带支持在设置里当场打开就预热。QoS 升到 `userInitiated` 一并保留。日志区分 `prewarmed` / `on demand`，否则这类误判没有证据可查。 |
