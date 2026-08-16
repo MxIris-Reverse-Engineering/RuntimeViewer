@@ -48,13 +48,22 @@ final class SourceEditorLoader {
         }
     }
 
-    private enum State {
+    /// `@unchecked` for the bridge class: an existential metatype is not `Sendable`, and this
+    /// value crosses back from the prewarm task. Safe because the only mutable state it reaches
+    /// — `state` below — is written on the main actor, and a loaded class is immutable.
+    private enum State: @unchecked Sendable {
         case notAttempted
         case ready(frameworksDirectory: URL, bridgeClass: SourceEditorBridging.Type)
         case unavailable(Unavailability)
     }
 
     private var state: State = .notAttempted
+
+    /// Set for as long as `prewarm()` has work in flight, so a second call does not start a
+    /// second load. A synchronous `resolvedState()` arriving meanwhile is *not* blocked by it:
+    /// `dlopen` and `Bundle.load` are both idempotent and thread-safe, so the worst case is
+    /// that the caller waits on the same work the task is already doing.
+    private var isPrewarming = false
 
     private init() {}
 
@@ -82,6 +91,36 @@ final class SourceEditorLoader {
         return bridgeClass.init()
     }
 
+    /// Loads the frameworks off the main thread so the first document does not pay for them.
+    ///
+    /// Measured on a warm file cache: the four `dlopen`s cost ~60 ms and the bridge bundle ~1 ms,
+    /// against ~9 ms to build the editor view and ~9 ms per `setSource` afterwards. That whole
+    /// ~60 ms lands on whichever click first opens a runtime object, which is what reads as the
+    /// first selection being slow while every later one is not.
+    ///
+    /// All of it moves off the main thread cleanly — the loading is plain dyld and `NSBundle`
+    /// work — leaving only the view construction, which is `NSView` and has to stay here.
+    ///
+    /// Does nothing when the editor is switched off in Settings, so a user who never turns it on
+    /// never loads Xcode's frameworks.
+    func prewarm() {
+        guard isEnabledByUser, !isPrewarming, case .notAttempted = state else { return }
+        isPrewarming = true
+
+        Task.detached(priority: .utility) {
+            let resolved = Self.resolve()
+            await MainActor.run {
+                self.isPrewarming = false
+                // A document opened while this ran would have resolved the state itself; that
+                // answer is the same one, and overwriting it would discard a `ready` for a
+                // second identical `ready`.
+                guard case .notAttempted = self.state else { return }
+                self.state = resolved
+                self.logResolution(of: resolved)
+            }
+        }
+    }
+
     /// Reads one of the `.xccolortheme` files the framework ships in its own resources.
     /// `SourceEditorThemeConversion` uses one as the base to overwrite with the app's own
     /// theme, so the many keys a `ThemeProfile` has no opinion about stay valid.
@@ -97,15 +136,27 @@ final class SourceEditorLoader {
 
     private func resolvedState() -> State {
         if case .notAttempted = state {
-            state = resolve()
-            if case .unavailable(let reason) = state {
-                #log(.info, "SourceEditor unavailable, falling back to NSTextView: \(reason.description, privacy: .public)")
-            }
+            state = Self.resolve()
+            logResolution(of: state)
         }
         return state
     }
 
-    private func resolve() -> State {
+    private func logResolution(of state: State) {
+        switch state {
+        case .notAttempted:
+            break
+        case .ready(let frameworksDirectory, _):
+            #log(.info, "SourceEditor loaded from \(frameworksDirectory.path, privacy: .public)")
+        case .unavailable(let reason):
+            #log(.info, "SourceEditor unavailable, falling back to NSTextView: \(reason.description, privacy: .public)")
+        }
+    }
+
+    /// `nonisolated` so `prewarm()` can run it off the main thread. Nothing in it touches the
+    /// loader's own state — the result is handed back and stored by the caller — and its two
+    /// halves, `dlopen` and `Bundle`, are both usable from any thread.
+    private nonisolated static func resolve() -> State {
         guard let frameworksDirectory = XcodeSourceEditorLocator.frameworksDirectory() else {
             return .unavailable(.frameworksNotFound(searched: XcodeSourceEditorLocator.candidateDirectories().map(\.path)))
         }
@@ -130,12 +181,11 @@ final class SourceEditorLoader {
             return .unavailable(.bridgePrincipalClassUnusable)
         }
 
-        #log(.info, "SourceEditor loaded from \(frameworksDirectory.path, privacy: .public)")
         return .ready(frameworksDirectory: frameworksDirectory, bridgeClass: bridgeClass)
     }
 
     /// - Returns: the failure, or `nil` on success.
-    private func loadFrameworks(from directory: URL) -> Unavailability? {
+    private nonisolated static func loadFrameworks(from directory: URL) -> Unavailability? {
         var pending = XcodeSourceEditorLocator.requiredFrameworkNames
         var lastFailedName = ""
         var lastFailureReason = ""

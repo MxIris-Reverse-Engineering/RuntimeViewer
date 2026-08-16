@@ -721,6 +721,33 @@ layoutBounds.origin.x = 布局起点 + accessoryMargins.left + contentMargins.le
 首次和后续字号变化都自然覆盖。取值沿用 Xcode 自己那条公式 `round(字号 / 2)`(12pt → 6pt),
 间距随字号走,而不是一个只在某一个字号下好看的常数。
 
+### 第一个对象慢一拍,是 dlopen 而不是解析器(2026-08-16)
+
+用户报告:第一次打开 RuntimeObject 会卡一下,之后就不卡。分段实测(文件已在页缓存,冷启动更慢):
+
+| 阶段 | 耗时 | 性质 |
+|---|---|---|
+| `dlopen` 四个框架 | 60 ms | 一次性 |
+| bridge bundle load + `principalClass` | 1 ms | 一次性 |
+| `bridge.init()`(构造 `SourceEditorView`) | 9 ms | 一次性 |
+| 首帧布局 | 12 ms | 一次性 |
+| `setSource` 第一次 | 9 ms | 每个对象 |
+| `setSource` 第二、三次 | 8 / 8 ms | 每个对象 |
+
+`setSource` **冷热无差别**,所以卡的不是 SourceModel 的解析器预热,就是加载本身:
+一次性成本约 80ms,全落在"第一次点开某个对象"那一下,而 `ContentSourceEditorViewController`
+的 `lazy var bridge` 正是在那时第一次求值,同步触发整条加载链。
+
+实测**加载全程可以离开主线程**:后台队列跑 `dlopen` + `Bundle.load` + `principalClass` 用时相同
+(63.5 ms),主线程期间照常跑了 9 个 runloop pass;回主线程建 bridge 仍只要 10 ms。
+`dlopen` 与 `NSBundle` 都是线程安全的,`NSView` 的构造留在主线程。
+
+因此 `SourceEditorLoader` 加 `prewarm()`:后台解析、回主线程落定 `state`,由 AppDelegate 在
+`applicationDidFinishLaunching` 末尾调用(必须排在 `settingsLifecycleController.loadOnLaunch()`
+之后 —— 它要读编辑器开关,关着就一个框架都不加载)。不加锁:预热途中打开文档会走同步路径,
+`dlopen`/`Bundle.load` 幂等且线程安全,最坏是同步侧等在后台已在做的那份工作上;
+落定时若 `state` 已被同步路径填好就不覆盖。
+
 ### 未完成
 
 **A. 其余显示项。** `lineWrappingStyle` / `overscroll`,对只读接口的价值存疑,未做。
@@ -887,3 +914,4 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | sticky header 单行是框架设计 | `headerLineLayer` 给 line layer 传的宽度是 `nil`（指令级确认），即不限宽不换行；`StickyHeaderViewContents` 也只有一个 line layer。溢出尾部的淡出才是 `maxWidth` 的用途。Xcode 同行为，不改。 |
 | 2026-08-15 | 设置面板文案更正（原落地步骤 D） | 「语法着色来自 Xcode 自己的 tokenizer，比内置视图不准」在语义高亮落地后已不成立，改为说明着色同样来自运行时元数据，并写明唯一例外是跨两段语义 run 的 token 保留框架自己的判断。 |
 | 2026-08-16 | 折叠列与正文的空隙自己补 | ribbon 的 `leadingInset`（macOS 26 起 4pt）全加在朝向行号的一侧，正文一侧不留白。Xcode 从前靠 `additionalLeftPadding = round(字号/2)` 补，而 macOS 26 给它加了「必须存在 gutter annotation」的前置条件，我们这个视图恒为 0。改写 `SourceEditorContentView.contentMargins.left`——框架自己从不写它，但写它也不触发重排，故放在 `applyTheme` 里紧挨 theme 赋值之前，由 theme 赋值刷新。沿用 Xcode 那条公式，间距随字号走。 |
+| 2026-08-16 | 首次打开慢是 dlopen，加预热 | 分段实测：`dlopen` 60ms + bundle 1ms + 建视图 9ms + 首帧 12ms 全是一次性，`setSource` 冷热都是 8–9ms，所以卡的不是解析器预热。加载全程可离开主线程（后台 63.5ms 期间主线程照常跑 runloop），故 `SourceEditorLoader.prewarm()` 在后台做 dlopen + bundle load、回主线程落定，AppDelegate 启动时调用；`NSView` 构造仍留在主线程。不加锁——两条路径的加载都是幂等且线程安全的。 |

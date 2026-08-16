@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.helperServiceVersionChecker) private var helperServiceVersionChecker
     @Dependency(\.mcpService) private var mcpService
     @Dependency(\.settingsLifecycleController) private var settingsLifecycleController
+    @Dependency(\.sourceEditorLoader) private var sourceEditorLoader
     @Dependency(\.tabMenuController) private var tabMenuController
     @Dependency(\.updaterService) private var updaterService
     @Dependency(\.simulatorInstallerWindowController) private var simulatorInstallerWindowController
@@ -33,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mcpService.start(for: AppMCPBridgeDocumentProvider())
         updaterService.start()
         helperServiceVersionChecker.checkOnLaunch()
+        // After `loadOnLaunch()`: it reads the editor setting to decide whether to load at all.
+        sourceEditorLoader.prewarm()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
