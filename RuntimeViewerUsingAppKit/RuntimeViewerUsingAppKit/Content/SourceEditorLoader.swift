@@ -103,20 +103,30 @@ final class SourceEditorLoader {
     ///
     /// Does nothing when the editor is switched off in Settings, so a user who never turns it on
     /// never loads Xcode's frameworks.
+    ///
+    /// **This has to win a race, so it runs at `userInitiated`.** A first attempt used
+    /// `Task.detached(priority: .utility)` and lost it: a Time Profiler trace of the first
+    /// selection showed the full 81 ms `dlopen` on the *main* thread, with no worker thread doing
+    /// the same work — the prewarm had not even reached `dlopen` by the time the user clicked.
+    /// Launch is the busiest moment the app has, and background-priority work gets pushed behind
+    /// all of it. Losing the race is not a correctness problem (the click just does the work
+    /// itself, as it did before) but it makes the prewarm pointless.
     func prewarm() {
         guard isEnabledByUser, !isPrewarming, case .notAttempted = state else { return }
         isPrewarming = true
 
-        Task.detached(priority: .utility) {
+        DispatchQueue.global(qos: .userInitiated).async {
             let resolved = Self.resolve()
-            await MainActor.run {
-                self.isPrewarming = false
-                // A document opened while this ran would have resolved the state itself; that
-                // answer is the same one, and overwriting it would discard a `ready` for a
-                // second identical `ready`.
-                guard case .notAttempted = self.state else { return }
-                self.state = resolved
-                self.logResolution(of: resolved)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.isPrewarming = false
+                    // A document opened while this ran would have resolved the state itself; that
+                    // answer is the same one, and overwriting it would discard a `ready` for a
+                    // second identical `ready`.
+                    guard case .notAttempted = self.state else { return }
+                    self.state = resolved
+                    self.logResolution(of: resolved, wasPrewarmed: true)
+                }
             }
         }
     }
@@ -137,19 +147,23 @@ final class SourceEditorLoader {
     private func resolvedState() -> State {
         if case .notAttempted = state {
             state = Self.resolve()
-            logResolution(of: state)
+            logResolution(of: state, wasPrewarmed: false)
         }
         return state
     }
 
-    private func logResolution(of state: State) {
+    /// - Parameter wasPrewarmed: whether this resolution came from `prewarm()`. Logged because it
+    ///   is the difference between the first selection being instant and it paying ~80 ms, and
+    ///   nothing else in the app's behaviour reveals which one happened.
+    private func logResolution(of state: State, wasPrewarmed: Bool) {
+        let origin = wasPrewarmed ? "prewarmed" : "on demand"
         switch state {
         case .notAttempted:
             break
         case .ready(let frameworksDirectory, _):
-            #log(.info, "SourceEditor loaded from \(frameworksDirectory.path, privacy: .public)")
+            #log(.info, "SourceEditor loaded \(origin, privacy: .public) from \(frameworksDirectory.path, privacy: .public)")
         case .unavailable(let reason):
-            #log(.info, "SourceEditor unavailable, falling back to NSTextView: \(reason.description, privacy: .public)")
+            #log(.info, "SourceEditor unavailable (\(origin, privacy: .public)), falling back to NSTextView: \(reason.description, privacy: .public)")
         }
     }
 
