@@ -54,6 +54,19 @@ re-arm 晚一个 main-queue tick。机制属实，但构造不出用户可见后
 整个缓存，不存在跨特化的死条目。（副作用是特化一次全缓存清零，属过度失效，另行讨论。）
 性能段（Key 内嵌整棵 `children` 的 hash/== 常数成本）属实，见 backlog。
 
+> **机制措辞订正（第五轮，2026-08-16）**：本条 backlog 行里写的「children 变化影响生成
+> 文本，现靠全量 flush 兜底」在**今天的 per-type printer 层面不精确**——
+> `SwiftDeclarationPrinter.printTypeDefinition` 只走 `typeChildren`/`protocolChildren`，
+> `specializedChildren` 是独立清单，只有模块级 `SwiftInterfaceBuilder` 会走它。
+> **但「不能收窄 `.specializationAdded` 的全量 flush」这个结论存活**，理由换成：
+> `RuntimeSwiftSection.specialize(for:with:)` 结尾就是
+> `interfaceByObject.removeValue(forKey: object.key)`（`RuntimeSwiftSection.swift:720-723`），
+> 引擎明文声明 parent 接口要因 specialization 重渲染；且 upstream `DiffRendering.swift:44`
+> 注释写着 "Latent today — the diff builder never walks `specializedChildren`"，printer 侧
+> 开始走它的那天收窄就无声变错。若要动，正确形态是**按 parent key 定向失效**，不是丢掉
+> 该事件。第五轮曾据前一个（错误的）壳层论据提案收窄，已撤销——详见
+> [2026-08-16](2026-08-16-pr100-review-findings.md)「翻案与订正」。
+
 ## 暂不修（backlog，后续拾起）
 
 | ID | 严重度 | 摘要 | 状态与理由 |

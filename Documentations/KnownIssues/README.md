@@ -82,3 +82,17 @@ when picking up follow-up work.
   `ResolvedThemeStream` `.forever` claim **改判为既存问题且后果不成立**, and
   the Open Quickly 500-row cap **判为重报 `PR88R2.11`**. Also carries the
   AGENTS.md §9 and Evolution 0005 corrections this batch made.
+  (`PR88R4.7` was later overturned — see the 2026-08-16 file.)
+- [2026-08-16-pr100-review-findings.md](2026-08-16-pr100-review-findings.md) —
+  adjudications for the fifth review pass on the same branch, now PR #100, IDs
+  `PR100.<N>`. Only 8 of 15 findings were new; 4 were re-reports of already
+  adjudicated entries. 4 fixed in-branch (Open Quickly's row cap truncating a
+  tie of equally-scoring matches by name order; the root sidebar left wedged in
+  filtering mode after a tree rebuild; the `.notLoaded` / `.loadError` outcomes
+  re-seeding derived state from the previous load; the untested `.loadError`
+  arm). Two adjudications changed direction: `PR88R4.7` is **overturned** —
+  `fuzzyMatch` freezes its score once the pattern is consumed, so "sorted by
+  weight" carries no discrimination — and this round's own proposal to narrow
+  the `.specializationAdded` cache flush was **withdrawn** once
+  `RuntimeSwiftSection.specialize` was read past its dispatch shell.
+  3 recorded as latent/unreachable with the change that would activate each.

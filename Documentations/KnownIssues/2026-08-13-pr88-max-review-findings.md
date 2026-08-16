@@ -16,11 +16,11 @@
 
 | ID | 严重度 | 摘要 | 修复 commit |
 |---|---|---|---|
-| PR88R3.1 | Major | 链接跳转的缓存对自己的请求键永远 miss：结果只按 `interface.object` 归档，请求键被 `entries[key] = nil` 清掉且不回填，「Back 之后再点同一个 token」每次全量重算（且本 PR 把该路径的选项从空改为完整选项，抬高了每次 miss 的代价） | `<commit1>`（请求键→存储键重定向表 + 回归测试 `repeatedResolutionOfTheSameTokenHitsCache`） |
-| PR88R3.2 | Major | 模糊搜索模式下侧边栏树每个命中行都在主线程重建富文本标题：`composedTitle()` 用 `ranges(of:)` 在整个子树聚合串里搜自己的 displayName，而该串按构造恒以 displayName 开头——每行一次全串扫描（`ranges(of:)` 收集全部匹配，连第一个命中都不短路），去重复现了本 PR 目标场景（打字路径主线程卡顿）的成本 | `<commit2>`（常量 `NSRange(location: 0, length:)` 替换搜索） |
-| PR88R3.3 | Minor | Open Quickly 索引（haystack）构建不去重：`cachedHaystacks` 在调度时同步快照、任务体内不重读，缓存冷时（每次 reload 后）落在构建窗口内的每个键击各开一份全量 O(N) 构建；`defaultHaystackBuilder` 无取消点，取消被取代的 pass 不释放任何东西 | `<commit3>`（`inFlightOpenQuicklyHaystackBuild` 共享在飞构建 + 改写既有测试同时钉住去重与不丢弃） |
-| PR88R3.4 | Minor | Open Quickly 每次键击遍历整个「暖缓存」字典来取消高亮，而该字典按设计跨查询保留，于是每键主线程成本随会话时长上涨 | `<commit3>`（`highlightedOpenQuicklyRowIndices` 差集，保留暖缓存设计不变） |
-| PR88R3.5 | Minor | Open Quickly 的 reload 作废（取消任务、代际递增、对象列表替换、缓存清空）在 `await super.reloadData()` **之后**的第二个 `MainActor.run` 里执行，而基类的 5 个 `MainActor.run` 中最后一个才安装 `nodes`；两者之间的 main-actor hop 是一个窗口 | `<commit3>`（基类新增 `didInstallReloadedNodes()` hook，作废与安装合并进同一同步临界区） |
+| PR88R3.1 | Major | 链接跳转的缓存对自己的请求键永远 miss：结果只按 `interface.object` 归档，请求键被 `entries[key] = nil` 清掉且不回填，「Back 之后再点同一个 token」每次全量重算（且本 PR 把该路径的选项从空改为完整选项，抬高了每次 miss 的代价） | `91e2169`（请求键→存储键重定向表 + 回归测试 `repeatedResolutionOfTheSameTokenHitsCache`） |
+| PR88R3.2 | Major | 模糊搜索模式下侧边栏树每个命中行都在主线程重建富文本标题：`composedTitle()` 用 `ranges(of:)` 在整个子树聚合串里搜自己的 displayName，而该串按构造恒以 displayName 开头——每行一次全串扫描（`ranges(of:)` 收集全部匹配，连第一个命中都不短路），去重复现了本 PR 目标场景（打字路径主线程卡顿）的成本 | `e23725f`（常量 `NSRange(location: 0, length:)` 替换搜索） |
+| PR88R3.3 | Minor | Open Quickly 索引（haystack）构建不去重：`cachedHaystacks` 在调度时同步快照、任务体内不重读，缓存冷时（每次 reload 后）落在构建窗口内的每个键击各开一份全量 O(N) 构建；`defaultHaystackBuilder` 无取消点，取消被取代的 pass 不释放任何东西 | `37c7a47`（`inFlightOpenQuicklyHaystackBuild` 共享在飞构建 + 改写既有测试同时钉住去重与不丢弃） |
+| PR88R3.4 | Minor | Open Quickly 每次键击遍历整个「暖缓存」字典来取消高亮，而该字典按设计跨查询保留，于是每键主线程成本随会话时长上涨 | `37c7a47`（`highlightedOpenQuicklyRowIndices` 差集，保留暖缓存设计不变） |
+| PR88R3.5 | Minor | Open Quickly 的 reload 作废（取消任务、代际递增、对象列表替换、缓存清空）在 `await super.reloadData()` **之后**的第二个 `MainActor.run` 里执行，而基类的 5 个 `MainActor.run` 中最后一个才安装 `nodes`；两者之间的 main-actor hop 是一个窗口 | `37c7a47`（基类新增 `didInstallReloadedNodes()` hook，作废与安装合并进同一同步临界区） |
 
 ### 关于 PR88R3.5 的测试缺口（诚实登记）
 

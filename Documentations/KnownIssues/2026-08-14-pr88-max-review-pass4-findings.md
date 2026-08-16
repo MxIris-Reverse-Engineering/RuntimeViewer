@@ -64,6 +64,15 @@ RxSwift 语义部分的判断是对的：`.forever` 只保留 replay subject，`
 
 ### PR88R4.7 — Open Quickly 500 行上限截断结果集（重报已裁决条目）
 
+> ⚠️ **本条已于第五轮翻案，见 [2026-08-16](2026-08-16-pr100-review-findings.md) 的
+> `PR100.2`（已修 `79a6b3c`）。** 下面「`fuzzyMatch` 确实 best-first ⋯ 丢的是低分尾巴
+> 而非任意 500 条」这个排除理由**被实测证伪**：排序确实按 weight 降序，但 weight 是
+> **退化**的——`fuzzyMatch` 在 pattern 耗尽时冻结分数，所有连续包含查询串的名字同分，
+> 所以丢的和留的分数完全相等。真实 AppKit 类表实测：`view` 命中 713、并列 639，砍掉
+> 139 个满分行；`vi` 命中 1038、并列 875，`NSView` 落第 502 位被砍。
+> 教训：**「按分数排序」不等于「分数有区分度」**——排除一条截断类发现之前，要验的是
+> 分数分布，不是排序方向。
+
 `verdicts.prefix(500)` 在发布前执行、`filteredNodesForOpenQuickly` 被截断、无 UI 提示，
 行为描述属实；`fuzzyMatch` 确实 best-first（`UIFoundation/FuzzySearch.swift` 按 weight
 降序），丢的是低分尾巴而非任意 500 条。
