@@ -119,6 +119,20 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
         currentRootFilterTask?.cancel()
         currentRootFilterTask = nil
         currentRootFilterGeneration &+= 1
+        // Before the `filteredNodes` assignment, never after.
+        // `didEndFiltering` fires off this flag and takes the outline out of
+        // `.filtering`, while `didChangeFiltering` fires off `filteredNodes`
+        // but only while the flag is still set. Clearing first therefore
+        // skips the `expandItem(nil, expandChildren: true)` that a
+        // `.filtering` `reloadData()` runs over the whole image tree;
+        // clearing second runs it, against a tree the filter no longer
+        // applies to. Leaving it set at all wedges the sidebar: nothing else
+        // lowers it, so every later rebuild re-expands the tree and
+        // `scheduleExpansionPersist`'s `filteringState == .idle` guard keeps
+        // expansion autosave off for the rest of the session.
+        if isFiltering {
+            isFiltering = false
+        }
         filteredNodes = rebuiltNodes
     }
 

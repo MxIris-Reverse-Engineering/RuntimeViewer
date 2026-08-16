@@ -73,6 +73,38 @@ struct SidebarRootFilterInvalidationTests {
             "each emission is expected to hand out freshly built cell view models"
         )
     }
+
+    /// Dropping the filter's *results* is only half the job — the flag has
+    /// to come down with them.
+    ///
+    /// `didEndFiltering` derives from `isFiltering`, so leaving it set means
+    /// `endFiltering()` is never called and the outline stays in
+    /// `.filtering` for the rest of the session: every later rebuild
+    /// re-runs `expandItem(nil, expandChildren: true)` over the whole image
+    /// tree, and `scheduleExpansionPersist`'s `filteringState == .idle`
+    /// guard keeps expansion autosave off. Nothing else lowers the flag
+    /// except the user clearing the search field by hand.
+    @Test("an image-tree rebuild leaves the sidebar out of filtering mode")
+    func rebuildClearsTheFilteringFlag() async throws {
+        let harness = try await Harness(seededGeneration: 0, wiringInput: true)
+
+        harness.search("System")
+        let filtering = try await pollUntil(timeout: .seconds(5)) {
+            harness.viewModel.isFiltering
+        }
+        #expect(filtering, "the query never put the sidebar into filtering mode")
+
+        harness.nodesRelay.accept(Harness.makeImageNodes(generation: 1))
+
+        let installed = try await pollUntil(timeout: .seconds(5)) {
+            harness.viewModel.filteredNodes.map(\.node.name) == ["generation1"]
+        }
+        #expect(installed, "the rebuilt tree was never installed into filteredNodes")
+        #expect(
+            !harness.viewModel.isFiltering,
+            "the rebuild dropped the filter results but left the sidebar wedged in filtering mode"
+        )
+    }
 }
 
 // MARK: - Harness
@@ -96,8 +128,11 @@ extension SidebarRootFilterInvalidationTests {
         /// every assertion.
         private let router: MockRouter<SidebarRootRoute>
         private let disposeBag = DisposeBag()
+        private let searchStringRelay = PublishRelay<String>()
 
-        init(seededGeneration: Int) async throws {
+        /// Opt-in so the tests that only exercise rebuilds keep running
+        /// against exactly the subscription set they were written for.
+        init(seededGeneration: Int, wiringInput: Bool = false) async throws {
             let nodesRelay = BehaviorRelay<[RuntimeImageNode]>(value: Self.makeImageNodes(generation: seededGeneration))
             let router = MockRouter<SidebarRootRoute>()
             let viewModel = withLiveDependencyContext {
@@ -116,6 +151,16 @@ extension SidebarRootFilterInvalidationTests {
             }
             #expect(seeded, "the view model never picked up the seeded image tree")
 
+            if wiringInput {
+                _ = viewModel.transform(
+                    SidebarRootViewModel.Input(
+                        clickedNode: .never(),
+                        selectedNode: .never(),
+                        searchString: searchStringRelay.asSignal()
+                    )
+                )
+            }
+
             // Installed after the seeding so only rebuild-driven emissions
             // are recorded. This observer runs in the same synchronous step
             // as the view model's own `filteredNodes` assignment.
@@ -129,6 +174,10 @@ extension SidebarRootFilterInvalidationTests {
                     }
                 }
                 .disposed(by: disposeBag)
+        }
+
+        func search(_ query: String) {
+            searchStringRelay.accept(query)
         }
 
         static func makeImageNodes(generation: Int) -> [RuntimeImageNode] {
