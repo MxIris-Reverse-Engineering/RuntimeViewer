@@ -97,6 +97,11 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont) {
         guard let themeDictionary = dictionary as? [String: AnyHashable] else { return }
         let theme = SourceEditorTheme(name: name, dictionary: themeDictionary, fontSizeModifier: fontSizeModifier)
+
+        // Before the theme is assigned, not after: writing the margin does not itself invalidate
+        // the laid-out lines, and the theme assignment is what flushes it. See the method below.
+        applyTextLeadingMargin(forPointSize: lineNumberFont.pointSize)
+
         sourceEditorView.colorTheme = theme
         sourceEditorView.fontTheme = theme
         applyLineNumberFont(lineNumberFont)
@@ -125,6 +130,30 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         if appliedDisplayOptions.showsLineNumbers {
             gutter.enableLineNumbers()
         }
+    }
+
+    /// Separates the text from the folding ribbon, which otherwise sits flush against it.
+    ///
+    /// The ribbon's own width is `leadingInset + 7`, and on macOS 26 that leading inset — 4pt —
+    /// goes on the side facing the line numbers, leaving nothing on the side facing the text.
+    /// Xcode used to make up the difference with `SourceEditorContentView.additionalLeftPadding`,
+    /// which `updateAdditionalLeftPadding()` filled with `round(pointSize / 2)`; as of macOS 26
+    /// that method leaves it at zero unless a gutter annotation is present, and this view has
+    /// none. `contentMargins` is the same offset by a different name — the text's origin is
+    /// `accessoryMargins.left + contentMargins.left + additionalLeftPadding` — with the
+    /// advantage that nothing in the framework writes it.
+    ///
+    /// Keeping Xcode's own formula means the gap tracks the font size rather than being a
+    /// constant that looks right at one size only.
+    ///
+    /// **Assigning this does not schedule a relayout.** The laid-out lines keep their old
+    /// origins until something else invalidates them — a `setSource`, or the theme assignment
+    /// this is called just ahead of. `SourceEditorLayoutManager.invalidateAllLayout()` would do
+    /// it directly but has no exported symbol to link against.
+    private func applyTextLeadingMargin(forPointSize pointSize: CGFloat) {
+        let leadingMargin = (pointSize * 0.5).rounded()
+        guard sourceEditorView.contentView.contentMargins.left != leadingMargin else { return }
+        sourceEditorView.contentView.contentMargins.left = leadingMargin
     }
 
     func applyBackgroundColor(_ backgroundColor: NSColor) {

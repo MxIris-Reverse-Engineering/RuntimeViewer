@@ -203,6 +203,16 @@ extension SourceEditor.TextAttributeOverrideProvider {
 }
 
 @_hasMissingDesignatedInitializers @objc public class SourceEditorContentView : AppKit.NSView {
+  // The host's channel into the text's own insets. The framework never writes it — the widths
+  // the gutter and the folding ribbon take up arrive through a separate `accessoryMargins` —
+  // so whatever is put here survives layout, theme changes and reloads.
+  //
+  // Its sibling `additionalLeftPadding` is not declared here on purpose: the framework does
+  // write that one, from `SourceEditorView.updateAdditionalLeftPadding()`.
+  public var contentMargins: AppKit.NSEdgeInsets {
+    get
+    set
+  }
   @objc deinit
 }
 

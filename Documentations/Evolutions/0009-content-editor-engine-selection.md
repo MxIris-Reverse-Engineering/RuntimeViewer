@@ -680,6 +680,47 @@ Xcode 自己也是这个行为。要改只能深入私有布局(拿到 `StickyHe
 上、`uninstallMinimap()` 不清它。每个 bridge 实例各有自己的 config,所以不跨标签页累积,
 量级也只是每次开关 8 个图层 —— 记录在案,不为此绕开框架 API。
 
+### 折叠列与正文之间没有空隙,得自己补(2026-08-16)
+
+用户报告:折叠列(folding ribbon)紧贴正文,中间一格空隙都没有。实测布局(12pt 字体):
+行号 gutter 占 0–36,ribbon 占 36–47,**正文首字符从 47 开始** —— 正好压着 ribbon 右缘。
+
+ribbon 那 11pt 是框架自己算的。`FoldingRibbon.updateMarginWidth(with:)` 先求行高
+`ceil(ascender + |descender| + leading)`,超过 20 才按行高推宽度,否则取 `minMarginWidth`;
+而 `minMarginWidth = leadingInset + 7`、macOS 26 起 `leadingInset = 4`(26 以下是 0)。
+关键是**那 4pt 全加在朝向行号的一侧**,朝向正文的一侧一点不留。
+
+Xcode 从前是用 `SourceEditorContentView.additionalLeftPadding` 补的,值由
+`SourceEditorView.updateAdditionalLeftPadding()` 算成 `round(字号 / 2)`。反编译那个方法可以看到
+**macOS 26 给它加了一道前置条件**:26 以下无条件取 `round(字号 / 2)`;26 及以上先遍历
+gutter annotations,一个都没有(或没有满足条件的)就直接填 0。我们这个视图没有任何 annotation,
+所以这条通道在 26 上恒为 0。
+
+正文左边界的构成(读 `SourceEditorContentView.layoutBounds` 的 getter):
+
+```
+layoutBounds.origin.x = 布局起点 + accessoryMargins.left + contentMargins.left + additionalLeftPadding
+```
+
+`accessoryMargins` 是框架按 gutter/ribbon 宽度算的,不该动;`additionalLeftPadding` 归框架写;
+剩下 **`contentMargins` 是给宿主的通道** —— 基线为 0,框架自己从不写它。离屏探针实测:
+
+| 动作 | `contentMargins.left` | 首行文本 x |
+|---|---|---|
+| 基线 | 0 | 47 |
+| 设成 8,不做别的 | 8(保住) | 47(**没重排**) |
+| 之后一次 `setSource` | 8 | 55 |
+| 设成 20 + 一次 theme 赋值 | 20 | 67 |
+| 再 resize / 再换主题 | 20 | 67(框架不覆盖) |
+
+所以:**写它有效,但它自己不触发重排**。`SourceEditorLayoutManager.invalidateAllLayout()` 能直接
+触发,但**没有导出符号**(只有各观察者的 `layoutManagerDidInvalidateAllLayout` 回调有),链接不到。
+可用的失效动作只有 `setSource` 和 theme 赋值。
+
+因此写在 `applyTheme` 里、**赋 `colorTheme`/`fontTheme` 之前**:紧跟着的 theme 赋值就把它刷出去,
+首次和后续字号变化都自然覆盖。取值沿用 Xcode 自己那条公式 `round(字号 / 2)`(12pt → 6pt),
+间距随字号走,而不是一个只在某一个字号下好看的常数。
+
 ### 未完成
 
 **A. 其余显示项。** `lineWrappingStyle` / `overscroll`,对只读接口的价值存疑,未做。
@@ -845,3 +886,4 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-15 | 加入 mark separators 开关 | 生成器目前不输出 `// MARK:`，所以这一项现在什么都不画；默认开是因为它无害（没有 MARK 就没有可画的位置），等生成器开始输出时自动生效，不用再改一次设置。实现与 scope guides 同形：两半都写同一个惰性创建的 controller 的同一个标志再请求布局，故幂等、无需跟踪状态。 |
 | 2026-08-15 | sticky header 单行是框架设计 | `headerLineLayer` 给 line layer 传的宽度是 `nil`（指令级确认），即不限宽不换行；`StickyHeaderViewContents` 也只有一个 line layer。溢出尾部的淡出才是 `maxWidth` 的用途。Xcode 同行为，不改。 |
 | 2026-08-15 | 设置面板文案更正（原落地步骤 D） | 「语法着色来自 Xcode 自己的 tokenizer，比内置视图不准」在语义高亮落地后已不成立，改为说明着色同样来自运行时元数据，并写明唯一例外是跨两段语义 run 的 token 保留框架自己的判断。 |
+| 2026-08-16 | 折叠列与正文的空隙自己补 | ribbon 的 `leadingInset`（macOS 26 起 4pt）全加在朝向行号的一侧，正文一侧不留白。Xcode 从前靠 `additionalLeftPadding = round(字号/2)` 补，而 macOS 26 给它加了「必须存在 gutter annotation」的前置条件，我们这个视图恒为 0。改写 `SourceEditorContentView.contentMargins.left`——框架自己从不写它，但写它也不触发重排，故放在 `applyTheme` 里紧挨 theme 赋值之前，由 theme 赋值刷新。沿用 Xcode 那条公式，间距随字号走。 |
