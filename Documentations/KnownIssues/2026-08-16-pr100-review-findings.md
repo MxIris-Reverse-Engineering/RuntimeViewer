@@ -188,6 +188,53 @@ row is a legitimate way to persist an empty set, and the third new test pins tha
 | PR100.8 | Minor | `openQuicklyCellViewModelsByRowIndex` 只在 `invalidateNodeDerivedState` 清空，跨查询累积，上界是全行数——会话越长常驻内存越高 | cap 部分已由 `PR88R2.11` + `PR100.2` 覆盖；**暖缓存无上限**这半条未被记过。最简修法是面板关闭时清一次。随下一轮 Open Quickly 工作拾起 |
 | PR100.14 | Minor | 提案 0005 在实现提交 `70733b9` 里首版即 `状态: Implemented`（跳过 `Accepted`）；`Documentations/Evolutions/` 与既有 `Documentations/Evolution/` 双目录并存，0005 指向 0004 的相对链接解析不到；两个目录都没有 README 状态总表 | 目录并存与死链靠 merge 时的 rename 检测自愈；**缺索引行与批准顺序违规不自愈**。补索引行随文档批次做；批准顺序无法回溯修复，记档即止。相关：`PR88.15` 记过文档落位，`PR88R4` 记过 0005 缺「与提案的差异」节 |
 
+## 对本批次修复自身的复审（2026-08-16，落地后立即执行）
+
+前四轮的教训是「修复未复审」这个流程缺口——`PR88R4` 的总体判断就是「真发现全部落在
+为修上一轮发现而写的那两个提交里」。本批次落地后立刻自审，结果：
+
+### PR100.16 —— 排序对 plain contains 会重排（**已修**，本批次自审发现）
+
+`rankByRelevance` 是为携带 weight 与 ranges 的 fuzzy verdict 写的。plain contains
+（`FilterMode` 为 `nil`）两者都没有：所有 verdict 权重 0、`matchesOwnName` 恒真、
+`firstMatchLocation` 回落到名字自身长度，于是比较器一路穿到**名字长度**这个 tie-breaker
+并重排——而 `FilterMatchVerdict` 的文档明写 plain contains「preserves input order」。
+
+今天不可达（Open Quickly 硬编码 `.fuzzySearch`），但 `PR100.13` 已经点名「把
+`appDefaults.filterMode` 接进 Open Quickly」是显而易见的下一步——那正好会踩上它。
+修复：`2905c61`（按 mode 早退，保留输入顺序）。
+
+**无回归测试**：触发它需要一个目前不存在的生产接缝，而 `PR88.14` 已在 backlog 上跟踪
+「生产类型里的测试钩子」。此缺口与 `PR88R3.5` / `PR88R4.2` 同类，一并记在案。
+
+### 已披露的行为变更：`PR100.4` 让 `endFiltering()` 在重建时首次可达
+
+修好 `isFiltering` 之后，`didEndFiltering` 会真的触发 `endFiltering()`，于是重建后
+`filteringState` 走 `.pendingRestore` → 下一次 `reloadData()` 执行
+`restoreExpansionState()`。而该函数按 **`AnyHashable` 对象身份**匹配
+`savedExpandedItems`，重建后每个 cell 都是新实例（`3a99ca68` 的 commit message 已记录
+这一点），所以匹配不到任何一项 —— 净效果是
+`collapseItem(nil, collapseChildren: true)` 之后不展开任何行。
+
+**「过滤中途遇到镜像列表重建」这一场景下，树从「全展开」变成「全折叠」。**
+判为可接受并有意保留：1.3 万节点全展开本就不可用，折叠是正常静息态；换来的是展开
+自动保存不再整场会话失效。`savedSelectedItem` 同理失配，但重建后 cell 全新、选中态本来
+就保不住。
+
+根治要让 `restoreExpansionState()` 改用**路径持久化标识**而非对象身份——这正是
+`PR88R3.10` 已经记过的「改用通知 `userInfo` 增量维护展开集合」那条，随 outline 那批工作
+一并做，本批次不动。
+
+### 未修的小账（不单独开条目）
+
+- `FilterEngine.match` 已按 weight 排过一次，`rankByRelevance` 再排一次，第一次排序现在
+  是纯浪费。去掉它要改 `FilterEngine.match` 的返回顺序契约，而 `stampMatches` 依赖那个
+  顺序决定侧栏树的过滤子节点次序，所以不在本批次动。开销在 off-main，不影响主线程。
+- `.notLoaded` / `.loadError` 清空 `nodes` 后 `filteredNodes` 仍持有旧 cell，形成
+  `nodes.isEmpty && !filteredNodes.isEmpty` 的新组合。已验为安全：VC 用 `loadState`
+  切 tab，outline 在隐藏页里；在飞的过滤 pass 走
+  `SidebarRuntimeObjectFilterPipeline.apply` 的 count 守卫返回 nil，不崩不误写。
+
 ## 复核推翻发起会话的三处（方法论留档）
 
 1. **只看壳层不看实现体**：`PR88R2.14` 的翻案建立在只读了 `RuntimeEngine+GenericSpecialization.swift`
