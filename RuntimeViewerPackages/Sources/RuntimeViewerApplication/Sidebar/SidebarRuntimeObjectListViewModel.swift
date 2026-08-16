@@ -340,11 +340,18 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         runtimeObjects: [RuntimeObject],
         limit: Int
     ) async -> [FilterMatchVerdict] {
-        rankByRelevance(
-            FilterEngine.match(context, haystacks: haystacks),
-            runtimeObjects: runtimeObjects,
-            limit: limit
-        )
+        let verdicts = FilterEngine.match(context, haystacks: haystacks)
+        // Plain contains scores nothing and reports no ranges, and
+        // `FilterMatchVerdict` promises *input* order for it. Ranking those
+        // verdicts would fall straight through to the name-length
+        // tie-breaker and reorder them. Open Quickly pins `.fuzzySearch`
+        // today, so this guard is not reachable — but wiring
+        // `appDefaults.filterMode` through here is the obvious next step,
+        // and it would otherwise change plain-contains order silently.
+        guard context.mode != nil else {
+            return Array(verdicts.prefix(limit))
+        }
+        return rankByRelevance(verdicts, runtimeObjects: runtimeObjects, limit: limit)
     }
 
     /// Orders fuzzy verdicts for the cap and returns the best `limit`.
