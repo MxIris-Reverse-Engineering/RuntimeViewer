@@ -72,5 +72,6 @@ struct FilterEngineCaseSensitivityTests {
 
     private struct StubFilterResult: FuzzyFilterResult {
         var ranges: [NSRange] { [] }
+        var relevanceWeight: Double { 0 }
     }
 }

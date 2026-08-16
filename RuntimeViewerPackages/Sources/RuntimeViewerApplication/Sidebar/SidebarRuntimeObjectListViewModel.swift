@@ -79,9 +79,10 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// `rebuildChildren()`, one per descendant, each with icon lookups and
     /// an attributed title — for every row in a single main-actor turn,
     /// which is the O(N) main-thread cost lazy materialization exists to
-    /// remove. `FuzzySearchable.fuzzyMatch` returns matches sorted by
-    /// descending weight, so the cap keeps the best ones; the rows it drops
-    /// are the near-zero-score tail nobody scrolls to.
+    /// remove. The cap is applied to `rankByRelevance(_:runtimeObjects:limit:)`
+    /// output, never to raw weight order: fuzzy weight ties every contiguous
+    /// match at one constant, so weight alone would drop rows scoring exactly
+    /// as high as the ones it keeps.
     static let openQuicklyMaximumMaterializedRows = 500
 
     /// Builds the Open Quickly haystacks for an object list. Injectable so
@@ -253,14 +254,14 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
                 runtimeObjects: runtimeObjects
             ) else { return }
             guard !Task.isCancelled, let self, self.currentOpenQuicklyFilterGeneration == generation else { return }
-            let verdicts = await Self.matchOffMain(context: context, haystacks: haystacks)
+            let displayedVerdicts = await Self.matchOffMain(
+                context: context,
+                haystacks: haystacks,
+                runtimeObjects: runtimeObjects,
+                limit: Self.openQuicklyMaximumMaterializedRows
+            )
             guard !Task.isCancelled else { return }
             guard self.currentOpenQuicklyFilterGeneration == generation else { return }
-
-            // Verdicts arrive sorted by descending fuzzy weight, so the
-            // prefix is the best-scoring window (see
-            // `openQuicklyMaximumMaterializedRows`).
-            let displayedVerdicts = verdicts.prefix(Self.openQuicklyMaximumMaterializedRows)
             var matchedRowIndices = Set<Int>(minimumCapacity: displayedVerdicts.count)
             var filteredCellViewModels: [SidebarRuntimeObjectCellViewModel] = []
             filteredCellViewModels.reserveCapacity(displayedVerdicts.count)
@@ -330,9 +331,86 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     }
 
     /// Hop for the fuzzy matcher: `nonisolated async` runs on the global
-    /// concurrent executor, keeping the scoring off the main thread.
-    private nonisolated static func matchOffMain(context: FilterContext, haystacks: [String]) async -> [FilterMatchVerdict] {
-        FilterEngine.match(context, haystacks: haystacks)
+    /// concurrent executor, keeping the scoring *and* the ranking off the
+    /// main thread. Returns at most `limit` verdicts, so the apply loop's
+    /// main-actor cost stays bounded however wide the query is.
+    private nonisolated static func matchOffMain(
+        context: FilterContext,
+        haystacks: [String],
+        runtimeObjects: [RuntimeObject],
+        limit: Int
+    ) async -> [FilterMatchVerdict] {
+        rankByRelevance(
+            FilterEngine.match(context, haystacks: haystacks),
+            runtimeObjects: runtimeObjects,
+            limit: limit
+        )
+    }
+
+    /// Orders fuzzy verdicts for the cap and returns the best `limit`.
+    ///
+    /// `FuzzySearchable.fuzzyMatch` stops accumulating once the pattern is
+    /// consumed — `hasPrefix(_:atIndex:)` compares against the empty suffix
+    /// from then on and always fails — so every haystack containing the
+    /// query as one contiguous run scores the *same* constant, whichever
+    /// name it is, however long, wherever the run sits. A four-character
+    /// query ties every such name at 1+3+7+15 = 26. Weight alone therefore
+    /// leaves the whole tie in object order and the cap keeps whichever
+    /// names sort first: on AppKit, `vi` ties 875 names and drops `NSView`
+    /// at position 502.
+    ///
+    /// The tie-breakers restore what a jump-to-type palette needs. The
+    /// haystack is the object's `displayName` followed by every
+    /// descendant's (`SidebarRuntimeObjectCellViewModel.haystack(for:)`),
+    /// so a match ending within the name's own length is a hit on the type
+    /// itself rather than on one of its members. The trailing `displayName`
+    /// compare only makes the order deterministic.
+    private nonisolated static func rankByRelevance(
+        _ verdicts: [FilterMatchVerdict],
+        runtimeObjects: [RuntimeObject],
+        limit: Int
+    ) -> [FilterMatchVerdict] {
+        struct RankingKey {
+            let weight: Double
+            let matchesOwnName: Bool
+            let firstMatchLocation: Int
+            let displayNameLength: Int
+            let displayName: String
+        }
+
+        let rankedVerdicts = verdicts.map { verdict -> (verdict: FilterMatchVerdict, key: RankingKey) in
+            let displayName = runtimeObjects[verdict.haystackIndex].displayName
+            let displayNameLength = displayName.count
+            let ranges = verdict.result?.ranges ?? []
+            let lastMatchEnd = ranges.last.map { $0.location + $0.length } ?? 0
+            let key = RankingKey(
+                weight: verdict.result?.relevanceWeight ?? 0,
+                matchesOwnName: lastMatchEnd <= displayNameLength,
+                firstMatchLocation: ranges.first?.location ?? displayNameLength,
+                displayNameLength: displayNameLength,
+                displayName: displayName
+            )
+            return (verdict, key)
+        }
+
+        return rankedVerdicts
+            .sorted { left, right in
+                if left.key.weight != right.key.weight {
+                    return left.key.weight > right.key.weight
+                }
+                if left.key.matchesOwnName != right.key.matchesOwnName {
+                    return left.key.matchesOwnName
+                }
+                if left.key.firstMatchLocation != right.key.firstMatchLocation {
+                    return left.key.firstMatchLocation < right.key.firstMatchLocation
+                }
+                if left.key.displayNameLength != right.key.displayNameLength {
+                    return left.key.displayNameLength < right.key.displayNameLength
+                }
+                return left.key.displayName < right.key.displayName
+            }
+            .prefix(limit)
+            .map(\.verdict)
     }
 
 

@@ -133,6 +133,10 @@ protocol FilterableItem: AnyObject {
 
 protocol FuzzyFilterResult {
     var ranges: [NSRange] { get }
+
+    /// Relevance score for ordering the results of the *same* query; higher
+    /// is better. Not comparable across queries or across `FilterMode`s.
+    var relevanceWeight: Double { get }
 }
 
 @dynamicMemberLookup
@@ -161,10 +165,17 @@ extension FuzzySrchResultWrapper: FuzzyFilterResult {
     var ranges: [NSRange] {
         wrappedValue.results.flatMap { $0.ranges.map { NSRange($0) } }
     }
+
+    /// Ifrit reports a *diff* score where lower is closer, and
+    /// `comparableDefinition` sorts on it ascending; negate so the
+    /// protocol's "higher is better" holds in both modes.
+    var relevanceWeight: Double { -wrappedValue.diffScore }
 }
 
 extension FuzzySearchResult: FuzzyFilterResult {
     var ranges: [NSRange] {
         parts
     }
+
+    var relevanceWeight: Double { Double(weight) }
 }

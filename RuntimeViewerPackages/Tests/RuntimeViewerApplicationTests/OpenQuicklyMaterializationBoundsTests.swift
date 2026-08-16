@@ -102,6 +102,56 @@ struct OpenQuicklyMaterializationBoundsTests {
         }
     }
 
+    /// The cap may only drop rows that are *less relevant*, and fuzzy
+    /// weight alone cannot tell it which those are.
+    ///
+    /// `FuzzySearchable.fuzzyMatch` stops accumulating once the pattern is
+    /// consumed, so every haystack containing the query as one contiguous
+    /// run scores the same constant. Here 600 filler objects match only
+    /// because a *descendant* is named `Alpha`, and one object matches in
+    /// its own name — all 601 tie. `nodes` is name-sorted, so the filler
+    /// block occupies the first 600 rows and a weight-ordered
+    /// `prefix(500)` drops the only row the user could have meant.
+    @Test("the row cap keeps the most relevant matches, not the first ones in the tie")
+    func rowCapKeepsTheMostRelevantMatches() async throws {
+        try await withSharedLocalEngineLock {
+            // Filler names share no character with the query, so each
+            // haystack carries exactly one matched run — the child's name —
+            // and every verdict lands on the same weight.
+            let fillerObjects = (0 ..< 600).map { index in
+                Harness.makeRuntimeObject(
+                    displayName: String(format: "Zx%04d", index),
+                    children: [Harness.makeRuntimeObject(displayName: "Alpha")]
+                )
+            }
+            // Sorts after every filler by name, and matches in its own name
+            // rather than in a descendant's.
+            let targetObject = Harness.makeRuntimeObject(displayName: "zzzAlpha")
+            let harness = try await Harness(seededRuntimeObjects: fillerObjects + [targetObject])
+
+            harness.search("Alpha")
+
+            let applied = try await pollUntil(timeout: .seconds(20)) {
+                !harness.viewModel.filteredNodesForOpenQuickly.isEmpty
+            }
+            #expect(applied, "the query never produced any rows")
+
+            let cap = SidebarRuntimeObjectListViewModel.openQuicklyMaximumMaterializedRows
+            let displayedNames = harness.viewModel.filteredNodesForOpenQuickly.map(\.runtimeObject.displayName)
+            #expect(
+                displayedNames.count == cap,
+                "the fixture must overflow the cap for this to mean anything"
+            )
+            #expect(
+                displayedNames.contains(targetObject.displayName),
+                "the cap dropped a row that scores exactly as high as the 500 it kept"
+            )
+            #expect(
+                displayedNames.first == targetObject.displayName,
+                "a hit in the object's own name must outrank hits that only landed in a descendant's"
+            )
+        }
+    }
 }
 
 // MARK: - Harness
@@ -165,8 +215,17 @@ extension OpenQuicklyMaterializationBoundsTests {
             objectCount: Int,
             gate: HaystackBuildGate? = nil
         ) async throws {
+            try await self.init(
+                seededRuntimeObjects: Self.makeRuntimeObjects(count: objectCount),
+                gate: gate
+            )
+        }
+
+        init(
+            seededRuntimeObjects: [RuntimeObject],
+            gate: HaystackBuildGate? = nil
+        ) async throws {
             let router = MockRouter<SidebarRuntimeObjectRoute>()
-            let seededRuntimeObjects = Self.makeRuntimeObjects(count: objectCount)
             let builder: SidebarRuntimeObjectListViewModel.HaystackBuilder = { runtimeObjects in
                 if let gate {
                     await gate.waitForRelease()
