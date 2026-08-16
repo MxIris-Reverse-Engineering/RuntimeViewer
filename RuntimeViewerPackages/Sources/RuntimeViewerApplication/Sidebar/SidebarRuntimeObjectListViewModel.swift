@@ -372,6 +372,20 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// so a match ending within the name's own length is a hit on the type
     /// itself rather than on one of its members. The trailing `displayName`
     /// compare only makes the order deterministic.
+    ///
+    /// Two things to fix before `appDefaults.filterMode` is ever wired
+    /// through here, both unreachable while the mode is pinned to
+    /// `.fuzzySearch`: `ranges.last` assumes ascending ranges, which holds
+    /// for `FuzzySearchResult.parts` but not for the Ifrit wrapper's
+    /// `results.flatMap` (use `map(end).max()` instead), and
+    /// `relevanceWeight` drops the secondary `resultsScore` key that
+    /// Ifrit's own `comparableDefinition` carries.
+    ///
+    /// Indexes `runtimeObjects` for *every* verdict, not only the ones that
+    /// survive the cap, so a `HaystackBuilder` returning more haystacks
+    /// than objects traps here rather than only when such a row is
+    /// displayed. The production builder is 1:1 by construction; only the
+    /// test seam can vary it.
     private nonisolated static func rankByRelevance(
         _ verdicts: [FilterMatchVerdict],
         runtimeObjects: [RuntimeObject],

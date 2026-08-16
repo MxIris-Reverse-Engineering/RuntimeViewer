@@ -124,10 +124,21 @@ struct OpenQuicklyMaterializationBoundsTests {
                     children: [Harness.makeRuntimeObject(displayName: "Alpha")]
                 )
             }
+            // Matches at the same offset as the target and carries a shorter
+            // name, so weight, match position and name length between them
+            // all either tie or favour this one. Only "the hit is inside the
+            // object's own name" separates them — without that key this row
+            // takes first place and the last assertion fails.
+            let decoyObject = Harness.makeRuntimeObject(
+                displayName: "Zz",
+                children: [Harness.makeRuntimeObject(displayName: "Alpha")]
+            )
             // Sorts after every filler by name, and matches in its own name
             // rather than in a descendant's.
             let targetObject = Harness.makeRuntimeObject(displayName: "zzzAlpha")
-            let harness = try await Harness(seededRuntimeObjects: fillerObjects + [targetObject])
+            let harness = try await Harness(
+                seededRuntimeObjects: fillerObjects + [decoyObject, targetObject]
+            )
 
             harness.search("Alpha")
 

@@ -225,6 +225,46 @@ row is a legitimate way to persist an empty set, and the third new test pins tha
 `PR88R3.10` 已经记过的「改用通知 `userInfo` 增量维护展开集合」那条，随 outline 那批工作
 一并做，本批次不动。
 
+### 修复批次的对抗复核（`RuntimeViewer-Fable`，2026-08-16）
+
+七个攻击点里六点确认、一点修正。**判定：可合。**
+
+**修正的那点——回归测试没钉住它要钉的键。** `rowCapKeepsTheMostRelevantMatches` 原本
+只有「600 个 `Zx%04d` + 子节点 `Alpha`」和目标 `zzzAlpha`：目标的匹配位置是 3，填充项是
+7（6 字符名 + 空格），所以**把 `matchesOwnName` 整个删掉，位置这一把 tie-breaker 单独
+就能让两个断言全绿**——测试钉住的是「排序整体优于名序截断」，不是 own-name 那把钥匙。
+
+（顺带否掉了发起会话自己担心的方向：填充名字符集 `{Z,x,0-9,空格}` 与 `alpha` 无交集，
+每个 haystack 恰一段连续匹配，601 项全部同分 57，权重并列成立。）
+
+修法是加一个 decoy：`displayName` 为 `"Zz"`、子节点 `"Alpha"`。它的匹配位置同样是 3、
+名长 2 < 8，于是 weight / 位置 / 名长三把键要么并列要么对它有利，**只有 own-name 能把
+两者分开**。已用变异测试证实：临时删掉 own-name 键后 `displayedNames.first` 变成 `"Zz"`、
+测试变红；恢复后 107 全绿。
+
+**确认的六点里值得留档的**：
+
+- `parts` 确是 Character 偏移（`tokenize()` 是 `string.map`，`characterIndex` 来自
+  `enumerated()`），与 `displayName.count` 同单位，`matchesOwnName` 的判据成立。pattern
+  侧确有 Character/UTF-16 混用（`hasPrefix` 走 `NSString.substring(from:)`、`patternIndex`
+  按 Character 累加），但那是上游既有行为、错乱的是评分而非 parts 的单位语义。
+- **`PR100.4` 的「全折叠」不是本批次引入的**（复核比发起会话的自评更站得住）：修复前
+  用户清搜索框时 `endFiltering()` 同样进 `.pendingRestore`，`restoreExpansionState()`
+  按对象身份在全新 cell 里同样一项都配不上，同样 collapse-all。修复只是把这个**既有
+  终态**从「清搜索时」提前到「重建时」。无双重 reload（adapter reload 先把状态收回
+  `.idle`，fallback 的 guard 落空）；collapse 期间的 didCollapse 通知被 `.pendingRestore`
+  挡在 persist 之外，不写盘；`restoreSelectedItem` 失配走 `row < 0` guard。加固方向是
+  restore 改走 `itemForExpansionPersistentObject`（按持久化标识而非对象身份），
+  与 `PR88R3.10` 同一批。
+- **iOS 侧无雷**（发起会话未查，复核补齐）：UIKit 的 `SidebarRuntimeObjectViewController`
+  用 `loadState.map { $0.index }` 驱动 `imageTabBarController.rx.selectedIndex`（:112），
+  错误/未加载态整页切走，与 AppKit 同构；`isEmpty` 只控 searchBar 与 emptyLabel
+  （:108-110），且都在被切走的页上。无按索引消费 `nodes` 的路径。
+
+**复核提出但未采纳的一条**：建议 `.notLoaded` / `.loadError` 顺手也清 `filteredNodes`
+（状态更齐）。今天被页切换完全遮住、无可达后果，属行为变更而非缺陷修复，留给作者决定，
+本批次不动。
+
 ### 未修的小账（不单独开条目）
 
 - `FilterEngine.match` 已按 weight 排过一次，`rankByRelevance` 再排一次，第一次排序现在
