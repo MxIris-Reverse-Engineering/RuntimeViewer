@@ -24,6 +24,7 @@
 | [0009](0009-content-editor-engine-selection.md) | 内容视图编辑器选型：继续 NSTextView 还是改用 Xcode SourceEditor | Accepted | 采纳方案 B：运行时 `dlopen` Xcode 私有 `SourceEditor` 框架，编辑器代码隔离在可选加载的 bridge bundle 内，`ContentSourceEditorViewController` 与现有 `NSTextView` 实现绑定同一 ViewModel 以便随时降级。当前为 opt-in 开关，语法高亮暂为词法级、主题转换未做。 |
 | [0010](0010-interface-snapshot-export.md) | 把接口导出成图片 | Draft | 把当前接口渲染成带主题配色的 PNG。需拍板渲染路径：自己排版生成侧已有的 `NSAttributedString`（不依赖 Xcode），还是借 `SourceEditorView` 的截图 API（所见即所得，但底层是已知不可靠的 `cacheDisplay`）。 |
 | [0011](0011-uifoundation-settings-adoption.md) | RuntimeViewer 接入 UIFoundation Settings | Implemented | 保留 RuntimeViewer 业务设置模型与页面，采用 UIFoundation 的持久化 store、属性包装器、设置窗口和导航，并删除重复壳层。原以 `0007` 起草，与本分支的 `0007` 撞号，合流时改为 `0011`。 |
+| [0012](0012-replace-uxkit-navigation-with-uifoundation.md) | 用 UIFoundation 的 NavigationController 取代 UXKit | Draft | 导航容器从 Apple 私有 `UXKit.framework` 换成 UIFoundation 的 `NavigationController`，三个 `UX` 前缀基类改继承 `NSViewController`，删除 `OpenUXKit` / `UXKitCoordinator` 依赖与 `USING_SYSTEM_UXKIT` 开关。起因是实测发现每次选中对象要向两个面板各 push 一次，约一半开销花在**已被隐藏的** UXKit 导航栏重新布局上。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
