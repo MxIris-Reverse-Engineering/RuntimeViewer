@@ -781,6 +781,71 @@ Inspector 8ms,以及该帧的 CA commit 55ms(其中 Auto Layout 24ms)。**即使
 **备选(未采用):在 `applicationDidFinishLaunching` 里同步预热。** 那样一定赢,代价是启动多 80ms
 且窗口更晚出现。先试后台高优先级这条,不行再退到同步。
 
+### 预热命中之后剩下的那一下,是 minimap 的 Metal 着色器编译(2026-08-17)
+
+上一节把「第一次慢」归给 dlopen,并预告「即使预热完全命中,首次仍有约 100ms 量级的开销」。
+用户复测后说的是另一件事:**只有第一次卡,切换第二次、第三次都不卡**。
+「每次都要重新解析」解释不了这个 —— 每次都做的事不会只在第一次被感知到。
+
+冷启动 `sample`(21171 个样本 / 21.2 秒,进程由 launchd 拉起,未挂调试器)把它钉死了:
+
+```
+ContentCoordinator.enterTextScene
+ → ContentSourceEditorViewController.viewDidLoad
+   → applyDisplayOptions(…)                                143
+     → SourceEditorView.installMinimap()                    139
+       → Minimap.init → MinimapView.init
+         → MinimapContentLayer.init
+           → MinimapLineContentLayer.init
+             → MinimapMetalLinesLayer.init                  138
+               → dispatch_once: sharedPipelineState         137
+                 → newRenderPipelineStateWithDescriptor:    136
+                   → MTLCompiler.compileFunctionRequest…    130  ← 主线程 blocked
+```
+
+那 130 个样本里主线程是**阻塞**的(`_dispatch_sync_f_slow` → `__DISPATCH_WAIT_FOR_QUEUE__` →
+`kevent_id`),在等 `com.apple.MTLCompilerConnectionQueue`,不是在算。
+
+`MinimapMetalLinesLayer.sharedPipelineState` 是框架里的 `static let`,`dispatch_once` 包着,
+**进程内只编译一次** —— 这正是「只有第一次」的机制。
+
+同一份采样里的其余首开成本:
+
+| 干什么 | 样本(≈ 毫秒) |
+|---|---|
+| `applyDisplayOptions` → `installMinimap()` → **编译 Metal 管线** | **143**(其中 137 是管线) |
+| `makeBridge()` → `SourceEditorView.init(frame:)` | 22 |
+| `setSource`(喂文本 + 语义 range) | 15 |
+| `applyTheme` | 4 |
+| 合计 | **≈ 185,其中 74% 是 Metal 编译** |
+
+两个顺带确认的结论:
+
+- **上一节的预热是有效的。** 整份采样里 `dlopen` 一次都没出现(唯一那 32 个 `_sl_dlopen`
+  是 AppKit 无障碍自己软链接用的),四个框架和 bridge bundle 早就在进程里。
+- **生成接口文本不是瓶颈。** `RuntimeEngine.interface(for:options:)` 全程 **21 个样本**。
+
+因此把预热往前推一步:`SourceEditorLoader.prewarmBridge()` 在框架落定后**立刻建好一个 bridge**
+并按当前设置调 `applyDisplayOptions`,第一个文档直接领走它(`makeBridge()` 先发预热件)。
+关键点:
+
+- **必须在主线程** —— `SourceEditorView` 是 `NSView`。所以这不是把成本消掉,是把同等大小的
+  主线程停顿从「用户点击那一下」挪到启动后 —— 那时主线程约 80% 空闲(对象列表在后台加载)。
+- **按当前设置应用,而不是无条件装 minimap。** minimap 关着的用户在这里不花钱,在点击时也不花,
+  因为那条路根本不会走到。
+- **领走而不是丢弃**,顺带把 22ms 的视图构造也省掉。视图控制器在其上做的其余动作(主题、
+  content inset、navigation delegate、`setSource`)照旧;重复下发同一组显示选项是 no-op。
+
+**未处理的边角:** 用户在第一个文档打开**之后**才在设置里打开 minimap,那次仍会当场编译管线。
+只发生一次,且是设置开关而不是浏览操作,不值得为它再加一层。
+
+**没做进度条那条。** 同一份采样显示侧边栏加载期间,三个进度属性的 setter 占掉
+`SidebarRuntimeObjectViewModel.reloadData()` 主线程 378 个样本中的 371 个(整条
+`Observed → BehaviorRelay → ObserveOn(MainScheduler) → ShareReplay → Driver → Binder →
+NSTextField.setStringValue:` 每次自增同步跑一遍,后面还带 `intrinsicContentSize` 重算)。
+节流能省掉大部分,但用户明确表示这一段感觉不到卡,且需要进度实时变化,节流会损伤体验 ——
+**记录在案,不改**。
+
 ### 未完成
 
 **A. 其余显示项。** `lineWrappingStyle` / `overscroll`,对只读接口的价值存疑,未做。

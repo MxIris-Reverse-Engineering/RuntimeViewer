@@ -59,6 +59,10 @@ final class SourceEditorLoader {
 
     private var state: State = .notAttempted
 
+    /// Built by `prewarm()` and handed to the first `makeBridge()` caller, so that building the
+    /// editor view does not land on the click that opens the first runtime object.
+    private var prewarmedBridge: SourceEditorBridging?
+
     /// Set for as long as `prewarm()` has work in flight, so a second call does not start a
     /// second load. A synchronous `resolvedState()` arriving meanwhile is *not* blocked by it:
     /// `dlopen` and `Bundle.load` are both idempotent and thread-safe, so the worst case is
@@ -92,6 +96,10 @@ final class SourceEditorLoader {
     }
 
     func makeBridge() -> SourceEditorBridging? {
+        if let prewarmedBridge {
+            self.prewarmedBridge = nil
+            return prewarmedBridge
+        }
         guard case .ready(_, let bridgeClass) = resolvedState() else { return nil }
         return bridgeClass.init()
     }
@@ -100,11 +108,14 @@ final class SourceEditorLoader {
     ///
     /// Measured on a warm file cache: the four `dlopen`s cost ~60 ms and the bridge bundle ~1 ms,
     /// against ~9 ms to build the editor view and ~9 ms per `setSource` afterwards. That whole
-    /// ~60 ms lands on whichever click first opens a runtime object, which is what reads as the
-    /// first selection being slow while every later one is not.
+    /// ~60 ms would otherwise land on whichever click first opens a runtime object.
     ///
     /// All of it moves off the main thread cleanly — the loading is plain dyld and `NSBundle`
     /// work — leaving only the view construction, which is `NSView` and has to stay here.
+    ///
+    /// **Loading was never the larger half.** A `sample` taken once this was working showed no
+    /// `dlopen` on the first selection at all, and 137 ms of Metal shader compilation instead —
+    /// see `prewarmBridge()`, which the completion below now runs for exactly that reason.
     ///
     /// Prewarms as soon as the editor is switched on: at launch once the stored settings have
     /// been read, or the moment the user turns it on in Settings.
@@ -149,9 +160,42 @@ final class SourceEditorLoader {
                     guard case .notAttempted = self.state else { return }
                     self.state = resolved
                     self.logResolution(of: resolved, wasPrewarmed: true)
+                    self.prewarmBridge()
                 }
             }
         }
+    }
+
+    /// Builds one bridge now instead of on the click that first needs it, and configures it the
+    /// way `ContentSourceEditorViewController` would.
+    ///
+    /// **What this is really buying is a Metal shader compile.** `installMinimap()` reaches
+    /// `MinimapMetalLinesLayer.init`, whose `sharedPipelineState` is a `static let` — so the first
+    /// minimap in the process compiles its render pipeline, and every later one gets it for free.
+    /// A `sample` of a cold launch put that at **137 ms of the 185 ms** the first selection spent
+    /// building the editor, and 130 of those 137 were the main thread *blocked* on
+    /// `com.apple.MTLCompilerConnectionQueue` rather than doing work. That is the whole reason the
+    /// first object opened felt slow while every later one did not: a one-time, process-wide cost
+    /// that no amount of caching further up could hide. Loading the frameworks — what this
+    /// prewarm covered before — never touched it.
+    ///
+    /// Applying the current display options is not incidental: without `showsMinimap` on, none of
+    /// the above happens. It also means a user who leaves the minimap off pays nothing here, and
+    /// nothing at the click either.
+    ///
+    /// **Has to be on the main thread**, since `SourceEditorView` is an `NSView`, so this is a
+    /// main-thread stall of roughly the same size — moved off the user's click and onto launch,
+    /// where the main thread is otherwise ~80% idle while the object list loads in the background.
+    ///
+    /// The bridge is handed to the first document rather than discarded, which also saves that
+    /// document the ~22 ms of view construction. Everything the view controller does on top —
+    /// theme, content inset, navigation delegate, `setSource` — is applied there as usual, and
+    /// re-sending the same display options is a no-op.
+    private func prewarmBridge() {
+        guard isEnabledByUser, prewarmedBridge == nil, case .ready(_, let bridgeClass) = state else { return }
+        let bridge = bridgeClass.init()
+        bridge.applyDisplayOptions(from: settings.editor)
+        prewarmedBridge = bridge
     }
 
     /// Reads one of the `.xccolortheme` files the framework ships in its own resources.

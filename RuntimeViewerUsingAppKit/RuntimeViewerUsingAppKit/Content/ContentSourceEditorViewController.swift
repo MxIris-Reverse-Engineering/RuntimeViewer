@@ -61,16 +61,7 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
 
         displayOptionsObserveToken = SwiftNavigation.observe { [weak self] in
             guard let self else { return }
-            let editorSettings = settings.editor
-            bridge.applyDisplayOptions(
-                showsLineNumbers: editorSettings.showsLineNumbers,
-                showsFoldingRibbon: editorSettings.showsFoldingRibbon,
-                showsStickyHeaders: editorSettings.showsStickyHeaders,
-                showsMinimap: editorSettings.showsMinimap,
-                showsScopeGuides: editorSettings.showsScopeGuides,
-                showsInvisibles: editorSettings.showsInvisibles,
-                showsMarkSeparators: editorSettings.showsMarkSeparators
-            )
+            bridge.applyDisplayOptions(from: settings.editor)
         }
 
         contentView.hierarchy {
