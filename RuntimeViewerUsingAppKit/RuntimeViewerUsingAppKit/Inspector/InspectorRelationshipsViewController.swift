@@ -5,7 +5,7 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import SnapKit
 
-final class InspectorRelationshipsViewController: UXEffectViewController<InspectorRelationshipsViewModel> {
+final class InspectorRelationshipsViewController: EffectViewController<InspectorRelationshipsViewModel> {
     private let headerLabel = Label()
     
     private let emptyLabel = Label(wrappingLabelWithString: "")

@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-final class InspectorPlaceholderViewController: UXEffectViewController<InspectorPlaceholderViewModel> {
+final class InspectorPlaceholderViewController: EffectViewController<InspectorPlaceholderViewModel> {
     private let placeholderLabel = Label("No Selection")
 
     override var contentViewUsingSafeArea: Bool { true }

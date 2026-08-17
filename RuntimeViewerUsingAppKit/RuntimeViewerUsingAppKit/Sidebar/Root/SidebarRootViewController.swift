@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-class SidebarRootViewController<ViewModel: SidebarRootViewModel>: UXKitViewController<ViewModel>, NSOutlineViewDelegate {
+class SidebarRootViewController<ViewModel: SidebarRootViewModel>: AppKitViewController<ViewModel>, NSOutlineViewDelegate {
     var isReorderable: Bool {
         false
     }

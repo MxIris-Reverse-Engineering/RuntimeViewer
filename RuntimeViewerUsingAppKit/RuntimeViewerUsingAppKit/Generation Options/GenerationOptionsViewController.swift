@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCore
 
-final class GenerationOptionsViewController: UXKitViewController<GenerationOptionsViewModel<MainRoute>> {
+final class GenerationOptionsViewController: AppKitViewController<GenerationOptionsViewModel<MainRoute>> {
     private enum OptionItem {
         case checkbox(title: String, keyPath: OptionKeyPath)
         case segmentedControl(title: String, labels: [String], selectedIndex: (RuntimeObjectInterface.GenerationOptions) -> Int, mutation: (Int) -> OptionsMutation)

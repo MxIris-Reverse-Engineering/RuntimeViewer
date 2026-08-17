@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerUI
 
-final class BatchExportingProgressViewController: UXKitViewController<BatchExportingProgressViewModel>, ExportingStepViewController {
+final class BatchExportingProgressViewController: AppKitViewController<BatchExportingProgressViewModel>, ExportingStepViewController {
     private let titleLabel = Label().then {
         $0.font = .systemFont(ofSize: 14, weight: .semibold)
         $0.textColor = .controlTextColor

@@ -5,7 +5,7 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import SnapKit
 
-final class InspectorSwiftSpecializationViewController: UXEffectViewController<InspectorSwiftSpecializationViewModel> {
+final class InspectorSwiftSpecializationViewController: EffectViewController<InspectorSwiftSpecializationViewModel> {
     // MARK: - Subviews
 
     private let headerLabel = Label()

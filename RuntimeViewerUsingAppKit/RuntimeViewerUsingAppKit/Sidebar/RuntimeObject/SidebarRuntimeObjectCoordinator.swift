@@ -46,19 +46,12 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
                 router: self
             )
             viewController.setupBindings(for: viewModel)
-            // Plain NSPopover via CocoaCoordinator's `GlobalPopover`. Using
-            // `.uxPopover` here would route through `UXPopoverController`,
-            // which bridges UXViewController's private `preferredContentSize`
-            // ivar to NSPopover via KVO — and that bridge re-emits CA-
-            // interpolated intermediate values, causing the popover to
-            // animate through zero height during disclosure expansion.
-//            return .uxPopover(
-//                viewController,
-//                relativeTo: sender.bounds,
-//                of: sender,
-//                preferredEdge: .maxY,
-//                behavior: .transient
-//            )
+            // Plain `NSPopover`. This used to carry a warning against `UXKitCoordinator`'s
+            // `.uxPopover`, whose `UXPopoverController` bridge KVOed `preferredContentSize` and
+            // re-emitted CA-interpolated intermediate values, animating this popover through zero
+            // height while a disclosure row expanded. UXKit is gone (proposal 0012) and so is
+            // that bridge; the note is kept only because the symptom was specific enough to be
+            // worth recognising if it ever returns from a different source.
             return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: .maxY, behavior: .transient))
         }
     }

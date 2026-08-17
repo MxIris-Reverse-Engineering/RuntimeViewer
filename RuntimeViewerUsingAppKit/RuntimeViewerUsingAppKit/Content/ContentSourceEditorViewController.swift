@@ -15,7 +15,7 @@ import Semantic
 /// generator's semantic runs are passed alongside the text to correct that parse, through the
 /// framework's own node-type adjuster. Coloring therefore comes out semantic, and so do token
 /// ranges — which is what ⌘-click reads.
-final class ContentSourceEditorViewController: UXKitViewController<ContentTextViewModel> {
+final class ContentSourceEditorViewController: AppKitViewController<ContentTextViewModel> {
     override var acceptsFirstResponder: Bool { true }
 
     override var shouldDisplayCommonLoading: Bool { true }
@@ -161,7 +161,7 @@ final class ContentSourceEditorViewController: UXKitViewController<ContentTextVi
         // the end of the document, and the container behind the editor.
         if let backgroundColor = currentTheme?.backgroundColor {
             bridge.applyBackgroundColor(backgroundColor)
-            (contentView as? UXView)?.backgroundColor = backgroundColor
+            (contentView as? LayerBackedView)?.backgroundColor = backgroundColor
         }
     }
 

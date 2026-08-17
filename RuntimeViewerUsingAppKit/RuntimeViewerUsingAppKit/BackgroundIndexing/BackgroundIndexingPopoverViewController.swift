@@ -9,7 +9,7 @@ import SnapKit
 import FoundationToolbox
 
 @Loggable
-final class BackgroundIndexingPopoverViewController: UXKitViewController<BackgroundIndexingPopoverViewModel> {
+final class BackgroundIndexingPopoverViewController: AppKitViewController<BackgroundIndexingPopoverViewModel> {
     // MARK: - Relays
 
     private let cancelBatchRelay = PublishRelay<RuntimeIndexingBatchID>()

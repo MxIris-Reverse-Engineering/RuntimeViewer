@@ -3,4 +3,4 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class InspectorNavigationController: UXKitNavigationController {}
+final class InspectorNavigationController: BaseNavigationController {}

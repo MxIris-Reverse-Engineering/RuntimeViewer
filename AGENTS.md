@@ -351,9 +351,12 @@ If a lifecycle responsibility doesn't fit one of these one-liners, **make it a n
 
 ### ViewController Base Class Selection
 
-- **`AppKitViewController<VM>`**: Default choice for simple view controllers that don't need UXKit features (contentView, loading indicator, skeleton effects)
-- **`UXKitViewController<VM>`**: Use when the ViewController needs `contentView` support, loading indicators (`CommonLoadingView`), or skeleton effects
-- **`UXEffectViewController<VM>`**: Use when a visual effect background is needed (inherits `UXKitViewController`)
+- **`AppKitViewController<VM>`**: The base for every AppKit view controller. Supplies `viewModel`, `setupBindings(for:)`, `errorRelay` alert presentation, a `contentView`, `CommonLoadingView` and skeleton support.
+- **`EffectViewController<VM>`**: Use when a visual effect background is needed (inherits `AppKitViewController`)
+
+There used to be a second, thinner `AppKitViewController` alongside a UXKit-based
+`UXKitViewController`; proposal 0012 removed UXKit and merged the two under the `AppKitViewController`
+name. `UXKitViewController` and `UXEffectViewController` no longer exist.
 
 ### UI Component Selection
 
@@ -449,7 +452,7 @@ The identity guard matters: re-entering the same object (a `.back` route from a 
 
 ### ViewController Conventions
 
-**Base classes**: `AppKitViewController<VM>` (simple) or `UXKitViewController<VM>` (with contentView support).
+**Base classes**: `AppKitViewController<VM>`, or `EffectViewController<VM>` when the pane needs a visual effect background.
 
 **UI events** — prefer RxAppKit / RxCocoa `rx.*` accessors over hand-rolled `PublishRelay` + `@objc` action plumbing. Wire control events straight into `Input`:
 

@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerUI
 
-final class BatchExportingConfigurationViewController: UXKitViewController<BatchExportingConfigurationViewModel>, ExportingStepViewController {
+final class BatchExportingConfigurationViewController: AppKitViewController<BatchExportingConfigurationViewModel>, ExportingStepViewController {
 
     private let summaryLabel = Label()
 

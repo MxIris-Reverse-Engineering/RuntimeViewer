@@ -91,15 +91,9 @@ let appkitPlatforms: [Platform] = [.macOS]
 
 let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
-let usingSystemUXKit = envEnable("USING_SYSTEM_UXKIT", default: true)
-
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar"]
-
-if usingSystemUXKit {
-    sharedSwiftSettings.append(.define("USING_SYSTEM_UXKIT"))
-}
+let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Navigation", "Settings", "TabBar"]
 
 let package = Package(
     name: "RuntimeViewerPackages",
@@ -188,25 +182,11 @@ let package = Package(
 
         .package(
             remote: .package(
-                url: "https://github.com/OpenUXKit/UXKitCoordinator",
-                branch: "main",
-            ),
-        ),
-
-        .package(
-            remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
                 from: "0.2.3",
             ),
         ),
         
-        .package(
-            remote: .package(
-                url: "https://github.com/OpenUXKit/OpenUXKit",
-                branch: "main",
-            ),
-        ),
-
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RxAppKit"),
@@ -366,7 +346,9 @@ let package = Package(
                 .product(name: "XCoordinatorRx", package: "XCoordinator", condition: .when(platforms: uikitPlatforms)),
                 .product(name: "CocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RxCocoaCoordinator", package: "CocoaCoordinator", condition: .when(platforms: appkitPlatforms)),
-                .product(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", package: "UXKitCoordinator", condition: .when(platforms: appkitPlatforms)),
+                // For `NavigationController`, which the CocoaCoordinator transitions in
+                // `Transition+Navigation.swift` drive.
+                .product(name: "UIFoundation", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Dependencies", package: "swift-dependencies"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
                 .product(name: "SwiftNavigation", package: "swift-navigation"),
@@ -380,7 +362,6 @@ let package = Package(
                 .product(name: "UIFoundation", package: "UIFoundation"),
                 .product(name: "UIFoundationToolbox", package: "UIFoundation"),
                 .product(name: "SnapKit", package: "SnapKit"),
-                .product(name: usingSystemUXKit ? "UXKit" : "OpenUXKit", package: "OpenUXKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "SFSymbols", package: "SFSymbols"),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),

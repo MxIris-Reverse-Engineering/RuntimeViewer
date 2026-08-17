@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import SnapKit
 
-final class SpecializationViewController: UXKitViewController<SpecializationViewModel> {
+final class SpecializationViewController: AppKitViewController<SpecializationViewModel> {
     // MARK: - Subviews
 
     private let headerLabel = Label()

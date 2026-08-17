@@ -8,10 +8,10 @@ struct TabViewItem {
     let viewController: NSViewController
 }
 
-class TabViewController: UXViewController {
+class TabViewController: NSViewController {
     private let contentView: NSView = {
         if #available(macOS 26.0, *) {
-            UXView()
+            LayerBackedView()
         } else {
             NSVisualEffectView()
         }
@@ -42,6 +42,12 @@ class TabViewController: UXViewController {
             tabView.selectTabViewItem(at: index)
             segmentedControl.selectedSegment = index
         }
+    }
+
+    /// `UXViewController` used to supply this; `NSViewController` looks for a nib named after
+    /// the class instead, and this project ships none.
+    override func loadView() {
+        view = NSView()
     }
 
     override func viewDidLoad() {

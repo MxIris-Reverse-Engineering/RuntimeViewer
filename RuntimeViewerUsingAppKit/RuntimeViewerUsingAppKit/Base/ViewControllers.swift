@@ -4,12 +4,12 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
+open class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController {
     public private(set) var viewModel: ViewModel?
 
     private let commonLoadingView = CommonLoadingView()
 
-    public private(set) var contentView: NSView = UXView()
+    public private(set) var contentView: NSView = LayerBackedView()
 
     open var contentInsets: NSDirectionalEdgeInsets { .init() }
 
@@ -26,6 +26,13 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
     public init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
+    }
+
+    /// **Load-bearing.** `UXViewController` used to supply this; `NSViewController`'s own
+    /// `loadView` looks up a nib named after the class, which this project does not ship, so
+    /// without it every subclass traps on first view access.
+    open override func loadView() {
+        view = LayerBackedView()
     }
 
     open override func viewDidLoad() {
@@ -134,68 +141,10 @@ open class UXKitViewController<ViewModel: ViewModelProtocol>: UXViewController {
     }
 }
 
-/// Plain `NSViewController`-based VM-hosting base. Use this when the view
-/// controller cannot inherit from `UXViewController` — most notably for
-/// popover content, since `UXViewController` overrides `preferredContentSize`
-/// with a private ivar that doesn't forward to `NSViewController`, breaking
-/// plain `NSPopover`'s KVO-driven resize observer. `UXKitViewController`
-/// works around that with `UXPopoverController`, but the bridge KVOs
-/// `preferredContentSize` on the controller and re-emits intermediate values
-/// to `NSPopover.contentSize` whenever the property is animated inside an
-/// `NSAnimationContext`, producing visible glitches (e.g. the popover
-/// collapsing to zero before growing to target).
-///
-/// This base mirrors `UXKitViewController`'s API surface (`viewModel`,
-/// `setupBindings(for:)`, `errorRelay` alert presentation) without the
-/// `contentView` / loading-indicator / skeleton machinery — popovers
-/// don't need any of that and the simpler base keeps the popover's
-/// `preferredContentSize` flowing through standard AppKit channels.
-open class AppKitViewController<ViewModel: ViewModelProtocol>: NSViewController {
-    public private(set) var viewModel: ViewModel?
-
-    public init(viewModel: ViewModel? = nil) {
-        self.viewModel = viewModel
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    @available(*, unavailable)
-    public required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    open override func loadView() {
-        // Default to an empty `NSView`; subclasses install their content
-        // hierarchy inside `viewDidLoad`. NSViewController's default
-        // `loadView` would look up a nib by class name, which we don't ship.
-        view = NSView()
-    }
-
-    open func setupBindings(for viewModel: ViewModel) {
-        loadViewIfNeeded()
-
-        rx.disposeBag = DisposeBag()
-
-        self.viewModel = viewModel
-
-        viewModel.errorRelay
-            .asSignal()
-            .emitOnNextMainActor { [weak self] error in
-                guard let self else { return }
-                if let window = view.window {
-                    NSAlert(error: error).beginSheetModal(for: window)
-                } else {
-                    NSAlert(error: error).runModal()
-                }
-            }
-            .disposed(by: rx.disposeBag)
-    }
-}
-
-open class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewController<ViewModel> {
+open class EffectViewController<ViewModel: ViewModelProtocol>: AppKitViewController<ViewModel> {
     private lazy var effectView: NSView = {
         if #available(macOS 26.0, *) {
-            return UXView()
-//            view.backgroundColor = .windowBackgroundColor
+            return LayerBackedView()
         } else {
             return NSVisualEffectView()
         }
@@ -204,12 +153,19 @@ open class UXEffectViewController<ViewModel: ViewModelProtocol>: UXKitViewContro
     open override var contentView: NSView { effectView }
 }
 
-open class UXKitNavigationController: UXNavigationController {
+/// The project's navigation container.
+///
+/// `NavigationController` has no navigation bar and no toolbar, which is what this class used to
+/// spend its `viewDidLoad` switching off on `UXNavigationController` — and switching them off did
+/// not stop UXKit from laying the bar out on every push. See proposal 0012.
+///
+/// Interactive pop stays off for the same reason it was off before: the panes are driven by the
+/// coordinator's route, and a swipe that pops the stack behind the router's back desynchronises
+/// the two.
+open class BaseNavigationController: NavigationController {
     open override func viewDidLoad() {
         super.viewDidLoad()
 
-        isToolbarHidden = true
-        isNavigationBarHidden = true
-        interactivePopGestureRecognizer?.isEnabled = false
+        allowsInteractivePop = false
     }
 }

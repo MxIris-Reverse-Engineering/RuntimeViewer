@@ -1,4 +1,4 @@
 import AppKit
 import RuntimeViewerUI
 
-final class ContentNavigationController: UXKitNavigationController {}
+final class ContentNavigationController: BaseNavigationController {}

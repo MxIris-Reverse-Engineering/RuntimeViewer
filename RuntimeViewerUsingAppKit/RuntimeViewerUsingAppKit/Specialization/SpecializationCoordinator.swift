@@ -75,7 +75,7 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
             return showTypePicker(for: parameterPath, rows: rows)
         case .didSelectCandidate(let parameterPath, let candidate):
             specializationViewModel?.applyArgumentChange(path: parameterPath, candidate: candidate)
-            return .closeUXPopover()
+            return .closePopover()
         }
     }
 
@@ -108,13 +108,19 @@ final class SpecializationCoordinator: SceneCoordinator<SpecializationRoute, Spe
             return .none()
         }
         let pickerViewController = makeTypePicker(parameterPath: parameterPath, rows: rows)
-        return .uxPopover(
+        // Plain `NSPopover` again, via CocoaCoordinator's own transition. This used to need
+        // `UXKitCoordinator`'s `.uxPopover`, whose only reason to exist was that
+        // `UXViewController` shadowed `preferredContentSize` with a private ivar that AppKit's
+        // popover never read — so the popover came up at UXKit's default 500×500 unless something
+        // seeded `NSPopover.contentSize` by hand. With UXKit gone the picker is an ordinary
+        // `NSViewController` and `preferredContentSize` is honoured directly. `animates` is not
+        // passed because `NSPopover` already defaults to animating.
+        return .popover(
             pickerViewController,
             relativeTo: anchor.bounds,
             of: anchor,
             preferredEdge: .minY,
-            behavior: .transient,
-            animates: true
+            behavior: .transient
         )
     }
 

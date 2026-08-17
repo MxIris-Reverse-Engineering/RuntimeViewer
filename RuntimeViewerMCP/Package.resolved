@@ -1,4 +1,5 @@
 {
+  "originHash" : "6d2df1a11e2e7257b2ab25a6442e9423e6eaee9f853f677b9dbef140d9455532",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -127,15 +128,6 @@
       }
     },
     {
-      "identity" : "machinjector",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
-      "state" : {
-        "revision" : "2f5603c11d43fd7e6ac815a6f400fe5c2dcf80de",
-        "version" : "0.5.0"
-      }
-    },
-    {
       "identity" : "machokitextensions",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
@@ -160,6 +152,15 @@
       "state" : {
         "revision" : "96d782a576273b73b277b577943a2a25b00b919e",
         "version" : "0.5.0"
+      }
+    },
+    {
+      "identity" : "openuxkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/OpenUXKit/OpenUXKit",
+      "state" : {
+        "branch" : "main",
+        "revision" : "6d117727b7e2f86615d483c0e129dcd3460a2fdf"
       }
     },
     {
@@ -280,15 +281,6 @@
       }
     },
     {
-      "identity" : "sparkle",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sparkle-project/Sparkle",
-      "state" : {
-        "revision" : "b6496a74a087257ef5e6da1c5b29a447a60f5bd7",
-        "version" : "2.9.4"
-      }
-    },
-    {
       "identity" : "swift-algorithms",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-algorithms.git",
@@ -356,8 +348,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-certificates.git",
       "state" : {
-        "revision" : "89fbc3714264cce8db8e4ec51b64e01c3e28c6c5",
-        "version" : "1.19.3"
+        "revision" : "449dbbecd0f31e82b510ada227ca152caa8b5e98",
+        "version" : "1.19.4"
       }
     },
     {
@@ -401,8 +393,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-custom-dump",
       "state" : {
-        "revision" : "a8cd6c976f335ed361dcecddb0dc39ebda51bc3e",
-        "version" : "1.6.1"
+        "revision" : "e9c34fd54ece006b491a0e6d23fe9a6024b9a828",
+        "version" : "1.7.0"
       }
     },
     {
@@ -410,8 +402,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "8dc1fbf2f6255a73dec53b4648164884898db4c5",
-        "version" : "1.14.1"
+        "revision" : "9381ab822de01c4e9f3a7eb8eabb6ae808febed3",
+        "version" : "1.15.0"
       }
     },
     {
@@ -430,15 +422,6 @@
       "state" : {
         "revision" : "8d83506dd4dff737807d90dbf2264096ed98c7a7",
         "version" : "0.2.2"
-      }
-    },
-    {
-      "identity" : "swift-helper-service",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/swift-helper-service",
-      "state" : {
-        "revision" : "415759aff0d2ea8e88b1331bcace29f25a47c73f",
-        "version" : "0.3.1"
       }
     },
     {
@@ -482,8 +465,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-log.git",
       "state" : {
-        "revision" : "a878e7f8f46cfc0e1125e565b5c08e7d5272dc9a",
-        "version" : "1.14.0"
+        "revision" : "3ffafb9722d5d918c614feb496c8789a3b59d222",
+        "version" : "1.15.0"
       }
     },
     {
@@ -509,8 +492,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Library-Forks/swift-navigation",
       "state" : {
-        "revision" : "3c81b1006da473b8b50e2e118585080c6b2193c8",
-        "version" : "2.10.102"
+        "revision" : "ad18e298db21474f9516c6d5d014942d05661dff",
+        "version" : "2.10.104"
       }
     },
     {
@@ -595,15 +578,6 @@
       }
     },
     {
-      "identity" : "swift-snapshot-testing",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
-      "state" : {
-        "revision" : "1bc16f430d8410e7f087d4c787767b26fd32fe30",
-        "version" : "1.19.3"
-      }
-    },
-    {
       "identity" : "swift-subprocess",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swiftlang/swift-subprocess.git",
@@ -613,12 +587,21 @@
       }
     },
     {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
+      "state" : {
+        "revision" : "79e4b74a295b6eb74a8b585e3a39d29e70c1dbd1",
+        "version" : "603.0.2"
+      }
+    },
+    {
       "identity" : "swift-system",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-system",
       "state" : {
-        "revision" : "50688cacbd41d547e9eb9f7a213542340b7c442b",
-        "version" : "1.7.5"
+        "revision" : "869129b7bf4ecc57b97d0193ad29690ca2134750",
+        "version" : "1.8.1"
       }
     },
     {
@@ -635,8 +618,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Cocoanetics/SwiftMCP",
       "state" : {
-        "revision" : "7f120fed9e3d36f49aceb1b190e5289c69a6d623",
-        "version" : "1.9.0"
+        "revision" : "ad3995476b45b6b3befa2b7fa0e2adc92f4b5121",
+        "version" : "1.10.4"
       }
     },
     {
@@ -667,6 +650,15 @@
       }
     },
     {
+      "identity" : "uxkitcoordinator",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
+      "state" : {
+        "branch" : "main",
+        "revision" : "e95846dc7424a7ec4b70155b2f1f04a49c6a01ad"
+      }
+    },
+    {
       "identity" : "version",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mxcl/Version",
@@ -694,5 +686,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
