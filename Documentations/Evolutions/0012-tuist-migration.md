@@ -1,6 +1,6 @@
 # 0012 - 迁移到 Tuist 并启用二进制缓存
 
-- **状态**: Draft
+- **状态**: Accepted
 - **作者**: JH
 - **创建日期**: 2026-08-17
 - **最后更新**: 2026-08-17
@@ -72,10 +72,12 @@ swift-syntax、X509 等，覆盖本项目的主要重量级依赖）：
 ### 依赖图兼容性（已实测，推翻了原先的顾虑）
 
 - **package traits 不是阻塞点。** 原以为 Swift 6.1 的 package traits（`RuntimeViewerPackages` 的
-  `UIFoundationTraits` 六项、`RuntimeViewerMCP` 的 SwiftMCP 三项）Tuist 处理不了。实测
+  `UIFoundationTraits`、`RuntimeViewerMCP` 的 SwiftMCP 三项）Tuist 处理不了。实测
   `tuist install` 解析成功，且 traits 被正确翻译成 `SWIFT_ACTIVE_COMPILATION_CONDITIONS`：
   UIFoundation 得到 `AppleInternal, FilterUI, IDEIcons, NSAttributedStringBuilder, QuickActionBar, TabBar`，
   SwiftMCP 得到 `Client, OpenAPI, Server`。
+  （注：UIFoundation 的实际 trait 集合是**七项** —— 上列六项加 `Settings`，由提案 0011 引入。
+  POC 当时只覆盖了六项，落地的 `Tuist/Package.swift` 已按七项声明。）
 - `tuist install` 解析 47 包成功，`tuist generate` 生成 47 个 Xcode 项目耗时 22.9 秒，
   **真实编译通过**（110 秒，零错误）。
 
@@ -138,6 +140,67 @@ swift-syntax、X509 等，覆盖本项目的主要重量级依赖）：
 - ✅ **`.external` 与 `.local(path:)` 可以在同一个 target 上混用**：POC 中主 app 同时依赖
   104 个缓存 xcframework 与一个 `.local(path:)` 的工作区包，`tuist generate` 缓存命中，
   构建成功（8.4 秒，比纯 external 的 7.7 秒多出的部分即编译该本地包本身）。
+
+### worktree 的本地依赖机制与它对缓存范围的限制（已查证）
+
+实现在 `.claude/worktrees/RuntimeViewer` 这个 worktree 中进行，因为只有那里的本地依赖能编译成功。
+其机制是：`.claude/worktrees/` 下放了 5 个**符号链接**，使各包 `Package.swift` 里的
+`../../<Lib>` 相对路径在 worktree 中也能解析到真实库 ——
+
+| 符号链接 | 指向 |
+|---|---|
+| `MachOKit` | `/Volumes/Code/Personal/MachOKit` |
+| `MachOObjCSection` | `/Volumes/Code/Personal/MachOObjCSection` |
+| `MachOSwiftSection` | 该库**自己的 worktree** |
+| `swift-demangling` | 该库**自己的 worktree** |
+| `swift-semantic-string` | 该库**自己的 worktree** |
+
+**归属查证的结论直接决定缓存范围**：这批本地依赖**全部集中在 `RuntimeViewerCore`**
+（MachOKit / MachOObjCSection / MachOSwiftSection / swift-semantic-string，
+swift-demangling 为传递依赖）。`RuntimeViewerPackages` 与 `RuntimeViewerMCP`
+**一个都没有** —— 它们的依赖全走远程 pin。
+
+因此：
+
+- `RuntimeViewerCore` 的这 4 个依赖必须走 `Project.swift` 的 `.local(path: "../../<Lib>")`
+  （Tuist 不支持 `Tuist/Package.swift` 中的 `.package(path:)`，见上一节），**这部分不进缓存**。
+  路径基准正确：`RuntimeViewerCore/Project.swift` 与 `RuntimeViewerCore/Package.swift`
+  同在仓库根的一级子目录下，`../../<Lib>` 解析结果一致。
+- 编译量大头 —— UIFoundation 1005、swift-nio 810、SwiftMCP 657、RxAppKit 462、
+  swift-certificates 387 —— 全部属于后两个包，**缓存收益基本不受影响**。
+  退出缓存的部分约占总编译任务的 6%（MachOSwiftSection 213 及三个较小的库）。
+
+**另需防范的既有陷阱**：`a540f4fe` 记录过 SwiftPM 按**内容 hash** 缓存 manifest 求值结果，
+主 checkout 与 worktree 的 `Package.swift` 字节相同但 `../../` 解析到不同路径，
+导致一侧被喂了另一侧的缓存（现象是本地路径依赖**静默退化成远程 tag**），
+当时以一段尾部注释制造内容差异规避。
+新增的 `Tuist/Package.swift` 若两侧内容相同，会重演同一问题；
+Tuist 自身还另有 `~/.cache/tuist/Manifests` 一层缓存（本次 POC 中已实测到它使
+`USING_LOCAL_DEPENDENCIES` 的改动不生效，需 `rm -rf` 该目录才重新求值）。
+**落地时必须显式处理这两层缓存**，见落地步骤第 1 步。
+
+### 第 1 步的落地验证结果（2026-08-17，worktree 内实测）
+
+`Tuist/Package.swift` 汇总三个包的远程依赖后，`tuist install` 解析出 **83 个包**，
+与现有 `RuntimeViewer.xcworkspace` 的 79 条 pin 比对：**零版本冲突**。全部差异均可解释：
+
+- **仅存在于 Tuist 一侧（6 个）**：`MachOKit` / `MachOObjCSection` / `MachOSwiftSection` /
+  `swift-semantic-string` / `swift-demangling` —— 即上一节那批本地依赖，workspace 里由符号链接
+  覆盖故无远程 pin；外加 `swift-syntax`，原因见下。
+- **仅存在于 workspace 一侧（2 个）**：`sparkle`（主 app 层依赖，本次不涉及）、
+  `swift-snapshot-testing`（MachOSwiftSection 与 swift-memberwise-init-macro 的**测试**依赖 ——
+  Tuist 的 external 集成不解析依赖包的测试依赖，属预期行为而非遗漏）。
+
+**新发现：预编译 swift-syntax 的覆盖机制在 external 集成下失效。**
+三个包的 `Package.swift` 中**没有任何一处**引用 `RuntimeViewerPrecompiledLibraries/swift-syntax`；
+该预编译包是靠 **workspace 成员关系**覆盖同名 `swift-syntax` 生效的。
+Tuist 的 external 集成不经由 workspace 解析依赖，因此覆盖不生效，
+`tuist install` 拉取的是源码版 `swift-syntax 603.0.2`。
+
+后果可接受，不构成阻塞：宏所依赖的 swift-syntax 首次需从源码编译，但它**整套都在
+`tuist cache` 的可缓存范围内**（POC 中 `SwiftSyntax` / `SwiftParser` / `SwiftSyntaxMacros` 及
+六个版本兼容层均已缓存），预热后效果与预编译 xcframework 相当。
+是否在迁移完成后弃用 `RuntimeViewerPrecompiledLibraries`，按「非目标」留待单独评估。
 
 ### 其他实测细节
 
@@ -373,6 +436,9 @@ Sparkle 会把新版本视为不同 app。本次不触碰这些 target 的配置
 
 1. **建立 Tuist 骨架**：仓库根 `Tuist.swift` + `Tuist/Package.swift`，仅含远程依赖声明。
    验证 `tuist install` 能解析出与现有 `Package.resolved` 一致的版本集合。
+   同时处理两层 manifest 缓存（见「前期调研 — worktree 的本地依赖机制」）：
+   `Tuist/Package.swift` 比照 `a540f4fe` 的做法加入 worktree 专属的内容差异标记，
+   并在排查依赖解析异常时先 `rm -rf ~/.cache/tuist/Manifests`。
 2. **迁移 `RuntimeViewerCore`**（4 源码 + 2 测试 target）。验证：`tuist generate` 后该项目
    单独构建通过，测试可运行。
 3. **验证 `ProjectDescriptionHelpers` 的环境变量方案**（详细设计中标注为未实测的部分）。
@@ -448,3 +514,5 @@ Sparkle 会把新版本视为不同 app。本次不触碰这些 target 的配置
 | 2026-08-17 | 交付路径按现行分支模型重写 | 用户指出 `AGENTS.md` 的「next 永不合入 main」已过时，现行模型是 PR 合入 `next`、`next` 整体合入 `main`。原「无法渐进合入、需一次性切换」的判断作废。`AGENTS.md` 该节待另行修正。 |
 | 2026-08-17 | **范围收窄为只迁包层** | 用户要求先只做三个本地 SPM 包，`.xcodeproj` 暂不迁。收益全部落在包层而风险集中在 `.xcodeproj` 层，故拆分。新增实测依据：Tuist target UUID 确定性稳定（跨 generate、跨内容变更均不变），跨项目引用可靠；external 依赖为 `MACH_O_TYPE = staticlib`，故包必须产出 dynamic framework。初稿否决「只迁包层」的理由（跨项目引用需长期维护）据此推翻，已在「替代方案考量」中留档。 |
 | 2026-08-17 | 保留三个包的 `Package.swift` | 用户拍板：`Package.swift` 与 `Project.swift` 并存，保住 SPM 形态（可 `swift build`、可被外部仓库消费）。代价是 target 拓扑与依赖版本约束两重漂移源，故新增落地第 5b 步：用 `swift package dump-package` 与 `tuist dump project` 的 JSON 比对做一致性校验，接入 CI，使漂移表现为构建失败而非静默的行为差异。 |
+| 2026-08-17 | 实现改在 worktree 中进行，查明本地依赖机制 | 用户指出只有 `.claude/worktrees/RuntimeViewer` 里的本地依赖能编译成功。查明机制为 `.claude/worktrees/` 下的 5 个符号链接使 `../../<Lib>` 在 worktree 中可解析。归属查证结论：这批本地依赖**全部集中在 `RuntimeViewerCore`**，`RuntimeViewerPackages` / `RuntimeViewerMCP` 一个都没有，故编译量大头仍可缓存，退出缓存的部分约占 6%。同时记录 `a540f4fe` 的 SwiftPM manifest 内容哈希缓存陷阱对新增 `Tuist/Package.swift` 同样适用，且 Tuist 另有一层 `~/.cache/tuist/Manifests`。 |
+| 2026-08-17 | 状态 → `Accepted` | 用户已批准迁移方向、只迁包层的范围收窄，以及保留 `Package.swift` 的处置。实现可以开始。 |

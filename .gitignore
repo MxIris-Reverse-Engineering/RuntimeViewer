@@ -15,6 +15,13 @@ buildServer.json
 .codex
 Products
 RuntimeViewerMCP/.build
+
+# Tuist (proposal 0012). Tuist/Package.swift and Tuist/Package.resolved are
+# tracked — the resolved file is the dependency lock for the external
+# integration. Everything Tuist fetches or derives underneath is not.
+Tuist/.build
+Tuist/Dependencies
+Derived/
 DerivedData
 .derived-data-log-*
 .omc
