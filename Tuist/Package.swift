@@ -1,6 +1,39 @@
 // swift-tools-version: 6.2
 
 import PackageDescription
+import Foundation
+
+// MARK: - Local checkout overrides
+
+/// Mirrors the `USING_LOCAL_DEPENDENCIES` switch in the packages' own manifests.
+let usingLocalDependencies: Bool = {
+    guard let value = Context.environment["USING_LOCAL_DEPENDENCIES"] else { return false }
+    return value == "1"
+}()
+
+/// Resolves a library to a checkout under `LocalDependencies/` when one is present
+/// and local dependencies are enabled, otherwise to its remote pin.
+///
+/// The checkouts are git worktrees of the upstream repositories, deliberately placed
+/// **inside** the project root. That placement is load-bearing: Tuist resolves
+/// `.package(path:)` only when the path lands inside the project root — a path
+/// outside it, or a symlink inside it pointing outside, both fail with
+/// "no Package.swift in <project root>". Keeping a single resolver (rather than
+/// mixing Xcode's SPM integration with Tuist's external one) is also what avoids
+/// the same package being built twice, which surfaces as "Multiple commands produce".
+func locallyOverridable(
+    _ name: String,
+    remote: PackageDescription.Package.Dependency
+) -> PackageDescription.Package.Dependency {
+    guard usingLocalDependencies else { return remote }
+    let path = URL(
+        fileURLWithPath: "../LocalDependencies/\(name)",
+        relativeTo: URL(fileURLWithPath: #filePath)
+    ).standardizedFileURL.path
+    guard FileManager.default.fileExists(atPath: path + "/Package.swift") else { return remote }
+    return .package(path: "../LocalDependencies/\(name)")
+}
+
 
 #if TUIST
 import ProjectDescription
@@ -10,6 +43,18 @@ let packageSettings = PackageSettings(
     // projects must expose the same set, otherwise a build under, say,
     // `Debug-arm64e` finds no matching configuration in them.
     baseSettings: .settings(
+        base: [
+            // Tuist defaults external dependencies to macOS 11.0 even when the
+            // package itself declares 10.15 (observed on FrameworkToolbox), which
+            // would drag RuntimeViewerCore's floor up with it. RuntimeViewerCore
+            // advertises macOS 10.15+, so pin the dependencies back down to the
+            // floor their own manifests declare.
+            "MACOSX_DEPLOYMENT_TARGET": "10.15",
+            "IPHONEOS_DEPLOYMENT_TARGET": "13.0",
+            "WATCHOS_DEPLOYMENT_TARGET": "6.0",
+            "TVOS_DEPLOYMENT_TARGET": "13.0",
+            "XROS_DEPLOYMENT_TARGET": "1.0",
+        ],
         configurations: [
             .debug(name: "Debug"),
             .debug(name: "Debug-arm64e"),
@@ -32,10 +77,27 @@ let package = Package(
     dependencies: [
         // MARK: - Reverse engineering core (RuntimeViewerCore)
 
-        .package(url: "https://github.com/MxIris-Reverse-Engineering/MachOKit", exact: "0.52.101"),
-        .package(url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection", exact: "0.8.105"),
-        .package(url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection", exact: "0.15.2"),
-        .package(url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string", from: "0.3.0"),
+        locallyOverridable(
+            "MachOKit",
+            remote: .package(url: "https://github.com/MxIris-Reverse-Engineering/MachOKit", exact: "0.52.101")
+        ),
+        locallyOverridable(
+            "MachOObjCSection",
+            remote: .package(url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection", exact: "0.8.105")
+        ),
+        locallyOverridable(
+            "MachOSwiftSection",
+            remote: .package(url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection", exact: "0.15.2")
+        ),
+        locallyOverridable(
+            "swift-demangling",
+            remote: .package(url: "https://github.com/MxIris-Reverse-Engineering/swift-demangling", from: "0.4.5")
+        ),
+        locallyOverridable(
+            "swift-semantic-string",
+            remote: .package(url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string", from: "0.3.0")
+        ),
+        .package(url: "https://github.com/MxIris-Reverse-Engineering/swift-demangling", from: "0.4.5"),
         .package(url: "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate", from: "0.1.0"),
 
         // MARK: - Shared infrastructure

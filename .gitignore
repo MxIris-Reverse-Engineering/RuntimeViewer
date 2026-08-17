@@ -22,8 +22,20 @@ RuntimeViewerMCP/.build
 Tuist/.build
 Tuist/Dependencies
 Derived/
+
+# Tuist-generated projects for the local packages. The hand-written app
+# projects under RuntimeViewerUsingAppKit / RuntimeViewerServer /
+# RuntimeViewerUsingUIKit stay tracked; only these generated ones are ignored.
+RuntimeViewerCore/RuntimeViewerCore.xcodeproj
+RuntimeViewerCore/RuntimeViewerCore.xcworkspace
+RuntimeViewerCore/.package.resolved
 DerivedData
 .derived-data-log-*
 .omc
 *.env
 RuntimeViewer.xcworkspace/xcshareddata/swiftpm
+
+# Local checkouts of upstream libraries (git worktrees), used when
+# USING_LOCAL_DEPENDENCIES=1. Must live inside the project root for Tuist to
+# resolve them as .package(path:).
+LocalDependencies/

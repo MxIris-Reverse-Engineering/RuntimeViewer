@@ -413,7 +413,25 @@ tuist dump project --path RuntimeViewerCore                    # targets + packa
 - **继续扩展预编译 xcframework 路线（现有 `RuntimeViewerPrecompiledLibraries` 的做法）。**
   否决原因：每覆盖一个包需自建一条 release 流水线并手工维护 checksum，
   而缓存目标是 104 个 target，规模上不可行。
-  （该目录本次保持原样；它与 Tuist Cache 的取舍留待落地后另评。）
+  （该目录本次保持原样。**它不可被取代，理由见下条**。）
+
+- **改用 SwiftPM 官方的 swift-syntax prebuilts（`IDEPackageEnablePrebuilts` / `--enable-experimental-prebuilts`）。**
+  否决原因：**官方 prebuilt 二进制不含 arm64e slice，启用后打包会失败。**
+  本项目的 `RuntimeViewerServer.framework` 与特权 service 必须带 arm64e 才能检查 arm64e 进程
+  （`Debug-arm64e` 配置即为此存在），因此官方 prebuilts 在本项目不可用。
+
+  > **这是 `RuntimeViewerPrecompiledLibraries/swift-syntax` 存在的真正理由** ——
+  > 自建 xcframework 带 arm64e slice，官方的不带。引入它的 commit（`7ec30f7a`，2026-01-06）
+  > 只写了 "for faster compilation times"，没有记录这条架构约束，
+  > 因此 `IDEPackageEnablePrebuilts` 被显式设为 `NO` 的原因从代码与历史中均无从得知。
+  > 在此留档，避免日后有人"顺手"打开该开关或删除这个目录。
+  >
+  > 附带影响：命令行 `swift build` 的 `--enable-experimental-prebuilts` 在 Swift 6.3 **默认开启**，
+  > 与 Xcode 侧的 `NO` 不一致。凡是要产出 arm64e 的命令行构建，都需显式传
+  > `--disable-experimental-prebuilts`。
+  >
+  > 反过来说，**基于本机编译的缓存方案不受此限制** —— Tuist Cache 与 Xcode 编译缓存
+  > 缓存的都是本机编译产物，架构由本项目的配置决定，因此都能覆盖 arm64e。
 
 - **让两个脚本共用一个 DerivedData。**
   成本极低，能消除「Debug-arm64e 与 Archive 来回切各重编一次」这一项。
