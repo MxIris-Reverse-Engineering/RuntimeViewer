@@ -229,19 +229,45 @@ SwiftPM 隐式提供、而生成的 Xcode target 必须显式声明的东西：
 > error: The file "UXView.h" couldn't be opened because there is no such file.
 > (in target 'UXKit' from project 'OpenUXKit')
 
-查证结论：
+查证结论（**符号链接就是根因**）：
 
-- 该包的 `UXKit` target 通过 `Sources/UXKit/include` **符号链接**复用 `OpenUXKit` 的头文件，
-  并以 `.unsafeFlags` 链接 `UXKit.tbd`。
-- **符号链接不是原因** —— 已实测把它替换为真实目录，报错完全相同。
-- 真正的缺陷在生成结果：Tuist 为同名头文件生成了**多份重复 fileRef**
-  （`UXView.h` 出现 4 次，因该头文件在 `include/OpenUXKit/`、`PrivateHeaders/OpenUXKit/`、
-  `Components/Public/` 三处各有一份），且 `path` 仅保留文件名、**丢失目录层级**
-  （`path = UXView.h; sourceTree = "<group>"`），Xcode 因而找不到文件。
+- 该包的头文件真身在 `Sources/OpenUXKit/Components/Public/*.h`，
+  `include/OpenUXKit/`（37 个）与 `PrivateHeaders/OpenUXKit/`（182 个）下的同名文件
+  **都是指向真身的符号链接**；`UXKit` target 另有 `Sources/UXKit/include` 符号链接复用
+  `OpenUXKit` 的 `include`，并以 `.unsafeFlags` 链接 `UXKit.tbd`。
+- Tuist 生成的项目为同名头文件产出**多份重复 fileRef**（`UXView.h` 出现 4 次），
+  且 `path` 仅保留文件名、**丢失目录层级**（`path = UXView.h; sourceTree = "<group>"`），
+  Xcode 因而找不到文件。
+- **实测：把 `include/OpenUXKit` 的符号链接解引用为真实文件后，该批报错全部消失。**
 
-出路（均未实施，待定）：调整上游 `OpenUXKit` 的目录结构；等待 / 提交 Tuist 侧修复；
+> **一处更正**：本节先前记载「符号链接不是原因 —— 已实测替换为真实目录，报错相同」。
+> 该结论错误，源于当时用 `cp -R` 复制 —— 它**保留**符号链接，因此那次测试实际未改变任何东西。
+> 改用 `cp -RL` 真正解引用后结论相反。
+
+**但简单解引用不是可行的上游修复**：`include/` 与 `PrivateHeaders/` 原本指向同一份真身，
+一旦各自变成独立的真实文件，编译器同时看到两份声明，报
+`redefinition of 'UXModalPresentationStyle'`。因此上游需要重构目录结构
+（让 public header 只有一份真实文件、不经符号链接暴露），而非把符号链接换成副本。
+
+出路（均未实施，待定）：重构上游 `OpenUXKit` 的目录结构；等待 / 提交 Tuist 侧修复；
 或将 `OpenUXKit` 排除出 external 集成 —— 但最后一条会重新引入两套解析器混用的
 「Multiple commands produce」问题，需谨慎。
+
+### 另一处上游缺陷：`KeyboardShortcuts` 的阿拉伯语本地化
+
+`ar.lproj/Localizable.strings` 第 5 行的值内含**未转义的直双引号**，
+`plutil -lint` 直接报 `Unexpected character " at line 1`；其余 8 种语言均通过。
+SwiftPM 只复制该文件而不校验，故长期未暴露；Tuist 生成的项目走
+`builtin-copyStrings --validate`，构建即失败。
+
+属上游 bug（`sindresorhus/KeyboardShortcuts`），修复即把该值内的直引号改为弯引号
+（与同文件第 3 行 `“%@”` 的写法一致）。已实测修正后该错误消失。
+
+> **操作提醒**：验证上游改动时**不要直接修改 `Tuist/.build/checkouts`**。
+> SwiftPM 以硬链接将 checkouts 关联到全局缓存 `~/.cache/swifterpm/sources`，
+> 改动会直接落入全局缓存并影响本机所有项目，且 `rm -rf Tuist/.build` 后重新
+> `tuist install` 会从被污染的缓存恢复、看似"改不回来"。
+> 需清除对应缓存条目才能复原。验证应在独立 clone 中进行。
 
 ### 其他实测细节
 
@@ -514,7 +540,16 @@ Sparkle 会把新版本视为不同 app。本次不触碰这些 target 的配置
 
 ### 平台与最低版本
 
-不变。各包 target 的 deployment target 原样搬迁，验收时以 `-showBuildSettings` 比对。
+**`RuntimeViewerCore` 的 macOS 下限由 10.15 升至 11.0**（**需拍板**，`README.md:87` 对外承诺 10.15+）。
+
+原因：Tuist 统一以 macOS 11.0 构建 external 依赖，不采纳各包自己声明的值。
+最初尝试用 `PackageSettings.baseSettings` 把全部 external 压回 10.15，但这会压垮
+合法要求更高下限的包 —— `CocoaCoordinator` 声明 `.macOS(.v11)` 并使用 `Logger`，
+被强制降到 10.15 后编译失败。若要让 `RuntimeViewerCore` 停留在 10.15，
+需逐个覆盖其依赖闭包中的 37 个包，不具可维护性。
+
+其余包的 deployment target 原样搬迁（`RuntimeViewerPackages` macOS 15 / iOS 18 等），
+验收时以 `-showBuildSettings` 比对。
 
 ### 发布
 

@@ -141,6 +141,10 @@ let project = Project(
             deploymentTargets: deploymentTargets,
             infoPlist: .default,
             sources: ["Sources/RuntimeViewerServiceHelper/**"],
+            // Objective-C target: SwiftPM treats Sources/<target>/include as the
+            // public headers directory by convention; a generated Xcode target
+            // needs it declared, otherwise the .m cannot find its own header.
+            headers: .headers(public: ["Sources/RuntimeViewerServiceHelper/include/**"]),
             settings: .settings(base: baseSettings)
         ),
         .target(

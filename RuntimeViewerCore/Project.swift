@@ -11,7 +11,7 @@ let destinations: Destinations = [.mac, .iPhone, .iPad, .macCatalyst, .appleWatc
 
 let deploymentTargets: DeploymentTargets = .multiplatform(
     iOS: "13.0",
-    macOS: "10.15",
+    macOS: "11.0",
     watchOS: "6.0",
     tvOS: "13.0",
     visionOS: "1.0"

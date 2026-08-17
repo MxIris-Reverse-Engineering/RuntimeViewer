@@ -42,19 +42,11 @@ let packageSettings = PackageSettings(
     // The app projects build under four configurations. External dependency
     // projects must expose the same set, otherwise a build under, say,
     // `Debug-arm64e` finds no matching configuration in them.
+    // Tuist builds external dependencies at macOS 11.0 regardless of what each
+    // package declares. Do not override this globally: packages that legitimately
+    // require a higher floor (CocoaCoordinator declares .macOS(.v11) and uses
+    // Logger) fail to compile when forced lower.
     baseSettings: .settings(
-        base: [
-            // Tuist defaults external dependencies to macOS 11.0 even when the
-            // package itself declares 10.15 (observed on FrameworkToolbox), which
-            // would drag RuntimeViewerCore's floor up with it. RuntimeViewerCore
-            // advertises macOS 10.15+, so pin the dependencies back down to the
-            // floor their own manifests declare.
-            "MACOSX_DEPLOYMENT_TARGET": "10.15",
-            "IPHONEOS_DEPLOYMENT_TARGET": "13.0",
-            "WATCHOS_DEPLOYMENT_TARGET": "6.0",
-            "TVOS_DEPLOYMENT_TARGET": "13.0",
-            "XROS_DEPLOYMENT_TARGET": "1.0",
-        ],
         configurations: [
             .debug(name: "Debug"),
             .debug(name: "Debug-arm64e"),
