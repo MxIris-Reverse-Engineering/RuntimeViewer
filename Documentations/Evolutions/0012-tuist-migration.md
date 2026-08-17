@@ -175,9 +175,11 @@ swift-demangling 为传递依赖）。`RuntimeViewerPackages` 与 `RuntimeViewer
 导致一侧被喂了另一侧的缓存（现象是本地路径依赖**静默退化成远程 tag**），
 当时以一段尾部注释制造内容差异规避。
 新增的 `Tuist/Package.swift` 若两侧内容相同，会重演同一问题；
-Tuist 自身还另有 `~/.cache/tuist/Manifests` 一层缓存（本次 POC 中已实测到它使
-`USING_LOCAL_DEPENDENCIES` 的改动不生效，需 `rm -rf` 该目录才重新求值）。
-**落地时必须显式处理这两层缓存**，见落地步骤第 1 步。
+**落地时必须显式处理这层缓存**，见落地步骤第 1 步。
+
+（另一层 `~/.cache/tuist/Manifests` 经第 3 步复测**不构成问题**：环境变量开关在不清缓存时
+也如实生效。早前一次「疑似缓存导致开关失效」的观察系变量名缺少 `TUIST_` 前缀所致，
+非缓存问题，已在「详细设计」中更正。）
 
 ### 第 1 步的落地验证结果（2026-08-17，worktree 内实测）
 
@@ -308,22 +310,60 @@ UUID 只与项目名 + target 名相关。改名 target 会使引用失效，须
 这条路径是实测过的混用方案，且**保留了 `.package(path:)` 直连工作区的语义**
 （改上游源码无需 commit 即可生效）—— 这是 `file://` URL 方案做不到的，因此不采用后者。
 
-代价：切换联调对象需要改 `Project.swift` 一行，而非改一个环境变量。为此提供
-`Tuist/ProjectDescriptionHelpers/LocalDependencies.swift` 辅助函数，把「读环境变量决定
-某依赖走 external 还是 local」这个判断集中一处：
+为此提供 `Tuist/ProjectDescriptionHelpers/LocalDependencies.swift`，把「读环境变量决定
+某依赖走 external 还是 local」的判断集中一处。**该方案已于落地第 3 步实测通过**
+（生成 `XCLocalSwiftPackageReference` 并构建成功），但环境变量名有一处关键约束：
 
 ```swift
-public func dependency(_ name: String, localPath: String) -> TargetDependency {
-    ProcessInfo.processInfo.environment["USING_LOCAL_DEPENDENCIES"] == "1"
-        && FileManager.default.fileExists(atPath: localPath)
-        ? .package(product: name)
-        : .external(name: name)
+import Foundation
+import ProjectDescription
+
+public enum LocalDependencies {
+    /// Tuist only forwards `TUIST_`-prefixed variables into manifest evaluation,
+    /// so this reads TUIST_USING_LOCAL_DEPENDENCIES — not USING_LOCAL_DEPENDENCIES.
+    public static var isEnabled: Bool {
+        Environment.usingLocalDependencies.getBoolean(default: false)
+    }
+
+    public static func isAvailable(_ relativePath: String, from manifestDirectory: String) -> Bool {
+        guard isEnabled else { return false }
+        let resolved = URL(fileURLWithPath: relativePath, relativeTo: URL(fileURLWithPath: manifestDirectory)).path
+        return FileManager.default.fileExists(atPath: resolved)
+    }
+
+    public static func dependency(
+        productName: String,
+        localPath: String,
+        manifestDirectory: String
+    ) -> TargetDependency {
+        isAvailable(localPath, from: manifestDirectory)
+            ? .package(product: productName)
+            : .external(name: productName)
+    }
+
+    public static func packages(_ entries: [(path: String, manifestDirectory: String)]) -> [Package] {
+        entries.compactMap {
+            isAvailable($0.path, from: $0.manifestDirectory) ? .local(path: .relativeToManifest($0.path)) : nil
+        }
+    }
 }
 ```
 
-> 注：`ProjectDescriptionHelpers` 在 `tuist generate` 期间求值，读环境变量可行；对应的
-> `packages:` 数组需同步条件化。此设计**尚未实测**，落地第 3 步须先验证，
-> 失败则退回「手工改一行」的朴素方案。
+**两层 manifest 认的变量名不同，必须同时设置**（实测结论）：
+
+| manifest | 读取方式 | 认的变量名 |
+|---|---|---|
+| `Tuist/Package.swift`（SwiftPM） | `Context.environment` | `USING_LOCAL_DEPENDENCIES` |
+| `Project.swift` / helpers（Tuist） | `Environment.xxx` | **`TUIST_`**`USING_LOCAL_DEPENDENCIES` |
+
+实测：只设 `USING_LOCAL_DEPENDENCIES=1` 时，`Project.swift` 内 `Environment` 与
+`ProcessInfo` 三种读法**全部读不到** —— Tuist 只把 `TUIST_` 前缀的变量透传进 manifest
+求值进程。因此联调时两个都要设，建议由脚本统一导出。
+
+> 缓存说明（修正）：Tuist 的 `~/.cache/tuist/Manifests` **不会**阻碍该开关 ——
+> 实测在不清缓存的情况下来回翻转，生成结果每次都如实跟随。
+> 需要留意的是另一层：SwiftPM 对 `Tuist/Package.swift` 的内容哈希缓存，
+> 见「worktree 的本地依赖机制」一节。
 
 ### 本地包的双形态：`Package.swift` 与 `Project.swift` 并存（已决定）
 
@@ -436,13 +476,14 @@ Sparkle 会把新版本视为不同 app。本次不触碰这些 target 的配置
 
 1. **建立 Tuist 骨架**：仓库根 `Tuist.swift` + `Tuist/Package.swift`，仅含远程依赖声明。
    验证 `tuist install` 能解析出与现有 `Package.resolved` 一致的版本集合。
-   同时处理两层 manifest 缓存（见「前期调研 — worktree 的本地依赖机制」）：
-   `Tuist/Package.swift` 比照 `a540f4fe` 的做法加入 worktree 专属的内容差异标记，
-   并在排查依赖解析异常时先 `rm -rf ~/.cache/tuist/Manifests`。
+   同时处理 SwiftPM 的 manifest 内容哈希缓存（见「前期调研 — worktree 的本地依赖机制」）：
+   `Tuist/Package.swift` 比照 `a540f4fe` 的做法加入 worktree 专属的内容差异标记。
+   ✅ **已完成**（`fd59a305`）：解析 83 包，与现有 pin 零版本冲突。
 2. **迁移 `RuntimeViewerCore`**（4 源码 + 2 测试 target）。验证：`tuist generate` 后该项目
    单独构建通过，测试可运行。
-3. **验证 `ProjectDescriptionHelpers` 的环境变量方案**（详细设计中标注为未实测的部分）。
-   不可行则退回手工切换，并更新本提案。
+3. **验证 `ProjectDescriptionHelpers` 的环境变量方案**。
+   ✅ **已完成**：方案可行 —— 生成 `XCLocalSwiftPackageReference` 且构建通过。
+   实测发现变量名必须带 `TUIST_` 前缀，详见「详细设计 —— `USING_LOCAL_DEPENDENCIES` 的替代」。
 4. **迁移 `RuntimeViewerMCP`**（1 源码 + 1 测试 target）。
 5. **迁移 `RuntimeViewerPackages`**（10 源码 + 3 测试 target，26 个直接依赖、
    60 处 product 引用、34 处平台条件）。验证：三个包互相引用正确，全部构建通过。
