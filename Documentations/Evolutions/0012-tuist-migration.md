@@ -204,6 +204,45 @@ Tuist 的 external 集成不经由 workspace 解析依赖，因此覆盖不生�
 六个版本兼容层均已缓存），预热后效果与预编译 xcframework 相当。
 是否在迁移完成后弃用 `RuntimeViewerPrecompiledLibraries`，按「非目标」留待单独评估。
 
+### 落地中发现的 SPM → Tuist 语义缺口（已实测）
+
+SwiftPM 隐式提供、而生成的 Xcode target 必须显式声明的东西：
+
+- **`SWIFT_PACKAGE_NAME`**：源码使用 Swift 的 `package` 访问级别
+  （`RuntimeViewerCore` 4 处、`RuntimeViewerPackages` 2 处，如 `package enum DyldUtilities`）。
+  其作用域由编译器的 `-package-name` 标志界定，SwiftPM 自动传递，生成的 target 没有，
+  于是这些声明解析失败 —— 报错信息是误导性的
+  `'DyldUtilities' is inaccessible due to 'fileprivate' protection level`。
+  同一包的所有 target 必须设相同值。
+- **系统框架需显式链接**：`Network` 在 `RuntimeViewerCommunication` 与 `RuntimeViewerCore`
+  **两处**都要声明（`RuntimeConnectionCredential` 的内存布局内嵌 `NWEndpoint`，
+  故使用方也需链接），另有 `SystemConfiguration`、`Security`。
+- `.when([...])` 返回 `PlatformCondition?` 而非 `PlatformCondition`；
+  平台过滤枚举是 `.catalyst`，不是 `.macCatalyst`。
+
+### 已知阻塞：`OpenUXKit` 的 `UXKit` product 无法经 external 集成构建
+
+`RuntimeViewerUI` / `RuntimeViewerArchitectures` 依赖 `OpenUXKit` 包的 `UXKit` product
+（`USING_SYSTEM_UXKIT` 默认开启时选用它，即系统私有 UXKit 的 `.tbd` shim）。
+经 Tuist external 集成生成后构建失败：
+
+> error: The file "UXView.h" couldn't be opened because there is no such file.
+> (in target 'UXKit' from project 'OpenUXKit')
+
+查证结论：
+
+- 该包的 `UXKit` target 通过 `Sources/UXKit/include` **符号链接**复用 `OpenUXKit` 的头文件，
+  并以 `.unsafeFlags` 链接 `UXKit.tbd`。
+- **符号链接不是原因** —— 已实测把它替换为真实目录，报错完全相同。
+- 真正的缺陷在生成结果：Tuist 为同名头文件生成了**多份重复 fileRef**
+  （`UXView.h` 出现 4 次，因该头文件在 `include/OpenUXKit/`、`PrivateHeaders/OpenUXKit/`、
+  `Components/Public/` 三处各有一份），且 `path` 仅保留文件名、**丢失目录层级**
+  （`path = UXView.h; sourceTree = "<group>"`），Xcode 因而找不到文件。
+
+出路（均未实施，待定）：调整上游 `OpenUXKit` 的目录结构；等待 / 提交 Tuist 侧修复；
+或将 `OpenUXKit` 排除出 external 集成 —— 但最后一条会重新引入两套解析器混用的
+「Multiple commands produce」问题，需谨慎。
+
 ### 其他实测细节
 
 本次适用：
