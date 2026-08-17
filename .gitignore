@@ -29,6 +29,12 @@ Derived/
 RuntimeViewerCore/RuntimeViewerCore.xcodeproj
 RuntimeViewerCore/RuntimeViewerCore.xcworkspace
 RuntimeViewerCore/.package.resolved
+RuntimeViewerPackages/RuntimeViewerPackages.xcodeproj
+RuntimeViewerPackages/RuntimeViewerPackages.xcworkspace
+RuntimeViewerPackages/.package.resolved
+RuntimeViewerMCP/RuntimeViewerMCP.xcodeproj
+RuntimeViewerMCP/RuntimeViewerMCP.xcworkspace
+RuntimeViewerMCP/.package.resolved
 DerivedData
 .derived-data-log-*
 .omc
