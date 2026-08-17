@@ -20,6 +20,7 @@
 | [0007](0007-objc-relationship-index-returns-to-application.md) | ObjC 关系索引归还应用侧 | 部分被 0008 取代 | MachOObjCSection 0003 的下游适配：渲染与解析层搬进库（**保留**），关系表改由应用从 `ObjCIndexingEvent` 事件流重建（**已被 0008 取代**）。 |
 | [0008](0008-symmetric-objc-and-swift-index-layers.md) | ObjC 与 Swift 索引层的对称化 | Implemented | `RuntimeObjCInterfaceIndexer` 回到与 `RuntimeSwiftInterfaceIndexer` 同构的形态：包装库侧 upstream、eager 反向表、`addSubIndexer` / `removeSubIndexer` 聚合、由 factory 持有聚合器，`RuntimeRelationshipsResolver` 从遍历所有 image 退回成查两次聚合器。取代 0007 的关系索引设计。 |
 | [0011](0011-uifoundation-settings-adoption.md) | RuntimeViewer 接入 UIFoundation Settings | Implemented | 保留 RuntimeViewer 业务设置模型与页面，采用 UIFoundation 的持久化 store、属性包装器、设置窗口和导航，并删除重复壳层。原以 `0007` 起草，与本分支的 `0007` 撞号，合流时改为 `0011`。 |
+| [0012](0012-tuist-migration.md) | 迁移到 Tuist 并启用二进制缓存 | Draft | **只迁三个本地 SPM 包**，第三方依赖走 external 集成以启用 `tuist cache`；三个 `.xcodeproj` 保持手写，仅改为跨项目引用 Tuist 生成的 framework。POC 实测 clean build 110s → 7.7s（一次真实构建 5939 个编译任务中 86% 属于第三方依赖）。`.xcodeproj` 自身的 Tuist 化留待后续提案 —— 两处 pbxproj hack（Catalyst helper 的假文件引用、`$(RUNTIME_VIEWER_SERVICE_NAME)` 插值）Tuist 表达不了，风险集中在那一层。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
@@ -27,7 +28,8 @@
 > `feature/objc-rendering-and-indexing` 的 `0007-objc-relationship-index-returns-to-application.md`
 > 保留 `0007`，`feature/uifoundation-settings-adoption` 的那篇改号为 `0011`。
 > 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`），
-> `0009` / `0010` 在 `feature/source-editor-integration`。**新提案从 `0012` 起编号**，
+> `0009` / `0010` 在 `feature/source-editor-integration`；`0012` 在 `feature/tuist-migration`
+> （`0012-tuist-migration.md`，已登记在上表）。**新提案从 `0013` 起编号**，
 > 不要只看本分支已有的文件挑下一个空号。
 
 ## 与 `Plans/` 的关系

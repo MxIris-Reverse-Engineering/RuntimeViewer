@@ -1,0 +1,450 @@
+# 0012 - 迁移到 Tuist 并启用二进制缓存
+
+- **状态**: Draft
+- **作者**: JH
+- **创建日期**: 2026-08-17
+- **最后更新**: 2026-08-17
+- **所属愿景**: 无
+- **关联提案**: 无
+- **实现分支 / PR**: `feature/tuist-migration`（基线 `next`，非 `main`）
+- **配套文档**: 待定 —— 落地时登记实现说明的链接
+
+## 摘要
+
+把三个本地 SPM 包（`RuntimeViewerCore` / `RuntimeViewerPackages` / `RuntimeViewerMCP`）改由 Tuist
+生成，第三方依赖改走 `tuist install` 的 external 集成，从而启用 Tuist 的二进制缓存
+（`tuist cache`）。目标是消除每次 clean build 重编 80+ 个第三方包的开销 —— POC 实测 clean build
+从 110 秒降到 7.7 秒。
+
+**本次只迁包，三个 `.xcodeproj` 保持手写不动**，改由 workspace 跨项目引用 Tuist 生成的 framework。
+`.xcodeproj` 自身的 Tuist 化（含两处 Tuist 表达不了的 pbxproj hack）留待后续提案，
+理由见「非目标」与「前期调研」。
+
+## 动机
+
+**构建时间的 86% 花在不属于本项目的代码上。**
+
+统计 `Products/Logs/04-build-main.log`（2026-08-06 的一次真实主 app 构建），5939 个编译任务的归属：
+
+| 归属 | 编译任务数 | 占比 |
+|---|---|---|
+| 第三方依赖 | ~5100 | 86% |
+| 本项目代码 | ~840 | 14% |
+
+前七名全部是外部依赖：UIFoundation 1005、swift-nio 810、SwiftMCP 657、RxAppKit 462、
+swift-certificates 387、swift-helper-service 216、MachOSwiftSection 213。本项目最大的
+`RuntimeViewerPackages` 只有 546，`RuntimeViewerUsingAppKit` 257。
+
+这批依赖版本很少变，却在下列场景被反复全量重编：
+
+- `RunScript.sh` 用 `/Volumes/DerivedData/RuntimeViewer/Debug-arm64e`，`ArchiveScript.sh` 用
+  `/Volumes/DerivedData/RuntimeViewer/Archive` —— **两套 DerivedData 互不共享**，来回切就各重编一次
+- 切分支导致 DerivedData 失效
+- CI 的全新环境
+
+**已有的手工缓解措施证明这个痛点是真实的，而且手工路线走不通。**
+`RuntimeViewerPrecompiledLibraries/swift-syntax` 已经把 swift-syntax 全套换成了
+`MxIris-DeveloperTool/swift-syntax-builder` 发布的预编译 xcframework（`.binaryTarget` +
+`_Aggregation` 空壳 target）。这条路每覆盖一个包就要自建一条 release 流水线，而
+`tuist cache` 一次覆盖 104 个 target（实测数字，见下）—— 手工路线不可能铺到这个规模。
+
+## 前期调研
+
+全部结论来自 2026-08-17 用 Tuist 4.204.0 在 scratchpad 中搭建的 POC，未改动本仓库任何文件。
+
+### 缓存收益（已实测）
+
+POC 依赖图含 47 个包（UIFoundation 全套、SwiftNIO、swift-crypto/BoringSSL、SwiftMCP、
+swift-syntax、X509 等，覆盖本项目的主要重量级依赖）：
+
+| 场景 | 耗时 |
+|---|---|
+| 无缓存 clean build | **110 秒** |
+| 缓存命中 clean build | **7.7 秒** |
+| `tuist cache` 预热（一次性） | 163 秒，产出 851 MB，104 个 target |
+| `tuist generate`（缓存命中） | 3.6 秒 |
+
+`tuist cache` 判定可缓存的 104 个 target 覆盖了全部宏 target
+（`SwiftMCPMacros`、`FoundationToolboxMacros`、`JSONFoundationMacros`、
+`ObjCRuntimeToolboxMacros`、`AssociatedObjectPlugin` 等）与 swift-syntax 全套
+（`SwiftSyntax` / `SwiftParser` / `SwiftSyntaxMacros` / `SwiftSyntax509`–`603` 六个版本兼容层）。
+
+### 依赖图兼容性（已实测，推翻了原先的顾虑）
+
+- **package traits 不是阻塞点。** 原以为 Swift 6.1 的 package traits（`RuntimeViewerPackages` 的
+  `UIFoundationTraits` 六项、`RuntimeViewerMCP` 的 SwiftMCP 三项）Tuist 处理不了。实测
+  `tuist install` 解析成功，且 traits 被正确翻译成 `SWIFT_ACTIVE_COMPILATION_CONDITIONS`：
+  UIFoundation 得到 `AppleInternal, FilterUI, IDEIcons, NSAttributedStringBuilder, QuickActionBar, TabBar`，
+  SwiftMCP 得到 `Client, OpenAPI, Server`。
+- `tuist install` 解析 47 包成功，`tuist generate` 生成 47 个 Xcode 项目耗时 22.9 秒，
+  **真实编译通过**（110 秒，零错误）。
+
+### Tuist 表达不了的两处 pbxproj hack（已实测确认）
+
+**这两处是「本次不迁 `.xcodeproj`」的直接依据** —— 它们全部位于主 app 项目，
+只要 `.xcodeproj` 保持手写，本次迁移就完全不触碰它们。以下结论留档，供后续提案使用。
+
+这两处是主 app 现有 `.xcodeproj` 中手工雕琢、Xcode GUI 做不出来的构造：
+
+1. **Catalyst helper 嵌入主 app。**
+   `RuntimeViewerUsingAppKit.xcodeproj/project.pbxproj:115` 的
+   `E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */` 是一个
+   `sourceTree = "<group>"` 的**普通文件引用**（指向 `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app`，
+   已在 `.gitignore` 中），而非 build product 引用。`Embed Helpers`（`dstSubfolder = Executables`,
+   `dstPath = ../Applications`）拷的是它。这样刻意不建立 target dependency，绕开了
+   "Xcode 把 Mac Catalyst helper 视作 iOS-family 内容、拒绝其成为 macOS app 依赖" 的限制
+   （此限制已记录在 `AGENTS.md` 的 Catalyst helper build order 一节）。
+
+   Tuist 的 `copyFiles` 的 `.buildProduct(name:)` 强制要求该 target 被声明为依赖，否则报
+   `no product reference was found`；而一旦声明，Tuist 的 graph linter 直接拒绝：
+
+   > Target POCApp has platforms 'macOS' and product 'application' and depends on target
+   > POCCatalystHelper of type 'application' and platforms 'iOS' which is an invalid or not yet
+   > supported combination.
+
+2. **XPC service 产物名是 build setting 插值。**
+   `project.pbxproj:116` 的 `E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */`
+   是一个 `path` 为 `$(RUNTIME_VIEWER_SERVICE_NAME)`、`sourceTree = BUILT_PRODUCTS_DIR` 的
+   文件引用，`Embed LaunchServices`（`dstPath = Contents/Library/LaunchServices`）拷的是它。
+   该变量按配置取三个值（`Configurations/RuntimeViewerUsingAppKit/` 下
+   Debug=`dev.mxiris.runtimeviewer.service`、Debug-arm64e=`dev.arm64e.mxiris.runtimeviewer.service`、
+   Release=`com.mxiris.runtimeviewer.service`），service target 的 `PRODUCT_NAME` 逐配置对应。
+
+   Tuist 的 `.buildProduct(name:)` 只接受静态 target 名，无法表达 `$(VAR)` 插值。
+
+### `USING_LOCAL_DEPENDENCIES` 在 Tuist 下的处境（已实测）
+
+三个包的 `Package.swift` 共用一套 `Package.Dependency.package(local:remote:)` 机制：
+`USING_LOCAL_DEPENDENCIES=1` 时把依赖切到 sibling 目录的本地检出
+（`../../UIFoundation`、`MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RxAppKit")` 等），
+配合 `#filePath` 判断自身是否作为 cloned dependency 被求值。这是同时改上游库时的核心工作流
+（`RuntimeViewer-Debug.xcworkspace` 引用 sibling 检出是同一目的的另一套机制）。
+
+实测结论：
+
+- ✅ `Context.environment` 在 `Tuist/Package.swift` 中**可读**，`#filePath` 探测同样成立
+  （Tuist 的 checkouts 落在 `Tuist/.build/checkouts/`，原有的 `/checkouts/` 判断继续有效）
+- ❌ **Tuist 4.204.0 的 `Tuist/Package.swift` 不支持 `.package(path:)` 本地路径依赖**。
+  硬编码绝对路径同样失败：
+
+  > failed to load the manifest for the local package siblinglib, declared as
+  > "…/SiblingLib" by "…/App/Tuist": no Package.swift in "…/App"
+
+  **对照实验坐实这是 Tuist 特有的限制**：同一份 manifest 交给纯 `swift package resolve`
+  解析成功（exit 0），Tuist 失败。
+- ✅ 改用 `file://` URL 可行：`.package(url: "file:///path/to/Lib", branch: "main")`
+  被 Tuist 正常解析并 checkout。代价是走 git clone，**只能拿到已提交的 commit，
+  看不到工作区未提交的改动** —— 这与 `.package(path:)` 的语义有实质差别。
+- ✅ **`.external` 与 `.local(path:)` 可以在同一个 target 上混用**：POC 中主 app 同时依赖
+  104 个缓存 xcframework 与一个 `.local(path:)` 的工作区包，`tuist generate` 缓存命中，
+  构建成功（8.4 秒，比纯 external 的 7.7 秒多出的部分即编译该本地包本身）。
+
+### 其他实测细节
+
+本次适用：
+
+- **Tuist 的 target UUID 是确定性的**：对同一 `Project.swift` 连续 `generate` 两次，
+  `PBXNativeTarget` 的 UUID 完全一致；改动 target 内容（新增源文件、修改 `deploymentTargets`）
+  后仍不变 —— UUID 只与项目名 + target 名相关。这是「手写 `.xcodeproj` 跨项目引用 Tuist 生成的
+  framework」可行的前提。
+- **external 依赖是静态的**：生成的 external target 为 `MACH_O_TYPE = staticlib` 的 framework，
+  缓存产物是 `.xcframework`。这决定了包 target 必须产出 dynamic framework，见「详细设计」。
+- **缓存按配置分桶**：`tuist cache warm --configuration <name>`。本项目四套配置
+  （Debug / Debug-arm64e / Release / Distribution）需各自预热；`Debug-arm64e` 因 ARCHS 不同
+  必然与 Debug 分桶。另有 `--cache-profile only-external`，只缓存依赖、自有代码照常编译。
+- **objectVersion**：Tuist 生成 55。本次仅三个**包**项目由 Tuist 生成，
+  三个 app / server 的 `.xcodeproj` 保持手写、版本不变
+  （`RuntimeViewerUsingAppKit` 90、`RuntimeViewerServer` 77、`RuntimeViewerUsingUIKit` 70）。
+
+留给后续提案（`.xcodeproj` 层，本次用不到）：
+
+- **Icon Composer 的 `.icon` 可用**：`Resources/AppIcon.icon` 以 `.folderReference` 声明后，
+  actool 正确带 `--app-icon AppIcon` 编译，无需额外处理。
+- **`buildableFolders` 可生成 `PBXFileSystemSynchronizedRootGroup`**，与现有三个项目已采用的
+  Xcode 16+ 同步文件夹一致。
+- **bundle 类型依赖会被 Tuist 自动 embed**：`RuntimeViewerCatalystHelperPlugin` 这类 bundle 只需
+  声明为依赖，再手写 `copyFiles` 会导致
+  `error: Unexpected duplicate tasks`（实测构建失败）。
+
+## 提议方案
+
+### 依赖与本地包 Tuist 化
+
+1. 新建仓库根的 `Tuist.swift` 与 `Tuist/Package.swift`，把三个包 `Package.swift` 中的**远程依赖**
+   声明合并进来，保留 traits 与版本约束。
+2. 三个本地包改写为 Tuist 项目：`RuntimeViewerCore/Project.swift`、
+   `RuntimeViewerPackages/Project.swift`、`RuntimeViewerMCP/Project.swift`，
+   target 拓扑与现有 `Package.swift` 一一对应（合计 15 个源码 target + 6 个测试 target）。
+   包间依赖用 `.project(target:path:)`，第三方依赖用 `.external(name:)`，
+   平台条件依赖 `.when(platforms: appkitPlatforms)` 映射为 `condition: .when([.macos])`。
+3. 包 target 产出 **dynamic framework**（`.framework` 而非 `.staticFramework`），
+   使 static 的 external 依赖被链入包自身，现有 `.xcodeproj` 无须感知传递依赖 ——
+   理由与代价见「详细设计 — 包产物形态」。
+4. 三个手写 `.xcodeproj` 改为经 workspace **跨项目引用**这些 framework，
+   取代原先的 SPM product 引用。这是本次唯一需要改动 `.xcodeproj` 的地方。
+5. 各包的 `Package.swift` 保留还是删除，见「详细设计 — 本地包的双形态问题」。
+6. `RunScript.sh` / `ArchiveScript.sh` / `BuildRuntimeViewerServerXCFramework.sh`
+   在 xcodebuild 之前插入 `tuist install` + `tuist generate`；
+   引入 `tuist cache warm` 的使用约定（四套配置各自预热）。
+
+### 非目标
+
+- **不迁移三个 `.xcodeproj` 自身。** 它们保持手写、继续入库，只改依赖引用方式。
+  两处 Tuist 表达不了的 pbxproj hack（Catalyst helper 假文件引用、
+  `$(RUNTIME_VIEWER_SERVICE_NAME)` 插值，详见「前期调研」）因此在本次**完全不受影响** ——
+  这正是先做包层的价值：收益全部落袋，风险最高的部分一点不碰。
+  `.xcodeproj` 的 Tuist 化留待后续提案。
+- **不引入顶层 `Workspace.swift`。** 现有三份 `contents.xcworkspacedata` 保持手工维护，
+  只把成员从 SPM 包目录换成 Tuist 生成的 `.xcodeproj`。
+- **不引入 Tuist Server / 远程缓存。** 本地缓存（`~/.cache/tuist/Binaries`）已足够，
+  远程缓存要账号与额度，单人开发拿不到额外收益。需要时另开提案。
+- **不改动任何运行时行为。** 本提案只动构建系统，不碰 app 的功能、UI 与架构。
+  唯一的形态变化是包从静态链接变为 dynamic framework，见「影响」。
+- **不迁移 `RuntimeViewerPrecompiledLibraries/swift-syntax`。** 它与 Tuist Cache 目标重叠，
+  但取舍需要单独评估（见「替代方案考量」），本次保持原样。
+- **不动 Sparkle 发布流程与公证流程本身**，只保证它们在新构建系统下行为不变。
+
+## 详细设计
+
+### 包产物形态：必须是 dynamic framework
+
+实测：`tuist install` 生成的 external 依赖是 `MACH_O_TYPE = staticlib` 的**静态** framework
+（POC 中 UIFoundation、SwiftMCP 等全部如此）。这决定了包 target 的产物形态：
+
+- 若包 target 也用 `.staticFramework`，静态库不传递链接，手写的 `.xcodeproj` 就必须显式链接
+  **全部传递依赖** —— POC 中是 104 个 target 的量级，手工维护 pbxproj 不可行。
+- 因此包 target 一律用 `.framework`（dynamic）。静态的 external 依赖被链入包自身，
+  `.xcodeproj` 只需链接并嵌入这几个包 framework。
+
+**代价（行为变化，需在验收中确认）**：现状是 SPM library 被静态链进 app 可执行文件，
+改为 dynamic framework 后，产物多出 `Contents/Frameworks/RuntimeViewer*.framework`，
+且必须 embed + code sign。这会影响 app bundle 结构、启动时的 dyld 加载数量，
+以及公证时的签名对象数量。
+
+### 现有 `.xcodeproj` 的引用改造
+
+三个 `.xcodeproj` 保持手写，仅把依赖引用从 SPM product 换成跨项目 framework 引用：
+workspace 纳入 Tuist 生成的 `RuntimeViewerCore.xcodeproj` / `RuntimeViewerPackages.xcodeproj` /
+`RuntimeViewerMCP.xcodeproj`，app target 链接并嵌入其中的 framework。
+
+该引用靠 pbxproj 的 `PBXContainerItemProxy` 按 target UUID 锚定，因此**要求 Tuist 生成的 UUID
+稳定**。已实测确认：Tuist 的 target UUID 是确定性的，连续 `generate` 完全一致，
+且在改动 target 内容（新增源文件、修改 `deploymentTargets`）后仍不变 ——
+UUID 只与项目名 + target 名相关。改名 target 会使引用失效，须与 `.xcodeproj` 同批次更新。
+
+### `USING_LOCAL_DEPENDENCIES` 的替代
+
+保留环境变量语义，但底层机制按用途拆成两条：
+
+- **默认路径（`USING_LOCAL_DEPENDENCIES` 未开启）**：`Tuist/Package.swift` 全部走
+  `.package(url:)` 远程 pin，`.external(name:)` 引用，缓存全量生效。
+- **联调路径**：需要改哪个上游库，就在对应包的 `Project.swift` 里把那一个依赖从
+  `.external(name:)` 换成 `packages: [.local(path: "../../UIFoundation")]` +
+  `.package(product:)`。只有该库退出缓存，其余 100+ target 仍命中。
+
+这条路径是实测过的混用方案，且**保留了 `.package(path:)` 直连工作区的语义**
+（改上游源码无需 commit 即可生效）—— 这是 `file://` URL 方案做不到的，因此不采用后者。
+
+代价：切换联调对象需要改 `Project.swift` 一行，而非改一个环境变量。为此提供
+`Tuist/ProjectDescriptionHelpers/LocalDependencies.swift` 辅助函数，把「读环境变量决定
+某依赖走 external 还是 local」这个判断集中一处：
+
+```swift
+public func dependency(_ name: String, localPath: String) -> TargetDependency {
+    ProcessInfo.processInfo.environment["USING_LOCAL_DEPENDENCIES"] == "1"
+        && FileManager.default.fileExists(atPath: localPath)
+        ? .package(product: name)
+        : .external(name: name)
+}
+```
+
+> 注：`ProjectDescriptionHelpers` 在 `tuist generate` 期间求值，读环境变量可行；对应的
+> `packages:` 数组需同步条件化。此设计**尚未实测**，落地第 3 步须先验证，
+> 失败则退回「手工改一行」的朴素方案。
+
+### 本地包的双形态：`Package.swift` 与 `Project.swift` 并存（已决定）
+
+**决定：保留 `Package.swift`**，与新增的 `Project.swift` 并存。
+理由是保住三个包的 SPM 形态 —— 仍可被 `swift build` 单独构建，
+仍可作为 SPM 依赖被外部仓库消费。曾评估过的「删除 `Package.swift` 只留 `Project.swift`」
+更干净，但会永久放弃这两项能力，代价不可逆。
+
+代价是**两重漂移源**，必须有机制约束，不能只靠人工同步：
+
+1. **target 拓扑**：target 名、target 之间的依赖、平台条件，两份声明各写一遍。
+2. **依赖版本约束**：各包 `Package.swift` 的 `.package(url:from:)` 与
+   `Tuist/Package.swift` 的同名声明各有一份 pin，可能指向不同版本。
+   **这一重比拓扑更危险** —— 拓扑漂移会编译失败，版本漂移则可能悄无声息地
+   让 `swift build` 与 `tuist generate` 构建出行为不同的产物。
+
+**防护机制：一致性校验脚本**（落地步骤新增一步）。两侧都能输出机器可读的 JSON：
+
+```bash
+swift package dump-package --package-path RuntimeViewerCore   # targets + dependencies + 版本约束
+tuist dump project --path RuntimeViewerCore                    # targets + packages
+```
+
+脚本比对三项并在不一致时以非零码退出：
+
+- 两侧 target 名集合相等（测试 target 一并比对）
+- 每个 target 的内部依赖集合相等
+- 每个外部依赖的 URL 与版本约束在两侧一致
+
+该校验接入 CI 与发布前检查，使漂移变成**构建失败**而非静默行为差异。
+若某项差异是有意为之（例如某 target 只在 Tuist 侧存在），
+在脚本的白名单里显式登记并注明理由，不允许直接放宽比对规则。
+
+## 替代方案考量
+
+- **连同三个 `.xcodeproj` 一并 Tuist 化（本提案初稿的方案，已推迟）。**
+  推迟原因：收益全部来自包层（缓存只作用于依赖），而 `.xcodeproj` 层集中了全部风险 ——
+  两处 Tuist 表达不了的 pbxproj hack 需改写成自维护的 run script，
+  并连带重新验证 SMJobBless 签名链、公证与 Sparkle。
+  先做包层可以把收益全部拿到手而完全不碰这些，因此拆分为两个提案。
+
+  > 初稿曾以「跨项目引用需长期手工维护、每次 `tuist generate` 后都要确认引用未断」
+  > 为由否决只迁包层。**该理由已被实测推翻**：Tuist 的 target UUID 是确定性的，
+  > 连续生成与内容变更后均不变，跨项目引用不会自行断裂。
+  > 真正的代价不是引用维护，而是包必须改为 dynamic framework（见「详细设计」）。
+
+- **继续扩展预编译 xcframework 路线（现有 `RuntimeViewerPrecompiledLibraries` 的做法）。**
+  否决原因：每覆盖一个包需自建一条 release 流水线并手工维护 checksum，
+  而缓存目标是 104 个 target，规模上不可行。
+  （该目录本次保持原样；它与 Tuist Cache 的取舍留待落地后另评。）
+
+- **让两个脚本共用一个 DerivedData。**
+  成本极低，能消除「Debug-arm64e 与 Archive 来回切各重编一次」这一项。
+  否决原因：只覆盖部分场景（clean build、切分支、CI 仍然全量重编），
+  且两套配置的 ARCHS 不同，共用目录并不能让产物互相复用。可作为迁移期间的临时缓解。
+
+- **用 `file://` URL 表达本地依赖。**
+  实测可行，但走 git clone 只能拿到已提交的 commit，改上游库必须先 commit 才能被看见，
+  联调体验显著劣于 `.package(path:)`。已被「external + local 混用」方案取代。
+
+- **`.package(path:)` 直接写进 `Tuist/Package.swift`。**
+  实测不可行（见前期调研），Tuist 4.204.0 的限制。
+
+## 影响
+
+### 用户可见变化
+
+无。本提案只改构建系统，不改 app 的任何界面、交互与行为。
+
+### 可发现性
+
+不适用（无用户可见功能）。
+
+对**开发者**而言可发现性有变化：三个包的 `.xcodeproj` 由 Tuist 生成、不入库，
+clone 后必须先跑 `tuist install && tuist generate` 才能用 Xcode 打开 workspace。
+须在 `README.md` 与 `AGENTS.md` 的 Build Commands 一节明确写出这一步。
+
+三个 app / server 的 `.xcodeproj` 与三份 `.xcworkspace` **仍然入库**，本次不变。
+
+### 数据与配置兼容
+
+不涉及。用户文档、偏好设置、缓存、钥匙串条目均不受影响。
+
+**但 bundle identifier 与 XPC service 名必须逐配置保持不变** ——
+`Configurations/CodeSigning.xcconfig` 定义的
+`RUNTIME_VIEWER_APP_*_BUNDLE_IDENTIFIER`、
+`RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER` 与
+`RUNTIME_VIEWER_SERVICE_NAME` 若在迁移中漂移，已安装的 SMJobBless helper 会失配、
+Sparkle 会把新版本视为不同 app。本次不触碰这些 target 的配置，
+它们理应零变化，验收仍须逐项比对（落地第 6 步）。
+
+### 平台与最低版本
+
+不变。各包 target 的 deployment target 原样搬迁，验收时以 `-showBuildSettings` 比对。
+
+### 发布
+
+- 不新增权限、entitlement 或隐私清单条目；现有 entitlements 文件原样引用。
+- **本次最高风险项是包由静态链接改为 dynamic framework**：app bundle 新增
+  `Contents/Frameworks/RuntimeViewer*.framework`，需正确 embed + code sign，
+  公证的签名对象随之增多。`ArchiveScript.sh` 的 archive → export → notarize 全链路
+  必须完整跑通一次并实际安装验证 helper 授权，才能认为迁移完成。
+- 原有两处 Embed phase（LaunchServices 的 XPC service、Catalyst helper）**本次完全不动**，
+  仍由 Xcode 的 `CodeSignOnCopy` 处理，不承担改写风险。
+- Sparkle appcast 生成依赖 `$DERIVED_DATA/SourcePackages/artifacts/sparkle` 下的
+  `generate_appcast`；Sparkle 改经 external 集成后产物布局可能变化，
+  `ArchiveScript.sh` 中这段查找逻辑需确认，必要时调整。
+
+## 落地步骤
+
+1. **建立 Tuist 骨架**：仓库根 `Tuist.swift` + `Tuist/Package.swift`，仅含远程依赖声明。
+   验证 `tuist install` 能解析出与现有 `Package.resolved` 一致的版本集合。
+2. **迁移 `RuntimeViewerCore`**（4 源码 + 2 测试 target）。验证：`tuist generate` 后该项目
+   单独构建通过，测试可运行。
+3. **验证 `ProjectDescriptionHelpers` 的环境变量方案**（详细设计中标注为未实测的部分）。
+   不可行则退回手工切换，并更新本提案。
+4. **迁移 `RuntimeViewerMCP`**（1 源码 + 1 测试 target）。
+5. **迁移 `RuntimeViewerPackages`**（10 源码 + 3 测试 target，26 个直接依赖、
+   60 处 product 引用、34 处平台条件）。验证：三个包互相引用正确，全部构建通过。
+   三个包的 `Package.swift` 一律保留（见「详细设计 — 本地包的双形态」），
+   验证 `swift build` 在三个包上仍然可用。
+5b. **一致性校验脚本**：比对 `swift package dump-package` 与 `tuist dump project` 的
+   target 拓扑与依赖版本约束，不一致即非零退出；接入 CI 与发布前检查。
+   与第 5 步同批次落地 —— 校验缺席则双形态从第一天起就开始漂移。
+6. **改造三个 `.xcodeproj` 的依赖引用**（本次唯一触碰 `.xcodeproj` 的一步）：
+   workspace 成员从 SPM 包目录换成 Tuist 生成的 `.xcodeproj`，
+   app / framework target 改为链接并嵌入包 framework。
+   验收清单（逐项核对，不得省略）：
+   - Debug / Debug-arm64e / Release 三套配置下，app bundle 结构与迁移前逐路径比对；
+     **新增**的 `Contents/Frameworks/RuntimeViewer*.framework` 是唯一允许的差异
+   - 原有嵌入项**原样保留**（`Contents/Library/LaunchServices/<service>`、
+     `Contents/PlugIns/*.bundle`、`Contents/Applications/RuntimeViewerCatalystHelper.app`、
+     `Contents/Frameworks/RuntimeViewerServer.framework`）—— 本次不改这些 Embed phase，
+     它们理应零变化，出现差异即为回归
+   - 三套配置的 bundle identifier 与 `RUNTIME_VIEWER_SERVICE_NAME` 与迁移前一致
+   - `codesign -dvvv` 核对新增 framework 已正确签名，SMJobBless helper 实际安装并取得授权
+7. **首次 `tuist cache warm`，记录实测加速比**，与本提案 POC 数字比对并回填。
+8. **脚本接入**：三个 `.sh` 插入 `tuist install` / `tuist generate`；
+   确认 `ArchiveScript.sh` 的 Sparkle `generate_appcast` 查找路径仍然有效
+   （Sparkle 现经 external 集成，产物布局可能变化）。
+9. **完整发布演练**：`ArchiveScript.sh` 走通 archive → export → notarize，
+   产物安装后验证 helper 授权与 Sparkle 更新检查。
+   重点确认新增的 dynamic framework 不破坏公证与 SMJobBless 授权链。
+10. **文档同批次更新**：`README.md`（clone 后需 `tuist generate`）、
+    `AGENTS.md`（Build Commands 一节）、本提案状态改 `Implemented`。
+
+### 交付路径
+
+本分支基线是 `next`。按现行分支模型，改动以 PR 形式合入 `next`，`next` 最终整体合入 `main`
+（`AGENTS.md` 的 Branching Model 一节仍写着旧模型「next 永不合入 main」，需另行修正）。
+
+据此，本次迁移**按上述 10 步拆成多个 PR 依次合入 `next`**。
+但每个 PR 必须让 `next` 处于**整体可构建**的状态，这带来一条硬约束：
+
+- **三个包的 Tuist 化（第 2、4、5 步）与 `.xcodeproj` 的引用改造（第 6 步）必须在同一个 PR 内闭合。**
+  包一旦从 SPM 形态改为 Tuist 项目，原先经 workspace 引用它的 `.xcodeproj` 立刻失效，
+  中间态构建不通。因此这四步合为一个 PR；第 1、3 步（骨架与机制验证）可先行独立合入，
+  第 7–10 步（缓存、脚本、发布演练、文档）可各自独立成 PR。
+
+`next` 合入 `main` 之前还有一件未决事项：
+
+- **`main` 的验收方式需要补充。** `AGENTS.md` 要求「`main` 上的一切必须能对着**已发布的**
+  远程 SPM pin 编译，用 `RuntimeViewer-Distribution.xcworkspace` 验证，
+  而非 Debug workspace（其本地检出会掩盖 pin 不匹配）」。
+  本次不删除该 workspace，规则本身继续成立，但需增加一条前置：
+  「`USING_LOCAL_DEPENDENCIES` 未设置时 `tuist install` 必须解析成功」——
+  否则包的依赖来源是本地检出还是远程 pin 将不再由 workspace 成员关系决定，
+  而是由 `Tuist/Package.swift` 的求值结果决定，原规则会失去约束力。
+  **具体措辞待定，合入 `main` 前需确认。**
+
+**收尾时必须判断两件事**（结果写进决策日志）：
+
+- **配套专题文章**：「包为什么必须是 dynamic framework 而非 staticFramework」
+  与「`USING_LOCAL_DEPENDENCIES` 在 Tuist 下如何联调上游库」都属于
+  「下次维护会踩、代码本身看不出来的决策」，**倾向写一篇实现说明**覆盖两者。
+- **新术语**：`external 集成` / `binary cache` / `cache 分桶` 等若在项目文档中反复出现，
+  登记进 `Documentations/Glossary.md`。
+
+## 决策日志
+
+| 日期 | 变更 | 说明 |
+|------|------|------|
+| 2026-08-17 | Created as Draft | 用户批准「全部迁移到 Tuist」并要求在独立分支进行。提案基于同日的 POC 实测：缓存命中使 clean build 从 110s 降至 7.7s；确认 package traits 可用、两处 pbxproj hack 需改写为 run script、Tuist 不支持 `Tuist/Package.swift` 中的本地路径依赖。 |
+| 2026-08-17 | 分支基线改为 `next` | 原从 `main` 切出，按用户要求改为基于 `next`。提案编号随之从 `0007` 改为 `0012`（`next` 上 0007/0008/0011 已占用，索引明确要求新提案从 0012 起）。同时按 `next` 实际内容校正 target 计数与 `README.md` 行号引用。 |
+| 2026-08-17 | 交付路径按现行分支模型重写 | 用户指出 `AGENTS.md` 的「next 永不合入 main」已过时，现行模型是 PR 合入 `next`、`next` 整体合入 `main`。原「无法渐进合入、需一次性切换」的判断作废。`AGENTS.md` 该节待另行修正。 |
+| 2026-08-17 | **范围收窄为只迁包层** | 用户要求先只做三个本地 SPM 包，`.xcodeproj` 暂不迁。收益全部落在包层而风险集中在 `.xcodeproj` 层，故拆分。新增实测依据：Tuist target UUID 确定性稳定（跨 generate、跨内容变更均不变），跨项目引用可靠；external 依赖为 `MACH_O_TYPE = staticlib`，故包必须产出 dynamic framework。初稿否决「只迁包层」的理由（跨项目引用需长期维护）据此推翻，已在「替代方案考量」中留档。 |
+| 2026-08-17 | 保留三个包的 `Package.swift` | 用户拍板：`Package.swift` 与 `Project.swift` 并存，保住 SPM 形态（可 `swift build`、可被外部仓库消费）。代价是 target 拓扑与依赖版本约束两重漂移源，故新增落地第 5b 步：用 `swift package dump-package` 与 `tuist dump project` 的 JSON 比对做一致性校验，接入 CI，使漂移表现为构建失败而非静默的行为差异。 |
