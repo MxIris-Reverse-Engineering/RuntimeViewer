@@ -1,6 +1,15 @@
 {
   "pins" : [
     {
+      "identity" : "appkitplus-release",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
+      "state" : {
+        "revision" : "c895a51ee055a6bfe0341ab67f49cbf9a1713cb9",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "associatedobject",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/AssociatedObject",
@@ -151,15 +160,6 @@
       "state" : {
         "revision" : "96d782a576273b73b277b577943a2a25b00b919e",
         "version" : "0.5.0"
-      }
-    },
-    {
-      "identity" : "openuxkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/OpenUXKit/OpenUXKit",
-      "state" : {
-        "branch" : "main",
-        "revision" : "6d117727b7e2f86615d483c0e129dcd3460a2fdf"
       }
     },
     {
@@ -664,15 +664,6 @@
       "state" : {
         "revision" : "0b323b0b4019ff9828786f2f97fbe23c97c59004",
         "version" : "0.17.0"
-      }
-    },
-    {
-      "identity" : "uxkitcoordinator",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/OpenUXKit/UXKitCoordinator",
-      "state" : {
-        "branch" : "main",
-        "revision" : "e95846dc7424a7ec4b70155b2f1f04a49c6a01ad"
       }
     },
     {

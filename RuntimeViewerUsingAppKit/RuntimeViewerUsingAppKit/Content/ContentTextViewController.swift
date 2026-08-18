@@ -1,10 +1,11 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerUI
 import RuntimeViewerCore
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-final class ContentTextViewController: UXKitViewController<ContentTextViewModel>, NSTextViewDelegate {
+final class ContentTextViewController: BaseViewController<ContentTextViewModel>, NSTextViewDelegate {
     override var acceptsFirstResponder: Bool { true }
 
     override var shouldDisplayCommonLoading: Bool { true }
@@ -107,10 +108,10 @@ final class ContentTextViewController: UXKitViewController<ContentTextViewModel>
         .disposed(by: rx.disposeBag)
 
         output.theme.drive(with: self) {
-            ($0.contentView as? UXView)?.backgroundColor = $1.backgroundColor
+            $0.contentView.backgroundColor = $1.backgroundColor
             $0.textView.backgroundColor = $1.backgroundColor
             $0.scrollView.backgroundColor = $1.backgroundColor
-            $0.lineNumberRulerView.backgroundColor = $1.backgroundColor
+            $0.lineNumberRulerView.gutterBackgroundColor = $1.backgroundColor
             var selectedAttributes = $0.textView.selectedTextAttributes
             selectedAttributes[.backgroundColor] = $1.selectionBackgroundColor
             $0.textView.selectedTextAttributes = selectedAttributes

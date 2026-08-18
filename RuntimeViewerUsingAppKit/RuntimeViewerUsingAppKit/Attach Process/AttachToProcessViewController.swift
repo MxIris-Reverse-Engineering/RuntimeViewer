@@ -5,7 +5,7 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import DependenciesMacros
 
-final class AttachToProcessViewController: UXKitViewController<AttachToProcessViewModel> {
+final class AttachToProcessViewController: BaseViewController<AttachToProcessViewModel> {
 
     override var shouldDisplayCommonLoading: Bool { true }
     

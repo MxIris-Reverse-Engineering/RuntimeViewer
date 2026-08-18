@@ -20,6 +20,7 @@
 | [0007](0007-objc-relationship-index-returns-to-application.md) | ObjC 关系索引归还应用侧 | 部分被 0008 取代 | MachOObjCSection 0003 的下游适配：渲染与解析层搬进库（**保留**），关系表改由应用从 `ObjCIndexingEvent` 事件流重建（**已被 0008 取代**）。 |
 | [0008](0008-symmetric-objc-and-swift-index-layers.md) | ObjC 与 Swift 索引层的对称化 | Implemented | `RuntimeObjCInterfaceIndexer` 回到与 `RuntimeSwiftInterfaceIndexer` 同构的形态：包装库侧 upstream、eager 反向表、`addSubIndexer` / `removeSubIndexer` 聚合、由 factory 持有聚合器，`RuntimeRelationshipsResolver` 从遍历所有 image 退回成查两次聚合器。取代 0007 的关系索引设计。 |
 | [0011](0011-uifoundation-settings-adoption.md) | RuntimeViewer 接入 UIFoundation Settings | Implemented | 保留 RuntimeViewer 业务设置模型与页面，采用 UIFoundation 的持久化 store、属性包装器、设置窗口和导航，并删除重复壳层。原以 `0007` 起草，与本分支的 `0007` 撞号，合流时改为 `0011`。 |
+| [0013](0013-replace-uxkit-with-appkitplus.md) | 用 AppKitPlus 取代 UXKit | In Progress | 导航容器从 Apple 私有的 `UXKit.framework` 换成 AppKitPlus 的 `NSNavigationController`（port 自 OpenUXKit，接口同名同义），三个 `UX` 前缀基类改名为 `Base*` 并直接继承 `NSViewController` / `NSNavigationController`，删除 `OpenUXKit`、`UXKitCoordinator` 依赖与 `USING_SYSTEM_UXKIT` 开关。取代 `feature/uifoundation-navigation` 上的 0012。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
@@ -27,8 +28,9 @@
 > `feature/objc-rendering-and-indexing` 的 `0007-objc-relationship-index-returns-to-application.md`
 > 保留 `0007`，`feature/uifoundation-settings-adoption` 的那篇改号为 `0011`。
 > 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`），
-> `0009` / `0010` 在 `feature/source-editor-integration`。**新提案从 `0012` 起编号**，
-> 不要只看本分支已有的文件挑下一个空号。
+> `0009` / `0010` 在 `feature/source-editor-integration`，`0012` 在 `feature/uifoundation-navigation`
+> （`0012-replace-uxkit-navigation-with-uifoundation.md`，已被本分支的 0013 取代）。
+> **新提案从 `0014` 起编号**，不要只看本分支已有的文件挑下一个空号。
 
 ## 与 `Plans/` 的关系
 

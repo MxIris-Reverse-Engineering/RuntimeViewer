@@ -15,11 +15,6 @@
 @_exported import RxAppKit
 @_exported import CocoaCoordinator
 @_exported import RxCocoaCoordinator
-#if USING_SYSTEM_UXKIT
-@_exported import UXKitCoordinator
-#else
-@_exported import OpenUXKitCoordinator
-#endif
 #endif
 
 #if canImport(UIKit) && !os(macOS)

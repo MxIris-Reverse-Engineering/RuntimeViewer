@@ -3,7 +3,7 @@ import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 import RuntimeViewerUI
 
-final class BatchExportingCompletionViewController: UXKitViewController<BatchExportingCompletionViewModel>, ExportingStepViewController {
+final class BatchExportingCompletionViewController: BaseViewController<BatchExportingCompletionViewModel>, ExportingStepViewController {
     private let headerIconImageView = ImageView().then {
         $0.image = .symbol(systemName: .checkmarkCircleFill)
         $0.symbolConfiguration = .init(pointSize: 22, weight: .semibold)

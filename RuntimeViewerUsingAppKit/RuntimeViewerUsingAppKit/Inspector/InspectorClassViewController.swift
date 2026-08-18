@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-final class InspectorClassViewController: UXEffectViewController<InspectorClassViewModel> {
+final class InspectorClassViewController: BaseEffectViewController<InspectorClassViewModel> {
     private let classHierarchyView = InspectorClassHierarchyView()
 
     private lazy var contentStackView = VStackView {

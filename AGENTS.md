@@ -351,9 +351,8 @@ If a lifecycle responsibility doesn't fit one of these one-liners, **make it a n
 
 ### ViewController Base Class Selection
 
-- **`AppKitViewController<VM>`**: Default choice for simple view controllers that don't need UXKit features (contentView, loading indicator, skeleton effects)
-- **`UXKitViewController<VM>`**: Use when the ViewController needs `contentView` support, loading indicators (`CommonLoadingView`), or skeleton effects
-- **`UXEffectViewController<VM>`**: Use when a visual effect background is needed (inherits `UXKitViewController`)
+- **`BaseViewController<VM>`**: Default choice. A plain `NSViewController` carrying the ViewModel plumbing plus `contentView`, loading indicator (`CommonLoadingView`) and skeleton support. AppKitPlus's navigation stack takes plain `NSViewController`s, so nothing has to inherit a navigation-specific base.
+- **`BaseEffectViewController<VM>`**: Use when a visual effect background is needed (inherits `BaseViewController`)
 
 ### UI Component Selection
 
@@ -449,7 +448,7 @@ The identity guard matters: re-entering the same object (a `.back` route from a 
 
 ### ViewController Conventions
 
-**Base classes**: `AppKitViewController<VM>` (simple) or `UXKitViewController<VM>` (with contentView support).
+**Base classes**: `BaseViewController<VM>` (default) or `BaseEffectViewController<VM>` (visual effect background).
 
 **UI events** — prefer RxAppKit / RxCocoa `rx.*` accessors over hand-rolled `PublishRelay` + `@objc` action plumbing. Wire control events straight into `Input`:
 

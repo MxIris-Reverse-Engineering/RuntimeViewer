@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingProgressViewController: UXKitViewController<ExportingProgressViewModel>, ExportingStepViewController {
+final class ExportingProgressViewController: BaseViewController<ExportingProgressViewModel>, ExportingStepViewController {
     private let progressPhaseLabel = Label("Preparing...").then {
         $0.font = .systemFont(ofSize: 20, weight: .bold)
         $0.textColor = .controlTextColor

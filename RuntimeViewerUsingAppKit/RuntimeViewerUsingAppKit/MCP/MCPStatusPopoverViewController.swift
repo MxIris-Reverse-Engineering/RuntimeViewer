@@ -5,7 +5,7 @@ import RuntimeViewerApplication
 import RuntimeViewerMCPBridge
 import RuntimeViewerSettingsUI
 
-final class MCPStatusPopoverViewController: UXKitViewController<MCPStatusPopoverViewModel<MainRoute>> {
+final class MCPStatusPopoverViewController: BaseViewController<MCPStatusPopoverViewModel<MainRoute>> {
     // MARK: - Views
 
     private let statusCircle = ImageView()
