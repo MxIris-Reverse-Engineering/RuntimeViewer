@@ -20,6 +20,7 @@
 | [0007](0007-objc-relationship-index-returns-to-application.md) | ObjC 关系索引归还应用侧 | 部分被 0008 取代 | MachOObjCSection 0003 的下游适配：渲染与解析层搬进库（**保留**），关系表改由应用从 `ObjCIndexingEvent` 事件流重建（**已被 0008 取代**）。 |
 | [0008](0008-symmetric-objc-and-swift-index-layers.md) | ObjC 与 Swift 索引层的对称化 | Implemented | `RuntimeObjCInterfaceIndexer` 回到与 `RuntimeSwiftInterfaceIndexer` 同构的形态：包装库侧 upstream、eager 反向表、`addSubIndexer` / `removeSubIndexer` 聚合、由 factory 持有聚合器，`RuntimeRelationshipsResolver` 从遍历所有 image 退回成查两次聚合器。取代 0007 的关系索引设计。 |
 | [0011](0011-uifoundation-settings-adoption.md) | RuntimeViewer 接入 UIFoundation Settings | Implemented | 保留 RuntimeViewer 业务设置模型与页面，采用 UIFoundation 的持久化 store、属性包装器、设置窗口和导航，并删除重复壳层。原以 `0007` 起草，与本分支的 `0007` 撞号，合流时改为 `0011`。 |
+| [0007](0007-inject-ios-simulator-process.md) | 支持注入 iOS Simulator 进程 | Accepted | 注入器把自身地址空间的符号地址喂给目标进程，打崩了三个 SpringBoard。先加平台守卫止血，再把符号解析改为针对目标进程，让 dlopen 路径支持 iOS Simulator 目标。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
