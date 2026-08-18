@@ -1,9 +1,9 @@
 # 0012 - 用 UIFoundation 的 NavigationController 取代 UXKit
 
-- **状态**: In Progress
+- **状态**: Superseded（被 [0013](0013-replace-uxkit-with-appkitplus.md) 取代，见文末决策日志）
 - **作者**: JH
 - **日期**: 2026-08-17
-- **最后更新**: 2026-08-17
+- **最后更新**: 2026-08-18
 
 ## 摘要
 
@@ -262,5 +262,6 @@ UIFoundation 的 `UIFoundationAppKit/Navigation/NavigationController`（约 1800
 
 | 日期 | 事件 | 说明 |
 |---|---|---|
+| 2026-08-18 | In Progress → Superseded | 改走 AppKitPlus，见 0013。两条路线目标相同（都摆脱 Apple 私有框架 `UXKit.framework`），分歧在代价：AppKitPlus 的导航栈逐文件 port 自 OpenUXKit，接口与 UXKit 同名同义，迁移退化为机械改名，`transitionCoordinator` 与 `SidebarNavigationController` 的 macOS 26 底色补丁都能原样保留；代价是本提案「动机一」（导航栏隐藏却仍被重新布局，约占 push 开销一半）很可能被一并 port 过去，需实测。本提案的实现代码留在 `feature/uifoundation-navigation` 分支上，不合入。 |
 | 2026-08-17 | Accepted → In Progress | 四个未决问题全部拍板（见「已定方向」），开始实现。 |
 | 2026-08-17 | Created as Draft | 起因是提案 0009 的 SourceEditor 预热落地后复测，发现剩余卡顿与 SourceEditor 无关：`sample` 显示每次选中对象要向两个面板各 push 一次，约一半开销花在**已被隐藏的** UXKit 导航栏重新布局上。顺带解决对 Apple 私有框架 `UXKit.framework` 的依赖。 |
