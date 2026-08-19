@@ -3,7 +3,7 @@
 - **状态**: Accepted（采纳方案 B）
 - **作者**: JH
 - **创建日期**: 2026-08-15
-- **最后更新**: 2026-08-15
+- **最后更新**: 2026-08-19
 - **所属愿景**: [自建代码视图引擎](../Visions/CodeViewEngine.md)
 - **关联提案**: 无
 - **实现分支 / PR**: 待定
@@ -514,11 +514,20 @@ Signing`，Apple Root CA），按规则应当豁免、无需 entitlement。**这
    **并且必须设 `lineNumberFont`**，否则行号图层全是 0×0、gutter 塌成 6pt。见下。
 6. **主题转换** —— `SourceEditorThemeConversion`，28 个语法键全部写入。
 7. **语义高亮** —— 走 `SourceModelLanguageService.nodeTypeAdjuster` 改写解析器节点类型。
+   一类节点到不了这个 adjuster：框架先自行判定、命中即提前返回，ObjC 父类名因此被当成
+   声明着色。绕法与论证见
+   [ObjC 父类名被染成"声明"色](../ResolvedIssues/2026-08-19-objc-superclass-colored-as-declaration.md)。
 8. **正式设置项** —— Settings › Editor，`Settings.Editor.usesSourceEditor`，默认关闭。
 9. **entitlement** —— `com.apple.security.cs.disable-library-validation` 已加。
 10. **内存实测** —— 见下。spike 那个「2.8 倍」是离屏测量的假象,已作废。
 11. **附加显示能力** —— 代码折叠、sticky header、minimap、行号、scope guides，五项都是
     Settings › Editor 里的独立开关。见下。
+12. **右键菜单**（2026-08-19）—— Jump to Definition / Open in New Tab，与 `NSTextView`
+    pane 对等。走框架自己的 `SourceEditorView.contextualMenuItemProvider`；它只递一个
+    `NSMenu`，不带事件也不带位置，点击位置从 `NSApp.currentEvent` 取——整条
+    `rightMouseDown` → `popUpContextMenu` 都在同一个事件的处理里，框架自己也是按这个事件
+    量的。菜单项由 app 侧构造（target / action 在那边），bridge 只负责把位置解析成 token
+    范围，和 ⌘-click 的分工一致。同一处顺手删掉框架自带的 Cut，理由见下。
 
 ### 内存:SourceEditor 的开销可忽略(2026-08-15 实机测量)
 
@@ -1014,3 +1023,6 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-16 | 折叠列与正文的空隙自己补 | ribbon 的 `leadingInset`（macOS 26 起 4pt）全加在朝向行号的一侧，正文一侧不留白。Xcode 从前靠 `additionalLeftPadding = round(字号/2)` 补，而 macOS 26 给它加了「必须存在 gutter annotation」的前置条件，我们这个视图恒为 0。改写 `SourceEditorContentView.contentMargins.left`——框架自己从不写它，但写它也不触发重排，故放在 `applyTheme` 里紧挨 theme 赋值之前，由 theme 赋值刷新。沿用 Xcode 那条公式，间距随字号走。 |
 | 2026-08-16 | 首次打开慢是 dlopen，加预热 | 分段实测：`dlopen` 60ms + bundle 1ms + 建视图 9ms + 首帧 12ms 全是一次性，`setSource` 冷热都是 8–9ms，所以卡的不是解析器预热。加载全程可离开主线程（后台 63.5ms 期间主线程照常跑 runloop），故 `SourceEditorLoader.prewarm()` 在后台做 dlopen + bundle load、回主线程落定，AppDelegate 启动时调用；`NSView` 构造仍留在主线程。不加锁——两条路径的加载都是幂等且线程安全的。 |
 | 2026-08-16 | 预热改成观察设置 | 第一版预热**一次都没跑过**：`loadOnLaunch()` 是 `Task { await settings.load() }`，而预热在 `applicationDidFinishLaunching` 里同步读开关，读到的是默认值，主开关默认关，`guard` 直接 return。曾误判为「后台优先级被启动挤掉」——分辨证据是 trace 里连一个工作线程的 `dlopen` 都没有，晚开始应当看得见。改用 `SwiftNavigation.observe` 盯设置（`SettingsStore` 是 `@Observable`，`load()` 替换 model 会重新触发），顺带支持在设置里当场打开就预热。QoS 升到 `userInitiated` 一并保留。日志区分 `prewarmed` / `on demand`，否则这类误判没有证据可查。 |
+| 2026-08-19 | ObjC 父类名着色修正 | 框架的 `SourceModelSyntaxTokenProvider` 在征询 `nodeTypeAdjuster` 之前先自己判定：父节点是 `xcode.syntax.name.type` 且位置在声明内，就直接设成 `xcode.syntax.declaration.type` 并返回。ObjC 语法规范让被声明的类名和父类名共用 `xcode.lang.objc.classname` 一条规则，父类因此一起被当成声明。替换 `-[SMSourceModel isDeclarationOrDefinitionAtLocation:]`，对生成侧标为引用的位置答 `false`。该 selector 在六个相关框架里只有这一个调用点，跳转、折叠、大纲都不读它。详见 ResolvedIssues 同名纪要。 |
+| 2026-08-19 | 补上右键菜单 | 走 `SourceEditorView.contextualMenuItemProvider`，`defaultMenu` 每次点击新建（Cut/Copy/Paste），故只管插入、无须清理。位置取自 `NSApp.currentEvent`，而不是用 event consumer 记录——后者只在本 bridge 的 consumer 始终跑在框架 `ContextualMenuEventConsumer` 前面时才成立，而那个顺序没有任何东西保证。stub 相应补了协议与属性（3 个符号）。 |
+| 2026-08-19 | 只读视图里删掉 Cut | `validateUserInterfaceItem(_:)` 只对 Paste 系列检查 `isEditingEnabled`；Cut / Copy 只要求选区非空，而右键本身会把点中的 token 选上，所以 Cut 在只读 pane 里恒为可用。按下去不会坏事——`cut(_:)` 是 `copy:` 加一条发给自己的 `delete:`，而 `SourceEditorView` 不实现 `delete:`（`dlopen` 四个框架后用 runtime 实测：`class_getInstanceMethod` 为 false；`deleteBackward:` / `moveLeft:` / `selectWord:` 同样为 false）。那批方法属于 `SourceEditorViewMissingKeyBindings`，一个框架只声明、留给宿主实现的 `@objc` 协议，其 method list 里 imp 字段全为 0；消息由 `NSResponder.forwardInvocation(_:)` 沿 responder chain 转走，我们链上无人处理，静默丢弃（实测正常返回，不抛异常）。净效果是 Cut 等于 Copy——不崩不改文本，但在只读视图里是错的菜单项，故在 `setupContextMenu(for:)` 里移除。 |
