@@ -11,7 +11,7 @@ import RuntimeViewerArchitectures
 /// class to adopt for navigation — this one exists only to carry the ViewModel plumbing
 /// (`viewModel`, `setupBindings(for:)`, `errorRelay` alert presentation) plus the `contentView` /
 /// loading-indicator / skeleton machinery the panes share.
-open class BaseViewController<ViewModel: ViewModelProtocol>: NSViewController {
+open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewController {
     public private(set) var viewModel: ViewModel?
 
     private let commonLoadingView = CommonLoadingView()
@@ -33,13 +33,6 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: NSViewController {
     public init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
-    }
-
-    open override func loadView() {
-        // Default to an empty `NSView`; subclasses install their content hierarchy inside
-        // `viewDidLoad`. `NSViewController`'s own `loadView` would look up a nib by class name,
-        // which we don't ship. `UXViewController` used to supply this.
-        view = NSView()
     }
 
     open override func viewDidLoad() {
