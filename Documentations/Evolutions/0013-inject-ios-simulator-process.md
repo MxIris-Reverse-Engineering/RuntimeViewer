@@ -1,0 +1,627 @@
+# 0013 - 支持注入 iOS Simulator 进程
+
+- **状态**: Accepted
+- **作者**: JH
+- **创建日期**: 2026-08-18
+- **最后更新**: 2026-08-18
+- **所属愿景**: 无
+- **关联提案**: 无
+- **实现分支 / PR**: 待定
+- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+
+## 摘要
+
+让 Attach to Process 能把 `RuntimeViewerServer` payload 注入到 iOS Simulator 进程里。
+
+当前这条路不但不通，而且**每试一次就打崩一个模拟器进程**：注入器把自己（宿主 macOS）地址空间里的
+函数地址写进 shellcode，交给模拟器进程去执行；模拟器进程有独立的 dyld shared cache，同一地址落在
+完全不相干的代码上。本提案分两步：先加平台守卫止血，再把符号解析从「在注入器身上 `dlsym`」改成
+「针对目标进程解析」，并补齐 payload 投递与通信通道。
+
+## 动机
+
+### 现在会崩
+
+Attach to Process 的进程列表来自宿主的运行进程枚举，模拟器进程（SpringBoard 及模拟器内的一切 app）
+都在列表里，看上去可选。选中之后走 `AttachToProcessViewModel.transform(_:)`
+（`RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Attach Process/AttachToProcessViewModel.swift:64`）
+→ `RuntimeInjectClient.injectApplication(pid:dylibURL:remapEntrySymbol:)` → daemon 侧
+`InjectionStrategy.initialAttempt(forTarget:payloadPath:)` 选路 → `MIMachInjector.injectToPID:dylibPath:error:`。
+
+2026-08-18 一次操作打崩了三个 SpringBoard（pid 42475 / 74181 / 32662，崩溃报告在
+`~/Library/Logs/DiagnosticReports/SpringBoard-2026-08-18-1125{06,07,08}.ips`），全部
+`EXC_BAD_ACCESS (SIGSEGV) KERN_INVALID_ADDRESS at 0x10`。
+
+用户看到的错误是 `task_for_pid(74181): (os/kern) failure`。**这条是二次失败，不是原因**：该消息格式
+只存在于 `MIMachInjectorRemap.m:1071`（dlopen 路径写的是 `could not retrieve task port for pid: %d`，
+async 路径写的是 `Failed to get task port for pid %d`）。实际顺序是 —— dlopen 注入把目标打崩 →
+注入器等 `MI_INJECTION_DONE` 标志超时 → daemon 回退到 remap 路径 → 目标已死 → `KERN_FAILURE`。
+
+### 为什么值得做
+
+模拟器是 iOS 逆向最常用的观察环境，且比真机宽松得多（SIP 已关、无需 developer disk image、
+进程随时可重启）。payload 侧的能力其实**已经具备**：`RuntimeViewerMobileServer` target 的
+`SUPPORTED_PLATFORMS` 已包含 `iphonesimulator`，且与 macOS 版共享同一份
+`RuntimeViewerServer/RuntimeViewerServer/main.m`，dlopen 入口（`__attribute__((constructor))`）
+和 remap 入口（`runtime_viewer_server_start`）都在。缺的只有注入这一段。
+
+## 前期调研
+
+### 崩溃根因（已查证，寄存器级）
+
+`MIMachInjector.m` 在**注入器自己的地址空间**解析三个符号，再 `memcpy` 进 shellcode 写到目标：
+
+```objc
+// MIMachInjector.m:229-231
+uint64_t pcfmt_address           = ptrauth_strip(dlsym(RTLD_DEFAULT, "pthread_create_from_mach_thread"), ...);
+uint64_t dlopen_address          = ptrauth_strip(dlsym(RTLD_DEFAULT, "dlopen"), ...);
+uint64_t sandbox_consume_address = ptrauth_strip(dlsym(RTLD_DEFAULT, "sandbox_extension_consume"), ...);
+```
+
+`loader_arm64.s` 的 shellcode 入口把参数摆好后 `blr` 过去：
+
+```asm
+add    x0, sp, #0x8          // &thread
+mov    x1, x8                // attr = NULL  (x8 = 0)
+adr    x2, __thread_entry    // start_routine
+mov    x3, x8                // arg  = NULL
+adr x9, ___patch_pthread_create
+ldr x9, [x9]
+blr x9
+```
+
+三份崩溃报告的寄存器与之逐项吻合：
+
+| 寄存器 | 三份报告实测 | shellcode 预期 |
+|---|---|---|
+| `x0` | `sp + 8`（三份一致） | `add x0, sp, #0x8` |
+| `x1` | `0` | `attr = NULL` |
+| `x3` | `0` | `arg = NULL` |
+| `x2` | `0x1071f8050` / `0x108534050` / `0x107f58050` | `__thread_entry`，三份全是 16KB 页对齐 + `0x50`，而该标号在 shellcode 内的偏移正是 `0x50`（基址由 `mach_vm_allocate` 给出，必然页对齐） |
+| `pc` | `0x180188ed4` = 模拟器 cache 里 `libdispatch` 的 `dispatch_once` | —— |
+| `lr` | `0x1890c3480`（三份一致） | —— |
+| `far` | `0x10` | —— |
+
+宿主实测（同一 boot session，`kern.boottime` = 2026-08-17 08:59:48，shared cache slide 未变）：
+
+```
+libsystem_pthread.dylib          base = 0x1890bb000
+pthread_create_from_mach_thread       = 0x1890c347c   （偏移 0x847c）
+```
+
+`lr - 0x1890c347c = 4`，**三份报告全部如此**。即：远程线程跳到注入器算出的
+`0x1890c347c`，在模拟器进程里那个地址属于 `Network.framework`，执行第一条指令（4 字节）就是个分支，
+跳进模拟器的 `dispatch_once`；此时 `x1` 还是 loader 给 `pthread_create_from_mach_thread` 准备的
+`attr = NULL`，`dispatch_once` 把它当 block 解引用 `+0x10` 取 invoke 指针 → `SIGSEGV at 0x10`。
+
+**排除 remap 路径**：`loader_arm64_remap.s` 的 `_remap_stage1_entry` 先 `bl _apply_fixups`，
+之后 `x0 = &_cfg_pthread_out`（`__DATA` 内地址，不是 `sp+8`）。形状对不上。
+
+`MIMachInjectorRemap.m` 的第 3 / 4 / 5 步（`FindLibObjCMapImages()`、
+`dlopen("/usr/lib/swift/libswiftCore.dylib")` 后取 `swift_register*`、
+`dlsym(RTLD_DEFAULT, "pthread_create_from_mach_thread")`）是同一个病，只是本次没执行到。
+
+### 模拟器进程的镜像布局（`vmmap` 实测，只读）
+
+对运行中的 `gamecontrollerd`（pid 12708，iOS 26.5 模拟器）实测：
+
+```
+__TEXT  100d94000-100e3c000   /usr/lib/dyld                                     ← 宿主 dyld
+__TEXT  100f58000-100f94000   /usr/lib/system/libsystem_kernel.dylib            ← 宿主
+__TEXT  100ff4000-101044000   RuntimeRoot/usr/lib/dyld_sim
+__TEXT  101158000-101168000   /usr/lib/system/libsystem_pthread.dylib           ← 宿主，独立映射
+__TEXT  180075000-1800a01d3   RuntimeRoot/usr/lib/system/libdyld.dylib          ← 模拟器 cache
+__TEXT  180185000-1801cb000   RuntimeRoot/usr/lib/system/libdispatch.dylib      ← 模拟器 cache
+__TEXT  1a2c33000-1a2c37674   RuntimeRoot/usr/lib/system/libsystem_sandbox.dylib← 模拟器 cache
+```
+
+**关键事实：`libsystem_pthread` 与 `libsystem_kernel` 用的是宿主 macOS 那一份**（线程与系统调用
+必须走宿主内核），只是装在不同地址。所以 `pthread_create_from_mach_thread` 这一半根本不需要解析
+cache —— 同一个文件、同样的偏移，把基址换掉即可：
+
+```
+宿主：  0x1890bb000 + 0x847c = 0x1890c347c   ← 现在错误地喂给了目标
+目标：  0x101158000 + 0x847c = 0x10116047c   ← 应该是这个
+```
+
+另两个符号在模拟器 cache 里，需要解析 cache 文件。
+
+### 模拟器 shared cache（已定位）
+
+```
+/Library/Developer/CoreSimulator/Caches/dyld/25F84/com.apple.CoreSimulator.SimRuntime.iOS-26-5.23F77/
+  dyld_sim_shared_cache_arm64        2.8 GB
+  dyld_sim_shared_cache_arm64.01     442 MB
+  dyld_sim_shared_cache_arm64.map    417 KB   （文本，逐镜像段地址表）
+  dyld_sim_shared_cache_arm64.atlas
+```
+
+路径规律：`.../Caches/dyld/<宿主 build>/<SimRuntime 标识>/dyld_sim_shared_cache_<arch>`。
+
+`.map` 里的地址与上面 `vmmap` 实测**完全一致**（libdyld `0x180075000`、libdispatch `0x180185000`、
+libsystem_sandbox `0x1a2c33000`），说明该次运行 cache slide 为 0。**但不可假设恒为 0**，实现仍需从
+目标进程读取实际 slide。
+
+`dyld_sim` 本体是 stripped（`nm` 无输出），不能靠它拿符号。
+
+### 依赖已具备的能力
+
+- **MachOKit 支持 dyld shared cache**，且项目已在用：
+  `RuntimeViewerCore/Sources/RuntimeViewerCore/Utils/DyldUtilities.swift:189` 使用 `DyldCacheLoaded.current`。
+  解析磁盘上的 cache 走 `DyldCache`。
+- **payload 侧已支持模拟器**：`RuntimeViewerServer.xcodeproj` 的 `RuntimeViewerMobileServer` target，
+  `SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator watchos watchsimulator xros xrsimulator"`，
+  `IPHONEOS_DEPLOYMENT_TARGET = 15.0`，与 macOS 版共享 `fileSystemSynchronizedGroups`（同一份源码）。
+  `BuildRuntimeViewerServerXCFramework.sh` 已能构建全平台 XCFramework。
+- **通信通道已经就位，且已支持模拟器**（2026-08-18 复核，此前判断有误，见决策日志）。
+  `RuntimeViewerServer.swift:52` 按**编译期**条件分流，不是运行期探测：
+
+  ```swift
+  #if os(macOS) || targetEnvironment(macCatalyst)
+      // SandboxProbe → localSocket 或 remote(XPC)
+  #else
+      // Bonjour
+  #endif
+  ```
+
+  `RuntimeViewerMobileServer` 编出来的 payload 落在 `#else`，走 **Bonjour**，与 localSocket 无关。
+  而 Bonjour 这条路本身已经把模拟器当一等场景：
+  `RuntimeNetworkBonjour.isSimulatorKey = "rv-sim"`（`RuntimeNetwork.swift:79`），广播时按
+  `RuntimeDeviceMetadata.current.isSimulator` 置位（`:177-178`），宿主侧
+  `MainViewModel.swift:125` 用它区分设备图标；`localHostName` 也有
+  `#if !targetEnvironment(simulator)` 分支。
+  既有用法是 `RuntimeViewerUsingUIKit/App/AppDelegate.swift:27` —— 在模拟器里跑 RuntimeViewer 的
+  iOS app，广播 Bonjour 由宿主 macOS 版发现。**payload 侧与通道侧都已经跑通过，缺的只有投递方式。**
+
+### 现状的两个缺口
+
+- **投递**：app bundle 里只有 macOS payload。实测
+  `/Library/Frameworks/RuntimeViewerServer.framework/RuntimeViewerServer` 三个 slice
+  （x86_64 / arm64 / arm64e）`vtool -show-build` 全部是 `platform MACOS`，没有 `IOSSIMULATOR`。
+- **策略选路没有平台维度**：`InjectionStrategy.initialAttempt(forTarget:payloadPath:)`
+  （`../swift-helper-service/Sources/HelperServices/InjectionService/Implementation/InjectionStrategy+Probe.swift`）
+  只探 seatbelt 的 `file-map-executable`，不看目标平台，也不看目标 payload 是否匹配。
+
+### 可行性验证：已通过（2026-08-18 实测）
+
+落地步骤 1 已执行完毕，**结论是这条路完全走得通**。
+
+构建：`xcodebuildmcp simulator build --scheme RuntimeViewerMobileServer`（sibling workspace，
+独立 DerivedData）产出
+`Debug-iphonesimulator/RuntimeViewerServer.framework/RuntimeViewerServer` ——
+`platform IOSSIMULATOR` / `minos 15.0` / `sdk 26.5`，arm64，adhoc 签名，
+`_runtime_viewer_server_start` 与 `_swift_initializeRuntimeViewerServer` 两个入口符号俱在，
+动态依赖全部落在模拟器 runtime 自带的系统库内（唯一的 `@rpath/libswiftCompatibilitySpan.dylib`
+是 weak）。
+
+注入：用 lldb attach 一个**系统 daemon**（`gamecontrollerd`，pid 58675，iOS 26.5 模拟器）后
+`expr (void*)dlopen(payload, RTLD_NOW)`。刻意不用 SpringBoard。
+
+| 检查项 | 结果 | 证据 |
+|---|---|---|
+| dyld 是否接受该 payload | **通过** | `dlerror()` 返回 `NULL`；`vmmap` 显示四个段已映射（`__TEXT 108ef0000-10a098000` 等） |
+| Swift runtime 是否起来 | **通过** | os_log 三条齐全：`Attach successfully`(14:34:29.306) → `RuntimeViewerServer Will Launch`(14:34:30.015) → `RuntimeViewerServer Did Launch`(14:34:33.180)，无异常分支 |
+| Bonjour 能否广播 | **通过** | `dns-sd -B _runtimeviewer._tcp local` 在 14:34:31.199 出现 `Add … iPhone 17 Pro` |
+| 宿主能否连回 | **通过** | 宿主 `RuntimeViewer[26880]`：`[C2 Bonjour#62d518f4] start` → `resolver:receive_bonjour` → `Socket received CONNECTED event` → `ready`，端口 52406 与目标侧 listener 端口一致 |
+| 目标进程是否存活 | **通过** | 注入后进程状态 `Ss`，未崩溃，无新崩溃报告 |
+
+**一个容易误读的现象**：Bonjour 广播在 14:34:32.365 就 `Rmv` 了，看着像失败，其实是成功后的正常
+收尾。目标侧日志显示顺序是 `[L1] Handling inbound connection [C1 …:52406]` →
+`nw_listener_cancel_block_invoke [L1] cancel` → `[L1] reporting state cancelled` ——
+listener 收到宿主的连接后主动 cancel，不再接受新连接，Bonjour 注册随之撤销。连接本身
+（`[C1 …] reporting state ready`）是活的。
+
+**据此推翻前一版的担忧**：注入目标是没有 `NSLocalNetworkUsageDescription`、进程沙盒也不同的系统
+daemon，Bonjour 照样工作 —— 模拟器上本地网络权限不构成障碍。
+
+连接实际走 link-local：目标侧 `local: 169.254.175.207:52406`（`lo0`），宿主侧经 `en21` 连入。
+与真机 Bonjour 是同一机制，不是模拟器特有路径。
+
+### 阻塞问题：iOS 端的 Bonjour 身份是设备级的，装不下「一台设备多个进程」
+
+2026-08-18 复验发现的**新阻塞项**，比原提案预估的范围更大。
+
+**成因**：iOS 分支的身份设计假设「一台 iOS 设备上只有一个嵌入 Server 的 app」——
+这在原场景（`RuntimeViewerUsingUIKit` 自带 Server）下成立，注入打破了它。
+`RuntimeViewerServer.swift` 的 `#else` 分支：
+
+```swift
+let name = RuntimeNetworkBonjour.localHostName      // 设备名，如 "iPhone 17 Pro"
+let deviceID = DeviceIdentifier.uniqueDeviceID      // MobileGestalt UDID，设备级
+runtimeEngine = RuntimeEngine(source: .bonjour(name: name, identifier: .init(rawValue: deviceID), role: .server))
+```
+
+对照 macOS 分支用的是 `processName` + `processIdentifier`（进程级），iOS 分支两个字段**都是设备级**。
+
+**后果不止于显示错乱**。宿主的 `RuntimeEngineManager.connectToBonjourEndpoint(_:attempt:)`
+（`:234`）用 **Bonjour 服务名**做去重键：
+
+```swift
+guard !knownBonjourEndpointNames.contains(endpoint.name) else {
+    #log(.info,"Skipping duplicate Bonjour endpoint: \(endpoint.name) ...")
+    pendingReconnectEndpoints[endpoint.name] = endpoint
+    return
+}
+```
+
+同一台模拟器上注入的第 2 个及以后的进程，服务名与第 1 个完全相同，会被判为「重复端点」并塞进
+`pendingReconnectEndpoints` 等第一个断开后才重连 —— 而 `pendingReconnectEndpoints` 也按 name 键，
+多个进程还会互相覆盖。**第二个进程永远连不上。**
+
+**实测**（2026-08-18，同一台 iPhone 17 Pro 模拟器，`launchd_sim` 42417）：
+
+| 进程 | pid | 结果 |
+|---|---|---|
+| `gamecontrollerd` | 58675 | `TCP …:52406->…:52407 (ESTABLISHED)` |
+| `nanoappregistryd` | 3964 | `TCP *:56487 (LISTEN)` —— 一直挂着，无人连接 |
+
+`dns-sd` 显示两次广播的 Instance Name 都是 `iPhone 17 Pro`；宿主日志：
+
+```
+15:34:01.096  Discovered new endpoint: iPhone 17 Pro, instanceID: 390EDC20-5C21-4955-8DF4-5A27478EB365
+15:34:01.098  Skipping duplicate Bonjour endpoint: iPhone 17 Pro, queueing for reconnect after current engine terminates
+```
+
+**一个可用的现成材料**：TXT 里的 `rv-instance-id` 对每个进程**已经是不同值**了 ——
+`localInstanceID` 走 `UserDefaults.standard`，注入到不同宿主进程时落在不同的 preferences 域。
+去重逻辑没有用它，用的是 name。但直接改用它并不合适：其语义是「安装实例」而非「进程」，
+且**有副作用** —— 会往被注入进程的 preferences 里写 `RuntimeViewer.localInstanceID`
+（注入 SpringBoard 就是往 SpringBoard 的 plist 写）。
+
+### 仍未验证（推测，留待落地时验掉）
+
+可行性已经确立，剩下两条只影响**注入器实现细节**，不影响提案成立：
+
+1. **arm64 目标上 shellcode 的 PAC 指令**。`loader_arm64.s` 含 `paciza` / `pacibsp` / `retab`。
+   按 ARM 规范，PAC enable 位关闭时这些指令不做认证、退化为无操作或普通 `ret`，推测无害 ——
+   但 lldb 走的是 dyld 自己的 `dlopen`，没有经过 shellcode，所以这条仍未被本次验证覆盖。
+2. **sandbox extension token 跨平台是否有效**。`sandbox_extension_issue_file_to_process` 发的是
+   宿主 sandbox 的 token，模拟器进程 consume 时走的是模拟器 cache 里的 `libsystem_sandbox`；
+   底层仍是宿主内核的 sandbox，推测兼容。本次 lldb 路径同样绕开了它。
+
+## 提议方案
+
+分两个阶段，阶段一独立可交付。
+
+### 阶段一：平台守卫（止血）
+
+在 daemon 侧注入入口加一道守卫：读目标进程主可执行文件的 `LC_BUILD_VERSION` platform，与宿主平台
+不一致时**直接抛出说人话的错误并中止**，不进入 `task_for_pid` / `thread_create_running`。同时在
+Attach to Process 列表里把跨平台进程标为不可用并给出原因。
+
+这一步的价值与阶段二无关：当前状态下每次误操作都会打崩一个模拟器进程，且 shellcode 页与自旋的
+mach thread 会永久留在目标里（`MIMachInjector.m` 的 cleanup 注释里明确说不回收）。
+
+### 阶段二：让 dlopen 路径支持 iOS Simulator 目标
+
+1. **符号解析改为针对目标进程**。新增一个解析器，输入 task port，输出目标进程里三个符号的绝对地址。
+2. **按目标 arch 分流 thread state 构建**。arm64 目标不做 PAC 签名。
+3. **payload 按目标平台选片**，并把 `iphonesimulator` slice 投递到目标可读的位置。
+4. **身份改造：设备做 Section、进程做条目**。让同一台模拟器上被注入的多个进程并入一个 Section，
+   而不是各成一个同名 Section。这是复用 Bonjour 通道带来的必修项 —— 与注入器完全解耦，
+   可独立交付并用 lldb 单独验证。
+
+### 非目标
+
+- **不支持 iOS 真机**。真机走的是 Bonjour + 手动集成 payload 那条路，与本提案无关。
+- **不支持 x86_64 模拟器**。Apple Silicon 上模拟器进程是 arm64（崩溃报告 `"arch": "arm64"` 已确认），
+  Intel 宿主不在本次范围。
+- **不改 remap 路径**。remap 路径同样有「宿主地址喂给目标」的问题（还多出 `map_images` 与
+  `swift_register*` 两组），但它的修法要连 chained fixups 与 runtime handoff 一起重做，量级不同。
+  本次让模拟器目标**只走 dlopen 路径**；若目标拒绝 dlopen，如实报错而非回退 remap。
+- **第一版只做 iOS Simulator**。tvOS / watchOS / visionOS 模拟器在设计上不排斥（cache 路径规律相同），
+  但不在本次验证范围，不声称支持。
+- **不做「注入后自动重连」**。模拟器进程重启后 pid 变化，本次不处理会话恢复。
+
+## 详细设计
+
+### 目标进程符号解析
+
+新增 `MITargetSymbolResolver`（Objective-C，随 MachInjector 一起演进），职责是把「符号名」解析成
+「目标进程里的绝对地址」：
+
+```objc
+/// Resolves a symbol to its address *inside a target process*, which may run a
+/// different dyld shared cache than the injector (iOS Simulator targets do).
+@interface MITargetSymbolResolver : NSObject
+
+/// Snapshots the target's loaded-image list and shared-cache slide.
+/// Fails if the task port is dead or `dyld_all_image_infos` cannot be read.
++ (nullable instancetype)resolverForTask:(mach_port_t)task
+                                   error:(NSError **)error;
+
+/// Absolute address of `symbolName` in the target, or 0 if not found.
+- (uint64_t)addressOfSymbol:(NSString *)symbolName
+                   inImage:(NSString *)imageSuffix
+                     error:(NSError **)error;
+
+/// The target's Mach-O cputype / cpusubtype, for PAC and slice decisions.
+@property (nonatomic, readonly) cpu_type_t targetCPUType;
+@property (nonatomic, readonly) cpu_subtype_t targetCPUSubtype;
+
+@end
+```
+
+内部按符号所属镜像分两条路：
+
+| 符号 | 所属镜像 | 解析方式 |
+|---|---|---|
+| `pthread_create_from_mach_thread` | 宿主 `/usr/lib/system/libsystem_pthread.dylib` | 宿主 `dlsym` 得到的地址减去宿主该镜像基址 = 偏移；加上目标 image list 里同名镜像的加载基址 |
+| `dlopen` | 模拟器 cache 的 `libdyld.dylib` | MachOKit 解析 `dyld_sim_shared_cache_<arch>` 的导出，得到 unslid 地址；加上目标 cache slide |
+| `sandbox_extension_consume` | 模拟器 cache 的 `libsystem_sandbox.dylib` | 同上 |
+
+目标侧的两项输入都来自 `dyld_all_image_infos`：
+
+```objc
+struct task_dyld_info dyldInfo;
+mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
+task_info(task, TASK_DYLD_INFO, (task_info_t)&dyldInfo, &count);
+// mach_vm_read dyldInfo.all_image_info_addr →
+//   infoArray        : 逐 image 的 imageLoadAddress + imageFilePath
+//   sharedCacheSlide : cache 的 slide
+//   sharedCacheBaseAddress
+```
+
+**待验证的实现风险**：模拟器进程由宿主 dyld 引导后交给 `dyld_sim`，`TASK_DYLD_INFO` 返回的是哪一份
+`dyld_all_image_infos`（宿主 dyld 的还是 dyld_sim 覆盖后的）需要实测。若拿到的是宿主 dyld 那份、
+不含模拟器镜像，退路是从 `dyld_sim` 的 `__DATA` 段定位它自己维护的那份。
+
+cache 文件路径由目标进程可执行路径推导（`.../Runtimes/<name>.simruntime/...` → SimRuntime 标识）
+或直接读 `CoreSimulator` 的 device plist，两者都比硬编码稳。
+
+### thread state 按 arch 分流
+
+`MIMachInjector.m` 现在无条件给 PC 做 PAC 签名：
+
+```objc
+__darwin_arm_thread_state64_set_pc_fptr(thread_state,
+    ptrauth_sign_unauthenticated((void *)code, ptrauth_key_asia, 0));
+```
+
+改为按 `resolver.targetCPUSubtype` 分流：目标是 `CPU_SUBTYPE_ARM64E` 时保持现状；目标是
+`CPU_SUBTYPE_ARM64_ALL` 时直接写裸地址，且跳过 `thread_convert_thread_state`（那是 arm64e 的机制）。
+
+若前期调研第 2 条（PAC 指令）实测不通过，再补一份不含 `paciza` / `pacibsp` / `retab` 的
+arm64 shellcode 变体，由 `MIMachInjector` 按目标 arch 选用。
+
+### payload 选片与投递
+
+`RuntimeInjectClient` 现在固定投递到 `/Library/Frameworks/RuntimeViewerServer.framework`
+（`serverFrameworkDestinationURL`）。改为按目标平台选择来源与目的地：
+
+```swift
+/// The payload slice matching a target process's platform.
+public enum PayloadPlatform: Sendable {
+    case macOS
+    case iOSSimulator
+}
+
+public func serverFrameworkSourceURL(for platform: PayloadPlatform) -> URL?
+public func serverFrameworkDestinationURL(for platform: PayloadPlatform) -> URL
+```
+
+`iphonesimulator` slice 由 `BuildRuntimeViewerServerXCFramework.sh` 产出，作为独立
+framework 随 app 分发。安装目的地需要满足两个条件：模拟器进程能读、且注入器能写。
+`/Library/Frameworks/` 下另起一个子目录是最省事的选择（模拟器进程的文件系统视图是宿主的），
+但**该假设需实测**。
+
+### 通信通道：不需要新增，但宿主侧的会话建立要绕开注入路径的假设
+
+payload 侧无需改动 —— `RuntimeViewerMobileServer` 走的是编译期就定死的 Bonjour 分支，
+与 `SandboxProbe` / `localSocket` 完全无关（见前期调研）。
+
+要改的是**宿主侧**。`AttachToProcessViewModel.transform(_:)` 现在的流程是：
+
+```swift
+let isSandbox = SandboxProbe.isRuntimeViewerServiceMachLookupBlocked(pid: ...)
+try await runtimeEngineManager.launchAttachedRuntimeEngine(name:identifier:isSandbox:)
+try await runtimeInjectClient.injectApplication(pid:dylibURL:remapEntrySymbol:)
+try await runtimeEngineManager.confirmAttachedRuntimeEngineConnected(name:identifier:isSandbox:)
+```
+
+它预设「注入方会连到宿主为这次注入专门起的 XPC / socket 端点」。模拟器目标不会 —— 它会去广播
+Bonjour，由既有的 Bonjour 发现流程接管。所以模拟器目标要走一条独立的会话建立路径：
+跳过 `launchAttachedRuntimeEngine` / `confirmAttachedRuntimeEngineConnected` 那对调用，
+改为注入后等待 Bonjour 侧出现对应的新 engine（TXT 记录里带 `rv-sim`）。
+
+超时与失败提示需要单独设计：Bonjour 发现是异步且可能延迟数秒的，不能沿用当前「注入返回即确认」的时序。
+
+### 引擎身份：设备做 Section，进程做条目 —— 与 Mac 完全对齐
+
+已定方向（2026-08-18 用户拍板）：**不为模拟器发明新的展示结构，直接复用 Mac 那套。**
+
+宿主的 `rebuildSections()`（`RuntimeEngineManager.swift:952`）本来就是按
+`engine.hostInfo.hostID` 分组、拿 `hostInfo.hostName` 当 Section 标题：
+
+```swift
+let hostID = engine.hostInfo.hostID
+if let index = hostIDToIndex[hostID] { /* 并入已有 Section */ }
+else { sections.append(RuntimeEngineSection(hostName: engine.hostInfo.hostName, hostID: hostID, engines: [engine])) }
+```
+
+Mac 本机注入多个进程时，各 engine 共享本机 `hostInfo` → 落在同一个 Section，条目名是各自的进程名
+（`launchAttachedRuntimeEngine(name:identifier:)` 传的是进程名 + pid）。**模拟器要的就是这个形状**，
+一台模拟器设备一个 Section，下面列出被注入的各个进程。
+
+当前实现落不到这个形状，是因为三个字段全取错了层级：
+
+| 字段 | 现状 | 应为 |
+|---|---|---|
+| `hostInfo.hostID`（Section 分组键） | `endpoint.instanceID`，而 `localInstanceID` 走 `UserDefaults.standard`，注入后每个进程一个值 → **每个进程各成一个同名 Section** | 设备级 ID |
+| `source.bonjour(name:)`（条目标题） | `RuntimeNetworkBonjour.localHostName`，设备名 | 进程名 |
+| `knownBonjourEndpointNames`（去重键） | `endpoint.name`，即设备名 → 第 2 个进程被判重复、连不上 | 进程级唯一键 |
+
+注意 `source.bonjour(name:)` 同时是 mDNS 广播的 Instance Name：
+`RuntimeNetworkConnection.swift:375` 把它存为 `serviceName`，`:401` 交给
+`RuntimeNetworkBonjour.makeService(name:)`。所以它必须全局唯一，不能直接拿进程名（同设备可能有重名进程，
+跨设备更会撞）。**展示名与广播名要拆开**：广播名只管唯一，展示名从 TXT 取。
+
+#### TXT record 调整
+
+| key | 状态 | 用途 |
+|---|---|---|
+| `rv-host-name` | 已有 | Section 标题（设备名） |
+| `rv-model-id` / `rv-os-ver` / `rv-sim` | 已有 | Section 图标与设备元数据 |
+| `rv-device-id` | **新增** | `DeviceIdentifier.uniqueDeviceID`（MobileGestalt UDID）→ `hostInfo.hostID`，Section 分组键 |
+| `rv-proc-name` | **新增** | engine 条目标题 |
+| `rv-proc-pid` | **新增** | 与 `rv-device-id` 合成进程级唯一键 |
+| `rv-instance-id` | 已有，语义收窄 | 仅保留给 engine mirroring 的环检测（`buildEngineDescriptors` 的 `originChain`），不再充当 `hostID` |
+
+#### payload 侧（`RuntimeViewerServer.swift` 的 `#else` 分支）
+
+广播名改为进程级唯一，展示信息走 TXT：
+
+```swift
+// 广播名：唯一即可，不面向用户
+let serviceName = "\(DeviceIdentifier.uniqueDeviceID)-\(ProcessInfo.processInfo.processIdentifier)"
+runtimeEngine = RuntimeEngine(
+    source: .bonjour(name: serviceName, identifier: .init(rawValue: serviceName), role: .server)
+)
+```
+
+`makeService(name:)` 补写 `rv-device-id` / `rv-proc-name` / `rv-proc-pid` 三个 key。
+
+**`localInstanceID` 的副作用要一并处理**：它经 `UserDefaults.standard` 持久化，注入场景下会往
+**被注入进程**的 preferences 写 `RuntimeViewer.localInstanceID`（注入 SpringBoard 就是写 SpringBoard 的
+plist）。注入路径下改为内存计算、不落盘。
+
+#### 宿主侧（`RuntimeEngineManager.connectToBonjourEndpoint(_:attempt:)`）
+
+```swift
+// 去重键从服务名换成进程级唯一键
+let endpointKey = endpoint.uniqueKey            // rv-device-id + rv-proc-pid，回退到 endpoint.name
+guard !knownBonjourEndpointKeys.contains(endpointKey) else { … }
+
+let remoteHostInfo = RuntimeHostInfo(
+    hostID: endpoint.deviceID ?? endpoint.instanceID ?? endpoint.name,   // 设备级 → 同设备并入一个 Section
+    hostName: endpoint.hostName ?? endpoint.name,                        // 设备名 → Section 标题
+    metadata: endpoint.deviceMetadata ?? .current
+)
+let runtimeEngine = RuntimeEngine(
+    source: .bonjour(name: endpoint.processName ?? endpoint.name,        // 进程名 → 条目标题
+                     identifier: .init(rawValue: endpointKey),
+                     role: .client),
+    hostInfo: remoteHostInfo,
+    originChain: [endpoint.instanceID ?? endpoint.name]                  // 环检测仍用 instanceID
+)
+```
+
+`pendingReconnectEndpoints` 的键同步改为 `endpointKey`，否则同设备的多个进程仍会互相覆盖。
+
+`RuntimeNetworkEndpoint` 增加 `deviceID` / `processName` / `processIdentifier` 三个字段，
+由 `RuntimeNetworkBonjour` 从 TXT 解析（对照已有的 `instanceID(from:)` / `hostName(from:)` /
+`deviceMetadata(from:)`）。
+
+#### 向后兼容
+
+旧 peer（含真机上尚未更新的 app）不带新 key，解析结果为 `nil`，全部字段按上面的 `??` 链回退到当前行为：
+`hostID = instanceID`、条目名 = 服务名、去重键 = 服务名。行为与今天一致，不需要为它们保留分支。
+
+真机场景自然跟着受益：同一台真机上若出现多个 Server（多个 app，或将来真机注入），也会并进同一个
+Section 而不是各成一个同名 Section。
+
+## 替代方案考量
+
+**只加守卫，不支持模拟器。** 成本最低，但把能力永久关死。守卫本身仍然要做，所以这不是替代方案而是
+阶段一；把它当终点则是放弃一个 payload 侧已经具备的能力。
+
+**用 lldb / debugserver 注入。** 模拟器进程可以直接 `lldb -p <pid>` 然后
+`expr (void *)dlopen("...", 2)`，完全绕开 shellcode、PAC 和符号解析。否决理由：引入对 Xcode 工具链
+的运行期依赖，attach 会暂停目标且与用户自己的调试会话抢占，错误处理只能靠解析 lldb 的文本输出。
+作为**验证手段**它很有用（可以用来先确认 payload 在模拟器里能否加载、能否连回宿主），但不适合做产品路径。
+
+**用 `simctl spawn` 在模拟器里起一个独立 server 进程。** 绕开注入，直接在模拟器里跑一个进程。
+否决理由：那个进程只能观察自己，而 Attach to Process 的价值恰恰在于观察**别人**的进程 ——
+SpringBoard、系统 daemon、用户自己的 app。这解决的是另一个问题。
+
+**把 payload 做成 `DYLD_INSERT_LIBRARIES` 随 app 启动注入。** `simctl launch` 支持传环境变量，
+对「用户自己的 app」够用。否决理由：只覆盖启动时刻，无法 attach 到已经在跑的进程，
+且对系统进程（SpringBoard）不适用。可以作为将来的补充入口，不是本提案的替代。
+
+**先修 remap 路径而不是 dlopen 路径。** 否决理由：remap 路径要额外解决 `map_images` 与三个
+`swift_register*` 的跨进程解析、chained fixups 按目标 PAC 密钥重签、以及 runtime handoff，
+量级远大于 dlopen 路径；而模拟器目标 SIP 已关、library validation 场景与 macOS 系统 app 不同，
+dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
+
+## 影响
+
+### 用户可见变化
+
+- **阶段一**：Attach to Process 列表中的模拟器进程标为不可用，附一句原因（当前是选中即崩）。
+  行为从「打崩目标进程」变为「明确拒绝」。
+- **阶段二**：模拟器进程恢复可选，注入成功后与注入 macOS app 一样出现在引擎列表里，
+  Sidebar / Inspector 的使用方式没有差别。
+
+用户没有「原有操作习惯」因此失效 —— 当前这条路本来就不可用。
+
+### 可发现性
+
+不新增菜单项或设置项。模拟器进程本来就在 Attach to Process 列表里，本提案只是让它从「假可用」
+变成「真可用」（中间经过一个「明确不可用」的阶段）。
+
+阶段二落地后，列表项需要能看出这是模拟器进程（与同名的 macOS 进程区分），建议在行内标注 runtime
+名称（如 `iOS 26.5`）。
+
+### 数据与配置兼容
+
+无迁移。不新增偏好设置、不改文档格式、不动钥匙串。
+
+已安装的 `/Library/Frameworks/RuntimeViewerServer.framework`（macOS payload）继续按原样使用；
+模拟器 payload 是并列新增，不覆盖它。
+
+### 平台与最低版本
+
+- RuntimeViewer 自身的最低系统版本不变。
+- 新增运行期前提：目标模拟器 runtime 必须已安装（cache 文件存在）。缺失时按「不可用 + 原因」处理，
+  不崩不静默。
+- 模拟器侧最低版本受 `RuntimeViewerMobileServer` 的 `IPHONEOS_DEPLOYMENT_TARGET = 15.0` 约束。
+- 仅 Apple Silicon 宿主（arm64 模拟器进程）。
+
+### 发布
+
+- **不需要**新 entitlement 或隐私清单条目 —— 注入能力本来就依赖已有的 root helper 与 SIP 关闭。
+- **app 体积增加**：需要随包分发 `iphonesimulator` slice 的 `RuntimeViewerServer.framework`。
+- 公证与 Sparkle 流程不受影响；`ArchiveScript.sh` 需要把新 payload 纳入打包。
+
+## 落地步骤
+
+1. ~~**验证可行性**（阻塞后续所有步骤）~~ —— **已完成，2026-08-18，全部通过**，详见前期调研的「可行性验证」。原文：用 lldb 手工把 `iphonesimulator` slice 的 payload
+   `dlopen` 进一个模拟器进程，逐项确认：(a) dyld 是否接受该 payload（平台、代码签名、AMFI）；
+   (b) 加载后 `swift_initializeRuntimeViewerServer` 是否跑起来（os_log 里的
+   `Attach successfully` / `RuntimeViewerServer Did Launch`）；(c) 该进程的 Bonjour 广播是否出现在
+   宿主（`dns-sd -B _runtimeviewer._tcp local`），以及宿主 RuntimeViewer 是否把它列为 engine。
+   先拿一个无关紧要的模拟器进程试，**不要**拿 SpringBoard。
+   **(c) 不通则本提案的价值基础不成立**，需要先解决通道再谈注入。
+2. **身份改造**（主仓库，与注入器解耦，优先做）。TXT 新增 `rv-device-id` / `rv-proc-name` /
+   `rv-proc-pid`；payload 广播名改为进程级唯一；宿主 `hostID` 取设备级、条目名取进程名、
+   去重键与 `pendingReconnectEndpoints` 键改为进程级唯一键；`localInstanceID` 在注入路径下不落盘。
+   改完即可用 lldb 注入同设备两个进程，验证它们并入同一个 Section。
+3. **阶段一：平台守卫**。daemon 侧读目标 `LC_BUILD_VERSION` platform 并在不匹配时抛错；
+   Attach to Process 列表标注不可用。可独立提 PR。
+4. **打通跨仓库联调路径**（动 MachInjector 之前的前置）。`swift-helper-service/Package.swift:136`
+   的 MachInjector local path 指向 `/Volumes/Repositories/Private/Personal/Library/macOS/MachInjector`，
+   该目录不存在，因此当前吃的是远程 pin `from: "0.5.0"`；两个 workspace 也都没有关联 MachInjector 与
+   swift-helper-service。需先决定：改 local path、迁移仓库位置，还是发版升 pin。**不解决则后两步无法验证。**
+5. **`MITargetSymbolResolver`**（MachInjector）：读目标 `dyld_all_image_infos`、镜像列表、cache slide；
+   宿主同文件镜像走偏移重定位，cache 内镜像走 MachOKit 解析。带单测。
+6. **`MIMachInjector` 接入 resolver**，并按目标 cpusubtype 分流 thread state 构建。
+   此时可在模拟器进程上做第一次真实注入验证（PAC 指令行为、sandbox token 有效性一并验掉）。
+7. **payload 选片与投递**：`BuildRuntimeViewerServerXCFramework.sh` 产物纳入 app 打包，
+   `RuntimeInjectClient` 按平台选源与目的地。
+8. **端到端验证**：SpringBoard + 一个用户 app，注入、浏览 ObjC/Swift 接口、断开、重注入。
+9. **收尾判断**（结论写入决策日志，不得沉默跳过）：
+   - 是否需要配套实现说明 —— 倾向「需要」：「宿主地址不能喂给目标进程」这条判据
+     （`lr - pthread_create_from_mach_thread = 4`）下次排查能省数小时，属于「代码本身看不出来」的决策。
+   - 是否引入新术语 —— `dyld_sim`、`RuntimeRoot`、`SimRuntime` 若在文档中反复出现，
+     登记进 `Documentations/Glossary.md`。
+
+## 决策日志
+
+| 日期 | 变更 | 说明 |
+|------|------|------|
+| 2026-08-18 | Created as Draft | 起因是注入模拟器进程打崩三个 SpringBoard。定位到根因为「注入器把自身地址空间的符号地址喂给目标进程」，dlopen 与 remap 两条路径同病。提案范围定为：先加平台守卫止血，再让 dlopen 路径支持 iOS Simulator 目标。 |
+| 2026-08-18 | Accepted | 用户批准开工，并指定先执行落地步骤 1（验证通信通道可行性）再进入编码。三条「尚未验证」的推测按提案原定顺序逐条验掉。 |
+| 2026-08-18 | 修正通信通道设计 | 开工后复核 `RuntimeViewerServer.swift:52` 发现：payload 的通道选择是**编译期**分流，MobileServer 走 Bonjour，与 `localSocket` 无关；且 Bonjour 路径已把模拟器当一等场景（`rv-sim` TXT key、`RuntimeViewerUsingUIKit` 既有用法）。原设计「模拟器目标强制走 localSocket」作废，改为「payload 侧不动，宿主侧改会话建立路径」。真正的通道风险随之从「能不能连」变为「注入进系统进程后 Bonjour 还灵不灵」。 |
+| 2026-08-18 | 落地步骤 1 通过 | lldb 把 `iphonesimulator` payload `dlopen` 进系统 daemon `gamecontrollerd`：加载成功、Swift runtime 起来、Bonjour 广播出现、宿主 `RuntimeViewer` 连接建立（端口 52406 双向对上）、目标进程存活。可行性确立，提案进入实现阶段。顺带推翻「系统进程缺少 `NSLocalNetworkUsageDescription` 会挡住 Bonjour」的担忧。 |
+| 2026-08-18 | 发现阻塞项：身份是设备级 | 用户指出注入多个进程后全部显示为模拟器设备名。复验确认成因是 iOS 分支的 Bonjour `name` 与 `identifier` 都取设备级值（原场景「一台设备一个 app」的遗留假设），且宿主 `connectToBonjourEndpoint` 用服务名做去重键 —— 后果不只是显示错乱，**第二个进程根本连不上**（实测 `nanoappregistryd` 停在 LISTEN）。进程级身份的三点取舍待拍板。 |
+| 2026-08-18 | 定案：设备做 Section，进程做条目 | 用户拍板「跟 Mac 一样」——不新增展示结构，复用 `rebuildSections()` 既有的「hostID 分组 + hostName 标题」。落到三处改动：TXT 新增 `rv-device-id`/`rv-proc-name`/`rv-proc-pid`；payload 广播名改为进程级唯一（展示名与广播名拆开）；宿主 `hostID` 取设备级、条目名取进程名、去重键与 `pendingReconnectEndpoints` 键改为进程级唯一键。旧 peer 靠 `??` 链回退，无需兼容分支。 |
