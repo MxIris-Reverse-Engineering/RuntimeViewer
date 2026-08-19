@@ -38,7 +38,17 @@ func locallyOverridable(
 #if TUIST
 import ProjectDescription
 
+let invalidKeyboardShortcutsArabicLocalizationPath = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .appendingPathComponent(".build/checkouts/KeyboardShortcuts/Sources/KeyboardShortcuts/Localization/ar.lproj/Localizable.strings")
+    .path
+
 let packageSettings = PackageSettings(
+    productTypes: [
+        // A generated UIFoundation.framework shadows Apple's private framework
+        // of the same name, which AppKit reexports on macOS.
+        "UIFoundation": .staticLibrary,
+    ],
     // The app projects build under four configurations. External dependency
     // projects must expose the same set, otherwise a build under, say,
     // `Debug-arm64e` finds no matching configuration in them.
@@ -47,6 +57,9 @@ let packageSettings = PackageSettings(
     // require a higher floor (CocoaCoordinator declares .macOS(.v11) and uses
     // Logger) fail to compile when forced lower.
     baseSettings: .settings(
+        base: [
+            "EXCLUDED_SOURCE_FILE_NAMES": .string(invalidKeyboardShortcutsArabicLocalizationPath),
+        ],
         configurations: [
             .debug(name: "Debug"),
             .debug(name: "Debug-arm64e"),
@@ -89,7 +102,6 @@ let package = Package(
             "swift-semantic-string",
             remote: .package(url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string", from: "0.3.0")
         ),
-        .package(url: "https://github.com/MxIris-Reverse-Engineering/swift-demangling", from: "0.4.5"),
         .package(url: "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate", from: "0.1.0"),
 
         // MARK: - Shared infrastructure
