@@ -154,6 +154,10 @@ let project = Project(
             dependencies: [
                 .target(name: "RuntimeViewerCore"),
                 .target(name: "RuntimeViewerCommunication"),
+                // SwiftPM propagates this system framework through
+                // RuntimeViewerCommunication; the generated XCTest bundle
+                // must link it explicitly for NWEndpoint type metadata.
+                .sdk(name: "Network", type: .framework),
             ],
             settings: .settings(base: baseSettings)
         ),
