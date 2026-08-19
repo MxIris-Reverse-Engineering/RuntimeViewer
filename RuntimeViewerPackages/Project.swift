@@ -17,11 +17,17 @@ let deploymentTargets: DeploymentTargets = .multiplatform(
     visionOS: "2.0"
 )
 
+let systemUXKitDeploymentTargets: DeploymentTargets = .macOS("11.0")
+
 /// Mirrors `appkitPlatforms` / `uikitPlatforms` in Package.swift.
 let appKitOnly: PlatformCondition? = .when([.macos])
 let uiKitOnly: PlatformCondition? = .when([.ios, .tvos, .visionos])
 
 let corePath: Path = "../RuntimeViewerCore"
+
+let systemUXKitSourceRoot = "../Tuist/.build/checkouts/OpenUXKit/Sources/UXKit"
+let systemUXKitCoordinatorSourceRoot = "../Tuist/.build/checkouts/UXKitCoordinator/Sources/UXKitCoordinator"
+let systemUXKitStubPath = "$(SRCROOT)/\(systemUXKitSourceRoot)/UXKit.tbd"
 
 /// `Package.swift` sets `USING_SYSTEM_UXKIT` by default, which both defines the
 /// compilation condition and selects the system UXKit products over the OpenUXKit
@@ -37,7 +43,12 @@ let baseSettings: SettingsDictionary = [
 ]
 
 let uxKitSettings: SettingsDictionary = usingSystemUXKit
-    ? baseSettings.merging(["SWIFT_ACTIVE_COMPILATION_CONDITIONS": "$(inherited) USING_SYSTEM_UXKIT"]) { _, new in new }
+    ? baseSettings.merging(
+        [
+            "OTHER_LDFLAGS": "$(inherited) \"\(systemUXKitStubPath)\"",
+            "SWIFT_ACTIVE_COMPILATION_CONDITIONS": "$(inherited) USING_SYSTEM_UXKIT",
+        ]
+    ) { _, newValue in newValue }
     : baseSettings
 
 let project = Project(
@@ -52,6 +63,47 @@ let project = Project(
         ]
     ),
     targets: [
+        // Tuist's external package converter follows Sources/UXKit/include to
+        // OpenUXKit's symlinked headers and incorrectly adds OpenUXKit as a
+        // dependency. Mapping the two lightweight system-UXKit targets here
+        // preserves the package's .tbd shim without exposing both Clang modules.
+        .target(
+            name: "UXKit",
+            destinations: [.mac],
+            product: .staticFramework,
+            bundleId: "com.MxIris.RuntimeViewerTuistSupport.UXKit",
+            deploymentTargets: systemUXKitDeploymentTargets,
+            infoPlist: .default,
+            sources: ["\(systemUXKitSourceRoot)/NSViewController+UXKitFixups.m"],
+            headers: .onlyHeaders(
+                from: ["TuistSupport/UXKit/**"],
+                umbrella: "TuistSupport/UXKit/UXKit.h"
+            ),
+            dependencies: [
+                .sdk(name: "AppKit", type: .framework),
+            ],
+            settings: .settings(
+                base: [
+                    "HEADER_SEARCH_PATHS": "$(inherited) \"$(SRCROOT)/\(systemUXKitSourceRoot)/include\"",
+                    "OTHER_LDFLAGS": "$(inherited) \"\(systemUXKitStubPath)\"",
+                ]
+            )
+        ),
+        .target(
+            name: "UXKitCoordinator",
+            destinations: [.mac],
+            product: .staticFramework,
+            bundleId: "com.MxIris.RuntimeViewerTuistSupport.UXKitCoordinator",
+            deploymentTargets: systemUXKitDeploymentTargets,
+            infoPlist: .default,
+            sources: ["\(systemUXKitCoordinatorSourceRoot)/**"],
+            dependencies: [
+                .target(name: "UXKit"),
+                .external(name: "CocoaCoordinator"),
+                .sdk(name: "AppKit", type: .framework),
+            ],
+            settings: .settings(base: baseSettings)
+        ),
         .target(
             name: "RuntimeViewerArchitectures",
             destinations: destinations,
@@ -74,7 +126,8 @@ let project = Project(
                 .external(name: "RxAppKit", condition: appKitOnly),
                 .external(name: "CocoaCoordinator", condition: appKitOnly),
                 .external(name: "RxCocoaCoordinator", condition: appKitOnly),
-                .external(name: usingSystemUXKit ? "UXKitCoordinator" : "OpenUXKitCoordinator", condition: appKitOnly),
+                .target(name: "UXKitCoordinator", condition: appKitOnly),
+                .sdk(name: "AppKit", type: .framework, condition: appKitOnly),
                 .external(name: "RxUIKit", condition: uiKitOnly),
                 .external(name: "XCoordinator", condition: uiKitOnly),
                 .external(name: "XCoordinatorRx", condition: uiKitOnly),
@@ -95,7 +148,8 @@ let project = Project(
                 .external(name: "SnapKit"),
                 .external(name: "SFSymbols"),
                 .external(name: "LateResponders"),
-                .external(name: usingSystemUXKit ? "UXKit" : "OpenUXKit", condition: appKitOnly),
+                .target(name: "UXKit", condition: appKitOnly),
+                .sdk(name: "AppKit", type: .framework, condition: appKitOnly),
                 .external(name: "Rearrange", condition: appKitOnly),
                 .external(name: "RunningApplicationKit", condition: appKitOnly),
                 .external(name: "KeyboardShortcuts", condition: appKitOnly),
@@ -141,10 +195,13 @@ let project = Project(
             deploymentTargets: deploymentTargets,
             infoPlist: .default,
             sources: ["Sources/RuntimeViewerServiceHelper/**"],
-            // Objective-C target: SwiftPM treats Sources/<target>/include as the
-            // public headers directory by convention; a generated Xcode target
-            // needs it declared, otherwise the .m cannot find its own header.
-            headers: .headers(public: ["Sources/RuntimeViewerServiceHelper/include/**"]),
+            // SwiftPM synthesizes a Clang module from the public include directory.
+            // The generated framework needs an explicit umbrella header to emit the
+            // module map imported by RuntimeViewerHelperClient.
+            headers: .onlyHeaders(
+                from: ["Sources/RuntimeViewerServiceHelper/include/**"],
+                umbrella: "Sources/RuntimeViewerServiceHelper/include/RuntimeViewerServiceHelper.h"
+            ),
             settings: .settings(base: baseSettings)
         ),
         .target(
@@ -243,6 +300,12 @@ let project = Project(
                 .external(name: "MemberwiseInit"),
                 .external(name: "IfritStatic"),
                 .external(name: "FuzzySearch"),
+                // RuntimeViewerApplication imports UIFoundation directly.
+                // SwiftPM makes it visible through RuntimeViewerUI, while a
+                // generated dynamic framework must link the static products
+                // that provide those symbols itself.
+                .external(name: "UIFoundation"),
+                .external(name: "UIFoundationToolbox"),
             ],
             settings: .settings(base: baseSettings)
         ),
