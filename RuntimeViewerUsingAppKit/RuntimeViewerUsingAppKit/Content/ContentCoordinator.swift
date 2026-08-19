@@ -12,7 +12,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
     /// navigation stack when this changes; switching the active
     /// `RuntimeObject` within the `.text` scene reuses the existing
     /// `ContentTextViewController` and just rebinds it to a fresh
-    /// `ContentTextViewModel`. This avoids the UXKit push transition flash on
+    /// `ContentTextViewModel`. This avoids the push transition flash on
     /// every sidebar selection.
     ///
     @CaseCheckable

@@ -3,12 +3,7 @@
 @_exported import UIFoundation
 @_exported import UIFoundationToolbox
 
-#if canImport(AppKit) && !targetEnvironment(macCatalyst)
-#if USING_SYSTEM_UXKIT
-@_exported import UXKit
-#else
-@_exported import OpenUXKit
-#endif
+#if os(macOS)
 @_exported import RunningApplicationKit
 @_exported import Rearrange
 @_exported import SystemHUD

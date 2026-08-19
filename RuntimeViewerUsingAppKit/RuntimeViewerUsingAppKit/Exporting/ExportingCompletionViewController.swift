@@ -3,7 +3,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingCompletionViewController: UXKitViewController<ExportingCompletionViewModel>, ExportingStepViewController {
+final class ExportingCompletionViewController: BaseViewController<ExportingCompletionViewModel>, ExportingStepViewController {
     private let checkmarkImageView = NSImageView().then {
         $0.image = .symbol(systemName: .checkmarkCircleFill)
         $0.symbolConfiguration = .init(pointSize: 56, weight: .regular)

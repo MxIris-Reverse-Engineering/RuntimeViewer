@@ -4,7 +4,7 @@ import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ExportingConfigurationViewController: UXKitViewController<ExportingConfigurationViewModel>, ExportingStepViewController {
+final class ExportingConfigurationViewController: BaseViewController<ExportingConfigurationViewModel>, ExportingStepViewController {
 
     override var shouldDisplayCommonLoading: Bool { true }
 

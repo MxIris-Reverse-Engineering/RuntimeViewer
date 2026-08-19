@@ -1,33 +1,34 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerUI
 
-final class SidebarNavigationController: UXKitNavigationController, UXNavigationControllerDelegate {
+final class SidebarNavigationController: BaseNavigationController, NSNavigationControllerDelegate {
     override func viewDidLoad() {
         super.viewDidLoad()
 
         delegate = self
     }
 
-    func navigationController(_ navigationController: UXNavigationController, willShow viewController: UXViewController) {
+    func navigationController(_ navigationController: NSNavigationController, willShow viewController: NSViewController) {
         if #available(macOS 26.0, *) {
             guard let coordinator = navigationController.transitionCoordinator,
                   let fromViewController = coordinator.viewController(forKey: .from),
                   let toViewController = coordinator.viewController(forKey: .to)
             else { return }
 
-            let fromOriginalBackgroundColor = fromViewController.uxView.backgroundColor
-            let toOriginalBackgroundColor = toViewController.uxView.backgroundColor
+            let fromOriginalBackgroundColor = fromViewController.view.backgroundColor
+            let toOriginalBackgroundColor = toViewController.view.backgroundColor
             coordinator.animate(alongsideTransition: { context in
-                fromViewController.uxView.backgroundColor = .windowBackgroundColor
-                toViewController.uxView.backgroundColor = .windowBackgroundColor
+                fromViewController.view.backgroundColor = .windowBackgroundColor
+                toViewController.view.backgroundColor = .windowBackgroundColor
             }, completion: { context in
-                fromViewController.uxView.backgroundColor = fromOriginalBackgroundColor
-                toViewController.uxView.backgroundColor = toOriginalBackgroundColor
+                fromViewController.view.backgroundColor = fromOriginalBackgroundColor
+                toViewController.view.backgroundColor = toOriginalBackgroundColor
             })
         }
     }
 
-    func navigationController(_ navigationController: UXNavigationController, didShow viewController: UXViewController) {
+    func navigationController(_ navigationController: NSNavigationController, didShow viewController: NSViewController) {
         if #available(macOS 26.0, *) {
             navigationController.view.needsDisplay = true
         }
@@ -35,5 +36,5 @@ final class SidebarNavigationController: UXKitNavigationController, UXNavigation
 }
 
 extension SidebarNavigationController {
-    
+
 }

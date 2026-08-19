@@ -11,15 +11,14 @@ import RuntimeViewerCore
 /// Any/Only/Exclude). All edits land back on the view model's relay live —
 /// dismissing the popover commits whatever is showing.
 ///
-/// Inherits from `AppKitViewController` (plain `NSViewController`), NOT
-/// `UXKitViewController`, so that `preferredContentSize` updates flow
-/// through standard `NSViewController` KVO directly to `NSPopover`. The
-/// previous UXKit-based version had to be presented through
+/// `preferredContentSize` updates flow through standard `NSViewController` KVO
+/// directly to `NSPopover`. The UXKit-era version had to be presented through
 /// `UXPopoverController`, which KVOed `preferredContentSize` on its own and
 /// re-emitted intermediate values to `NSPopover.contentSize` whenever the
 /// property was animated — producing the "popover collapses to zero before
-/// growing" glitch during disclosure expansion.
-final class SidebarRuntimeObjectScopeViewController: UXKitViewController<SidebarRuntimeObjectScopeViewModel<SidebarRuntimeObjectRoute>> {
+/// growing" glitch during disclosure expansion. AppKitPlus's navigation stack
+/// takes plain `NSViewController`s, so that bridge is gone.
+final class SidebarRuntimeObjectScopeViewController: BaseViewController<SidebarRuntimeObjectScopeViewModel<SidebarRuntimeObjectRoute>> {
     // MARK: - Header
 
     private let titleLabel = Label("Filter Scope")

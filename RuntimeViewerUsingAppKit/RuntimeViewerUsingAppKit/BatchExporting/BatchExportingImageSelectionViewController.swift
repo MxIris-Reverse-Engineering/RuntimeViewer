@@ -4,7 +4,7 @@ import RuntimeViewerArchitectures
 import RuntimeViewerCore
 import RuntimeViewerUI
 
-final class BatchExportingImageSelectionViewController: UXKitViewController<BatchExportingImageSelectionViewModel>, ExportingStepViewController {
+final class BatchExportingImageSelectionViewController: BaseViewController<BatchExportingImageSelectionViewModel>, ExportingStepViewController {
     private let searchField = SearchField()
 
     private let selectAllButton = PushButton(title: "Select All", titleFont: .systemFont(ofSize: 13))

@@ -1,7 +1,5 @@
 import Foundation
-#if !os(Linux)
 import CoreGraphics
-#endif
 
 #if os(macOS)
 import AppKit

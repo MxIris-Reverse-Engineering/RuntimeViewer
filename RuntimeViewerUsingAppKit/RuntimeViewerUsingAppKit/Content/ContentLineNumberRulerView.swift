@@ -10,7 +10,7 @@ import RuntimeViewerUI
 ///
 /// The ruler owns everything intrinsic to its own rendering — scroll tracking and reflow tracking
 /// are handled internally through clip-view bounds and text-view frame notifications. Content and
-/// theme updates are pushed in by the owning view controller via ``reload()`` and ``backgroundColor``.
+/// theme updates are pushed in by the owning view controller via ``reload()`` and ``gutterBackgroundColor``.
 final class ContentLineNumberRulerView: NSRulerView {
     /// Horizontal padding between the line numbers and the gutter edges.
     private let horizontalPadding: CGFloat = 5
@@ -19,9 +19,9 @@ final class ContentLineNumberRulerView: NSRulerView {
     private let minimumThickness: CGFloat = 32
 
     /// Background color of the gutter, kept in sync with the editor background by the controller.
-    var backgroundColor: NSColor = .textBackgroundColor {
+    var gutterBackgroundColor: NSColor = .textBackgroundColor {
         didSet {
-            guard backgroundColor != oldValue else { return }
+            guard gutterBackgroundColor != oldValue else { return }
             needsDisplay = true
         }
     }
@@ -143,7 +143,7 @@ final class ContentLineNumberRulerView: NSRulerView {
     // MARK: - Drawing
 
     override func drawHashMarksAndLabels(in rect: NSRect) {
-        backgroundColor.setFill()
+        gutterBackgroundColor.setFill()
         bounds.fill()
 
         drawLineNumbers()

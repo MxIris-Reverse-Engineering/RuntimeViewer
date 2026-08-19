@@ -6,7 +6,7 @@ import RuntimeViewerApplication
 import SnapKit
 
 /// Popover content for choosing a concrete type for a generic parameter.
-final class SpecializationTypePickerViewController: UXKitViewController<SpecializationTypePickerViewModel> {
+final class SpecializationTypePickerViewController: BaseViewController<SpecializationTypePickerViewModel> {
     // MARK: - Subviews
 
     private let searchField = NSSearchField()

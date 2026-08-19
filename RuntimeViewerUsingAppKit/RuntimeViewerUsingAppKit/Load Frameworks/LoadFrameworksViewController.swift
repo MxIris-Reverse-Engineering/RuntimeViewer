@@ -6,7 +6,7 @@ import RuntimeViewerApplication
 
 final class LoadFrameworksViewModel: ViewModel<MainRoute> {}
 
-final class LoadFrameworksViewController: UXKitViewController<LoadFrameworksViewModel> {
+final class LoadFrameworksViewController: BaseViewController<LoadFrameworksViewModel> {
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do view setup here.

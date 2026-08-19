@@ -4,7 +4,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 
-final class ContentPlaceholderViewController: UXKitViewController<ContentPlaceholderViewModel> {
+final class ContentPlaceholderViewController: BaseViewController<ContentPlaceholderViewModel> {
     private let placeholderLabel = Label("Select a runtime object")
 
     override var contentViewUsingSafeArea: Bool { true }

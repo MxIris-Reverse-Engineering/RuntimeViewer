@@ -25,7 +25,7 @@ final class InspectorCoordinator: ViewCoordinator<InspectorRoute, InspectorTrans
     /// navigation stack when this changes; switching the active
     /// `RuntimeObject` within the `.runtimeObject` scene reuses the existing
     /// `InspectorRuntimeObjectCoordinator` and just rebuilds its tab items.
-    /// This avoids the UXKit push transition flash on every selection.
+    /// This avoids the push transition flash on every selection.
     private enum Scene {
         case initial
         case placeholder
