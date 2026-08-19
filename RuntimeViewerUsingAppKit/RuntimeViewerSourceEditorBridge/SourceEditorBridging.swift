@@ -113,7 +113,7 @@ protocol SourceEditorBridging: NSObjectProtocol {
     func scrollToCharacterIndex(_ characterIndex: Int)
 }
 
-/// Told when the user ⌘-clicks a token.
+/// Told when the user ⌘-clicks a token, and asked what to offer when they right-click one.
 ///
 /// Resolving that token to a `RuntimeObject` deliberately stays on the app side. The
 /// framework's own tokenizer is lexical — it guesses identifier categories from a language
@@ -125,4 +125,14 @@ protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
     /// - Parameter characterRange: the clicked token's UTF-16 range in the source last passed
     ///   to `setSource(_:languageIdentifier:)`.
     func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange)
+
+    /// The items to put at the top of the contextual menu for the token it was opened on.
+    ///
+    /// Built app-side rather than described to the bridge, because their targets and actions
+    /// live there — the same reason the ⌘-click above hands back a range instead of a
+    /// destination. Return an empty array for a token that goes nowhere; the framework's own
+    /// items are left alone either way.
+    ///
+    /// - Parameter characterRange: as above, the token's UTF-16 range in the current source.
+    func sourceEditorBridge(_ bridge: SourceEditorBridging, contextualMenuItemsForTokenIn characterRange: NSRange) -> [NSMenuItem]
 }

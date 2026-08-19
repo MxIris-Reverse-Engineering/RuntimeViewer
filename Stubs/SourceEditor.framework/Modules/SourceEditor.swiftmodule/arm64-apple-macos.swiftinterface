@@ -91,6 +91,21 @@ extension SourceEditor.SourceEditorViewEventConsumer {
   public func willRemoveFromSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
 }
 
+// The only hook into the editor's contextual menu. `SourceEditorView.contextMenu()` builds
+// Cut/Copy/Paste afresh on every click, hands the menu here, then lets the spell checker add
+// its guesses — so items put in from here survive, and there is nothing to clean up between
+// clicks.
+//
+// The menu is all it passes: no event, no position. Where the click landed has to come from
+// `NSApp.currentEvent`, which is still the right-click while this runs.
+public protocol SourceEditorViewContextualMenuItemProvider : AnyObject {
+  func setupContextMenu(for menu: AppKit.NSMenu)
+}
+
+extension SourceEditor.SourceEditorViewContextualMenuItemProvider {
+  public func setupContextMenu(for menu: AppKit.NSMenu)
+}
+
 // Declared with no cases: token types are only ever passed back to us and handed straight
 // on, never matched. Adding cases later means copying all of them in declaration order,
 // since a resilient enum's case indices come from that order.
@@ -270,6 +285,12 @@ extension SourceEditor.TextAttributeOverrideProvider {
   }
   public func addEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
   public func removeEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
+  // Weak in the framework too. The view's own `contextualMenuEventConsumer` is what opens the
+  // menu; this is only asked what to put in it.
+  weak public var contextualMenuItemProvider: SourceEditor.SourceEditorViewContextualMenuItemProvider? {
+    get
+    set
+  }
   // The optional margins and overlays. Each pair takes no arguments and builds whatever it
   // needs from the view's own state, so nothing has to be configured before calling them.
   //

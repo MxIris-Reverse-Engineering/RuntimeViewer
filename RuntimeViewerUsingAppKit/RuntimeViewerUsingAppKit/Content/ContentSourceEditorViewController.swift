@@ -202,11 +202,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
 
 extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDelegate {
     func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange) {
-        guard let displayedAttributedString,
-              characterRange.location < displayedAttributedString.length,
-              let runtimeObject = displayedAttributedString
-                  .attributes(at: characterRange.location, effectiveRange: nil)[.link] as? RuntimeObject
-        else { return }
+        guard let runtimeObject = runtimeObject(atCharacterIndex: characterRange.location) else { return }
 
         // Same split as the NSTextView path: ⌘-click jumps in place, ⌘⇧-click opens a tab.
         if NSEvent.modifierFlags.contains(.shift) {
@@ -214,5 +210,36 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
         } else {
             jumpToDefinitionRelay.accept(runtimeObject)
         }
+    }
+
+    func sourceEditorBridge(_ bridge: SourceEditorBridging, contextualMenuItemsForTokenIn characterRange: NSRange) -> [NSMenuItem] {
+        guard let runtimeObject = runtimeObject(atCharacterIndex: characterRange.location) else { return [] }
+
+        let jumpToDefinitionMenuItem = RuntimeObjectMenuItem(title: "Jump to Definition", symbolName: .arrowTurnDownRight, runtimeObject: runtimeObject)
+        jumpToDefinitionMenuItem.target = self
+        jumpToDefinitionMenuItem.action = #selector(jumpToDefinitionAction(_:))
+
+        let openInNewTabMenuItem = RuntimeObjectMenuItem(title: "Open in New Tab", symbolName: .plusSquareOnSquare, runtimeObject: runtimeObject)
+        openInNewTabMenuItem.target = self
+        openInNewTabMenuItem.action = #selector(openInNewTabAction(_:))
+
+        return [jumpToDefinitionMenuItem, openInNewTabMenuItem]
+    }
+
+    /// The jump target the generator recorded for the token starting at `characterIndex`, if
+    /// that token is one.
+    private func runtimeObject(atCharacterIndex characterIndex: Int) -> RuntimeObject? {
+        guard let displayedAttributedString,
+              characterIndex < displayedAttributedString.length
+        else { return nil }
+        return displayedAttributedString.attributes(at: characterIndex, effectiveRange: nil)[.link] as? RuntimeObject
+    }
+
+    @objc private func jumpToDefinitionAction(_ sender: RuntimeObjectMenuItem) {
+        jumpToDefinitionRelay.accept(sender.runtimeObject)
+    }
+
+    @objc private func openInNewTabAction(_ sender: RuntimeObjectMenuItem) {
+        openInNewTabRelay.accept(sender.runtimeObject)
     }
 }

@@ -189,23 +189,6 @@ extension ContentTextViewController: NSMenuItemValidation {
     }
 }
 
-private final class RuntimeObjectMenuItem: NSMenuItem {
-    let runtimeObject: RuntimeObject
-
-    init(title: String, symbolName: SFSymbols.SystemSymbolName, runtimeObject: RuntimeObject) {
-        self.runtimeObject = runtimeObject
-        super.init(title: title, action: nil, keyEquivalent: "")
-        if #available(macOS 26.0, *) {
-            image = SFSymbols(systemName: symbolName).nsuiImgae
-        }
-    }
-
-    @available(*, unavailable)
-    required init(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-}
-
 extension Selector {
     fileprivate var isStandardAction: Bool {
         self == #selector(NSText.cut(_:)) || self == #selector(NSText.copy(_:)) || self == #selector(NSText.paste(_:))

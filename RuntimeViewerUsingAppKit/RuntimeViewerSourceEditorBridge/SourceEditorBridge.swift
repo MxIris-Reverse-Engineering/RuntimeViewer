@@ -65,6 +65,10 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
         commandClickNavigator.bridge = self
         sourceEditorView.addEventConsumer(commandClickNavigator)
+
+        // Held weakly by the view, and the view is owned by this object, so this does not
+        // retain-cycle and does not need clearing.
+        sourceEditorView.contextualMenuItemProvider = self
     }
 
     func setSource(
@@ -260,15 +264,19 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     }
 
     fileprivate func reportCommandClick(at position: SourceEditorPosition) {
-        guard let navigationDelegate else { return }
+        guard let navigationDelegate, let characterRange = characterRange(ofTokenAt: position) else { return }
+        navigationDelegate.sourceEditorBridge(self, didCommandClickTokenIn: characterRange)
+    }
+
+    /// The UTF-16 range of the token at `position`, in the source last passed to `setSource`.
+    private func characterRange(ofTokenAt position: SourceEditorPosition) -> NSRange? {
         let dataSource = sourceEditorView.dataSource
-        guard let (_, tokenRange) = dataSource.tokenRangeAtPosition(position) else { return }
+        guard let (_, tokenRange) = dataSource.tokenRangeAtPosition(position) else { return nil }
 
         let lowerBound = characterIndex(of: tokenRange.lowerBound, in: dataSource)
         let upperBound = characterIndex(of: tokenRange.upperBound, in: dataSource)
-        guard upperBound > lowerBound else { return }
-
-        navigationDelegate.sourceEditorBridge(self, didCommandClickTokenIn: NSRange(location: lowerBound, length: upperBound - lowerBound))
+        guard upperBound > lowerBound else { return nil }
+        return NSRange(location: lowerBound, length: upperBound - lowerBound)
     }
 
     /// A `SourceEditorPosition` is a line/column pair; the app indexes the same text by
@@ -276,6 +284,61 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     private func characterIndex(of position: SourceEditorPosition, in dataSource: SourceEditorDataSource) -> Int {
         let lineRange = dataSource.characterRangeForLineRange(NSRange(location: position.line, length: 1))
         return lineRange.location + position.col
+    }
+}
+
+// MARK: - Contextual Menu
+
+/// The editor builds its contextual menu itself — `defaultMenu` is Cut/Copy/Paste, freshly
+/// constructed per click, plus whatever the spell checker adds — and offers this one hook to
+/// put something else in it.
+///
+/// **The hook is handed the menu and nothing else**, no event and no position, so where the
+/// click landed has to come from somewhere. `NSApp.currentEvent` is that somewhere: the whole
+/// path from `rightMouseDown` to `popUpContextMenu(_:withEvent:forView:)` runs inside the
+/// handling of one event, and it is the same event the framework itself measures the click by.
+/// Reading it here beats recording the position from an event consumer, which would only be
+/// correct while this bridge's consumer keeps running ahead of the framework's own
+/// `ContextualMenuEventConsumer` — an ordering nothing enforces.
+extension SourceEditorBridge: SourceEditorViewContextualMenuItemProvider {
+    func setupContextMenu(for menu: NSMenu) {
+        removeCutItem(from: menu)
+
+        guard let navigationDelegate,
+              let characterRange = characterRangeOfTokenUnderPointer()
+        else { return }
+
+        let items = navigationDelegate.sourceEditorBridge(self, contextualMenuItemsForTokenIn: characterRange)
+        guard !items.isEmpty else { return }
+
+        for (index, item) in items.enumerated() {
+            menu.insertItem(item, at: index)
+        }
+        menu.insertItem(.separator(), at: items.count)
+    }
+
+    /// **Cut stays enabled in a read-only editor, and pressing it behaves like Copy.**
+    ///
+    /// `validateUserInterfaceItem(_:)` gates Paste on `isEditingEnabled`, but gates Cut and
+    /// Copy only on the selection being non-empty — and right-clicking a token selects it, so
+    /// Cut is always live. Pressing it runs `copy:` and then sends itself `delete:`, which
+    /// `SourceEditorView` does not implement: `delete:` belongs to its
+    /// `SourceEditorViewMissingKeyBindings` protocol, an `@objc` protocol the framework
+    /// declares and leaves entirely to its host, so `NSResponder.forwardInvocation(_:)` walks
+    /// it up a responder chain where nothing handles it and it is dropped.
+    ///
+    /// Nothing breaks, then — but a Cut that silently means Copy is worse than no Cut, and
+    /// this pane never edits anything.
+    private func removeCutItem(from menu: NSMenu) {
+        guard let index = menu.items.firstIndex(where: { $0.action == #selector(NSText.cut(_:)) }) else { return }
+        menu.removeItem(at: index)
+    }
+
+    private func characterRangeOfTokenUnderPointer() -> NSRange? {
+        guard let event = NSApp.currentEvent else { return nil }
+        let viewPoint = sourceEditorView.convert(event.locationInWindow, from: nil)
+        guard let position = sourceEditorView.positionAtPoint(viewPoint) else { return nil }
+        return characterRange(ofTokenAt: position)
     }
 }
 
