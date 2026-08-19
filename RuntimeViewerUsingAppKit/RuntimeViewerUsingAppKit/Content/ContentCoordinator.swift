@@ -44,7 +44,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     private var currentEditorKind: EditorKind?
 
-    private lazy var textViewController: UXKitViewController<ContentTextViewModel> = makeTextViewController(kind: desiredEditorKind())
+    private lazy var textViewController: BaseViewController<ContentTextViewModel> = makeTextViewController(kind: desiredEditorKind())
 
     /// Anything that stops the Xcode-backed editor from loading — the setting being off, no
     /// Xcode installed, an arm64e build, a missing bridge bundle — resolves to the
@@ -57,7 +57,7 @@ final class ContentCoordinator: ViewCoordinator<ContentRoute, ContentTransition>
 
     /// Both content views bind the same `ContentTextViewModel`, so choosing between them is
     /// the whole of the switch.
-    private func makeTextViewController(kind: EditorKind) -> UXKitViewController<ContentTextViewModel> {
+    private func makeTextViewController(kind: EditorKind) -> BaseViewController<ContentTextViewModel> {
         switch kind {
         case .textView: ContentTextViewController()
         case .sourceEditor: ContentSourceEditorViewController()

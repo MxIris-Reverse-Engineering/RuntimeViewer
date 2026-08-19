@@ -22,7 +22,10 @@ import RuntimeViewerSettings
 final class SourceEditorLoader {
     fileprivate static let shared = SourceEditorLoader()
 
-    private static let bridgeBundleName = "RuntimeViewerSourceEditorBridge.bundle"
+    /// `nonisolated` because both readers are: `resolve()` runs off the main thread, and
+    /// `Unavailability` is an error type that nonisolated code constructs and describes. An
+    /// immutable `String` has no reason to inherit the class's isolation.
+    private nonisolated static let bridgeBundleName = "RuntimeViewerSourceEditorBridge.bundle"
 
     enum Unavailability: Error, CustomStringConvertible {
         /// No directory held all of the required frameworks.
