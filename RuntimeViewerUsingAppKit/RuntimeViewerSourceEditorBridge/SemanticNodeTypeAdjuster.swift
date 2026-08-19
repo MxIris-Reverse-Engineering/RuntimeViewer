@@ -16,6 +16,9 @@ import SourceModelSupport
 /// lexical parse with index data. Retyping here means the editor's *own* machinery becomes
 /// semantic — colouring, but also `tokenRangeAtPosition`, delimiter matching and structural
 /// selection — rather than having correct colours painted over an incorrect parse.
+///
+/// One class of node never reaches this adjuster on its own; see
+/// ``SourceModelDeclarationShortCircuitOverride`` for what gets it here.
 final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
     /// Node type ids, resolved by name once per process.
     ///
@@ -48,6 +51,7 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
     func load(semanticRanges: [NSRange], nodeTypeNames: [String]) {
         guard semanticRanges.count == nodeTypeNames.count else {
             sortedRanges = []
+            Self.typeReferenceRanges.removeSnapshot(for: self)
             return
         }
         sortedRanges = zip(semanticRanges, nodeTypeNames)
@@ -56,6 +60,18 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
                 return (range, identifier)
             }
             .sorted { $0.range.location < $1.range.location }
+
+        Self.typeReferenceRanges.storeSnapshot(
+            zip(semanticRanges, nodeTypeNames)
+                .filter { Self.isReferenceNodeTypeName($1) }
+                .map(\.0)
+                .sorted { $0.location < $1.location },
+            for: self
+        )
+    }
+
+    deinit {
+        Self.typeReferenceRanges.removeSnapshot(for: self)
     }
 
     // `invalidateCache()` is deliberately NOT implemented. It has a default in the framework's
@@ -94,5 +110,80 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
         let entry = sortedRanges[index]
         guard nodeRange.location + nodeRange.length <= entry.range.location + entry.range.length else { return nil }
         return entry.nodeTypeIdentifier
+    }
+
+    // MARK: - Reference Ranges
+
+    /// Node type names are hierarchical, and the two halves of the hierarchy that matter here
+    /// say opposite things: everything under `xcode.syntax.identifier` names a *use* of
+    /// something, while `xcode.syntax.declaration.*` names the place it is introduced. The app
+    /// side assigns the first to every `.name` semantic and the second to every `.declaration`
+    /// one, so the prefix separates references from declarations without the bundle linking
+    /// anything from the app — which it must not do, for the reasons in `SourceEditorBridging`.
+    private static func isReferenceNodeTypeName(_ name: String) -> Bool {
+        name.hasPrefix("xcode.syntax.identifier")
+    }
+
+    /// The reference ranges of every adjuster that currently holds any, so
+    /// ``SourceModelDeclarationShortCircuitOverride`` can answer for whichever document the
+    /// framework is parsing. It is handed a location and an `SMSourceModel`, with no way back
+    /// to the adjuster installed on that model's language service — hence a shared registry
+    /// rather than a lookup.
+    ///
+    /// Asking on behalf of all documents at once cannot produce a wrong colour. A location one
+    /// document calls a reference and another calls a declaration still arrives at the second
+    /// document's own adjuster, which retypes it from that document's runs; the override only
+    /// decides *whether* the adjuster is consulted, never what it answers.
+    private static let typeReferenceRanges = TypeReferenceRangeRegistry()
+
+    /// Whether any displayed interface labels `location` as a reference to a named entity.
+    static func isTypeReferenceLocation(_ location: Int) -> Bool {
+        typeReferenceRanges.containsLocation(location)
+    }
+}
+
+/// Immutable per-adjuster snapshots of the reference ranges, behind a lock.
+///
+/// Snapshots are stored whole and never mutated in place, so a reader holds a plain `let` array
+/// once the lock is released. That matters because the parse that queries this runs on
+/// whichever thread the editor parses on, while the snapshots are stored from the main thread.
+private final class TypeReferenceRangeRegistry {
+    private let lock = NSLock()
+    private var snapshotsByAdjuster: [ObjectIdentifier: [NSRange]] = [:]
+
+    func storeSnapshot(_ sortedRanges: [NSRange], for adjuster: AnyObject) {
+        lock.lock()
+        defer { lock.unlock() }
+        snapshotsByAdjuster[ObjectIdentifier(adjuster)] = sortedRanges
+    }
+
+    func removeSnapshot(for adjuster: AnyObject) {
+        lock.lock()
+        defer { lock.unlock() }
+        snapshotsByAdjuster.removeValue(forKey: ObjectIdentifier(adjuster))
+    }
+
+    func containsLocation(_ location: Int) -> Bool {
+        lock.lock()
+        let snapshots = Array(snapshotsByAdjuster.values)
+        lock.unlock()
+        return snapshots.contains { Self.sortedRanges($0, contain: location) }
+    }
+
+    private static func sortedRanges(_ sortedRanges: [NSRange], contain location: Int) -> Bool {
+        var low = 0
+        var high = sortedRanges.count - 1
+        while low <= high {
+            let middle = (low + high) / 2
+            let range = sortedRanges[middle]
+            if location < range.location {
+                high = middle - 1
+            } else if location >= range.location + range.length {
+                low = middle + 1
+            } else {
+                return true
+            }
+        }
+        return false
     }
 }

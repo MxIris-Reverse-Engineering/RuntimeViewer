@@ -52,6 +52,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     override init() {
         super.init()
 
+        SourceModelDeclarationShortCircuitOverride.install()
+
         // Defaults to true, in which case the view takes ⌘-click as a multi-cursor
         // gesture and consumes it before any event consumer is offered the event.
         sourceEditorView.enableCmdClickMultiCursor = false
