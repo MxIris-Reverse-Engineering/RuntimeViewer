@@ -204,8 +204,9 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
     func sourceEditorBridge(_ bridge: SourceEditorBridging, didCommandClickTokenIn characterRange: NSRange) {
         guard let runtimeObject = runtimeObject(atCharacterIndex: characterRange.location) else { return }
 
-        // Same split as the NSTextView path: ⌘-click jumps in place, ⌘⇧-click opens a tab.
-        if NSEvent.modifierFlags.contains(.shift) {
+        // Same split as the NSTextView path: ⌘-click jumps in place, while ⌘⇧-click and
+        // ⌥⌘-click both open a tab.
+        if NSEvent.modifierFlags.contains(.shift) || NSEvent.modifierFlags.contains(.option) {
             openInNewTabRelay.accept(runtimeObject)
         } else {
             jumpToDefinitionRelay.accept(runtimeObject)

@@ -46,6 +46,11 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     private var isPressedCommand: Bool = false
 
     private var isPressedShift: Bool = false
+
+    private var isPressedOption: Bool = false
+
+    /// Held with ⌘, either of these means "open in a new tab" rather than "jump in place".
+    private var isPressedOpenInNewTabModifier: Bool { isPressedShift || isPressedOption }
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -84,9 +89,9 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
 
         let linkClicked = textView.rx.methodInvoked(#selector(ContentTextView.clicked(onLink:at:))).map { $0[0] as! RuntimeObject }.asSignalOnErrorJustComplete()
         let input = ContentTextViewModel.Input(
-            // ⌘-click jumps in place; ⌘⇧-click opens in a new tab (Safari semantics).
-            runtimeObjectClicked: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedShift != true }, jumpToDefinitionRelay.asSignal()).merge(),
-            runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedShift == true }, openInNewTabRelay.asSignal()).merge()
+            // ⌘-click jumps in place; ⌘⇧-click and ⌥⌘-click open in a new tab (Safari semantics).
+            runtimeObjectClicked: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedOpenInNewTabModifier != true }, jumpToDefinitionRelay.asSignal()).merge(),
+            runtimeObjectOpenedInNewTab: Signal.of(linkClicked.filter { [weak self] _ in self?.isPressedCommand == true && self?.isPressedOpenInNewTabModifier == true }, openInNewTabRelay.asSignal()).merge()
         )
         let output = viewModel.transform(input)
 
@@ -130,6 +135,7 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
             guard let self else { return event }
             isPressedCommand = event.modifierFlags.contains(.command)
             isPressedShift = event.modifierFlags.contains(.shift)
+            isPressedOption = event.modifierFlags.contains(.option)
             if isPressedCommand {
                 textView.linkTextAttributes = [
                     .cursor: NSCursor.pointingHand,
