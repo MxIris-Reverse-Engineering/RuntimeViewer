@@ -1,4 +1,5 @@
 import AppKit
+import AppKitPlus
 import RuntimeViewerUI
 import RuntimeViewerApplication
 
@@ -8,10 +9,10 @@ struct TabViewItem {
     let viewController: NSViewController
 }
 
-class TabViewController: NSViewController {
+class TabViewController: NSLayerBackedViewController {
     private let contentView: NSView = {
         if #available(macOS 26.0, *) {
-            NSView()
+            NSLayerBackedView()
         } else {
             NSVisualEffectView()
         }
@@ -42,12 +43,6 @@ class TabViewController: NSViewController {
             tabView.selectTabViewItem(at: index)
             segmentedControl.selectedSegment = index
         }
-    }
-
-    override func loadView() {
-        // `NSViewController`'s own `loadView` would look up a nib by class name, which we don't
-        // ship. `UXViewController` used to supply this.
-        view = NSView()
     }
 
     override func viewDidLoad() {
