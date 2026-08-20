@@ -20,6 +20,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.simulatorInstallerWindowController) private var simulatorInstallerWindowController
     @Dependency(\.windowLifecycleController) private var windowLifecycleController
 
+    // **Not `applicationDidFinishLaunching`.** The default this registers is read while the
+    // main nib's outlets are connected, which is before any delegate callback; moving it there
+    // makes it silently do nothing. See `SystemAutoFillMenuSuppression`.
+    override init() {
+        super.init()
+        SystemAutoFillMenuSuppression.install()
+    }
+
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         #if RUNTIMEVIEWER_ARM64E
         runtimeViewerIsARM64EVariant = true

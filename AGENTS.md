@@ -391,6 +391,7 @@ final class MyConsumer {
 - `IBAction` methods that immediately delegate to a router or injected service (one line each)
 - One-line `start()` / `install()` / `stop()` / `checkOnLaunch()` calls on injected services
 - Compile-time flag toggles like `runtimeViewerIsARM64EVariant = true` and one-shot fixes like `NSToolbarItemViewerOverflowFix.install()`
+- An `override init()` whose body is one-line one-shot fixes that **must** beat the main nib — `AppDelegate` is unarchived from `MainMenu.xib`, so `init` runs before the nib connects `NSApplication.mainMenu`, which is the last moment some AppKit defaults are still readable (`SystemAutoFillMenuSuppression` is the standing example). Anything that works from a lifecycle callback belongs in one instead; a fix that lands here must say in a comment why, or the next reader will move it and it will silently stop working
 
 **Forbidden in AppDelegate**:
 - `@objc` action handlers with bodies (extract to a controller's `@objc` method)
