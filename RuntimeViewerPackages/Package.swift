@@ -184,6 +184,11 @@ let package = Package(
         // may remove classes or change protocol requirements with no deprecation
         // period, so the version is pinned exactly and upgraded deliberately.
         .package(
+            local: .package(
+                path: "/Volumes/Code/Personal/AppKitPlus/build/LocalPackage/AppKitPlus-Release",
+                isRelative: false,
+                isEnabled: true
+            ),
             remote: .package(
                 url: "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
                 exact: "0.1.6",
