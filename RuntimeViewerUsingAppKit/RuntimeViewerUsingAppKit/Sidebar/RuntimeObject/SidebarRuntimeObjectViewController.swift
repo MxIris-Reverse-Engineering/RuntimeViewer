@@ -173,17 +173,21 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         let output = viewModel.transform(input)
 
-        let cellProvider = { (outlineView: NSOutlineView, _: NSTableColumn?, viewModel: SidebarRuntimeObjectCellViewModel) -> NSView? in
+        let cellProvider: Reactive<NSOutlineView>.OutlineCellViewProvider<SidebarRuntimeObjectCellViewModel> = { outlineView, _, viewModel in
             outlineView.box.makeView(ofClass: RuntimeObjectCellView<SidebarRuntimeObjectCellViewModel>.self).then {
                 $0.bind(to: viewModel)
             }
         }
 
+        let rowProvider: Reactive<NSOutlineView>.OutlineRowViewProvider<SidebarRuntimeObjectCellViewModel> = { outlineView, viewModel in
+            outlineView.box.makeView(ofClass: SidebarTableRowView.self)
+        }
+        
         if supportsSections {
             let sectionsSource = output.runtimeObjectSections
                 .asObservable()
                 .map { $0.map { ArraySection(model: $0, elements: $0.objects) } }
-            let sectionHeaderProvider = { (outlineView: NSOutlineView, _: NSTableColumn?, section: SidebarRuntimeObjectSection) -> NSView? in
+            let sectionHeaderProvider: Reactive<NSOutlineView>.OutlineSectionHeaderViewProvider<SidebarRuntimeObjectSection> = { outlineView, _, section in
                 let headerView = outlineView.box.makeView(ofClass: SectionHeaderView.self)
                 headerView.configure(title: section.title)
                 return headerView
@@ -450,7 +454,6 @@ extension SidebarRuntimeObjectViewController {
 
             scrollView.do {
                 $0.autohidesScrollers = true
-                $0.isHiddenVisualEffectView = true
             }
 
             bottomSeparatorView.do {

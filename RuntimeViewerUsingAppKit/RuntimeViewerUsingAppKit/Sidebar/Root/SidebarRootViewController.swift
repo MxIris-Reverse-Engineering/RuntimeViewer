@@ -67,6 +67,10 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
             $0.autohidesScrollers = true
             $0.isHiddenVisualEffectView = true
         }
+        
+        outlineView.do {
+            $0.style = .sourceList
+        }
     }
 
     override func setupBindings(for viewModel: ViewModel) {
@@ -86,7 +90,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
             return cellView
         }, { outlineView, _ -> NSTableRowView? in
             if #available(macOS 26.0, *) {
-                return outlineView.box.makeView(ofClass: SidebarRootTableRowView.self)
+                return outlineView.box.makeView(ofClass: SidebarTableRowView.self)
             } else {
                 return nil
             }

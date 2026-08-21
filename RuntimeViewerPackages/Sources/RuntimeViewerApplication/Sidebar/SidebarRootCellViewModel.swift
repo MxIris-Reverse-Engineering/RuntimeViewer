@@ -70,7 +70,6 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
             icon: node.icon,
             name: NSAttributedString {
                 AText(node.name)
-                    .foregroundColor(.labelColor)
                     .font(.systemFont(ofSize: 13))
                     .alignment(.left)
                     .lineBreakeMode(.byTruncatingTail)

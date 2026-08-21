@@ -19,6 +19,13 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
 
     let minimumHeight: CGFloat?
 
+//    override var backgroundStyle: NSView.BackgroundStyle {
+//        didSet {
+//            guard let window else { return }
+//            print("isKeyWindow: \(window.isKeyWindow), isMainWindow: \(window.isMainWindow)")
+//        }
+//    }
+    
     convenience init() {
         self.init(contentInsets: .init())
     }
@@ -29,7 +36,8 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
         super.init(frame: .zero)
         
         registerForTraitChanges([NSTraitActiveAppearance.self]) { [weak self] (cellView: RuntimeObjectCellView, _) in
-            guard let self else { return }
+            guard let self, let window else { return }
+            print("isKeyWindow: \(window.isKeyWindow), isMainWindow: \(window.isMainWindow)")
             switch traitCollection.activeAppearance {
             case .active:
 //                backgroundColor = .systemRed
