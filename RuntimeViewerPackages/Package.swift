@@ -189,6 +189,11 @@ let package = Package(
                 isRelative: false,
                 isEnabled: true
             ),
+            .package(
+                path: "/Volumes/Repositories/Private/Personal/Library/macOS/AppKitPlus/build/LocalPackage/AppKitPlus-Release",
+                isRelative: false,
+                isEnabled: true
+            ),
             remote: .package(
                 url: "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
                 exact: "0.1.6",
