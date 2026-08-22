@@ -154,6 +154,27 @@ COMMON_XCODEBUILD_SETTINGS=(
     "RUNTIME_VIEWER_BUILD_DATE=$BUILD_DATE"
     "RUNTIME_VIEWER_GIT_BRANCH=$GIT_BRANCH"
     "RUNTIME_VIEWER_GIT_COMMIT=$GIT_COMMIT"
+
+    # Debug-arm64e exists to debug on this machine and to inspect arm64e
+    # processes, so the Intel slice is dead weight here. It is also broken
+    # weight: AppKitPlus ships as a prebuilt XCFramework whose macOS slice
+    # covers arm64 and arm64e only, so compiling the x86_64 variant of any
+    # package that imports it dies in AppKitPlus-Swift.h with "unsupported
+    # Swift architecture".
+    #
+    # This must be a command-line setting rather than a line in
+    # Configurations/RuntimeViewerUsingAppKit/Debug-arm64e.xcconfig: that
+    # xcconfig is the base configuration of the app target alone, and the
+    # targets that fail are the SwiftPM ones. Command-line settings reach
+    # every target.
+    #
+    # EXCLUDED_ARCHS subtracts a slice instead of dictating the list, which
+    # leaves both sources of arm64e untouched — iOSPackagesShouldBuildARM64e
+    # in RuntimeViewer-Debug.xcworkspace for the SwiftPM targets, and the
+    # service target's own settings for the daemon. Overwriting ARCHS here
+    # would drop arm64e on the floor, and so would narrowing -destination
+    # away from 'generic/platform=macOS'.
+    "EXCLUDED_ARCHS=x86_64"
 )
 
 log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
