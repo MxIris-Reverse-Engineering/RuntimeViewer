@@ -34,21 +34,6 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
         self.contentInsets = contentInsets
         self.minimumHeight = minimumHeight
         super.init(frame: .zero)
-        
-        registerForTraitChanges([NSTraitActiveAppearance.self]) { [weak self] (cellView: RuntimeObjectCellView, _) in
-            guard let self, let window else { return }
-            print("isKeyWindow: \(window.isKeyWindow), isMainWindow: \(window.isMainWindow)")
-            switch traitCollection.activeAppearance {
-            case .active:
-//                backgroundColor = .systemRed
-                break
-            case .inactive:
-//                backgroundColor = .systemBlue
-                break
-            default:
-                break
-            }
-        }
     }
 
     @available(*, unavailable)
