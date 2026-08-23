@@ -7,7 +7,14 @@ import Dependencies
 import DependenciesMacros
 import OrderedCollections
 
-public final class AppDefaults {
+/// `@unchecked` rather than a real conformance because the safety lives in the
+/// property wrappers, where the compiler cannot see it: `@UserDefault` goes
+/// through `UserDefaults`, which is thread-safe, and `@FileStorage` serializes
+/// every read and write through a concurrent queue with barriers. The class
+/// itself adds no mutable state of its own. Reads already come from background
+/// schedulers all over the Rx pipelines, so this states an existing fact rather
+/// than granting new access.
+public final class AppDefaults: @unchecked Sendable {
     fileprivate static let shared = AppDefaults()
 
     private init() {
