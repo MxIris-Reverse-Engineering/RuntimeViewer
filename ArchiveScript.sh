@@ -6,7 +6,7 @@
 #   ./ArchiveScript.sh --version-tag vX.Y.Z \
 #                      [--configuration Release|Debug] \
 #                      [--release-notes Changelogs/vX.Y.Z.md] \
-#                      [--update-packages] \
+#                      [--update-packages] [--local-deps] \
 #                      [--update-appcast] [--upload-to-github] [--commit-push]
 #   ./ArchiveScript.sh --help
 #
@@ -14,7 +14,8 @@
 # local build that only produces the signed, notarized zip. The default
 # configuration is Release; pass --configuration Debug (or any other
 # configuration name defined in the workspace) for local validation. Pass
-# --update-packages to refresh SwiftPM pins before archiving.
+# --update-packages to refresh SwiftPM pins before archiving. Pass
+# --local-deps to build against local dependency checkouts.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -33,6 +34,7 @@ CHANNEL=""
 RELEASE_NOTES=""
 ED_KEY_FILE=""
 UPDATE_PACKAGES=false
+LOCAL_DEPENDENCIES=false
 UPDATE_APPCAST=false
 UPLOAD_TO_GITHUB=false
 COMMIT_PUSH=false
@@ -96,6 +98,7 @@ while [[ $# -gt 0 ]]; do
         --scheme) SCHEME="$2"; shift 2;;
         --catalyst-helper-scheme) CATALYST_SCHEME="$2"; shift 2;;
         --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
+        --local-deps) LOCAL_DEPENDENCIES=true; shift;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
         --version-tag) VERSION_TAG="$2"; shift 2;;
@@ -115,7 +118,7 @@ while [[ $# -gt 0 ]]; do
         --notary-api-key) NOTARY_API_KEY="$2"; shift 2;;
         --notary-key-id) NOTARY_KEY_ID="$2"; shift 2;;
         --notary-issuer-id) NOTARY_ISSUER_ID="$2"; shift 2;;
-        -h|--help) sed -n '2,17p' "$0" | sed 's/^# *//'; exit 0;;
+        -h|--help) sed -n '2,18p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -148,6 +151,21 @@ EXPORT_PATH="$BUILD_PATH/Products/Export"
 CATALYST_EXPORT_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit"
 CATALYST_HELPER_ARCHIVE="$BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive"
 MAIN_ARCHIVE="$BUILD_PATH/RuntimeViewer.xcarchive"
+# Build against the local sibling checkouts of the dependency repos rather
+# than the pinned remote versions. Needed whenever a change under test lives
+# in one of those repos and has not been tagged yet — MachInjector reached
+# through swift-helper-service is the usual case. Without it the build
+# silently uses the remote pin, and the symptom is "I changed it and nothing
+# happened", which is hard to self-diagnose.
+#
+# Releases should normally NOT use this: main has to compile against the
+# released pins. It is here for validating a release build locally before the
+# dependency ships.
+if $LOCAL_DEPENDENCIES; then
+    export USING_LOCAL_DEPENDENCIES=1
+    log "Using local dependency checkouts (USING_LOCAL_DEPENDENCIES=1)"
+fi
+
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/Products/Logs}"
 
 # DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the

@@ -12,6 +12,7 @@
 #   ./RunScript.sh --no-launch              # build only
 #   ./RunScript.sh --update-packages        # refresh SPM pins first
 #   ./RunScript.sh --dry-run                # print commands without running
+#   ./RunScript.sh --local-deps             # build against local dependency checkouts
 #   ./RunScript.sh --help
 #
 # All distribution-related flags (notarize, appcast, GitHub upload, commit)
@@ -43,6 +44,7 @@ fi
 UPDATE_PACKAGES=false
 LAUNCH=true
 DRY_RUN=false
+LOCAL_DEPENDENCIES=false
 
 fail() { echo "error: $*" >&2; exit 1; }
 log()  { echo "[RunScript] $*"; }
@@ -95,7 +97,8 @@ while [[ $# -gt 0 ]]; do
         --update-packages) UPDATE_PACKAGES=true; shift;;
         --no-launch) LAUNCH=false; shift;;
         --dry-run) DRY_RUN=true; shift;;
-        -h|--help) sed -n '2,18p' "$0" | sed 's/^# *//'; exit 0;;
+        --local-deps) LOCAL_DEPENDENCIES=true; shift;;
+        -h|--help) sed -n '2,19p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -104,6 +107,17 @@ done
 
 log "workspace=$WORKSPACE scheme=$SCHEME configuration=$CONFIGURATION build=$BUILD_NUMBER"
 log "derived_data=$DERIVED_DATA update_packages=$UPDATE_PACKAGES launch=$LAUNCH"
+
+# Build against the local sibling checkouts of the dependency repos rather
+# than the pinned remote versions. Needed whenever a change under test lives
+# in one of those repos and has not been tagged yet — MachInjector reached
+# through swift-helper-service is the usual case. Without it the build
+# silently uses the remote pin, and the symptom is "I changed it and nothing
+# happened", which is hard to self-diagnose.
+if $LOCAL_DEPENDENCIES; then
+    export USING_LOCAL_DEPENDENCIES=1
+    log "Using local dependency checkouts (USING_LOCAL_DEPENDENCIES=1)"
+fi
 
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/Products/Logs}"
 XCODEBUILD_LOG_INDEX=0

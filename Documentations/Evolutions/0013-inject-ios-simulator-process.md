@@ -690,9 +690,10 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
    远程 pin `from: "0.5.0"`；该目录现已存在（git 干净、tag `0.5.0`），`USING_LOCAL_DEPENDENCIES=1`
    下 `swift package show-dependencies` 确认 RuntimeViewer → swift-helper-service → MachInjector
    整条链都解析到本地路径。
-   **剩余一项**：`RunScript.sh` / `ArchiveScript.sh` 都不传 `USING_LOCAL_DEPENDENCIES`，所以实机
-   daemon 仍吃远程 pin，改本地 MachInjector 不会生效。动步骤 6 的验证之前，先给两个脚本加一个
-   `--local-deps` 开关（优于每次手动带环境变量 —— 忘记带时的症状是「改了没反应」，很难自查）。
+   ~~**剩余一项**：`RunScript.sh` / `ArchiveScript.sh` 都不传 `USING_LOCAL_DEPENDENCIES`~~ ——
+   **已补，2026-08-23**：两个脚本都加了 `--local-deps`，默认关闭。`ArchiveScript.sh` 的注释里
+   额外写明「发布正常不该用它，main 必须能对着已发布的 pin 编过」，它只服务于「依赖还没发版时
+   本地验证一次 release 构建」。
 5. **`MITargetSymbolResolver`**（MachInjector）：读目标 `dyld_all_image_infos`、镜像列表、cache slide；
    宿主同文件镜像解析**目标进程内存里**那份的 `LC_SYMTAB`（不得用注入器自身的偏移，见决策日志
    2026-08-23），cache 内镜像走 MachOKit 解析。带单测。
@@ -745,6 +746,7 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 | 2026-08-22 | 已知取舍：`clearAllWithHostID` 的前缀现在是设备级 | `hostID` 转为设备级后，`engineID = "{hostID}/{localID}"` 的前缀也随之设备级，于是「某个 bonjour engine 断开」会让 `clearAllWithHostID` 清掉**同设备所有**镜像。当前不可触发：走这条路要求对端支持 engine sharing 并返回非空 descriptor，而 iOS payload 不注册 engine list handler，一律被判为 `directBonjourEngines`。正确修法是让 mirrorRegistry 改用 engine 级键，属于架构改动，不在本次范围。裁决与复核判据记于 `Documentations/KnownIssues/2026-08-22-simulator-injection-identity-findings.md`。 |
 | 2026-08-23 | 落地步骤 5 的前置风险已验掉 | 用只读探针对 iOS 18.5 模拟器的 `peopled` 实测 `TASK_DYLD_INFO`：拿到的**就是 `dyld_sim` 维护的那一份**（580 个镜像中 576 个属于模拟器 RuntimeRoot），`sharedCacheBaseAddress = 0x180000000`、slide 为 0，且三个宿主镜像恰好是 `libsystem_platform` / `libsystem_kernel` / `libsystem_pthread`。`MITargetSymbolResolver` 的分流设计因此成立，提案原定的退路（从 `dyld_sim` 的 `__DATA` 段自行定位）不需要了。另记两个易误判点：`dyldPath` 读出来是宿主的 `/usr/lib/dyld`，不能用它判断目标是否模拟器进程；slide 虽为 0 但仍须从进程读取。 |
 | 2026-08-23 | 修正详细设计：宿主符号的偏移不能照抄注入器自身 | 实测发现 `/usr/lib/system/libsystem_pthread.dylib` 的 arm64 与 arm64e slice 中 `_pthread_create_from_mach_thread` 偏移不同（`0x7d84` vs `0x847c`）。注入器用的是宿主 cache 里的 arm64e 那份，而模拟器进程是 arm64、独立映射，因此原设计「宿主 `dlsym` 地址减宿主基址得偏移，再加目标基址」会算出偏高 0x6f8 字节的地址 —— 落在函数体中间，跳过去同样崩，且症状与「地址完全解析错」难以区分，属于评审阶段看不出、只在实现后才发作的坑。改为解析**目标进程内存里**那份 Mach-O 的 `LC_SYMTAB` 求偏移：不依赖宿主状态，也不必假设目标 map 的是 cache 还是磁盘文件，且与另两个符号共用同一套 Mach-O 解析。前期调研与详细设计中相应的算式一并更正（原文保留在正文中并标注为错）。 |
+| 2026-08-23 | 步骤 4 收尾：`--local-deps` 开关 | `RunScript.sh` / `ArchiveScript.sh` 加 `--local-deps`，设置时导出 `USING_LOCAL_DEPENDENCIES=1`，默认关闭。动机是这个缺口的症状特别难自查 —— 忘记带环境变量时构建**静默**走远程 pin，表现为「我改了本地 MachInjector 但没反应」，看不出是构建吃错了依赖。`ArchiveScript.sh` 那份注释额外声明发布不该用它（main 必须能对着已发布的 pin 编过），它只用于依赖未发版时本地验证 release 构建。 |
 | 2026-08-23 | 步骤 8 的「浏览接口」通过，并记下一个会误判的对照 | 注入 `backboardd` 后类型信息完整，这一项通过。**同时记下：不能拿 SpringBoard 判断这一项** —— 它的主二进制 249 KB 且连 `__objc_classlist` 段都没有（实现在 SpringBoardHome / SpringBoardUI 等框架里），注入后主二进制显示为空是正确结果。这个对照值得留档：SpringBoard 是最直觉的验证对象，而它恰好会给出「注入成功但看起来什么都没有」的假故障信号。`backboardd` 2.5 MB / `__objc_classlist` 0x558 字节（171 个类）是合适的对照物。 |
 | 2026-08-23 | 端到端打通：产品路径注入 SpringBoard 成功 | 走完整产品路径（Attach to Process → daemon → `MIMachInjector` dlopen，非 lldb）注入 iOS 18.5 模拟器的 SpringBoard，payload 三条启动日志齐全、目标存活 47 分钟以上。**提案闭环** —— 动机一节的起因就是注入模拟器进程打崩三个 SpringBoard，落地步骤 1 当时还特意写「先拿无关紧要的进程试，不要拿 SpringBoard」。同时确认 dlopen 路径成功、未触发 remap 回退。**顺带否掉了一项原定落地内容**：提案要求按 cpusubtype 分流 thread state（arm64 目标写裸地址、跳过 `thread_convert_thread_state`），但那段无条件 PAC 签名的代码**原样未改**就成功了。原因未查明，故降级为可选优化并保留该节作为「shellcode 在 arm64 目标上跳飞」时的第一排查点 —— 在有实测反例前，凭推理去改一段已验证可用的 thread state 构建，风险大于收益。 |
 | 2026-08-23 | 模拟器目标的会话建立落地 | 实机验证暴露出这件事比提案预想的小得多：payload 广播后宿主**自动**连上了，既有 Bonjour 发现流程原样接管，不需要任何新通道代码。于是改动收敛为「attach 流程别再去建那条用不上的 XPC engine」—— `AttachToProcessViewModel` 按 payload 平台分成 `attachToLocalProcess` / `attachToSimulatorProcess` 两个方法，后者注入完直接等 `RuntimeEngineManager.awaitInjectedBonjourEngine`。匹配用 pid 不用服务名（模拟器进程是宿主真实进程，pid 一致），且因为端点键里的 deviceID 是含短横线的 UUID，取最后一个分段比较而非后缀匹配。沙盒探测在模拟器分支一并跳过 —— 它只用来在 XPC 与 socket 之间选，而模拟器 payload 两个都不走。 |
