@@ -303,6 +303,32 @@ struct RemoteEngineDescriptorTests {
         #expect(decoded.engineID == "engine-1")
         #expect(decoded.metadata == RuntimeDeviceMetadata.current)
         #expect(decoded.iconData == nil)
+        // A peer predating `hostID` sends none; the receiver detects that by the
+        // empty string and falls back to `originChain.first`.
+        #expect(decoded.hostID == "")
+    }
+
+    /// `hostID` decides which section a mirrored engine joins. It has to survive
+    /// the wire, or a mirror of a host lands in a section of its own instead of
+    /// beside the direct route to that same host.
+    @Test("Host ID survives a round-trip")
+    func codableHostID() throws {
+        let original = RuntimeRemoteEngineDescriptor(
+            engineID: "engine-1",
+            source: .bonjour(name: "SpringBoard", identifier: "DEVICE-A-42475", role: .client),
+            hostID: "DEVICE-A",
+            hostName: "iPhone 17 Pro",
+            originChain: ["instance-1"],
+            directTCPHost: "localhost",
+            directTCPPort: 8080
+        )
+        let decoded = try JSONDecoder().decode(
+            RuntimeRemoteEngineDescriptor.self,
+            from: try JSONEncoder().encode(original)
+        )
+        #expect(decoded.hostID == "DEVICE-A")
+        #expect(decoded.hostID != decoded.originChain.first)
+        #expect(decoded == original)
     }
 
     // MARK: - Hashable / Equatable

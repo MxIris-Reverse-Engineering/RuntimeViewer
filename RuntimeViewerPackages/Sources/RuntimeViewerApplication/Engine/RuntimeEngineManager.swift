@@ -4,7 +4,6 @@ import Foundation
 import FoundationToolbox
 import OrderedCollections
 import ServiceManagement
-import SystemConfiguration
 import Dependencies
 import DependenciesMacros
 import RuntimeViewerCore
@@ -39,10 +38,16 @@ public final class RuntimeEngineManager {
 
     private let browser = RuntimeNetworkBrowser()
 
-    private var knownBonjourEndpointNames: Set<String> = []
+    /// Endpoints already connected, keyed by ``RuntimeNetworkEndpoint/uniqueKey``.
+    ///
+    /// Deliberately *not* keyed by service name. An iOS peer advertises one
+    /// name per device, so keying by name means the second payload-carrying
+    /// process on one device (several injected processes inside one simulator,
+    /// say) is written off as a duplicate of the first and never connects.
+    private var knownBonjourEndpointKeys: Set<String> = []
 
-    /// Endpoints that were rediscovered while a stale engine with the same name
-    /// was still being torn down. After `terminateRuntimeEngine` clears the name,
+    /// Endpoints that were rediscovered while a stale engine with the same key
+    /// was still being torn down. After `terminateRuntimeEngine` clears the key,
     /// we re-issue `connectToBonjourEndpoint` for any pending entry so the user
     /// gets auto-reconnected (e.g. when the iOS server resumes from background
     /// suspension and re-advertises Bonjour before the old NWConnection has
@@ -187,12 +192,12 @@ public final class RuntimeEngineManager {
             onRemoved: { [weak self] endpoint in
                 guard let self else { return }
                 #log(.info,"Bonjour endpoint removed: \(endpoint.name, privacy: .public)")
-                // Do NOT clear knownBonjourEndpointNames here. The Bonjour service
+                // Do NOT clear knownBonjourEndpointKeys here. The Bonjour service
                 // is de-registered whenever the NWListener is cancelled (e.g., after
                 // accepting a connection), causing the endpoint to flap. Clearing
-                // the name here would allow a duplicate connection when the endpoint
+                // the key here would allow a duplicate connection when the endpoint
                 // reappears. Instead, rely on terminateRuntimeEngine (called on
-                // actual disconnect) to clear the name and allow reconnection.
+                // actual disconnect) to clear the key and allow reconnection.
                 _ = self
             }
         )
@@ -211,7 +216,10 @@ public final class RuntimeEngineManager {
     }
 
     private func startBonjourServer() {
-        let name = SCDynamicStoreCopyComputerName(nil, nil) as? String ?? ProcessInfo.processInfo.hostName
+        // A process-level unique service name, matching what every other peer
+        // now advertises. The computer name a remote peer displays travels in
+        // the TXT record (`rv-host-name`) instead of in the service name.
+        let name = RuntimeNetworkBonjour.localServiceName
         let source = RuntimeSource.bonjour(name: name, identifier: .init(rawValue: name), role: .server)
         let engine = RuntimeEngine(source: source, pushesRuntimeData: false)
         bonjourServerEngine = engine
@@ -231,27 +239,37 @@ public final class RuntimeEngineManager {
     // MARK: - Bonjour Connection
 
     private func connectToBonjourEndpoint(_ endpoint: RuntimeNetworkEndpoint, attempt: Int = 0) async {
-        guard !knownBonjourEndpointNames.contains(endpoint.name) else {
+        let endpointKey = endpoint.uniqueKey
+        guard !knownBonjourEndpointKeys.contains(endpointKey) else {
             // The endpoint was rediscovered before the previous engine for this
-            // name finished tearing down. Stash it so `terminateRuntimeEngine`
+            // key finished tearing down. Stash it so `terminateRuntimeEngine`
             // can pick it up and reconnect once the old engine is fully gone.
-            #log(.info,"Skipping duplicate Bonjour endpoint: \(endpoint.name, privacy: .public), queueing for reconnect after current engine terminates")
-            pendingReconnectEndpoints[endpoint.name] = endpoint
+            #log(.info,"Skipping duplicate Bonjour endpoint: \(endpoint.name, privacy: .public), key: \(endpointKey, privacy: .public), queueing for reconnect after current engine terminates")
+            pendingReconnectEndpoints[endpointKey] = endpoint
             return
         }
-        // A fresh connection attempt for this name supersedes any pending one.
-        pendingReconnectEndpoints.removeValue(forKey: endpoint.name)
-        knownBonjourEndpointNames.insert(endpoint.name)
+        // A fresh connection attempt for this key supersedes any pending one.
+        pendingReconnectEndpoints.removeValue(forKey: endpointKey)
+        knownBonjourEndpointKeys.insert(endpointKey)
 
         do {
+            // Device-level `hostID` groups every engine on one device into a
+            // single section; the entry inside it is titled with the peer's
+            // process name. That is the shape local Mac injection already
+            // produces, and it is what a simulator carrying several injected
+            // payloads has to produce too. Peers that publish neither key fall
+            // back to what they have always sent.
             let remoteHostInfo = RuntimeHostInfo(
-                hostID: endpoint.instanceID ?? endpoint.name,
+                hostID: endpoint.deviceID ?? endpoint.instanceID ?? endpoint.name,
                 hostName: endpoint.hostName ?? endpoint.name,
                 metadata: endpoint.deviceMetadata ?? .current
             )
             let runtimeEngine = RuntimeEngine(
-                source: .bonjour(name: endpoint.name, identifier: .init(rawValue: endpoint.name), role: .client),
+                source: .bonjour(name: endpoint.processName ?? endpoint.name, identifier: .init(rawValue: endpointKey), role: .client),
                 hostInfo: remoteHostInfo,
+                // Cycle detection stays on `instanceID`: it identifies the
+                // advertising *installation*, which is the thing a mirrored
+                // engine can loop back through.
                 originChain: [endpoint.instanceID ?? endpoint.name]
             )
             try await runtimeEngine.connect(credential: .bonjour(endpoint))
@@ -302,10 +320,10 @@ public final class RuntimeEngineManager {
                 let delay = Self.retryBaseDelay * UInt64(1 << attempt) // 2s, 4s, 8s
                 #log(.info,"Retrying Bonjour connection to \(endpoint.name, privacy: .public) in \(delay / 1_000_000_000, privacy: .public)s...")
                 try? await Task.sleep(nanoseconds: delay)
-                knownBonjourEndpointNames.remove(endpoint.name)
+                knownBonjourEndpointKeys.remove(endpointKey)
                 await connectToBonjourEndpoint(endpoint, attempt: attempt + 1)
             } else {
-                knownBonjourEndpointNames.remove(endpoint.name)
+                knownBonjourEndpointKeys.remove(endpointKey)
                 #log(.error,"Exhausted retry attempts for Bonjour endpoint: \(endpoint.name, privacy: .public)")
             }
         }
@@ -366,12 +384,15 @@ public final class RuntimeEngineManager {
     public func terminateRuntimeEngine(for source: RuntimeSource) {
         #log(.info,"Terminating runtime engine: \(source.description, privacy: .public)")
         var pendingBonjourReconnect: RuntimeNetworkEndpoint?
-        if case .bonjour(let name, _, let role) = source, role.isClient {
-            knownBonjourEndpointNames.remove(name)
+        if case .bonjour(_, let identifier, let role) = source, role.isClient {
+            // The identifier, not the name — the name is the peer's process
+            // display name and no longer identifies the endpoint on its own.
+            let endpointKey = identifier.rawValue
+            knownBonjourEndpointKeys.remove(endpointKey)
             // If the same endpoint was rediscovered while we were still tearing
             // down this engine (typical when the iOS server resumes from
             // background suspension), reconnect to it now.
-            pendingBonjourReconnect = pendingReconnectEndpoints.removeValue(forKey: name)
+            pendingBonjourReconnect = pendingReconnectEndpoints.removeValue(forKey: endpointKey)
         }
         if case .localSocket(_, let socketIdentifier, .client) = source, let pid = Int32(socketIdentifier.rawValue) {
             removeInjectedSocketEndpointRecord(pid: pid)
@@ -777,6 +798,7 @@ public final class RuntimeEngineManager {
             let descriptor = RuntimeRemoteEngineDescriptor(
                 engineID: globalID,
                 source: engine.source,
+                hostID: engine.hostInfo.hostID,
                 hostName: engine.hostInfo.hostName,
                 originChain: chainWithSelf,
                 directTCPHost: proxyHost,
@@ -912,7 +934,12 @@ public final class RuntimeEngineManager {
                         role: .client
                     ),
                     hostInfo: RuntimeHostInfo(
-                        hostID: descriptor.originChain.first ?? "",
+                        // The forwarder's own `hostID` for this engine, so a
+                        // mirror shares a section with a direct route to the
+                        // same host. `originChain.first` is the pre-`hostID`
+                        // fallback, and only coincides with the host while a
+                        // device runs a single installation.
+                        hostID: descriptor.hostID.isEmpty ? (descriptor.originChain.first ?? "") : descriptor.hostID,
                         hostName: descriptor.hostName,
                         metadata: descriptor.metadata
                     ),

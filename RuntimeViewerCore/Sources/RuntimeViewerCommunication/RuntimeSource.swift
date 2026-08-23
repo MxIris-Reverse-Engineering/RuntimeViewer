@@ -195,8 +195,11 @@ extension RuntimeSource {
             return "local"
         case .remote(_, let id, _):
             return id.rawValue
-        case .bonjour(let name, let id, let role):
-            return role.isClient ? "bonjour.\(name)" : "bonjourServer.\(id.rawValue)"
+        case .bonjour(_, let id, let role):
+            // Keyed by the identifier, never the name: a Bonjour client's name
+            // is the peer's *process* display name, which two processes on one
+            // device can share. The identifier carries the process-level key.
+            return role.isClient ? "bonjour.\(id.rawValue)" : "bonjourServer.\(id.rawValue)"
         case .localSocket(_, let id, let role):
             return role.isClient ? id.rawValue : "localSocketServer.\(id.rawValue)"
         case .directTCP(let name, let host, let port, let role):

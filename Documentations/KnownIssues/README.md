@@ -106,3 +106,16 @@ when picking up follow-up work.
   the `.specializationAdded` cache flush was **withdrawn** once
   `RuntimeSwiftSection.specialize` was read past its dispatch shell.
   3 recorded as latent/unreachable with the change that would activate each.
+- [2026-08-22-simulator-injection-identity-findings.md](2026-08-22-simulator-injection-identity-findings.md) —
+  self-audit of Evolution 0013's identity rework (`feature/inject-ios-simulator-process`),
+  IDs `SIMID.<N>`. Not a review pass: it walks every consumer of
+  `hostInfo.hostID` after that field moved from process-level (instanceID) to
+  device-level (deviceID). 3 fixed in the same batch (mirrored engines landing
+  in a section of their own because the mirror path derived `hostID` from
+  `originChain.first`; `RuntimeSource.identifier` keying Bonjour clients by a
+  display name two processes can share; teardown clearing the dedup tables by
+  name after the key moved). `SIMID.4` records why the now-device-level prefix
+  in `clearAllWithHostID` is left alone — its trigger set is empty while iOS
+  payloads register no engine-list handler — together with the three changes
+  that would reopen it. `SIMID.5` flags `SIMULATOR_UDID` as unverified until
+  the end-to-end pass.

@@ -2,7 +2,6 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
-import RuntimeViewerUtilities
 
 #if canImport(UIKit)
 #if os(watchOS)
@@ -43,6 +42,10 @@ private enum RuntimeViewerServer {
         #if RUNTIMEVIEWER_ARM64E
         runtimeViewerIsARM64EVariant = true
         #endif
+        // Every entry point into this type is an injection, so declare it
+        // before any identity is derived: the payload runs inside a process it
+        // does not own and must not persist anything into that process.
+        RuntimeNetworkBonjour.isRunningInsideInjectedProcess = true
         #log(.default, "Attach successfully")
         Task {
             do {
@@ -64,10 +67,16 @@ private enum RuntimeViewerServer {
 
                 #else
 
-                let name = RuntimeNetworkBonjour.localHostName
-                let deviceID = DeviceIdentifier.uniqueDeviceID
+                // Advertise under a process-level unique name. Several
+                // processes on one device can each carry a payload — injecting
+                // a simulator is the case that made this necessary — and a
+                // device-level service name would make the host treat the
+                // second one as a duplicate of the first and never connect it.
+                // What the user reads (device name, process name) travels in
+                // the TXT record instead.
+                let serviceName = RuntimeNetworkBonjour.localServiceName
 
-                runtimeEngine = RuntimeEngine(source: .bonjour(name: name, identifier: .init(rawValue: deviceID), role: .server))
+                runtimeEngine = RuntimeEngine(source: .bonjour(name: serviceName, identifier: .init(rawValue: serviceName), role: .server))
                 try await runtimeEngine?.connect()
 
                 #endif

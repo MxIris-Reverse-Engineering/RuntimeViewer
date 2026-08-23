@@ -1,7 +1,6 @@
 import UIKit
 import FoundationToolbox
 import RuntimeViewerCore
-import RuntimeViewerUtilities
 import RuntimeViewerCommunication
 
 @Loggable
@@ -17,14 +16,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             #log(.info,"Local runtime engine initialized")
         }
         Task {
-            // Resolve the user-friendly host name off the main thread —
-            // mDNS reverse-DNS can stall for tens of seconds on a cold cache
-            // (the first launch after install). Blocking the main thread
-            // there would trip the scene-create watchdog (0x8BADF00D).
-            let deviceName = await RuntimeNetworkBonjour.resolvedHostName()
-            let deviceID = DeviceIdentifier.uniqueDeviceID
-            #log(.info,"Creating Bonjour server runtime engine with name: \(deviceName, privacy: .public), identifier: \(deviceID, privacy: .private)")
-            remoteRuntimeEngine = RuntimeEngine(source: .bonjour(name: deviceName, identifier: .init(rawValue: deviceID), role: .server))
+            // A process-level unique service name, matching what the injected
+            // payload advertises, so a device running both shows up as two
+            // entries under one section rather than one entry that shadows the
+            // other. The user-friendly device name is resolved inside
+            // `makeService` and travels in the TXT record — resolving it here
+            // as well would just repeat the mDNS lookup.
+            let serviceName = RuntimeNetworkBonjour.localServiceName
+            #log(.info,"Creating Bonjour server runtime engine with service name: \(serviceName, privacy: .private)")
+            remoteRuntimeEngine = RuntimeEngine(source: .bonjour(name: serviceName, identifier: .init(rawValue: serviceName), role: .server))
             do {
                 try await remoteRuntimeEngine?.connect()
                 #log(.info,"Bonjour server runtime engine connected successfully")

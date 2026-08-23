@@ -1,12 +1,12 @@
 # 0013 - 支持注入 iOS Simulator 进程
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-08-18
-- **最后更新**: 2026-08-18
+- **最后更新**: 2026-08-22
 - **所属愿景**: 无
 - **关联提案**: 无
-- **实现分支 / PR**: 待定
+- **实现分支 / PR**: `feature/inject-ios-simulator-process`
 - **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
 
 ## 摘要
@@ -592,10 +592,13 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
    宿主（`dns-sd -B _runtimeviewer._tcp local`），以及宿主 RuntimeViewer 是否把它列为 engine。
    先拿一个无关紧要的模拟器进程试，**不要**拿 SpringBoard。
    **(c) 不通则本提案的价值基础不成立**，需要先解决通道再谈注入。
-2. **身份改造**（主仓库，与注入器解耦，优先做）。TXT 新增 `rv-device-id` / `rv-proc-name` /
+2. ~~**身份改造**（主仓库，与注入器解耦，优先做）~~ —— **代码已完成，2026-08-22**，
+   待用 lldb 做双进程实机验证。原文：TXT 新增 `rv-device-id` / `rv-proc-name` /
    `rv-proc-pid`；payload 广播名改为进程级唯一；宿主 `hostID` 取设备级、条目名取进程名、
    去重键与 `pendingReconnectEndpoints` 键改为进程级唯一键；`localInstanceID` 在注入路径下不落盘。
    改完即可用 lldb 注入同设备两个进程，验证它们并入同一个 Section。
+   落地时相对提案多出两项，见决策日志 2026-08-22 两条：descriptor 必须自带 `hostID`，
+   以及 `localDeviceID` 在模拟器上优先取 `SIMULATOR_UDID`。
 3. **阶段一：平台守卫**。daemon 侧读目标 `LC_BUILD_VERSION` platform 并在不匹配时抛错；
    Attach to Process 列表标注不可用。可独立提 PR。
 4. **打通跨仓库联调路径**（动 MachInjector 之前的前置）。`swift-helper-service/Package.swift:136`
@@ -624,4 +627,8 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 | 2026-08-18 | 修正通信通道设计 | 开工后复核 `RuntimeViewerServer.swift:52` 发现：payload 的通道选择是**编译期**分流，MobileServer 走 Bonjour，与 `localSocket` 无关；且 Bonjour 路径已把模拟器当一等场景（`rv-sim` TXT key、`RuntimeViewerUsingUIKit` 既有用法）。原设计「模拟器目标强制走 localSocket」作废，改为「payload 侧不动，宿主侧改会话建立路径」。真正的通道风险随之从「能不能连」变为「注入进系统进程后 Bonjour 还灵不灵」。 |
 | 2026-08-18 | 落地步骤 1 通过 | lldb 把 `iphonesimulator` payload `dlopen` 进系统 daemon `gamecontrollerd`：加载成功、Swift runtime 起来、Bonjour 广播出现、宿主 `RuntimeViewer` 连接建立（端口 52406 双向对上）、目标进程存活。可行性确立，提案进入实现阶段。顺带推翻「系统进程缺少 `NSLocalNetworkUsageDescription` 会挡住 Bonjour」的担忧。 |
 | 2026-08-18 | 发现阻塞项：身份是设备级 | 用户指出注入多个进程后全部显示为模拟器设备名。复验确认成因是 iOS 分支的 Bonjour `name` 与 `identifier` 都取设备级值（原场景「一台设备一个 app」的遗留假设），且宿主 `connectToBonjourEndpoint` 用服务名做去重键 —— 后果不只是显示错乱，**第二个进程根本连不上**（实测 `nanoappregistryd` 停在 LISTEN）。进程级身份的三点取舍待拍板。 |
+| 2026-08-22 | 落地步骤 2 代码完成 | 改动落在八个文件：`RuntimeNetwork.swift`（三个 TXT key、`localDeviceID` / `localProcessName` / `localServiceName`、`isRunningInsideInjectedProcess`、endpoint 的 `uniqueKey`）、`RuntimeSource.swift`（bonjour client 的 `identifier` 改用 id 而非 name）、`RuntimeRemoteEngineDescriptor.swift`（新增 `hostID`）、`RuntimeEngineManager.swift`（去重键、`hostID`、条目名、teardown 键）、payload 与 iOS app 的广播名、`Package.swift`（Communication 依赖 Utilities）。新增 `BonjourProcessIdentityTests`（7 项）与 descriptor 的 `hostID` 往返测试。验证：`RuntimeViewerCommunication` / `RuntimeViewerApplication` / `RuntimeViewerMobileServer`（iphonesimulator）均编译通过，通信测试 107 项、mirror registry 12 项全绿。**注意所有构建都要 `USING_LOCAL_DEPENDENCIES=1`**，否则走 remote pin 会报 `TypeDefinition` / `demangleAsNodeTransient` 缺失，与本改动无关。 |
+| 2026-08-22 | 提案外的必需修正：descriptor 自带 `hostID` | 提案只说宿主直连时 `hostID` 取设备级，漏了**镜像**路径：`handleEngineListChanged` 的 engineFactory 用 `descriptor.originChain.first` 当 `hostID`，而 originChain 装的是 instanceID。两者在「一台设备一个安装」时恰好相等，改成设备级后就分叉了 —— 同一台远程设备的直连 engine 与镜像 engine 会落进两个 Section，且 `deduplicateForwardedMirrors` 靠 `hostInfo.hostID == section.hostID` 找同 Section 本地路由，去重随之失效，用户会看到重复条目。修法是给 descriptor 加 `hostID` 字段（`@Default("")`，旧 peer 解码为空串后回退 `originChain.first`），发送端填 `engine.hostInfo.hostID`。环检测仍用 originChain，不受影响。 |
+| 2026-08-22 | 提案外的落地取舍：`localDeviceID` 优先 `SIMULATOR_UDID` | 提案写的是直接用 `DeviceIdentifier.uniqueDeviceID`。但它在 MobileGestalt 无答案时回退到 keychain UUID，而 keychain 查询是**从被注入进程里**发起的，可能按进程解析 —— 那会把一台模拟器重新拆成「每个注入进程一个 Section」，正是本次要消除的症状。故模拟器上先读 CoreSimulator 注入到每个进程环境里的 `SIMULATOR_UDID`，真机维持原路径。`SIMULATOR_UDID` 的实际存在性尚未实测（本机当前无 booted 模拟器，且启动模拟器需单独授权），留待步骤 8 端到端验证时确认；即便缺失也只是退回原路径，不会更差。 |
+| 2026-08-22 | 已知取舍：`clearAllWithHostID` 的前缀现在是设备级 | `hostID` 转为设备级后，`engineID = "{hostID}/{localID}"` 的前缀也随之设备级，于是「某个 bonjour engine 断开」会让 `clearAllWithHostID` 清掉**同设备所有**镜像。当前不可触发：走这条路要求对端支持 engine sharing 并返回非空 descriptor，而 iOS payload 不注册 engine list handler，一律被判为 `directBonjourEngines`。正确修法是让 mirrorRegistry 改用 engine 级键，属于架构改动，不在本次范围。裁决与复核判据记于 `Documentations/KnownIssues/2026-08-22-simulator-injection-identity-findings.md`。 |
 | 2026-08-18 | 定案：设备做 Section，进程做条目 | 用户拍板「跟 Mac 一样」——不新增展示结构，复用 `rebuildSections()` 既有的「hostID 分组 + hostName 标题」。落到三处改动：TXT 新增 `rv-device-id`/`rv-proc-name`/`rv-proc-pid`；payload 广播名改为进程级唯一（展示名与广播名拆开）；宿主 `hostID` 取设备级、条目名取进程名、去重键与 `pendingReconnectEndpoints` 键改为进程级唯一键。旧 peer 靠 `??` 链回退，无需兼容分支。 |
