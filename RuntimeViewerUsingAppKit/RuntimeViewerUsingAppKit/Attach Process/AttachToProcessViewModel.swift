@@ -42,11 +42,7 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
             guard let self else { return }
 
             let name = runningItem.name
-            let identifier = runningItem.processIdentifier.description
-            // Probe the target's live sandbox rather than reading RunningApplicationKit's
-            // entitlement-only `isSandboxed`, which misses seatbelt-profiled daemons
-            // (e.g. rapportd) that deny mach-lookup yet carry no app-sandbox entitlement.
-            let isSandbox = SandboxProbe.isRuntimeViewerServiceMachLookupBlocked(pid: runningItem.processIdentifier)
+            let processIdentifier = runningItem.processIdentifier
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -59,31 +55,19 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                     // be read rather than assumed — and it throws for a target
                     // we ship no payload for, instead of handing over the
                     // nearest slice and letting dyld refuse it.
-                    let payloadPlatform = try runtimeInjectClient.payloadPlatform(
-                        forTargetProcess: runningItem.processIdentifier
-                    )
+                    let payloadPlatform = try runtimeInjectClient.payloadPlatform(forTargetProcess: processIdentifier)
                     try await runtimeInjectClient.installServerFrameworkIfNeeded(for: payloadPlatform)
                     guard let dylibURL = runtimeInjectClient.serverFrameworkExecutableURL(for: payloadPlatform) else { return }
 
-                    try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: identifier, isSandbox: isSandbox)
-
-                    // dlopen or mach_vm_remap is the daemon's call — it probes the target's
-                    // sandbox and code signing to find out which one the target will accept.
-                    // All we owe it is the entry symbol the remap path needs.
-                    try await runtimeInjectClient.injectApplication(
-                        pid: runningItem.processIdentifier,
-                        dylibURL: dylibURL,
-                        remapEntrySymbol: "runtime_viewer_server_start"
-                    )
-                    // `connect()` only brought up the local half and optimistically reported
-                    // `.connected`; confirm the injected peer actually connected back before
-                    // dismissing, so a rejected connection surfaces an error and the engine is
-                    // torn down instead of lingering silently.
-                    try await runtimeEngineManager.confirmAttachedRuntimeEngineConnected(name: name, identifier: identifier, isSandbox: isSandbox)
+                    switch payloadPlatform {
+                    case .iOSSimulator:
+                        try await attachToSimulatorProcess(name: name, processIdentifier: processIdentifier, dylibURL: dylibURL)
+                    case .macOS:
+                        try await attachToLocalProcess(name: name, processIdentifier: processIdentifier, dylibURL: dylibURL)
+                    }
 
                     router.trigger(.dismiss)
                 } catch {
-                    runtimeEngineManager.terminateAttachedRuntimeEngine(name: name, identifier: identifier, isSandbox: isSandbox)
                     #log(.error, "\(error, privacy: .public)")
                     errorRelay.accept(error)
                 }
@@ -91,5 +75,57 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         }.disposed(by: rx.disposeBag)
 
         return Output()
+    }
+
+    /// The Mac flow: bring up a client engine, inject, confirm the payload
+    /// connected back to it.
+    @MainActor
+    private func attachToLocalProcess(name: String, processIdentifier: pid_t, dylibURL: URL) async throws {
+        let identifier = processIdentifier.description
+        // Probe the target's live sandbox rather than reading RunningApplicationKit's
+        // entitlement-only `isSandboxed`, which misses seatbelt-profiled daemons
+        // (e.g. rapportd) that deny mach-lookup yet carry no app-sandbox entitlement.
+        let isSandbox = SandboxProbe.isRuntimeViewerServiceMachLookupBlocked(pid: processIdentifier)
+
+        try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: identifier, isSandbox: isSandbox)
+        do {
+            try await inject(processIdentifier: processIdentifier, dylibURL: dylibURL)
+            // `connect()` only brought up the local half and optimistically reported
+            // `.connected`; confirm the injected peer actually connected back before
+            // dismissing, so a rejected connection surfaces an error and the engine is
+            // torn down instead of lingering silently.
+            try await runtimeEngineManager.confirmAttachedRuntimeEngineConnected(name: name, identifier: identifier, isSandbox: isSandbox)
+        } catch {
+            runtimeEngineManager.terminateAttachedRuntimeEngine(name: name, identifier: identifier, isSandbox: isSandbox)
+            throw error
+        }
+    }
+
+    /// The simulator flow: inject, then wait for the payload to advertise itself.
+    ///
+    /// No engine is launched first, and none has to be torn down on failure. A
+    /// simulator payload picks its transport at compile time and always
+    /// advertises over Bonjour (see `RuntimeViewerServer.main()`), so the
+    /// browser already running in this process is what connects to it — the
+    /// XPC/socket endpoint the Mac flow prepares would never be dialled.
+    ///
+    /// The sandbox probe is skipped for the same reason: it exists to choose
+    /// between the XPC and localhost-socket transports, and neither is in play.
+    @MainActor
+    private func attachToSimulatorProcess(name: String, processIdentifier: pid_t, dylibURL: URL) async throws {
+        try await inject(processIdentifier: processIdentifier, dylibURL: dylibURL)
+        try await runtimeEngineManager.awaitInjectedBonjourEngine(name: name, processIdentifier: processIdentifier)
+    }
+
+    /// dlopen or mach_vm_remap is the daemon's call — it probes the target's
+    /// sandbox and code signing to find out which one the target will accept.
+    /// All we owe it is the entry symbol the remap path needs.
+    @MainActor
+    private func inject(processIdentifier: pid_t, dylibURL: URL) async throws {
+        try await runtimeInjectClient.injectApplication(
+            pid: processIdentifier,
+            dylibURL: dylibURL,
+            remapEntrySymbol: "runtime_viewer_server_start"
+        )
     }
 }

@@ -478,9 +478,25 @@ try await runtimeEngineManager.confirmAttachedRuntimeEngineConnected(name:identi
 它预设「注入方会连到宿主为这次注入专门起的 XPC / socket 端点」。模拟器目标不会 —— 它会去广播
 Bonjour，由既有的 Bonjour 发现流程接管。所以模拟器目标要走一条独立的会话建立路径：
 跳过 `launchAttachedRuntimeEngine` / `confirmAttachedRuntimeEngineConnected` 那对调用，
-改为注入后等待 Bonjour 侧出现对应的新 engine（TXT 记录里带 `rv-sim`）。
+改为注入后等待 Bonjour 侧出现对应的新 engine。
 
-超时与失败提示需要单独设计：Bonjour 发现是异步且可能延迟数秒的，不能沿用当前「注入返回即确认」的时序。
+**已落地（2026-08-23）。** `AttachToProcessViewModel.transform(_:)` 按 `payloadPlatform` 分成两个方法：
+
+- `attachToLocalProcess` —— 原流程原样保留（探沙盒 → 起 engine → 注入 → 确认连回），
+  失败时拆掉自己起的那个 engine。
+- `attachToSimulatorProcess` —— 注入 → `awaitInjectedBonjourEngine(name:processIdentifier:timeout:)`。
+  不起 engine，失败时也没有 engine 要拆。**沙盒探测一并跳过**：`SandboxProbe` 存在的意义是在
+  XPC 与 localhost socket 两种 transport 间做选择，而模拟器 payload 两个都不用。
+
+`awaitInjectedBonjourEngine` 落在 `RuntimeEngineManager`：按 pid 轮询 `bonjourRuntimeEngines`
+（0.5 秒一次，默认 30 秒超时）。**匹配用 pid 而非服务名** —— 模拟器进程是宿主的真实进程，
+payload 在 TXT 里发布的 pid 就是被注入的那个，端点键形如 `{deviceID}-{pid}`；
+deviceID 是含短横线的 UUID，所以取最后一个 `-` 分段比较，而不是做后缀匹配。
+超时错误单独一个 case，提示里点明「模拟器的启动日志在 `xcrun simctl spawn <udid> log show`，
+宿主的 `log show` 看不到」—— 这是本次排查里实际踩过的坑。
+
+**这里没有新增任何通道代码**：2026-08-23 的实机验证中，payload 一广播，用户宿主上正在运行的
+RuntimeViewer 就自动连上了。要改的从来不是「怎么连」，而是「别再去建那条用不上的 engine」。
 
 ### 引擎身份：设备做 Section，进程做条目 —— 与 Mac 完全对齐
 
@@ -710,6 +726,7 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 | 2026-08-22 | 已知取舍：`clearAllWithHostID` 的前缀现在是设备级 | `hostID` 转为设备级后，`engineID = "{hostID}/{localID}"` 的前缀也随之设备级，于是「某个 bonjour engine 断开」会让 `clearAllWithHostID` 清掉**同设备所有**镜像。当前不可触发：走这条路要求对端支持 engine sharing 并返回非空 descriptor，而 iOS payload 不注册 engine list handler，一律被判为 `directBonjourEngines`。正确修法是让 mirrorRegistry 改用 engine 级键，属于架构改动，不在本次范围。裁决与复核判据记于 `Documentations/KnownIssues/2026-08-22-simulator-injection-identity-findings.md`。 |
 | 2026-08-23 | 落地步骤 5 的前置风险已验掉 | 用只读探针对 iOS 18.5 模拟器的 `peopled` 实测 `TASK_DYLD_INFO`：拿到的**就是 `dyld_sim` 维护的那一份**（580 个镜像中 576 个属于模拟器 RuntimeRoot），`sharedCacheBaseAddress = 0x180000000`、slide 为 0，且三个宿主镜像恰好是 `libsystem_platform` / `libsystem_kernel` / `libsystem_pthread`。`MITargetSymbolResolver` 的分流设计因此成立，提案原定的退路（从 `dyld_sim` 的 `__DATA` 段自行定位）不需要了。另记两个易误判点：`dyldPath` 读出来是宿主的 `/usr/lib/dyld`，不能用它判断目标是否模拟器进程；slide 虽为 0 但仍须从进程读取。 |
 | 2026-08-23 | 修正详细设计：宿主符号的偏移不能照抄注入器自身 | 实测发现 `/usr/lib/system/libsystem_pthread.dylib` 的 arm64 与 arm64e slice 中 `_pthread_create_from_mach_thread` 偏移不同（`0x7d84` vs `0x847c`）。注入器用的是宿主 cache 里的 arm64e 那份，而模拟器进程是 arm64、独立映射，因此原设计「宿主 `dlsym` 地址减宿主基址得偏移，再加目标基址」会算出偏高 0x6f8 字节的地址 —— 落在函数体中间，跳过去同样崩，且症状与「地址完全解析错」难以区分，属于评审阶段看不出、只在实现后才发作的坑。改为解析**目标进程内存里**那份 Mach-O 的 `LC_SYMTAB` 求偏移：不依赖宿主状态，也不必假设目标 map 的是 cache 还是磁盘文件，且与另两个符号共用同一套 Mach-O 解析。前期调研与详细设计中相应的算式一并更正（原文保留在正文中并标注为错）。 |
+| 2026-08-23 | 模拟器目标的会话建立落地 | 实机验证暴露出这件事比提案预想的小得多：payload 广播后宿主**自动**连上了，既有 Bonjour 发现流程原样接管，不需要任何新通道代码。于是改动收敛为「attach 流程别再去建那条用不上的 XPC engine」—— `AttachToProcessViewModel` 按 payload 平台分成 `attachToLocalProcess` / `attachToSimulatorProcess` 两个方法，后者注入完直接等 `RuntimeEngineManager.awaitInjectedBonjourEngine`。匹配用 pid 不用服务名（模拟器进程是宿主真实进程，pid 一致），且因为端点键里的 deviceID 是含短横线的 UUID，取最后一个分段比较而非后缀匹配。沙盒探测在模拟器分支一并跳过 —— 它只用来在 XPC 与 socket 之间选，而模拟器 payload 两个都不走。 |
 | 2026-08-23 | 落地步骤 2 实机验证通过，SIMID.5 一并关闭 | 步骤 7 产出可用 payload 后，步骤 2 挂了一整天的「双进程实机验证」终于具备条件。把 payload 分别 `dlopen` 进同一台模拟器的 `mobiletimerd` 与 `nanoprefsyncd`，两者在宿主 RuntimeViewer 中并入同一个 Section（用户实机确认）—— 进程级唯一广播名、设备级 `hostID`、进程级去重键三项改造同时成立。顺带读到两个进程的环境里都有相同的 `SIMULATOR_UDID`，与 `simctl` 报的设备 UDID 一致，`localDeviceID` 优先读它的取舍（2026-08-22 那条）得到证实，KnownIssues 的 SIMID.5 关闭。**注意宿主是自动连上的**：payload 广播后既有的 Bonjour 发现流程直接接管，宿主侧没有为此写任何新代码 —— 这也说明「模拟器目标的会话建立」要做的不是新增通道，而是让 attach 流程别再去建那条用不上的 XPC engine。 |
 | 2026-08-23 | 落地步骤 5/6 生效，PAC 疑虑消解 | `MITargetSymbolResolver` 接入 `MIMachInjector` 后的第一次真实注入：目标返回了自己 `dlerror()` 的文本（`MIMachInjectorErrorTargetRefusedToLoadDylib`），而修复前的症状是 `could not get thread state: (ipc/send) invalid destination port` —— shellcode 跳飞、目标当场崩。能产生 dlerror 文本，意味着 shellcode 在目标里跑完了 `pthread_create_from_mach_thread` → `dlopen` → `dlerror` → 写 report 四步，四个地址全部由 resolver 从目标符号表解出。**顺带把「仍未验证」第 1 条（arm64 目标上的 PAC 指令）验掉了**。那次注入最终仍失败并打崩目标，但成因是另外两件事：投的是 macOS slice，以及模拟器目标仍会回退 remap。 |
 | 2026-08-23 | 推翻一个中途做出的错误判断：`/Library/Frameworks` 并未被 `dyld_sim` 劫持 | 上一条那次失败的 `dlerror` 被 256 字节的 report 缓冲截断在**第一个**候选路径内部，只看得到 `<RuntimeRoot>/Library/Frameworks/…`，据此一度判定「模拟器进程的文件系统视图不是宿主的、提案的投递路径假设被推翻」。实测否掉了这个判断：对 `mobiletimerd` 逐个 `dlopen` 不存在的路径读 `tried:` 全列表，`dyld_sim` 对**任何**前缀都是先试 RuntimeRoot 版本、**再试宿主原路径**，七个前缀行为一致。提案原假设成立，投递目录的选择是自由的。真正的失败原因是 slice 平台不匹配（装在那里的是 `platform 1` 的 macOS slice）。**教训是截断的诊断信息比没有信息更危险** —— 它看起来像完整答案。 |

@@ -446,11 +446,20 @@ public final class RuntimeEngineManager {
     public enum AttachedEngineHandshakeError: LocalizedError {
         case engineNotFound(name: String)
         case handshakeTimedOut(name: String)
+        case bonjourEngineNeverAdvertised(name: String, processIdentifier: pid_t)
 
         public var errorDescription: String? {
             switch self {
             case .engineNotFound(let name):
                 return "Could not find the runtime engine for \(name) to confirm its connection."
+            case .bonjourEngineNeverAdvertised(let name, let processIdentifier):
+                return """
+                    Timed out waiting for \(name) (pid \(processIdentifier)) to appear on the network after injection.
+
+                    A simulator payload does not connect back the way a Mac one does — it advertises itself over Bonjour and this app's browser picks it up. The injection RPC returned successfully, so either the payload never finished starting up, or its advertisement never reached this machine.
+
+                    Check the simulator's own log for the payload's startup lines; `xcrun simctl spawn <udid> log show` shows them, the host's `log show` does not.
+                    """
             case .handshakeTimedOut(let name):
                 return """
                     Timed out waiting for \(name) to connect back after injection.
@@ -491,6 +500,68 @@ public final class RuntimeEngineManager {
             throw AttachedEngineHandshakeError.handshakeTimedOut(name: name)
         }
         #log(.info, "Injected peer for \(name, privacy: .public) confirmed connected")
+    }
+
+    /// How often ``awaitInjectedBonjourEngine(name:processIdentifier:timeout:)`` re-checks for
+    /// the advertised engine. Bonjour discovery plus the engine handshake take
+    /// seconds, not milliseconds, so a tight poll would only burn main-actor
+    /// hops.
+    private static let injectedBonjourEnginePollInterval: UInt64 = 500_000_000 // 0.5 seconds
+
+    /// Waits for a just-injected simulator process to show up as a Bonjour engine.
+    ///
+    /// The Mac injection path launches a client engine *before* injecting and
+    /// then confirms the payload connected back to it. A simulator payload does
+    /// neither: its transport is chosen at compile time and is always Bonjour
+    /// (see `RuntimeViewerServer.main()`), so it advertises itself and the
+    /// browser already running in this process connects to it — no engine to
+    /// launch here, only one to wait for.
+    ///
+    /// Matching is on pid. A simulator process is a real host process, so the
+    /// pid the payload publishes in its TXT record is the same one that was
+    /// injected, and the endpoint key it lands under is `{deviceID}-{pid}`.
+    public func awaitInjectedBonjourEngine(
+        name: String,
+        processIdentifier: pid_t,
+        timeout: TimeInterval = 30
+    ) async throws {
+        #log(.info, "Waiting for injected Bonjour engine: \(name, privacy: .public) (pid: \(processIdentifier, privacy: .public), timeout: \(timeout, privacy: .public)s)")
+
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if injectedBonjourEngine(forProcessIdentifier: processIdentifier) != nil {
+                #log(.info, "Injected Bonjour engine appeared for \(name, privacy: .public)")
+                return
+            }
+            try? await Task.sleep(nanoseconds: Self.injectedBonjourEnginePollInterval)
+        } while Date() < deadline
+
+        // One last look: the engine may have arrived while the final sleep was
+        // in flight, and reporting a timeout for a connection that exists would
+        // tear down a perfectly good engine.
+        if injectedBonjourEngine(forProcessIdentifier: processIdentifier) != nil {
+            #log(.info, "Injected Bonjour engine appeared for \(name, privacy: .public) on the final check")
+            return
+        }
+
+        #log(.error, "Injected Bonjour engine never advertised for \(name, privacy: .public) within \(timeout, privacy: .public)s")
+        throw AttachedEngineHandshakeError.bonjourEngineNeverAdvertised(name: name, processIdentifier: processIdentifier)
+    }
+
+    /// The Bonjour engine belonging to `processIdentifier`, if it has connected.
+    ///
+    /// The endpoint key is `{deviceID}-{pid}` and the device half is a UUID
+    /// containing its own dashes, so the pid is read as the last dash-separated
+    /// component rather than by matching a suffix — `-1913` would otherwise be a
+    /// suffix of nothing, but the reverse mistake is easy to introduce later.
+    private func injectedBonjourEngine(forProcessIdentifier processIdentifier: pid_t) -> RuntimeEngine? {
+        bonjourRuntimeEngines.first { runtimeEngine in
+            guard case .bonjour(_, let identifier, let role) = runtimeEngine.source, role.isClient else {
+                return false
+            }
+            let trailingComponent = identifier.rawValue.split(separator: "-").last.map(String.init)
+            return trailingComponent == String(processIdentifier)
+        }
     }
 
     /// Polls the engine with a lightweight `engineList` round-trip until the peer answers,
