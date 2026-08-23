@@ -116,12 +116,25 @@ __TEXT  1a2c33000-1a2c37674   RuntimeRoot/usr/lib/system/libsystem_sandbox.dylib
 ```
 
 **关键事实：`libsystem_pthread` 与 `libsystem_kernel` 用的是宿主 macOS 那一份**（线程与系统调用
-必须走宿主内核），只是装在不同地址。所以 `pthread_create_from_mach_thread` 这一半根本不需要解析
-cache —— 同一个文件、同样的偏移，把基址换掉即可：
+必须走宿主内核），只是装在不同地址。所以 `pthread_create_from_mach_thread` 这一半不需要解析模拟器
+cache，只需要知道它在目标进程里的加载基址 —— 那个基址就在目标的镜像列表里。
+
+**但偏移不能照抄注入器自己那一份**（2026-08-23 实测更正，原文的算法是错的，见决策日志）。
+`/usr/lib/system/libsystem_pthread.dylib` 是 universal 文件，两个 slice 的符号偏移并不相同：
 
 ```
-宿主：  0x1890bb000 + 0x847c = 0x1890c347c   ← 现在错误地喂给了目标
-目标：  0x101158000 + 0x847c = 0x10116047c   ← 应该是这个
+arm64  slice:  _pthread_create_from_mach_thread @ 0x7d84
+arm64e slice:  _pthread_create_from_mach_thread @ 0x847c      ← 差 0x6f8
+```
+
+注入器进程用的是宿主 shared cache 里那份（arm64e，实测偏移 `0x847c`）；模拟器进程是 arm64，
+它那份 `libsystem_pthread` 独立映射、偏移是 `0x7d84`。拿宿主偏移去加目标基址，落点会比正确地址
+高 0x6f8 字节 —— 正好落在函数体中间，跳过去照样崩，而且症状与「地址完全解析错」难以区分。
+
+```
+注入器（arm64e，来自宿主 cache）：  0x188dd9000 + 0x847c = 0x188de147c
+目标（arm64，独立映射）：          0x104f84000 + 0x7d84 = 0x104f8bd84   ← 正确
+                                   0x104f84000 + 0x847c                  ← 照抄宿主偏移会得到这个，错
 ```
 
 另两个符号在模拟器 cache 里，需要解析 cache 文件。
@@ -346,7 +359,7 @@ mach thread 会永久留在目标里（`MIMachInjector.m` 的 cleanup 注释里�
 
 | 符号 | 所属镜像 | 解析方式 |
 |---|---|---|
-| `pthread_create_from_mach_thread` | 宿主 `/usr/lib/system/libsystem_pthread.dylib` | 宿主 `dlsym` 得到的地址减去宿主该镜像基址 = 偏移；加上目标 image list 里同名镜像的加载基址 |
+| `pthread_create_from_mach_thread` | 宿主 `/usr/lib/system/libsystem_pthread.dylib`（目标里独立映射） | 从目标 image list 取该镜像的加载基址，再解析**目标进程内存里**那份 Mach-O 的 `LC_SYMTAB` 求偏移。**不得**使用注入器自身的偏移 —— arm64 与 arm64e slice 的偏移不同（`0x7d84` / `0x847c`），而注入器与目标未必同 arch |
 | `dlopen` | 模拟器 cache 的 `libdyld.dylib` | MachOKit 解析 `dyld_sim_shared_cache_<arch>` 的导出，得到 unslid 地址；加上目标 cache slide |
 | `sandbox_extension_consume` | 模拟器 cache 的 `libsystem_sandbox.dylib` | 同上 |
 
@@ -362,9 +375,23 @@ task_info(task, TASK_DYLD_INFO, (task_info_t)&dyldInfo, &count);
 //   sharedCacheBaseAddress
 ```
 
-**待验证的实现风险**：模拟器进程由宿主 dyld 引导后交给 `dyld_sim`，`TASK_DYLD_INFO` 返回的是哪一份
-`dyld_all_image_infos`（宿主 dyld 的还是 dyld_sim 覆盖后的）需要实测。若拿到的是宿主 dyld 那份、
-不含模拟器镜像，退路是从 `dyld_sim` 的 `__DATA` 段定位它自己维护的那份。
+~~**待验证的实现风险**~~ —— **已验证通过，2026-08-23**：`TASK_DYLD_INFO` 返回的就是 `dyld_sim`
+维护的那一份，退路不需要了。对 iOS 18.5 模拟器的 `peopled` 实测（只读探针）：
+
+```
+sharedCacheSlide     = 0x0
+sharedCacheBaseAddr  = 0x180000000
+infoArrayCount       = 580     → 576 个模拟器镜像 + 3 个宿主镜像
+宿主镜像恰好是：libsystem_platform / libsystem_kernel / libsystem_pthread
+```
+
+`libsystem_pthread.dylib` 在镜像列表里、加载基址可直接读出，分流设计因此成立。
+
+两个容易误判的点：
+
+- `dyldPath` 字段读出来是宿主的 `/usr/lib/dyld`，尽管镜像列表是模拟器的 —— **不能用它判断目标
+  是不是模拟器进程**。
+- `sharedCacheSlide` 这次是 0，与 `.map` 文件一致，但仍须从进程读取，不得写死。
 
 cache 文件路径由目标进程可执行路径推导（`.../Runtimes/<name>.simruntime/...` → SimRuntime 标识）
 或直接读 `CoreSimulator` 的 device plist，两者都比硬编码稳。
@@ -601,12 +628,17 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
    以及 `localDeviceID` 在模拟器上优先取 `SIMULATOR_UDID`。
 3. **阶段一：平台守卫**。daemon 侧读目标 `LC_BUILD_VERSION` platform 并在不匹配时抛错；
    Attach to Process 列表标注不可用。可独立提 PR。
-4. **打通跨仓库联调路径**（动 MachInjector 之前的前置）。`swift-helper-service/Package.swift:136`
-   的 MachInjector local path 指向 `/Volumes/Repositories/Private/Personal/Library/macOS/MachInjector`，
-   该目录不存在，因此当前吃的是远程 pin `from: "0.5.0"`；两个 workspace 也都没有关联 MachInjector 与
-   swift-helper-service。需先决定：改 local path、迁移仓库位置，还是发版升 pin。**不解决则后两步无法验证。**
+4. ~~**打通跨仓库联调路径**~~ —— **大半已消解，2026-08-23 复核**。原文称
+   `swift-helper-service/Package.swift:136` 的 MachInjector local path 指向的目录不存在、因此吃
+   远程 pin `from: "0.5.0"`；该目录现已存在（git 干净、tag `0.5.0`），`USING_LOCAL_DEPENDENCIES=1`
+   下 `swift package show-dependencies` 确认 RuntimeViewer → swift-helper-service → MachInjector
+   整条链都解析到本地路径。
+   **剩余一项**：`RunScript.sh` / `ArchiveScript.sh` 都不传 `USING_LOCAL_DEPENDENCIES`，所以实机
+   daemon 仍吃远程 pin，改本地 MachInjector 不会生效。动步骤 6 的验证之前，先给两个脚本加一个
+   `--local-deps` 开关（优于每次手动带环境变量 —— 忘记带时的症状是「改了没反应」，很难自查）。
 5. **`MITargetSymbolResolver`**（MachInjector）：读目标 `dyld_all_image_infos`、镜像列表、cache slide；
-   宿主同文件镜像走偏移重定位，cache 内镜像走 MachOKit 解析。带单测。
+   宿主同文件镜像解析**目标进程内存里**那份的 `LC_SYMTAB`（不得用注入器自身的偏移，见决策日志
+   2026-08-23），cache 内镜像走 MachOKit 解析。带单测。
 6. **`MIMachInjector` 接入 resolver**，并按目标 cpusubtype 分流 thread state 构建。
    此时可在模拟器进程上做第一次真实注入验证（PAC 指令行为、sandbox token 有效性一并验掉）。
 7. **payload 选片与投递**：`BuildRuntimeViewerServerXCFramework.sh` 产物纳入 app 打包，
@@ -627,8 +659,11 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 | 2026-08-18 | 修正通信通道设计 | 开工后复核 `RuntimeViewerServer.swift:52` 发现：payload 的通道选择是**编译期**分流，MobileServer 走 Bonjour，与 `localSocket` 无关；且 Bonjour 路径已把模拟器当一等场景（`rv-sim` TXT key、`RuntimeViewerUsingUIKit` 既有用法）。原设计「模拟器目标强制走 localSocket」作废，改为「payload 侧不动，宿主侧改会话建立路径」。真正的通道风险随之从「能不能连」变为「注入进系统进程后 Bonjour 还灵不灵」。 |
 | 2026-08-18 | 落地步骤 1 通过 | lldb 把 `iphonesimulator` payload `dlopen` 进系统 daemon `gamecontrollerd`：加载成功、Swift runtime 起来、Bonjour 广播出现、宿主 `RuntimeViewer` 连接建立（端口 52406 双向对上）、目标进程存活。可行性确立，提案进入实现阶段。顺带推翻「系统进程缺少 `NSLocalNetworkUsageDescription` 会挡住 Bonjour」的担忧。 |
 | 2026-08-18 | 发现阻塞项：身份是设备级 | 用户指出注入多个进程后全部显示为模拟器设备名。复验确认成因是 iOS 分支的 Bonjour `name` 与 `identifier` 都取设备级值（原场景「一台设备一个 app」的遗留假设），且宿主 `connectToBonjourEndpoint` 用服务名做去重键 —— 后果不只是显示错乱，**第二个进程根本连不上**（实测 `nanoappregistryd` 停在 LISTEN）。进程级身份的三点取舍待拍板。 |
+| 2026-08-18 | 定案：设备做 Section，进程做条目 | 用户拍板「跟 Mac 一样」——不新增展示结构，复用 `rebuildSections()` 既有的「hostID 分组 + hostName 标题」。落到三处改动：TXT 新增 `rv-device-id`/`rv-proc-name`/`rv-proc-pid`；payload 广播名改为进程级唯一（展示名与广播名拆开）；宿主 `hostID` 取设备级、条目名取进程名、去重键与 `pendingReconnectEndpoints` 键改为进程级唯一键。旧 peer 靠 `??` 链回退，无需兼容分支。 |
 | 2026-08-22 | 落地步骤 2 代码完成 | 改动落在八个文件：`RuntimeNetwork.swift`（三个 TXT key、`localDeviceID` / `localProcessName` / `localServiceName`、`isRunningInsideInjectedProcess`、endpoint 的 `uniqueKey`）、`RuntimeSource.swift`（bonjour client 的 `identifier` 改用 id 而非 name）、`RuntimeRemoteEngineDescriptor.swift`（新增 `hostID`）、`RuntimeEngineManager.swift`（去重键、`hostID`、条目名、teardown 键）、payload 与 iOS app 的广播名、`Package.swift`（Communication 依赖 Utilities）。新增 `BonjourProcessIdentityTests`（7 项）与 descriptor 的 `hostID` 往返测试。验证：`RuntimeViewerCommunication` / `RuntimeViewerApplication` / `RuntimeViewerMobileServer`（iphonesimulator）均编译通过，通信测试 107 项、mirror registry 12 项全绿。**注意所有构建都要 `USING_LOCAL_DEPENDENCIES=1`**，否则走 remote pin 会报 `TypeDefinition` / `demangleAsNodeTransient` 缺失，与本改动无关。 |
 | 2026-08-22 | 提案外的必需修正：descriptor 自带 `hostID` | 提案只说宿主直连时 `hostID` 取设备级，漏了**镜像**路径：`handleEngineListChanged` 的 engineFactory 用 `descriptor.originChain.first` 当 `hostID`，而 originChain 装的是 instanceID。两者在「一台设备一个安装」时恰好相等，改成设备级后就分叉了 —— 同一台远程设备的直连 engine 与镜像 engine 会落进两个 Section，且 `deduplicateForwardedMirrors` 靠 `hostInfo.hostID == section.hostID` 找同 Section 本地路由，去重随之失效，用户会看到重复条目。修法是给 descriptor 加 `hostID` 字段（`@Default("")`，旧 peer 解码为空串后回退 `originChain.first`），发送端填 `engine.hostInfo.hostID`。环检测仍用 originChain，不受影响。 |
 | 2026-08-22 | 提案外的落地取舍：`localDeviceID` 优先 `SIMULATOR_UDID` | 提案写的是直接用 `DeviceIdentifier.uniqueDeviceID`。但它在 MobileGestalt 无答案时回退到 keychain UUID，而 keychain 查询是**从被注入进程里**发起的，可能按进程解析 —— 那会把一台模拟器重新拆成「每个注入进程一个 Section」，正是本次要消除的症状。故模拟器上先读 CoreSimulator 注入到每个进程环境里的 `SIMULATOR_UDID`，真机维持原路径。`SIMULATOR_UDID` 的实际存在性尚未实测（本机当前无 booted 模拟器，且启动模拟器需单独授权），留待步骤 8 端到端验证时确认；即便缺失也只是退回原路径，不会更差。 |
 | 2026-08-22 | 已知取舍：`clearAllWithHostID` 的前缀现在是设备级 | `hostID` 转为设备级后，`engineID = "{hostID}/{localID}"` 的前缀也随之设备级，于是「某个 bonjour engine 断开」会让 `clearAllWithHostID` 清掉**同设备所有**镜像。当前不可触发：走这条路要求对端支持 engine sharing 并返回非空 descriptor，而 iOS payload 不注册 engine list handler，一律被判为 `directBonjourEngines`。正确修法是让 mirrorRegistry 改用 engine 级键，属于架构改动，不在本次范围。裁决与复核判据记于 `Documentations/KnownIssues/2026-08-22-simulator-injection-identity-findings.md`。 |
-| 2026-08-18 | 定案：设备做 Section，进程做条目 | 用户拍板「跟 Mac 一样」——不新增展示结构，复用 `rebuildSections()` 既有的「hostID 分组 + hostName 标题」。落到三处改动：TXT 新增 `rv-device-id`/`rv-proc-name`/`rv-proc-pid`；payload 广播名改为进程级唯一（展示名与广播名拆开）；宿主 `hostID` 取设备级、条目名取进程名、去重键与 `pendingReconnectEndpoints` 键改为进程级唯一键。旧 peer 靠 `??` 链回退，无需兼容分支。 |
+| 2026-08-23 | 落地步骤 5 的前置风险已验掉 | 用只读探针对 iOS 18.5 模拟器的 `peopled` 实测 `TASK_DYLD_INFO`：拿到的**就是 `dyld_sim` 维护的那一份**（580 个镜像中 576 个属于模拟器 RuntimeRoot），`sharedCacheBaseAddress = 0x180000000`、slide 为 0，且三个宿主镜像恰好是 `libsystem_platform` / `libsystem_kernel` / `libsystem_pthread`。`MITargetSymbolResolver` 的分流设计因此成立，提案原定的退路（从 `dyld_sim` 的 `__DATA` 段自行定位）不需要了。另记两个易误判点：`dyldPath` 读出来是宿主的 `/usr/lib/dyld`，不能用它判断目标是否模拟器进程；slide 虽为 0 但仍须从进程读取。 |
+| 2026-08-23 | 修正详细设计：宿主符号的偏移不能照抄注入器自身 | 实测发现 `/usr/lib/system/libsystem_pthread.dylib` 的 arm64 与 arm64e slice 中 `_pthread_create_from_mach_thread` 偏移不同（`0x7d84` vs `0x847c`）。注入器用的是宿主 cache 里的 arm64e 那份，而模拟器进程是 arm64、独立映射，因此原设计「宿主 `dlsym` 地址减宿主基址得偏移，再加目标基址」会算出偏高 0x6f8 字节的地址 —— 落在函数体中间，跳过去同样崩，且症状与「地址完全解析错」难以区分，属于评审阶段看不出、只在实现后才发作的坑。改为解析**目标进程内存里**那份 Mach-O 的 `LC_SYMTAB` 求偏移：不依赖宿主状态，也不必假设目标 map 的是 cache 还是磁盘文件，且与另两个符号共用同一套 Mach-O 解析。前期调研与详细设计中相应的算式一并更正（原文保留在正文中并标注为错）。 |
+| 2026-08-23 | 落地步骤 4 复核：联调路径已通，但构建脚本仍缺开关 | 提案原文称 MachInjector 的 local path 指向的目录不存在、因此吃远程 pin。复核发现该目录现已存在（git 干净、tag `0.5.0`），`USING_LOCAL_DEPENDENCIES=1` 下 `swift package show-dependencies` 确认 RuntimeViewer → swift-helper-service → MachInjector 整条链解析到本地路径，步骤 4 的阻塞已消失。**但 `RunScript.sh` / `ArchiveScript.sh` 都不传该环境变量**，实机 daemon 仍会吃远程 pin，改本地 MachInjector 不生效 —— 验证注入器改动前需先给脚本加开关（或构建时手动带上）。 |
