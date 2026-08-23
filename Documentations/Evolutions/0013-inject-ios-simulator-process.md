@@ -724,11 +724,14 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
    不是注入或引擎故障。作为对照，`backboardd` 是 2.5 MB、`__objc_classlist` 0x558 字节（171 个类）。
 
    剩余未验：断开、重注入，以及用户自己安装的 app（非系统 daemon）。
-9. **收尾判断**（结论写入决策日志，不得沉默跳过）：
-   - 是否需要配套实现说明 —— 倾向「需要」：「宿主地址不能喂给目标进程」这条判据
-     （`lr - pthread_create_from_mach_thread = 4`）下次排查能省数小时，属于「代码本身看不出来」的决策。
-   - 是否引入新术语 —— `dyld_sim`、`RuntimeRoot`、`SimRuntime` 若在文档中反复出现，
-     登记进 `Documentations/Glossary.md`。
+9. ~~**收尾判断**~~ —— **已判定，2026-08-23**，两条结论都记在决策日志里：
+   - **实现说明：写了。**
+     [`ResolvedIssues/2026-08-23-simulator-injection-host-address-fallacy.md`](../ResolvedIssues/2026-08-23-simulator-injection-host-address-fallacy.md)。
+     放 `ResolvedIssues/` 而非新建 `Internal/` —— 项目既有的文档结构里，该目录的定位就是
+     「已定位并修复的疑难问题纪要，含根因与验证过程」，正好是这份东西。
+   - **术语表：不建。** `dyld_sim` / `RuntimeRoot` / `SimRuntime` 都是 Apple 的既有术语而非
+     项目自造词，且已在实现说明里就地解释；本项目也没有 `Glossary.md` 的既有传统，
+     为三个词新起一份索引收益不抵维护成本。若日后这些词在多篇文档间反复出现再重新评估。
 
 ## 决策日志
 
@@ -746,6 +749,7 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 | 2026-08-22 | 已知取舍：`clearAllWithHostID` 的前缀现在是设备级 | `hostID` 转为设备级后，`engineID = "{hostID}/{localID}"` 的前缀也随之设备级，于是「某个 bonjour engine 断开」会让 `clearAllWithHostID` 清掉**同设备所有**镜像。当前不可触发：走这条路要求对端支持 engine sharing 并返回非空 descriptor，而 iOS payload 不注册 engine list handler，一律被判为 `directBonjourEngines`。正确修法是让 mirrorRegistry 改用 engine 级键，属于架构改动，不在本次范围。裁决与复核判据记于 `Documentations/KnownIssues/2026-08-22-simulator-injection-identity-findings.md`。 |
 | 2026-08-23 | 落地步骤 5 的前置风险已验掉 | 用只读探针对 iOS 18.5 模拟器的 `peopled` 实测 `TASK_DYLD_INFO`：拿到的**就是 `dyld_sim` 维护的那一份**（580 个镜像中 576 个属于模拟器 RuntimeRoot），`sharedCacheBaseAddress = 0x180000000`、slide 为 0，且三个宿主镜像恰好是 `libsystem_platform` / `libsystem_kernel` / `libsystem_pthread`。`MITargetSymbolResolver` 的分流设计因此成立，提案原定的退路（从 `dyld_sim` 的 `__DATA` 段自行定位）不需要了。另记两个易误判点：`dyldPath` 读出来是宿主的 `/usr/lib/dyld`，不能用它判断目标是否模拟器进程；slide 虽为 0 但仍须从进程读取。 |
 | 2026-08-23 | 修正详细设计：宿主符号的偏移不能照抄注入器自身 | 实测发现 `/usr/lib/system/libsystem_pthread.dylib` 的 arm64 与 arm64e slice 中 `_pthread_create_from_mach_thread` 偏移不同（`0x7d84` vs `0x847c`）。注入器用的是宿主 cache 里的 arm64e 那份，而模拟器进程是 arm64、独立映射，因此原设计「宿主 `dlsym` 地址减宿主基址得偏移，再加目标基址」会算出偏高 0x6f8 字节的地址 —— 落在函数体中间，跳过去同样崩，且症状与「地址完全解析错」难以区分，属于评审阶段看不出、只在实现后才发作的坑。改为解析**目标进程内存里**那份 Mach-O 的 `LC_SYMTAB` 求偏移：不依赖宿主状态，也不必假设目标 map 的是 cache 还是磁盘文件，且与另两个符号共用同一套 Mach-O 解析。前期调研与详细设计中相应的算式一并更正（原文保留在正文中并标注为错）。 |
+| 2026-08-23 | 步骤 9 收尾判断：实现说明写、术语表不建 | **实现说明写了**，落在 `ResolvedIssues/2026-08-23-simulator-injection-host-address-fallacy.md`。选这个目录而不是按全局默认规则新建 `Internal/`：项目已有自己的文档结构，`ResolvedIssues/` 的既有定位（「已定位并修复的疑难问题纪要，含根因与验证过程」）恰好匹配，另起并行目录只会稀释。内容取舍是只写「代码里看不出来」的部分 —— 根因的三个变体（宿主地址、切片平台、通道走错）各自的判据，以及三个诊断陷阱（256 字节截断的 dlerror 看起来像完整答案、模拟器 os_log 不在宿主 log store、SpringBoard 空壳会给出假故障信号）。**术语表不建**：`dyld_sim` / `RuntimeRoot` / `SimRuntime` 是 Apple 既有术语而非项目自造词，已在实现说明里就地解释，且本项目无 `Glossary.md` 传统。 |
 | 2026-08-23 | 步骤 4 收尾：`--local-deps` 开关 | `RunScript.sh` / `ArchiveScript.sh` 加 `--local-deps`，设置时导出 `USING_LOCAL_DEPENDENCIES=1`，默认关闭。动机是这个缺口的症状特别难自查 —— 忘记带环境变量时构建**静默**走远程 pin，表现为「我改了本地 MachInjector 但没反应」，看不出是构建吃错了依赖。`ArchiveScript.sh` 那份注释额外声明发布不该用它（main 必须能对着已发布的 pin 编过），它只用于依赖未发版时本地验证 release 构建。 |
 | 2026-08-23 | 步骤 8 的「浏览接口」通过，并记下一个会误判的对照 | 注入 `backboardd` 后类型信息完整，这一项通过。**同时记下：不能拿 SpringBoard 判断这一项** —— 它的主二进制 249 KB 且连 `__objc_classlist` 段都没有（实现在 SpringBoardHome / SpringBoardUI 等框架里），注入后主二进制显示为空是正确结果。这个对照值得留档：SpringBoard 是最直觉的验证对象，而它恰好会给出「注入成功但看起来什么都没有」的假故障信号。`backboardd` 2.5 MB / `__objc_classlist` 0x558 字节（171 个类）是合适的对照物。 |
 | 2026-08-23 | 端到端打通：产品路径注入 SpringBoard 成功 | 走完整产品路径（Attach to Process → daemon → `MIMachInjector` dlopen，非 lldb）注入 iOS 18.5 模拟器的 SpringBoard，payload 三条启动日志齐全、目标存活 47 分钟以上。**提案闭环** —— 动机一节的起因就是注入模拟器进程打崩三个 SpringBoard，落地步骤 1 当时还特意写「先拿无关紧要的进程试，不要拿 SpringBoard」。同时确认 dlopen 路径成功、未触发 remap 回退。**顺带否掉了一项原定落地内容**：提案要求按 cpusubtype 分流 thread state（arm64 目标写裸地址、跳过 `thread_convert_thread_state`），但那段无条件 PAC 签名的代码**原样未改**就成功了。原因未查明，故降级为可选优化并保留该节作为「shellcode 在 arm64 目标上跳飞」时的第一排查点 —— 在有实测反例前，凭推理去改一段已验证可用的 thread state 构建，风险大于收益。 |
