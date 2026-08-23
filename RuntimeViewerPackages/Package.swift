@@ -498,6 +498,13 @@ let package = Package(
         ),
 
         .testTarget(
+            name: "RuntimeViewerHelperClientTests",
+            dependencies: [
+                .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
+            ],
+        ),
+
+        .testTarget(
             name: "RuntimeViewerApplicationTests",
             dependencies: [
                 "RuntimeViewerApplication",

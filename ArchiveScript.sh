@@ -24,6 +24,7 @@ cd "$PROJECT_DIR"
 WORKSPACE="RuntimeViewer-Distribution.xcworkspace"
 SCHEME="RuntimeViewer macOS"
 CATALYST_SCHEME="RuntimeViewerCatalystHelper"
+MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Release"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 
@@ -94,6 +95,7 @@ while [[ $# -gt 0 ]]; do
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
         --catalyst-helper-scheme) CATALYST_SCHEME="$2"; shift 2;;
+        --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
         --version-tag) VERSION_TAG="$2"; shift 2;;
@@ -303,6 +305,27 @@ run rm -f "$CATALYST_EXPORT_PATH/Packaging.log" \
         "$CATALYST_EXPORT_PATH/DistributionSummary.plist" \
         "$CATALYST_EXPORT_PATH/ExportOptions.plist"
 
+# The iOS Simulator injection payload, built before the app so the app's
+# "Embed iOS Simulator Payload" phase can seal it into the signed bundle.
+# It cannot be a target dependency — Xcode rejects iOS-family embedded content
+# from a macOS app target, the same constraint that keeps the Catalyst helper
+# out — so the ordering lives here.
+#
+# A failure is not fatal: the release still ships, only without the ability to
+# inject simulator processes. The build phase warns when the payload is absent.
+log "Building iOS Simulator injection payload"
+SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
+if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
+    -workspace "$WORKSPACE" \
+    -scheme "$MOBILE_SERVER_SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -destination 'generic/platform=iOS Simulator' \
+    -derivedDataPath "$DERIVED_DATA" \
+    -skipPackagePluginValidation -skipMacroValidation \
+    "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
+    log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this release"
+fi
+
 log "Archiving main app"
 XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
@@ -312,6 +335,7 @@ XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -archivePath "$MAIN_ARCHIVE" \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
+    "RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH=$SIMULATOR_PAYLOAD_PATH" \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 run rm -rf "$EXPORT_PATH"

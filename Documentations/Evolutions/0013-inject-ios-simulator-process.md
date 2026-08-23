@@ -285,9 +285,14 @@ guard !knownBonjourEndpointNames.contains(endpoint.name) else {
 
 可行性已经确立，剩下两条只影响**注入器实现细节**，不影响提案成立：
 
-1. **arm64 目标上 shellcode 的 PAC 指令**。`loader_arm64.s` 含 `paciza` / `pacibsp` / `retab`。
-   按 ARM 规范，PAC enable 位关闭时这些指令不做认证、退化为无操作或普通 `ret`，推测无害 ——
-   但 lldb 走的是 dyld 自己的 `dlopen`，没有经过 shellcode，所以这条仍未被本次验证覆盖。
+1. ~~**arm64 目标上 shellcode 的 PAC 指令**~~ —— **已验，2026-08-23**。原文：`loader_arm64.s` 含
+   `paciza` / `pacibsp` / `retab`，按 ARM 规范 PAC enable 位关闭时退化为无操作，推测无害，但 lldb
+   走的是 dyld 自己的 `dlopen`、没经过 shellcode，所以未被覆盖。
+   接入 `MITargetSymbolResolver` 后的第一次真实注入把这条验掉了：目标返回了它自己
+   `dlerror()` 的文本（`MIMachInjectorErrorTargetRefusedToLoadDylib`）。要产生这条消息，
+   shellcode 必须在目标里依次跑完 `pthread_create_from_mach_thread` → `dlopen` → `dlerror` →
+   写回 report block，四个地址全部来自目标符号表。**PAC 指令没有构成障碍**。
+   （那次注入本身仍失败，原因是投的是 macOS slice —— 见决策日志 2026-08-23 的「dyld_sim 路径规则」条。）
 2. **sandbox extension token 跨平台是否有效**。`sandbox_extension_issue_file_to_process` 发的是
    宿主 sandbox 的 token，模拟器进程 consume 时走的是模拟器 cache 里的 `libsystem_sandbox`；
    底层仍是宿主内核的 sandbox，推测兼容。本次 lldb 路径同样绕开了它。
@@ -427,10 +432,34 @@ public func serverFrameworkSourceURL(for platform: PayloadPlatform) -> URL?
 public func serverFrameworkDestinationURL(for platform: PayloadPlatform) -> URL
 ```
 
-`iphonesimulator` slice 由 `BuildRuntimeViewerServerXCFramework.sh` 产出，作为独立
-framework 随 app 分发。安装目的地需要满足两个条件：模拟器进程能读、且注入器能写。
-`/Library/Frameworks/` 下另起一个子目录是最省事的选择（模拟器进程的文件系统视图是宿主的），
-但**该假设需实测**。
+`iphonesimulator` slice 作为独立 framework 随 app 分发。安装目的地需要满足两个条件：
+模拟器进程能读、且注入器能写。
+
+**「模拟器进程的文件系统视图是宿主的」已实测成立**（2026-08-23，对 iOS 18.5 模拟器的 `mobiletimerd`
+用 lldb 逐个 `dlopen` 不存在的路径，读 `dlerror()` 的 `tried:` 列表）。`dyld_sim` 对**任何**绝对路径
+都按同一套顺序尝试：
+
+1. `<RuntimeRoot>` + 原路径
+2. **原路径本身（宿主视图）**
+3. `.framework` 路径额外再试 `<RuntimeRoot>/System/Library/Frameworks/<Name>.framework/<Name>`
+
+测了 `/Library/Frameworks`、`/System/Library/Frameworks`、`/usr/lib`、`/Users/Shared`、`/tmp`、
+`/Volumes/…`、`/Applications` 七个前缀，行为一致。**所以投递目录的选择是自由的**，
+`/Library/Frameworks/` 可以直接用。
+
+落地时的取舍：**不另起子目录，改用同级的兄弟 bundle**
+`/Library/Frameworks/RuntimeViewerServer-iphonesimulator.framework`。子目录会让 daemon 的
+`FileOperationRequest.copy` 多承担一层 `mkdir -p`；兄弟命名不需要新建目录，且后缀跟随 Xcode 的
+SDK 名，将来加 `-appletvsimulator` 无需再发明约定。两个 slice **不能合成一个 fat binary** ——
+它们架构相同、只差 `LC_BUILD_VERSION` 的 platform，这正是 fat 格式无法表达、而 `.xcframework`
+要拆成多个文件的原因。
+
+payload 由 `RuntimeViewerMobileServer` scheme 以 `generic/platform=iOS Simulator` 构建，
+在主 app 之前，产物由主 app 的 **`Embed iOS Simulator Payload`** build phase 改名嵌入
+`Contents/Resources/`。**必须是 build phase 而非事后拷贝**：`Resources` 下的一切都被 app 的
+代码签名 seal，签完再塞文件会让签名失效，进而破坏 `SMAppService` 的 daemon 注册。
+它也**不能**建模成 target dependency —— Xcode 把 iOS-family framework 视作 macOS app target
+拒收的嵌入内容，与 Catalyst helper 同一个约束，所以顺序由 `RunScript.sh` / `ArchiveScript.sh` 保证。
 
 ### 通信通道：不需要新增，但宿主侧的会话建立要绕开注入路径的假设
 
@@ -619,8 +648,13 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
    宿主（`dns-sd -B _runtimeviewer._tcp local`），以及宿主 RuntimeViewer 是否把它列为 engine。
    先拿一个无关紧要的模拟器进程试，**不要**拿 SpringBoard。
    **(c) 不通则本提案的价值基础不成立**，需要先解决通道再谈注入。
-2. ~~**身份改造**（主仓库，与注入器解耦，优先做）~~ —— **代码已完成，2026-08-22**，
-   待用 lldb 做双进程实机验证。原文：TXT 新增 `rv-device-id` / `rv-proc-name` /
+2. ~~**身份改造**（主仓库，与注入器解耦，优先做）~~ —— **已完成并实机验证，2026-08-23**
+   （代码 2026-08-22）。验证方式：用 lldb 把步骤 7 产出的 `iphonesimulator` payload 分别
+   `dlopen` 进同一台 iOS 18.5 模拟器的两个系统 daemon（`mobiletimerd` / `nanoprefsyncd`），
+   两者在宿主 RuntimeViewer 中**并入同一个 Section**、各成一条以进程名标题的条目 ——
+   正是本步骤要达成的形状。同批确认 `SIMULATOR_UDID` 确实存在于每个模拟器进程的环境中
+   且同设备取值一致（见 `Documentations/KnownIssues/2026-08-22-simulator-injection-identity-findings.md`
+   的 SIMID.5）。原文：TXT 新增 `rv-device-id` / `rv-proc-name` /
    `rv-proc-pid`；payload 广播名改为进程级唯一；宿主 `hostID` 取设备级、条目名取进程名、
    去重键与 `pendingReconnectEndpoints` 键改为进程级唯一键；`localInstanceID` 在注入路径下不落盘。
    改完即可用 lldb 注入同设备两个进程，验证它们并入同一个 Section。
@@ -641,8 +675,18 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
    2026-08-23），cache 内镜像走 MachOKit 解析。带单测。
 6. **`MIMachInjector` 接入 resolver**，并按目标 cpusubtype 分流 thread state 构建。
    此时可在模拟器进程上做第一次真实注入验证（PAC 指令行为、sandbox token 有效性一并验掉）。
-7. **payload 选片与投递**：`BuildRuntimeViewerServerXCFramework.sh` 产物纳入 app 打包，
-   `RuntimeInjectClient` 按平台选源与目的地。
+7. ~~**payload 选片与投递**~~ —— **已完成，2026-08-23**。原文：`BuildRuntimeViewerServerXCFramework.sh`
+   产物纳入 app 打包，`RuntimeInjectClient` 按平台选源与目的地。
+   落地形态：新增 `InjectionTargetPlatformProbe`（读目标 `LC_BUILD_VERSION`）与 `PayloadPlatform`
+   （我们有哪些 slice）两个类型，`RuntimeInjectClient` 的四个 URL API 全部改为按平台取值；
+   payload 由 `RuntimeViewerMobileServer` 构建、经 `Embed iOS Simulator Payload` build phase
+   嵌入签名前的 app bundle。两个 probe 的取舍与实测见「详细设计 / payload 选片与投递」。
+   **顺带覆盖了步骤 3 的宿主侧一半**：目标平台没有对应 slice（tvOS / watchOS / visionOS 模拟器）时
+   直接抛错，不再把最近的 slice 交给 dyld 去拒。daemon 侧的守卫仍未做。
+   验证：单测 21 项（含用真实 simruntime 二进制验平台识别）；构建出的 slice 是 `platform 7` /
+   arm64 / ad-hoc 签名、两个入口符号俱在；用 lldb 把它 `dlopen` 进真实模拟器 daemon
+   `mobiletimerd`，`dlerror()` 为 `NULL`、`dlsym` 解出入口地址，模拟器侧 os_log 三条齐全
+   （`Attach successfully` → `Will Launch` → `Did Launch`）。
 8. **端到端验证**：SpringBoard + 一个用户 app，注入、浏览 ObjC/Swift 接口、断开、重注入。
 9. **收尾判断**（结论写入决策日志，不得沉默跳过）：
    - 是否需要配套实现说明 —— 倾向「需要」：「宿主地址不能喂给目标进程」这条判据
@@ -666,4 +710,9 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 | 2026-08-22 | 已知取舍：`clearAllWithHostID` 的前缀现在是设备级 | `hostID` 转为设备级后，`engineID = "{hostID}/{localID}"` 的前缀也随之设备级，于是「某个 bonjour engine 断开」会让 `clearAllWithHostID` 清掉**同设备所有**镜像。当前不可触发：走这条路要求对端支持 engine sharing 并返回非空 descriptor，而 iOS payload 不注册 engine list handler，一律被判为 `directBonjourEngines`。正确修法是让 mirrorRegistry 改用 engine 级键，属于架构改动，不在本次范围。裁决与复核判据记于 `Documentations/KnownIssues/2026-08-22-simulator-injection-identity-findings.md`。 |
 | 2026-08-23 | 落地步骤 5 的前置风险已验掉 | 用只读探针对 iOS 18.5 模拟器的 `peopled` 实测 `TASK_DYLD_INFO`：拿到的**就是 `dyld_sim` 维护的那一份**（580 个镜像中 576 个属于模拟器 RuntimeRoot），`sharedCacheBaseAddress = 0x180000000`、slide 为 0，且三个宿主镜像恰好是 `libsystem_platform` / `libsystem_kernel` / `libsystem_pthread`。`MITargetSymbolResolver` 的分流设计因此成立，提案原定的退路（从 `dyld_sim` 的 `__DATA` 段自行定位）不需要了。另记两个易误判点：`dyldPath` 读出来是宿主的 `/usr/lib/dyld`，不能用它判断目标是否模拟器进程；slide 虽为 0 但仍须从进程读取。 |
 | 2026-08-23 | 修正详细设计：宿主符号的偏移不能照抄注入器自身 | 实测发现 `/usr/lib/system/libsystem_pthread.dylib` 的 arm64 与 arm64e slice 中 `_pthread_create_from_mach_thread` 偏移不同（`0x7d84` vs `0x847c`）。注入器用的是宿主 cache 里的 arm64e 那份，而模拟器进程是 arm64、独立映射，因此原设计「宿主 `dlsym` 地址减宿主基址得偏移，再加目标基址」会算出偏高 0x6f8 字节的地址 —— 落在函数体中间，跳过去同样崩，且症状与「地址完全解析错」难以区分，属于评审阶段看不出、只在实现后才发作的坑。改为解析**目标进程内存里**那份 Mach-O 的 `LC_SYMTAB` 求偏移：不依赖宿主状态，也不必假设目标 map 的是 cache 还是磁盘文件，且与另两个符号共用同一套 Mach-O 解析。前期调研与详细设计中相应的算式一并更正（原文保留在正文中并标注为错）。 |
+| 2026-08-23 | 落地步骤 2 实机验证通过，SIMID.5 一并关闭 | 步骤 7 产出可用 payload 后，步骤 2 挂了一整天的「双进程实机验证」终于具备条件。把 payload 分别 `dlopen` 进同一台模拟器的 `mobiletimerd` 与 `nanoprefsyncd`，两者在宿主 RuntimeViewer 中并入同一个 Section（用户实机确认）—— 进程级唯一广播名、设备级 `hostID`、进程级去重键三项改造同时成立。顺带读到两个进程的环境里都有相同的 `SIMULATOR_UDID`，与 `simctl` 报的设备 UDID 一致，`localDeviceID` 优先读它的取舍（2026-08-22 那条）得到证实，KnownIssues 的 SIMID.5 关闭。**注意宿主是自动连上的**：payload 广播后既有的 Bonjour 发现流程直接接管，宿主侧没有为此写任何新代码 —— 这也说明「模拟器目标的会话建立」要做的不是新增通道，而是让 attach 流程别再去建那条用不上的 XPC engine。 |
+| 2026-08-23 | 落地步骤 5/6 生效，PAC 疑虑消解 | `MITargetSymbolResolver` 接入 `MIMachInjector` 后的第一次真实注入：目标返回了自己 `dlerror()` 的文本（`MIMachInjectorErrorTargetRefusedToLoadDylib`），而修复前的症状是 `could not get thread state: (ipc/send) invalid destination port` —— shellcode 跳飞、目标当场崩。能产生 dlerror 文本，意味着 shellcode 在目标里跑完了 `pthread_create_from_mach_thread` → `dlopen` → `dlerror` → 写 report 四步，四个地址全部由 resolver 从目标符号表解出。**顺带把「仍未验证」第 1 条（arm64 目标上的 PAC 指令）验掉了**。那次注入最终仍失败并打崩目标，但成因是另外两件事：投的是 macOS slice，以及模拟器目标仍会回退 remap。 |
+| 2026-08-23 | 推翻一个中途做出的错误判断：`/Library/Frameworks` 并未被 `dyld_sim` 劫持 | 上一条那次失败的 `dlerror` 被 256 字节的 report 缓冲截断在**第一个**候选路径内部，只看得到 `<RuntimeRoot>/Library/Frameworks/…`，据此一度判定「模拟器进程的文件系统视图不是宿主的、提案的投递路径假设被推翻」。实测否掉了这个判断：对 `mobiletimerd` 逐个 `dlopen` 不存在的路径读 `tried:` 全列表，`dyld_sim` 对**任何**前缀都是先试 RuntimeRoot 版本、**再试宿主原路径**，七个前缀行为一致。提案原假设成立，投递目录的选择是自由的。真正的失败原因是 slice 平台不匹配（装在那里的是 `platform 1` 的 macOS slice）。**教训是截断的诊断信息比没有信息更危险** —— 它看起来像完整答案。 |
+| 2026-08-23 | MachInjector：dlerror report 缓冲 256 → 2048 字节 | 上一条的直接产物。dyld 的拒绝消息会列出它试过的每一条路径，单是一条模拟器路径就超过 200 字符，256 字节切在第一个候选中间，恰好隐藏了「后面还试了什么、每个为什么被拒」这唯一有用的部分。report block 本来就是目标进程里一次独立的 `mach_vm_allocate`、已经占满一页，在页内扩大字段零成本。同步路径与 async notepad 同病，一并改。带回归测试（旧尺寸下失败）。 |
+| 2026-08-23 | 落地步骤 7 完成，并顺带覆盖步骤 3 的宿主侧一半 | 新增 `InjectionTargetPlatformProbe`（读目标 `LC_BUILD_VERSION`，不用可执行文件路径判断 —— RuntimeRoot 前缀只认得出系统 daemon，用户自己装的 app 跑在设备 data 容器里没有这个标记）与 `PayloadPlatform`（这份构建有哪些 slice）。两者刻意分开：前者描述目标**是什么**，后者描述我们**能给什么**，缺口处就是显式拒绝的位置 —— tvOS / watchOS / visionOS 模拟器是完全可读的目标但没有对应 slice，现在如实报错，而不是把最近的 slice 交给 dyld 去拒（那正是上一次打崩进程的路径）。daemon 侧的守卫仍未做。 |
 | 2026-08-23 | 落地步骤 4 复核：联调路径已通，但构建脚本仍缺开关 | 提案原文称 MachInjector 的 local path 指向的目录不存在、因此吃远程 pin。复核发现该目录现已存在（git 干净、tag `0.5.0`），`USING_LOCAL_DEPENDENCIES=1` 下 `swift package show-dependencies` 确认 RuntimeViewer → swift-helper-service → MachInjector 整条链解析到本地路径，步骤 4 的阻塞已消失。**但 `RunScript.sh` / `ArchiveScript.sh` 都不传该环境变量**，实机 daemon 仍会吃远程 pin，改本地 MachInjector 不生效 —— 验证注入器改动前需先给脚本加开关（或构建时手动带上）。 |

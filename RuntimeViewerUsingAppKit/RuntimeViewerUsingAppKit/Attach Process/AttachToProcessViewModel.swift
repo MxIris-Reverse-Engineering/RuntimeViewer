@@ -53,8 +53,17 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                 isAttaching = true
                 defer { isAttaching = false }
                 do {
-                    try await runtimeInjectClient.installServerFrameworkIfNeeded()
-                    guard let dylibURL = Bundle(url: runtimeInjectClient.serverFrameworkDestinationURL)?.executableURL else { return }
+                    // Which slice the target can load. A macOS process and an
+                    // iOS Simulator process on this Mac share a cputype and are
+                    // told apart only by their LC_BUILD_VERSION, so this has to
+                    // be read rather than assumed — and it throws for a target
+                    // we ship no payload for, instead of handing over the
+                    // nearest slice and letting dyld refuse it.
+                    let payloadPlatform = try runtimeInjectClient.payloadPlatform(
+                        forTargetProcess: runningItem.processIdentifier
+                    )
+                    try await runtimeInjectClient.installServerFrameworkIfNeeded(for: payloadPlatform)
+                    guard let dylibURL = runtimeInjectClient.serverFrameworkExecutableURL(for: payloadPlatform) else { return }
 
                     try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: identifier, isSandbox: isSandbox)
 

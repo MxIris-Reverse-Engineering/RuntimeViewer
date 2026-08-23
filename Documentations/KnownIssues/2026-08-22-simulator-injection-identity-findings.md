@@ -68,6 +68,16 @@ ID 形式 `SIMID.<N>`。审查基线：分支 `feature/inject-ios-simulator-proc
 `DeviceIdentifier` 的 keychain 回退 —— 从被注入进程里发起的 keychain 查询可能按进程解析，
 那会把一台模拟器重新拆成「每个注入进程一个 Section」，正是本次要消除的症状。
 
-**本机当前无 booted 模拟器，且启动模拟器需单独授权，故未实测。** 风险有界：即使
-`SIMULATOR_UDID` 不存在，也只是退回原路径，不会比不加这一层更差。留待提案 0013 落地步骤 8
-的端到端验证一并确认。
+**已实测成立（2026-08-23）。** 在 booted 的 iOS 18.5 模拟器上对两个被注入的系统 daemon
+（`mobiletimerd` pid 41913、`nanoprefsyncd` pid 41923）读进程环境：
+
+```
+SIMULATOR_UDID=20DAFF33-83CA-4C2F-AD0E-809B05501803   # 两个进程完全一致
+SIMULATOR_DEVICE_NAME=iPhone
+```
+
+值与 `simctl list devices booted` 报的设备 UDID 相同。同一批验证里，两个进程在宿主
+RuntimeViewer 中**并入了同一个 Section**（用户实机确认），这也正是 SIMID.1–3 那组身份改造
+要达成的形状 —— 一并验掉。
+
+裁决关闭，无需复核。

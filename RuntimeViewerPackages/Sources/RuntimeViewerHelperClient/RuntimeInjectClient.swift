@@ -17,11 +17,18 @@ import ServiceManagement
 @Loggable
 public final class RuntimeInjectClient: @unchecked Sendable {
     public enum Error: LocalizedError {
-        case serverFrameworkNotFound
+        case serverFrameworkNotFound(PayloadPlatform)
+        case targetPlatformUnreadable(pid_t)
+        case noPayloadForTargetPlatform(InjectionTargetPlatform)
+
         public var errorDescription: String? {
             switch self {
-            case .serverFrameworkNotFound:
-                return "Server framework not found."
+            case .serverFrameworkNotFound(let platform):
+                return "The \(platform.displayName) server framework is missing from this build of RuntimeViewer."
+            case .targetPlatformUnreadable(let processIdentifier):
+                return "Could not read what platform process \(processIdentifier) was built for."
+            case .noPayloadForTargetPlatform(let platform):
+                return "RuntimeViewer has no payload for a \(platform.displayName) process."
             }
         }
     }
@@ -55,14 +62,52 @@ public final class RuntimeInjectClient: @unchecked Sendable {
         await helperServiceManager.reconnect()
     }
 
-    public let serverFrameworkDestinationURL = URL(fileURLWithPath: "/Library/Frameworks/RuntimeViewerServer.framework")
+    // MARK: - Payload selection
 
-    public var isInstalledServerFramework: Bool {
-        FileManager.default.fileExists(atPath: serverFrameworkDestinationURL.path)
+    /// Which payload slice a target process needs, read out of its executable.
+    ///
+    /// A macOS process and an iOS Simulator process on the same Mac share a
+    /// `cputype`, so there is no cheaper signal than the target's own
+    /// `LC_BUILD_VERSION`. Guessing wrong is not recoverable: dyld refuses the
+    /// mismatched slice, and the daemon's remap fallback then projects the
+    /// payload into the target anyway, which the kernel kills on page-in.
+    public func payloadPlatform(forTargetProcess processIdentifier: pid_t) throws -> PayloadPlatform {
+        guard let targetPlatform = InjectionTargetPlatformProbe.platform(ofProcess: processIdentifier) else {
+            throw Error.targetPlatformUnreadable(processIdentifier)
+        }
+        guard let payloadPlatform = PayloadPlatform(targetPlatform: targetPlatform) else {
+            throw Error.noPayloadForTargetPlatform(targetPlatform)
+        }
+        return payloadPlatform
     }
 
-    public var serverFrameworkSourceURL: URL? {
-        Bundle.main.url(forResource: "RuntimeViewerServer", withExtension: "framework")
+    /// Where a payload slice is installed for targets to load it from.
+    ///
+    /// Both live directly in `/Library/Frameworks`. A simulator process reaches
+    /// them there despite `dyld_sim` rewriting the path: it probes
+    /// `<RuntimeRoot>/Library/Frameworks/…` first and the host's own
+    /// `/Library/Frameworks/…` second, so an absolute host path still resolves.
+    /// (Measured against a live iOS 18.5 simulator daemon, 2026-08-23.)
+    ///
+    /// The two slices cannot share one bundle. They are the same architecture
+    /// and differ only in platform, which is exactly what a fat binary cannot
+    /// express — hence the sibling bundles rather than one fat file.
+    public func serverFrameworkDestinationURL(for platform: PayloadPlatform) -> URL {
+        platform.installedFrameworkURL
+    }
+
+    public func isInstalledServerFramework(for platform: PayloadPlatform) -> Bool {
+        FileManager.default.fileExists(atPath: serverFrameworkDestinationURL(for: platform).path)
+    }
+
+    public func serverFrameworkSourceURL(for platform: PayloadPlatform) -> URL? {
+        Bundle.main.url(forResource: platform.frameworkBundleBaseName, withExtension: "framework")
+    }
+
+    /// The executable inside an installed payload bundle — the path handed to
+    /// the target's `dlopen`.
+    public func serverFrameworkExecutableURL(for platform: PayloadPlatform) -> URL? {
+        Bundle(url: serverFrameworkDestinationURL(for: platform))?.executableURL
     }
 
     // MARK: - Injection
@@ -87,17 +132,19 @@ public final class RuntimeInjectClient: @unchecked Sendable {
 
     // MARK: - Framework install
 
-    public func installServerFrameworkIfNeeded() async throws {
-        try await installServerFramework()
+    public func installServerFrameworkIfNeeded(for platform: PayloadPlatform) async throws {
+        try await installServerFramework(for: platform)
     }
 
-    public func installServerFramework() async throws {
-        guard let serverFrameworkSourceURL else {
-            throw Error.serverFrameworkNotFound
+    public func installServerFramework(for platform: PayloadPlatform) async throws {
+        guard let sourceURL = serverFrameworkSourceURL(for: platform) else {
+            throw Error.serverFrameworkNotFound(platform)
         }
         try await helperServiceManager.ensureConnectedToTool()
         try await helperServiceManager.helperClient.sendToTool(
-            request: FileOperationRequest(operation: .copy(from: serverFrameworkSourceURL, to: serverFrameworkDestinationURL))
+            request: FileOperationRequest(
+                operation: .copy(from: sourceURL, to: serverFrameworkDestinationURL(for: platform))
+            )
         )
     }
 

@@ -25,6 +25,7 @@ cd "$PROJECT_DIR"
 WORKSPACE="RuntimeViewer-Debug.xcworkspace"
 SCHEME="RuntimeViewer macOS"
 CATALYST_SCHEME="RuntimeViewerCatalystHelper"
+MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Debug-arm64e"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 
@@ -87,6 +88,7 @@ while [[ $# -gt 0 ]]; do
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
         --catalyst-helper-scheme) CATALYST_SCHEME="$2"; shift 2;;
+        --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
         --derived-data) DERIVED_DATA="$2"; shift 2;;
@@ -168,6 +170,28 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
+# The iOS Simulator injection payload, built before the app so the app's
+# "Embed iOS Simulator Payload" phase finds it in this DerivedData's
+# Build/Products/<configuration>-iphonesimulator. It is deliberately not a
+# target dependency — Xcode rejects iOS-family embedded content from a macOS
+# app target, the same constraint that keeps the Catalyst helper out.
+#
+# A failure here is not fatal: the app builds and runs, and only injecting into
+# simulator processes is unavailable. The build phase says so in a warning.
+log "Building iOS Simulator injection payload"
+if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
+    -workspace "$WORKSPACE" \
+    -scheme "$MOBILE_SERVER_SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -destination 'generic/platform=iOS Simulator' \
+    -derivedDataPath "$DERIVED_DATA" \
+    -skipPackagePluginValidation -skipMacroValidation \
+    "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
+    log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this build"
+fi
+
+SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
+
 log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
@@ -176,6 +200,7 @@ XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -destination 'generic/platform=macOS' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
+    "RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH=$SIMULATOR_PAYLOAD_PATH" \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"
