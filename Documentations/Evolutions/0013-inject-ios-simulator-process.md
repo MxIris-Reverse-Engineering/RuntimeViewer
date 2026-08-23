@@ -410,11 +410,18 @@ __darwin_arm_thread_state64_set_pc_fptr(thread_state,
     ptrauth_sign_unauthenticated((void *)code, ptrauth_key_asia, 0));
 ```
 
-改为按 `resolver.targetCPUSubtype` 分流：目标是 `CPU_SUBTYPE_ARM64E` 时保持现状；目标是
+原计划按 `resolver.targetCPUSubtype` 分流：目标是 `CPU_SUBTYPE_ARM64E` 时保持现状；目标是
 `CPU_SUBTYPE_ARM64_ALL` 时直接写裸地址，且跳过 `thread_convert_thread_state`（那是 arm64e 的机制）。
 
-若前期调研第 2 条（PAC 指令）实测不通过，再补一份不含 `paciza` / `pacibsp` / `retab` 的
-arm64 shellcode 变体，由 `MIMachInjector` 按目标 arch 选用。
+**实测下来这项分流不是必需的（2026-08-23）。** 上面那段无条件 PAC 签名的代码原样未改，
+就把 arm64 的模拟器 SpringBoard 注入成功了（payload 启动三条日志齐全，目标存活）。
+**原因未查明** —— 可能是签名位对该目标恰好无害，也可能被链路上某处消化掉了。故：
+
+- 分流**降级为可选优化**，不再是本提案的落地项；
+- 但**不删除本节** —— 一旦出现「shellcode 在某类 arm64 目标上跳飞」的症状，这里是第一个该查的地方；
+- 同理，不含 `paciza` / `pacibsp` / `retab` 的 arm64 shellcode 变体也不做，留作同一场景的后备。
+
+在有实测反例之前，凭推理去改一段已经验证可用的 thread state 构建，风险大于收益。
 
 ### payload 选片与投递
 
@@ -689,8 +696,9 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 5. **`MITargetSymbolResolver`**（MachInjector）：读目标 `dyld_all_image_infos`、镜像列表、cache slide；
    宿主同文件镜像解析**目标进程内存里**那份的 `LC_SYMTAB`（不得用注入器自身的偏移，见决策日志
    2026-08-23），cache 内镜像走 MachOKit 解析。带单测。
-6. **`MIMachInjector` 接入 resolver**，并按目标 cpusubtype 分流 thread state 构建。
-   此时可在模拟器进程上做第一次真实注入验证（PAC 指令行为、sandbox token 有效性一并验掉）。
+6. ~~**`MIMachInjector` 接入 resolver**~~ —— **已完成，2026-08-23**。原文还要求「按目标 cpusubtype
+   分流 thread state 构建」，**实测表明不需要**，已降级为可选优化，理由见「详细设计 / thread state
+   按 arch 分流」。PAC 指令行为随第一次真实注入一并验掉（见「仍未验证」第 1 条）。
 7. ~~**payload 选片与投递**~~ —— **已完成，2026-08-23**。原文：`BuildRuntimeViewerServerXCFramework.sh`
    产物纳入 app 打包，`RuntimeInjectClient` 按平台选源与目的地。
    落地形态：新增 `InjectionTargetPlatformProbe`（读目标 `LC_BUILD_VERSION`）与 `PayloadPlatform`
@@ -704,6 +712,11 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
    `mobiletimerd`，`dlerror()` 为 `NULL`、`dlsym` 解出入口地址，模拟器侧 os_log 三条齐全
    （`Attach successfully` → `Will Launch` → `Did Launch`）。
 8. **端到端验证**：SpringBoard + 一个用户 app，注入、浏览 ObjC/Swift 接口、断开、重注入。
+   **注入这一项已通过（2026-08-23）**：经完整产品路径（Attach to Process → daemon → `MIMachInjector`
+   的 dlopen 路径，非 lldb）注入 iOS 18.5 模拟器的 **SpringBoard**，payload 启动三条日志齐全
+   （`Attach successfully` → `Will Launch` → `Did Launch`，19:30:21–19:30:22），目标进程存活。
+   **这是本提案的闭环** —— 动机一节里被打崩三次的正是 SpringBoard。
+   剩余未验：浏览 ObjC / Swift 接口、断开、重注入，以及用户自己安装的 app（非系统 daemon）。
 9. **收尾判断**（结论写入决策日志，不得沉默跳过）：
    - 是否需要配套实现说明 —— 倾向「需要」：「宿主地址不能喂给目标进程」这条判据
      （`lr - pthread_create_from_mach_thread = 4`）下次排查能省数小时，属于「代码本身看不出来」的决策。
@@ -726,6 +739,7 @@ dlopen 被拒的概率低得多。先走简单且测试更充分的那条。
 | 2026-08-22 | 已知取舍：`clearAllWithHostID` 的前缀现在是设备级 | `hostID` 转为设备级后，`engineID = "{hostID}/{localID}"` 的前缀也随之设备级，于是「某个 bonjour engine 断开」会让 `clearAllWithHostID` 清掉**同设备所有**镜像。当前不可触发：走这条路要求对端支持 engine sharing 并返回非空 descriptor，而 iOS payload 不注册 engine list handler，一律被判为 `directBonjourEngines`。正确修法是让 mirrorRegistry 改用 engine 级键，属于架构改动，不在本次范围。裁决与复核判据记于 `Documentations/KnownIssues/2026-08-22-simulator-injection-identity-findings.md`。 |
 | 2026-08-23 | 落地步骤 5 的前置风险已验掉 | 用只读探针对 iOS 18.5 模拟器的 `peopled` 实测 `TASK_DYLD_INFO`：拿到的**就是 `dyld_sim` 维护的那一份**（580 个镜像中 576 个属于模拟器 RuntimeRoot），`sharedCacheBaseAddress = 0x180000000`、slide 为 0，且三个宿主镜像恰好是 `libsystem_platform` / `libsystem_kernel` / `libsystem_pthread`。`MITargetSymbolResolver` 的分流设计因此成立，提案原定的退路（从 `dyld_sim` 的 `__DATA` 段自行定位）不需要了。另记两个易误判点：`dyldPath` 读出来是宿主的 `/usr/lib/dyld`，不能用它判断目标是否模拟器进程；slide 虽为 0 但仍须从进程读取。 |
 | 2026-08-23 | 修正详细设计：宿主符号的偏移不能照抄注入器自身 | 实测发现 `/usr/lib/system/libsystem_pthread.dylib` 的 arm64 与 arm64e slice 中 `_pthread_create_from_mach_thread` 偏移不同（`0x7d84` vs `0x847c`）。注入器用的是宿主 cache 里的 arm64e 那份，而模拟器进程是 arm64、独立映射，因此原设计「宿主 `dlsym` 地址减宿主基址得偏移，再加目标基址」会算出偏高 0x6f8 字节的地址 —— 落在函数体中间，跳过去同样崩，且症状与「地址完全解析错」难以区分，属于评审阶段看不出、只在实现后才发作的坑。改为解析**目标进程内存里**那份 Mach-O 的 `LC_SYMTAB` 求偏移：不依赖宿主状态，也不必假设目标 map 的是 cache 还是磁盘文件，且与另两个符号共用同一套 Mach-O 解析。前期调研与详细设计中相应的算式一并更正（原文保留在正文中并标注为错）。 |
+| 2026-08-23 | 端到端打通：产品路径注入 SpringBoard 成功 | 走完整产品路径（Attach to Process → daemon → `MIMachInjector` dlopen，非 lldb）注入 iOS 18.5 模拟器的 SpringBoard，payload 三条启动日志齐全、目标存活 47 分钟以上。**提案闭环** —— 动机一节的起因就是注入模拟器进程打崩三个 SpringBoard，落地步骤 1 当时还特意写「先拿无关紧要的进程试，不要拿 SpringBoard」。同时确认 dlopen 路径成功、未触发 remap 回退。**顺带否掉了一项原定落地内容**：提案要求按 cpusubtype 分流 thread state（arm64 目标写裸地址、跳过 `thread_convert_thread_state`），但那段无条件 PAC 签名的代码**原样未改**就成功了。原因未查明，故降级为可选优化并保留该节作为「shellcode 在 arm64 目标上跳飞」时的第一排查点 —— 在有实测反例前，凭推理去改一段已验证可用的 thread state 构建，风险大于收益。 |
 | 2026-08-23 | 模拟器目标的会话建立落地 | 实机验证暴露出这件事比提案预想的小得多：payload 广播后宿主**自动**连上了，既有 Bonjour 发现流程原样接管，不需要任何新通道代码。于是改动收敛为「attach 流程别再去建那条用不上的 XPC engine」—— `AttachToProcessViewModel` 按 payload 平台分成 `attachToLocalProcess` / `attachToSimulatorProcess` 两个方法，后者注入完直接等 `RuntimeEngineManager.awaitInjectedBonjourEngine`。匹配用 pid 不用服务名（模拟器进程是宿主真实进程，pid 一致），且因为端点键里的 deviceID 是含短横线的 UUID，取最后一个分段比较而非后缀匹配。沙盒探测在模拟器分支一并跳过 —— 它只用来在 XPC 与 socket 之间选，而模拟器 payload 两个都不走。 |
 | 2026-08-23 | 落地步骤 2 实机验证通过，SIMID.5 一并关闭 | 步骤 7 产出可用 payload 后，步骤 2 挂了一整天的「双进程实机验证」终于具备条件。把 payload 分别 `dlopen` 进同一台模拟器的 `mobiletimerd` 与 `nanoprefsyncd`，两者在宿主 RuntimeViewer 中并入同一个 Section（用户实机确认）—— 进程级唯一广播名、设备级 `hostID`、进程级去重键三项改造同时成立。顺带读到两个进程的环境里都有相同的 `SIMULATOR_UDID`，与 `simctl` 报的设备 UDID 一致，`localDeviceID` 优先读它的取舍（2026-08-22 那条）得到证实，KnownIssues 的 SIMID.5 关闭。**注意宿主是自动连上的**：payload 广播后既有的 Bonjour 发现流程直接接管，宿主侧没有为此写任何新代码 —— 这也说明「模拟器目标的会话建立」要做的不是新增通道，而是让 attach 流程别再去建那条用不上的 XPC engine。 |
 | 2026-08-23 | 落地步骤 5/6 生效，PAC 疑虑消解 | `MITargetSymbolResolver` 接入 `MIMachInjector` 后的第一次真实注入：目标返回了自己 `dlerror()` 的文本（`MIMachInjectorErrorTargetRefusedToLoadDylib`），而修复前的症状是 `could not get thread state: (ipc/send) invalid destination port` —— shellcode 跳飞、目标当场崩。能产生 dlerror 文本，意味着 shellcode 在目标里跑完了 `pthread_create_from_mach_thread` → `dlopen` → `dlerror` → 写 report 四步，四个地址全部由 resolver 从目标符号表解出。**顺带把「仍未验证」第 1 条（arm64 目标上的 PAC 指令）验掉了**。那次注入最终仍失败并打崩目标，但成因是另外两件事：投的是 macOS slice，以及模拟器目标仍会回退 remap。 |
