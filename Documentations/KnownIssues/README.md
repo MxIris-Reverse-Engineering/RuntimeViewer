@@ -119,3 +119,26 @@ when picking up follow-up work.
   payloads register no engine-list handler — together with the three changes
   that would reopen it. `SIMID.5` flags `SIMULATOR_UDID` as unverified until
   the end-to-end pass.
+- [2026-08-24-pr106-review-findings.md](2026-08-24-pr106-review-findings.md) —
+  `/code-review xhigh` pass on PR #106 (`feature/inject-ios-simulator-process`),
+  IDs `PR106.<N>`, cross-reviewed by a second session before adjudication.
+  14 findings: 11 fixed in-branch — among them the Bonjour service name
+  carrying the pid (old hosts display a raw UUID *and* accumulate one
+  `NSOutlineView` autosave key per peer launch), mirror cleanup missing the
+  instance-level namespace after `hostID` went device-level, a trapping
+  `Int(UInt64)` on a hostile fat-64 slice offset, injection confirmation
+  matching on pid alone, and a duplicated `processName` fallback that names a
+  target the empty string. `PR106.13` is a **false positive** — `return nil`
+  versus `continue` on an unreadable fat entry is provably unobservable,
+  because entries are contiguous and fixed-size, so once one is out of bounds
+  every later one is too; both review passes had called it real. `PR106.14`
+  (UDID in mDNS and in ~40 `.public` log sites) is deferred to its own
+  proposal: it needs one privacy convention, not patches, and the salted-hash
+  replacement must use a *fixed* salt or it re-splits one simulator into a
+  section per injected process. `PR106.1` (Bonjour bookmarks keyed by a
+  pid-bearing identifier, reversing `917002cc`'s deliberate stable identity) is
+  deferred to its own PR, bundled with the pre-existing `@FileStorage` defect
+  that lets a renamed peer silently overwrite another peer's bookmarks on
+  decode. Also records 4 pre-existing `RuntimeViewerCore` test failures
+  (reproduced on an untouched `69d8131b`) and a release path that can ship
+  without the simulator payload behind a single `warning:` line.
