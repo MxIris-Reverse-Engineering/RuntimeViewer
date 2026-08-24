@@ -57,7 +57,13 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                     // nearest slice and letting dyld refuse it.
                     let payloadPlatform = try runtimeInjectClient.payloadPlatform(forTargetProcess: processIdentifier)
                     try await runtimeInjectClient.installServerFrameworkIfNeeded(for: payloadPlatform)
-                    guard let dylibURL = runtimeInjectClient.serverFrameworkExecutableURL(for: payloadPlatform) else { return }
+                    // Every other failure in this block throws and surfaces as
+                    // an alert. A bare `return` here would leave the sheet open
+                    // with nothing reported at all — the user clicks Attach and
+                    // watches nothing happen.
+                    guard let dylibURL = runtimeInjectClient.serverFrameworkExecutableURL(for: payloadPlatform) else {
+                        throw RuntimeInjectClient.Error.serverFrameworkNotFound(payloadPlatform)
+                    }
 
                     switch payloadPlatform {
                     case .iOSSimulator:
@@ -113,8 +119,25 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     /// between the XPC and localhost-socket transports, and neither is in play.
     @MainActor
     private func attachToSimulatorProcess(name: String, processIdentifier: pid_t, dylibURL: URL) async throws {
+        // Which simulator the target belongs to, read before injecting so a
+        // failure here costs nothing. The pid alone cannot identify the
+        // payload's advertisement — pids are per device, and the endpoint key
+        // the payload lands under is `{deviceID}-{pid}`.
+        guard let deviceID = ProcessEnvironmentProbe.environment(ofProcess: processIdentifier)?["SIMULATOR_UDID"],
+              !deviceID.isEmpty
+        else {
+            throw RuntimeEngineManager.AttachedEngineHandshakeError.simulatorDeviceUnidentifiable(
+                name: name,
+                processIdentifier: processIdentifier
+            )
+        }
+
         try await inject(processIdentifier: processIdentifier, dylibURL: dylibURL)
-        try await runtimeEngineManager.awaitInjectedBonjourEngine(name: name, processIdentifier: processIdentifier)
+        try await runtimeEngineManager.awaitInjectedBonjourEngine(
+            name: name,
+            deviceID: deviceID,
+            processIdentifier: processIdentifier
+        )
     }
 
     /// dlopen or mach_vm_remap is the daemon's call — it probes the target's

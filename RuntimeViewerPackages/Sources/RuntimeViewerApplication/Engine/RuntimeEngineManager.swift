@@ -216,9 +216,10 @@ public final class RuntimeEngineManager {
     }
 
     private func startBonjourServer() {
-        // A process-level unique service name, matching what every other peer
-        // now advertises. The computer name a remote peer displays travels in
-        // the TXT record (`rv-host-name`) instead of in the service name.
+        // The readable, launch-stable service name every peer now advertises.
+        // Process-level identity travels in the TXT record instead; see
+        // `RuntimeNetworkBonjour.localServiceName` for why the name itself must
+        // not carry it.
         let name = RuntimeNetworkBonjour.localServiceName
         let source = RuntimeSource.bonjour(name: name, identifier: .init(rawValue: name), role: .server)
         let engine = RuntimeEngine(source: source, pushesRuntimeData: false)
@@ -447,6 +448,7 @@ public final class RuntimeEngineManager {
         case engineNotFound(name: String)
         case handshakeTimedOut(name: String)
         case bonjourEngineNeverAdvertised(name: String, processIdentifier: pid_t)
+        case simulatorDeviceUnidentifiable(name: String, processIdentifier: pid_t)
 
         public var errorDescription: String? {
             switch self {
@@ -459,6 +461,12 @@ public final class RuntimeEngineManager {
                     A simulator payload does not connect back the way a Mac one does — it advertises itself over Bonjour and this app's browser picks it up. The injection RPC returned successfully, so either the payload never finished starting up, or its advertisement never reached this machine.
 
                     Check the simulator's own log for the payload's startup lines; `xcrun simctl spawn <udid> log show` shows them, the host's `log show` does not.
+                    """
+            case .simulatorDeviceUnidentifiable(let name, let processIdentifier):
+                return """
+                    Could not tell which simulator \(name) (pid \(processIdentifier)) belongs to.
+
+                    A simulator process is an ordinary host process, so its pid alone cannot identify the payload's advertisement — pids are per device, and another peer on this network may be using the same one. CoreSimulator records the answer in the target's SIMULATOR_UDID environment variable, and reading it failed.
                     """
             case .handshakeTimedOut(let name):
                 return """
@@ -517,11 +525,14 @@ public final class RuntimeEngineManager {
     /// browser already running in this process connects to it — no engine to
     /// launch here, only one to wait for.
     ///
-    /// Matching is on pid. A simulator process is a real host process, so the
-    /// pid the payload publishes in its TXT record is the same one that was
-    /// injected, and the endpoint key it lands under is `{deviceID}-{pid}`.
+    /// Matching is on device *and* pid. A simulator process is a real host
+    /// process, so the pid the payload publishes in its TXT record is the one
+    /// that was injected — but a pid namespace is per device, so the pid alone
+    /// does not identify the advertisement. The endpoint key is
+    /// `{deviceID}-{pid}` and both halves are required.
     public func awaitInjectedBonjourEngine(
         name: String,
+        deviceID: String,
         processIdentifier: pid_t,
         timeout: TimeInterval = 30
     ) async throws {
@@ -529,17 +540,23 @@ public final class RuntimeEngineManager {
 
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if injectedBonjourEngine(forProcessIdentifier: processIdentifier) != nil {
+            if injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) != nil {
                 #log(.info, "Injected Bonjour engine appeared for \(name, privacy: .public)")
                 return
             }
-            try? await Task.sleep(nanoseconds: Self.injectedBonjourEnginePollInterval)
+            // `try`, not `try?`. Swallowing the cancellation error would turn
+            // this into a main-actor spin: `Task.sleep` throws immediately once
+            // cancelled, so the loop would re-run with no delay until the
+            // deadline. Nothing cancels this today — the only caller drops the
+            // task handle on the floor — but the function is public, and the
+            // first caller that does cancel would freeze the UI for 30s.
+            try await Task.sleep(nanoseconds: Self.injectedBonjourEnginePollInterval)
         } while Date() < deadline
 
         // One last look: the engine may have arrived while the final sleep was
         // in flight, and reporting a timeout for a connection that exists would
         // tear down a perfectly good engine.
-        if injectedBonjourEngine(forProcessIdentifier: processIdentifier) != nil {
+        if injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) != nil {
             #log(.info, "Injected Bonjour engine appeared for \(name, privacy: .public) on the final check")
             return
         }
@@ -548,20 +565,39 @@ public final class RuntimeEngineManager {
         throw AttachedEngineHandshakeError.bonjourEngineNeverAdvertised(name: name, processIdentifier: processIdentifier)
     }
 
-    /// The Bonjour engine belonging to `processIdentifier`, if it has connected.
-    ///
-    /// The endpoint key is `{deviceID}-{pid}` and the device half is a UUID
-    /// containing its own dashes, so the pid is read as the last dash-separated
-    /// component rather than by matching a suffix — `-1913` would otherwise be a
-    /// suffix of nothing, but the reverse mistake is easy to introduce later.
-    private func injectedBonjourEngine(forProcessIdentifier processIdentifier: pid_t) -> RuntimeEngine? {
-        bonjourRuntimeEngines.first { runtimeEngine in
+    /// The Bonjour engine belonging to `processIdentifier` on `deviceID`, if it
+    /// has connected.
+    private func injectedBonjourEngine(deviceID: String, processIdentifier: pid_t) -> RuntimeEngine? {
+        let clientIdentifiers = bonjourRuntimeEngines.compactMap { runtimeEngine -> (identifier: String, engine: RuntimeEngine)? in
             guard case .bonjour(_, let identifier, let role) = runtimeEngine.source, role.isClient else {
-                return false
+                return nil
             }
-            let trailingComponent = identifier.rawValue.split(separator: "-").last.map(String.init)
-            return trailingComponent == String(processIdentifier)
+            return (identifier.rawValue, runtimeEngine)
         }
+        guard let matched = Self.injectedBonjourEngineIdentifier(
+            among: clientIdentifiers.map(\.identifier),
+            deviceID: deviceID,
+            processIdentifier: processIdentifier
+        ) else { return nil }
+        return clientIdentifiers.first { $0.identifier == matched }?.engine
+    }
+
+    /// Picks the endpoint key belonging to the payload injected into
+    /// `processIdentifier` on the simulator `deviceID`.
+    ///
+    /// Whole-key equality, never "ends with the pid". A pid namespace is per
+    /// device: an iPhone on this network, or a simulator on somebody else's
+    /// Mac, can be advertising a process whose pid equals the one just injected
+    /// here. Matching on the trailing component alone reports a successful
+    /// attach for a payload that never started — the wait returns on its first
+    /// poll and the sheet closes, while the target never advertised at all.
+    static func injectedBonjourEngineIdentifier(
+        among identifiers: some Sequence<String>,
+        deviceID: String,
+        processIdentifier: pid_t
+    ) -> String? {
+        let expected = "\(deviceID)-\(processIdentifier)"
+        return identifiers.first { $0 == expected }
     }
 
     /// Polls the engine with a lightweight `engineList` round-trip until the peer answers,
@@ -780,10 +816,16 @@ public final class RuntimeEngineManager {
         }
 
         // Case 2: direct peer disconnect — handle both intermediate and leaf topologies.
+        //
+        // Both of the peer's identities are handed over: `hostInfo.hostID` is the
+        // device ID for a Bonjour route, while the peer's own engines are
+        // namespaced under its instance ID, which `connectToBonjourEndpoint`
+        // parked in `originChain[0]` when it opened the connection.
         let disconnectedHostID = runtimeEngine.hostInfo.hostID
-        let peerRemovals = mirrorRegistry.clearAllOwnedBy(hostID: disconnectedHostID)
-        let originRemovals = mirrorRegistry.clearAllWithHostID(hostID: disconnectedHostID)
-        let allRemovals = peerRemovals + originRemovals
+        let allRemovals = mirrorRegistry.clearAllForDisconnectedPeer(
+            hostID: disconnectedHostID,
+            originInstanceID: runtimeEngine.originChain.first
+        )
         for removal in allRemovals {
             let stopped = removal.engine
             Task { @MainActor in await stopped.stop() }
