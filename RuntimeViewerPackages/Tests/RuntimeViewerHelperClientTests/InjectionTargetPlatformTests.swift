@@ -39,7 +39,13 @@ struct InjectionTargetPlatformTests {
         #expect(InjectionTargetPlatformProbe.platform(forLoadCommandValue: 7) == .iOSSimulator)
         #expect(InjectionTargetPlatformProbe.platform(forLoadCommandValue: 8) == .tvOSSimulator)
         #expect(InjectionTargetPlatformProbe.platform(forLoadCommandValue: 9) == .watchOSSimulator)
-        #expect(InjectionTargetPlatformProbe.platform(forLoadCommandValue: 11) == .visionOSSimulator)
+        #expect(InjectionTargetPlatformProbe.platform(forLoadCommandValue: 12) == .visionOSSimulator)
+        // PLATFORM_VISIONOS (11) is the device and PLATFORM_VISIONOSSIMULATOR
+        // (12) the simulator - <mach-o/loader.h>, lines 1335-1336. Reading 11
+        // as the simulator names a visionOS *device* build "visionOS Simulator"
+        // in the refusal, and would hand it the simulator slice the day one
+        // exists.
+        #expect(InjectionTargetPlatformProbe.platform(forLoadCommandValue: 11) == .unsupported(11))
     }
 
     @Test("An unknown platform is carried through rather than guessed at")
@@ -137,14 +143,55 @@ struct InjectionTargetPlatformTests {
         #expect(InjectionTargetPlatformProbe.platform(ofMachOFileAt: url) == nil)
     }
 
+    @Test("A fat-64 slice offset larger than Int.max yields no answer rather than a crash")
+    func hostileFat64OffsetDoesNotTrap() throws {
+        // `Int(_: UInt64)` is a trapping conversion, so a slice offset with the
+        // high bit set does not produce a wrong answer - it kills the process
+        // outright with SIGTRAP. `platform(ofMachOFileAt:)` documents that a
+        // hostile Mach-O must answer "cannot tell" instead.
+        let url = try MachOFixture.write(MachOFixture.fat64(sliceOffset: .max))
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(InjectionTargetPlatformProbe.platform(ofMachOFileAt: url) == nil)
+    }
+
+    @Test("A fat-64 slice offset at the top of Int's range yields no answer rather than a crash")
+    func fat64OffsetAtIntMaxDoesNotTrap() throws {
+        // Offsets in (Int.max - 4, Int.max] survive the conversion and trap one
+        // frame later, inside the bounds check itself: the first read of a thin
+        // header is the 4-byte magic, so `byteOffset + 4` overflows before it
+        // can be compared against the buffer's count. Four bytes, not eight -
+        // the width comes from that first read, not from the widest one.
+        let url = try MachOFixture.write(MachOFixture.fat64(sliceOffset: UInt64(Int.max)))
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(InjectionTargetPlatformProbe.platform(ofMachOFileAt: url) == nil)
+    }
+
+    @Test("A slice count past the iteration cap still reports a readable slice")
+    func sliceCountPastCapIsClampedRatherThanRefused() throws {
+        // The cap exists so a corrupt count cannot turn into a huge loop. It
+        // must not also turn into a refusal: answering `nil` here is
+        // indistinguishable from "this file is unreadable", which the caller
+        // reports as `targetPlatformUnreadable` and declines to attach.
+        var bytes = MachOFixture.fat(sliceCount: 1, platform: 1)
+        bytes.replaceSubrange(4 ... 7, with: MachOFixture.bigEndianWordBytes(100))
+        let url = try MachOFixture.write(bytes)
+        defer { try? FileManager.default.removeItem(at: url) }
+        #expect(InjectionTargetPlatformProbe.platform(ofMachOFileAt: url) == .macOS)
+    }
+
     // MARK: - A real simulator binary
 
-    @Test("A real simulator runtime binary reports iOSSimulator")
-    func realSimulatorBinaryIsDetected() throws {
-        // Skipped rather than failed when no iOS runtime is installed: the
-        // synthetic cases above already pin the parsing, and this one exists to
+    @Test(
+        "A real simulator runtime binary reports iOSSimulator",
+        // Genuinely skipped when no iOS runtime is installed. An early `return`
+        // would report as *passed*, and a test that is green whether or not it
+        // ran is worse than no test: it reads as a defence that isn't there.
+        // The synthetic cases above already pin the parsing; this one exists to
         // catch the day Apple changes what a simruntime binary looks like.
-        guard let url = MachOFixture.installediOSSimulatorRuntimeBinaryURL() else { return }
+        .enabled(if: MachOFixture.installediOSSimulatorRuntimeBinaryURL() != nil)
+    )
+    func realSimulatorBinaryIsDetected() throws {
+        let url = try #require(MachOFixture.installediOSSimulatorRuntimeBinaryURL())
         #expect(InjectionTargetPlatformProbe.platform(ofMachOFileAt: url) == .iOSSimulator)
     }
 }
@@ -248,18 +295,47 @@ private enum MachOFixture {
         return file
     }
 
+    /// A 64-bit fat file (`FAT_MAGIC_64`) carrying one entry at `sliceOffset`.
+    ///
+    /// `fat_arch_64.offset` is 64 bits wide and nothing constrains it to values
+    /// an `Int` can hold, which is the whole point of this fixture. The 32-bit
+    /// `fat()` above cannot express it - its offset field is a `UInt32`.
+    static func fat64(sliceOffset: UInt64) -> [UInt8] {
+        var bytes: [UInt8] = []
+        bytes += bigEndianWord(FAT_MAGIC_64)
+        bytes += bigEndianWord(1)                                    // nfat_arch
+        bytes += bigEndianWord(UInt32(bitPattern: CPU_TYPE_ARM64))   // cputype
+        bytes += bigEndianWord(0)                                    // cpusubtype
+        bytes += bigEndianDoubleWord(sliceOffset)                    // offset
+        bytes += bigEndianDoubleWord(0)                              // size
+        bytes += bigEndianWord(14)                                   // align
+        bytes += bigEndianWord(0)                                    // reserved
+        return bytes
+    }
+
     /// An arbitrary Mach-O from any installed iOS simulator runtime, or `nil`
     /// when none is installed.
+    ///
+    /// Both layouts are searched. CoreSimulator moved downloadable runtimes
+    /// into per-runtime disk images under `Volumes/`, but runtimes installed
+    /// before that move stay in `Profiles/Runtimes` directly - a machine can
+    /// have either or both, and searching only the newer one is how this test
+    /// silently stops running.
     static func installediOSSimulatorRuntimeBinaryURL() -> URL? {
-        let runtimeVolumes = URL(fileURLWithPath: "/Library/Developer/CoreSimulator/Volumes")
         let fileManager = FileManager.default
-        guard let volumes = try? fileManager.contentsOfDirectory(atPath: runtimeVolumes.path) else {
-            return nil
+        let legacyProfiles = URL(fileURLWithPath: "/Library/Developer/CoreSimulator/Profiles/Runtimes")
+        let runtimeVolumes = URL(fileURLWithPath: "/Library/Developer/CoreSimulator/Volumes")
+
+        var profileDirectories = [legacyProfiles]
+        if let volumes = try? fileManager.contentsOfDirectory(atPath: runtimeVolumes.path) {
+            profileDirectories += volumes.filter { $0.hasPrefix("iOS_") }.map { volume in
+                runtimeVolumes
+                    .appendingPathComponent(volume)
+                    .appendingPathComponent("Library/Developer/CoreSimulator/Profiles/Runtimes")
+            }
         }
-        for volume in volumes where volume.hasPrefix("iOS_") {
-            let profiles = runtimeVolumes
-                .appendingPathComponent(volume)
-                .appendingPathComponent("Library/Developer/CoreSimulator/Profiles/Runtimes")
+
+        for profiles in profileDirectories {
             guard let runtimes = try? fileManager.contentsOfDirectory(atPath: profiles.path) else { continue }
             for runtime in runtimes where runtime.hasSuffix(".simruntime") {
                 let candidate = profiles
@@ -282,6 +358,13 @@ private enum MachOFixture {
     private static func bigEndianWord(_ value: UInt32) -> [UInt8] {
         withUnsafeBytes(of: value.bigEndian) { Array($0) }
     }
+
+    private static func bigEndianDoubleWord(_ value: UInt64) -> [UInt8] {
+        withUnsafeBytes(of: value.bigEndian) { Array($0) }
+    }
+
+    /// `bigEndianWord` for tests that patch a header field in place.
+    static func bigEndianWordBytes(_ value: UInt32) -> [UInt8] { bigEndianWord(value) }
 }
 
 #endif

@@ -90,6 +90,12 @@ public enum InjectionTargetPlatformProbe {
 
     // MARK: - Fat files
 
+    /// How many slices of a fat file are inspected before giving up.
+    ///
+    /// Real fat binaries hold a handful of architectures; a count far past this
+    /// means the header is corrupt or hostile, not that the file is unusual.
+    private static let maximumInspectedSliceCount = 64
+
     private static func platformOfFatFile(
         _ buffer: UnsafeRawBufferPointer,
         magic: UInt32
@@ -102,14 +108,19 @@ public enum InjectionTargetPlatformProbe {
         let count = Int(architectureCount.bigEndian)
         // A corrupt or hostile count must not turn into a huge loop; each entry
         // is bounds-checked below anyway, but cap the iteration up front.
-        guard count > 0, count < 64 else { return nil }
+        //
+        // The cap clamps rather than refuses. Answering `nil` for a large count
+        // would be indistinguishable from "this file is unreadable", which the
+        // caller surfaces as `targetPlatformUnreadable` and declines to attach
+        // on - a refusal invented by the guard rather than by the file.
+        guard count > 0 else { return nil }
 
         let entrySize = is64Bit ? MemoryLayout<fat_arch_64>.size : MemoryLayout<fat_arch>.size
         // `offset` is the third field of both fat_arch and fat_arch_64, after
         // cputype and cpusubtype; it widens to 64 bits in the _64 variant.
         let offsetFieldOffset = MemoryLayout<UInt32>.size * 2
 
-        for index in 0 ..< count {
+        for index in 0 ..< min(count, maximumInspectedSliceCount) {
             let entryOffset = MemoryLayout<fat_header>.size + index * entrySize
             let sliceOffset: Int
             if is64Bit {
@@ -117,7 +128,13 @@ public enum InjectionTargetPlatformProbe {
                     byteOffset: entryOffset + offsetFieldOffset,
                     as: UInt64.self
                 ) else { return nil }
-                sliceOffset = Int(rawOffset.bigEndian)
+                // `fat_arch_64.offset` is 64 bits wide and nothing constrains
+                // it to values an `Int` can hold - and `Int(_: UInt64)` traps
+                // on the ones it cannot, taking the whole app with it. A slice
+                // at an offset we cannot even address is skipped; the entries
+                // after it are still readable.
+                guard let addressableOffset = Int(exactly: rawOffset.bigEndian) else { continue }
+                sliceOffset = addressableOffset
             } else {
                 guard let rawOffset: UInt32 = buffer.loadUnalignedIfWithinBounds(
                     byteOffset: entryOffset + offsetFieldOffset,
@@ -219,7 +236,7 @@ public enum InjectionTargetPlatformProbe {
         case 7: return .iOSSimulator          // PLATFORM_IOSSIMULATOR
         case 8: return .tvOSSimulator         // PLATFORM_TVOSSIMULATOR
         case 9: return .watchOSSimulator      // PLATFORM_WATCHOSSIMULATOR
-        case 11: return .visionOSSimulator    // PLATFORM_XROS_SIMULATOR
+        case 12: return .visionOSSimulator    // PLATFORM_VISIONOSSIMULATOR
         default: return .unsupported(value)
         }
     }
@@ -237,7 +254,14 @@ extension UnsafeRawBufferPointer {
         byteOffset: Int,
         as type: Value.Type
     ) -> Value? {
-        guard byteOffset >= 0, byteOffset + MemoryLayout<Value>.size <= count else { return nil }
+        // Written as a subtraction rather than `byteOffset + size <= count`:
+        // the addition overflows - and traps - for a `byteOffset` within
+        // `MemoryLayout<Value>.size` of `Int.max`, which is precisely the range
+        // a hostile 64-bit fat offset can land in.
+        guard byteOffset >= 0,
+              count >= MemoryLayout<Value>.size,
+              byteOffset <= count - MemoryLayout<Value>.size
+        else { return nil }
         return loadUnaligned(fromByteOffset: byteOffset, as: type)
     }
 }
