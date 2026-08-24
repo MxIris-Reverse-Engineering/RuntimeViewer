@@ -97,10 +97,19 @@ public enum RuntimeNetworkBonjour {
     /// Set by an injected payload before it advertises anything.
     ///
     /// An injected payload runs inside a process it does not own, so the
-    /// identity it derives must not leave traces there. Today the only such
-    /// trace is ``localInstanceID``, whose `UserDefaults.standard` write would
-    /// land in the *host* process's preference domain — injecting SpringBoard
-    /// would write `RuntimeViewer.localInstanceID` into SpringBoard's plist.
+    /// identity it derives must not leave traces there. This flag guards
+    /// ``localInstanceID``, whose `UserDefaults.standard` write would land in
+    /// the *host* process's preference domain — injecting SpringBoard would
+    /// write `RuntimeViewer.localInstanceID` into SpringBoard's plist.
+    ///
+    /// It is not the only such trace. ``localDeviceID`` can reach
+    /// `DeviceIdentifier.uniqueDeviceID`, which persists a keychain item when
+    /// MobileGestalt has no answer — also into the host process. That path is
+    /// currently unreachable rather than guarded, held shut by two independent
+    /// gates: on the simulator ``localDeviceID`` returns `SIMULATOR_UDID` before
+    /// it gets there, and MobileGestalt answers before the keychain fallback
+    /// does. Remove either gate and this flag has to cover ``localDeviceID``
+    /// too.
     ///
     /// Must be set before the first read of ``localInstanceID``; the payload's
     /// entry point runs early enough for that.
@@ -145,24 +154,56 @@ public enum RuntimeNetworkBonjour {
     }()
 
     /// Display name of the advertising process, used as the engine entry's title.
+    ///
+    /// In an injected payload `Bundle.main` is the *host* process's bundle, so
+    /// this reads whatever the target app declares — including the empty string,
+    /// which several shipping apps do declare for `CFBundleDisplayName`.
     public static let localProcessName: String = {
-        if let displayName = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String, !displayName.isEmpty {
-            return displayName
-        }
-        if let bundleName = Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String, !bundleName.isEmpty {
-            return bundleName
-        }
-        return ProcessInfo.processInfo.processName
+        processName(
+            displayName: Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String,
+            bundleName: Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String,
+            fallback: ProcessInfo.processInfo.processName
+        )
     }()
 
-    /// Process-level unique service name.
+    /// The display-name fallback chain, separated from `Bundle.main` so it can
+    /// be tested.
     ///
-    /// The Bonjour instance name has to be globally unique — two processes on
-    /// one device may well share a display name — so it is built from the
-    /// device ID and the pid rather than from anything user-facing. The name a
-    /// user sees travels in the TXT record instead (``processNameKey``).
+    /// Present-but-empty is treated as absent at every step. A key that exists
+    /// with an empty value is not a name, and taking it as one leaves the engine
+    /// entry and window title blank with nothing to explain why.
+    static func processName(displayName: String?, bundleName: String?, fallback: String) -> String {
+        if let displayName, !displayName.isEmpty { return displayName }
+        if let bundleName, !bundleName.isEmpty { return bundleName }
+        return fallback
+    }
+
+    /// The advertised Bonjour instance name.
+    ///
+    /// Readable and stable across launches, on purpose. A host predating the
+    /// TXT keys below has nothing else to go on: it reads `endpoint.name`
+    /// straight into the engine title, the window title, and — the part that
+    /// does lasting damage — the sidebar's `NSOutlineView` autosave keys. A
+    /// name carrying the pid gives such a host a fresh set of those keys on
+    /// every relaunch of this process, accumulating in its `UserDefaults`
+    /// forever, and shows the user a raw identifier where a device name used
+    /// to be.
+    ///
+    /// Process-level uniqueness is not this string's job any more. It lives in
+    /// the TXT record (``deviceIDKey`` plus ``processIdentifierKey``), which is
+    /// what a current host keys on — see ``RuntimeNetworkEndpoint/uniqueKey``.
+    /// Two processes sharing a display name on one device do collide here;
+    /// mDNS resolves that by suffixing the instance name, which a current host
+    /// ignores entirely and an old one merely displays.
     public static var localServiceName: String {
-        "\(localDeviceID)-\(ProcessInfo.processInfo.processIdentifier)"
+        serviceName(hostName: localHostName, processName: localProcessName)
+    }
+
+    /// The instance-name composition, separated from its inputs so it can be
+    /// tested. Takes no pid, which is the property that matters: everything it
+    /// is built from survives a relaunch.
+    static func serviceName(hostName: String, processName: String) -> String {
+        "\(hostName) (\(processName))"
     }
 
     /// Reads the kernel hostname via POSIX `gethostname(2)`.

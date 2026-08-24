@@ -70,12 +70,47 @@ struct BonjourProcessIdentityTests {
         #expect(discovered.uniqueKey == "iPhone 17 Pro")
     }
 
-    @Test("Local service name is process-level and stable")
-    func localServiceName() {
+    @Test("Service name is composed of the host and process names only")
+    func serviceNameComposition() {
+        #expect(
+            RuntimeNetworkBonjour.serviceName(hostName: "JH's iPhone", processName: "mobiletimerd")
+                == "JH's iPhone (mobiletimerd)"
+        )
+    }
+
+    /// The service name doubles as a *persistent key* on any host predating the
+    /// TXT keys: it lands in `NSOutlineView`'s autosave names by way of
+    /// `RuntimeSource.description`. Carrying the pid there gave such a host a
+    /// fresh set of those keys on every relaunch of this process, accumulating
+    /// in its `UserDefaults` with nothing to ever clean them up — and showed the
+    /// user a raw identifier where a device name belonged.
+    @Test("Local service name carries no process identifier")
+    func localServiceNameCarriesNoProcessIdentifier() {
         let serviceName = RuntimeNetworkBonjour.localServiceName
         #expect(!serviceName.isEmpty)
-        #expect(serviceName.hasSuffix("-\(ProcessInfo.processInfo.processIdentifier)"))
-        #expect(serviceName == RuntimeNetworkBonjour.localServiceName)
+        #expect(!serviceName.hasSuffix("-\(ProcessInfo.processInfo.processIdentifier)"))
+        #expect(
+            serviceName == RuntimeNetworkBonjour.serviceName(
+                hostName: RuntimeNetworkBonjour.localHostName,
+                processName: RuntimeNetworkBonjour.localProcessName
+            )
+        )
+    }
+
+    @Test("Local service name is stable across reads")
+    func localServiceNameIsStable() {
+        #expect(RuntimeNetworkBonjour.localServiceName == RuntimeNetworkBonjour.localServiceName)
+    }
+
+    /// Uniqueness moved to the TXT record, so the name no longer has to carry
+    /// it — but the shape that made the whole change necessary must still work:
+    /// two payloads inside one simulator are told apart by device ID and pid.
+    @Test("Two processes on one device stay distinct without the name")
+    func twoProcessesStayDistinctWithoutNameUniqueness() {
+        let first = Self.endpoint(name: "iPhone (gamecontrollerd)", deviceID: "DEVICE-A", processIdentifier: "58675")
+        let second = Self.endpoint(name: "iPhone (gamecontrollerd)", deviceID: "DEVICE-A", processIdentifier: "3964")
+
+        #expect(first.uniqueKey != second.uniqueKey)
     }
 
     @Test("Local device ID is non-empty and stable")

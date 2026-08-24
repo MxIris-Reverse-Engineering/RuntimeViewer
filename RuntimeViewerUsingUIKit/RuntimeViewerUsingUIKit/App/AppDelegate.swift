@@ -16,12 +16,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             #log(.info,"Local runtime engine initialized")
         }
         Task {
-            // A process-level unique service name, matching what the injected
-            // payload advertises, so a device running both shows up as two
-            // entries under one section rather than one entry that shadows the
-            // other. The user-friendly device name is resolved inside
-            // `makeService` and travels in the TXT record — resolving it here
-            // as well would just repeat the mDNS lookup.
+            // The same readable, launch-stable name the injected payload
+            // advertises. A device running both still shows up as two entries
+            // under one section: the host tells them apart by the TXT record's
+            // device ID and pid, not by this name. The user-friendly device
+            // name is resolved inside `makeService` and travels in the TXT
+            // record — resolving it here as well would just repeat the lookup.
             let serviceName = RuntimeNetworkBonjour.localServiceName
             #log(.info,"Creating Bonjour server runtime engine with service name: \(serviceName, privacy: .private)")
             remoteRuntimeEngine = RuntimeEngine(source: .bonjour(name: serviceName, identifier: .init(rawValue: serviceName), role: .server))

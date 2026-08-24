@@ -22,17 +22,14 @@ func initializeRuntimeViewerServer() {
 private enum RuntimeViewerServer {
     private static var runtimeEngine: RuntimeEngine?
 
-    private static var processName: String {
-        if let displayName = Bundle.main.infoDictionary?["CFBundleDisplayName"] as? String {
-            return displayName
-        }
-
-        if let bundleName = Bundle.main.infoDictionary?[kCFBundleNameKey as String] as? String {
-            return bundleName
-        }
-
-        return ProcessInfo.processInfo.processName
-    }
+    /// The advertised display name.
+    ///
+    /// Deliberately `RuntimeNetworkBonjour`'s copy rather than a private one.
+    /// This used to be duplicated here without its `isEmpty` checks, so a target
+    /// declaring an empty `CFBundleDisplayName` — three apps on a typical Mac do
+    /// — named the XPC and localSocket sources the empty string while the
+    /// Bonjour branch, going through the shared copy, named them correctly.
+    private static var processName: String { RuntimeNetworkBonjour.localProcessName }
 
     private static var identifier: String {
         return ProcessInfo.processInfo.processIdentifier.description
@@ -67,13 +64,12 @@ private enum RuntimeViewerServer {
 
                 #else
 
-                // Advertise under a process-level unique name. Several
-                // processes on one device can each carry a payload — injecting
-                // a simulator is the case that made this necessary — and a
-                // device-level service name would make the host treat the
-                // second one as a duplicate of the first and never connect it.
-                // What the user reads (device name, process name) travels in
-                // the TXT record instead.
+                // Several processes on one device can each carry a payload —
+                // injecting a simulator is the case that made this necessary —
+                // so the host must be able to tell them apart. It does that
+                // from the TXT record (device ID plus pid), not from this name,
+                // which stays readable and launch-stable for hosts that predate
+                // those keys.
                 let serviceName = RuntimeNetworkBonjour.localServiceName
 
                 runtimeEngine = RuntimeEngine(source: .bonjour(name: serviceName, identifier: .init(rawValue: serviceName), role: .server))
