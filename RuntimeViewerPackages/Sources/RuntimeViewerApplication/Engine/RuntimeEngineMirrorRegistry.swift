@@ -164,6 +164,42 @@ public final class RuntimeEngineMirrorRegistry {
     /// cache keys on the direct upstream (forwarder), which is unrelated to the leaf
     /// going away — if B re-pushes later without C's entries, normal reconcile takes
     /// care of it.
+    /// Everything a direct-peer disconnect must drop, across every identity that
+    /// peer's mirrors can be namespaced under.
+    ///
+    /// Three deliberately overlapping matches:
+    ///
+    /// - `ownership == hostID` — entries this peer forwarded to us
+    ///   (intermediate-node disconnect).
+    /// - `engineID` prefixed `"{hostID}/"` — mirrors *of* this peer that reached
+    ///   us through some other forwarder (leaf-node disconnect).
+    /// - `engineID` prefixed `"{originInstanceID}/"` — the same leaf case, for the
+    ///   peer's *own* engines.
+    ///
+    /// That third match exists because a peer has two identities and stamps a
+    /// different one into each kind of descriptor. `buildEngineDescriptors` copies
+    /// `engine.hostInfo.hostID`, which is the *device* ID for a Bonjour route that
+    /// peer opened, but `RuntimeEngine.init` still defaults `hostInfo.hostID` to
+    /// `localInstanceID` — so a Mac's own engines arrive namespaced under its
+    /// instance ID while our direct Bonjour route to it is keyed by its device ID.
+    /// The two used to coincide (one installation per device); they stopped when
+    /// Bonjour identity moved to device level. Without this third match a leaf
+    /// Mac's forwarded mirrors outlive the Mac.
+    ///
+    /// Removing an entry twice is harmless — the later pass no longer sees it.
+    @discardableResult
+    public func clearAllForDisconnectedPeer(
+        hostID: String,
+        originInstanceID: String?
+    ) -> [ReconcileOutcome.Removal] {
+        var removals = clearAllOwnedBy(hostID: hostID)
+        removals += clearAllWithHostID(hostID: hostID)
+        if let originInstanceID, originInstanceID != hostID {
+            removals += clearAllWithHostID(hostID: originInstanceID)
+        }
+        return removals
+    }
+
     @discardableResult
     public func clearAllWithHostID(hostID: String) -> [ReconcileOutcome.Removal] {
         let prefix = "\(hostID)/"

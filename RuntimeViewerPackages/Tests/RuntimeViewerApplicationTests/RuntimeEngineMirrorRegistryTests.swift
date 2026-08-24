@@ -305,6 +305,59 @@ struct RuntimeEngineMirrorRegistryTests {
         #expect(registry.lastDescriptorIDsBySource["D"] == ["D/e1"])
     }
 
+    @Test("a disconnected peer's mirrors are cleared under both of its host identities")
+    func clearForDisconnectedPeerCoversDeviceAndInstanceNamespaces() {
+        // The shape the device-level identity rework introduced. Peer A is a Mac
+        // reachable to us two ways at once:
+        //
+        //   - directly over Bonjour, where our engine for A carries
+        //     `hostInfo.hostID = A's *device* ID` (read from the TXT record);
+        //   - via intermediate B, which forwards A's own engines — and those are
+        //     namespaced `"{A's *instance* ID}/…"`, because A stamped its
+        //     `RuntimeEngine.init` default `hostInfo.hostID` into the descriptor.
+        //
+        // When our direct route to A drops we are told A's device ID. Matching
+        // only on that leaves A's forwarded mirrors in the registry, and the
+        // sidebar keeps showing a peer that is gone.
+        let registry = RuntimeEngineMirrorRegistry()
+        _ = registry.reconcile(
+            descriptors: [descriptor(engineID: "A-instance/local", originChain: ["A-instance", "B-device"])],
+            fromHostID: "B-device",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+        _ = registry.reconcile(
+            descriptors: [descriptor(engineID: "D-device/local", originChain: ["D-instance"])],
+            fromHostID: "D-device",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+
+        let removed = registry.clearAllForDisconnectedPeer(hostID: "A-device", originInstanceID: "A-instance")
+
+        #expect(Set(removed.map(\.engineID)) == ["A-instance/local"])
+        #expect(registry.engines.keys.elements == ["D-device/local"])
+    }
+
+    @Test("a disconnected peer whose mirrors are namespaced by device ID is still covered")
+    func clearForDisconnectedPeerStillCoversDeviceNamespace() {
+        // The other half: what B forwards about *its own* Bonjour routes is
+        // already device-namespaced, so the pre-existing match must keep working.
+        // An iPhone or simulator peer only ever lands here.
+        let registry = RuntimeEngineMirrorRegistry()
+        _ = registry.reconcile(
+            descriptors: [descriptor(engineID: "A-device/local", originChain: ["A-instance", "B-device"])],
+            fromHostID: "B-device",
+            localInstanceID: "local",
+            engineFactory: makeEngine
+        )
+
+        let removed = registry.clearAllForDisconnectedPeer(hostID: "A-device", originInstanceID: "A-instance")
+
+        #expect(Set(removed.map(\.engineID)) == ["A-device/local"])
+        #expect(registry.engines.isEmpty)
+    }
+
     @Test("clearAllWithHostID returns empty when no engineID is namespaced under the host")
     func clearAllWithHostIDIsEmptyWhenNoMatch() {
         let registry = RuntimeEngineMirrorRegistry()
