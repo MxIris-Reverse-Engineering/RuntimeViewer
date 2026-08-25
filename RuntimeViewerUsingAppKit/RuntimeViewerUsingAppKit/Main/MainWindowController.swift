@@ -280,11 +280,11 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         }
     }
 
-    @IBAction func exportInterface(_ sender: Any?) {
+    @objc func exportInterface(_ sender: Any?) {
         viewModel?.router.trigger(.exportInterfaces)
     }
 
-    @IBAction func exportMultipleImages(_ sender: Any?) {
+    @objc func exportMultipleImages(_ sender: Any?) {
         viewModel?.router.trigger(.exportMultipleImages)
     }
 

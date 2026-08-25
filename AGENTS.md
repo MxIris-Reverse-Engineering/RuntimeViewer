@@ -178,9 +178,11 @@ LLM Client
   `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json`.
 - The UIFoundation dependency enables the `Settings` trait, exposes both
   `UIFoundationSettings` and `UIFoundationSettingsUI`, and requires version
-  `0.17.0` or later. `0.16.0` carries the observable reference-model store but
-  *not* `SettingsConfiguration`, which landed after that tag; `0.17.0` is the
-  first release with both, plus the window frame restoration below.
+  `0.17.0` or later for Settings. `0.16.0` carries the observable reference-model
+  store but *not* `SettingsConfiguration`, which landed after that tag; `0.17.0`
+  is the first release with both, plus the window frame restoration below. The
+  declared floor is `0.20.0`, which is where `MainMenu` — the main menu builder
+  `MainMenuController` uses — arrived.
 - UIFoundation's Settings API is macOS-only, so `SettingsAccess` keeps an
   in-memory `Settings` on the other platforms and its `load()` / `flush()` are
   no-ops there. That costs nothing today because nothing off macOS *writes* a
@@ -388,15 +390,14 @@ final class MyConsumer {
 **Allowed in AppDelegate** (and nothing else):
 - Lifecycle hooks (`applicationDidFinishLaunching`, `applicationWillTerminate`, `applicationSupportsSecureRestorableState`, `applicationShouldTerminateAfterLastWindowClosed`, `application(_:open:)`, …)
 - `@Dependency(\.xxx)` declarations for the controllers/services it dispatches to
-- `IBAction` methods that immediately delegate to a router or injected service (one line each)
+- `@objc` action methods that immediately delegate to a router or injected service (one line each). The app has no nib, so these are menu actions reached through the responder chain, not Interface Builder connections
 - One-line `start()` / `install()` / `stop()` / `checkOnLaunch()` calls on injected services
 - Compile-time flag toggles like `runtimeViewerIsARM64EVariant = true` and one-shot fixes like `NSToolbarItemViewerOverflowFix.install()`
-- An `override init()` whose body is one-line one-shot fixes that **must** beat the main nib — `AppDelegate` is unarchived from `MainMenu.xib`, so `init` runs before the nib connects `NSApplication.mainMenu`, which is the last moment some AppKit defaults are still readable (`SystemAutoFillMenuSuppression` is the standing example). Anything that works from a lifecycle callback belongs in one instead; a fix that lands here must say in a comment why, or the next reader will move it and it will silently stop working
 
 **Forbidden in AppDelegate**:
 - `@objc` action handlers with bodies (extract to a controller's `@objc` method)
 - `Task { … }` blocks doing work (push the work into a service method)
-- `NSMenu` / `NSMenuItem` construction (extract to a `XxxMenuController.install()`)
+- `NSMenu` / `NSMenuItem` construction (the main menu is `MainMenuController`'s; anything added to it afterwards goes in a `XxxMenuController.install()`)
 - `NSAlert` / `NSSavePanel` / `NSOpenPanel` flows (extract to the responsible controller)
 - `observe { … }` / `withObservationTracking { … }` blocks (extract to a controller that owns the `ObserveToken`)
 - Singleton bootstrapping logic, version checks, file I/O, log export — all belong to dedicated controllers
@@ -406,13 +407,15 @@ final class MyConsumer {
 - `DebugMenuController` — installs the Debug menu and owns the Export Logs flow
 - `HelperServiceVersionChecker` — runs the helper version probe and presents reinstall alerts
 - `UpdaterService` — owns the Sparkle updater lifecycle
+- `MainMenuController` — assembles the main menu in code (the replacement for `MainMenu.xib`)
 - `WindowLifecycleController` — answers `applicationShouldHandleReopen` / `applicationShouldTerminateAfterLastWindowClosed`
+
+**One-shot fixes that must beat the main menu** go in `RuntimeViewerApp.main()` (the entry point that sits above `AppDelegate` in `AppDelegate.swift`), before `NSApplication.mainMenu` is assigned — not in a lifecycle callback, which runs too late. `SystemAutoFillMenuSuppression` is the standing example: the default it registers is read, and then cached for the process, the first time AppKit customizes the main menu. A fix that lands there must say in a comment why, or the next reader will move it and it will silently stop working.
 
 AppDelegate then reduces to:
 
 ```swift
 @MainActor
-@main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @Dependency(\.appearanceController)         private var appearanceController
     @Dependency(\.debugMenuController)          private var debugMenuController
@@ -1024,7 +1027,8 @@ do { ... } catch {
 
 ## Key Source Locations
 
-- Main app entry: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift`
+- Main app entry: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift` (the `@main` `RuntimeViewerApp` enum, then the delegate)
+- Main menu: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift`
 - Document model: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift`
 - Coordinator/navigation: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
 - Runtime engine: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`
@@ -1060,7 +1064,7 @@ Prefer Xcode MCP tools for all Xcode project-level operations:
 ## External Dependencies
 
 Core reverse engineering powered by:
-- [UIFoundation](https://github.com/Mx-Iris/UIFoundation) — shared Settings store, bindings, window, forms, and navigation
+- [UIFoundation](https://github.com/Mx-Iris/UIFoundation) — main menu, shared Settings store, bindings, window, forms, and navigation
 - [MachOKit](https://github.com/MxIris-Reverse-Engineering/MachOKit) — Mach-O binary parsing
 - [MachOObjCSection](https://github.com/MxIris-Reverse-Engineering/MachOObjCSection) — ObjC runtime introspection
 - [MachOSwiftSection](https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection) — Swift interface extraction

@@ -68,7 +68,7 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
         #selector(openQuickly(_:))
     }
 
-    @IBAction func openQuickly(_ sender: Any?) {
+    @objc func openQuickly(_ sender: Any?) {
         openQuicklyActionBar.cancel()
         openQuicklyActionBar.present(
             parentWindow: view.window,

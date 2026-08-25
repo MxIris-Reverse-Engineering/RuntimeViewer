@@ -17,7 +17,7 @@ import AppKit
 // `objectForKey:` inside `_NSGetBoolAppConfig` reads like any other, without writing anything
 // to the user's preferences.
 //
-// ## Why this runs from `AppDelegate.init`
+// ## Why this runs from `RuntimeViewerApp.main`, before the main menu is assigned
 //
 // **`applicationDidFinishLaunching` is too late — measured, not assumed.** The key has two
 // readers, and the first one runs during startup:
@@ -29,20 +29,24 @@ import AppKit
 //
 // That is where the Edit menu gets its AutoFill / Emoji & Symbols / Dictation items, and
 // `_NSGetBoolAppConfig` caches its answer in a static byte on first read and never consults the
-// defaults again. `AppDelegate` is unarchived from the main nib, and a nib instantiates its
-// objects before it connects their outlets — `NSApplication.mainMenu` among them — so `init`
-// lands before that read while any delegate callback lands after it.
+// defaults again. So the registration has to beat the first `setMainMenu:`, and the entry point
+// assigns `NSApplication.mainMenu` itself — the call sits directly above it.
 //
-// Measured by whether AppKit put its item into the Edit menu, which is gated on the same key:
+// Measured by whether AppKit put its item into the Edit menu, which is gated on the same key.
+// The measurements below were taken while the menu still came from `MainMenu.xib`, where the
+// winning site was `AppDelegate.init` — the nib instantiates its objects before it connects
+// `NSApplication.mainMenu`, so `init` fell on the same side of that read as the entry point
+// does now:
 //
 // | registration site | AutoFill in Edit menu |
 // |---|---|
-// | `AppDelegate.init` | absent |
+// | before `setMainMenu:` (then `AppDelegate.init`) | absent |
 // | none (control) | present |
 // | `applicationDidFinishLaunching` | present |
 //
-// **Do not move this call into a lifecycle method.** It silently stops working there, and the
-// only symptom is the menu item coming back.
+// **Do not move this call into a lifecycle method, and do not let it drift below the `mainMenu`
+// assignment.** It silently stops working there, and the only symptom is the menu item coming
+// back.
 //
 // ## Turning off the rest of that group
 //
