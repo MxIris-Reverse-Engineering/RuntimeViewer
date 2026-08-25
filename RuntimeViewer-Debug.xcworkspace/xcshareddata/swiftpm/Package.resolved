@@ -671,8 +671,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "0b323b0b4019ff9828786f2f97fbe23c97c59004",
-        "version" : "0.17.0"
+        "revision" : "5f9e269ff50fb388251d3d72c5db9d5bb8cb744f",
+        "version" : "0.20.0"
       }
     },
     {
