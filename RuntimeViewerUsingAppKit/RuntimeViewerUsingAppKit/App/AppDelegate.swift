@@ -5,32 +5,15 @@ import RuntimeViewerCommunication
 import RuntimeViewerMCPBridge
 import RuntimeViewerSimulatorInstaller
 
-/// The app's entry point.
-///
-/// Hand-written because there is no `MainMenu.xib` any more, and `@main` on an
-/// `NSApplicationDelegate` only synthesizes a call to `NSApplicationMain` —
-/// which instantiates and connects the delegate solely through the principal
-/// nib. Without one, nothing would ever create `AppDelegate` and no lifecycle
-/// callback would fire. So the three things the nib did — create the delegate,
-/// connect it, install the main menu — are done here instead.
 @main
 @MainActor
-enum RuntimeViewerApp {
+enum App {
     static func main() {
-        // **Before `NSApplication` is touched at all.** This registers a default
-        // that AppKit reads, and then caches for the life of the process, the
-        // first time it customizes the main menu — which assigning `mainMenu`
-        // below triggers. See `SystemAutoFillMenuSuppression`.
         SystemAutoFillMenuSuppression.install()
-
-        // Mirrors `NSApplicationMain`, which pushes an autorelease pool over
-        // the whole of launch setup and pops it right before `run()`.
         let application = autoreleasepool {
             @Dependency(\.mainMenuController) var mainMenuController
 
             let application = NSApplication.shared
-            // `NSApplication.delegate` is weak; `AppDelegate.shared` is what
-            // keeps it alive.
             application.delegate = AppDelegate.shared
             application.setActivationPolicy(.regular)
             application.mainMenu = mainMenuController.makeMainMenu()
@@ -42,9 +25,6 @@ enum RuntimeViewerApp {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// Not exposed through `@Dependency`: nothing reaches the delegate as a
-    /// service. It exists only so `RuntimeViewerApp.main()` above can create it
-    /// and hold the strong reference `NSApplication` does not.
     fileprivate static let shared = AppDelegate()
 
     @Dependency(\.appRouter) private var appRouter
