@@ -192,9 +192,9 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 headerView.configure(title: section.title)
                 return headerView
             }
-            imageLoadedView.outlineView.rx.sections(source: sectionsSource)(sectionHeaderProvider, cellProvider).disposed(by: rx.disposeBag)
+            imageLoadedView.outlineView.rx.sections(source: sectionsSource)(sectionHeaderProvider, cellProvider, rowProvider).disposed(by: rx.disposeBag)
         } else {
-            imageLoadedView.outlineView.rx.nodes(source: output.runtimeObjects.asObservable(), options: isReorderable ? [.reorderable] : [])(cellProvider).disposed(by: rx.disposeBag)
+            imageLoadedView.outlineView.rx.nodes(source: output.runtimeObjects.asObservable(), options: isReorderable ? [.reorderable] : [])(cellProvider, rowProvider).disposed(by: rx.disposeBag)
         }
 
         output.errorText.drive(imageLoadErrorView.titleLabel.rx.stringValue).disposed(by: rx.disposeBag)
