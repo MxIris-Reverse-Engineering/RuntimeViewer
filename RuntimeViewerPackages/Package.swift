@@ -93,7 +93,7 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar"]
+let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD"]
 
 let package = Package(
     name: "RuntimeViewerPackages",
@@ -161,7 +161,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.20.0",
+                from: "0.21.0",
                 traits: uiFoundationTraits,
             ),
         ),
@@ -268,17 +268,6 @@ let package = Package(
         ),
 
         .package(
-            local: .package(
-                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("SystemHUD"),
-                isRelative: true,
-            ),
-            remote: .package(
-                url: "https://github.com/Mx-Iris/SystemHUD",
-                from: "0.1.0",
-            ),
-        ),
-
-        .package(
             url: "https://github.com/SnapKit/SnapKit",
             from: "6.0.0",
         ),
@@ -380,13 +369,12 @@ let package = Package(
                 .product(name: "UIFoundation", package: "UIFoundation"),
                 .product(name: "UIFoundationToolbox", package: "UIFoundation"),
                 .product(name: "SnapKit", package: "SnapKit"),
-                .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "SFSymbols", package: "SFSymbols"),
+                .product(name: "LateResponders", package: "LateResponders"),
+                .product(name: "AppKitPlus", package: "AppKitPlus-Release", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Rearrange", package: "Rearrange", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RunningApplicationKit", package: "RunningApplicationKit", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "LateResponders", package: "LateResponders"),
                 .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts", condition: .when(platforms: appkitPlatforms)),
-                .product(name: "SystemHUD", package: "SystemHUD", condition: .when(platforms: appkitPlatforms)),
 
             ],
             swiftSettings: sharedSwiftSettings,
