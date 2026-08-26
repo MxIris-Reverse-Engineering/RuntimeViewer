@@ -304,7 +304,7 @@ let package = Package(
         
         .package(
             url: "https://github.com/pointfreeco/swift-dependencies",
-            from: "1.13.1",
+            "1.13.1" ..< "1.16.0",
         ),
         
         .package(
