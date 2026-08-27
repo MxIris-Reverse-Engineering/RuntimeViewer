@@ -9,6 +9,7 @@
 | [`ResolvedIssues/`](ResolvedIssues/) | 已定位并修复的疑难问题纪要，含根因与验证过程 |
 | [`KnownIssues/`](KnownIssues/) | 代码审查发现但当时未修的问题快照，见 [子索引](KnownIssues/README.md) |
 | [`Reviews/`](Reviews/) | 针对某项工作的多轮审查闭环记录 |
+| [`TaskReports/`](TaskReports/) | 单次任务的落地纪要：起因、调研经过、选定方案与实际执行到哪一步 |
 
 ## 架构与运维
 
@@ -101,6 +102,14 @@
 - [UltraReview 发现](Reviews/2026-04-26-background-indexing-ultrareview.md)（2026-04-26）
 - [实现审查（最终轮）](Reviews/2026-04-26-background-indexing-implementation-review.md)（2026-04-26）
 
+## 任务纪要（TaskReports）
+
+按时间倒序。记录一次具体任务是怎么落地的——与提案（决策）和已解决问题（根因）互补。
+
+- [PR #106 代码审查与修复落地](TaskReports/2026-08-24-pr106-review-and-fixes.md)（2026-08-24 ~ 08-25）—— 注入 iOS Simulator 分支的审查、逐条裁决与修复过程。
+- [PR #88 F9/F10/F11 落地复盘](TaskReports/2026-08-10-pr88-f9-f10-f11-landing-retrospective.md)（2026-08-10）
+- [落地 PR #88 的 Open Quickly 性能修复](TaskReports/2026-08-10-land-the-pr-88-open-quickly-perf-fixes.md)（2026-08-10）
+
 ## 待办问题快照（KnownIssues）
 
-见 [`KnownIssues/README.md`](KnownIssues/README.md)。四份审查发现记录：v2.0.0-RC.4 预发布审查（2026-04-10）、UltraReview（2026-04-17）、Engine 镜像路由（2026-04-30）、主题设置面板（2026-06-25）。
+见 [`KnownIssues/README.md`](KnownIssues/README.md)。逐条裁决过的审查发现快照，按 `<slice>.<N>` 编号以便被 commit 与后续审查引用；判为「不修」或「误报」的同样留档，下一轮审查据此跳过。

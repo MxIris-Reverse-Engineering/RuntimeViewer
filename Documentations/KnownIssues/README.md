@@ -119,6 +119,31 @@ when picking up follow-up work.
   payloads register no engine-list handler — together with the three changes
   that would reopen it. `SIMID.5` flags `SIMULATOR_UDID` as unverified until
   the end-to-end pass.
+- [2026-08-27-pr106-cross-review-findings.md](2026-08-27-pr106-cross-review-findings.md) —
+  second `/code-review xhigh` pass on PR #106, IDs `PR106X.<N>`, with every
+  finding re-verified by *two* mutually unaware sessions before adjudication.
+  5 fixed in-branch (the advertised Bonjour name regressing to a model name on
+  iOS devices — a revert of `db8388dc`'s deliberate fix; a failed simulator
+  payload build leaving the *previous* product for the embed phase to seal in
+  while the log says it succeeded; a doc block that swallowed the function it
+  documented; a stale DocC reference; the unregistered `TaskReports/`
+  directory). `PR106X.4` (service name over the 63-byte DNS-SD limit) is a
+  **false positive**: both sessions measured it, and mDNSResponder truncates on
+  a UTF-8 boundary and registers anyway — `NWListener` still reaches `.ready`
+  and the TXT record, which is what peer matching reads, is untouched.
+  `PR106X.2` (a relaunched peer briefly showing a second, dead row) is
+  **no-fix**: the obvious repair would kill the one legitimate case Evolution
+  0013 exists for, several injected processes on one device. `PR106X.1` (the
+  sidebar's autosave keys taking a peer's *process display name*) is deferred
+  to the `RuntimeBookmarkScope` proposal together with `PR106.1` — and records
+  why the obvious fix, switching those keys to `source.identifier`, is worse
+  than the bug: that identifier carries the pid. `PR106X.6` (both payload
+  bundles sharing one `CFBundleIdentifier`) keeps only its factual half; the
+  "notarization rejects this" claim is marked unproven, and the real acceptance
+  step is one full `ArchiveScript.sh` notarization run. `PR106X.10` is new this
+  round and still unmeasured: `NWBrowser`'s `.changed` case is dropped
+  entirely, which matters now that the service name survives a relaunch.
+
 - [2026-08-24-pr106-review-findings.md](2026-08-24-pr106-review-findings.md) —
   `/code-review xhigh` pass on PR #106 (`feature/inject-ios-simulator-process`),
   IDs `PR106.<N>`, cross-reviewed by a second session before adjudication.
