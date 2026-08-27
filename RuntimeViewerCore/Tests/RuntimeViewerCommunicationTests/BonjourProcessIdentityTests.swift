@@ -102,6 +102,32 @@ struct BonjourProcessIdentityTests {
         #expect(RuntimeNetworkBonjour.localServiceName == RuntimeNetworkBonjour.localServiceName)
     }
 
+    /// What a peer actually advertises must come from ``resolvedHostName()``,
+    /// not from the non-blocking ``localHostName``. The difference only shows
+    /// on an iOS device: `localHostName` has no way to reach the user-assigned
+    /// name there and falls back to a model name, so an advertisement built
+    /// from it reads `"iPhone (RuntimeViewer)"`. A host predating the TXT keys
+    /// puts that string in its window title *and* its sidebar autosave keys, so
+    /// the downgrade outlives the session that caused it.
+    ///
+    /// Honest about its own reach: on macOS both names come from
+    /// `SCDynamicStoreCopyComputerName`, so this cannot tell them apart at
+    /// runtime here. What it does hold is the composition — a body that drifts
+    /// back to `localHostName` still passes on macOS but fails the moment this
+    /// suite runs on a device.
+    @Test("Resolved service name is composed from the resolved host name")
+    func resolvedServiceNameUsesResolvedHostName() async {
+        let expected = RuntimeNetworkBonjour.serviceName(
+            hostName: await RuntimeNetworkBonjour.resolvedHostName(),
+            processName: RuntimeNetworkBonjour.localProcessName
+        )
+        let advertised = await RuntimeNetworkBonjour.resolvedServiceName()
+
+        #expect(advertised == expected)
+        #expect(!advertised.isEmpty)
+        #expect(advertised.hasSuffix(" (\(RuntimeNetworkBonjour.localProcessName))"))
+    }
+
     /// Uniqueness moved to the TXT record, so the name no longer has to carry
     /// it — but the shape that made the whole change necessary must still work:
     /// two payloads inside one simulator are told apart by device ID and pid.

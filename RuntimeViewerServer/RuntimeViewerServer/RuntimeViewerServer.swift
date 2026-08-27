@@ -70,7 +70,7 @@ private enum RuntimeViewerServer {
                 // from the TXT record (device ID plus pid), not from this name,
                 // which stays readable and launch-stable for hosts that predate
                 // those keys.
-                let serviceName = RuntimeNetworkBonjour.localServiceName
+                let serviceName = await RuntimeNetworkBonjour.resolvedServiceName()
 
                 runtimeEngine = RuntimeEngine(source: .bonjour(name: serviceName, identifier: .init(rawValue: serviceName), role: .server))
                 try await runtimeEngine?.connect()

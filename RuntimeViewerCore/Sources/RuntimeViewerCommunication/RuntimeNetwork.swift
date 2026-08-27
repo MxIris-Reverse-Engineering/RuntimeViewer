@@ -195,13 +195,44 @@ public enum RuntimeNetworkBonjour {
     /// Two processes sharing a display name on one device do collide here;
     /// mDNS resolves that by suffixing the instance name, which a current host
     /// ignores entirely and an old one merely displays.
+    /// Prefer ``resolvedServiceName()`` wherever the caller can await. This
+    /// one is built from the non-blocking ``localHostName``, which on an iOS
+    /// device falls back to a model name; on macOS the two are equivalent,
+    /// because `SCDynamicStoreCopyComputerName` needs no lookup.
     public static var localServiceName: String {
         serviceName(hostName: localHostName, processName: localProcessName)
+    }
+
+    /// The advertised Bonjour instance name, with the user-assigned device
+    /// name resolved off the calling thread.
+    ///
+    /// Same composition as ``localServiceName``, but sourced from
+    /// ``resolvedHostName()`` so an iOS device advertises
+    /// `"JH's iPhone (RuntimeViewer)"` rather than `"iPhone (RuntimeViewer)"`.
+    /// Only a host predating the TXT keys reads this string — a current one
+    /// takes the device name from ``hostNameKey`` — but that host puts it in
+    /// its window title and its sidebar autosave keys, so the difference
+    /// outlives the session.
+    ///
+    /// The extra lookup is free: ``makeService(name:)`` resolves the same value
+    /// for the TXT record on the same code path, and mDNSResponder's cache
+    /// makes the second call essentially free.
+    public static func resolvedServiceName() async -> String {
+        serviceName(hostName: await resolvedHostName(), processName: localProcessName)
     }
 
     /// The instance-name composition, separated from its inputs so it can be
     /// tested. Takes no pid, which is the property that matters: everything it
     /// is built from survives a relaunch.
+    ///
+    /// Deliberately unclamped. RFC 6763 §7.2 caps an instance name at 63 bytes
+    /// and a long device name plus `" (\(processName))"` can exceed that —
+    /// sooner in a non-ASCII name, where each character costs several bytes.
+    /// mDNSResponder truncates on a UTF-8 character boundary and registers the
+    /// service anyway: `NWListener` still reaches `.ready` and reports the
+    /// shortened name through its registration update handler, and the TXT
+    /// record is unaffected, so peer matching never sees it. Clamping here
+    /// would only duplicate that, less well.
     static func serviceName(hostName: String, processName: String) -> String {
         "\(hostName) (\(processName))"
     }
