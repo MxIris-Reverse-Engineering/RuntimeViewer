@@ -154,16 +154,6 @@ public final class RuntimeEngineMirrorRegistry {
         return removals
     }
 
-    /// Removes every mirrored engine whose `engineID` is namespaced under `hostID`
-    /// (recall `engineID = "{hostID}/{localID}"`), regardless of which forwarder
-    /// pushed the descriptor.
-    ///
-    /// Suitable for the **leaf-node disconnect** half of a direct-peer disconnect
-    /// (A → B → C, C disconnects → drop every mirror of C, even those forwarded by B
-    /// whose `ownership = B`). Does **not** touch `lastDescriptorIDsBySource`: that
-    /// cache keys on the direct upstream (forwarder), which is unrelated to the leaf
-    /// going away — if B re-pushes later without C's entries, normal reconcile takes
-    /// care of it.
     /// Everything a direct-peer disconnect must drop, across every identity that
     /// peer's mirrors can be namespaced under.
     ///
@@ -200,6 +190,16 @@ public final class RuntimeEngineMirrorRegistry {
         return removals
     }
 
+    /// Removes every mirrored engine whose `engineID` is namespaced under `hostID`
+    /// (recall `engineID = "{hostID}/{localID}"`), regardless of which forwarder
+    /// pushed the descriptor.
+    ///
+    /// Suitable for the **leaf-node disconnect** half of a direct-peer disconnect
+    /// (A → B → C, C disconnects → drop every mirror of C, even those forwarded by B
+    /// whose `ownership = B`). Does **not** touch `lastDescriptorIDsBySource`: that
+    /// cache keys on the direct upstream (forwarder), which is unrelated to the leaf
+    /// going away — if B re-pushes later without C's entries, normal reconcile takes
+    /// care of it.
     @discardableResult
     public func clearAllWithHostID(hostID: String) -> [ReconcileOutcome.Removal] {
         let prefix = "\(hostID)/"

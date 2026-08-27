@@ -510,7 +510,7 @@ public final class RuntimeEngineManager {
         #log(.info, "Injected peer for \(name, privacy: .public) confirmed connected")
     }
 
-    /// How often ``awaitInjectedBonjourEngine(name:processIdentifier:timeout:)`` re-checks for
+    /// How often ``awaitInjectedBonjourEngine(name:deviceID:processIdentifier:timeout:)`` re-checks for
     /// the advertised engine. Bonjour discovery plus the engine handshake take
     /// seconds, not milliseconds, so a tight poll would only burn main-actor
     /// hops.
