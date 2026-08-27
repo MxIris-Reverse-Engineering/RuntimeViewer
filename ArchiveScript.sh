@@ -342,6 +342,13 @@ if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
     log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this release"
+    # Drop whatever the last successful run left there. DerivedData is reused
+    # across builds and a failed compile does not clear the previous product,
+    # so leaving it lets the embed phase seal a stale payload into the app and
+    # report success — the warning above would be the only sign, and the phase
+    # contradicts it two lines later. Removing the directory also covers the
+    # phase's BUILD_DIR fallback, which resolves to this same path.
+    rm -rf "$SIMULATOR_PAYLOAD_PATH"
 fi
 
 log "Archiving main app"

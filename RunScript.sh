@@ -193,6 +193,7 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
 # A failure here is not fatal: the app builds and runs, and only injecting into
 # simulator processes is unavailable. The build phase says so in a warning.
 log "Building iOS Simulator injection payload"
+SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
 if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
     -scheme "$MOBILE_SERVER_SCHEME" \
@@ -202,9 +203,14 @@ if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
     log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this build"
+    # Drop whatever the last successful run left there. DerivedData is reused
+    # across builds and a failed compile does not clear the previous product,
+    # so leaving it lets the embed phase seal a stale payload into the app and
+    # report success — the warning above would be the only sign, and the phase
+    # contradicts it two lines later. Removing the directory also covers the
+    # phase's BUILD_DIR fallback, which resolves to this same path.
+    rm -rf "$SIMULATOR_PAYLOAD_PATH"
 fi
-
-SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
 
 log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
