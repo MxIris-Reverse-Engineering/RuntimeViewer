@@ -1,12 +1,12 @@
 # Draft - RuntimeBookmarkScope：把持久化身份从显示名手里拿走
 
-- **状态**: Draft
+- **状态**: Accepted
 - **作者**: JH
 - **创建日期**: 2026-08-27
-- **最后更新**: 2026-08-27
+- **最后更新**: 2026-08-28
 - **所属愿景**: 无
 - **关联提案**: [0013](0013-inject-ios-simulator-process.md)（本提案处理它暴露出的持久化身份问题）
-- **实现分支 / PR**: 待定 —— 等 0013 的 PR #106 合入 `next` 后开新分支
+- **实现分支 / PR**: `feature/runtime-bookmark-scope`（从 `feature/inject-ios-simulator-process` 分出）
 - **配套文档**: 待定 —— 落地时登记实现说明的链接
 
 ## 摘要

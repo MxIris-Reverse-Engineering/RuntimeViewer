@@ -21,7 +21,7 @@
 | [0008](0008-symmetric-objc-and-swift-index-layers.md) | ObjC 与 Swift 索引层的对称化 | Implemented | `RuntimeObjCInterfaceIndexer` 回到与 `RuntimeSwiftInterfaceIndexer` 同构的形态：包装库侧 upstream、eager 反向表、`addSubIndexer` / `removeSubIndexer` 聚合、由 factory 持有聚合器，`RuntimeRelationshipsResolver` 从遍历所有 image 退回成查两次聚合器。取代 0007 的关系索引设计。 |
 | [0011](0011-uifoundation-settings-adoption.md) | RuntimeViewer 接入 UIFoundation Settings | Implemented | 保留 RuntimeViewer 业务设置模型与页面，采用 UIFoundation 的持久化 store、属性包装器、设置窗口和导航，并删除重复壳层。原以 `0007` 起草，与本分支的 `0007` 撞号，合流时改为 `0011`。 |
 | [0013](0013-inject-ios-simulator-process.md) | 支持注入 iOS Simulator 进程 | In Progress | 注入器把自身地址空间的符号地址喂给目标进程，打崩了三个 SpringBoard。先加平台守卫止血，再把符号解析改为针对目标进程，让 dlopen 路径支持 iOS Simulator 目标。 |
-| [draft](draft-runtime-bookmark-scope.md) | RuntimeBookmarkScope：把持久化身份从显示名手里拿走 | Draft | 新建稳定的 `RuntimeBookmarkScope` 取代三处各自拼出来的键（含 pid 的书签键、用进程显示名的 sidebar autosave 键、编码了 `name` 却按忽略 `name` 比较的落盘表示）。身份走 descriptor 上的 `@Default` 字段以保持混版兼容，`RuntimeSource` 不动。等 0013 的 PR #106 合入 `next` 后开工，拆三个 PR。 |
+| [draft](draft-runtime-bookmark-scope.md) | RuntimeBookmarkScope：把持久化身份从显示名手里拿走 | Accepted | 新建稳定的 `RuntimeBookmarkScope` 取代三处各自拼出来的键（含 pid 的书签键、用进程显示名的 sidebar autosave 键、编码了 `name` 却按忽略 `name` 比较的落盘表示）。身份走 descriptor 上的 `@Default` 字段以保持混版兼容，`RuntimeSource` 不动。在 `feature/runtime-bookmark-scope` 上实现，拆三个 PR。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
@@ -31,6 +31,11 @@
 > 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`），
 > `0009` / `0010` 在 `feature/source-editor-integration`。**新提案从 `0012` 起编号**，
 > 不要只看本分支已有的文件挑下一个空号。
+>
+> **`0013` 已经是第二次撞号，尚未解决**：本分支的 `0013-inject-ios-simulator-process.md` 与
+> `next` 上的 `0013-replace-uxkit-with-appkitplus.md` 同号，两者互不知情。按前一次 `0007` 的
+> 先例，合流时先入 `next` 的那篇保号，后到的改号。记在这里是为了让合流的人一眼看到，本条与
+> `draft-runtime-bookmark-scope` 无关——那篇按 skill 的规定，落到共享分支时才分配编号。
 
 ## 与 `Plans/` 的关系
 
