@@ -11,6 +11,7 @@
 // RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER = com.example.RuntimeViewerCatalystHelper
 // RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER = com.example.RuntimeViewerCatalystHelperPlugin
 // RUNTIME_VIEWER_SERVER_BUNDLE_IDENTIFIER = com.example.RuntimeViewerServer
+// RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER = com.example.RuntimeViewerMobileServer
 
 // Override these only if you need a fully custom SMJobBless requirement.
 // RUNTIME_VIEWER_DEBUG_SM_PRIVILEGED_EXECUTABLE = identifier "$(RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER)" and anchor apple generic and $(RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_REQUIREMENT)

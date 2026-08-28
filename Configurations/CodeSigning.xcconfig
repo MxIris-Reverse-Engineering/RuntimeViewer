@@ -21,8 +21,18 @@ RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerC
 // to load when run from Xcode against a release-built helper.
 RUNTIME_VIEWER_CATALYST_HELPER_PLUGIN_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelperPlugin
 
-// XPC server framework (RuntimeViewerServer / RuntimeViewerMobileServer targets)
+// XPC server framework (RuntimeViewerServer target, macOS slice)
 RUNTIME_VIEWER_SERVER_BUNDLE_IDENTIFIER = com.MxIris.RuntimeViewerServer
+
+// Injection payload for iOS-family targets (RuntimeViewerMobileServer target).
+// Deliberately NOT the identifier above. Both bundles ship inside the same
+// signed app -- the macOS slice as RuntimeViewerServer.framework, this one as
+// RuntimeViewerServer-iphonesimulator.framework -- and both get installed side
+// by side into /Library/Frameworks. Two nested bundles claiming one identity
+// makes any identifier-based lookup ambiguous and is a validation-rejection
+// class worth staying clear of, even though the Developer ID notarisation path
+// this project uses has not been shown to enforce it.
+RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER = com.MxIris.RuntimeViewerMobileServer
 
 RUNTIME_VIEWER_DEVELOPMENT_CERTIFICATE_REQUIREMENT = certificate leaf[subject.OU] = $(RUNTIME_VIEWER_DEVELOPMENT_TEAM) and certificate 1[field.1.2.840.113635.100.6.2.1] /* exists */
 // `and` binds tighter than `or` in csreq, so the outer parens around the `or` group are load-bearing — they keep the team OU check from being bypassed on the Apple Distribution branch.
