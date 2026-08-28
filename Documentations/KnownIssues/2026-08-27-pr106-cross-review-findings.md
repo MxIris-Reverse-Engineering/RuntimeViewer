@@ -173,10 +173,14 @@ identifier 的嵌套 bundle，属**已知的公证/校验驳回类别**，且 `B
    根本没被本 PR 修改，`RuntimeViewerMobileServer` 自 `4fd6db7b` 起就共用同一变量）；**本 PR 新引入的
    是「把两者装进同一个签名 App」这件事**。也就是说，它把一个一直无害的配置放到了会产生后果的位置上。
    报告把两者混为一谈了。
-3. **值不值得修** —— **卫生修可做，但不以「会被驳回」为理由**。给模拟器 target 一个带后缀的
-   identifier（或给现有变量加 `[sdk=iphonesimulator*]` 分支）是一行 xcconfig 改动，没有任何下游
-   代码依赖当前值。理由是「两个不同平台的产物共用一个身份本来就是错的，且修它几乎不要钱」。
-   **本轮未修** —— 它改的是另一个工程文件，与本批次其余改动不同域，留给发布前的验收批次。
+3. **值不值得修** —— **卫生修已做（2026-08-28），但不以「会被驳回」为理由**。理由是「两个不同
+   平台的产物共用一个身份本来就是错的，且修它几乎不要钱」。
+   落地方式：`CodeSigning.xcconfig` 拆出 `RUNTIME_VIEWER_MOBILE_SERVER_BUNDLE_IDENTIFIER`
+   （`com.MxIris.RuntimeViewerMobileServer`），`RuntimeViewerMobileServer` 的四个 build
+   configuration 改指它；macOS 那个 target 的四个配置不动。`custom.xcconfig.example` 同步补上
+   覆盖示例。**改动安全的依据**：全仓库对 `com.MxIris.RuntimeViewerServer` 的引用只有 xcconfig
+   定义本身一处，没有任何代码、plist 或 entitlements 依赖这个字面量（payload 查找走文件名与 URL，
+   `Bundle(identifier:)` 零使用）。
 4. **以前修过吗** —— `1d402ceb` 把 identifier 收进 xcconfig 变量，但从未涉及这两个 server target 的
    拆分。当前写法是「只有一个 target 时正确、加第二个时没人重新审视」的产物，不是有意为之。
 
@@ -258,11 +262,32 @@ damage"*。防护落在了对外广播名（`PR106.10`）上，宿主侧这三�
 **如果 mDNSResponder 把「goodbye + 重新注册」合并成一次 TXT 更新，宿主将完全看不到新 pid，
 永远不会重连。**
 
-**状态：机制可信，行为未实测。** 静态判不出走哪条路 —— 取决于 goodbye 包与新注册的到达顺序。
+**已修（2026-08-28）**，但要分清修了什么、没修什么：
 
-**下一步**：真机/模拟器上杀掉对端 app 再启动，观察 `browseResultsChangedHandler` 收到的是
-`.removed` + `.added` 还是 `.changed`。无论 `PR106X.2` 修不修，**补上 `.changed` 分支
-（`flags` 含 `.metadataChanged` 且 `uniqueKey` 变了时等价于 removed + added）都是该做的**。
+- **已修**：`.changed` 分支补上了。判据**不看 flags**（`.metadataChanged` 对任何 TXT 编辑都会置位，
+  包括不动进程身份的那种），而是比较新旧两端的 `uniqueKey`：变了就等价于 `onRemoved(旧)` +
+  `onAdded(新)`，没变就只记一条 debug 日志。
+- **仍未实测**：`.changed` 究竟会不会在真实的对端重启中触发，仍取决于 mDNSResponder 把
+  「goodbye + 重新注册」如何呈现，静态判不出。**这条分支目前有可能是死代码。**
+- 之所以照修不误：若它不触发，新增分支无害；若它触发，修掉的是「宿主永远看不到新 pid」这个
+  严重问题。两份复核都判定「无论如何都该补」。
+
+**这条修复实际改变了什么，追到底是这样**（不追清楚就等于又交一个半成品）：`onRemoved` 在
+`RuntimeEngineManager` 里**是个刻意的空实现**（`_ = self`），因为 listener 在接受连接后取消会让
+Bonjour 服务反复注销、端点抖动，照着 removal 动手会误杀只是在抖的对端。所以真正起作用的是
+`onAdded`：**宿主因此能连上重启后的新 pid**。指向死进程的那一行仍旧靠心跳自然消失（约 90 秒），
+与 `PR106X.2` 已裁决接受的行为一致 —— 本条修的是「够不到新进程」，不是「旧行残留」。
+仍然传 `previous` 是为了将来：若 removal 日后长出行为，它必须作用在旧键上。
+
+**判断逻辑做成了可测的接缝**而不是埋在闭包里：`RuntimeNetworkEndpoint.metadataChange(from:to:)`
+是纯函数，返回 `.replacesEndpoint` / `.sameEndpoint`。四条测试覆盖：对端重启（同名、同设备、
+不同 pid）、纯元数据变动、旧对端升级后开始发布 TXT 键、两端都无 TXT 键。
+
+**做过变异验证**：把判据从 `uniqueKey` 换成 `name`（也就是那个会重新引入 bug 的写法——服务名重启后
+恰恰不变），测试套件退出码变 1，「重启后判为替换」那条直接变红。**这条测试不是同义反复。**
+
+**下一步（仍未做）**：真机或模拟器上杀掉对端 app 再启动，观察 `browseResultsChangedHandler`
+收到的到底是 `.removed` + `.added` 还是 `.changed`，据此判定新分支是活代码还是死代码。
 
 **横向排查**：`NWBrowser` 全仓库只有这一个消费点，无同类实例。
 

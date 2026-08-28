@@ -145,6 +145,18 @@ pbxproj 新增的 "Embed iOS Simulator Payload" 构建阶段在 payload 缺失�
 发布方在发布前不会被拦（运行时用户会正常收到 `serverFrameworkNotFound`，那条路径本身是对的）。
 建议在 `--upload-to-github` 路径上把这个 warning 升级为 fail。
 
+**已修（2026-08-28）**，加了两道闸而不是一道：
+
+1. `ArchiveScript.sh` 引入 `PUBLISHING`（`--upload-to-github` / `--update-appcast` / `--commit-push`
+   任一即为真）。payload 构建失败时，本地构建仍只 warn（少的只是模拟器注入这一项能力），
+   **发布运行直接 fail**。
+2. 更硬的一道：导出之后**直接检查 `.app` 里有没有** `Contents/Resources/
+   RuntimeViewerServer-iphonesimulator.framework`，没有就拒绝发布。这一道检查的是产物本身而不是
+   中间步骤，所以连「嵌入阶段压根没跑」也一起挡住了 —— 那个阶段缺 payload 时同样是 `warning:`
+   加 `exit 0`，从退出码上看和成功一模一样。
+
+与 `PR106X.5`（陈旧 payload 被当新品嵌入）是同一域的两面：那条管「别发旧的」，这条管「别发缺的」。
+
 ## 构建与测试说明
 
 本分支**必须**用 `USING_LOCAL_DEPENDENCIES=1` 构建。按声明的远程 pin 解析会失败：
