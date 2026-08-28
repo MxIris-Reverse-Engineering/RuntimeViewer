@@ -18,6 +18,12 @@ public final class AppDefaults: @unchecked Sendable {
     fileprivate static let shared = AppDefaults()
 
     private init() {
+        // Not a bookmark concern, but it belongs to the same one-time rekeying
+        // and has to happen before a sidebar writes under its new key — which
+        // it does shortly after this type is first resolved, since the sidebar
+        // ViewModels reach for `@Dependency(\.appDefaults)` on the way up.
+        SidebarAutosaveKeyCleanup.runIfNeeded(flagKey: Self.sidebarAutosaveCleanupFlagKey)
+
         let applicationSupportURL = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
             .appendingPathComponent("AppStorage", isDirectory: true)
@@ -25,6 +31,8 @@ public final class AppDefaults: @unchecked Sendable {
         migrateFlatBookmarkArraysIfNeeded(in: applicationSupportURL)
         migrateBookmarksToScopeKeysIfNeeded(in: applicationSupportURL)
     }
+
+    static let sidebarAutosaveCleanupFlagKey = "sidebarAutosaveKeyCleanupCompleted"
 
     @UserDefault(key: "generationOptions", defaultValue: .init())
     public var options: RuntimeObjectInterface.GenerationOptions

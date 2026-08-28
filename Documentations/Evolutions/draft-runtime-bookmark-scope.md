@@ -1,13 +1,13 @@
 # Draft - RuntimeBookmarkScope：把持久化身份从显示名手里拿走
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-08-27
 - **最后更新**: 2026-08-28
 - **所属愿景**: 无
 - **关联提案**: [0013](0013-inject-ios-simulator-process.md)（本提案处理它暴露出的持久化身份问题）
 - **实现分支 / PR**: `feature/runtime-bookmark-scope`（从 `feature/inject-ios-simulator-process` 分出）
-- **配套文档**: 待定 —— 落地时登记实现说明的链接
+- **配套文档**: [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §2.3.1 与 `buildEngineDescriptors` 字段表（同批次更新）
 
 ## 摘要
 
@@ -482,10 +482,28 @@ descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹
     为本机进程定义一个稳定身份（bundle identifier 是显然的候选，但那要改注入侧的记账格式，是独立
     取舍）。记账，不默默略过。
 
+30. **旧 autosave 键的清理时机定为「迁移时一并做」。**「尚未决定」里留的两个选项，按「取简单者」
+    选了后者：`SidebarAutosaveKeyCleanup` 由 `AppDefaults` 的迁移序列在第一次解析该依赖时跑一次，
+    带自己的 `UserDefaults` 开关。时序上够早——sidebar 的 ViewModel 在构造时就取
+    `@Dependency(\.appDefaults)`，早于任何 `NSOutlineView` 写入新键。
+
+    清理判据是「键里同时含 `com.JH.RuntimeViewer.` 与 `.autosaveName.`」，因为 AppKit 会把我们给的
+    名字包一层（列宽是 `NSTableView Columns <name>`，展开状态是 `NSOutlineView Items <name>`），
+    单纯的前缀匹配一个都命中不了。
+
+    **它必须只跑一次，不能做成每次启动都扫。** 落到 legacy scope 的对端会持续用显示名当键写入，
+    那是当前状态而非残留；反复清扫等于每次启动都删掉活数据。
+
+31. **架构文档同批次更新**：`CommunicationAndEngineArchitecture.md` 新增 §2.3.1 说明「连接身份 vs
+    落盘身份」，并在 `buildEngineDescriptors` 的字段清单里补上 `bookmarkScopeIdentity` 与它的
+    双向兼容性。不另写实现说明——本提案已经涵盖取舍，再开一份只会分散权威来源。
+
+32. **不新建术语表。** 按 evolution 流程要求显式裁决：本轮唯一的新术语是 `RuntimeBookmarkScope`，
+    它在架构文档 §2.3.1 已有完整定义、在本提案有完整取舍，项目至今没有 `Glossary.md`。为一个条目
+    新开一份术语表只是多一个要维护的索引，权威来源反而分散。**下次再引入跨文档复用的术语时再建。**
+
 ### 尚未决定
 
-- 旧 autosave 键的**清理时机**（启动时扫一次 vs 迁移时一并做）—— 实现时按简单者取，两种都不改变
-  外部行为。
 - `PR106.14` 的 UDID 隐私提案落地后，版本号从 `v1` 到 `v2` 的具体迁移规则 —— 等那个提案定稿。
 - 注入本机 App 的引擎用进程号做 identifier（见「实现期修正」第 29 条）—— 需要先定一个稳定的本机
   进程身份，本提案不做。
