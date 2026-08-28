@@ -139,6 +139,61 @@ struct BonjourProcessIdentityTests {
         #expect(first.uniqueKey != second.uniqueKey)
     }
 
+    // MARK: - `.changed` browse results
+
+    /// The regression this branch exists for. A peer that restarts keeps its
+    /// service instance name — that was made launch-stable on purpose — and
+    /// moves only its pid, inside the TXT record. `NWBrowser` reports that as a
+    /// change to an existing result, not as a removal plus an addition, so a
+    /// browser that only handles `.added` / `.removed` never learns the old pid
+    /// is dead or that a new one is live.
+    ///
+    /// Note what this pins down: the decision must key on ``uniqueKey``, not on
+    /// the service name. The name is identical on both sides here, so a rule
+    /// that compared names would call this "same endpoint" and reintroduce the
+    /// bug.
+    @Test("A relaunched peer is classified as a replacement")
+    func relaunchedPeerReplacesEndpoint() {
+        let before = Self.endpoint(name: "JHs-iPhone (SpringBoard)", deviceID: "DEVICE-A", processName: "SpringBoard", processIdentifier: "42475")
+        let after = Self.endpoint(name: "JHs-iPhone (SpringBoard)", deviceID: "DEVICE-A", processName: "SpringBoard", processIdentifier: "58675")
+
+        #expect(before.name == after.name)
+        #expect(RuntimeNetworkEndpoint.metadataChange(from: before, to: after) == .replacesEndpoint)
+    }
+
+    /// `.metadataChanged` fires for any TXT edit. A host name that resolves
+    /// late — the exact shape `resolvedHostName()` produces on a cold mDNS
+    /// cache — must not be mistaken for the process going away.
+    @Test("Metadata moving without a new process holds the endpoint")
+    func metadataOnlyChangeKeepsEndpoint() {
+        let before = Self.endpoint(name: "iPhone (RuntimeViewer)", deviceID: "DEVICE-A", processName: "RuntimeViewer", processIdentifier: "42475")
+        let after = Self.endpoint(name: "iPhone (RuntimeViewer)", deviceID: "DEVICE-A", processName: "RuntimeViewer", processIdentifier: "42475")
+
+        #expect(RuntimeNetworkEndpoint.metadataChange(from: before, to: after) == .sameEndpoint)
+    }
+
+    /// A peer upgrading in place starts publishing the TXT keys it did not have
+    /// before, so its key moves from the service name to `{deviceID}-{pid}`.
+    /// That is a genuine identity change and has to be handled as one, or the
+    /// host keeps the pre-upgrade entry forever.
+    @Test("A peer that starts publishing the TXT keys replaces its old entry")
+    func peerAdoptingTXTKeysReplacesEndpoint() {
+        let before = Self.endpoint(name: "JHs-iPhone")
+        let after = Self.endpoint(name: "JHs-iPhone", deviceID: "DEVICE-A", processName: "RuntimeViewer", processIdentifier: "42475")
+
+        #expect(RuntimeNetworkEndpoint.metadataChange(from: before, to: after) == .replacesEndpoint)
+    }
+
+    /// Two peers that publish no TXT keys at all are still keyed by name, so a
+    /// change between them is not an identity change.
+    @Test("Legacy peers without TXT keys hold their entry")
+    func legacyPeerWithoutTXTKeysKeepsEndpoint() {
+        let before = Self.endpoint(name: "JHs-iPhone")
+        let after = Self.endpoint(name: "JHs-iPhone")
+
+        #expect(RuntimeNetworkEndpoint.metadataChange(from: before, to: after) == .sameEndpoint)
+    }
+
     @Test("Local device ID is non-empty and stable")
     func localDeviceID() {
         let deviceID = RuntimeNetworkBonjour.localDeviceID

@@ -398,6 +398,31 @@ public struct RuntimeNetworkEndpoint: Sendable, Hashable {
         return "\(deviceID)-\(processIdentifier)"
     }
 
+    /// What a `.changed` browse result means for the endpoint list.
+    public enum MetadataChange: Equatable, Sendable {
+        /// The advertisement now describes a *different* process: the old
+        /// endpoint is gone and a new one has taken its place.
+        case replacesEndpoint
+        /// Same process; some other published field moved.
+        case sameEndpoint
+    }
+
+    /// Classifies a `.changed` browse result by whether the peer's *identity*
+    /// moved — not by which flags `NWBrowser` set, because `.metadataChanged`
+    /// fires for any TXT edit, including ones that leave the process alone.
+    ///
+    /// This exists because `.changed` is now the ordinary shape of a peer
+    /// relaunching. The advertised name was deliberately made launch-stable, so
+    /// a restarted process keeps its service instance name and moves only its
+    /// TXT record — which `NWBrowser` reports as a change to an existing
+    /// result rather than a removal followed by an addition.
+    public static func metadataChange(
+        from previous: RuntimeNetworkEndpoint,
+        to current: RuntimeNetworkEndpoint
+    ) -> MetadataChange {
+        previous.uniqueKey == current.uniqueKey ? .sameEndpoint : .replacesEndpoint
+    }
+
     init(
         name: String,
         instanceID: String? = nil,
@@ -482,6 +507,39 @@ public class RuntimeNetworkBrowser {
                         let removed = RuntimeNetworkEndpoint(name: name, result: result)
                         #log(.info, "Endpoint removed: \(name, privacy: .public), key: \(removed.uniqueKey, privacy: .public)")
                         onRemoved(removed)
+                    }
+                case .changed(let oldResult, let newResult, _):
+                    // Dropping this case used to be harmless: while the service
+                    // name carried the pid, a relaunched peer arrived under a
+                    // new *name* and so as .removed + .added. The name is now
+                    // launch-stable on purpose, so a relaunch moves only the
+                    // TXT record — which arrives here, not there. Ignoring it
+                    // leaves the host attached to a dead pid and blind to the
+                    // live one.
+                    guard case .service(let oldName, _, _, _) = oldResult.endpoint,
+                          case .service(let newName, _, _, _) = newResult.endpoint
+                    else { break }
+                    let previous = RuntimeNetworkEndpoint(name: oldName, result: oldResult)
+                    let current = RuntimeNetworkEndpoint(name: newName, result: newResult)
+                    switch RuntimeNetworkEndpoint.metadataChange(from: previous, to: current) {
+                    case .replacesEndpoint:
+                        #log(.info, "Endpoint replaced in place: \(previous.uniqueKey, privacy: .public) -> \(current.uniqueKey, privacy: .public)")
+                        // Reported as removal-then-arrival because that is what
+                        // it is. Note what the host actually does with each
+                        // today: `onRemoved` is deliberately inert — a listener
+                        // cancelled after accepting a connection de-registers
+                        // the service, so acting on a removal would drop a peer
+                        // that is merely flapping — and the reconnect is driven
+                        // entirely by `onAdded`. So this restores the host's
+                        // ability to *reach* the new process; the entry for the
+                        // dead one goes away on its own when the heartbeat
+                        // expires, which is the behaviour already accepted in
+                        // PR106X.2. Passing `previous` still matters: if
+                        // removal ever grows teeth, it must bite the old key.
+                        onRemoved(previous)
+                        onAdded(current)
+                    case .sameEndpoint:
+                        #log(.debug, "Endpoint metadata changed but identity held: \(current.uniqueKey, privacy: .public)")
                     }
                 default:
                     break
