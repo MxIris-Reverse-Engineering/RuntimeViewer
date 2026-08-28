@@ -123,7 +123,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+PUBLISHING=false
 if $UPLOAD_TO_GITHUB || $UPDATE_APPCAST || $COMMIT_PUSH; then
+    PUBLISHING=true
     [[ -z "$VERSION_TAG" ]] && fail "--version-tag required when --upload-to-github / --update-appcast / --commit-push is set"
 fi
 
@@ -349,6 +351,13 @@ if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     # contradicts it two lines later. Removing the directory also covers the
     # phase's BUILD_DIR fallback, which resolves to this same path.
     rm -rf "$SIMULATOR_PAYLOAD_PATH"
+    # A local build may legitimately ship without the payload — only injecting
+    # simulator processes is lost. A publishing run may not: the artefact goes
+    # out to people who cannot tell it is missing until injection fails on
+    # their machine.
+    if $PUBLISHING; then
+        fail "iOS Simulator payload failed to build; refusing to publish without it (drop --upload-to-github / --update-appcast / --commit-push to build locally anyway)"
+    fi
 fi
 
 log "Archiving main app"
@@ -372,6 +381,17 @@ XCODEBUILD_LOG_NAME="export-main" run_piped xcodebuild -exportArchive \
 
 APP_PATH=$(find "$EXPORT_PATH" -maxdepth 1 -type d -name '*.app' | head -1)
 [[ -n "$APP_PATH" && -d "$APP_PATH" ]] || fail "expected exported *.app under $EXPORT_PATH"
+
+# Check the shipped bundle, not the intermediate step that was supposed to fill
+# it. The embed phase reports a missing payload with `warning:` and exits 0, so
+# a build where it never ran — or ran against a source that had just been
+# cleared — reaches here looking exactly like a successful one.
+if $PUBLISHING; then
+    EMBEDDED_SIMULATOR_PAYLOAD="$APP_PATH/Contents/Resources/RuntimeViewerServer-iphonesimulator.framework"
+    [[ -d "$EMBEDDED_SIMULATOR_PAYLOAD" ]] \
+        || fail "exported app carries no iOS Simulator payload at $EMBEDDED_SIMULATOR_PAYLOAD; refusing to publish"
+    log "Verified embedded iOS Simulator payload"
+fi
 
 if ! $SKIP_NOTARIZATION; then
     log "Notarizing"
