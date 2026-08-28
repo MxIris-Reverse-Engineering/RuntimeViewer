@@ -9,7 +9,7 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     public override init(imageNode: RuntimeImageNode, documentState: DocumentState, router: any Router<SidebarRuntimeObjectRoute>) {
         super.init(imageNode: imageNode, documentState: documentState, router: router)
 
-        appDefaults.$objectBookmarksBySourceAndImagePath
+        appDefaults.$objectBookmarksByScopeAndImagePath
             .asObservable()
             .subscribeOnNext { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -25,12 +25,12 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
     
     private var currentImageObjectBookmarks: [RuntimeObjectBookmark] {
         set {
-            var dict = appDefaults.objectBookmarksBySourceAndImagePath
-            dict[documentState.runtimeEngine.source, default: [:]][imagePath] = newValue
-            appDefaults.objectBookmarksBySourceAndImagePath = dict
+            var dict = appDefaults.objectBookmarksByScopeAndImagePath
+            dict[documentState.runtimeEngine.bookmarkScope.bookmarkKey, default: [:]][imagePath] = newValue
+            appDefaults.objectBookmarksByScopeAndImagePath = dict
         }
         get {
-            appDefaults.objectBookmarksBySourceAndImagePath[documentState.runtimeEngine.source, default: [:]][imagePath, default: []]
+            appDefaults.objectBookmarksByScopeAndImagePath[documentState.runtimeEngine.bookmarkScope.bookmarkKey, default: [:]][imagePath, default: []]
         }
     }
     
@@ -61,13 +61,13 @@ public final class SidebarRuntimeObjectBookmarkViewModel: SidebarRuntimeObjectVi
 
         return Output(
             isMoveBookmarkEnabled: $isFiltering.asDriver().not(),
-            isBookmarkEmpty: appDefaults.$objectBookmarksBySourceAndImagePath.asDriver(onErrorJustReturn: [:]).map { [weak self] _ in self?.currentImageObjectBookmarks.isEmpty ?? true }
+            isBookmarkEmpty: appDefaults.$objectBookmarksByScopeAndImagePath.asDriver(onErrorJustReturn: [:]).map { [weak self] _ in self?.currentImageObjectBookmarks.isEmpty ?? true }
         )
     }
 }
 
 extension RuntimeObjectBookmark: @retroactive OutlineNodeType {
-    public var children: [RuntimeObjectBookmark] { object.children.map { .init(source: source, object: $0) } }
+    public var children: [RuntimeObjectBookmark] { object.children.map { .init(object: $0) } }
 }
 
 

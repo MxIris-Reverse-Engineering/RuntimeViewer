@@ -14,7 +14,8 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
         @Dependency(\.appDefaults)
         var appDefaults
 
-        let nodesSource = appDefaults.$imageBookmarksByRuntimeSource.map { $0[documentState.runtimeEngine.source, default: []].map(\.imageNode) }
+        let bookmarkKey = documentState.runtimeEngine.bookmarkScope.bookmarkKey
+        let nodesSource = appDefaults.$imageBookmarksByScope.map { $0[bookmarkKey, default: []].map(\.imageNode) }
 
         super.init(documentState: documentState, router: router, nodesSource: nodesSource)
     }
@@ -33,31 +34,32 @@ public final class SidebarRootBookmarkViewModel: SidebarRootViewModel {
     public func transform(_ input: Input) -> Output {
         input.moveBookmark.emitOnNext { [weak self] outlineMove in
             guard let self else { return }
-            var bookmarks = appDefaults.imageBookmarksByRuntimeSource
-            var sourceBookmarks = bookmarks[documentState.runtimeEngine.source, default: []]
-            outlineMove.applyToRoots(&sourceBookmarks)
-            bookmarks[documentState.runtimeEngine.source] = sourceBookmarks
-            appDefaults.imageBookmarksByRuntimeSource = bookmarks
+            let bookmarkKey = documentState.runtimeEngine.bookmarkScope.bookmarkKey
+            var bookmarks = appDefaults.imageBookmarksByScope
+            var scopedBookmarks = bookmarks[bookmarkKey, default: []]
+            outlineMove.applyToRoots(&scopedBookmarks)
+            bookmarks[bookmarkKey] = scopedBookmarks
+            appDefaults.imageBookmarksByScope = bookmarks
         }
         .disposed(by: rx.disposeBag)
 
         input.removeBookmark
             .emitOnNext { [weak self] index in
                 guard let self else { return }
-                var bookmarks = appDefaults.imageBookmarksByRuntimeSource
-                bookmarks[documentState.runtimeEngine.source, default: []].remove(at: index)
-                appDefaults.imageBookmarksByRuntimeSource = bookmarks
+                var bookmarks = appDefaults.imageBookmarksByScope
+                bookmarks[documentState.runtimeEngine.bookmarkScope.bookmarkKey, default: []].remove(at: index)
+                appDefaults.imageBookmarksByScope = bookmarks
             }
             .disposed(by: rx.disposeBag)
         return Output(
             isMoveBookmarkEnabled: $isFiltering.asDriver().not(),
-            isBookmarkEmpty: appDefaults.$imageBookmarksByRuntimeSource.asDriver(onErrorJustReturn: [:]).map { $0[self.documentState.runtimeEngine.source, default: []].isEmpty }
+            isBookmarkEmpty: appDefaults.$imageBookmarksByScope.asDriver(onErrorJustReturn: [:]).map { $0[self.documentState.runtimeEngine.bookmarkScope.bookmarkKey, default: []].isEmpty }
         )
     }
 }
 
 extension RuntimeImageBookmark: @retroactive OutlineNodeType {
-    public var children: [RuntimeImageBookmark] { imageNode.children.map { .init(source: source, imageNode: $0) } }
+    public var children: [RuntimeImageBookmark] { imageNode.children.map { .init(imageNode: $0) } }
 }
 
 
