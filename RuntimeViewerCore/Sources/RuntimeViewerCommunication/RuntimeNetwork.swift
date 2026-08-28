@@ -208,7 +208,9 @@ public enum RuntimeNetworkBonjour {
     ///
     /// Same composition as ``localServiceName``, but sourced from
     /// ``resolvedHostName()`` so an iOS device advertises
-    /// `"JH's iPhone (RuntimeViewer)"` rather than `"iPhone (RuntimeViewer)"`.
+    /// `"JHs-iPhone (RuntimeViewer)"` rather than `"iPhone (RuntimeViewer)"` —
+    /// the mDNS form, with the punctuation and spaces of the user-facing device
+    /// name already stripped by the reverse lookup.
     /// Only a host predating the TXT keys reads this string — a current one
     /// takes the device name from ``hostNameKey`` — but that host puts it in
     /// its window title and its sidebar autosave keys, so the difference

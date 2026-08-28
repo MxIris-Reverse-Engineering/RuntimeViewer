@@ -35,10 +35,21 @@ UDID 隐私、`PR106.15` / `PR106.16`）直接跳过，不再重走四问。
 | ID | 严重度 | 摘要 | 修复 | 复现测试 |
 |---|---|---|---|---|
 | PR106X.3 | Minor | `localServiceName` 用 `localHostName` 组合广播名，而该属性自己的文档就写着「对外可见的服务名请用 `resolvedHostName()`」。iOS 真机上 `gethostname` 为空/`localhost` 时回退到 `UIDevice.current.name`，无 `user-assigned-device-name` entitlement 即机型名 —— 旧宿主把它同时用作窗口标题**和** sidebar autosave 键 | 新增 `resolvedServiceName()`，把会退化的两个调用点（iOS app 自身广播、注入 payload 的 Bonjour 分支）切过去；`localServiceName` 保留给 macOS 宿主（`SCDynamicStoreCopyComputerName` 不退化）与测试 | `resolvedServiceNameUsesResolvedHostName` |
-| PR106X.5 | Minor | 模拟器 payload 编译失败时脚本只打 `warning:`，`SIMULATOR_PAYLOAD_PATH` 仍无条件传给主 app 构建。DerivedData 路径固定复用、编译失败不清旧产物，于是嵌入阶段 `-d` 判真、`ditto` 陈旧 framework 进包并打印「Embedded iOS Simulator payload」，与两行前的 warning 直接矛盾 | 失败分支 `rm -rf "$SIMULATOR_PAYLOAD_PATH"`（`RunScript.sh` 需先把赋值上提到 `if` 之前）。**光把变量置空不够** —— 嵌入阶段在变量为空时会回退到 `BUILD_DIR` 下的同一路径，必须真的删掉目录 | — （脚本层，无单测接缝） |
+| PR106X.5 | Minor | 模拟器 payload 编译失败时脚本只打 `warning:`，`SIMULATOR_PAYLOAD_PATH` 仍无条件传给主 app 构建。DerivedData 路径固定复用、编译失败不清旧产物，于是嵌入阶段 `-d` 判真、`ditto` 陈旧 framework 进包并打印「Embedded iOS Simulator payload」，与两行前的 warning 直接矛盾 | **两处**：脚本失败分支 `rm -rf "$SIMULATOR_PAYLOAD_PATH"`（`RunScript.sh` 需先把赋值上提到 `if` 之前）；嵌入阶段的缺失分支 `rm -rf "${PAYLOAD_DESTINATION}"`。**光把变量置空不够** —— 嵌入阶段在变量为空时会回退到 `BUILD_DIR` 下的同一路径，必须真的删掉目录 | — （脚本层，无单测接缝） |
 | PR106X.7 | Trivial | `Documentations/TaskReports/` 未登记进文档索引，而索引第 3 行自己写着「新增或重命名任何文档都必须同步更新这份索引」 | 索引补目录行 + 三份文件逐条登记。顺带修正同文件里「四份审查发现记录」的陈旧计数（实为 12 份），改为不含计数的描述 | — |
 | PR106X.8 | Trivial | `clearAllForDisconnectedPeer`（`PR106.7` 的修复）插在 `clearAllWithHostID` 的文档块与函数体之间且无空行，两段 `///` 在词法上合并、全部挂到新函数；`clearAllWithHostID` 文档归零，而它仍是 `public` 且被新函数直接调用两次 | 把原文档块搬回 `clearAllWithHostID` 上方 | — |
 | PR106X.9 | Trivial | ``awaitInjectedBonjourEngine(name:processIdentifier:timeout:)`` 引用悬空 —— 同 PR 内 `610e9d9c`（`PR106.3` 的修复）加了 `deviceID:` 却没同步这处 | 补上 `deviceID:` 标签 | — |
+
+**`PR106X.5` 第一版修复不完整，已补**（2026-08-28，由起草后的复核发现）：只清脚本侧的**源**不够。
+嵌入阶段（`alwaysOutOfDate = 1`，每次构建都跑）的缺失分支原本只 warn + `exit 0`，**不清理已经
+`ditto` 进 `.app` 的那一份**。增量构建下 `.app` 在 `Build/Products` 里持续存在，于是：第一次构建
+成功嵌入 → 第二次 payload 编译失败 → 脚本删掉了 DerivedData 里的源 → 嵌入阶段 warn 后退出 →
+**`.app` 里第一次嵌进去的旧 payload 原样留存**。终态与修复前完全相同，也就是说第一版修复没有真正
+修掉 commit message 描述的那个 bug。
+
+补上的一行 `rm -rf "${PAYLOAD_DESTINATION}"` 顺带覆盖了**不经过任何脚本的 Xcode GUI 构建** ——
+那条路径两个脚本都管不到。Archive 路径下 `ArchiveIntermediates` 是否同样残留未验证；`PR106.16` 的
+release gate 落地后 Archive 会直接 fail，与此正交，但它管不到 Debug 路径。
 
 **`PR106X.3` 的两处收窄**（避免下次被当成更严重的问题重报）：
 
@@ -225,9 +236,13 @@ damage"*。防护落在了对外广播名（`PR106.10`）上，宿主侧这三�
 忽略 `name` 的自定义 `Equatable` / `Hashable`，目的正是让持久化身份**与显示名解耦**。本 PR 把显示名
 重新绑回持久化键（虽然是另一处键），与那次决策的意图相悖。
 
-> **待核实的引文**：两份复核对 `917002cc` 的 commit message 说法冲突 —— 一份称
-> `2026-08-24` 那份裁决文件里引的句子不是原文，另一份把它当原文引用。两边对该 commit 的**内容
-> 判断一致**（刻意让身份与名字解耦），仅引文出处存疑。写进提案前需 `git show 917002cc` 核对一次。
+> **引文之争已关闭**（2026-08-28，`git show 917002cc`）：commit body 原文为 *"Also includes: use
+> stable DeviceIdentifier for Bonjour endpoint identity, custom Equatable/Hashable for RuntimeSource
+> (name-independent matching)"*。`2026-08-24` 那份裁决文件引的片段与正文**逐字一致**，只是做了
+> 截取并加着重号。「引的不是原文」的说法不成立。
+>
+> 记一笔教训：这条当初被写进「只能实测」的清单，实际上一条 `git show` 就能了结。**能查的事实
+> 不该以「待核实」的形式留给下一轮。**
 
 ## 未验证（本轮新发现，非原始 10 条之一）
 

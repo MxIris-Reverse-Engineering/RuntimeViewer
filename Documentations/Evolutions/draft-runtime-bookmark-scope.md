@@ -67,9 +67,10 @@
 `Equatable` / `Hashable`，目的正是让持久化身份与显示名解耦。0013 把 pid 塞回键里、把显示名绑回
 autosave 键，撤销了那次决策的目的。本提案是把它重新做对，并且这次做成一个**无法绕过**的类型。
 
-> 待核实：两轮复核对 `917002cc` 的 commit message 引文说法冲突（一份称
-> `2026-08-24-pr106-review-findings.md` 里引的句子不是原文）。两边对该 commit 的内容判断一致，
-> 仅引文出处存疑。写进最终稿前 `git show 917002cc` 核对一次。
+> 已核实（2026-08-28，`git show 917002cc`）：commit body 原文为 *"Also includes: use stable
+> DeviceIdentifier for Bonjour endpoint identity, custom Equatable/Hashable for RuntimeSource
+> (name-independent matching)"*。`2026-08-24-pr106-review-findings.md` 引的片段与正文**逐字一致**，
+> 只是做了截取并加着重号。「引的不是原文」的说法不成立，争议关闭。
 
 ## 前期调研
 
@@ -134,17 +135,34 @@ autosave 键，撤销了那次决策的目的。本提案是把它重新做对�
 
 | 来源 | scope 构成 |
 |---|---|
-| `.local` | 固定值 |
+| `.local` | 固定字面量 `local` |
 | `.remote`（XPC） | 已有的 `Identifier`（如 `com.RuntimeViewer.RuntimeSource.MacCatalyst`，本来就稳定） |
 | `.localSocket` | 已有的 `Identifier` |
-| `.directTCP` | host + port |
+| `.directTCP` | port + host（顺序见下 —— host 可以是含 `:` 的 IPv6 字面量） |
 | `.bonjour` | **deviceID + processName** |
 
-`role`（client / server）**进 scope**，与今天 `RuntimeSource` 的相等性语义一致，迁移时能 1:1
-对得上，不会出现「两个旧键映射到同一个新 scope」而需要定义合并规则的边界情况。
+`role`（client / server）**进 scope**，`.directTCP` 也包括在内（今天 `RuntimeSource.==` 对它比较
+的正是 host + port + role）。理由是与现有相等性语义一致，非 Bonjour 的旧键因此能 1:1 映射。
 
-**落盘表示是可读的、带格式版本号的字符串**，例如 `v1:bonjour:<deviceID>:<processName>`。版本号
-现在就留好，理由见「与 UDID 隐私提案的交互」。
+> **但 role 进 scope 并不能免掉合并规则。** 起草时曾这样论证，那是错的：磁盘上按 pid 累积的死
+> 记录，deviceID、processName、role 全都相同、只有 pid 不同，会全部映射到同一个新 scope。role
+> 挡掉的只是 client / server 合并那一种。合并规则见「6. 迁移」。
+
+**落盘表示是可读的、带格式版本号的字符串。** 格式与解析规则必须一次定死，因为它**需要被反向
+解析**——本提案自己预留的 v1 → v2 迁移（UDID 哈希化）就要从 v1 字符串里取出 deviceID 段再哈希：
+
+- 段以 `:` 分隔，段序固定为 `<版本>:<种类>:<role>:<其余>`。
+- 前三段保证不含 `:`（都是本项目定义的字面量集合）。
+- **「其余」由每个种类自己定义，且除最后一个子段外都保证不含 `:`；最后一个子段吞掉剩余全部内容**，
+  不再继续切分。于是无需任何转义：
+  - `.bonjour` → `<deviceID>:<processName>`。deviceID 是 UUID 形状、不含 `:`；`processName` 落在
+    吞尾段，可以含 `:`、空格与非 ASCII。
+  - `.directTCP` → `<port>:<host>`。**port 在前**是为了让可能含 `:` 的 IPv6 host 落到吞尾段；
+    port 是纯数字，无歧义。
+  - `.remote` / `.localSocket` → 已有的 `Identifier`，整体落在吞尾段。
+  - `.local` → 空。
+- 反向解析保证能取出前三段与「其余」，以及「其余」的第一个子段。v1 → v2 只需要动 `.bonjour` 的
+  deviceID，它正是那个第一子段。
 
 ### 2. 身份怎么到达 scope —— 不动 `RuntimeSource`
 
@@ -156,11 +174,26 @@ autosave 键，撤销了那次决策的目的。本提案是把它重新做对�
 - **本机直连的 Bonjour client**：`RuntimeEngineManager` 从 `RuntimeNetworkEndpoint` 现成的
   `deviceID` / `processName` 字段构造，engine 创建时一并传入。
 - **镜像引擎**：从 descriptor 的新字段构造。
-- **旧对端的镜像引擎**（descriptor 缺字段）：回退到从 `name` / `Identifier` 尽力解析；解析不出
-  形状时退回今天的行为（用现有 identifier 字符串作为 legacy scope），并记日志。**不比现状更差**
-  是这条回退的验收标准。
+- **旧对端的镜像引擎**（descriptor 缺字段）：先试着从 `name` 解析「设备名 (进程名)」形状；解析
+  不出时落到 legacy scope，**且两个消费点的 legacy 取值必须分别定义**——起草时笼统写成「退回
+  今天的行为（用现有 identifier 字符串）」，括号内外说的其实是两件事：
+  - **书签**用 `source.identifier`。它今天就是书签键的来源，取值不变即行为不变。
+  - **sidebar autosave 键**用 `source.description`（显示名）。**绝不能用 `source.identifier`**
+    ——0013 之后 Bonjour client 的 identifier 含 pid，那样等于把 `PR106.10` 刚修掉的「每次启动换
+    一套键并永久累积」搬进 sidebar，正是「替代方案考量」里痛斥的那个错误修法。
+  - 验收标准「不比现状更差」按上面两条**逐个消费点**判定，不是笼统一句。
 
 这样 sidebar 与书签的读取点都改为读 `runtimeEngine.bookmarkScope`，不再碰 `source.description`。
+
+**已知并接受的缺口：跨主机镜像的非 Bonjour 引擎会撞 scope。** `.remote` / `.localSocket` 的 scope
+取「已有的 `Identifier`」，而那是每台机器上都相同的常量（如
+`com.RuntimeViewer.RuntimeSource.MacCatalyst`）。A、B 两台 Mac 的 Catalyst 引擎镜像到同一个宿主时
+会落进同一个 scope，书签与展开状态互串。
+
+**现状（用 `RuntimeSource` 做键）就已经这样，不是本提案引入的。** descriptor 上现成的 `hostID` 能
+给镜像引擎的 scope 补一个 origin host 维度来根治，但那需要先为「同一个引擎，直连时与被镜像时」
+定义 scope 是否相同——不同则跨主机看同一台机器会看到两份书签。那是一个独立的取舍，不塞进本提案。
+**记账，不默默略过。**
 
 ### 3. 书签存储换一层薄封装
 
@@ -195,6 +228,10 @@ source 分组」的迁移代码）一并处理。
 - 非 Bonjour 的源：1:1 映射。
 - Bonjour 的源：deviceID 从 `Identifier` 前缀取，processName 从磁盘键里那个 `name` 字段取 ——
   **但只在 `name` 形如「设备名 (进程名)」时才解析**，否则当作无法迁移，丢弃并记日志。
+- **合并规则（必须有，不是边界情况）**：多条旧键落进同一个新 scope 是**常态**而非例外——按 pid
+  累积的死记录（`PR106.1` 点名的那种，`next` 上的用户磁盘就有）deviceID、processName、role 全都
+  相同，只有 pid 不同。规则定为：**按旧键在磁盘上的出现顺序取并集，逐项去重**（用书签自身的相等性
+  判定），先出现的排在前。不做「保留最新一条」之类的裁决——磁盘上没有时间戳，无从判断新旧。
 - 丢弃的条目**只记日志，不打扰用户**：旧文件本来就保留不删，事后可查可救；启动时弹窗说「几条
   书签没迁过来」对用户没有可操作性，只是制造焦虑。
 - 迁移代码**永久保留**，沿用项目现有做法（早年那次迁移至今仍在，带 `@available(deprecated)` 标记）。
@@ -218,11 +255,26 @@ source 分组」的迁移代码）一并处理。
 这条一度已经作为建议发出去过，是第二份独立复核拦下来的 —— 记在这里，因为它说明**对修法的复核
 和对发现的复核同等重要**。
 
-**给 `RuntimeSource.bonjour` 加结构化字段 —— 否决。**
-概念上最干净（身份集中在一处），一度也是选定方案，直到查出 `RuntimeSource` 会跟着
-`RuntimeRemoteEngineDescriptor` 在对端之间互推。加关联值会改变编码形状，而 iOS 端有外部用户、
-混版是常态。手写向后兼容的 `init(from:)` 可以解决，但那段回退解析正是本提案要消灭的东西，为了
-兼容把它写进来并长期保留，得不偿失。
+**给 `RuntimeSource.bonjour` 加结构化字段 —— 否决，但理由不是兼容性。**
+
+概念上最干净（身份集中在一处），一度也是选定方案。
+
+> **起草时给的否决理由是错的，原样留在这里作为记录。** 当时写的是：`RuntimeSource` 跟着
+> `RuntimeRemoteEngineDescriptor` 在对端之间互推，加关联值会改变编码形状、**混版时旧对端解不了**。
+> 走线这个事实成立，推论不成立——复核做了空白实验（合成 `Codable` 的 enum，给 case 加两个
+> Optional 关联值，模拟新旧两版互解）：新版解旧数据，缺失键得到 `nil`，成功；旧版解新数据，多余
+> 键被忽略，成功。**加 Optional 关联值是双向兼容的，且不需要手写 `init(from:)`**；`RuntimeSource`
+> 是纯合成 `Codable`（全仓库无手写 `init(from:)`），实验适用。当时甚至把风险方向说反了——keyed
+> container 忽略多余键在任何版本都成立，有风险的方向本来是「新解旧」，而 Optional 正好化解了它。
+
+**真正的否决理由是相等性两难。** `RuntimeSource` 同时是书签字典的键，它的 `==` / `hash` 是手写的：
+
+- 新字段**不进**相等性：身份仍然要从别处比较，字段只是搭个便车，什么也没解决。
+- 新字段**进**相等性：磁盘上的旧键解码后新字段为 `nil`，与运行时构造的新键不相等——**又一轮全量
+  书签失效，正好重演本提案要修的那个事故**。
+
+descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹配点全仓库 25 处，而 enum case 不支持
+默认参数，全都要跟着改。
 
 **scope 只到设备级 —— 否决。** 最稳、永不失效，但同一设备上多个注入进程的书签会互相串，而多进程
 注入正是 0013 存在的理由。
@@ -284,14 +336,19 @@ source 分组」的迁移代码）一并处理。
 放进 TXT 记录的改造之上，而那个 PR 仍在审查中、仍在变（两轮共 24 条发现，第二轮又改了五处），
 并行开工只会反复 rebase。
 
-拆成三个 PR，每个能独立审查、独立回滚：
+拆成三个 PR，每个能独立审查、独立回滚。**中间态是安全的**：PR ① 合入后没有任何消费点读新字段，
+行为与合入前相同；② 与 ③ 互不依赖，任一个先合都不会让书签或 sidebar 处于半坏状态。
 
 **PR ① 身份层**
 - 新增 `RuntimeBookmarkScope`（`RuntimeViewerCommunication`）及其可读带版本号的字符串表示。
 - `RuntimeRemoteEngineDescriptor` 新增 `@Default` 结构化身份字段。
 - `RuntimeEngine` 持有 scope；`RuntimeEngineManager` 在两条创建路径（endpoint / descriptor）注入。
 - 旧对端的回退解析 + 日志。
-- 测试：scope 构成与字符串往返、旧对端回退、混版双向解码。
+- 测试：scope 构成与字符串往返（含 `processName` 带 `:` / 空格 / 非 ASCII、`.directTCP` 的 IPv6
+  host）、旧对端回退**按消费点分别验证**、混版双向解码。
+- **混版双向解码不需要第二台设备**，不要把它写成需要真机的验收条件：新解旧用手写的旧形状 JSON
+  fixture，旧解新在测试里冻结一份 V1 镜像类型去解新编码。几十行即可，复核已用这个做法跑通。写不成
+  这样，它就容易退化成「同一套类型自编自解」的同义反复。
 
 **PR ② 存储与书签**（依赖 ①）
 - 自写存储薄封装：逐条容错、坡坐备份、诊断日志。
@@ -302,7 +359,8 @@ source 分组」的迁移代码）一并处理。
 **PR ③ sidebar 键**（依赖 ①，不依赖 ②）
 - 四处键站点换 scope。
 - 旧 autosave 键清理。
-- 测试：两个同名进程得到不同的键；清理只命中本项目前缀。
+- 测试：**不同设备上的**同名进程得到不同的键（同一设备上同名进程共享 scope 是本提案显式接受的
+  代价，别把它当 bug 测）；清理只命中本项目前缀。
 
 ## 决策日志
 
@@ -357,13 +415,39 @@ source 分组」的迁移代码）一并处理。
 
 20. **scope 运行时挂在哪**：挂在 `RuntimeEngine` 上，由创建方注入。理由：sidebar 与书签的读取点
     都已经能拿到 `runtimeEngine`，不需要新的传递通道。
-21. **旧对端缺字段时的回退**：尽力从 `name` / `Identifier` 解析；解析不出形状时退回今天的行为
-    （用现有 identifier 字符串作为 legacy scope）并记日志。验收标准是**不比现状更差**。
+21. **旧对端缺字段时的回退**：尽力从 `name` 解析；解析不出形状时落到 legacy scope 并记日志。
+    ~~验收标准是不比现状更差。~~ **本条在起草后的复核中被指出含糊并已改写**——见「2. 身份怎么
+    到达 scope」，legacy 取值现在按消费点分别定义（书签用 `identifier`，sidebar 用 `description`），
+    因为笼统那句的一种读法正好是本提案痛斥的错误修法。
 22. **迁移测试的 fixture**：手写，覆盖已知的历史形状；不使用真实用户文件（避免把设备名与 UDID
     写进仓库，也避免测试依赖某台机器的磁盘状态）。
+
+### 起草后的复核修正（2026-08-28）
+
+草稿完成后交给同项目的另一个会话做只读复核，**它推翻了本提案的一处核心论证**，另有四处补正。
+按「提案是决策快照、不回头修改让它符合实现」的约定，被推翻的原文保留在原处并标注，这里只记修正
+本身：
+
+23. **第五轮的选型依据（17）被实测证伪。** 「给 `RuntimeSource` 加字段会破坏混版兼容」不成立：
+    加 Optional 关联值对合成 `Codable` 是双向兼容的。**结论（不动 `RuntimeSource`）保持不变，
+    但换成一个更硬的理由——相等性两难**，详见「替代方案考量」。这条错误理由如果留着，会传播
+    「加字段必破兼容」这个错误知识。
+24. **「role 进 scope 就不必定义合并规则」的论证是错的。** 按 pid 累积的死记录会全部落进同一个新
+    scope，合并是常态。已在「6. 迁移」补上并集去重的规则。
+25. **落盘字符串格式补齐了解析规则。** 原稿只给了一个例子就往下走，漏了两件事：`.directTCP` 的
+    host 可以是含 `:` 的 IPv6 字面量；以及本提案自己预留的 v1 → v2 迁移**需要反向解析**。已定死
+    段序与「末段吞尾」规则。
+26. **回退语义的歧义已消除**，见修正后的 21。
+27. **新记一个已知缺口**：跨主机镜像的非 Bonjour 引擎会撞 scope（两台 Mac 的 Catalyst 引擎落进同
+    一个常量 `Identifier`）。现状就已如此、非本提案引入，显式声明本轮不处理并写明根治方向。
+
+另外复核替本提案关掉了一处「待核实」（`917002cc` 的引文之争，见「动机」一节），并指出
+「混版双向解码」不需要第二台设备即可测——已写进落地步骤。
 
 ### 尚未决定
 
 - 旧 autosave 键的**清理时机**（启动时扫一次 vs 迁移时一并做）—— 实现时按简单者取，两种都不改变
   外部行为。
 - `PR106.14` 的 UDID 隐私提案落地后，版本号从 `v1` 到 `v2` 的具体迁移规则 —— 等那个提案定稿。
+- 跨主机镜像的非 Bonjour 引擎撞 scope（见「2. 身份怎么到达 scope」的已知缺口）—— 需要先决定
+  「同一个引擎，直连时与被镜像时」是否算同一个 scope，本提案不做。
