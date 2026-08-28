@@ -17,6 +17,24 @@ public struct RuntimeRemoteEngineDescriptor: Hashable, Sendable {
     /// field, in which case the receiver falls back to `originChain.first`.
     @Default("")
     public let hostID: String
+
+    /// The advertised engine's ``RuntimeBookmarkScope`` identity, in the stored
+    /// string form, so a mirror of this engine keys its bookmarks and sidebar
+    /// state exactly as a direct connection to it would.
+    ///
+    /// Carried here rather than folded into ``source`` because `RuntimeSource`
+    /// doubles as the bookmark dictionary's key and hand-writes its own
+    /// `Equatable`. Adding an identity field there forces a choice between
+    /// leaving it out of equality — where it settles nothing — and putting it
+    /// in, which makes every key already on disk (decoding with the field
+    /// absent) unequal to the live one, wiping the bookmarks this identity
+    /// exists to preserve.
+    ///
+    /// Empty when the peer predates this field, in which case the receiver
+    /// falls back to `RuntimeBookmarkScope.recovered(from:)` on `source` alone.
+    @Default("")
+    public let bookmarkScopeIdentity: String
+
     public let hostName: String
     public let originChain: [String]
     public let directTCPHost: String
@@ -29,6 +47,7 @@ public struct RuntimeRemoteEngineDescriptor: Hashable, Sendable {
         engineID: String,
         source: RuntimeSource,
         hostID: String = "",
+        bookmarkScopeIdentity: String = "",
         hostName: String,
         originChain: [String],
         directTCPHost: String,
@@ -39,6 +58,7 @@ public struct RuntimeRemoteEngineDescriptor: Hashable, Sendable {
         self.engineID = engineID
         self.source = source
         self.hostID = hostID
+        self.bookmarkScopeIdentity = bookmarkScopeIdentity
         self.hostName = hostName
         self.originChain = originChain
         self.directTCPHost = directTCPHost

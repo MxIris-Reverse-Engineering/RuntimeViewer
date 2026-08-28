@@ -444,10 +444,50 @@ descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹
 另外复核替本提案关掉了一处「待核实」（`917002cc` 的引文之争，见「动机」一节），并指出
 「混版双向解码」不需要第二台设备即可测——已写进落地步骤。
 
+### 实现期修正（2026-08-28）
+
+实现过程中发现两处原文与代码事实不符。按「提案是决策快照、被推翻的原文保留在原处」的约定，
+原文不动，修正记在这里：
+
+28. **迁移与回退的判据被改写了。** 原文（「6. 迁移」）说 Bonjour 的旧键「只在 `name` 形如
+    『设备名 (进程名)』时才解析，否则当作无法迁移」。照此执行**一条 Bonjour 书签都迁不过来**：
+    - 0013 之后写的键，`name` 是 `endpoint.processName ?? endpoint.name`，绝大多数情况就是**纯
+      进程名**，不含括号 —— 会被这条规则全部丢弃，而这批恰恰是唯一能从 identifier 里取出
+      deviceID 的、唯一迁得动的。
+    - 0013 之前写的键，`name` 确实是「设备名 (进程名)」，但 identifier 是服务名，取不出
+      deviceID，本来就迁不了。
+
+    改为：**唯一的闸门是 identifier 能否被解析成 `{deviceID}-{processIdentifier}`**（那是构造
+    scope 的硬前提，没有 deviceID 就没有 scope）。闸门一开就已经锁定了 `name` 的语义 —— 这种
+    形状的 identifier 只可能是 0013 之后写的，此时 `name` 与运行时构造引擎用的是同一个字符串
+    —— 所以 `name` **原样使用，不解析括号**。这既不是被否决的「无条件使用 `name`」（有闸门），
+    也去掉了原规则里那个会误归类的解析步骤。
+
+    落地为 `RuntimeBookmarkScope.recovered(from:)` 一个函数，迁移与旧对端回退共用，两者不可能
+    再分叉。测试 `directConstructionAgreesWithRecovery` 把「直连构造出的 scope == 从同一对端的
+    source 恢复出的 scope」钉成不变量。
+
+    附带加固：identifier 尾段不只要求「全是数字」，还要求它是一个正 `Int32` 的精确十进制写法。
+    UUID 的最后一组是 12 位十六进制，约每 200 个里有一个碰巧全是数字，只按「全数字」切会把
+    deviceID 悄悄截短。这条是测试先失败才发现的，不是推理出来的。
+
+29. **新记一个已知缺口：注入本机 App 的引擎，scope 同样每次失效。** 原文（「1.
+    `RuntimeBookmarkScope`」）说 `.remote`（XPC）的 `Identifier`「本来就稳定」，举的例子是
+    `com.RuntimeViewer.RuntimeSource.MacCatalyst`。对**注入**产生的引擎不成立：
+    `RuntimeEngineManager` 用进程号当 identifier（`.remote(identifier: "\(pid)")` 与
+    `.localSocket(identifier: "\(pid)")`），所以注入同一个 App 两次就是两个 scope，与本提案要修
+    的 Bonjour 缺陷是同一个病。
+
+    **本轮不处理**，理由与「跨主机镜像撞 scope」相同：现状就已如此、非本提案引入，且根治需要先
+    为本机进程定义一个稳定身份（bundle identifier 是显然的候选，但那要改注入侧的记账格式，是独立
+    取舍）。记账，不默默略过。
+
 ### 尚未决定
 
 - 旧 autosave 键的**清理时机**（启动时扫一次 vs 迁移时一并做）—— 实现时按简单者取，两种都不改变
   外部行为。
 - `PR106.14` 的 UDID 隐私提案落地后，版本号从 `v1` 到 `v2` 的具体迁移规则 —— 等那个提案定稿。
+- 注入本机 App 的引擎用进程号做 identifier（见「实现期修正」第 29 条）—— 需要先定一个稳定的本机
+  进程身份，本提案不做。
 - 跨主机镜像的非 Bonjour 引擎撞 scope（见「2. 身份怎么到达 scope」的已知缺口）—— 需要先决定
   「同一个引擎，直连时与被镜像时」是否算同一个 scope，本提案不做。

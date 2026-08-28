@@ -265,13 +265,24 @@ public final class RuntimeEngineManager {
                 hostName: endpoint.hostName ?? endpoint.name,
                 metadata: endpoint.deviceMetadata ?? .current
             )
+            // One string, used twice on purpose. The engine's display name and
+            // the process half of its bookmark scope must be the same value,
+            // because the migration that reads old bookmarks off disk can only
+            // recover the process name from the stored display name. Let the
+            // two drift and a migrated bookmark lands under a key this engine
+            // never asks for.
+            let engineName = endpoint.processName ?? endpoint.name
+            if endpoint.deviceID == nil {
+                #log(.info, "Bonjour endpoint \(endpoint.name, privacy: .public) publishes no device ID; its bookmarks and sidebar state fall back to legacy keys")
+            }
             let runtimeEngine = RuntimeEngine(
-                source: .bonjour(name: endpoint.processName ?? endpoint.name, identifier: .init(rawValue: endpointKey), role: .client),
+                source: .bonjour(name: engineName, identifier: .init(rawValue: endpointKey), role: .client),
                 hostInfo: remoteHostInfo,
                 // Cycle detection stays on `instanceID`: it identifies the
                 // advertising *installation*, which is the thing a mirrored
                 // engine can loop back through.
-                originChain: [endpoint.instanceID ?? endpoint.name]
+                originChain: [endpoint.instanceID ?? endpoint.name],
+                bookmarkScope: .bonjour(deviceID: endpoint.deviceID, processName: engineName, role: .client)
             )
             try await runtimeEngine.connect(credential: .bonjour(endpoint))
             appendBonjourRuntimeEngine(runtimeEngine)
@@ -912,6 +923,10 @@ public final class RuntimeEngineManager {
                 engineID: globalID,
                 source: engine.source,
                 hostID: engine.hostInfo.hostID,
+                // Empty for an engine with no stable identity of its own, which
+                // is what a peer predating the field also sends — the receiver
+                // handles both the same way.
+                bookmarkScopeIdentity: engine.bookmarkScope.identityRawValue ?? "",
                 hostName: engine.hostInfo.hostName,
                 originChain: chainWithSelf,
                 directTCPHost: proxyHost,
@@ -1039,7 +1054,11 @@ public final class RuntimeEngineManager {
             fromHostID: sourceHostID,
             localInstanceID: RuntimeNetworkBonjour.localInstanceID,
             engineFactory: { descriptor in
-                RuntimeEngine(
+                let bookmarkScope = descriptor.bookmarkScope
+                if descriptor.bookmarkScopeIdentity.isEmpty {
+                    #log(.info, "Descriptor \(descriptor.engineID, privacy: .public) carries no bookmark scope identity; recovered \(String(describing: bookmarkScope), privacy: .public) from its source")
+                }
+                return RuntimeEngine(
                     source: .directTCP(
                         name: descriptor.source.description,
                         host: descriptor.directTCPHost,
@@ -1056,7 +1075,12 @@ public final class RuntimeEngineManager {
                         hostName: descriptor.hostName,
                         metadata: descriptor.metadata
                     ),
-                    originChain: descriptor.originChain
+                    originChain: descriptor.originChain,
+                    // Never derived from the mirror's own `directTCP` source:
+                    // that host and port belong to a proxy assigned per
+                    // session, so a scope built from it would change on every
+                    // reconnect — the exact failure this type exists to stop.
+                    bookmarkScope: bookmarkScope
                 )
             }
         )
