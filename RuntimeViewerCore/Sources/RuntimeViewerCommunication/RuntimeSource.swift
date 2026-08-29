@@ -30,6 +30,16 @@ extension RuntimeSource {
     }
 }
 
+extension RuntimeSource.Identifier {
+    /// The Mac Catalyst helper's XPC identity.
+    ///
+    /// Lives here rather than in `RuntimeViewerCatalystExtensions` because the
+    /// connection layer keys a decision on it: an XPC server carrying this
+    /// identity must not announce itself to the injected-endpoint registry —
+    /// see `RuntimeXPCServerConnection.shouldAnnounceListenerEndpoint(identifier:)`.
+    public static let macCatalyst: Self = "com.RuntimeViewer.RuntimeSource.MacCatalyst"
+}
+
 /// Represents different sources for runtime inspection.
 ///
 /// `RuntimeSource` defines the various ways to connect to a runtime environment
