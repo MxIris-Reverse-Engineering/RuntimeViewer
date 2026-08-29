@@ -22,15 +22,19 @@ import RuntimeViewerCoreObjC
 /// Probing `sandbox_check` directly covers both, plus any future sandbox flavor,
 /// and lets the host (probing the target pid) and the injected server (probing
 /// `getpid()`) reach the same decision about the same process.
+///
+/// Takes the Mach service name as a parameter and knows none itself, which is
+/// what lets it sit in the utility layer: the question "can this pid look up
+/// that name" is a sandbox question, not a question about any particular
+/// service. `RuntimeViewerCommunication` supplies its own name in an extension.
 public enum SandboxProbe {
     /// Whether `pid`'s sandbox would deny a `mach-lookup` of `globalName`.
     ///
     /// Returns `false` for an unsandboxed process, and also on probe failure so the
     /// XPC default is preserved. Accepts any pid, including `getpid()`.
     ///
-    /// `pid` is a `pid_t` (an `Int32`); it is spelled `Int32` here because the module's
-    /// `import Foundation` is internal (`.internalImportsByDefault`), which would make the
-    /// `pid_t` typealias too inaccessible for a `public` signature.
+    /// `pid` is a `pid_t`, spelled as its underlying `Int32` so the signature
+    /// does not depend on how visibly this module happens to import Foundation.
     public static func isMachLookupBlocked(pid: Int32, globalName: String) -> Bool {
         let result = globalName.withCString { globalNamePointer in
             "mach-lookup".withCString { operationPointer in
@@ -41,12 +45,6 @@ public enum SandboxProbe {
         // when denied, and -1 on error. Only an explicit denial routes to the
         // socket fallback; errors keep the previous XPC default.
         return result > 0
-    }
-
-    /// Convenience over ``isMachLookupBlocked(pid:globalName:)`` for the RuntimeViewer
-    /// helper Mach service (``RuntimeViewerMachServiceName``).
-    public static func isRuntimeViewerServiceMachLookupBlocked(pid: Int32) -> Bool {
-        isMachLookupBlocked(pid: pid, globalName: RuntimeViewerMachServiceName)
     }
 
     // Whether a target would refuse a `dlopen` — the `file-map-executable`

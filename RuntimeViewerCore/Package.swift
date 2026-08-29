@@ -232,6 +232,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerUtilities",
             dependencies: [
+                "RuntimeViewerCoreObjC",
                 .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
                 .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
             ],

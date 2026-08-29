@@ -2,6 +2,7 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerUtilities
 
 #if canImport(UIKit)
 #if os(watchOS)
