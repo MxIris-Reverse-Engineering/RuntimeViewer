@@ -186,6 +186,38 @@ struct RuntimeEngineMirrorRegistryTests {
         #expect(registry.engines.keys.contains("cyclic") == false)
     }
 
+    /// The ghost-device shape. A peer that browsed us before our TXT record
+    /// arrived had no instance ID to record, so the engine it built for us
+    /// carries our *advertised service name* as its origin — and when that
+    /// peer forwards the descriptor back, a cycle check that only knows our
+    /// instance ID lets our own advertisement in as a foreign device. Old
+    /// peers never stop forwarding that entry, so the receiving side must
+    /// recognize the name as itself.
+    @Test("descriptors whose originChain contains the advertised service name are filtered as cycles")
+    func cycleDetectionCoversServiceNameFallback() {
+        let registry = RuntimeEngineMirrorRegistry()
+        let ghost = descriptor(
+            engineID: "ghost",
+            originChain: ["JH's Mac Studio Ultra (RuntimeViewer)", "peer-instance"]
+        )
+        let normal = descriptor(engineID: "normal")
+
+        let outcome = registry.reconcile(
+            descriptors: [ghost, normal],
+            fromHostID: "peer-instance",
+            localInstanceID: "local",
+            advertisedServiceName: "JH's Mac Studio Ultra (RuntimeViewer)",
+            engineFactory: makeEngine
+        )
+
+        guard case .applied(_, let added) = outcome else {
+            Issue.record("expected .applied")
+            return
+        }
+        #expect(added.map(\.descriptor.engineID) == ["normal"])
+        #expect(registry.engines.keys.contains("ghost") == false)
+    }
+
     // MARK: - Cleanup
 
     @Test("clearOwnMirror removes only the matching mirror entry")
