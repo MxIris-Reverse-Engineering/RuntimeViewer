@@ -1,7 +1,7 @@
 #if os(macOS) || targetEnvironment(macCatalyst)
 
 import Foundation
-import RuntimeViewerCoreObjC
+import RuntimeViewerObjC
 
 /// Runtime probe deciding whether a process's sandbox forces the localhost-socket
 /// transport instead of the XPC Mach-service transport.
@@ -24,9 +24,9 @@ import RuntimeViewerCoreObjC
 /// `getpid()`) reach the same decision about the same process.
 ///
 /// Takes the Mach service name as a parameter and knows none itself, which is
-/// what lets it sit in the utility layer: the question "can this pid look up
-/// that name" is a sandbox question, not a question about any particular
-/// service. `RuntimeViewerCommunication` supplies its own name in an extension.
+/// what lets it sit in the utility layer: "can this pid look up that name" is a
+/// sandbox question, not a question about any particular service. Callers pass
+/// `RuntimeViewerMachServiceName` when they mean this project's helper.
 public enum SandboxProbe {
     /// Whether `pid`'s sandbox would deny a `mach-lookup` of `globalName`.
     ///

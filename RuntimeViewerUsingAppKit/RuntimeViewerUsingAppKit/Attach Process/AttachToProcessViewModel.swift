@@ -92,7 +92,7 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         // Probe the target's live sandbox rather than reading RunningApplicationKit's
         // entitlement-only `isSandboxed`, which misses seatbelt-profiled daemons
         // (e.g. rapportd) that deny mach-lookup yet carry no app-sandbox entitlement.
-        let isSandbox = SandboxProbe.isRuntimeViewerServiceMachLookupBlocked(pid: processIdentifier)
+        let isSandbox = SandboxProbe.isMachLookupBlocked(pid: processIdentifier, globalName: RuntimeViewerMachServiceName)
 
         try await runtimeEngineManager.launchAttachedRuntimeEngine(name: name, identifier: identifier, isSandbox: isSandbox)
         do {

@@ -1,6 +1,6 @@
 import MachOKit
 public import FoundationToolbox
-import RuntimeViewerCoreObjC
+import RuntimeViewerObjC
 public import Foundation
 public import Combine
 public import RuntimeViewerCommunication

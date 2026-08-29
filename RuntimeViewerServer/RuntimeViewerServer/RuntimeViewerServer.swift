@@ -55,7 +55,10 @@ private enum RuntimeViewerServer {
                 // Sandbox apps and seatbelt-profiled daemons like rapportd) makes
                 // the XPC path impossible; fall back to the localhost socket, which
                 // only needs an outbound connect().
-                if SandboxProbe.isRuntimeViewerServiceMachLookupBlocked(pid: ProcessInfo.processInfo.processIdentifier) {
+                if SandboxProbe.isMachLookupBlocked(
+                    pid: ProcessInfo.processInfo.processIdentifier,
+                    globalName: RuntimeViewerMachServiceName
+                ) {
                     runtimeEngine = RuntimeEngine(source: .localSocket(name: processName, identifier: .init(rawValue: identifier), role: .server))
                     try await runtimeEngine?.connect()
                 } else {

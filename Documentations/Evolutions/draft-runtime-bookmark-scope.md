@@ -532,15 +532,34 @@ descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹
       自己的定义文件，**内部零使用**；而「engine」根本不是这一层的概念。测试里的
       `@Suite("RuntimeRemoteEngineDescriptor")` 一并从 `RuntimeViewerCommunicationTests` 拆到
       `RuntimeViewerCoreTests`，同文件里测 `RuntimeDeviceMetadata` / `RuntimeHostInfo` 的部分留下。
-    - **`SandboxProbe` 拆成两半。** 通用探测器（`isMachLookupBlocked(pid:globalName:)`，服务名是
+    - ~~**`SandboxProbe` 拆成两半。** 通用探测器（`isMachLookupBlocked(pid:globalName:)`，服务名是
       **参数**，自己不认识任何名字）移到 `RuntimeViewerUtilities`；绑定本项目服务名的那个便利方法
       作为 4 行 extension 留在 Communication。**不整块移走**：它回答的「用 XPC 还是 localhost
-      socket」正是连接层的选型问题，整块搬走等于把传输选型反向泄漏进工具层或 Core。
+      socket」正是连接层的选型问题，整块搬走等于把传输选型反向泄漏进工具层或 Core。~~
+      **只移一半的做法被推翻了，见第 35 条。**
 
     落地代价：`RuntimeViewerUtilities` 新增对 `RuntimeViewerCoreObjC` 的依赖（探测走
     `RVSandboxCheckGlobalName`）。另外 Utilities **没有**开 `.internalImportsByDefault`，所以
     `SandboxProbe` 里那句「签名用 `Int32` 是因为 `pid_t` 不够可见」在新位置已不成立，注释改写为
     真实理由。
+
+35. **`SandboxProbe` 整块移到 `RuntimeViewerUtilities`，连接层不再留残余。** 第 34 条留了一个
+    绑定服务名的 extension 在 Communication，被否掉了。
+
+    **不是把便利方法搬过去**——那会把连接层身份倒灌进工具层。`RuntimeViewerMachServiceName` 在
+    DEBUG 下不是常量而是依赖 `runtimeViewerIsARM64EVariant` 的计算属性，和 Debug-arm64e 变体的
+    helper daemon 身份绑在一起，XPC 连接直接用它。工具层没有理由知道这一整套。
+
+    做法是**删掉便利方法**，两个调用点（`RuntimeViewerServer`、`AttachToProcessViewModel`）显式传
+    `globalName: RuntimeViewerMachServiceName`。两处本来就 import 了 Communication，多一个参数换来
+    的是：探测器完全通用，服务名归调用方所有。
+
+36. **`RuntimeViewerCoreObjC` 更名为 `RuntimeViewerObjC`。** 这是在纠正一处既有的不一致——该 target
+    的 `.h` / `.m` 文件头注释里写的本来就是 `RuntimeViewerObjC`，只有 target 名和文件名带着 `Core`。
+    SPM 的 C target 要求 umbrella header 与 target 同名，所以目录、`.h`、`.m` 一起改。
+
+    顺带清掉一条依赖：`RuntimeViewerCommunication` 对该 target 的依赖只服务于 `SandboxProbe`，
+    第 35 条把它移走后已经没有使用者，一并删除。
 
 ### 尚未决定
 
