@@ -1,4 +1,7 @@
 import Foundation
+// `RuntimeSource` and `RuntimeRemoteEngineDescriptor` are re-exported because
+// both appear in this file's public API.
+public import RuntimeViewerCommunication
 
 /// The stable persistence identity of one inspected peer.
 ///
@@ -13,6 +16,13 @@ import Foundation
 /// Both mistakes were live in three separate places before this type existed,
 /// each having independently reached for whatever string was nearest. See
 /// `Documentations/Evolutions/draft-runtime-bookmark-scope.md`.
+///
+/// Lives here, beside ``RuntimeImageBookmark`` and ``RuntimeObjectBookmark``,
+/// rather than beside `RuntimeSource` in `RuntimeViewerCommunication`. It is
+/// derived from a source, but what it *is* is an application-level persistence
+/// key, and the communication layer has no business knowing that bookmarks
+/// exist. Every target that reaches for a scope already depends on this
+/// module.
 public enum RuntimeBookmarkScope: Sendable, Hashable {
     /// A scope built from an identity that survives the peer relaunching.
     case identified(Identity)

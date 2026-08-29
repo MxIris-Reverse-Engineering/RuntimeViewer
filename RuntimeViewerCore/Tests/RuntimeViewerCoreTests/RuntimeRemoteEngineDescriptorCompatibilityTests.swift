@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import RuntimeViewerCore
 import RuntimeViewerCommunication
 
 /// Mixed-version wire compatibility for the bookmark scope identity that

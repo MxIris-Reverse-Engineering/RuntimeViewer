@@ -128,8 +128,8 @@ autosave 键，撤销了那次决策的目的。本提案是把它重新做对�
 
 ### 1. `RuntimeBookmarkScope`
 
-放在 `RuntimeViewerCommunication`（`RuntimeSource` 所在模块），这样 `RuntimeViewerCore` 的书签
-类型与 AppKit 应用侧的 autosave 键都能拿到。
+~~放在 `RuntimeViewerCommunication`（`RuntimeSource` 所在模块），这样 `RuntimeViewerCore` 的书签
+类型与 AppKit 应用侧的 autosave 键都能拿到。~~ **改放 `RuntimeViewerCore`，见「实现期修正」第 33 条。**
 
 身份构成按来源分别取**各自已有的稳定标识**，而不是硬凑成统一形状：
 
@@ -501,6 +501,24 @@ descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹
 32. **不新建术语表。** 按 evolution 流程要求显式裁决：本轮唯一的新术语是 `RuntimeBookmarkScope`，
     它在架构文档 §2.3.1 已有完整定义、在本提案有完整取舍，项目至今没有 `Glossary.md`。为一个条目
     新开一份术语表只是多一个要维护的索引，权威来源反而分散。**下次再引入跨文档复用的术语时再建。**
+
+33. **模块归属从 `RuntimeViewerCommunication` 改到 `RuntimeViewerCore`。** 原文给的理由是「放
+    `RuntimeSource` 所在模块，两边都能拿到」——查过依赖图后这个理由不成立：`RuntimeViewerPackages`
+    里**每一个**依赖 `RuntimeViewerCommunication` 的 target（`RuntimeViewerService`、
+    `RuntimeViewerHelperClient`、`RuntimeViewerCatalystExtensions`）都同时依赖 `RuntimeViewerCore`，
+    所以放 Core 一样人人拿得到。
+
+    理由换成职责：`RuntimeViewerCommunication` 是连接层，**不该知道「书签」这回事**。scope 由
+    source 派生，但它本质是应用层的持久化键，和 `RuntimeImageBookmark` / `RuntimeObjectBookmark`
+    以及持有它的 `RuntimeEngine` 同属 Core。文件因此落在 `RuntimeViewerCore/Common/`，与书签模型
+    并列，测试一并从 `RuntimeViewerCommunicationTests` 移到 `RuntimeViewerCoreTests`。
+
+    唯一被牵动的是 `RuntimeRemoteEngineDescriptor`：字段 `bookmarkScopeIdentity: String` 留在
+    Communication（它只是个不透明字符串，无类型依赖），把它解回 scope 的那个计算属性搬到 Core。
+
+    **字段名保留 `bookmarkScopeIdentity`，不改。** 它确实把「书签」这个词留在了通信层，但 descriptor
+    早就不是纯连接类型——`iconData` 是 App 图标 PNG，`originChain` 是环检测——为一个词改走线 key
+    不划算。
 
 ### 尚未决定
 

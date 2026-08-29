@@ -3,6 +3,7 @@
 import Testing
 import Foundation
 @testable import RuntimeViewerApplication
+import RuntimeViewerCore
 import RuntimeViewerCommunication
 
 @Suite("SidebarAutosaveKeyCleanup")

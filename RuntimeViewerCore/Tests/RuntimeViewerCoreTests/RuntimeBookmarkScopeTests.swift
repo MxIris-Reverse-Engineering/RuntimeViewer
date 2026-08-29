@@ -1,6 +1,7 @@
 import Testing
 import Foundation
-@testable import RuntimeViewerCommunication
+@testable import RuntimeViewerCore
+import RuntimeViewerCommunication
 
 // MARK: - String representation
 

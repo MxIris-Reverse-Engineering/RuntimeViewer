@@ -99,27 +99,17 @@ func stop()
 
 这个反转是 `localSocket` 的核心（详见 §3.3）。
 
-### 2.3.1 `RuntimeBookmarkScope`（`RuntimeBookmarkScope.swift`）—— 落盘用的身份
-
-`RuntimeSource` 是**连接**身份，回答「往哪里连、以什么角色连」。它不适合当**持久化**键，两个原因：
-
-- `.bonjour` 客户端的 `Identifier` 是 `{deviceID}-{processIdentifier}`，对端每次重启都换一个，
-  于是上次存的书签再也读不到、字典里还多一条永远不会被清理的死记录。
-- `description` 是对端的**进程显示名**，两台设备各注入一个同名进程就会写到同一个键。
-
-`RuntimeBookmarkScope` 把这件事单独拿出来做：每种 source 各取自己**已有的稳定标识**——
-`.bonjour` 用 deviceID + processName，`.remote` / `.localSocket` 用现成的 `Identifier`，
-`.directTCP` 用 port + host，`.local` 是字面量。落盘表示是可读、可反向解析、带格式版本号的字符串
-（`v1:<种类>:<role>:<其余>`，末段吞尾，因此 IPv6 host 与含冒号的进程名都不需要转义）。
-
-拿不到稳定身份时退到 `.legacy`，**两个消费点分别取值**：书签用 `source.identifier`（今天就是书签键
-的来源，取值不变即行为不变），sidebar autosave 键用 `source.description`。sidebar 绝不能用
-identifier——那正是带 pid 的那个。
-
-身份由创建方注入到 `RuntimeEngine.bookmarkScope`：直连的 Bonjour 对端从 TXT 记录构造，镜像引擎从
-descriptor 的 `bookmarkScopeIdentity` 字段构造（见 §5），其余从 `source` 推导。
-
-完整取舍见提案 [`draft-runtime-bookmark-scope`](Evolutions/draft-runtime-bookmark-scope.md)。
+> **连接身份 ≠ 落盘身份。** `RuntimeSource` 回答「往哪里连、以什么角色连」，不适合当持久化键：
+> `.bonjour` 客户端的 `Identifier` 是 `{deviceID}-{processIdentifier}`，对端每次重启就换一个；
+> `description` 是对端的**进程显示名**，两台设备各注入一个同名进程就会写到同一个键。
+>
+> 落盘键由 `RuntimeViewerCore` 的 `RuntimeBookmarkScope` 负责（和书签模型放在一起——它由 source
+> 派生，但本质是应用层的持久化键，连接层不该知道「书签」这回事）。每种 source 各取自己已有的稳定
+> 标识，落盘表示是可读、可反向解析、带版本号的字符串，例如
+> `v1:bonjour:client:{deviceID}:SpringBoard`。取不到稳定身份时退到 legacy，且**书签与 sidebar
+> autosave 两个消费点分别取值**——sidebar 绝不能用 `identifier`，那正是带 pid 的那个。
+>
+> 完整取舍见提案 [`draft-runtime-bookmark-scope`](Evolutions/draft-runtime-bookmark-scope.md)。
 
 ### 2.4 `RuntimeConnectionCredential`（`RuntimeConnectionCredential.swift`）—— 会话级凭证
 
@@ -449,7 +439,8 @@ AWDL 路由的对端（iOS/visionOS/tvOS）即使进程已死，TCP keepalive �
    iconData      = proxy.iconData()               App 图标 PNG
    bookmarkScopeIdentity = engine.bookmarkScope.identityRawValue ?? ""   ← 见 §2.3.1
    ```
-   `bookmarkScopeIdentity` 让镜像端把书签与 sidebar 状态记在**被镜像那个引擎**的 scope 下，而不是
+   `bookmarkScopeIdentity` 是一个不透明字符串（`RuntimeBookmarkScope` 的落盘形式，见 §2.3 的注），
+   让镜像端把书签与 sidebar 状态记在**被镜像那个引擎**的 scope 下，而不是
    镜像自己那条 `directTCP` 链路上——后者的 host 与 port 属于每会话新建的 proxy，拿它当键等于每次
    重连换一套。字段用 MetaCodable 的 `@Default("")` 标注：旧对端不发这个键，接收方回退到
    `RuntimeBookmarkScope.recovered(from:)`；旧对端读新数据时多出的键被忽略。**双向兼容，不要求同版本。**
