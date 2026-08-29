@@ -60,7 +60,12 @@ public final class RuntimeEngineMirrorRegistry {
     /// Reconcile descriptors from a single direct upstream.
     ///
     /// Steps:
-    /// 1. Drop descriptors whose `originChain` already contains `localInstanceID` (cycle).
+    /// 1. Drop descriptors whose `originChain` already names this host (cycle).
+    ///    A chain names us by `localInstanceID` — or by `advertisedServiceName`,
+    ///    because a peer that browsed us before our TXT record arrived had no
+    ///    instance ID to record and fell back to the service name. Older peers
+    ///    never stop doing that, so the check on the receiving side is what
+    ///    keeps their ghost of us from mirroring back in.
     /// 2. Per-source dedup: if this source's last payload was identical, skip everything.
     /// 3. Per-source reconcile: remove engines previously owned by this source that no
     ///    longer appear in the new payload.
@@ -70,10 +75,13 @@ public final class RuntimeEngineMirrorRegistry {
         descriptors: [RuntimeRemoteEngineDescriptor],
         fromHostID sourceHostID: String,
         localInstanceID: String,
+        advertisedServiceName: String? = nil,
         engineFactory: EngineFactory
     ) -> ReconcileOutcome {
         let filteredDescriptors = descriptors.filter { descriptor in
-            !descriptor.originChain.contains(localInstanceID)
+            if descriptor.originChain.contains(localInstanceID) { return false }
+            if let advertisedServiceName, descriptor.originChain.contains(advertisedServiceName) { return false }
+            return true
         }
 
         let newIDSet = Set(filteredDescriptors.map(\.engineID))

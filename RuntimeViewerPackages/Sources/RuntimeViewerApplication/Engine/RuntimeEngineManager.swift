@@ -1053,6 +1053,11 @@ public final class RuntimeEngineManager {
             descriptors: descriptors,
             fromHostID: sourceHostID,
             localInstanceID: RuntimeNetworkBonjour.localInstanceID,
+            // The name this host advertises is also an identity of ours: a peer
+            // that browsed us before our TXT record arrived recorded it — not
+            // our instance ID — into its engine's origin chain, and old peers
+            // keep forwarding that ghost forever.
+            advertisedServiceName: RuntimeNetworkBonjour.localServiceName,
             engineFactory: { descriptor in
                 let bookmarkScope = descriptor.bookmarkScope
                 if descriptor.stableIdentity.isEmpty {
