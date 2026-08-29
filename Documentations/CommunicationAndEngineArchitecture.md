@@ -103,7 +103,8 @@ func stop()
 > `.bonjour` 客户端的 `Identifier` 是 `{deviceID}-{processIdentifier}`，对端每次重启就换一个；
 > `description` 是对端的**进程显示名**，两台设备各注入一个同名进程就会写到同一个键。
 >
-> 落盘键由 `RuntimeViewerCore` 的 `RuntimeBookmarkScope` 负责（和书签模型放在一起——它由 source
+> 落盘键由 `RuntimeViewerCore` 的 `RuntimeBookmarkScope` 负责（和书签模型、`RuntimeRemoteEngineDescriptor`
+> 放在一起——它由 source
 > 派生，但本质是应用层的持久化键，连接层不该知道「书签」这回事）。每种 source 各取自己已有的稳定
 > 标识，落盘表示是可读、可反向解析、带版本号的字符串，例如
 > `v1:bonjour:client:{deviceID}:SpringBoard`。取不到稳定身份时退到 legacy，且**书签与 sidebar
@@ -437,10 +438,11 @@ AWDL 路由的对端（iOS/visionOS/tvOS）即使进程已死，TCP keepalive �
    directTCPPort = proxy.port
    originChain   = engine.originChain + [localInstanceID]   ← 追加自己，供环路检测
    iconData      = proxy.iconData()               App 图标 PNG
-   bookmarkScopeIdentity = engine.bookmarkScope.identityRawValue ?? ""   ← 见 §2.3.1
+   stableIdentity = engine.bookmarkScope.identityRawValue ?? ""          ← 见 §2.3 的注
    ```
-   `bookmarkScopeIdentity` 是一个不透明字符串（`RuntimeBookmarkScope` 的落盘形式，见 §2.3 的注），
-   让镜像端把书签与 sidebar 状态记在**被镜像那个引擎**的 scope 下，而不是
+   `stableIdentity` 是一个不透明字符串（`RuntimeBookmarkScope` 的落盘形式，见 §2.3 的注）。
+   **连接层只搬运、不解析它**——`RuntimeRemoteEngineDescriptor` 本身也不在连接层，它和「engine」这个
+   概念一起住在 `RuntimeViewerCore`。它让镜像端把书签与 sidebar 状态记在**被镜像那个引擎**的 scope 下，而不是
    镜像自己那条 `directTCP` 链路上——后者的 host 与 port 属于每会话新建的 proxy，拿它当键等于每次
    重连换一套。字段用 MetaCodable 的 `@Default("")` 标注：旧对端不发这个键，接收方回退到
    `RuntimeBookmarkScope.recovered(from:)`；旧对端读新数据时多出的键被忽略。**双向兼容，不要求同版本。**

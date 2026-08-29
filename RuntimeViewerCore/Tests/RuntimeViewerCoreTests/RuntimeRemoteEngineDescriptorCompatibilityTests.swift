@@ -82,7 +82,7 @@ struct RuntimeRemoteEngineDescriptorCompatibilityTests {
         let iconData: Data?
     }
 
-    private func makeDescriptor(bookmarkScopeIdentity: String) -> RuntimeRemoteEngineDescriptor {
+    private func makeDescriptor(stableIdentity: String) -> RuntimeRemoteEngineDescriptor {
         RuntimeRemoteEngineDescriptor(
             engineID: "DEVICE/bonjour.11111111-2222-3333-4444-555555555555-4242",
             source: .bonjour(
@@ -91,7 +91,7 @@ struct RuntimeRemoteEngineDescriptorCompatibilityTests {
                 role: .client
             ),
             hostID: "11111111-2222-3333-4444-555555555555",
-            bookmarkScopeIdentity: bookmarkScopeIdentity,
+            stableIdentity: stableIdentity,
             hostName: "JHs-iPhone",
             originChain: ["instance-a"],
             directTCPHost: "192.168.1.10",
@@ -108,7 +108,7 @@ struct RuntimeRemoteEngineDescriptorCompatibilityTests {
         let data = Data(Self.descriptorFromPeerWithoutIdentityField.utf8)
         let descriptor = try JSONDecoder().decode(RuntimeRemoteEngineDescriptor.self, from: data)
 
-        #expect(descriptor.bookmarkScopeIdentity.isEmpty)
+        #expect(descriptor.stableIdentity.isEmpty)
         #expect(descriptor.hostID == "11111111-2222-3333-4444-555555555555")
         #expect(descriptor.source.description == "SpringBoard")
     }
@@ -139,7 +139,7 @@ struct RuntimeRemoteEngineDescriptorCompatibilityTests {
 
     @Test("A field the current version cannot parse is treated as absent, not trusted")
     func unparsableIdentityIsTreatedAsAbsent() {
-        let descriptor = makeDescriptor(bookmarkScopeIdentity: "v9:something:from:the:future")
+        let descriptor = makeDescriptor(stableIdentity: "v9:something:from:the:future")
         #expect(
             descriptor.bookmarkScope == .identified(.bonjour(
                 deviceID: "11111111-2222-3333-4444-555555555555",
@@ -153,7 +153,7 @@ struct RuntimeRemoteEngineDescriptorCompatibilityTests {
     func presentIdentityIsUsedVerbatim() {
         // Deliberately unlike anything recovery would produce, so the test can
         // tell "used the wire value" from "recomputed and happened to match".
-        let descriptor = makeDescriptor(bookmarkScopeIdentity: "v1:bonjour:client:OTHER-DEVICE:OtherProcess")
+        let descriptor = makeDescriptor(stableIdentity: "v1:bonjour:client:OTHER-DEVICE:OtherProcess")
         #expect(
             descriptor.bookmarkScope == .identified(.bonjour(
                 deviceID: "OTHER-DEVICE",
@@ -167,7 +167,7 @@ struct RuntimeRemoteEngineDescriptorCompatibilityTests {
 
     @Test("A peer predating the field reads a current descriptor unharmed")
     func oldReadsNew() throws {
-        let descriptor = makeDescriptor(bookmarkScopeIdentity: "v1:bonjour:client:11111111-2222-3333-4444-555555555555:SpringBoard")
+        let descriptor = makeDescriptor(stableIdentity: "v1:bonjour:client:11111111-2222-3333-4444-555555555555:SpringBoard")
         let data = try JSONEncoder().encode(descriptor)
 
         let asSeenByOldPeer = try JSONDecoder().decode(FrozenPreIdentityDescriptor.self, from: data)

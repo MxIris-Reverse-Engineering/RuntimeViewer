@@ -926,7 +926,7 @@ public final class RuntimeEngineManager {
                 // Empty for an engine with no stable identity of its own, which
                 // is what a peer predating the field also sends — the receiver
                 // handles both the same way.
-                bookmarkScopeIdentity: engine.bookmarkScope.identityRawValue ?? "",
+                stableIdentity: engine.bookmarkScope.identityRawValue ?? "",
                 hostName: engine.hostInfo.hostName,
                 originChain: chainWithSelf,
                 directTCPHost: proxyHost,
@@ -1055,7 +1055,7 @@ public final class RuntimeEngineManager {
             localInstanceID: RuntimeNetworkBonjour.localInstanceID,
             engineFactory: { descriptor in
                 let bookmarkScope = descriptor.bookmarkScope
-                if descriptor.bookmarkScopeIdentity.isEmpty {
+                if descriptor.stableIdentity.isEmpty {
                     #log(.info, "Descriptor \(descriptor.engineID, privacy: .public) carries no bookmark scope identity; recovered \(String(describing: bookmarkScope), privacy: .public) from its source")
                 }
                 return RuntimeEngine(

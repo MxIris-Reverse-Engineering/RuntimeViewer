@@ -276,9 +276,11 @@ extension RuntimeRemoteEngineDescriptor {
     /// assigned per session, so deriving a scope from the *mirror's* own source
     /// would produce a key that changes on every reconnect. The identity has to
     /// come from the peer that owns the engine, which is why it travels on the
-    /// descriptor.
+    /// descriptor — as an opaque `stableIdentity` string that the communication
+    /// layer forwards without interpreting. This is the one place that reads it
+    /// back as a scope.
     public var bookmarkScope: RuntimeBookmarkScope {
-        if let identity = RuntimeBookmarkScope.Identity(rawValue: bookmarkScopeIdentity) {
+        if let identity = RuntimeBookmarkScope.Identity(rawValue: stableIdentity) {
             return .identified(identity)
         }
         // Either the peer predates the field, or it sent something this version

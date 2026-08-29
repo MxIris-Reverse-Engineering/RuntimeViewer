@@ -7,7 +7,7 @@
 - **所属愿景**: 无
 - **关联提案**: [0013](0013-inject-ios-simulator-process.md)（本提案处理它暴露出的持久化身份问题）
 - **实现分支 / PR**: `feature/runtime-bookmark-scope`（从 `feature/inject-ios-simulator-process` 分出）
-- **配套文档**: [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §2.3.1 与 `buildEngineDescriptors` 字段表（同批次更新）
+- **配套文档**: [`CommunicationAndEngineArchitecture.md`](../CommunicationAndEngineArchitecture.md) §2.3 的注与 `buildEngineDescriptors` 字段表（同批次更新）
 
 ## 摘要
 
@@ -494,12 +494,13 @@ descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹
     **它必须只跑一次，不能做成每次启动都扫。** 落到 legacy scope 的对端会持续用显示名当键写入，
     那是当前状态而非残留；反复清扫等于每次启动都删掉活数据。
 
-31. **架构文档同批次更新**：`CommunicationAndEngineArchitecture.md` 新增 §2.3.1 说明「连接身份 vs
-    落盘身份」，并在 `buildEngineDescriptors` 的字段清单里补上 `bookmarkScopeIdentity` 与它的
+31. **架构文档同批次更新**：`CommunicationAndEngineArchitecture.md` 新增一节说明「连接身份 vs
+    落盘身份」，并在 `buildEngineDescriptors` 的字段清单里补上那个身份字段（当时叫
+    `bookmarkScopeIdentity`，第 34 条改名为 `stableIdentity`）与它的
     双向兼容性。不另写实现说明——本提案已经涵盖取舍，再开一份只会分散权威来源。
 
 32. **不新建术语表。** 按 evolution 流程要求显式裁决：本轮唯一的新术语是 `RuntimeBookmarkScope`，
-    它在架构文档 §2.3.1 已有完整定义、在本提案有完整取舍，项目至今没有 `Glossary.md`。为一个条目
+    它在架构文档 §2.3 的注里已有完整定义、在本提案有完整取舍，项目至今没有 `Glossary.md`。为一个条目
     新开一份术语表只是多一个要维护的索引，权威来源反而分散。**下次再引入跨文档复用的术语时再建。**
 
 33. **模块归属从 `RuntimeViewerCommunication` 改到 `RuntimeViewerCore`。** 原文给的理由是「放
@@ -513,12 +514,33 @@ descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹
     以及持有它的 `RuntimeEngine` 同属 Core。文件因此落在 `RuntimeViewerCore/Common/`，与书签模型
     并列，测试一并从 `RuntimeViewerCommunicationTests` 移到 `RuntimeViewerCoreTests`。
 
-    唯一被牵动的是 `RuntimeRemoteEngineDescriptor`：字段 `bookmarkScopeIdentity: String` 留在
-    Communication（它只是个不透明字符串，无类型依赖），把它解回 scope 的那个计算属性搬到 Core。
+    唯一被牵动的是 `RuntimeRemoteEngineDescriptor`：字段留在 Communication（它只是个不透明字符串，
+    无类型依赖），把它解回 scope 的那个计算属性搬到 Core。
 
-    **字段名保留 `bookmarkScopeIdentity`，不改。** 它确实把「书签」这个词留在了通信层，但 descriptor
-    早就不是纯连接类型——`iconData` 是 App 图标 PNG，`originChain` 是环检测——为一个词改走线 key
-    不划算。
+    > ~~**字段名保留 `bookmarkScopeIdentity`，不改。** 它确实把「书签」这个词留在了通信层，但
+    > descriptor 早就不是纯连接类型——`iconData` 是 App 图标 PNG，`originChain` 是环检测——为一个词
+    > 改走线 key 不划算。~~ **这条判断被推翻了，见第 34 条**：「别的地方也漏了」不是继续漏的理由。
+
+34. **把「应用层概念」彻底赶出连接层**——第 33 条只做了一半，本条补完。三处改动，判据都是同一条：
+    `RuntimeViewerCommunication` 只该知道连接、source 与消息通道。
+
+    - **字段 `bookmarkScopeIdentity` 更名为 `stableIdentity`**（走线 key 同步改）。原本以「descriptor
+      早就不纯了」为由留着，但那是「别处也漏了」，不是继续漏的理由。新名字描述的是它对连接层而言
+      的全部含义：一个跨对端重启稳定、**本层不解析**的不透明串。它与 `engineID` 的区别也因此说得清了
+      ——后者是每会话的路由地址，内嵌 `source.identifier`，Bonjour 对端重启就变。
+    - **`RuntimeRemoteEngineDescriptor` 整体移到 `RuntimeViewerCore`。** 连接层里对它的引用只有它
+      自己的定义文件，**内部零使用**；而「engine」根本不是这一层的概念。测试里的
+      `@Suite("RuntimeRemoteEngineDescriptor")` 一并从 `RuntimeViewerCommunicationTests` 拆到
+      `RuntimeViewerCoreTests`，同文件里测 `RuntimeDeviceMetadata` / `RuntimeHostInfo` 的部分留下。
+    - **`SandboxProbe` 拆成两半。** 通用探测器（`isMachLookupBlocked(pid:globalName:)`，服务名是
+      **参数**，自己不认识任何名字）移到 `RuntimeViewerUtilities`；绑定本项目服务名的那个便利方法
+      作为 4 行 extension 留在 Communication。**不整块移走**：它回答的「用 XPC 还是 localhost
+      socket」正是连接层的选型问题，整块搬走等于把传输选型反向泄漏进工具层或 Core。
+
+    落地代价：`RuntimeViewerUtilities` 新增对 `RuntimeViewerCoreObjC` 的依赖（探测走
+    `RVSandboxCheckGlobalName`）。另外 Utilities **没有**开 `.internalImportsByDefault`，所以
+    `SandboxProbe` 里那句「签名用 `Int32` 是因为 `pid_t` 不够可见」在新位置已不成立，注释改写为
+    真实理由。
 
 ### 尚未决定
 
