@@ -5,6 +5,6 @@ extension RuntimeSource {
     public static let macCatalystServer: Self = .remote(name: "My Mac (Mac Catalyst)", identifier: .macCatalyst, role: .server)
 }
 
-extension RuntimeSource.Identifier {
-    public static let macCatalyst: Self = "com.RuntimeViewer.RuntimeSource.MacCatalyst"
-}
+// `RuntimeSource.Identifier.macCatalyst` is declared in RuntimeViewerCommunication
+// alongside the Identifier type: the connection layer keys the injected-endpoint
+// registry announcement on it, so it cannot live up here.

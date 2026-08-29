@@ -201,10 +201,10 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
 ///
 /// Backed by `HelperPeerServer`. The lib peer fetches the client's endpoint
 /// from the broker, opens a direct reverse connection, sends `ServerLaunched`
-/// to populate the client's peer connection, and registers its own listener
-/// endpoint so the host can later reconnect directly. A `ClientReconnected`
-/// handler is installed on the listener so subsequent host reconnects swap
-/// the peer connection in place.
+/// to populate the client's peer connection, and — for injected servers —
+/// registers its own listener endpoint so the host can later reconnect
+/// directly. A `ClientReconnected` handler is installed on the listener so
+/// subsequent host reconnects swap the peer connection in place.
 final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendable {
     // IMPORTANT: the modifier MUST run before `peer.activate()`. The modifier
     // installs the engine's server-side handlers (imageList, loadImage,
@@ -222,7 +222,30 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
         await super.init(identifier: identifier, peer: peer)
         try await modifier?(self)
         try await peer.activate()
-        await announceListenerEndpoint()
+        if Self.shouldAnnounceListenerEndpoint(identifier: identifier) {
+            await announceListenerEndpoint()
+        }
+    }
+
+    /// Whether this server belongs in the injected-endpoint registry.
+    ///
+    /// The registry means "an injected app the host cannot relaunch — keep its
+    /// endpoint so the host can reconnect after a restart". The Mac Catalyst
+    /// helper is the opposite: the host launches it fresh on every start, and
+    /// the two always ship in the same bundle.
+    ///
+    /// Announcing the helper is not merely redundant, it is what produced the
+    /// phantom "RuntimeViewerCatalystHelper" engine entry. The host's
+    /// reconnect pass runs in the same launch, right after the helper
+    /// connects, so it fetched the helper's just-announced endpoint, treated
+    /// it as an injected app, and opened a direct connection — whose
+    /// `ClientReconnected` handling swapped the helper's single peer slot away
+    /// from the engine the launch sequence had just built. The
+    /// "My Mac (Mac Catalyst)" entry died on the spot and an attached entry
+    /// named after the helper process took its place. No orphaned process is
+    /// required; a clean quit and relaunch reproduced it.
+    static func shouldAnnounceListenerEndpoint(identifier: RuntimeSource.Identifier) -> Bool {
+        identifier != .macCatalyst
     }
 
     /// Announce this server's listener endpoint to the Mach Service injected-endpoint
