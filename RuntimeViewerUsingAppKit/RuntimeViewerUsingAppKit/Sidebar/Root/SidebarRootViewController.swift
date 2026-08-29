@@ -123,7 +123,12 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
             .subscribeOnNext { [weak self] _ in
                 guard let self else { return }
                 
-                outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
+                // Keyed on the scope, never on `source.description`. That is the
+                // peer's *process* display name, so two devices each running a
+                // SpringBoard — the case simulator injection exists for — wrote
+                // one another's expansion state.
+                let scopeKey = viewModel.documentState.runtimeEngine.bookmarkScope.sidebarAutosaveKey
+                outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(scopeKey)"
 
                 // Manual expansion autosave: NSOutlineView's built-in
                 // `autosaveExpandedItems` only attempts the first restore at the
@@ -141,7 +146,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
                     guard let viewModel, !viewModel.isFiltering else { return nil }
                     return viewModel.allNodes[persistentObject]
                 }
-                outlineView.expansionAutosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
+                outlineView.expansionAutosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(scopeKey)"
                 outlineView.restoreExpansionFromAutosave()
             }
             .disposed(by: rx.disposeBag)

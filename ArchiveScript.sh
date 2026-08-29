@@ -6,7 +6,7 @@
 #   ./ArchiveScript.sh --version-tag vX.Y.Z \
 #                      [--configuration Release|Debug] \
 #                      [--release-notes Changelogs/vX.Y.Z.md] \
-#                      [--update-packages] \
+#                      [--update-packages] [--local-deps] \
 #                      [--update-appcast] [--upload-to-github] [--commit-push]
 #   ./ArchiveScript.sh --help
 #
@@ -14,7 +14,8 @@
 # local build that only produces the signed, notarized zip. The default
 # configuration is Release; pass --configuration Debug (or any other
 # configuration name defined in the workspace) for local validation. Pass
-# --update-packages to refresh SwiftPM pins before archiving.
+# --update-packages to refresh SwiftPM pins before archiving. Pass
+# --local-deps to build against local dependency checkouts.
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -24,6 +25,7 @@ cd "$PROJECT_DIR"
 WORKSPACE="RuntimeViewer-Distribution.xcworkspace"
 SCHEME="RuntimeViewer macOS"
 CATALYST_SCHEME="RuntimeViewerCatalystHelper"
+MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Release"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 
@@ -32,6 +34,7 @@ CHANNEL=""
 RELEASE_NOTES=""
 ED_KEY_FILE=""
 UPDATE_PACKAGES=false
+LOCAL_DEPENDENCIES=false
 UPDATE_APPCAST=false
 UPLOAD_TO_GITHUB=false
 COMMIT_PUSH=false
@@ -94,6 +97,8 @@ while [[ $# -gt 0 ]]; do
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
         --catalyst-helper-scheme) CATALYST_SCHEME="$2"; shift 2;;
+        --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
+        --local-deps) LOCAL_DEPENDENCIES=true; shift;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
         --version-tag) VERSION_TAG="$2"; shift 2;;
@@ -113,12 +118,14 @@ while [[ $# -gt 0 ]]; do
         --notary-api-key) NOTARY_API_KEY="$2"; shift 2;;
         --notary-key-id) NOTARY_KEY_ID="$2"; shift 2;;
         --notary-issuer-id) NOTARY_ISSUER_ID="$2"; shift 2;;
-        -h|--help) sed -n '2,17p' "$0" | sed 's/^# *//'; exit 0;;
+        -h|--help) sed -n '2,18p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
 
+PUBLISHING=false
 if $UPLOAD_TO_GITHUB || $UPDATE_APPCAST || $COMMIT_PUSH; then
+    PUBLISHING=true
     [[ -z "$VERSION_TAG" ]] && fail "--version-tag required when --upload-to-github / --update-appcast / --commit-push is set"
 fi
 
@@ -146,6 +153,21 @@ EXPORT_PATH="$BUILD_PATH/Products/Export"
 CATALYST_EXPORT_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit"
 CATALYST_HELPER_ARCHIVE="$BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive"
 MAIN_ARCHIVE="$BUILD_PATH/RuntimeViewer.xcarchive"
+# Build against the local sibling checkouts of the dependency repos rather
+# than the pinned remote versions. Needed whenever a change under test lives
+# in one of those repos and has not been tagged yet — MachInjector reached
+# through swift-helper-service is the usual case. Without it the build
+# silently uses the remote pin, and the symptom is "I changed it and nothing
+# happened", which is hard to self-diagnose.
+#
+# Releases should normally NOT use this: main has to compile against the
+# released pins. It is here for validating a release build locally before the
+# dependency ships.
+if $LOCAL_DEPENDENCIES; then
+    export USING_LOCAL_DEPENDENCIES=1
+    log "Using local dependency checkouts (USING_LOCAL_DEPENDENCIES=1)"
+fi
+
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/Products/Logs}"
 
 # DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
@@ -303,6 +325,41 @@ run rm -f "$CATALYST_EXPORT_PATH/Packaging.log" \
         "$CATALYST_EXPORT_PATH/DistributionSummary.plist" \
         "$CATALYST_EXPORT_PATH/ExportOptions.plist"
 
+# The iOS Simulator injection payload, built before the app so the app's
+# "Embed iOS Simulator Payload" phase can seal it into the signed bundle.
+# It cannot be a target dependency — Xcode rejects iOS-family embedded content
+# from a macOS app target, the same constraint that keeps the Catalyst helper
+# out — so the ordering lives here.
+#
+# A failure is not fatal: the release still ships, only without the ability to
+# inject simulator processes. The build phase warns when the payload is absent.
+log "Building iOS Simulator injection payload"
+SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
+if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
+    -workspace "$WORKSPACE" \
+    -scheme "$MOBILE_SERVER_SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -destination 'generic/platform=iOS Simulator' \
+    -derivedDataPath "$DERIVED_DATA" \
+    -skipPackagePluginValidation -skipMacroValidation \
+    "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
+    log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this release"
+    # Drop whatever the last successful run left there. DerivedData is reused
+    # across builds and a failed compile does not clear the previous product,
+    # so leaving it lets the embed phase seal a stale payload into the app and
+    # report success — the warning above would be the only sign, and the phase
+    # contradicts it two lines later. Removing the directory also covers the
+    # phase's BUILD_DIR fallback, which resolves to this same path.
+    rm -rf "$SIMULATOR_PAYLOAD_PATH"
+    # A local build may legitimately ship without the payload — only injecting
+    # simulator processes is lost. A publishing run may not: the artefact goes
+    # out to people who cannot tell it is missing until injection fails on
+    # their machine.
+    if $PUBLISHING; then
+        fail "iOS Simulator payload failed to build; refusing to publish without it (drop --upload-to-github / --update-appcast / --commit-push to build locally anyway)"
+    fi
+fi
+
 log "Archiving main app"
 XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
@@ -312,6 +369,7 @@ XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -archivePath "$MAIN_ARCHIVE" \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
+    "RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH=$SIMULATOR_PAYLOAD_PATH" \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 run rm -rf "$EXPORT_PATH"
@@ -323,6 +381,17 @@ XCODEBUILD_LOG_NAME="export-main" run_piped xcodebuild -exportArchive \
 
 APP_PATH=$(find "$EXPORT_PATH" -maxdepth 1 -type d -name '*.app' | head -1)
 [[ -n "$APP_PATH" && -d "$APP_PATH" ]] || fail "expected exported *.app under $EXPORT_PATH"
+
+# Check the shipped bundle, not the intermediate step that was supposed to fill
+# it. The embed phase reports a missing payload with `warning:` and exits 0, so
+# a build where it never ran — or ran against a source that had just been
+# cleared — reaches here looking exactly like a successful one.
+if $PUBLISHING; then
+    EMBEDDED_SIMULATOR_PAYLOAD="$APP_PATH/Contents/Resources/RuntimeViewerServer-iphonesimulator.framework"
+    [[ -d "$EMBEDDED_SIMULATOR_PAYLOAD" ]] \
+        || fail "exported app carries no iOS Simulator payload at $EMBEDDED_SIMULATOR_PAYLOAD; refusing to publish"
+    log "Verified embedded iOS Simulator payload"
+fi
 
 if ! $SKIP_NOTARIZATION; then
     log "Notarizing"

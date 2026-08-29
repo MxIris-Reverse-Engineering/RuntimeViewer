@@ -106,3 +106,64 @@ when picking up follow-up work.
   the `.specializationAdded` cache flush was **withdrawn** once
   `RuntimeSwiftSection.specialize` was read past its dispatch shell.
   3 recorded as latent/unreachable with the change that would activate each.
+- [2026-08-22-simulator-injection-identity-findings.md](2026-08-22-simulator-injection-identity-findings.md) —
+  self-audit of Evolution 0014's identity rework (`feature/inject-ios-simulator-process`),
+  IDs `SIMID.<N>`. Not a review pass: it walks every consumer of
+  `hostInfo.hostID` after that field moved from process-level (instanceID) to
+  device-level (deviceID). 3 fixed in the same batch (mirrored engines landing
+  in a section of their own because the mirror path derived `hostID` from
+  `originChain.first`; `RuntimeSource.identifier` keying Bonjour clients by a
+  display name two processes can share; teardown clearing the dedup tables by
+  name after the key moved). `SIMID.4` records why the now-device-level prefix
+  in `clearAllWithHostID` is left alone — its trigger set is empty while iOS
+  payloads register no engine-list handler — together with the three changes
+  that would reopen it. `SIMID.5` flags `SIMULATOR_UDID` as unverified until
+  the end-to-end pass.
+- [2026-08-27-pr106-cross-review-findings.md](2026-08-27-pr106-cross-review-findings.md) —
+  second `/code-review xhigh` pass on PR #106, IDs `PR106X.<N>`, with every
+  finding re-verified by *two* mutually unaware sessions before adjudication.
+  5 fixed in-branch (the advertised Bonjour name regressing to a model name on
+  iOS devices — a revert of `db8388dc`'s deliberate fix; a failed simulator
+  payload build leaving the *previous* product for the embed phase to seal in
+  while the log says it succeeded; a doc block that swallowed the function it
+  documented; a stale DocC reference; the unregistered `TaskReports/`
+  directory). `PR106X.4` (service name over the 63-byte DNS-SD limit) is a
+  **false positive**: both sessions measured it, and mDNSResponder truncates on
+  a UTF-8 boundary and registers anyway — `NWListener` still reaches `.ready`
+  and the TXT record, which is what peer matching reads, is untouched.
+  `PR106X.2` (a relaunched peer briefly showing a second, dead row) is
+  **no-fix**: the obvious repair would kill the one legitimate case Evolution
+  0014 exists for, several injected processes on one device. `PR106X.1` (the
+  sidebar's autosave keys taking a peer's *process display name*) is deferred
+  to the `RuntimeBookmarkScope` proposal together with `PR106.1` — and records
+  why the obvious fix, switching those keys to `source.identifier`, is worse
+  than the bug: that identifier carries the pid. `PR106X.6` (both payload
+  bundles sharing one `CFBundleIdentifier`) keeps only its factual half; the
+  "notarization rejects this" claim is marked unproven, and the real acceptance
+  step is one full `ArchiveScript.sh` notarization run. `PR106X.10` is new this
+  round and still unmeasured: `NWBrowser`'s `.changed` case is dropped
+  entirely, which matters now that the service name survives a relaunch.
+
+- [2026-08-24-pr106-review-findings.md](2026-08-24-pr106-review-findings.md) —
+  `/code-review xhigh` pass on PR #106 (`feature/inject-ios-simulator-process`),
+  IDs `PR106.<N>`, cross-reviewed by a second session before adjudication.
+  14 findings: 11 fixed in-branch — among them the Bonjour service name
+  carrying the pid (old hosts display a raw UUID *and* accumulate one
+  `NSOutlineView` autosave key per peer launch), mirror cleanup missing the
+  instance-level namespace after `hostID` went device-level, a trapping
+  `Int(UInt64)` on a hostile fat-64 slice offset, injection confirmation
+  matching on pid alone, and a duplicated `processName` fallback that names a
+  target the empty string. `PR106.13` is a **false positive** — `return nil`
+  versus `continue` on an unreadable fat entry is provably unobservable,
+  because entries are contiguous and fixed-size, so once one is out of bounds
+  every later one is too; both review passes had called it real. `PR106.14`
+  (UDID in mDNS and in ~40 `.public` log sites) is deferred to its own
+  proposal: it needs one privacy convention, not patches, and the salted-hash
+  replacement must use a *fixed* salt or it re-splits one simulator into a
+  section per injected process. `PR106.1` (Bonjour bookmarks keyed by a
+  pid-bearing identifier, reversing `917002cc`'s deliberate stable identity) is
+  deferred to its own PR, bundled with the pre-existing `@FileStorage` defect
+  that lets a renamed peer silently overwrite another peer's bookmarks on
+  decode. Also records 4 pre-existing `RuntimeViewerCore` test failures
+  (reproduced on an untouched `69d8131b`) and a release path that can ship
+  without the simulator payload behind a single `warning:` line.

@@ -12,6 +12,7 @@
 #   ./RunScript.sh --no-launch              # build only
 #   ./RunScript.sh --update-packages        # refresh SPM pins first
 #   ./RunScript.sh --dry-run                # print commands without running
+#   ./RunScript.sh --local-deps             # build against local dependency checkouts
 #   ./RunScript.sh --help
 #
 # All distribution-related flags (notarize, appcast, GitHub upload, commit)
@@ -25,6 +26,7 @@ cd "$PROJECT_DIR"
 WORKSPACE="RuntimeViewer-Debug.xcworkspace"
 SCHEME="RuntimeViewer macOS"
 CATALYST_SCHEME="RuntimeViewerCatalystHelper"
+MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Debug-arm64e"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 
@@ -42,6 +44,7 @@ fi
 UPDATE_PACKAGES=false
 LAUNCH=true
 DRY_RUN=false
+LOCAL_DEPENDENCIES=false
 
 fail() { echo "error: $*" >&2; exit 1; }
 log()  { echo "[RunScript] $*"; }
@@ -87,13 +90,15 @@ while [[ $# -gt 0 ]]; do
         --workspace) WORKSPACE="$2"; shift 2;;
         --scheme) SCHEME="$2"; shift 2;;
         --catalyst-helper-scheme) CATALYST_SCHEME="$2"; shift 2;;
+        --mobile-server-scheme) MOBILE_SERVER_SCHEME="$2"; shift 2;;
         --configuration) CONFIGURATION="$2"; shift 2;;
         --build-number) BUILD_NUMBER="$2"; shift 2;;
         --derived-data) DERIVED_DATA="$2"; shift 2;;
         --update-packages) UPDATE_PACKAGES=true; shift;;
         --no-launch) LAUNCH=false; shift;;
         --dry-run) DRY_RUN=true; shift;;
-        -h|--help) sed -n '2,18p' "$0" | sed 's/^# *//'; exit 0;;
+        --local-deps) LOCAL_DEPENDENCIES=true; shift;;
+        -h|--help) sed -n '2,19p' "$0" | sed 's/^# *//'; exit 0;;
         *) fail "unknown argument: $1";;
     esac
 done
@@ -102,6 +107,17 @@ done
 
 log "workspace=$WORKSPACE scheme=$SCHEME configuration=$CONFIGURATION build=$BUILD_NUMBER"
 log "derived_data=$DERIVED_DATA update_packages=$UPDATE_PACKAGES launch=$LAUNCH"
+
+# Build against the local sibling checkouts of the dependency repos rather
+# than the pinned remote versions. Needed whenever a change under test lives
+# in one of those repos and has not been tagged yet — MachInjector reached
+# through swift-helper-service is the usual case. Without it the build
+# silently uses the remote pin, and the symptom is "I changed it and nothing
+# happened", which is hard to self-diagnose.
+if $LOCAL_DEPENDENCIES; then
+    export USING_LOCAL_DEPENDENCIES=1
+    log "Using local dependency checkouts (USING_LOCAL_DEPENDENCIES=1)"
+fi
 
 LOG_DIR="${LOG_DIR:-$PROJECT_DIR/Products/Logs}"
 XCODEBUILD_LOG_INDEX=0
@@ -189,6 +205,34 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
+# The iOS Simulator injection payload, built before the app so the app's
+# "Embed iOS Simulator Payload" phase finds it in this DerivedData's
+# Build/Products/<configuration>-iphonesimulator. It is deliberately not a
+# target dependency — Xcode rejects iOS-family embedded content from a macOS
+# app target, the same constraint that keeps the Catalyst helper out.
+#
+# A failure here is not fatal: the app builds and runs, and only injecting into
+# simulator processes is unavailable. The build phase says so in a warning.
+log "Building iOS Simulator injection payload"
+SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
+if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
+    -workspace "$WORKSPACE" \
+    -scheme "$MOBILE_SERVER_SCHEME" \
+    -configuration "$CONFIGURATION" \
+    -destination 'generic/platform=iOS Simulator' \
+    -derivedDataPath "$DERIVED_DATA" \
+    -skipPackagePluginValidation -skipMacroValidation \
+    "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
+    log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this build"
+    # Drop whatever the last successful run left there. DerivedData is reused
+    # across builds and a failed compile does not clear the previous product,
+    # so leaving it lets the embed phase seal a stale payload into the app and
+    # report success — the warning above would be the only sign, and the phase
+    # contradicts it two lines later. Removing the directory also covers the
+    # phase's BUILD_DIR fallback, which resolves to this same path.
+    rm -rf "$SIMULATOR_PAYLOAD_PATH"
+fi
+
 log "Building main app"
 XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
@@ -197,6 +241,7 @@ XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -destination 'generic/platform=macOS' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
+    "RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH=$SIMULATOR_PAYLOAD_PATH" \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"

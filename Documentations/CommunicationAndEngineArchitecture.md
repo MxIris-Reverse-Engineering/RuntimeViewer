@@ -99,6 +99,19 @@ func stop()
 
 这个反转是 `localSocket` 的核心（详见 §3.3）。
 
+> **连接身份 ≠ 落盘身份。** `RuntimeSource` 回答「往哪里连、以什么角色连」，不适合当持久化键：
+> `.bonjour` 客户端的 `Identifier` 是 `{deviceID}-{processIdentifier}`，对端每次重启就换一个；
+> `description` 是对端的**进程显示名**，两台设备各注入一个同名进程就会写到同一个键。
+>
+> 落盘键由 `RuntimeViewerCore` 的 `RuntimeBookmarkScope` 负责（和书签模型、`RuntimeRemoteEngineDescriptor`
+> 放在一起——它由 source
+> 派生，但本质是应用层的持久化键，连接层不该知道「书签」这回事）。每种 source 各取自己已有的稳定
+> 标识，落盘表示是可读、可反向解析、带版本号的字符串，例如
+> `v1:bonjour:client:{deviceID}:SpringBoard`。取不到稳定身份时退到 legacy，且**书签与 sidebar
+> autosave 两个消费点分别取值**——sidebar 绝不能用 `identifier`，那正是带 pid 的那个。
+>
+> 完整取舍见提案 [`draft-runtime-bookmark-scope`](Evolutions/draft-runtime-bookmark-scope.md)。
+
 ### 2.4 `RuntimeConnectionCredential`（`RuntimeConnectionCredential.swift`）—— 会话级凭证
 
 `RuntimeSource` 是稳定身份，但有些连接还需要一个**每会话临时解析**的凭证（由服务发现或前一次握手产生），它不应参与身份的等值/哈希，因此拆成独立的可选参数：
@@ -192,7 +205,7 @@ XPC 独特点：**不可重连**（SwiftyXPC 限制），只能销毁重建；`s
 底层 `RuntimeNetworkConnection` 包一个 `NWConnection`：
 - TCP keepalive（idle 2s / interval 2s / count 3）+ `noDelay`，`includePeerToPeer = true`（启用 AWDL 点对点），`serviceClass = .responsiveData`。
 - **`.waiting` 容忍窗口**：本地网络权限弹窗 / DNS 解析 / 网络切换期间会短暂进入 `.waiting`，代码给 10 秒容忍再判失败，避免误杀。
-- 服务发现与广播在 `RuntimeNetwork.swift`：`RuntimeNetworkBrowser`（`NWBrowser`）+ Bonjour TXT 记录（携带 `localInstanceID`、hostName、机型、系统版本、是否模拟器）。
+- 服务发现与广播在 `Network/`：`RuntimeNetworkBrowser`（`NWBrowser`）+ Bonjour TXT 记录（携带 `localInstanceID`、hostName、机型、系统版本、是否模拟器）。
 - 服务类型 `_runtimeviewer._tcp`。`localInstanceID` 持久化在 UserDefaults，用于**过滤自己**和镜像时的环路检测。
 
 两个子类：`RuntimeNetworkClientConnection`（用发现到的 `NWEndpoint` 主动连）、`RuntimeNetworkServerConnection`（起 `NWListener` 广播 + accept）。
@@ -286,7 +299,20 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ---
 
-## 4. 消息通道与线路协议（`RuntimeMessageChannel.swift` + `RuntimeNetwork.swift`）
+> **`Network/` 的分文件**（原先全塞在一个 `RuntimeNetwork.swift` 里）：
+>
+> | 文件 | 内容 |
+> |---|---|
+> | `RuntimeNetworkBonjour.swift` | 服务类型、TXT 记录键，以及写入 / 读回这两个方向 |
+> | `RuntimeNetworkBonjour+LocalIdentity.swift` | 这些值从哪来——注入负载的身份、设备 ID、进程名、服务名、两种主机名 |
+> | `RuntimeNetworkEndpoint.swift` | 发现到的对端及其 `uniqueKey` / `metadataChange` 判定 |
+> | `RuntimeNetworkBrowser.swift` | `NWBrowser` 封装与 added / removed / changed 的分派 |
+> | `RuntimeNetworkError.swift` | 传输层错误 |
+>
+> 本机身份单独成文件，是因为那里几乎每个值都带一个坑：注入负载不得往宿主进程写任何东西、
+> 设备 ID 必须跨进程稳定、主机名有两种形态（好读的那种会做阻塞式反向 DNS，曾触发启动看门狗）。
+
+## 4. 消息通道与线路协议（`RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` + `Network/`）
 
 除 XPC 外的四族共享 `RuntimeMessageChannel`，负责**组帧、编解码、请求路由、超时**。
 
@@ -297,7 +323,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 {"identifier":"com.example.Request","data":"<base64>","nonce":"..."}\nOK
 ```
 
-`RuntimeRequestData`（在 `RuntimeNetwork.swift`）字段：
+`RuntimeRequestData`（在 `RuntimeRequestData.swift`，与它唯一的使用者 `RuntimeMessageChannel` 并列）字段：
 - `identifier`：命令名。
 - `data`：内层 payload 的 JSON。
 - `nonce`：**每次往返的路由键**。让多个同名并发请求不在 pending 表里撞车——因此 `sendSemaphore` 不必端到端串行化往返。对端处理器必须原样回显 nonce；缺省则回退用 `identifier`（旧版单飞行行为）。
@@ -425,7 +451,14 @@ AWDL 路由的对端（iOS/visionOS/tvOS）即使进程已死，TCP keepalive �
    directTCPPort = proxy.port
    originChain   = engine.originChain + [localInstanceID]   ← 追加自己，供环路检测
    iconData      = proxy.iconData()               App 图标 PNG
+   stableIdentity = engine.bookmarkScope.identityRawValue ?? ""          ← 见 §2.3 的注
    ```
+   `stableIdentity` 是一个不透明字符串（`RuntimeBookmarkScope` 的落盘形式，见 §2.3 的注）。
+   **连接层只搬运、不解析它**——`RuntimeRemoteEngineDescriptor` 本身也不在连接层，它和「engine」这个
+   概念一起住在 `RuntimeViewerCore`。它让镜像端把书签与 sidebar 状态记在**被镜像那个引擎**的 scope 下，而不是
+   镜像自己那条 `directTCP` 链路上——后者的 host 与 port 属于每会话新建的 proxy，拿它当键等于每次
+   重连换一套。字段用 MetaCodable 的 `@Default("")` 标注：旧对端不发这个键，接收方回退到
+   `RuntimeBookmarkScope.recovered(from:)`；旧对端读新数据时多出的键被忽略。**双向兼容，不要求同版本。**
 2. **`updateProxyServers(for:)`**：订阅 `rx.runtimeEngines`，为每个新引擎起一个 `RuntimeEngineProxyServer`（存入 `proxyServers[id]`），引擎消失则 `stop()` 并移除。Proxy 在 detached task 里 `start()`（不阻塞主 actor），起好后重新 `buildEngineDescriptors` 并通过 Bonjour server 引擎 `pushEngineListChanged` 推给已连的对端。
 3. **Bonjour server 引擎连上事件** → 立即推当前引擎清单。
 
@@ -519,7 +552,7 @@ port = connection.connectionInfo.port
 | 我想…… | 看这里 |
 |--------|--------|
 | 新增一种传输 | 实现 `RuntimeConnection`（或走 `RuntimeForwardingConnection` + `RuntimeUnderlyingConnection`），在 `RuntimeSource` 加 case，在 `RuntimeCommunicator.connect` 加分支 |
-| 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData`（`RuntimeNetwork.swift`） |
+| 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` |
 | 加一条业务 RPC 命令 | `RuntimeEngine.CommandNames` + `RuntimeEngine.registerSharedHandlers`（Proxy 自动继承） |
 | 调 Bonjour 发现/心跳/重试参数 | `RuntimeEngineManager` 顶部的 static 常量 |
 | 理解镜像/断开/去重规则 | `RuntimeEngineMirrorRegistry`（纯逻辑，有单测）+ `Documentations/EngineMirroringWalkthrough.md` |

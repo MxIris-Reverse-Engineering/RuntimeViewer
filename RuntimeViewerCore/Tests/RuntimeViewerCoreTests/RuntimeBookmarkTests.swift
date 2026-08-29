@@ -7,36 +7,18 @@ import RuntimeViewerCommunication
 
 @Suite("RuntimeImageBookmark")
 struct RuntimeImageBookmarkTests {
-    @Test("Initialization with source and imageNode")
+    @Test("Initialization with imageNode")
     func initialization() {
-        let source = RuntimeSource.local
-        let imageNode = RuntimeImageNode("libobjc.dylib")
-
-        let bookmark = RuntimeImageBookmark(source: source, imageNode: imageNode)
-        #expect(bookmark.source == source)
+        let bookmark = RuntimeImageBookmark(imageNode: RuntimeImageNode("libobjc.dylib"))
         #expect(bookmark.imageNode.name == "libobjc.dylib")
-    }
-
-    @Test("Initialization with remote source")
-    func initializationWithRemoteSource() {
-        let source = RuntimeSource.remote(name: "Device", identifier: "abc-123", role: .server)
-        let imageNode = RuntimeImageNode("UIKit")
-
-        let bookmark = RuntimeImageBookmark(source: source, imageNode: imageNode)
-        #expect(bookmark.source == source)
-        #expect(bookmark.imageNode.name == "UIKit")
     }
 
     @Test("Codable round-trip")
     func codable() throws {
-        let source = RuntimeSource.local
-        let imageNode = RuntimeImageNode("Foundation")
-
-        let original = RuntimeImageBookmark(source: source, imageNode: imageNode)
+        let original = RuntimeImageBookmark(imageNode: RuntimeImageNode("Foundation"))
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(RuntimeImageBookmark.self, from: data)
-        #expect(decoded.source == original.source)
-        #expect(decoded.imageNode == original.imageNode)
+        #expect(decoded == original)
     }
 
     @Test("Codable round-trip with complex image node tree")
@@ -45,12 +27,10 @@ struct RuntimeImageBookmarkTests {
             for: ["/usr/lib/libobjc.dylib", "/usr/lib/libSystem.dylib"],
             name: "Images"
         )
-        let source = RuntimeSource.bonjour(name: "TestDevice", identifier: "test-id", role: .client)
 
-        let original = RuntimeImageBookmark(source: source, imageNode: rootNode)
+        let original = RuntimeImageBookmark(imageNode: rootNode)
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(RuntimeImageBookmark.self, from: data)
-        #expect(decoded.source == original.source)
         #expect(decoded.imageNode.name == original.imageNode.name)
         #expect(decoded.imageNode.children.count == original.imageNode.children.count)
     }
@@ -66,12 +46,32 @@ struct RuntimeImageBookmarkTests {
         var leafNode = rootNode
         while let next = leafNode.children.first { leafNode = next }
 
-        let original = RuntimeImageBookmark(source: .local, imageNode: leafNode)
+        let original = RuntimeImageBookmark(imageNode: leafNode)
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(RuntimeImageBookmark.self, from: data)
 
         #expect(decoded.imageNode.path == "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit")
         #expect(decoded.imageNode == original.imageNode)
+    }
+
+    @Test("A bookmark written before the source field was dropped still decodes")
+    func decodesLegacyPayloadCarryingASource() throws {
+        // Files on disk still carry the field. It has to decode as an ignored
+        // extra key, or every bookmark the user has is unreadable after the
+        // upgrade — the exact failure this whole change exists to prevent.
+        let legacyJSON = """
+        {"source": {"local": {}}, "imageNode": {"name": "AppKit", "absolutePath": "/AppKit", "children": []}}
+        """
+        let decoded = try JSONDecoder().decode(RuntimeImageBookmark.self, from: Data(legacyJSON.utf8))
+        #expect(decoded.imageNode.name == "AppKit")
+    }
+
+    @Test("A bookmark no longer encodes a source of its own")
+    func doesNotEncodeASource() throws {
+        let data = try JSONEncoder().encode(RuntimeImageBookmark(imageNode: RuntimeImageNode("AppKit")))
+        let object = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["source"] == nil)
+        #expect(object.keys.sorted() == ["imageNode"])
     }
 }
 
@@ -79,84 +79,69 @@ struct RuntimeImageBookmarkTests {
 
 @Suite("RuntimeObjectBookmark")
 struct RuntimeObjectBookmarkTests {
-    @Test("Initialization with source and object")
-    func initialization() {
-        let source = RuntimeSource.local
-        let object = RuntimeObject(
-            name: "NSObject",
-            displayName: "NSObject",
-            kind: .objc(.type(.class)),
+    private func makeObject(
+        name: String,
+        kind: RuntimeObjectKind = .objc(.type(.class)),
+        imagePath: String = "/usr/lib/libobjc.dylib",
+        children: [RuntimeObject] = []
+    ) -> RuntimeObject {
+        RuntimeObject(
+            name: name,
+            displayName: name,
+            kind: kind,
             secondaryKind: nil,
-            imagePath: "/usr/lib/libobjc.dylib",
-            children: []
+            imagePath: imagePath,
+            children: children
         )
+    }
 
-        let bookmark = RuntimeObjectBookmark(source: source, object: object)
-        #expect(bookmark.source == source)
+    @Test("Initialization with object")
+    func initialization() {
+        let bookmark = RuntimeObjectBookmark(object: makeObject(name: "NSObject"))
         #expect(bookmark.object.name == "NSObject")
         #expect(bookmark.object.kind == .objc(.type(.class)))
     }
 
-    @Test("Initialization with Swift object and remote source")
-    func initializationSwiftRemote() {
-        let source = RuntimeSource.directTCP(name: "Remote", host: "192.168.1.1", port: 8080, role: .server)
-        let object = RuntimeObject(
+    @Test("Initialization with a Swift object")
+    func initializationSwift() {
+        let bookmark = RuntimeObjectBookmark(object: makeObject(
             name: "MyStruct",
-            displayName: "MyStruct",
             kind: .swift(.type(.struct)),
-            secondaryKind: nil,
-            imagePath: "/usr/lib/swift/libswiftCore.dylib",
-            children: []
-        )
-
-        let bookmark = RuntimeObjectBookmark(source: source, object: object)
-        #expect(bookmark.source == source)
+            imagePath: "/usr/lib/swift/libswiftCore.dylib"
+        ))
         #expect(bookmark.object.kind == .swift(.type(.struct)))
     }
 
     @Test("Codable round-trip")
     func codable() throws {
-        let source = RuntimeSource.local
-        let object = RuntimeObject(
+        let original = RuntimeObjectBookmark(object: makeObject(
             name: "NSView",
-            displayName: "NSView",
-            kind: .objc(.type(.class)),
-            secondaryKind: nil,
-            imagePath: "/System/Library/Frameworks/AppKit.framework/AppKit",
-            children: []
-        )
-
-        let original = RuntimeObjectBookmark(source: source, object: object)
+            imagePath: "/System/Library/Frameworks/AppKit.framework/AppKit"
+        ))
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(RuntimeObjectBookmark.self, from: data)
-        #expect(decoded.source == original.source)
-        #expect(decoded.object == original.object)
+        #expect(decoded == original)
     }
 
     @Test("Codable round-trip with children")
     func codableWithChildren() throws {
-        let childObject = RuntimeObject(
-            name: "ChildClass",
-            displayName: "ChildClass",
-            kind: .objc(.type(.class)),
-            secondaryKind: nil,
-            imagePath: "/usr/lib/libobjc.dylib",
-            children: []
-        )
-        let parentObject = RuntimeObject(
-            name: "ParentClass",
-            displayName: "ParentClass",
-            kind: .objc(.type(.class)),
-            secondaryKind: nil,
-            imagePath: "/usr/lib/libobjc.dylib",
-            children: [childObject]
-        )
-        let source = RuntimeSource.localSocket(name: "Socket", identifier: "sock-1", role: .server)
+        let parentObject = makeObject(name: "ParentClass", children: [makeObject(name: "ChildClass")])
 
-        let original = RuntimeObjectBookmark(source: source, object: parentObject)
+        let original = RuntimeObjectBookmark(object: parentObject)
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(RuntimeObjectBookmark.self, from: data)
         #expect(decoded.object.children.count == 1)
         #expect(decoded.object.children[0].name == "ChildClass")
+    }
+
+    @Test("A bookmark written before the source field was dropped still decodes")
+    func decodesLegacyPayloadCarryingASource() throws {
+        let legacyJSON = """
+        {"source": {"bonjour": {"identifier": "DEV-100", "name": "SpringBoard", "role": {"client": {}}}}, \
+        "object": {"children": [], "displayName": "NSObject", "imagePath": "/usr/lib/libobjc.dylib", \
+        "kind": {"objc": {"_0": {"type": {"_0": {"class": {}}}}}}, "name": "NSObject", "properties": 0}}
+        """
+        let decoded = try JSONDecoder().decode(RuntimeObjectBookmark.self, from: Data(legacyJSON.utf8))
+        #expect(decoded.object.name == "NSObject")
     }
 }

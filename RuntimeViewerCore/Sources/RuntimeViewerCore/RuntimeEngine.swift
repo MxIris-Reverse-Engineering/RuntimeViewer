@@ -1,6 +1,6 @@
 import MachOKit
 public import FoundationToolbox
-import RuntimeViewerCoreObjC
+import RuntimeViewerObjC
 public import Foundation
 public import Combine
 public import RuntimeViewerCommunication
@@ -106,6 +106,19 @@ public actor RuntimeEngine {
     public nonisolated let engineID: String
 
     public nonisolated let source: RuntimeSource
+
+    /// The stable persistence identity of the peer this engine talks to.
+    ///
+    /// Every key the app files this peer's data under — bookmarks, sidebar
+    /// autosave state — comes from here rather than from ``source``, whose
+    /// display name collides between peers and whose Bonjour identifier
+    /// carries a process identifier that changes on every relaunch.
+    ///
+    /// Injected by whoever builds the engine, because only they hold the
+    /// identity: a directly-discovered Bonjour peer publishes it in its TXT
+    /// record, and a mirrored engine receives it on the wire. Everything else
+    /// already names itself stably and is derived from ``source``.
+    public nonisolated let bookmarkScope: RuntimeBookmarkScope
 
     public nonisolated let hostInfo: RuntimeHostInfo
 
@@ -235,9 +248,15 @@ public actor RuntimeEngine {
         ),
         originChain: [String] = [RuntimeNetworkBonjour.localInstanceID],
         pushesRuntimeData: Bool = true,
+        bookmarkScope: RuntimeBookmarkScope? = nil,
     ) {
         self.engineID = engineID
         self.source = source
+        // Deriving from `source` covers every kind that already names itself
+        // stably. It cannot cover a Bonjour *client*, whose identifier is
+        // `{deviceID}-{processIdentifier}` at best and a bare service name at
+        // worst, so that one caller passes the scope in.
+        self.bookmarkScope = bookmarkScope ?? .recovered(from: source) ?? .legacy(for: source)
         self.hostInfo = hostInfo
         self.originChain = originChain
         self.pushesRuntimeData = pushesRuntimeData

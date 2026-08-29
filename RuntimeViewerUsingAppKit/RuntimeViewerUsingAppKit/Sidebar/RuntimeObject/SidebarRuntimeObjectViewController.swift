@@ -264,8 +264,11 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         outlineView.rx.setDelegate(self).disposed(by: rx.disposeBag)
 
-        outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(viewModel.documentState.runtimeEngine.source.description)"
-        outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(viewModel.documentState.runtimeEngine.source.description)"
+        // Keyed on the scope, never on `source.description` — see the note in
+        // `SidebarRootViewController`.
+        let scopeKey = viewModel.documentState.runtimeEngine.bookmarkScope.sidebarAutosaveKey
+        outlineView.identifier = "com.JH.RuntimeViewer.\(Self.self).identifier.\(scopeKey)"
+        outlineView.autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName.\(scopeKey)"
 
         imageLoadedView.filterScopeButton.rx.click.asSignal()
             .emitOnNextMainActor { [weak self, weak viewModel] in

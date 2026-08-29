@@ -438,8 +438,8 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     public func transform(_ input: Input) -> Output {
         input.addBookmark.emitOnNext { [weak self] viewModel in
             guard let self else { return }
-            let runtimeSource = documentState.runtimeEngine.source
-            appDefaults.objectBookmarksBySourceAndImagePath[runtimeSource, default: [:]][imagePath, default: []].append(.init(source: runtimeSource, object: viewModel.runtimeObject))
+            let bookmarkKey = documentState.runtimeEngine.bookmarkScope.bookmarkKey
+            appDefaults.objectBookmarksByScopeAndImagePath[bookmarkKey, default: [:]][imagePath, default: []].append(.init(object: viewModel.runtimeObject))
         }
         .disposed(by: rx.disposeBag)
 

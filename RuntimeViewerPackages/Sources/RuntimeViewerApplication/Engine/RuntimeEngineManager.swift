@@ -4,7 +4,6 @@ import Foundation
 import FoundationToolbox
 import OrderedCollections
 import ServiceManagement
-import SystemConfiguration
 import Dependencies
 import DependenciesMacros
 import RuntimeViewerCore
@@ -39,10 +38,16 @@ public final class RuntimeEngineManager {
 
     private let browser = RuntimeNetworkBrowser()
 
-    private var knownBonjourEndpointNames: Set<String> = []
+    /// Endpoints already connected, keyed by ``RuntimeNetworkEndpoint/uniqueKey``.
+    ///
+    /// Deliberately *not* keyed by service name. An iOS peer advertises one
+    /// name per device, so keying by name means the second payload-carrying
+    /// process on one device (several injected processes inside one simulator,
+    /// say) is written off as a duplicate of the first and never connects.
+    private var knownBonjourEndpointKeys: Set<String> = []
 
-    /// Endpoints that were rediscovered while a stale engine with the same name
-    /// was still being torn down. After `terminateRuntimeEngine` clears the name,
+    /// Endpoints that were rediscovered while a stale engine with the same key
+    /// was still being torn down. After `terminateRuntimeEngine` clears the key,
     /// we re-issue `connectToBonjourEndpoint` for any pending entry so the user
     /// gets auto-reconnected (e.g. when the iOS server resumes from background
     /// suspension and re-advertises Bonjour before the old NWConnection has
@@ -187,12 +192,12 @@ public final class RuntimeEngineManager {
             onRemoved: { [weak self] endpoint in
                 guard let self else { return }
                 #log(.info,"Bonjour endpoint removed: \(endpoint.name, privacy: .public)")
-                // Do NOT clear knownBonjourEndpointNames here. The Bonjour service
+                // Do NOT clear knownBonjourEndpointKeys here. The Bonjour service
                 // is de-registered whenever the NWListener is cancelled (e.g., after
                 // accepting a connection), causing the endpoint to flap. Clearing
-                // the name here would allow a duplicate connection when the endpoint
+                // the key here would allow a duplicate connection when the endpoint
                 // reappears. Instead, rely on terminateRuntimeEngine (called on
-                // actual disconnect) to clear the name and allow reconnection.
+                // actual disconnect) to clear the key and allow reconnection.
                 _ = self
             }
         )
@@ -211,7 +216,11 @@ public final class RuntimeEngineManager {
     }
 
     private func startBonjourServer() {
-        let name = SCDynamicStoreCopyComputerName(nil, nil) as? String ?? ProcessInfo.processInfo.hostName
+        // The readable, launch-stable service name every peer now advertises.
+        // Process-level identity travels in the TXT record instead; see
+        // `RuntimeNetworkBonjour.localServiceName` for why the name itself must
+        // not carry it.
+        let name = RuntimeNetworkBonjour.localServiceName
         let source = RuntimeSource.bonjour(name: name, identifier: .init(rawValue: name), role: .server)
         let engine = RuntimeEngine(source: source, pushesRuntimeData: false)
         bonjourServerEngine = engine
@@ -231,28 +240,49 @@ public final class RuntimeEngineManager {
     // MARK: - Bonjour Connection
 
     private func connectToBonjourEndpoint(_ endpoint: RuntimeNetworkEndpoint, attempt: Int = 0) async {
-        guard !knownBonjourEndpointNames.contains(endpoint.name) else {
+        let endpointKey = endpoint.uniqueKey
+        guard !knownBonjourEndpointKeys.contains(endpointKey) else {
             // The endpoint was rediscovered before the previous engine for this
-            // name finished tearing down. Stash it so `terminateRuntimeEngine`
+            // key finished tearing down. Stash it so `terminateRuntimeEngine`
             // can pick it up and reconnect once the old engine is fully gone.
-            #log(.info,"Skipping duplicate Bonjour endpoint: \(endpoint.name, privacy: .public), queueing for reconnect after current engine terminates")
-            pendingReconnectEndpoints[endpoint.name] = endpoint
+            #log(.info,"Skipping duplicate Bonjour endpoint: \(endpoint.name, privacy: .public), key: \(endpointKey, privacy: .public), queueing for reconnect after current engine terminates")
+            pendingReconnectEndpoints[endpointKey] = endpoint
             return
         }
-        // A fresh connection attempt for this name supersedes any pending one.
-        pendingReconnectEndpoints.removeValue(forKey: endpoint.name)
-        knownBonjourEndpointNames.insert(endpoint.name)
+        // A fresh connection attempt for this key supersedes any pending one.
+        pendingReconnectEndpoints.removeValue(forKey: endpointKey)
+        knownBonjourEndpointKeys.insert(endpointKey)
 
         do {
+            // Device-level `hostID` groups every engine on one device into a
+            // single section; the entry inside it is titled with the peer's
+            // process name. That is the shape local Mac injection already
+            // produces, and it is what a simulator carrying several injected
+            // payloads has to produce too. Peers that publish neither key fall
+            // back to what they have always sent.
             let remoteHostInfo = RuntimeHostInfo(
-                hostID: endpoint.instanceID ?? endpoint.name,
+                hostID: endpoint.deviceID ?? endpoint.instanceID ?? endpoint.name,
                 hostName: endpoint.hostName ?? endpoint.name,
                 metadata: endpoint.deviceMetadata ?? .current
             )
+            // One string, used twice on purpose. The engine's display name and
+            // the process half of its bookmark scope must be the same value,
+            // because the migration that reads old bookmarks off disk can only
+            // recover the process name from the stored display name. Let the
+            // two drift and a migrated bookmark lands under a key this engine
+            // never asks for.
+            let engineName = endpoint.processName ?? endpoint.name
+            if endpoint.deviceID == nil {
+                #log(.info, "Bonjour endpoint \(endpoint.name, privacy: .public) publishes no device ID; its bookmarks and sidebar state fall back to legacy keys")
+            }
             let runtimeEngine = RuntimeEngine(
-                source: .bonjour(name: endpoint.name, identifier: .init(rawValue: endpoint.name), role: .client),
+                source: .bonjour(name: engineName, identifier: .init(rawValue: endpointKey), role: .client),
                 hostInfo: remoteHostInfo,
-                originChain: [endpoint.instanceID ?? endpoint.name]
+                // Cycle detection stays on `instanceID`: it identifies the
+                // advertising *installation*, which is the thing a mirrored
+                // engine can loop back through.
+                originChain: [endpoint.instanceID ?? endpoint.name],
+                bookmarkScope: .bonjour(deviceID: endpoint.deviceID, processName: engineName, role: .client)
             )
             try await runtimeEngine.connect(credential: .bonjour(endpoint))
             appendBonjourRuntimeEngine(runtimeEngine)
@@ -302,10 +332,10 @@ public final class RuntimeEngineManager {
                 let delay = Self.retryBaseDelay * UInt64(1 << attempt) // 2s, 4s, 8s
                 #log(.info,"Retrying Bonjour connection to \(endpoint.name, privacy: .public) in \(delay / 1_000_000_000, privacy: .public)s...")
                 try? await Task.sleep(nanoseconds: delay)
-                knownBonjourEndpointNames.remove(endpoint.name)
+                knownBonjourEndpointKeys.remove(endpointKey)
                 await connectToBonjourEndpoint(endpoint, attempt: attempt + 1)
             } else {
-                knownBonjourEndpointNames.remove(endpoint.name)
+                knownBonjourEndpointKeys.remove(endpointKey)
                 #log(.error,"Exhausted retry attempts for Bonjour endpoint: \(endpoint.name, privacy: .public)")
             }
         }
@@ -366,12 +396,15 @@ public final class RuntimeEngineManager {
     public func terminateRuntimeEngine(for source: RuntimeSource) {
         #log(.info,"Terminating runtime engine: \(source.description, privacy: .public)")
         var pendingBonjourReconnect: RuntimeNetworkEndpoint?
-        if case .bonjour(let name, _, let role) = source, role.isClient {
-            knownBonjourEndpointNames.remove(name)
+        if case .bonjour(_, let identifier, let role) = source, role.isClient {
+            // The identifier, not the name — the name is the peer's process
+            // display name and no longer identifies the endpoint on its own.
+            let endpointKey = identifier.rawValue
+            knownBonjourEndpointKeys.remove(endpointKey)
             // If the same endpoint was rediscovered while we were still tearing
             // down this engine (typical when the iOS server resumes from
             // background suspension), reconnect to it now.
-            pendingBonjourReconnect = pendingReconnectEndpoints.removeValue(forKey: name)
+            pendingBonjourReconnect = pendingReconnectEndpoints.removeValue(forKey: endpointKey)
         }
         if case .localSocket(_, let socketIdentifier, .client) = source, let pid = Int32(socketIdentifier.rawValue) {
             removeInjectedSocketEndpointRecord(pid: pid)
@@ -425,11 +458,27 @@ public final class RuntimeEngineManager {
     public enum AttachedEngineHandshakeError: LocalizedError {
         case engineNotFound(name: String)
         case handshakeTimedOut(name: String)
+        case bonjourEngineNeverAdvertised(name: String, processIdentifier: pid_t)
+        case simulatorDeviceUnidentifiable(name: String, processIdentifier: pid_t)
 
         public var errorDescription: String? {
             switch self {
             case .engineNotFound(let name):
                 return "Could not find the runtime engine for \(name) to confirm its connection."
+            case .bonjourEngineNeverAdvertised(let name, let processIdentifier):
+                return """
+                    Timed out waiting for \(name) (pid \(processIdentifier)) to appear on the network after injection.
+
+                    A simulator payload does not connect back the way a Mac one does — it advertises itself over Bonjour and this app's browser picks it up. The injection RPC returned successfully, so either the payload never finished starting up, or its advertisement never reached this machine.
+
+                    Check the simulator's own log for the payload's startup lines; `xcrun simctl spawn <udid> log show` shows them, the host's `log show` does not.
+                    """
+            case .simulatorDeviceUnidentifiable(let name, let processIdentifier):
+                return """
+                    Could not tell which simulator \(name) (pid \(processIdentifier)) belongs to.
+
+                    A simulator process is an ordinary host process, so its pid alone cannot identify the payload's advertisement — pids are per device, and another peer on this network may be using the same one. CoreSimulator records the answer in the target's SIMULATOR_UDID environment variable, and reading it failed.
+                    """
             case .handshakeTimedOut(let name):
                 return """
                     Timed out waiting for \(name) to connect back after injection.
@@ -470,6 +519,96 @@ public final class RuntimeEngineManager {
             throw AttachedEngineHandshakeError.handshakeTimedOut(name: name)
         }
         #log(.info, "Injected peer for \(name, privacy: .public) confirmed connected")
+    }
+
+    /// How often ``awaitInjectedBonjourEngine(name:deviceID:processIdentifier:timeout:)`` re-checks for
+    /// the advertised engine. Bonjour discovery plus the engine handshake take
+    /// seconds, not milliseconds, so a tight poll would only burn main-actor
+    /// hops.
+    private static let injectedBonjourEnginePollInterval: UInt64 = 500_000_000 // 0.5 seconds
+
+    /// Waits for a just-injected simulator process to show up as a Bonjour engine.
+    ///
+    /// The Mac injection path launches a client engine *before* injecting and
+    /// then confirms the payload connected back to it. A simulator payload does
+    /// neither: its transport is chosen at compile time and is always Bonjour
+    /// (see `RuntimeViewerServer.main()`), so it advertises itself and the
+    /// browser already running in this process connects to it — no engine to
+    /// launch here, only one to wait for.
+    ///
+    /// Matching is on device *and* pid. A simulator process is a real host
+    /// process, so the pid the payload publishes in its TXT record is the one
+    /// that was injected — but a pid namespace is per device, so the pid alone
+    /// does not identify the advertisement. The endpoint key is
+    /// `{deviceID}-{pid}` and both halves are required.
+    public func awaitInjectedBonjourEngine(
+        name: String,
+        deviceID: String,
+        processIdentifier: pid_t,
+        timeout: TimeInterval = 30
+    ) async throws {
+        #log(.info, "Waiting for injected Bonjour engine: \(name, privacy: .public) (pid: \(processIdentifier, privacy: .public), timeout: \(timeout, privacy: .public)s)")
+
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) != nil {
+                #log(.info, "Injected Bonjour engine appeared for \(name, privacy: .public)")
+                return
+            }
+            // `try`, not `try?`. Swallowing the cancellation error would turn
+            // this into a main-actor spin: `Task.sleep` throws immediately once
+            // cancelled, so the loop would re-run with no delay until the
+            // deadline. Nothing cancels this today — the only caller drops the
+            // task handle on the floor — but the function is public, and the
+            // first caller that does cancel would freeze the UI for 30s.
+            try await Task.sleep(nanoseconds: Self.injectedBonjourEnginePollInterval)
+        } while Date() < deadline
+
+        // One last look: the engine may have arrived while the final sleep was
+        // in flight, and reporting a timeout for a connection that exists would
+        // tear down a perfectly good engine.
+        if injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) != nil {
+            #log(.info, "Injected Bonjour engine appeared for \(name, privacy: .public) on the final check")
+            return
+        }
+
+        #log(.error, "Injected Bonjour engine never advertised for \(name, privacy: .public) within \(timeout, privacy: .public)s")
+        throw AttachedEngineHandshakeError.bonjourEngineNeverAdvertised(name: name, processIdentifier: processIdentifier)
+    }
+
+    /// The Bonjour engine belonging to `processIdentifier` on `deviceID`, if it
+    /// has connected.
+    private func injectedBonjourEngine(deviceID: String, processIdentifier: pid_t) -> RuntimeEngine? {
+        let clientIdentifiers = bonjourRuntimeEngines.compactMap { runtimeEngine -> (identifier: String, engine: RuntimeEngine)? in
+            guard case .bonjour(_, let identifier, let role) = runtimeEngine.source, role.isClient else {
+                return nil
+            }
+            return (identifier.rawValue, runtimeEngine)
+        }
+        guard let matched = Self.injectedBonjourEngineIdentifier(
+            among: clientIdentifiers.map(\.identifier),
+            deviceID: deviceID,
+            processIdentifier: processIdentifier
+        ) else { return nil }
+        return clientIdentifiers.first { $0.identifier == matched }?.engine
+    }
+
+    /// Picks the endpoint key belonging to the payload injected into
+    /// `processIdentifier` on the simulator `deviceID`.
+    ///
+    /// Whole-key equality, never "ends with the pid". A pid namespace is per
+    /// device: an iPhone on this network, or a simulator on somebody else's
+    /// Mac, can be advertising a process whose pid equals the one just injected
+    /// here. Matching on the trailing component alone reports a successful
+    /// attach for a payload that never started — the wait returns on its first
+    /// poll and the sheet closes, while the target never advertised at all.
+    static func injectedBonjourEngineIdentifier(
+        among identifiers: some Sequence<String>,
+        deviceID: String,
+        processIdentifier: pid_t
+    ) -> String? {
+        let expected = "\(deviceID)-\(processIdentifier)"
+        return identifiers.first { $0 == expected }
     }
 
     /// Polls the engine with a lightweight `engineList` round-trip until the peer answers,
@@ -688,10 +827,16 @@ public final class RuntimeEngineManager {
         }
 
         // Case 2: direct peer disconnect — handle both intermediate and leaf topologies.
+        //
+        // Both of the peer's identities are handed over: `hostInfo.hostID` is the
+        // device ID for a Bonjour route, while the peer's own engines are
+        // namespaced under its instance ID, which `connectToBonjourEndpoint`
+        // parked in `originChain[0]` when it opened the connection.
         let disconnectedHostID = runtimeEngine.hostInfo.hostID
-        let peerRemovals = mirrorRegistry.clearAllOwnedBy(hostID: disconnectedHostID)
-        let originRemovals = mirrorRegistry.clearAllWithHostID(hostID: disconnectedHostID)
-        let allRemovals = peerRemovals + originRemovals
+        let allRemovals = mirrorRegistry.clearAllForDisconnectedPeer(
+            hostID: disconnectedHostID,
+            originInstanceID: runtimeEngine.originChain.first
+        )
         for removal in allRemovals {
             let stopped = removal.engine
             Task { @MainActor in await stopped.stop() }
@@ -777,6 +922,11 @@ public final class RuntimeEngineManager {
             let descriptor = RuntimeRemoteEngineDescriptor(
                 engineID: globalID,
                 source: engine.source,
+                hostID: engine.hostInfo.hostID,
+                // Empty for an engine with no stable identity of its own, which
+                // is what a peer predating the field also sends — the receiver
+                // handles both the same way.
+                stableIdentity: engine.bookmarkScope.identityRawValue ?? "",
                 hostName: engine.hostInfo.hostName,
                 originChain: chainWithSelf,
                 directTCPHost: proxyHost,
@@ -904,7 +1054,11 @@ public final class RuntimeEngineManager {
             fromHostID: sourceHostID,
             localInstanceID: RuntimeNetworkBonjour.localInstanceID,
             engineFactory: { descriptor in
-                RuntimeEngine(
+                let bookmarkScope = descriptor.bookmarkScope
+                if descriptor.stableIdentity.isEmpty {
+                    #log(.info, "Descriptor \(descriptor.engineID, privacy: .public) carries no bookmark scope identity; recovered \(String(describing: bookmarkScope), privacy: .public) from its source")
+                }
+                return RuntimeEngine(
                     source: .directTCP(
                         name: descriptor.source.description,
                         host: descriptor.directTCPHost,
@@ -912,11 +1066,21 @@ public final class RuntimeEngineManager {
                         role: .client
                     ),
                     hostInfo: RuntimeHostInfo(
-                        hostID: descriptor.originChain.first ?? "",
+                        // The forwarder's own `hostID` for this engine, so a
+                        // mirror shares a section with a direct route to the
+                        // same host. `originChain.first` is the pre-`hostID`
+                        // fallback, and only coincides with the host while a
+                        // device runs a single installation.
+                        hostID: descriptor.hostID.isEmpty ? (descriptor.originChain.first ?? "") : descriptor.hostID,
                         hostName: descriptor.hostName,
                         metadata: descriptor.metadata
                     ),
-                    originChain: descriptor.originChain
+                    originChain: descriptor.originChain,
+                    // Never derived from the mirror's own `directTCP` source:
+                    // that host and port belong to a proxy assigned per
+                    // session, so a scope built from it would change on every
+                    // reconnect — the exact failure this type exists to stop.
+                    bookmarkScope: bookmarkScope
                 )
             }
         )

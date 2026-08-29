@@ -174,12 +174,12 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "RuntimeViewerCoreObjC",
+            name: "RuntimeViewerObjC",
         ),
         .target(
             name: "RuntimeViewerCore",
             dependencies: [
-                "RuntimeViewerCoreObjC",
+                "RuntimeViewerObjC",
                 "RuntimeViewerCommunication",
                 .product(name: "MachOKit", package: "MachOKit"),
                 .product(name: "MachOObjCSection", package: "MachOObjCSection"),
@@ -208,7 +208,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerCommunication",
             dependencies: [
-                "RuntimeViewerCoreObjC",
+                "RuntimeViewerUtilities",
                 .product(name: "HelperCommunication", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperPeer", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "HelperClient", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
@@ -231,6 +231,7 @@ let package = Package(
         .target(
             name: "RuntimeViewerUtilities",
             dependencies: [
+                "RuntimeViewerObjC",
                 .product(name: "SwiftMobileGestalt", package: "swift-mobile-gestalt"),
                 .product(name: "LaunchServicesPrivate", package: "LaunchServicesPrivate"),
             ],

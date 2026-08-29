@@ -4,7 +4,7 @@ import MachOObjCSection
 import ObjCDump
 import ObjCTypeDecodeKit
 import OrderedCollections
-private import RuntimeViewerCoreObjC
+private import RuntimeViewerObjC
 import Semantic
 import Utilities
 import MetaCodable

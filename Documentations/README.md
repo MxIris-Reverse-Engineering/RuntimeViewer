@@ -10,6 +10,7 @@
 | [`ResolvedIssues/`](ResolvedIssues/) | 已定位并修复的疑难问题纪要，含根因与验证过程 |
 | [`KnownIssues/`](KnownIssues/) | 代码审查发现但当时未修的问题快照，见 [子索引](KnownIssues/README.md) |
 | [`Reviews/`](Reviews/) | 针对某项工作的多轮审查闭环记录 |
+| [`TaskReports/`](TaskReports/) | 单次任务的落地纪要：起因、调研经过、选定方案与实际执行到哪一步 |
 
 ## 架构与运维
 
@@ -23,7 +24,7 @@
 
 ## 提案（Evolutions）
 
-见 [`Evolutions/README.md`](Evolutions/README.md)。当前 11 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings。
+见 [`Evolutions/README.md`](Evolutions/README.md)。当前 13 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程；另有 1 篇待编号草案：RuntimeBookmarkScope（把持久化身份从显示名手里拿走）。
 
 ## 设计与实现计划（Plans，归档）
 
@@ -84,6 +85,7 @@
 
 按时间倒序。
 
+- [注入 iOS Simulator 进程：宿主的地址不能喂给目标](ResolvedIssues/2026-08-23-simulator-injection-host-address-fallacy.md)（2026-08-23）—— 打崩三个 SpringBoard 的根因、它的三个变体，以及三个会把排查带偏的诊断陷阱。
 - [ObjC 父类名被染成"声明"色](ResolvedIssues/2026-08-19-objc-superclass-colored-as-declaration.md)（2026-08-19）—— SourceEditor 在征询我们的 nodeTypeAdjuster 之前就自行判定，父类与被声明的类共用同一种节点。
 - [库校验拦住 dlopen 注入](ResolvedIssues/2026-08-06-library-validation-blocks-dlopen-injection.md)（2026-08-06）—— Music 一类 Apple App 附加不上的原因。
 - [从 Inspector 跳转时 sidebar 选中高亮闪烁](ResolvedIssues/2026-08-05-sidebar-selection-highlight-flicker.md)（2026-08-05）
@@ -106,6 +108,14 @@
 - [UltraReview 发现](Reviews/2026-04-26-background-indexing-ultrareview.md)（2026-04-26）
 - [实现审查（最终轮）](Reviews/2026-04-26-background-indexing-implementation-review.md)（2026-04-26）
 
+## 任务纪要（TaskReports）
+
+按时间倒序。记录一次具体任务是怎么落地的——与提案（决策）和已解决问题（根因）互补。
+
+- [PR #106 代码审查与修复落地](TaskReports/2026-08-24-pr106-review-and-fixes.md)（2026-08-24 ~ 08-25）—— 注入 iOS Simulator 分支的审查、逐条裁决与修复过程。
+- [PR #88 F9/F10/F11 落地复盘](TaskReports/2026-08-10-pr88-f9-f10-f11-landing-retrospective.md)（2026-08-10）
+- [落地 PR #88 的 Open Quickly 性能修复](TaskReports/2026-08-10-land-the-pr-88-open-quickly-perf-fixes.md)（2026-08-10）
+
 ## 待办问题快照（KnownIssues）
 
-见 [`KnownIssues/README.md`](KnownIssues/README.md)。四份审查发现记录：v2.0.0-RC.4 预发布审查（2026-04-10）、UltraReview（2026-04-17）、Engine 镜像路由（2026-04-30）、主题设置面板（2026-06-25）。
+见 [`KnownIssues/README.md`](KnownIssues/README.md)。逐条裁决过的审查发现快照，按 `<slice>.<N>` 编号以便被 commit 与后续审查引用；判为「不修」或「误报」的同样留档，下一轮审查据此跳过。
