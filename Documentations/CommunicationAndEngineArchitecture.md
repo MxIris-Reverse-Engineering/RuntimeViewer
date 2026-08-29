@@ -205,7 +205,7 @@ XPC 独特点：**不可重连**（SwiftyXPC 限制），只能销毁重建；`s
 底层 `RuntimeNetworkConnection` 包一个 `NWConnection`：
 - TCP keepalive（idle 2s / interval 2s / count 3）+ `noDelay`，`includePeerToPeer = true`（启用 AWDL 点对点），`serviceClass = .responsiveData`。
 - **`.waiting` 容忍窗口**：本地网络权限弹窗 / DNS 解析 / 网络切换期间会短暂进入 `.waiting`，代码给 10 秒容忍再判失败，避免误杀。
-- 服务发现与广播在 `RuntimeNetwork.swift`：`RuntimeNetworkBrowser`（`NWBrowser`）+ Bonjour TXT 记录（携带 `localInstanceID`、hostName、机型、系统版本、是否模拟器）。
+- 服务发现与广播在 `Network/`：`RuntimeNetworkBrowser`（`NWBrowser`）+ Bonjour TXT 记录（携带 `localInstanceID`、hostName、机型、系统版本、是否模拟器）。
 - 服务类型 `_runtimeviewer._tcp`。`localInstanceID` 持久化在 UserDefaults，用于**过滤自己**和镜像时的环路检测。
 
 两个子类：`RuntimeNetworkClientConnection`（用发现到的 `NWEndpoint` 主动连）、`RuntimeNetworkServerConnection`（起 `NWListener` 广播 + accept）。
@@ -299,7 +299,20 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 ---
 
-## 4. 消息通道与线路协议（`RuntimeMessageChannel.swift` + `RuntimeNetwork.swift`）
+> **`Network/` 的分文件**（原先全塞在一个 `RuntimeNetwork.swift` 里）：
+>
+> | 文件 | 内容 |
+> |---|---|
+> | `RuntimeNetworkBonjour.swift` | 服务类型、TXT 记录键，以及写入 / 读回这两个方向 |
+> | `RuntimeNetworkBonjour+LocalIdentity.swift` | 这些值从哪来——注入负载的身份、设备 ID、进程名、服务名、两种主机名 |
+> | `RuntimeNetworkEndpoint.swift` | 发现到的对端及其 `uniqueKey` / `metadataChange` 判定 |
+> | `RuntimeNetworkBrowser.swift` | `NWBrowser` 封装与 added / removed / changed 的分派 |
+> | `RuntimeNetworkError.swift` | 传输层错误 |
+>
+> 本机身份单独成文件，是因为那里几乎每个值都带一个坑：注入负载不得往宿主进程写任何东西、
+> 设备 ID 必须跨进程稳定、主机名有两种形态（好读的那种会做阻塞式反向 DNS，曾触发启动看门狗）。
+
+## 4. 消息通道与线路协议（`RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` + `Network/`）
 
 除 XPC 外的四族共享 `RuntimeMessageChannel`，负责**组帧、编解码、请求路由、超时**。
 
@@ -310,7 +323,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 {"identifier":"com.example.Request","data":"<base64>","nonce":"..."}\nOK
 ```
 
-`RuntimeRequestData`（在 `RuntimeNetwork.swift`）字段：
+`RuntimeRequestData`（在 `RuntimeRequestData.swift`，与它唯一的使用者 `RuntimeMessageChannel` 并列）字段：
 - `identifier`：命令名。
 - `data`：内层 payload 的 JSON。
 - `nonce`：**每次往返的路由键**。让多个同名并发请求不在 pending 表里撞车——因此 `sendSemaphore` 不必端到端串行化往返。对端处理器必须原样回显 nonce；缺省则回退用 `identifier`（旧版单飞行行为）。
@@ -539,7 +552,7 @@ port = connection.connectionInfo.port
 | 我想…… | 看这里 |
 |--------|--------|
 | 新增一种传输 | 实现 `RuntimeConnection`（或走 `RuntimeForwardingConnection` + `RuntimeUnderlyingConnection`），在 `RuntimeSource` 加 case，在 `RuntimeCommunicator.connect` 加分支 |
-| 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData`（`RuntimeNetwork.swift`） |
+| 改线路格式 / 组帧 | `RuntimeMessageChannel.swift` + `RuntimeRequestData.swift` |
 | 加一条业务 RPC 命令 | `RuntimeEngine.CommandNames` + `RuntimeEngine.registerSharedHandlers`（Proxy 自动继承） |
 | 调 Bonjour 发现/心跳/重试参数 | `RuntimeEngineManager` 顶部的 static 常量 |
 | 理解镜像/断开/去重规则 | `RuntimeEngineMirrorRegistry`（纯逻辑，有单测）+ `Documentations/EngineMirroringWalkthrough.md` |
