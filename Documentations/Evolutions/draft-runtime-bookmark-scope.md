@@ -561,6 +561,25 @@ descriptor 方案没有这个两难。次要成本：`.bonjour(` 的构造与匹
     顺带清掉一条依赖：`RuntimeViewerCommunication` 对该 target 的依赖只服务于 `SandboxProbe`，
     第 35 条把它移走后已经没有使用者，一并删除。
 
+37. **`RuntimeHostInfo` 也移到 `RuntimeViewerCore`，`RuntimeDeviceMetadata` 留下。** 这两个决定
+    出自同一条判据——**连接层内部有没有引用它**——而这条判据把二者干干净净地分开：
+
+    - `RuntimeHostInfo` 在 `RuntimeViewerCommunication` 里的引用**只有它自己的定义文件**。它回答的
+      「这个 engine 属于哪台机器」是分组问题，和 `RuntimeRemoteEngineDescriptor` 同一层。移走，
+      `@Suite("RuntimeHostInfo")` 一并拆到 `RuntimeViewerCoreTests`。
+    - `RuntimeDeviceMetadata` 相反，是连接层**自己在用**的线路数据：`makeService(name:)` 把
+      `modelID` / `osVersion` / `isSimulator` 写进 Bonjour TXT 记录，`deviceMetadata(from:)` 从
+      browse result 解析回来，`RuntimeNetworkEndpoint.deviceMetadata` 是它的存储属性。**留下。**
+
+      而且这里不只是归属之争：`RuntimeViewerCore` 已经依赖 `RuntimeViewerCommunication`，把
+      `RuntimeDeviceMetadata` 搬进 Core 会让 `RuntimeNetwork` 反向依赖 Core，**直接构成循环依赖，
+      编不过**。
+
+    起草本条时先说过一句「`RuntimeHostInfo` 是 Bonjour TXT 记录和握手要用的」——**那是错的**，查证后
+    发现连接层根本没引用它。记在这里，因为它说明这类归属判断必须以 grep 结果为准，不能凭印象。
+
+    拆完之后 `DeviceMetadataTests.swift` 只剩 `RuntimeDeviceMetadata` 一个 suite，名副其实。
+
 ### 尚未决定
 
 - `PR106.14` 的 UDID 隐私提案落地后，版本号从 `v1` 到 `v2` 的具体迁移规则 —— 等那个提案定稿。

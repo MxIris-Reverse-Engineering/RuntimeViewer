@@ -1,5 +1,13 @@
 import Foundation
+// `RuntimeDeviceMetadata` is a stored property, and it stays in the connection
+// layer because Bonjour publishes it and `RuntimeNetworkEndpoint` carries it.
+public import RuntimeViewerCommunication
 
+/// Which machine an engine belongs to.
+///
+/// Lives here rather than in `RuntimeViewerCommunication` for the same reason
+/// as ``RuntimeRemoteEngineDescriptor``: the connection layer never referenced
+/// it, and grouping engines by host is not a question that layer asks.
 public struct RuntimeHostInfo: Codable, Hashable, Sendable {
     public let hostID: String
     public let hostName: String
