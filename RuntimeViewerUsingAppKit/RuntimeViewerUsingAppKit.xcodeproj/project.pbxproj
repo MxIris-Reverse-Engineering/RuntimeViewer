@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
-		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E910124C38FF8B6334251802 /* Sparkle */; };
 		E95ED17E0000000000000001 /* RuntimeViewerSourceEditorBridge.bundle in Embed SourceEditor Bridge */ = {isa = PBXBuildFile; fileRef = E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -106,14 +106,14 @@
 			);
 			name = "Embed PlugIns";
 		};
-		E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */ = {
+		E9C9E9EB2C2D33F500C4AA34 /* Embed Catalyst Helpers */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = ../Applications;
 			dstSubfolder = Executables;
 			files = (
-				E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Helpers */,
+				E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */,
 			);
-			name = "Embed Helpers";
+			name = "Embed Catalyst Helpers";
 		};
 /* End PBXCopyFilesBuildPhase section */
 
@@ -378,7 +378,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E9432FEF2C0D614A00362862 /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingAppKit" */;
 			buildPhases = (
-				E9CAFE010000000000000011 /* Build Embedded iOS-Family Products */,
 				E9432FDE2C0D614900362862 /* Sources */,
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
@@ -386,7 +385,7 @@
 				E9CAFE010000000000000002 /* Embed iOS Simulator Payload */,
 				E9CAFE010000000000000001 /* Generate LaunchDaemon plist */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
-				E9C9E9EB2C2D33F500C4AA34 /* Embed Helpers */,
+				E9C9E9EB2C2D33F500C4AA34 /* Embed Catalyst Helpers */,
 				E95ED17E0000000000000005 /* Embed SourceEditor Bridge */,
 			);
 			buildRules = (
@@ -609,142 +608,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		E9CAFE010000000000000011 /* Build Embedded iOS-Family Products */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Build Embedded iOS-Family Products";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = (
-				"set -e",
-				"",
-				"# Build the two iOS-family products this app embeds: the Mac Catalyst helper and the",
-				"# iOS Simulator injection payload. Neither can be a target dependency -- Xcode treats",
-				"# both as iOS-family embedded content and rejects them from a macOS app target -- so",
-				"# they are built here as nested top-level xcodebuild invocations, and their products",
-				"# are copied to where the Embed Helpers / Embed iOS Simulator Payload phases already",
-				"# look for them. Those two phases are left untouched.",
-				"#",
-				"# Three constraints, each established by measurement rather than inference:",
-				"#",
-				"# 1. `env -i`. A nested xcodebuild inherits this build's environment, and PRODUCT_NAME",
-				"#    and friends then make every SPM target believe it is producing the main app:",
-				"#    \"error: Multiple commands produce .../RuntimeViewer-Debug.app/Contents/MacOS/__preview.dylib\",",
-				"#    naming targets like AssociatedObject and swift-clocks as the producers.",
-				"#",
-				"# 2. A derived data path of its own. Reusing this build's fails outright: the outer",
-				"#    build holds XCBuildData/build.db, and the inner one gets \"database is locked.",
-				"#    Possibly there are two concurrent builds running in the same filesystem location\".",
-				"#    That is why this cannot simply mirror what RunScript.sh does -- the script runs two",
-				"#    builds back to back, so only one ever holds the lock. Compilation caching",
-				"#    (COMPILATION_CACHE_ENABLE_CACHING) is shared across derived data directories, so the",
-				"#    second one costs far less than a full rebuild: ~56s from cold, not minutes.",
-				"#",
-				"# 3. The staleness guard below. A nested xcodebuild costs ~23s even when everything is",
-				"#    already up to date -- that time goes to process startup and re-resolving the package",
-				"#    graph, not to compiling. Skipping it when no input changed takes the common case,",
-				"#    editing the main app, to ~0s.",
-				"#",
-				"# RunScript.sh / ArchiveScript.sh build both products before the app, so on those paths",
-				"# the guard finds the products current and this phase does nothing.",
-				"",
-				"case \"${CONFIGURATION}\" in",
-				"    Release*) workspace_name=\"RuntimeViewer-Distribution.xcworkspace\" ;;",
-				"    *)        workspace_name=\"RuntimeViewer-Debug.xcworkspace\" ;;",
-				"esac",
-				"",
-				"repository_root=\"${SRCROOT}/..\"",
-				"workspace_path=\"${repository_root}/${workspace_name}\"",
-				"nested_derived_data=\"${BUILD_DIR}/../../NestedProductsBuild\"",
-				"",
-				"# True when the product is missing, or any input directory holds something newer.",
-				"is_out_of_date() {",
-				"    product_path=\"$1\"",
-				"    shift",
-				"    [ -e \"$product_path\" ] || return 0",
-				"    for source_directory in \"$@\"; do",
-				"        [ -d \"$source_directory\" ] || continue",
-				"        [ -z \"$(find \"$source_directory\" -newer \"$product_path\" -print -quit)\" ] || return 0",
-				"    done",
-				"    return 1",
-				"}",
-				"",
-				"# DEVELOPER_DIR is forwarded so the nested build uses the same Xcode as this one;",
-				"# env -i would otherwise drop it and fall back to whatever xcode-select points at.",
-				"build_scheme() {",
-				"    env -i \\",
-				"        PATH=\"/usr/bin:/bin:/usr/sbin:/sbin\" \\",
-				"        HOME=\"${HOME}\" \\",
-				"        DEVELOPER_DIR=\"${DEVELOPER_DIR}\" \\",
-				"        USING_LOCAL_DEPENDENCIES=\"${USING_LOCAL_DEPENDENCIES}\" \\",
-				"        xcodebuild build \\",
-				"            -workspace \"$workspace_path\" \\",
-				"            -scheme \"$1\" \\",
-				"            -configuration \"${CONFIGURATION}\" \\",
-				"            -destination \"$2\" \\",
-				"            -derivedDataPath \"$nested_derived_data\" \\",
-				"            -skipPackagePluginValidation \\",
-				"            -skipMacroValidation",
-				"}",
-				"",
-				"# The Mac Catalyst helper. Its inputs are its own sources, the plugin it embeds, and the",
-				"# two packages that plugin links.",
-				"catalyst_helper_product=\"${BUILD_DIR}/${CONFIGURATION}-maccatalyst/RuntimeViewerCatalystHelper.app\"",
-				"if is_out_of_date \"$catalyst_helper_product\" \\",
-				"    \"${SRCROOT}/RuntimeViewerCatalystHelper\" \\",
-				"    \"${SRCROOT}/RuntimeViewerCatalystHelperPlugin\" \\",
-				"    \"${repository_root}/RuntimeViewerCore/Sources\" \\",
-				"    \"${repository_root}/RuntimeViewerPackages/Sources/RuntimeViewerCatalystExtensions\"; then",
-				"    echo \"Building RuntimeViewerCatalystHelper\"",
-				"    build_scheme RuntimeViewerCatalystHelper 'generic/platform=macOS,variant=Mac Catalyst'",
-				"    mkdir -p \"$(dirname \"$catalyst_helper_product\")\"",
-				"    rm -rf \"$catalyst_helper_product\"",
-				"    ditto \"${nested_derived_data}/Build/Products/${CONFIGURATION}-maccatalyst/RuntimeViewerCatalystHelper.app\" \"$catalyst_helper_product\"",
-				"else",
-				"    echo \"RuntimeViewerCatalystHelper is up to date\"",
-				"fi",
-				"",
-				"# The iOS Simulator payload. Unlike the helper, a failure here is not fatal: the app",
-				"# builds and runs, and only injecting into simulator processes is unavailable. The stale",
-				"# product is removed so the embed phase reports that truthfully instead of sealing in the",
-				"# last one that did build.",
-				"simulator_payload_product=\"${BUILD_DIR}/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework\"",
-				"if is_out_of_date \"$simulator_payload_product\" \\",
-				"    \"${repository_root}/RuntimeViewerServer/RuntimeViewerServer\" \\",
-				"    \"${repository_root}/RuntimeViewerCore/Sources\"; then",
-				"    echo \"Building RuntimeViewerMobileServer\"",
-				"    if build_scheme RuntimeViewerMobileServer 'generic/platform=iOS Simulator'; then",
-				"        mkdir -p \"$(dirname \"$simulator_payload_product\")\"",
-				"        rm -rf \"$simulator_payload_product\"",
-				"        ditto \"${nested_derived_data}/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework\" \"$simulator_payload_product\"",
-				"    else",
-				"        echo \"warning: iOS Simulator payload failed to build - injecting into simulator processes will be unavailable in this build.\"",
-				"        rm -rf \"$simulator_payload_product\"",
-				"    fi",
-				"else",
-				"    echo \"RuntimeViewerMobileServer payload is up to date\"",
-				"fi",
-				"",
-			);
-		};
-		E9CAFE010000000000000002 /* Embed iOS Simulator Payload */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			name = "Embed iOS Simulator Payload";
-			shellPath = /bin/sh;
-			shellScript = "set -e\n\n# The iOS Simulator injection payload.\n#\n# It cannot be a target dependency: Xcode treats an iOS-family framework as\n# embedded content the macOS app target rejects outright — the same reason the\n# Mac Catalyst helper is built by the shell scripts rather than depended on.\n# RunScript.sh / ArchiveScript.sh build RuntimeViewerMobileServer for\n# 'generic/platform=iOS Simulator' into this DerivedData first, which is what\n# leaves the framework where this phase picks it up.\n#\n# It has to land here, in a build phase, rather than being copied into the\n# built .app afterwards: everything under Resources is sealed by the app's code\n# signature, and adding a file after signing invalidates it — which in turn\n# breaks the SMAppService daemon registration.\n#\n# The bundle is renamed on the way in. The macOS slice already occupies\n# RuntimeViewerServer.framework, and the two cannot be merged: they are the same\n# architecture and differ only in LC_BUILD_VERSION's platform, which is exactly\n# what a fat binary cannot express. The name matches\n# PayloadPlatform.frameworkBundleName in RuntimeViewerHelperClient.\n\n# RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH is passed by RunScript.sh /\n# ArchiveScript.sh, which know where they built the payload. BUILD_DIR is\n# the fallback for a plain Xcode build, but it is not reliable under\n# `xcodebuild archive`, where the archive redirects the product paths.\nPAYLOAD_SOURCE=\"${RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH}\"\nif [ -z \"${PAYLOAD_SOURCE}\" ]; then\n    PAYLOAD_SOURCE=\"${BUILD_DIR}/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework\"\nfi\nPAYLOAD_DESTINATION=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RuntimeViewerServer-iphonesimulator.framework\"\n\nif [ ! -d \"${PAYLOAD_SOURCE}\" ]; then\n    echo \"warning: iOS Simulator payload not found at ${PAYLOAD_SOURCE} - injecting into simulator processes will be unavailable in this build. Build the RuntimeViewerMobileServer scheme for 'generic/platform=iOS Simulator' into this DerivedData first.\"\n    # Drop whatever an earlier build sealed in. TARGET_BUILD_DIR survives\n    # incremental builds, so without this the app keeps carrying -- and\n    # injecting -- the last payload that did build, while this build reports\n    # it as unavailable. The scripts clear the stale *source*; only this phase\n    # can clear the copy already inside the bundle, and it is also the only\n    # thing covering a plain Xcode build that runs neither script.\n    rm -rf \"${PAYLOAD_DESTINATION}\"\n    exit 0\nfi\n\nmkdir -p \"$(dirname \"${PAYLOAD_DESTINATION}\")\"\nrm -rf \"${PAYLOAD_DESTINATION}\"\nditto \"${PAYLOAD_SOURCE}\" \"${PAYLOAD_DESTINATION}\"\necho \"Embedded iOS Simulator payload: ${PAYLOAD_DESTINATION}\"\n";
-		};
 		E9CAFE010000000000000001 /* Generate LaunchDaemon plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -764,6 +627,63 @@
 				"\"${PB}\" -c \"Add :MachServices dict\" \"${PLIST}\"",
 				"\"${PB}\" -c \"Add :MachServices:${RUNTIME_VIEWER_SERVICE_NAME} bool true\" \"${PLIST}\"",
 				"echo \"Generated LaunchDaemon plist: ${PLIST}\"",
+				"",
+			);
+		};
+		E9CAFE010000000000000002 /* Embed iOS Simulator Payload */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			name = "Embed iOS Simulator Payload";
+			shellPath = /bin/sh;
+			shellScript = (
+				"set -e",
+				"",
+				"# The iOS Simulator injection payload.",
+				"#",
+				"# It cannot be a target dependency: Xcode treats an iOS-family framework as",
+				"# embedded content the macOS app target rejects outright — the same reason the",
+				"# Mac Catalyst helper is built by the shell scripts rather than depended on.",
+				"# RunScript.sh / ArchiveScript.sh build RuntimeViewerMobileServer for",
+				"# 'generic/platform=iOS Simulator' into this DerivedData first, which is what",
+				"# leaves the framework where this phase picks it up.",
+				"#",
+				"# It has to land here, in a build phase, rather than being copied into the",
+				"# built .app afterwards: everything under Resources is sealed by the app's code",
+				"# signature, and adding a file after signing invalidates it — which in turn",
+				"# breaks the SMAppService daemon registration.",
+				"#",
+				"# The bundle is renamed on the way in. The macOS slice already occupies",
+				"# RuntimeViewerServer.framework, and the two cannot be merged: they are the same",
+				"# architecture and differ only in LC_BUILD_VERSION's platform, which is exactly",
+				"# what a fat binary cannot express. The name matches",
+				"# PayloadPlatform.frameworkBundleName in RuntimeViewerHelperClient.",
+				"",
+				"# RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH is passed by RunScript.sh /",
+				"# ArchiveScript.sh, which know where they built the payload. BUILD_DIR is",
+				"# the fallback for a plain Xcode build, but it is not reliable under",
+				"# `xcodebuild archive`, where the archive redirects the product paths.",
+				"PAYLOAD_SOURCE=\"${RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH}\"",
+				"if [ -z \"${PAYLOAD_SOURCE}\" ]; then",
+				"    PAYLOAD_SOURCE=\"${BUILD_DIR}/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework\"",
+				"fi",
+				"PAYLOAD_DESTINATION=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RuntimeViewerServer-iphonesimulator.framework\"",
+				"",
+				"if [ ! -d \"${PAYLOAD_SOURCE}\" ]; then",
+				"    echo \"warning: iOS Simulator payload not found at ${PAYLOAD_SOURCE} - injecting into simulator processes will be unavailable in this build. Build the RuntimeViewerMobileServer scheme for 'generic/platform=iOS Simulator' into this DerivedData first.\"",
+				"    # Drop whatever an earlier build sealed in. TARGET_BUILD_DIR survives",
+				"    # incremental builds, so without this the app keeps carrying -- and",
+				"    # injecting -- the last payload that did build, while this build reports",
+				"    # it as unavailable. The scripts clear the stale *source*; only this phase",
+				"    # can clear the copy already inside the bundle, and it is also the only",
+				"    # thing covering a plain Xcode build that runs neither script.",
+				"    rm -rf \"${PAYLOAD_DESTINATION}\"",
+				"    exit 0",
+				"fi",
+				"",
+				"mkdir -p \"$(dirname \"${PAYLOAD_DESTINATION}\")\"",
+				"rm -rf \"${PAYLOAD_DESTINATION}\"",
+				"ditto \"${PAYLOAD_SOURCE}\" \"${PAYLOAD_DESTINATION}\"",
+				"echo \"Embedded iOS Simulator payload: ${PAYLOAD_DESTINATION}\"",
 				"",
 			);
 		};

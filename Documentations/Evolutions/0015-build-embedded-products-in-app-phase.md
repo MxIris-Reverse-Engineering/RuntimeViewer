@@ -1,13 +1,16 @@
 # 0015 - 让主 App 的构建阶段自己产出嵌入的 iOS-family 产物
 
-- **状态**: Accepted
+- **状态**: Withdrawn
 - **作者**: JH
 - **创建日期**: 2026-08-29
-- **最后更新**: 2026-08-29
+- **最后更新**: 2026-08-30
 - **所属愿景**: 无
 - **关联提案**: [0014](0014-inject-ios-simulator-process.md)（它引入了第二个需要预先构建的 iOS-family 产物）
 - **实现分支 / PR**: `next`
-- **配套文档**: `CLAUDE.md`「Embedded iOS-family products」一节
+- **配套文档**: 无（撤回时已把 `CLAUDE.md` 的对应段落改回手动预建的说明）
+
+> **本提案已于 2026-08-30 撤回，构建阶段已从 `project.pbxproj` 删除。** 下面的方案与决策日志
+> 保留原样，作为「这条路走过、代价是什么」的记录。撤回理由见文末「撤回记录」。
 
 ## 摘要
 
@@ -111,3 +114,28 @@ GUI 会，这让它无法被命令行验证。
 - **磁盘**：多一个 `NestedProductsBuild` DerivedData 目录。
 - **维护约束**：helper 的依赖闭包一旦变化（例如它开始链接新的 SPM 包），新旧判断的输入列表必须
   同步更新，否则会重现「改了却没重建」这一类问题——正是本提案要消灭的那一类。
+
+## 撤回记录
+
+**日期**: 2026-08-30 · **决定人**: JH
+
+撤回，构建阶段整个从 `project.pbxproj` 删除。GUI 构建从此**不再**代为产出这两个产物：没有模拟器
+载荷就不嵌入（`Embed iOS Simulator Payload` 阶段本就是 warning 后 `exit 0`，行为不变），要连同
+载荷一起测就跑 `RunScript.sh`。
+
+两个理由：
+
+1. **代价太高。** 嵌套 `xcodebuild` 用的是独立 DerivedData，冷启动时实测把一次 Release 构建从
+   86 秒拖到 554 秒。方案里估的「首次多 ~2.3 分钟、其余 ~0 秒」低估了它——新旧判断只在产物落在
+   本次构建的 `BUILD_DIR` 时才命中，而换一个 DerivedData 就等于每次都是首次。
+
+2. **helper 那一半从来没有生效过。** 阶段把 helper 拷到
+   `${BUILD_DIR}/${CONFIGURATION}-maccatalyst/RuntimeViewerCatalystHelper.app`，而
+   `Embed Catalyst Helpers` 拷的是另一个文件引用——`sourceTree = "<group>"` 的
+   `SRCROOT/RuntimeViewerCatalystHelper.app`，也就是 `ArchiveScript.sh` 的 `-exportArchive`
+   输出位置。两者是 `project.pbxproj` 里不同的 `PBXFileReference`
+   （`BUILT_PRODUCTS_DIR` 那个是 helper target 自己的 `productReference`，嵌入阶段不用它）。
+   删掉阶段后 helper 照样嵌进去了，这正是它一直没起作用的证据。
+
+方案与决策日志里那三个约束（`env -i`、独立 DerivedData、失败语义）仍然成立，只是不再有代码依赖
+它们。谁将来再想自动化这件事，先读它们，别重新踩一遍。

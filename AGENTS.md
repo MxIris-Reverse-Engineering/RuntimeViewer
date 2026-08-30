@@ -15,28 +15,20 @@ macOS — `RuntimeViewerCatalystHelper` (Mac Catalyst) and the
 dependency: Xcode treats both as iOS-family embedded content and rejects them
 from the macOS app target.
 
-The main app's **Build Embedded iOS-Family Products** phase builds both ahead of
-everything else, so a plain Xcode GUI build of `RuntimeViewer macOS` needs no
-manual pre-step — do not go back to building the helper by hand. The phase
-compares each product against its inputs and skips itself when nothing changed,
-so the ordinary "edit the main app" build pays ~0s; a helper change costs ~35s.
+**Nothing builds them for you.** `RunScript.sh` and `ArchiveScript.sh` build
+both before the app and hand them over — the helper through its
+`-exportArchive` output at `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app`,
+which is exactly the file reference `Embed Catalyst Helpers` copies, and the
+payload through `RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH`, which
+`Embed iOS Simulator Payload` reads before falling back to `BUILD_DIR`.
 
-Two things about that phase are load-bearing and must survive any edit to it:
+A plain Xcode GUI build does neither. It embeds whichever helper is already
+sitting at that path, and if the simulator payload is absent it warns and
+carries on without it — so **anything involving simulator injection has to be
+tested through `RunScript.sh`**, not through the GUI.
 
-- It builds into a sibling `NestedProductsBuild` directory rather than this
-  build's own. Reusing this one fails outright — the outer build holds
-  `XCBuildData/build.db` and the nested `xcodebuild` gets `database is locked`.
-  This is also why the phase cannot simply do what `RunScript.sh` does: the
-  script runs two builds back to back, so only one ever holds the lock. The
-  second directory costs ~88s for the helper and ~50s for the payload the first
-  time, once; do not expect compilation caching to make that cheaper, as
-  measured it is the slower configuration from cold.
-- It runs `xcodebuild` under `env -i`. Inheriting the outer build's environment
-  makes every SPM target believe it produces the main app, and the nested build
-  dies with `Multiple commands produce .../__preview.dylib`.
-
-`RunScript.sh` and `ArchiveScript.sh` still build both products before the app;
-on those paths the phase finds them current and does nothing.
+A build phase that produced both automatically was tried and withdrawn; see
+evolution 0015 for what it cost and why the helper half never actually worked.
 
 ```bash
 # Debug build + launch (configuration "Debug-arm64e", workspace
