@@ -127,11 +127,11 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/apple/swift-collections",
-            from: "1.5.1",
+            from: "1.6.0",
         ),
         .package(
             url: "https://github.com/Mx-Iris/FrameworkToolbox",
-            from: "0.7.1",
+            from: "0.9.0",
         ),
         .package(
             local: .package(
