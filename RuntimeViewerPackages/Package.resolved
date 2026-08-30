@@ -1,13 +1,13 @@
 {
-  "originHash" : "b797a9fcebda47068575c492839ad659c569931cd294af70a330f4d633a9e192",
+  "originHash" : "721f8c8f62fbed646bac3411102e157f5b95fb7ee7864d48b53ffa625a861388",
   "pins" : [
     {
       "identity" : "appkitplus-release",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "f68e4eeae7ab687b08f79e40ab4a1b6dae3c400a",
-        "version" : "0.1.5"
+        "revision" : "33ee33806b1a0af09920d740f74cf70ab002ed25",
+        "version" : "0.1.6"
       }
     },
     {
@@ -168,8 +168,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "32bf83c1e6b1306ce37fd5a0a5971a3a79c70bc7",
-        "version" : "0.15.2"
+        "revision" : "6ab2cd30f12c6fda97d8d94a754cf4c30d9fd6a6",
+        "version" : "0.17.1"
       }
     },
     {
@@ -308,6 +308,24 @@
       }
     },
     {
+      "identity" : "sourcekitd",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/SourceKitD",
+      "state" : {
+        "revision" : "47ddc958a3962f9bb0fe08de1c8f39723e472228",
+        "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "swift-apinotes",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-DeveloperTool/swift-apinotes",
+      "state" : {
+        "revision" : "e762ac739f71adf83ed2e05f40211c96cd91f6c5",
+        "version" : "0.2.0"
+      }
+    },
+    {
       "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-argument-parser",
@@ -402,8 +420,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "04c959b1b5f2cc8c9baca522cd0fedabb45f73a0",
-        "version" : "0.4.5"
+        "revision" : "a3477d387bbd004af5d602dcec68e40e70c49f6f",
+        "version" : "0.6.1"
       }
     },
     {
@@ -438,8 +456,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "415759aff0d2ea8e88b1331bcace29f25a47c73f",
-        "version" : "0.3.1"
+        "revision" : "568793c4e14165ee37a22f58c3b695f5bee13199",
+        "version" : "0.3.2"
       }
     },
     {
@@ -542,21 +560,12 @@
       }
     },
     {
-      "identity" : "systemhud",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/SystemHUD",
-      "state" : {
-        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
-        "version" : "0.1.0"
-      }
-    },
-    {
       "identity" : "uifoundation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "5f9e269ff50fb388251d3d72c5db9d5bb8cb744f",
-        "version" : "0.20.0"
+        "revision" : "f9cdc532222b63963a2aef4001bf71fb9302e695",
+        "version" : "0.21.0"
       }
     },
     {
@@ -584,6 +593,15 @@
       "state" : {
         "revision" : "8f6abcf4c8950e2679d5b2fee4ca284fd7c34886",
         "version" : "1.11.0"
+      }
+    },
+    {
+      "identity" : "yams",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jpsim/Yams",
+      "state" : {
+        "revision" : "a27b21e0c81c5bf42049b897a62aaf387e80f279",
+        "version" : "6.2.2"
       }
     }
   ],

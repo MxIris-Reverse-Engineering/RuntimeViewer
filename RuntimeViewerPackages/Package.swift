@@ -248,7 +248,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/swift-helper-service",
-                from: "0.1.5",
+                from: "0.3.2",
             ),
         ),
         

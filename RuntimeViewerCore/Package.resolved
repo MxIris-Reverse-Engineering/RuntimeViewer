@@ -1,5 +1,5 @@
 {
-  "originHash" : "c18bb30a07f5ba26cda9d0987bf5fbf07b1c15377b75b574ec421b7a79e7bb74",
+  "originHash" : "78504a0a6d4289f0ac00f70394ed9812ef98afc1c5cb9b6b51c7c03f12dd6930",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -258,8 +258,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "415759aff0d2ea8e88b1331bcace29f25a47c73f",
-        "version" : "0.3.1"
+        "revision" : "568793c4e14165ee37a22f58c3b695f5bee13199",
+        "version" : "0.3.2"
       }
     },
     {

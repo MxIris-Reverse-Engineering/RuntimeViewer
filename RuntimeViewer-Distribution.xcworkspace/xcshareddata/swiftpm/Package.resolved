@@ -500,8 +500,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "415759aff0d2ea8e88b1331bcace29f25a47c73f",
-        "version" : "0.3.1"
+        "revision" : "568793c4e14165ee37a22f58c3b695f5bee13199",
+        "version" : "0.3.2"
       }
     },
     {
