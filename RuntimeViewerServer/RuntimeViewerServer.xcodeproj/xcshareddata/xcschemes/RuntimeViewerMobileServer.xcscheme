@@ -22,6 +22,24 @@
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
+      <PostActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Stage Payload For Main App"
+               scriptText = "#!/bin/bash&#10;set -e&#10;&#10;# Stage the freshly built payload where the main app's &quot;Embed Mobile Server&quot;&#10;# copy phase looks for it. Same arrangement as the Catalyst helper's post&#10;# action: an iOS-family product cannot be a target dependency of a macOS app,&#10;# so something has to put it at a fixed path, and for a GUI build that is this.&#10;#&#10;# Only Xcode runs scheme actions; xcodebuild ignores them entirely, which is&#10;# why RunScript.sh and ArchiveScript.sh still stage it themselves.&#10;SOURCE_PATH=&quot;${BUILT_PRODUCTS_DIR}/${FULL_PRODUCT_NAME}&quot;&#10;DESTINATION_PATH=&quot;${SRCROOT}/../RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework&quot;&#10;&#10;rm -rf &quot;${DESTINATION_PATH}&quot;&#10;ditto &quot;${SOURCE_PATH}&quot; &quot;${DESTINATION_PATH}&quot;&#10;echo &quot;Staged ${SOURCE_PATH} at ${DESTINATION_PATH}&quot;&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "E994E2892F323A51009DD28A"
+                     BuildableName = "RuntimeViewerServer.framework"
+                     BlueprintName = "RuntimeViewerMobileServer"
+                     ReferencedContainer = "container:RuntimeViewerServer.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PostActions>
    </BuildAction>
    <TestAction
       buildConfiguration = "Debug"

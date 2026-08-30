@@ -30,9 +30,16 @@ its build fails so a stale one is never sealed in. The payload lands in
 `Contents/Resources/` because `RuntimeInjectClient` finds it with
 `Bundle.main.url(forResource:withExtension:)`, which looks nowhere else.
 
-A plain Xcode GUI build stages neither: it embeds whatever is already at those
-paths, left there by the last script run. So **anything involving simulator
-injection has to be tested through `RunScript.sh`**, not through the GUI.
+Each of the two schemes also carries a build **post-action** that stages its own
+product, so building `RuntimeViewerMobileServer` or `RuntimeViewerCatalystHelper`
+in Xcode refreshes the staged copy without running a script. Only Xcode runs
+scheme actions — `xcodebuild` ignores them outright — which is why the scripts
+still stage both on their own path, and why a post-action failure cannot break a
+command-line build.
+
+A plain Xcode GUI build of the *app* stages neither: it embeds whatever is
+already at those paths. So **anything involving simulator injection has to be
+tested through `RunScript.sh`**, or by building the payload's own scheme first.
 
 A build phase that produced both automatically was tried and withdrawn; see
 evolution 0015 for what it cost and why the helper half never actually worked.
