@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "c895a51ee055a6bfe0341ab67f49cbf9a1713cb9",
-        "version" : "0.1.0"
+        "revision" : "33ee33806b1a0af09920d740f74cf70ab002ed25",
+        "version" : "0.1.6"
       }
     },
     {
@@ -176,8 +176,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "32bf83c1e6b1306ce37fd5a0a5971a3a79c70bc7",
-        "version" : "0.15.2"
+        "revision" : "6ab2cd30f12c6fda97d8d94a754cf4c30d9fd6a6",
+        "version" : "0.17.1"
       }
     },
     {
@@ -316,6 +316,15 @@
       }
     },
     {
+      "identity" : "sourcekitd",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/SourceKitD",
+      "state" : {
+        "revision" : "47ddc958a3962f9bb0fe08de1c8f39723e472228",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "sparkle",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sparkle-project/Sparkle",
@@ -331,6 +340,15 @@
       "state" : {
         "revision" : "87e50f483c54e6efd60e885f7f5aa946cee68023",
         "version" : "1.2.1"
+      }
+    },
+    {
+      "identity" : "swift-apinotes",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-DeveloperTool/swift-apinotes",
+      "state" : {
+        "revision" : "e762ac739f71adf83ed2e05f40211c96cd91f6c5",
+        "version" : "0.2.0"
       }
     },
     {
@@ -446,8 +464,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "04c959b1b5f2cc8c9baca522cd0fedabb45f73a0",
-        "version" : "0.4.5"
+        "revision" : "a3477d387bbd004af5d602dcec68e40e70c49f6f",
+        "version" : "0.6.1"
       }
     },
     {
@@ -694,21 +712,12 @@
       }
     },
     {
-      "identity" : "systemhud",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/SystemHUD",
-      "state" : {
-        "revision" : "42d259b5d2b3d5cb4ce14281ce86f010034ff36c",
-        "version" : "0.1.0"
-      }
-    },
-    {
       "identity" : "uifoundation",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "0b323b0b4019ff9828786f2f97fbe23c97c59004",
-        "version" : "0.17.0"
+        "revision" : "f9cdc532222b63963a2aef4001bf71fb9302e695",
+        "version" : "0.21.0"
       }
     },
     {
@@ -736,6 +745,15 @@
       "state" : {
         "revision" : "dfd70507def84cb5fb821278448a262c6ff2bbad",
         "version" : "1.9.0"
+      }
+    },
+    {
+      "identity" : "yams",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/jpsim/Yams",
+      "state" : {
+        "revision" : "a27b21e0c81c5bf42049b897a62aaf387e80f279",
+        "version" : "6.2.2"
       }
     }
   ],
