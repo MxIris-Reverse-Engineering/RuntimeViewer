@@ -9,17 +9,34 @@ Runtime Viewer is a macOS/iOS document-based (NSDocument) application for inspec
 
 **Workspace preference**: Before running any `xcodebuild` / `swift build` / `swift test`, check whether `../MxIris-Reverse-Engineering.xcworkspace` (sibling of this repo) exists. If it does, **use that workspace** via `xcodebuild -workspace ../MxIris-Reverse-Engineering.xcworkspace -scheme <scheme> ...` — it wires this repo together with local checkouts of MachOKit / MachOObjCSection / MachOSwiftSection / swift-capstone / swift-demangling / swift-semantic-string / swift-syntax that may contain in-progress fixes not yet published upstream. Building against the remote SPM resolution can hit stale errors (e.g. the MachOSwiftSection `@Mutex` macro expansion bug) that the workspace's local checkout already fixes. Only fall back to the standalone commands below when the workspace is absent.
 
-**Catalyst helper build order**: For native macOS builds, build
-`RuntimeViewerCatalystHelper` first, then build `RuntimeViewer macOS` /
-`RuntimeViewerUsingAppKit` in the same Xcode/DerivedData session. Do not model
-this as a direct target dependency: Xcode treats the Mac Catalyst helper as
-iOS-family embedded content and rejects it from the macOS app target.
-`RunScript.sh` and `ArchiveScript.sh` both already handle this by building/
-archiving the helper before the main app.
+**Embedded iOS-family products**: the app embeds two products that are not
+macOS — `RuntimeViewerCatalystHelper` (Mac Catalyst) and the
+`RuntimeViewerMobileServer` payload (iOS Simulator). Neither can be a target
+dependency: Xcode treats both as iOS-family embedded content and rejects them
+from the macOS app target.
 
-Recommended Xcode order:
-1. Build `RuntimeViewerCatalystHelper` for `My Mac (Mac Catalyst)`.
-2. Build `RuntimeViewer macOS` for `My Mac`.
+The main app's **Build Embedded iOS-Family Products** phase builds both ahead of
+everything else, so a plain Xcode GUI build of `RuntimeViewer macOS` needs no
+manual pre-step — do not go back to building the helper by hand. The phase
+compares each product against its inputs and skips itself when nothing changed,
+so the ordinary "edit the main app" build pays ~0s; a helper change costs ~35s.
+
+Two things about that phase are load-bearing and must survive any edit to it:
+
+- It builds into a sibling `NestedProductsBuild` directory rather than this
+  build's own. Reusing this one fails outright — the outer build holds
+  `XCBuildData/build.db` and the nested `xcodebuild` gets `database is locked`.
+  This is also why the phase cannot simply do what `RunScript.sh` does: the
+  script runs two builds back to back, so only one ever holds the lock. The
+  second directory costs ~88s for the helper and ~50s for the payload the first
+  time, once; do not expect compilation caching to make that cheaper, as
+  measured it is the slower configuration from cold.
+- It runs `xcodebuild` under `env -i`. Inheriting the outer build's environment
+  makes every SPM target believe it produces the main app, and the nested build
+  dies with `Multiple commands produce .../__preview.dylib`.
+
+`RunScript.sh` and `ArchiveScript.sh` still build both products before the app;
+on those paths the phase finds them current and does nothing.
 
 ```bash
 # Debug build + launch (configuration "Debug-arm64e", workspace

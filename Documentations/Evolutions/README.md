@@ -26,6 +26,7 @@
 | [0011](0011-uifoundation-settings-adoption.md) | RuntimeViewer 接入 UIFoundation Settings | Implemented | 保留 RuntimeViewer 业务设置模型与页面，采用 UIFoundation 的持久化 store、属性包装器、设置窗口和导航，并删除重复壳层。原以 `0007` 起草，与本分支的 `0007` 撞号，合流时改为 `0011`。 |
 | [0013](0013-replace-uxkit-with-appkitplus.md) | 用 AppKitPlus 取代 UXKit | In Progress | 导航容器从 Apple 私有的 `UXKit.framework` 换成 AppKitPlus 的 `NSNavigationController`（port 自 OpenUXKit，接口同名同义），三个 `UX` 前缀基类改名为 `Base*` 并直接继承 `NSViewController` / `NSNavigationController`，删除 `OpenUXKit`、`UXKitCoordinator` 依赖与 `USING_SYSTEM_UXKIT` 开关。取代 `feature/uifoundation-navigation` 上的 0012。 |
 | [0014](0014-inject-ios-simulator-process.md) | 支持注入 iOS Simulator 进程 | In Progress | 注入器把自身地址空间的符号地址喂给目标进程，打崩了三个 SpringBoard。先加平台守卫止血，再把符号解析改为针对目标进程，让 dlopen 路径支持 iOS Simulator 目标。原以 `0013` 起草，与本分支的 `0013` 撞号，合流时改为 `0014`。 |
+| [0015](0015-build-embedded-products-in-app-phase.md) | 让主 App 的构建阶段自己产出嵌入的 iOS-family 产物 | Accepted | 主 App 嵌入的 Catalyst helper 与 iOS Simulator 载荷都不能做 target dependency，此前只有 RunScript.sh 按序预建，GUI 里必须手动先建一遍、忘了就拿到过期产物且无提示。新增构建阶段用 `env -i` + 独立 DerivedData 的嵌套 xcodebuild 产出两者并拷到既有嵌入阶段的取件位置；带新旧判断，未改动时开销 ~0s。 |
 | [draft](draft-runtime-bookmark-scope.md) | RuntimeBookmarkScope：把持久化身份从显示名手里拿走 | Accepted | 新建稳定的 `RuntimeBookmarkScope` 取代三处各自拼出来的键（含 pid 的书签键、用进程显示名的 sidebar autosave 键、编码了 `name` 却按忽略 `name` 比较的落盘表示）。身份走 descriptor 上的 `@Default` 字段以保持混版兼容，`RuntimeSource` 不动。在 `feature/runtime-bookmark-scope` 上实现，拆三个 PR。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
@@ -36,7 +37,7 @@
 > 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`），
 > `0012` 在 `feature/uifoundation-navigation`
 > （`0012-replace-uxkit-navigation-with-uifoundation.md`，已被本分支的 0013 取代）。
-> **新提案从 `0015` 起编号**，不要只看本分支已有的文件挑下一个空号。
+> **新提案从 `0016` 起编号**，不要只看本分支已有的文件挑下一个空号。
 >
 > **`0013` 是第二次撞号，2026-08-29 合流时已解决**——`feature/inject-ios-simulator-process`
 > 与 `next` 上的 `0013-replace-uxkit-with-appkitplus.md` 同号，两者互不知情。按前一次 `0007`
