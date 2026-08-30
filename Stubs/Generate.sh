@@ -42,6 +42,22 @@ for framework in SourceEditor SourceModelSupport SourceModel; do
         python3 Trim.py "$output" "$framework.framework/UsedSymbols.txt"
     fi
 
+    # The stub has to describe every architecture we build the bridge for, not just the
+    # ones this Xcode's binary happens to carry. See AddArchitectures.py for why that is
+    # sound, and why an x86_64 build fails without it.
+    python3 AddArchitectures.py "$output" x86_64-macos
+
+    # Same reasoning one level up: a module the compiler cannot resolve for x86_64 stops
+    # the build before the linker is ever reached. The interfaces are hand-written, so the
+    # x86_64 one is derived from the arm64 one here rather than maintained beside it —
+    # two copies of a hand-written file drift, and the only difference is the target flag.
+    interface_directory="$framework.framework/Modules/$framework.swiftmodule"
+    if [ -f "$interface_directory/arm64-apple-macos.swiftinterface" ]; then
+        sed 's/-target arm64-apple-macos/-target x86_64-apple-macos/' \
+            "$interface_directory/arm64-apple-macos.swiftinterface" \
+            > "$interface_directory/x86_64-apple-macos.swiftinterface"
+    fi
+
     printf "%-20s %s\n" "$framework" "$(du -h "$output" | cut -f1)"
 done
 

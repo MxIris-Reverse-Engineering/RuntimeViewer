@@ -11,8 +11,18 @@ SourceEditor.framework/
 ├── SourceEditor.tbd                            # exported symbol list (tapi stubify)
 └── Modules/
     └── SourceEditor.swiftmodule/               # a directory, not a binary swiftmodule
-        └── arm64-apple-macos.swiftinterface    # hand-written subset of the real module
+        ├── arm64-apple-macos.swiftinterface    # hand-written subset of the real module
+        └── x86_64-apple-macos.swiftinterface   # generated from the arm64 one — do not edit
 ```
+
+**Edit only the arm64 interface.** `Generate.sh` derives the x86_64 one from it (the sole
+difference is the `-target` flag) and adds an `x86_64-macos` entry to the `.tbd`'s target list.
+Both are needed because the bridge is built for every architecture the app is, while the Xcode
+installed here ships these frameworks as arm64 alone — without them an x86_64 build fails at
+module resolution, before a single symbol is looked up. That is sound because the stub is a
+link-time contract only: Swift mangled names do not encode the architecture, and which slice
+actually loads is decided at run time by `dlopen` against *the user's* Xcode, which may well
+carry an x86_64 slice this machine's does not.
 
 `SourceModel` is the exception: its surface is Objective-C, so it is stubbed with a hand-written
 header and a module map instead of a `.swiftinterface`. Only the two classes the bridge needs

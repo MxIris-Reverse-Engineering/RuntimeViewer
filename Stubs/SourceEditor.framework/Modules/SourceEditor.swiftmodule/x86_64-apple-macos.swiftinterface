@@ -1,0 +1,329 @@
+// swift-interface-format-version: 1.0
+// swift-compiler-version: Apple Swift version 6.2
+// swift-module-flags: -target x86_64-apple-macos14.0 -enable-library-evolution -swift-version 5 -module-name SourceEditor
+//
+// A hand-written subset of Xcode's private SourceEditor module. See ../../../../README.md
+// for the two rules that decide how each declaration must be written, and for the audit
+// script that answers them from the binary instead of by guesswork.
+import AppKit
+import CoreGraphics
+import Foundation
+import Swift
+import _Concurrency
+import _StringProcessing
+
+// Declared empty on purpose. We never conform anything on our side to these, so no witness
+// table is emitted here and requirement order cannot matter. SourceEditorTheme's own
+// conformances live inside the framework.
+public protocol SourceEditorLanguage {
+}
+
+// Declared empty on purpose: we only ever receive one of these and downcast it to the concrete
+// SourceModelLanguageService. Nothing conforms on our side, so no witness table is emitted here
+// and the real protocol's 48 requirements are irrelevant.
+public protocol SourceEditorLanguageService : AnyObject {
+}
+
+public protocol SourceEditorColorTheme {
+}
+
+public protocol SourceEditorFontTheme {
+}
+
+public struct SourceEditorFormattingOptions {
+  public init()
+}
+
+public struct SourceEditorPosition {
+  public init(line: Swift.Int, col: Swift.Int)
+  public var line: Swift.Int {
+    get
+    set
+  }
+  public var col: Swift.Int {
+    get
+    set
+  }
+}
+
+// Comparable is required: the framework hands back Range<SourceEditorPosition>.
+extension SourceEditor.SourceEditorPosition : Swift.Equatable {
+}
+
+extension SourceEditor.SourceEditorPosition : Swift.Hashable {
+}
+
+extension SourceEditor.SourceEditorPosition : Swift.Comparable {
+}
+
+public enum SourceEditorEventConsumerPriority {
+  case highest
+  case high
+  case standard
+  case low
+  case lowest
+}
+
+// Requirement order follows the PWT offsets in the dump (0x8, 0x10, 0x18, ...).
+// A gap in that sequence would mean a requirement is missing here.
+//
+// This — not SourceEditorViewCodeNavigationHandler — is the real ⌘-click entry point.
+// That handler is only ever read by the framework's Vi*CommandHandler types, i.e. it is
+// Vim-mode-only; SourceEditorView.mouseDown(with:) offers the event to the registered
+// event consumers and otherwise falls through to its selection controller.
+public protocol SourceEditorViewEventConsumer : AnyObject {
+  func handleMouseEvent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  func handleKeyEvent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  func handleKeyEquivalent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  func handleFlagsChanged(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView)
+  var consumerPriority: SourceEditor.SourceEditorEventConsumerPriority { get }
+  func didAddToSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
+  func willRemoveFromSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
+}
+
+extension SourceEditor.SourceEditorViewEventConsumer {
+  public func handleMouseEvent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  public func handleKeyEvent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  public func handleKeyEquivalent(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView) -> Swift.Bool
+  public func handleFlagsChanged(_ event: AppKit.NSEvent, in sourceEditorView: SourceEditor.SourceEditorView)
+  public var consumerPriority: SourceEditor.SourceEditorEventConsumerPriority { get }
+  public func didAddToSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
+  public func willRemoveFromSourceEditorView(_ sourceEditorView: SourceEditor.SourceEditorView)
+}
+
+// The only hook into the editor's contextual menu. `SourceEditorView.contextMenu()` builds
+// Cut/Copy/Paste afresh on every click, hands the menu here, then lets the spell checker add
+// its guesses — so items put in from here survive, and there is nothing to clean up between
+// clicks.
+//
+// The menu is all it passes: no event, no position. Where the click landed has to come from
+// `NSApp.currentEvent`, which is still the right-click while this runs.
+public protocol SourceEditorViewContextualMenuItemProvider : AnyObject {
+  func setupContextMenu(for menu: AppKit.NSMenu)
+}
+
+extension SourceEditor.SourceEditorViewContextualMenuItemProvider {
+  public func setupContextMenu(for menu: AppKit.NSMenu)
+}
+
+// Declared with no cases: token types are only ever passed back to us and handed straight
+// on, never matched. Adding cases later means copying all of them in declaration order,
+// since a resilient enum's case indices come from that order.
+public enum SourceEditorTokenType {
+}
+
+// Case order copied from the dump, which prints it — a resilient enum takes both its case
+// indices and its implicit raw values from declaration order, so this cannot be guessed.
+public enum LayoutOverrideProviderPriority : Swift.Int {
+  case low
+  case medium
+  case high
+}
+
+public protocol LayoutOverrideProvider : AnyObject {
+  var priority: SourceEditor.LayoutOverrideProviderPriority { get }
+}
+
+public struct SourceEditorTextAttributeOverride {
+  // `range` is in columns, relative to the start of the line it was returned for.
+  public init(range: Swift.Range<Swift.Int>, attr: [Foundation.NSAttributedString.Key : Any])
+  public var range: Swift.Range<Swift.Int> {
+    get
+  }
+  public var attr: [Foundation.NSAttributedString.Key : Any] {
+    get
+  }
+}
+
+// The cheap way to color text ourselves. The alternative — supplying a whole
+// `SourceEditorLanguageService`, which is what the framework's own syntax coloring goes
+// through — is a 48-requirement protocol; this one has two, and the second has a default.
+//
+// Registration is via `SourceEditorLayoutManager.addLayoutOverrideProvider(_:)`: the layout
+// manager sorts a provider into its buckets by dynamic cast, which is how the framework's own
+// `SourceEditorLineAnnotationManager` (conforming to both protocols) is installed.
+public protocol TextAttributeOverrideProvider : SourceEditor.LayoutOverrideProvider {
+  func textAttributeOverridesForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [SourceEditor.SourceEditorTextAttributeOverride]
+  func pasteboardTextAttributeOverridesForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [SourceEditor.SourceEditorTextAttributeOverride]
+}
+
+extension SourceEditor.TextAttributeOverrideProvider {
+  public func pasteboardTextAttributeOverridesForLine(_ line: Swift.Int, in layoutManager: SourceEditor.SourceEditorLayoutManager) -> [SourceEditor.SourceEditorTextAttributeOverride]
+}
+
+// A native Swift class, not an NSObject subclass — the framework exports no ObjC class symbol
+// for it. Declaring the wrong superclass here compiles and then dispatches into garbage.
+@_hasMissingDesignatedInitializers public class SourceEditorLayoutManager {
+  // `final`: direct symbols only.
+  public final func addLayoutOverrideProvider(_ provider: SourceEditor.LayoutOverrideProvider)
+  public final func removeLayoutOverrideProvider(_ provider: SourceEditor.LayoutOverrideProvider)
+  deinit
+}
+
+// The `: NSObject` here is load-bearing, and the symptom of dropping it is nasty. The
+// framework exports `_OBJC_CLASS_$__TtC12SourceEditor18SourceEditorGutter`, so this class is
+// NSObject-rooted and must be released through the Objective-C dealloc chain. Declared as its
+// own root it constructs fine, answers every call fine, and then crashes when it is
+// *deallocated* — which is why a gutter kept alive for the process's lifetime hides the bug
+// entirely. Adding `@objc deinit` does NOT fix it; only the superclass does.
+// `SourceEditorLayoutManager` has no such symbol and is correctly a native Swift class.
+@_hasMissingDesignatedInitializers @objc public class SourceEditorGutter : ObjectiveC.NSObject {
+  @objc override dynamic public init()
+  // `final`: direct symbol only.
+  public final var priority: SourceEditor.LayoutOverrideProviderPriority {
+    get
+  }
+  public func enableLineNumbers()
+  public func disableLineNumbers()
+  public var lineNumbersEnabled: Swift.Bool {
+    get
+    set
+  }
+  public var emphasizeActiveLines: Swift.Bool {
+    get
+    set
+  }
+  public var lineNumberFont: AppKit.NSFont? {
+    get
+    set
+  }
+  @objc deinit
+}
+
+@_hasMissingDesignatedInitializers public class SourceEditorTheme : SourceEditor.SourceEditorColorTheme, SourceEditor.SourceEditorFontTheme {
+  // `dictionary` takes .xccolortheme plist contents. The framework ships Default (Dark)
+  // and Default (Light) under its own Resources directory.
+  public init(name: Swift.String, dictionary: [Swift.String : Swift.AnyHashable], fontSizeModifier: Swift.Int)
+  deinit
+}
+
+@_hasMissingDesignatedInitializers public class SourceEditorDataSource {
+  public init(usingMutableString: Foundation.NSMutableString, language: SourceEditor.SourceEditorLanguage?, formattingOptions: SourceEditor.SourceEditorFormattingOptions)
+  // `final`: direct symbols only, no dispatch thunk.
+  public final var string: Swift.String {
+    get
+    set
+  }
+  // `final`: direct symbol only.
+  public final func tokenRangeAtPosition(_ position: SourceEditor.SourceEditorPosition) -> (SourceEditor.SourceEditorTokenType?, Swift.Range<SourceEditor.SourceEditorPosition>)?
+  // `final`: direct symbol only. Maps a line range to a UTF-16 character range, which is
+  // how a SourceEditorPosition is turned back into an offset into the string we supplied.
+  public final func characterRangeForLineRange(_ lineRange: Foundation.NSRange) -> Foundation.NSRange
+  // `final`: direct symbol only. Non-optional despite the dump showing `lazy var … ?` — that
+  // question mark is the lazy *storage*, while the exported getter returns the value.
+  public final var languageService: SourceEditor.SourceEditorLanguageService {
+    get
+  }
+  deinit
+}
+
+@_hasMissingDesignatedInitializers @objc public class SourceEditorContentView : AppKit.NSView {
+  // The host's channel into the text's own insets. The framework never writes it — the widths
+  // the gutter and the folding ribbon take up arrive through a separate `accessoryMargins` —
+  // so whatever is put here survives layout, theme changes and reloads.
+  //
+  // Its sibling `additionalLeftPadding` is not declared here on purpose: the framework does
+  // write that one, from `SourceEditorView.updateAdditionalLeftPadding()`.
+  public var contentMargins: AppKit.NSEdgeInsets {
+    get
+    set
+  }
+  @objc deinit
+}
+
+@_hasMissingDesignatedInitializers @objc public class SourceEditorView : AppKit.NSView {
+  // `final`: a stored `let` in the framework, so only a direct symbol is exported.
+  public final var contentView: SourceEditor.SourceEditorContentView {
+    get
+  }
+  @objc override dynamic public init(frame: CoreGraphics.CGRect)
+  public var dataSource: SourceEditor.SourceEditorDataSource {
+    get
+    set
+  }
+  public var colorTheme: SourceEditor.SourceEditorColorTheme {
+    get
+    set
+  }
+  public var fontTheme: SourceEditor.SourceEditorFontTheme {
+    get
+    set
+  }
+  // Defaults to true, which makes the view treat ⌘-click as a multi-cursor gesture and
+  // swallow it before any event consumer sees it. Must be turned off.
+  public var enableCmdClickMultiCursor: Swift.Bool {
+    get
+    set
+  }
+  public var isEditingEnabled: Swift.Bool {
+    get
+    set
+  }
+  public var backgroundColor: AppKit.NSColor {
+    get
+    set
+  }
+  // Added on top of `defaultScrollViewContentInsets` to make the scroll view's content insets.
+  // `installScrollView()` turns `automaticallyAdjustsContentInsets` off on the scroll view it
+  // builds, so the safe area does not reach it on its own — this is the way in.
+  public var additionalScrollViewContentInsets: AppKit.NSEdgeInsets {
+    get
+    set
+  }
+  public var defaultScrollViewContentInsets: AppKit.NSEdgeInsets {
+    get
+    set
+  }
+  // Nil until a gutter is installed; that is also what turns line numbers on.
+  public var gutter: SourceEditor.SourceEditorGutter? {
+    get
+    set
+  }
+  // `final`: direct symbol only.
+  public final var layoutManager: SourceEditor.SourceEditorLayoutManager {
+    get
+  }
+  public func addEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
+  public func removeEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)
+  // Weak in the framework too. The view's own `contextualMenuEventConsumer` is what opens the
+  // menu; this is only asked what to put in it.
+  weak public var contextualMenuItemProvider: SourceEditor.SourceEditorViewContextualMenuItemProvider? {
+    get
+    set
+  }
+  // The optional margins and overlays. Each pair takes no arguments and builds whatever it
+  // needs from the view's own state, so nothing has to be configured before calling them.
+  //
+  // The `install` half is NOT idempotent: `installMinimap()` skips building a second minimap
+  // but goes on to register it as a margin accessory and an event consumer a second time.
+  // The `uninstall` half is — each one returns early when its object is nil — but the caller
+  // tracks state anyway rather than relying on that asymmetry.
+  public func installFoldingRibbon()
+  public func uninstallFoldingRibbon()
+  public func installStickyHeaders()
+  public func uninstallStickyHeaders()
+  public func installMinimap()
+  public func uninstallMinimap()
+  public var isMinimapShown: Swift.Bool {
+    get
+  }
+  // Genuinely idempotent, unlike the pairs above: both read the old flag and skip the work
+  // when it did not change. `areScopeGuidesShown` is a stored property with no exported
+  // accessor, so these two functions are the only way in.
+  public func showScopeGuides()
+  public func hideScopeGuides()
+  // `showInvisibles()` reads the view's current `colorTheme`, casts it to the framework's
+  // `ShowInvisiblesTheme` and hands that to the layout manager — `SourceEditorTheme` conforms,
+  // so nothing has to be supplied the way the gutter's font does. It captures the theme at the
+  // time of the call, though, so a later theme change means calling it again.
+  public func showInvisibles()
+  public func hideInvisibles()
+  // Draws a rule across the text at every `// MARK:` line. Idempotent: both write the same
+  // flag on a lazily-created controller and then ask the layout manager for a pass.
+  public func showMarkSeparators()
+  public func hideMarkSeparators()
+  public func positionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?
+  // `final`: direct symbol only, unlike positionAtPoint which has a dispatch thunk.
+  public final func closestPositionAtPoint(_ point: CoreGraphics.CGPoint) -> SourceEditor.SourceEditorPosition?
+  @objc deinit
+}
