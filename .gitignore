@@ -2,6 +2,7 @@
 /Configurations/custom.xcconfig
 .swiftpm
 RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app
+RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework
 archive
 build
 Archives

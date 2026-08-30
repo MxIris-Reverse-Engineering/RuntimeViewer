@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed Mobile Server */ = {isa = PBXBuildFile; fileRef = E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E910124C38FF8B6334251802 /* Sparkle */; };
 		E95ED17E0000000000000001 /* RuntimeViewerSourceEditorBridge.bundle in Embed SourceEditor Bridge */ = {isa = PBXBuildFile; fileRef = E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -115,6 +116,15 @@
 			);
 			name = "Embed Catalyst Helpers";
 		};
+		E9CAFE010000000000000022 /* Embed Mobile Server */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = Resources;
+			files = (
+				E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed Mobile Server */,
+			);
+			name = "Embed Mobile Server";
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -131,6 +141,7 @@
 		E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Config.xcconfig; path = ../Configurations/RuntimeViewerService/Config.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
+		E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = RuntimeViewerMobileServer.framework; sourceTree = "<group>"; };
 		E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "$(RUNTIME_VIEWER_SERVICE_NAME)"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Debug-arm64e.xcconfig"; path = "../Configurations/RuntimeViewerUsingAppKit/Debug-arm64e.xcconfig"; sourceTree = SOURCE_ROOT; };
 		E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerCatalystHelperPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -288,6 +299,7 @@
 				E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */,
 				E927C22D2E9444F300084A7B /* AppIcon.icon */,
 				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
+				E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */,
 				E9DAF4962FEE740D00DD20CB /* RuntimeViewerUsingAppKit */,
 				E9DAF5022FEE741200DD20CB /* RuntimeViewerCatalystHelper */,
 				E9DAF50A2FEE741500DD20CB /* RuntimeViewerCatalystHelperPlugin */,
@@ -382,7 +394,7 @@
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
 				E961FEEB2F54511E00ED3419 /* Copy RuntimeViewerServer Framework */,
-				E9CAFE010000000000000002 /* Embed iOS Simulator Payload */,
+				E9CAFE010000000000000022 /* Embed Mobile Server */,
 				E9CAFE010000000000000001 /* Generate LaunchDaemon plist */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Catalyst Helpers */,
@@ -627,63 +639,6 @@
 				"\"${PB}\" -c \"Add :MachServices dict\" \"${PLIST}\"",
 				"\"${PB}\" -c \"Add :MachServices:${RUNTIME_VIEWER_SERVICE_NAME} bool true\" \"${PLIST}\"",
 				"echo \"Generated LaunchDaemon plist: ${PLIST}\"",
-				"",
-			);
-		};
-		E9CAFE010000000000000002 /* Embed iOS Simulator Payload */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			name = "Embed iOS Simulator Payload";
-			shellPath = /bin/sh;
-			shellScript = (
-				"set -e",
-				"",
-				"# The iOS Simulator injection payload.",
-				"#",
-				"# It cannot be a target dependency: Xcode treats an iOS-family framework as",
-				"# embedded content the macOS app target rejects outright — the same reason the",
-				"# Mac Catalyst helper is built by the shell scripts rather than depended on.",
-				"# RunScript.sh / ArchiveScript.sh build RuntimeViewerMobileServer for",
-				"# 'generic/platform=iOS Simulator' into this DerivedData first, which is what",
-				"# leaves the framework where this phase picks it up.",
-				"#",
-				"# It has to land here, in a build phase, rather than being copied into the",
-				"# built .app afterwards: everything under Resources is sealed by the app's code",
-				"# signature, and adding a file after signing invalidates it — which in turn",
-				"# breaks the SMAppService daemon registration.",
-				"#",
-				"# The bundle is renamed on the way in. The macOS slice already occupies",
-				"# RuntimeViewerServer.framework, and the two cannot be merged: they are the same",
-				"# architecture and differ only in LC_BUILD_VERSION's platform, which is exactly",
-				"# what a fat binary cannot express. The name matches",
-				"# PayloadPlatform.frameworkBundleName in RuntimeViewerHelperClient.",
-				"",
-				"# RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH is passed by RunScript.sh /",
-				"# ArchiveScript.sh, which know where they built the payload. BUILD_DIR is",
-				"# the fallback for a plain Xcode build, but it is not reliable under",
-				"# `xcodebuild archive`, where the archive redirects the product paths.",
-				"PAYLOAD_SOURCE=\"${RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH}\"",
-				"if [ -z \"${PAYLOAD_SOURCE}\" ]; then",
-				"    PAYLOAD_SOURCE=\"${BUILD_DIR}/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework\"",
-				"fi",
-				"PAYLOAD_DESTINATION=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RuntimeViewerMobileServer.framework\"",
-				"",
-				"if [ ! -d \"${PAYLOAD_SOURCE}\" ]; then",
-				"    echo \"warning: iOS Simulator payload not found at ${PAYLOAD_SOURCE} - injecting into simulator processes will be unavailable in this build. Build the RuntimeViewerMobileServer scheme for 'generic/platform=iOS Simulator' into this DerivedData first.\"",
-				"    # Drop whatever an earlier build sealed in. TARGET_BUILD_DIR survives",
-				"    # incremental builds, so without this the app keeps carrying -- and",
-				"    # injecting -- the last payload that did build, while this build reports",
-				"    # it as unavailable. The scripts clear the stale *source*; only this phase",
-				"    # can clear the copy already inside the bundle, and it is also the only",
-				"    # thing covering a plain Xcode build that runs neither script.",
-				"    rm -rf \"${PAYLOAD_DESTINATION}\"",
-				"    exit 0",
-				"fi",
-				"",
-				"mkdir -p \"$(dirname \"${PAYLOAD_DESTINATION}\")\"",
-				"rm -rf \"${PAYLOAD_DESTINATION}\"",
-				"ditto \"${PAYLOAD_SOURCE}\" \"${PAYLOAD_DESTINATION}\"",
-				"echo \"Embedded iOS Simulator payload: ${PAYLOAD_DESTINATION}\"",
 				"",
 			);
 		};
