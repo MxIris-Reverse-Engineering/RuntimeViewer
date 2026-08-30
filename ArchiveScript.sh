@@ -387,7 +387,7 @@ APP_PATH=$(find "$EXPORT_PATH" -maxdepth 1 -type d -name '*.app' | head -1)
 # a build where it never ran — or ran against a source that had just been
 # cleared — reaches here looking exactly like a successful one.
 if $PUBLISHING; then
-    EMBEDDED_SIMULATOR_PAYLOAD="$APP_PATH/Contents/Resources/RuntimeViewerServer-iphonesimulator.framework"
+    EMBEDDED_SIMULATOR_PAYLOAD="$APP_PATH/Contents/Resources/RuntimeViewerMobileServer.framework"
     [[ -d "$EMBEDDED_SIMULATOR_PAYLOAD" ]] \
         || fail "exported app carries no iOS Simulator payload at $EMBEDDED_SIMULATOR_PAYLOAD; refusing to publish"
     log "Verified embedded iOS Simulator payload"

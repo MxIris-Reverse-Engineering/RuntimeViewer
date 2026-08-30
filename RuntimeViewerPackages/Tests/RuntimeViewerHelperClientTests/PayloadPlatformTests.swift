@@ -54,7 +54,7 @@ struct PayloadPlatformTests {
         #expect(macOSURL != simulatorURL)
         #expect(macOSURL.deletingLastPathComponent() == simulatorURL.deletingLastPathComponent())
         #expect(macOSURL.path == "/Library/Frameworks/RuntimeViewerServer.framework")
-        #expect(simulatorURL.path == "/Library/Frameworks/RuntimeViewerServer-iphonesimulator.framework")
+        #expect(simulatorURL.path == "/Library/Frameworks/RuntimeViewerMobileServer.framework")
     }
 
     @Test("Bundle names stay in sync with their base names")

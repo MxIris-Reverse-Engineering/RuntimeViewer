@@ -33,12 +33,12 @@ public enum PayloadPlatform: Sendable, Hashable, CaseIterable {
     ///
     /// The two slices are the same architecture and differ only in platform, so
     /// a single fat binary cannot hold both — they ship and install as sibling
-    /// bundles instead. The suffix follows Xcode's SDK naming so a third slice
-    /// (`-appletvsimulator`, …) needs no new convention.
+    /// bundles instead. Each is named after the scheme that produces it, so the
+    /// bundle sitting in `/Library/Frameworks` says which build it came from.
     public var frameworkBundleBaseName: String {
         switch self {
         case .macOS: return "RuntimeViewerServer"
-        case .iOSSimulator: return "RuntimeViewerServer-iphonesimulator"
+        case .iOSSimulator: return "RuntimeViewerMobileServer"
         }
     }
 

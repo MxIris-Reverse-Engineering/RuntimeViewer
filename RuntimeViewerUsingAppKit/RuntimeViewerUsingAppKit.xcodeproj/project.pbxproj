@@ -666,7 +666,7 @@
 				"if [ -z \"${PAYLOAD_SOURCE}\" ]; then",
 				"    PAYLOAD_SOURCE=\"${BUILD_DIR}/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework\"",
 				"fi",
-				"PAYLOAD_DESTINATION=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RuntimeViewerServer-iphonesimulator.framework\"",
+				"PAYLOAD_DESTINATION=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/RuntimeViewerMobileServer.framework\"",
 				"",
 				"if [ ! -d \"${PAYLOAD_SOURCE}\" ]; then",
 				"    echo \"warning: iOS Simulator payload not found at ${PAYLOAD_SOURCE} - injecting into simulator processes will be unavailable in this build. Build the RuntimeViewerMobileServer scheme for 'generic/platform=iOS Simulator' into this DerivedData first.\"",
