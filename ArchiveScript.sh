@@ -229,6 +229,14 @@ update_packages() {
     log "Refreshing workspace package pins"
     run rm -f "$workspace_package_resolved"
 
+    # Deleting Package.resolved alone does not force an update: SourcePackages/
+    # workspace-state.json records the previously resolved versions and SPM reads
+    # them straight back, so `from:` dependencies stay on the old version even when
+    # a newer matching tag already sits in the local repository cache. Dropping the
+    # state file is enough -- checkouts/ and repositories/ are still reused, which
+    # keeps this far cheaper than wiping SourcePackages wholesale.
+    run rm -f "$DERIVED_DATA/SourcePackages/workspace-state.json"
+
     XCODEBUILD_LOG_NAME="resolve-catalyst-helper-packages" run_piped xcodebuild -resolvePackageDependencies \
         -workspace "$WORKSPACE" \
         -scheme "$CATALYST_SCHEME" \
