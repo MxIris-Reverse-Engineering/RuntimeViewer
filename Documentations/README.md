@@ -87,6 +87,7 @@
 
 - [Sidebar 过滤的大小写开关，意思和图标反着](ResolvedIssues/2026-08-31-sidebar-match-case-toggle-polarity.md)（2026-08-31）—— 按钮叫 "Case Insensitive" 且默认高亮，于是取消高亮反而让搜索更严格；改成通用的 Match Case 极性。
 - [`--update-packages` 从来没更新过 `from:` 依赖](ResolvedIssues/2026-08-31-spm-from-dependencies-never-update.md)（2026-08-31）—— 删了 `Package.resolved`，但 `SourcePackages/workspace-state.json` 把旧版本喂了回来。
+- [折叠一段代码后切换类，SourceEditor 布局时崩溃](ResolvedIssues/2026-08-31-source-editor-stale-folds-crash.md)（2026-08-31）—— 折叠区属于 view 而非 data source，换 data source 不清空它，旧折叠区遇上更短的新行即触发 `Range` 前置条件。
 - [Catalyst 条目变成 RuntimeViewerCatalystHelper](ResolvedIssues/2026-08-29-catalyst-helper-injected-registry-hijack.md)（2026-08-29）—— helper 无差别登记进「已注入 App」名册，同一次启动内被重连扫描当成注入目标、直连顶掉正牌引擎；不需要任何残留进程。
 - [幽灵设备：本机广播被当成陌生设备出现在引擎菜单](ResolvedIssues/2026-08-29-bonjour-ghost-device-self-discovery.md)（2026-08-29）—— TXT record 未到的浏览结果让自我过滤、分组、循环检测三道闸同时塌回服务名；双端修复并带 mutation-check 测试。
 - [注入 iOS Simulator 进程：宿主的地址不能喂给目标](ResolvedIssues/2026-08-23-simulator-injection-host-address-fallacy.md)（2026-08-23）—— 打崩三个 SpringBoard 的根因、它的三个变体，以及三个会把排查带偏的诊断陷阱。

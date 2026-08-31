@@ -160,6 +160,30 @@ extension SourceEditor.TextAttributeOverrideProvider {
   deinit
 }
 
+// Also a native Swift class — `AuditClasses.sh` reports `native`, and the dump prints it as
+// `class FoldingController {` with no superclass.
+//
+// Declared for one reason: the folds it holds are the view's state, not the data source's, so
+// swapping `SourceEditorView.dataSource` leaves them in place. `FoldingController.dataSource`'s
+// didSet (0x51E88) only rebuilds the delimiter data at field 0x30; it never touches `allFolds`
+// at field 0x68. A fold left over from a longer document then hands the layout manager an end
+// column past the end of a line in the new one, and `FoldedRegionDisplay.visibleColumnRanges`
+// (0x384D4) traps at 0x38788 building `foldEnd.column ..< lineLength` with the bounds reversed.
+@_hasMissingDesignatedInitializers public class FoldingController {
+  // Plain, not `final`: exported as a dispatch thunk, matching its vtable slot in the dump.
+  //
+  // Cheap to call unconditionally. It reads `topLevelFolds` and forwards to the private
+  // `unfold(ranges:select:restoreNestedFolds:animate:)` (0x565EC), whose first act is to return
+  // when that array is empty — the common case here, since most interfaces are never folded.
+  //
+  // `animate: false` is the only usable value for the callers here: `true` hands the work to
+  // `FoldingAnimationController.runAnimation` and finishes later, while `false` takes the branch
+  // that clears `allFolds` and nils the `_cascadedFoldedRanges` cache (0x56AE4) before returning.
+  // Both matter to a caller that is about to replace the data source on the next line.
+  public func unfoldAll(animate: Swift.Bool)
+  deinit
+}
+
 // The `: NSObject` here is load-bearing, and the symptom of dropping it is nasty. The
 // framework exports `_OBJC_CLASS_$__TtC12SourceEditor18SourceEditorGutter`, so this class is
 // NSObject-rooted and must be released through the Objective-C dealloc chain. Declared as its
@@ -281,6 +305,11 @@ extension SourceEditor.TextAttributeOverrideProvider {
   }
   // `final`: direct symbol only.
   public final var layoutManager: SourceEditor.SourceEditorLayoutManager {
+    get
+  }
+  // `final`: a stored `let` in the framework, so only a direct symbol is exported — the same
+  // shape as `contentView` and `layoutManager` above.
+  public final var foldingController: SourceEditor.FoldingController {
     get
   }
   public func addEventConsumer(_ consumer: SourceEditor.SourceEditorViewEventConsumer)

@@ -97,6 +97,24 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // Reading `languageService` is what creates it — it is lazy — so this both brings the
         // service up and installs the adjuster before anything asks the data source to parse.
         (dataSource.languageService as? SourceModelLanguageService)?.nodeTypeAdjuster = semanticNodeTypeAdjuster
+
+        // **Before the assignment, never after.** Folds belong to the view, not to the data
+        // source: `SourceEditorView.dataSource`'s setter reaches the folding controller only to
+        // run its own `dataSource` didSet, which rebuilds the delimiter data and leaves the fold
+        // list untouched. Xcode never notices because it gives every document its own editor;
+        // this bridge reuses one view for every interface it shows, so a fold made in one
+        // survives into the next.
+        //
+        // The layout manager then asks `FoldedRegionDisplay` for that line's visible column
+        // ranges, which builds `foldEnd.column ..< lineLength` from the stale fold and the new
+        // line — and traps on the reversed bounds as soon as the new text is shorter. It is a
+        // hard crash, not a glitch, and it lands inside the sidebar click's own event tracking.
+        //
+        // Unfolding here is the only ordering that works: it runs against the data source the
+        // folds were made in, so the relayout it triggers is self-consistent. Doing it after the
+        // assignment would take the same trap on the way through.
+        sourceEditorView.foldingController.unfoldAll(animate: false)
+
         sourceEditorView.dataSource = dataSource
     }
 
