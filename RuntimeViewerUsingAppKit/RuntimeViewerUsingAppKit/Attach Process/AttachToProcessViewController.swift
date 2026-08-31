@@ -17,12 +17,14 @@ final class AttachToProcessViewController: BaseViewController<AttachToProcessVie
 
     override init(viewModel: AttachToProcessViewModel? = nil) {
         let applicationConfiguration = RunningPickerTabViewController.ApplicationConfiguration(
+            style: .list,
             title: "Attach To Application",
             description: "Select a running application to attach to",
             cancelButtonTitle: "Cancel",
             confirmButtonTitle: "Attach"
         )
         let processConfiguration = RunningPickerTabViewController.ProcessConfiguration(
+            style: .list,
             title: "Attach To Process",
             description: "Select a running process to attach to",
             cancelButtonTitle: "Cancel",
