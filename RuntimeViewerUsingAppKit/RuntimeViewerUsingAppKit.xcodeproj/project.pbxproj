@@ -740,7 +740,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -809,7 +809,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -843,7 +843,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -898,7 +898,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -951,7 +951,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystHelper/RuntimeViewerCatalystHelper.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
@@ -997,7 +997,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystHelper/RuntimeViewerCatalystHelper.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
@@ -1037,7 +1037,7 @@
 		E95ED17E000000000000000C /* Debug configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridge" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -1073,7 +1073,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = arm64;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -1107,7 +1107,7 @@
 		E95ED17E000000000000000E /* Release configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridge" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -1177,7 +1177,7 @@
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -1219,7 +1219,7 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.entitlements;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -1272,7 +1272,7 @@
 				CODE_SIGN_ENTITLEMENTS = RuntimeViewerCatalystHelper/RuntimeViewerCatalystHelper.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1310,7 +1310,7 @@
 		E9958CD92FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -1336,7 +1336,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1354,8 +1354,8 @@
 		E9958CDB2FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = D5Q73692VW;
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
@@ -1370,7 +1370,7 @@
 		E9A9CCE52F5D880400A10DD3 /* Debug configuration for PBXNativeTarget "com.mxiris.runtimeviewer.service" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = NO;
@@ -1387,7 +1387,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_POINTER_AUTHENTICATION = YES;
@@ -1403,7 +1403,7 @@
 		E9E900DE2C2CF9A500FADDCC /* Debug configuration for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -1429,7 +1429,7 @@
 		E9E900DF2C2CF9A500FADDCC /* Release configuration for PBXNativeTarget "RuntimeViewerCatalystHelperPlugin" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
@@ -1456,7 +1456,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
@@ -1476,7 +1476,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E95CDA662DAA6FA900D97B03 /* Release.xcconfig */;
 			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_STYLE = Manual;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
