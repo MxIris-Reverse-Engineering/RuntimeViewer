@@ -9,11 +9,10 @@
 /* Begin PBXBuildFile section */
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed Mobile Server */ = {isa = PBXBuildFile; fileRef = E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E910124C38FF8B6334251802 /* Sparkle */; };
 		E95ED17E0000000000000001 /* RuntimeViewerSourceEditorBridge.bundle in Embed SourceEditor Bridge */ = {isa = PBXBuildFile; fileRef = E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Copy RuntimeViewerServer Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Embed RuntimeViewerServer Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
 		E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D92D9AF7E5005A573C /* RuntimeViewerService */; };
 		E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */ = {isa = PBXBuildFile; productRef = E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */; };
@@ -22,6 +21,7 @@
 		E9A9CCE22F5D880400A10DD3 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */; };
 		E9A9CCF12F5D884900A10DD3 /* $(RUNTIME_VIEWER_SERVICE_NAME) in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
 
@@ -80,14 +80,14 @@
 			);
 			name = "Embed SourceEditor Bridge";
 		};
-		E961FEEB2F54511E00ED3419 /* Copy RuntimeViewerServer Framework */ = {
+		E961FEEB2F54511E00ED3419 /* Embed RuntimeViewerServer Framework */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = "";
 			dstSubfolder = Resources;
 			files = (
-				E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Copy RuntimeViewerServer Framework */,
+				E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Embed RuntimeViewerServer Framework */,
 			);
-			name = "Copy RuntimeViewerServer Framework";
+			name = "Embed RuntimeViewerServer Framework";
 		};
 		E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -116,14 +116,14 @@
 			);
 			name = "Embed Catalyst Helpers";
 		};
-		E9CAFE010000000000000022 /* Embed Mobile Server */ = {
+		E9CAFE010000000000000022 /* Embed RuntimeViewerMobileServer Framework */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = "";
 			dstSubfolder = Resources;
 			files = (
-				E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed Mobile Server */,
+				E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed RuntimeViewerMobileServer Framework */,
 			);
-			name = "Embed Mobile Server";
+			name = "Embed RuntimeViewerMobileServer Framework";
 		};
 /* End PBXCopyFilesBuildPhase section */
 
@@ -393,8 +393,8 @@
 				E9432FDE2C0D614900362862 /* Sources */,
 				E9432FDF2C0D614900362862 /* Frameworks */,
 				E9432FE02C0D614900362862 /* Resources */,
-				E961FEEB2F54511E00ED3419 /* Copy RuntimeViewerServer Framework */,
-				E9CAFE010000000000000022 /* Embed Mobile Server */,
+				E961FEEB2F54511E00ED3419 /* Embed RuntimeViewerServer Framework */,
+				E9CAFE010000000000000022 /* Embed RuntimeViewerMobileServer Framework */,
 				E9CAFE010000000000000001 /* Generate LaunchDaemon plist */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Catalyst Helpers */,

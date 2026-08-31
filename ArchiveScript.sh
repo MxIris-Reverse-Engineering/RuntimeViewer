@@ -151,11 +151,6 @@ log "update_packages=$UPDATE_PACKAGES update_appcast=$UPDATE_APPCAST upload_to_g
 BUILD_PATH="$PROJECT_DIR/Products/Archives"
 EXPORT_PATH="$BUILD_PATH/Products/Export"
 CATALYST_EXPORT_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit"
-# Where the app's "Embed Mobile Server" copy phase expects the iOS Simulator
-# payload — a fixed path inside the project, beside the Catalyst helper's own
-# export location, because both are plain file references in the project rather
-# than script phases reading a build setting.
-MOBILE_SERVER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework"
 CATALYST_HELPER_ARCHIVE="$BUILD_PATH/RuntimeViewerCatalystHelper.xcarchive"
 MAIN_ARCHIVE="$BUILD_PATH/RuntimeViewer.xcarchive"
 # Build against the local sibling checkouts of the dependency repos rather
@@ -330,17 +325,17 @@ run rm -f "$CATALYST_EXPORT_PATH/Packaging.log" \
         "$CATALYST_EXPORT_PATH/DistributionSummary.plist" \
         "$CATALYST_EXPORT_PATH/ExportOptions.plist"
 
-# The iOS Simulator injection payload, built before the app and staged at
-# $MOBILE_SERVER_STAGED_PATH — the fixed path the app's "Embed Mobile Server"
-# copy phase references, exactly how the Catalyst helper is handed over. It
-# cannot be a target dependency: Xcode rejects iOS-family embedded content from
-# a macOS app target, which is the same constraint that keeps the helper out.
+# The iOS Simulator injection payload, built before the app so the app's
+# "Embed iOS Simulator Payload" phase can seal it into the signed bundle.
+# It cannot be a target dependency — Xcode rejects iOS-family embedded content
+# from a macOS app target, the same constraint that keeps the Catalyst helper
+# out — so the ordering lives here.
 #
-# A failure is not fatal for a local build: it still ships, only without the
-# ability to inject simulator processes.
+# A failure is not fatal: the release still ships, only without the ability to
+# inject simulator processes. The build phase warns when the payload is absent.
 log "Building iOS Simulator injection payload"
 SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
-if XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
+if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
     -scheme "$MOBILE_SERVER_SCHEME" \
     -configuration "$CONFIGURATION" \
@@ -348,15 +343,14 @@ if XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
-    run rm -rf "$MOBILE_SERVER_STAGED_PATH"
-    run ditto "$SIMULATOR_PAYLOAD_PATH" "$MOBILE_SERVER_STAGED_PATH"
-else
     log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this release"
-    # Clear the staged copy rather than leaving the last good one there. The
-    # copy phase cannot tell a current payload from a stale one, so without this
-    # the archive would seal in — and ship — a build this run just failed to
-    # produce, with only the warning above to say otherwise.
-    run rm -rf "$MOBILE_SERVER_STAGED_PATH"
+    # Drop whatever the last successful run left there. DerivedData is reused
+    # across builds and a failed compile does not clear the previous product,
+    # so leaving it lets the embed phase seal a stale payload into the app and
+    # report success — the warning above would be the only sign, and the phase
+    # contradicts it two lines later. Removing the directory also covers the
+    # phase's BUILD_DIR fallback, which resolves to this same path.
+    rm -rf "$SIMULATOR_PAYLOAD_PATH"
     # A local build may legitimately ship without the payload — only injecting
     # simulator processes is lost. A publishing run may not: the artefact goes
     # out to people who cannot tell it is missing until injection fails on
@@ -375,6 +369,7 @@ XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -archivePath "$MAIN_ARCHIVE" \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
+    "RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH=$SIMULATOR_PAYLOAD_PATH" \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 run rm -rf "$EXPORT_PATH"
