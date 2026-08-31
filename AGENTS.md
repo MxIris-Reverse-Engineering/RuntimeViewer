@@ -15,17 +15,24 @@ macOS — `RuntimeViewerCatalystHelper` (Mac Catalyst) and the
 dependency: Xcode treats both as iOS-family embedded content and rejects them
 from the macOS app target.
 
-**Nothing builds them for you.** `RunScript.sh` and `ArchiveScript.sh` build
-both before the app and hand them over — the helper through its
-`-exportArchive` output at `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app`,
-which is exactly the file reference `Embed Catalyst Helpers` copies, and the
-payload through `RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH`, which
-`Embed iOS Simulator Payload` reads before falling back to `BUILD_DIR`.
+**Nothing builds them for you.** Both are handed over the same way: a script
+builds the product, stages it at a fixed path under `RuntimeViewerUsingAppKit/`,
+and a `PBXCopyFilesBuildPhase` referencing that path embeds it.
 
-A plain Xcode GUI build does neither. It embeds whichever helper is already
-sitting at that path, and if the simulator payload is absent it warns and
-carries on without it — so **anything involving simulator injection has to be
-tested through `RunScript.sh`**, not through the GUI.
+| Product | Staged at | Copied by |
+|---------|-----------|-----------|
+| Catalyst helper | `RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app` | `Embed Catalyst Helpers` |
+| Simulator payload | `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework` | `Embed RuntimeViewerMobileServer Framework` |
+
+Both staged paths are gitignored. `ArchiveScript.sh` writes the helper there via
+`-exportArchive`; both scripts stage the payload with `ditto`, and clear it when
+its build fails so a stale one is never sealed in. The payload lands in
+`Contents/Resources/` because `RuntimeInjectClient` finds it with
+`Bundle.main.url(forResource:withExtension:)`, which looks nowhere else.
+
+A plain Xcode GUI build stages neither: it embeds whatever is already at those
+paths, left there by the last script run. So **anything involving simulator
+injection has to be tested through `RunScript.sh`**, not through the GUI.
 
 A build phase that produced both automatically was tried and withdrawn; see
 evolution 0015 for what it cost and why the helper half never actually worked.

@@ -30,6 +30,13 @@ MOBILE_SERVER_SCHEME="RuntimeViewerMobileServer"
 CONFIGURATION="Debug-arm64e"
 BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 
+# Where the app's "Embed RuntimeViewerMobileServer Framework" copy phase expects
+# the iOS Simulator payload. A fixed path inside the project rather than one
+# under DerivedData, because the phase is a plain file reference — the same
+# arrangement that carries the Catalyst helper, and the reason neither needs a
+# shell script.
+MOBILE_SERVER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework"
+
 # DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
 # SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
 # tree (otherwise git clients like Fork index them). Falls back to a
@@ -213,17 +220,18 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
-# The iOS Simulator injection payload, built before the app so the app's
-# "Embed iOS Simulator Payload" phase finds it in this DerivedData's
-# Build/Products/<configuration>-iphonesimulator. It is deliberately not a
-# target dependency — Xcode rejects iOS-family embedded content from a macOS
-# app target, the same constraint that keeps the Catalyst helper out.
+# The iOS Simulator injection payload, built before the app and staged at
+# $MOBILE_SERVER_STAGED_PATH — the fixed path referenced by the app's "Embed
+# RuntimeViewerMobileServer Framework" copy phase, the same arrangement the
+# Catalyst helper uses. It is
+# deliberately not a target dependency: Xcode rejects iOS-family embedded
+# content from a macOS app target, which is what keeps the helper out too.
 #
 # A failure here is not fatal: the app builds and runs, and only injecting into
-# simulator processes is unavailable. The build phase says so in a warning.
+# simulator processes is unavailable.
 log "Building iOS Simulator injection payload"
 SIMULATOR_PAYLOAD_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewerServer.framework"
-if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
+if XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     -workspace "$WORKSPACE" \
     -scheme "$MOBILE_SERVER_SCHEME" \
     -configuration "$CONFIGURATION" \
@@ -231,14 +239,15 @@ if ! XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
+    run rm -rf "$MOBILE_SERVER_STAGED_PATH"
+    run ditto "$SIMULATOR_PAYLOAD_PATH" "$MOBILE_SERVER_STAGED_PATH"
+else
     log "warning: iOS Simulator payload failed to build; simulator injection will be unavailable in this build"
-    # Drop whatever the last successful run left there. DerivedData is reused
-    # across builds and a failed compile does not clear the previous product,
-    # so leaving it lets the embed phase seal a stale payload into the app and
-    # report success — the warning above would be the only sign, and the phase
-    # contradicts it two lines later. Removing the directory also covers the
-    # phase's BUILD_DIR fallback, which resolves to this same path.
-    rm -rf "$SIMULATOR_PAYLOAD_PATH"
+    # Clear the staged copy rather than leaving the last good one there. The
+    # copy phase has no way to tell a current payload from a stale one, so
+    # without this the app would embed — and inject — a build that this run
+    # just failed to produce, with only the warning above to say otherwise.
+    run rm -rf "$MOBILE_SERVER_STAGED_PATH"
 fi
 
 log "Building main app"
@@ -249,7 +258,6 @@ XCODEBUILD_LOG_NAME="build-main" run_piped xcodebuild build \
     -destination 'generic/platform=macOS' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
-    "RUNTIME_VIEWER_SIMULATOR_PAYLOAD_PATH=$SIMULATOR_PAYLOAD_PATH" \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
 
 PRODUCTS_DIR="$DERIVED_DATA/Build/Products/$CONFIGURATION"
