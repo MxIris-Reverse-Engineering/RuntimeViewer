@@ -353,7 +353,7 @@ struct SidebarFilterPerformanceBaselineTests {
             runtimeObjectOpenedInNewTab: .never(),
             loadImageClicked: .never(),
             searchString: searchStringRelay.asDriver(onErrorJustReturn: ""),
-            isSearchCaseInsensitive: .just(true)
+            isSearchCaseSensitive: .just(false)
         )
         _ = viewModel.transform(input)
 

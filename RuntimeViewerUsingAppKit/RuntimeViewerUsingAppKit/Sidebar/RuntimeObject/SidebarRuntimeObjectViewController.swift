@@ -168,7 +168,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageLoadedView.filterSearchField.rx.stringValue.asDriver(),
                 filterModeDidChange.asDriver(),
             ),
-            isSearchCaseInsensitive: imageLoadedView.searchCaseInsensitiveButton.rx.state.asDriver().map { $0 == .on },
+            isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
         )
 
         let output = viewModel.transform(input)
@@ -382,21 +382,21 @@ extension SidebarRuntimeObjectViewController {
             filterSearchField
         }
 
-        private(set) var searchCaseInsensitiveButton: NSButton!
+        private(set) var matchCaseButton: NSButton!
 
         override init(frame frameRect: NSRect) {
             super.init(frame: frameRect)
 
-            searchCaseInsensitiveButton = filterSearchField.addFilterButton(
+            // "Match Case", the polarity every other search field uses
+            // (Xcode, VS Code, Safari): highlighted means the *stricter*
+            // search. The button used to read "Case Insensitive" and start
+            // highlighted, so switching it off made the search stricter —
+            // backwards from the icon everyone recognizes. Leaving it
+            // unselected keeps the effective default (ignore case).
+            matchCaseButton = filterSearchField.addFilterButton(
                 systemSymbolName: "textformat",
-                toolTip: "Case Insensitive",
+                toolTip: "Match Case",
             )
-            // Case-insensitive search is the default. FilterEngine used to
-            // invert this flag (state .off accidentally meant insensitive);
-            // now that the engine honors it, the button starts .on so the
-            // effective default behavior is unchanged and the highlighted
-            // state finally tells the truth.
-            searchCaseInsensitiveButton.state = .on
 
             hierarchy {
                 scrollView
@@ -425,7 +425,7 @@ extension SidebarRuntimeObjectViewController {
                 make.bottom.equalTo(filterStackView.snp.top).offset(-8)
             }
 
-            searchCaseInsensitiveButton.snp.makeConstraints { make in
+            matchCaseButton.snp.makeConstraints { make in
                 make.top.bottom.equalToSuperview()
             }
 //            filterModeButton.snp.makeConstraints { make in

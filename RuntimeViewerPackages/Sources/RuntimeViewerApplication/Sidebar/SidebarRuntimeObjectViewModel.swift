@@ -20,7 +20,12 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     @Observed public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var filteredNodes: [SidebarRuntimeObjectCellViewModel] = []
     @Observed public private(set) var isFiltering: Bool = false
-    @Observed public private(set) var isSearchCaseInsensitive: Bool = false
+    /// Mirrors the search field's "Match Case" toggle: `true` matches case
+    /// sensitively. `FilterContext` carries the inverse
+    /// (`isCaseInsensitive`); `scheduleRefilter()` is the only place the two
+    /// meet. Defaults to `false` so the filter ignores case until asked not
+    /// to, matching the toggle's own unselected default.
+    @Observed public private(set) var isSearchCaseSensitive: Bool = false
     @Observed public private(set) var loadingProgress: Double = 0
     @Observed public private(set) var loadingDescription: String = ""
     @Observed public private(set) var loadingItemCount: String = ""
@@ -181,7 +186,10 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let runtimeObjectOpenedInNewTab: Signal<SidebarRuntimeObjectCellViewModel>
         public let loadImageClicked: Signal<Void>
         public let searchString: Driver<String>
-        public let isSearchCaseInsensitive: Driver<Bool>
+        /// The "Match Case" toggle: `true` == case sensitive. Callers with
+        /// no such control pass `.just(false)` for the case-insensitive
+        /// default.
+        public let isSearchCaseSensitive: Driver<Bool>
     }
 
     public struct Output {
@@ -207,7 +215,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 
     @MainActor
     public func transform(_ input: Input) -> Output {
-//        input.isSearchCaseInsensitive.drive($isSearchCaseInsensitive).disposed(by: rx.disposeBag)
+//        input.isSearchCaseSensitive.drive($isSearchCaseSensitive).disposed(by: rx.disposeBag)
 
         // Keystroke coalescing: non-empty queries wait 150 ms (cancelled by
         // the next keystroke via `flatMapLatest`), clearing applies
@@ -217,21 +225,21 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         // `.just(...).debounce(500ms)` never delayed anything. The window
         // can be short because the matching itself runs off-main and stale
         // passes are cancelled.
-        Driver.combineLatest(input.searchString, input.isSearchCaseInsensitive)
-            .flatMapLatest { searchString, isSearchCaseInsensitive -> Driver<(String, Bool)> in
+        Driver.combineLatest(input.searchString, input.isSearchCaseSensitive)
+            .flatMapLatest { searchString, isSearchCaseSensitive -> Driver<(String, Bool)> in
                 if searchString.isEmpty {
-                    return .just((searchString, isSearchCaseInsensitive))
+                    return .just((searchString, isSearchCaseSensitive))
                 } else {
-                    return .just((searchString, isSearchCaseInsensitive))
+                    return .just((searchString, isSearchCaseSensitive))
                         .delay(.milliseconds(150))
                 }
             }
-            .driveOnNextMainActor { [weak self] searchString, isSearchCaseInsensitive in
+            .driveOnNextMainActor { [weak self] searchString, isSearchCaseSensitive in
                 guard let self else { return }
-                guard (self.searchString != searchString) || (self.isSearchCaseInsensitive != isSearchCaseInsensitive) else { return }
+                guard (self.searchString != searchString) || (self.isSearchCaseSensitive != isSearchCaseSensitive) else { return }
 
                 self.searchString = searchString
-                self.isSearchCaseInsensitive = isSearchCaseInsensitive
+                self.isSearchCaseSensitive = isSearchCaseSensitive
                 scheduleRefilter()
             }
             .disposed(by: rx.disposeBag)
@@ -446,9 +454,13 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         currentFilterGeneration &+= 1
         let generation = currentFilterGeneration
 
+        // The UI-facing flag is "Match Case" (on == case sensitive), the
+        // way every other search field spells it; `FilterContext` states the
+        // opposite polarity. This is the one place the two meet, so the
+        // negation lives here rather than at each call site.
         let context = FilterContext(
             query: searchString,
-            isCaseInsensitive: isSearchCaseInsensitive,
+            isCaseInsensitive: !isSearchCaseSensitive,
             mode: appDefaults.filterMode
         )
         let activeScope = scope
