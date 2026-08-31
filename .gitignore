@@ -21,3 +21,7 @@ DerivedData
 .omc
 *.env
 RuntimeViewer.xcworkspace/xcshareddata/swiftpm
+
+# Release artifacts ArchiveScript.sh writes to the repository root
+RuntimeViewer-macOS.zip
+RuntimeViewer-iOS-Simulator.zip
