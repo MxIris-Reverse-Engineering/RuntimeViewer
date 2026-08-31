@@ -202,11 +202,19 @@ trap collect_xcdistributionlogs EXIT
 
 log "xcodebuild logs: $LOG_DIR"
 
+# Update package pins through the workspace ONLY. Do not run
+# `swift package update` on RuntimeViewerCore / RuntimeViewerPackages
+# individually: the workspace unifies swift-syntax via the local
+# RuntimeViewerPrecompiledLibraries/swift-syntax checkout, so resolving each
+# package standalone picks incompatible upstream constraints (e.g. SwiftMCP
+# wants 602.x while RxSwiftPlus wants 601.x) and writes per-package
+# Package.resolved files that the workspace build never reads.
+#
+# Deleting the workspace's Package.resolved before -resolvePackageDependencies
+# is what turns "resolve" into a real update: SPM then picks the newest
+# versions matching the workspace constraints instead of replaying the old
+# pins. BuildRuntimeViewerServerXCFramework.sh does the same thing.
 update_packages() {
-    log "Updating Swift package dependencies"
-    run swift package update --package-path "$PROJECT_DIR/RuntimeViewerCore"
-    run swift package update --package-path "$PROJECT_DIR/RuntimeViewerPackages"
-
     local workspace_path="$WORKSPACE"
     if [[ "$workspace_path" != /* ]]; then
         workspace_path="$PROJECT_DIR/$workspace_path"
