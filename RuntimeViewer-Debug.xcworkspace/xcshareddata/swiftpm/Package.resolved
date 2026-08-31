@@ -185,8 +185,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
       "state" : {
-        "revision" : "8e56152efc97647f3443b13d80c443ba9463d3e9",
-        "version" : "0.5.0"
+        "revision" : "a229465b463d90485c775f0b1c91260e30f0c813",
+        "version" : "0.6.0"
       }
     },
     {
@@ -455,8 +455,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "568793c4e14165ee37a22f58c3b695f5bee13199",
-        "version" : "0.3.2"
+        "revision" : "7ba43efcaaf1f483f7bcddc60096534573c56254",
+        "version" : "0.3.3"
       }
     },
     {
@@ -599,8 +599,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-perception",
       "state" : {
-        "revision" : "de219a1cf34e958134e75a9ebb134cf09bf52fc6",
-        "version" : "2.0.11"
+        "revision" : "597afd46249f4a71885b95d26b26cc5b893daf32",
+        "version" : "2.0.12"
       }
     },
     {
