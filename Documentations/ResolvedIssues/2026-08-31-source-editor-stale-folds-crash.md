@@ -149,11 +149,53 @@ sourceEditorView.dataSource = dataSource
 
 ## 验证
 
-- `xcodebuild -target RuntimeViewerSourceEditorBridge -configuration Debug ARCHS=arm64` 通过；
-  产物的 `nm -u` 里出现且仅出现新增的两个符号，说明 stub 声明与实际引用一致。
-- **自动化复现测试尚未落地。** 触发它需要真实的 `SourceEditorView` 在 window 里完成一次布局，
-  而 app 工程当前没有任何测试 target，bridge 又只能在装有 Xcode 的机器上加载。补这个测试要新建
-  一个链接同一套 stub 的 test target，并在框架缺失时 skip —— 单独一批改动。
+构建：Debug 与 Release × arm64 与 x86_64 四种组合全部通过，四个产物的 `nm -u` 里都出现且仅出现
+新增的那两个符号，说明 stub 声明与实际引用一致。
+
+复现测试落在新建的 `RuntimeViewerSourceEditorBridgeTests` target 里（`SourceEditorStaleFoldTests`），
+两个测试分工不同：
+
+| 测试 | 撤掉修复后的表现 |
+|---|---|
+| `swappingTheSourceClearsTheFolds` | 断言失败，打印出残留的那条折叠区 `Range(line: 1, col: 0 ..< line: 4, col: 191)` |
+| `layoutSurvivesASwapToShorterTextWhileFolded` | **进程被 SIGTRAP 杀死**，退出码 133 |
+
+红绿都实测过：把 `unfoldAll` 那行注释掉，整个 bundle 退出码 133；恢复后 `2 tests passed`，退出码 0。
+
+**第二个测试失败的方式是杀死 test runner，没有任何测试框架能捕获 `EXC_BREAKPOINT`。** 第一个
+测试因此排在前面并断言同一个不变量——回归时先得到一句能读的诊断，然后 runner 才死。
+
+两个决定值得记：
+
+- **离屏就够。** 崩溃要的是一个 layer-backed view 的 `layoutSublayers(of:)` 跑在 CoreAnimation
+  事务里，不是可见窗口。`NSWindow` + `orderFront(nil)` + `CATransaction.flush()` 即可，无需
+  屏幕交互，也无需 app 宿主。
+- **测试驱动 bridge，不是裸的 `SourceEditorView`。** 受测的顺序在 `SourceEditorBridge.setSource`
+  里；自建视图的测试无论那个方法怎么写都会通过。
+
+### 怎么跑
+
+test target 已登记进 `RuntimeViewerUsingAppKit.xctestplan`。但走 scheme 的那条路
+（`xcodebuild test -scheme "RuntimeViewer macOS"`）在本机跑不起来：它要先构建整个 app target，
+而那一步缺 `RuntimeViewerMobileServer.framework`（与本测试无关的既有问题）。测试本身是无宿主的，
+不需要 app，所以直接跑 bundle：
+
+```sh
+xcodebuild -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj \
+  -target RuntimeViewerSourceEditorBridgeTests -configuration Debug ARCHS=arm64 \
+  SYMROOT=<产物目录> OBJROOT=<中间产物目录> build
+cd <产物目录>/Debug && xcrun xctest RuntimeViewerSourceEditorBridgeTests.xctest
+```
+
+没装 Xcode 的机器上，`-weak_framework` 让 bundle 照常加载、类查不到，`.enabled(if:)` 把两个测试
+跳过——是 skip，不是失败。
+
+### 工程文件的改法
+
+新 target 是手工写进 `project.pbxproj` 的：本会话没有 Xcode MCP，而 `xcodeproj` gem 打不开
+`objectVersion = 90` 的工程（它不认数组形式的 `shellScript`，也不认新的 `dstSubfolder`）。
+对象结构照抄同样手工添加的 bridge target，标识符用相邻的 `E95ED17F` 段。改完先在副本上
+`plutil -convert xml1` 验语法，再 `xcodebuild -list` 验语义。
 
 ## 相关
 

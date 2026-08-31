@@ -38,6 +38,13 @@
         "identifier" : "RuntimeViewerCommunicationTests",
         "name" : "RuntimeViewerCommunicationTests"
       }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:RuntimeViewerUsingAppKit.xcodeproj",
+        "identifier" : "E95ED17F000000000000000B",
+        "name" : "RuntimeViewerSourceEditorBridgeTests"
+      }
     }
   ],
   "version" : 1

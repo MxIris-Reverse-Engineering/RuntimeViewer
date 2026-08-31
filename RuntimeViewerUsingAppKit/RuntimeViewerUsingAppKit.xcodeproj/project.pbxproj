@@ -68,6 +68,13 @@
 			remoteGlobalIDString = E9E900DB2C2CF9A500FADDCC;
 			remoteInfo = RuntimeViewerCatalystHelperPlugin;
 		};
+		E95ED17F000000000000000D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E95ED17E0000000000000004;
+			remoteInfo = RuntimeViewerSourceEditorBridge;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -150,6 +157,7 @@
 		E9F2E9B52ED3BD2B001DCC3E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = ../Configurations/Shared/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F2E9B72ED3BD36001DCC3E /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/Shared/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = CodeSigning.xcconfig; path = ../Configurations/CodeSigning.xcconfig; sourceTree = SOURCE_ROOT; };
+		E95ED17F0000000000000001 /* RuntimeViewerSourceEditorBridgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerSourceEditorBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -188,6 +196,13 @@
 			);
 			target = E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */;
 		};
+		E95ED17F0000000000000003 /* Exceptions for "RuntimeViewerSourceEditorBridge" folder in "RuntimeViewerSourceEditorBridgeTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SourceEditorBridging.swift,
+			);
+			target = E95ED17F000000000000000B /* RuntimeViewerSourceEditorBridgeTests */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -195,6 +210,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				E95ED17E0000000000000006 /* Exceptions for "RuntimeViewerSourceEditorBridge" folder in "RuntimeViewerUsingAppKit" target */,
+				E95ED17F0000000000000003 /* Exceptions for "RuntimeViewerSourceEditorBridge" folder in "RuntimeViewerSourceEditorBridgeTests" target */,
 			);
 			path = RuntimeViewerSourceEditorBridge;
 			sourceTree = "<group>";
@@ -239,6 +255,11 @@
 			path = RuntimeViewerService;
 			sourceTree = "<group>";
 		};
+		E95ED17F0000000000000002 /* RuntimeViewerSourceEditorBridgeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = RuntimeViewerSourceEditorBridgeTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -279,6 +300,11 @@
 			isa = PBXFrameworksBuildPhase;
 			files = (
 				E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */,
+			);
+		};
+		E95ED17F0000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
 			);
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -322,6 +348,7 @@
 				E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
 				E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */,
 				E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */,
+				E95ED17F0000000000000001 /* RuntimeViewerSourceEditorBridgeTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -521,6 +548,27 @@
 			productReference = E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */;
 			productType = "com.apple.product-type.tool";
 		};
+		E95ED17F000000000000000B /* RuntimeViewerSourceEditorBridgeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E95ED17F000000000000000A /* Build configuration list for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */;
+			buildPhases = (
+				E95ED17F0000000000000004 /* Sources */,
+				E95ED17F0000000000000005 /* Frameworks */,
+				E95ED17F0000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E95ED17F000000000000000C /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				E95ED17F0000000000000002 /* RuntimeViewerSourceEditorBridgeTests */,
+			);
+			name = RuntimeViewerSourceEditorBridgeTests;
+			productName = RuntimeViewerSourceEditorBridgeTests;
+			productReference = E95ED17F0000000000000001 /* RuntimeViewerSourceEditorBridgeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -574,6 +622,7 @@
 				E9E900E72C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */,
 				E9A9CCDD2F5D880400A10DD3 /* com.mxiris.runtimeviewer.service */,
 				E95ED17E0000000000000004 /* RuntimeViewerSourceEditorBridge */,
+				E95ED17F000000000000000B /* RuntimeViewerSourceEditorBridgeTests */,
 			);
 		};
 /* End PBXProject section */
@@ -613,6 +662,11 @@
 			);
 		};
 		E9E900DA2C2CF9A500FADDCC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		E95ED17F0000000000000006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -675,6 +729,11 @@
 			files = (
 			);
 		};
+		E95ED17F0000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -698,6 +757,11 @@
 			platformFilter = maccatalyst;
 			target = E9E900DB2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin */;
 			targetProxy = E9C9E9D82C2D161000C4AA34 /* PBXContainerItemProxy */;
+		};
+		E95ED17F000000000000000C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E95ED17E0000000000000004 /* RuntimeViewerSourceEditorBridge */;
+			targetProxy = E95ED17F000000000000000D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1491,6 +1555,106 @@
 			};
 			name = Release;
 		};
+		E95ED17F0000000000000007 /* Debug configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+					"$(DEVELOPER_DIR)/../SharedFrameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 3.0.0;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = (
+					"-weak_framework",
+					SourceEditor,
+					"-weak_framework",
+					SourceModelSupport,
+					"-weak_framework",
+					SourceModel,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER).Tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E95ED17F0000000000000008 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+					"$(DEVELOPER_DIR)/../SharedFrameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 3.0.0;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = (
+					"-weak_framework",
+					SourceEditor,
+					"-weak_framework",
+					SourceModelSupport,
+					"-weak_framework",
+					SourceModel,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER).Tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = "Debug-arm64e";
+		};
+		E95ED17F0000000000000009 /* Release configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "$(RUNTIME_VIEWER_DEVELOPMENT_TEAM)";
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				FRAMEWORK_SEARCH_PATHS = "$(SRCROOT)/../Stubs";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+					"$(DEVELOPER_DIR)/../SharedFrameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 3.0.0;
+				ONLY_ACTIVE_ARCH = NO;
+				OTHER_LDFLAGS = (
+					"-weak_framework",
+					SourceEditor,
+					"-weak_framework",
+					SourceModelSupport,
+					"-weak_framework",
+					SourceModel,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER).Tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1554,6 +1718,15 @@
 				E9E900ED2C2D0D5B00FADDCC /* Debug configuration for PBXNativeTarget "com.JH.RuntimeViewerService" */,
 				E9958CDA2FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "com.JH.RuntimeViewerService" */,
 				E9E900EE2C2D0D5B00FADDCC /* Release configuration for PBXNativeTarget "com.JH.RuntimeViewerService" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		E95ED17F000000000000000A /* Build configuration list for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E95ED17F0000000000000007 /* Debug configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */,
+				E95ED17F0000000000000008 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */,
+				E95ED17F0000000000000009 /* Release configuration for PBXNativeTarget "RuntimeViewerSourceEditorBridgeTests" */,
 			);
 			defaultConfigurationName = Release;
 		};
