@@ -15,7 +15,7 @@
 | **现象** | 点击侧边栏切换类的瞬间进程终止。崩溃报告是 `EXC_BREAKPOINT (SIGTRAP)`，栈顶为 `SourceEditor` 的 `FoldedRegionDisplay.visibleColumnRanges(for:in:)` |
 | **影响范围** | 只影响开启 Xcode 编辑器且用过折叠的会话。内置 `NSTextView` 那条路径没有折叠，完全不受影响 |
 | **根因** | 折叠区是 **view** 的状态而不是 data source 的状态。`SourceEditorView.dataSource` 的 setter 不清空折叠列表，于是上一份接口的折叠区活到了下一份接口里；布局据此构造出一个上界小于下界的 `Range`，触发 Swift 前置条件 |
-| **Status** | **Fixed** —— 换 data source 之前先 `foldingController.unfoldAll(animate: false)`。自动化复现测试尚未落地，原因见文末 |
+| **Status** | **Fixed** —— 换 data source 之前先 `foldingController.unfoldAll(animate: false)`，并把折叠状态存进 `FoldStateCache`、同一份文本回来时恢复。`RuntimeViewerSourceEditorBridgeTests` 覆盖两侧，红绿都实测过 |
 
 ---
 
@@ -132,6 +132,11 @@ sourceEditorView.dataSource = dataSource
 **为什么可以每次都调。** `unfold(ranges:…)` 的第一件事就是 `ranges` 为空即返回，而
 `unfoldAll` 传的是 `topLevelFolds`。绝大多数接口从未被折叠过，这条路径上没有任何开销。
 
+**展开会丢掉用户的折叠，所以要先存。** 这是修复自带的代价：不处理的话，离开一个类再回来永远是
+全展开的。`setSource` 因此在展开之前把 `foldingController.stateDictionaryForSaving` 存进
+`FoldStateCache`（会话内 LRU，按文本内容作键），换完 data source 后若同一份文本回来就
+`restore(from:)`。设计与实测见 Evolution 0009 的决策日志。
+
 ### stub 侧的改动
 
 `FoldingController` 此前不在 `Stubs/SourceEditor.framework` 的接口子集里，本次按
@@ -176,9 +181,10 @@ sourceEditorView.dataSource = dataSource
 ### 怎么跑
 
 test target 已登记进 `RuntimeViewerUsingAppKit.xctestplan`。但走 scheme 的那条路
-（`xcodebuild test -scheme "RuntimeViewer macOS"`）在本机跑不起来：它要先构建整个 app target，
-而那一步缺 `RuntimeViewerMobileServer.framework`（与本测试无关的既有问题）。测试本身是无宿主的，
-不需要 app，所以直接跑 bundle：
+（`xcodebuild test -scheme "RuntimeViewer macOS"`）需要先构建整个 app target，而 app 嵌入的
+`RuntimeViewerMobileServer.framework` 不由 Xcode 构建——它由 `RunScript.sh` / `ArchiveScript.sh`
+暂存到固定路径（见 AGENTS.md「Embedded iOS-family products」），普通 `xcodebuild` 遇不到它就报
+"couldn't be opened"。测试本身是无宿主的，不需要 app，所以直接跑 bundle：
 
 ```sh
 xcodebuild -project RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj \

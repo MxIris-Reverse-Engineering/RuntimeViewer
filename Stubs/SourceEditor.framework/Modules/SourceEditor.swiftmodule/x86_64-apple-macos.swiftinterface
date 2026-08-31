@@ -181,6 +181,22 @@ extension SourceEditor.TextAttributeOverrideProvider {
   // that clears `allFolds` and nils the `_cascadedFoldedRanges` cache (0x56AE4) before returning.
   // Both matter to a caller that is about to replace the data source on the next line.
   public func unfoldAll(animate: Swift.Bool)
+  // The pair Xcode saves and restores folding state with. `stateDictionaryForSaving` returns
+  // `{"folds": [{"start": {line, col}, "end": {line, col}}], "documentLength": Int}` — small
+  // enough to keep several of per session.
+  //
+  // `restore(from:)` guards itself: it compares the stored `documentLength` against the
+  // current document and abandons the whole restore on a mismatch, and a position that lands
+  // outside the new text is dropped rather than folded. Measured — restoring one text's state
+  // onto a different text of *identical* length also produces no folds. Treat that as a safety
+  // net, not as the key: the cache still has to know which text a state belongs to.
+  //
+  // Safe to call immediately after assigning `dataSource`, before any parse has run. Also
+  // measured; it reads line and column numbers, not the parse.
+  public var stateDictionaryForSaving: Foundation.NSDictionary {
+    get
+  }
+  public func restore(from state: [Swift.AnyHashable : Any])
   // The next two are used only by RuntimeViewerSourceEditorBridgeTests, which has to make a
   // fold and then look at whether one is still there. Nothing in the bridge calls them; they
   // are here because both targets link the one stub. Dispatch thunks, like everything else on

@@ -18,6 +18,14 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
     /// whether or not the numbers are wanted.
     private let gutter = SourceEditorGutter()
 
+    /// What was folded in each interface this view has shown. See `setSource`, which has to
+    /// unfold before every swap and would otherwise lose the folds for good.
+    private var foldStates = FoldStateCache()
+
+    /// Identifies the text currently in the view, so its folds can be filed under the right key
+    /// when the next one arrives. Nil until the first `setSource`.
+    private var displayedSourceKey: FoldStateCache.Key?
+
     /// What `applyDisplayOptions` last put into effect, so a settings change that moves one
     /// toggle does not re-run the other four. That is not just tidiness: `installMinimap()`
     /// and its siblings register margin accessories and event consumers unconditionally, so
@@ -113,9 +121,26 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // Unfolding here is the only ordering that works: it runs against the data source the
         // folds were made in, so the relayout it triggers is self-consistent. Doing it after the
         // assignment would take the same trap on the way through.
+        //
+        // Saving first is what keeps that from also throwing the reader's folds away: leaving a
+        // class and coming back would otherwise arrive fully expanded every time.
+        if let displayedSourceKey {
+            foldStates.store(sourceEditorView.foldingController.stateDictionaryForSaving, for: displayedSourceKey)
+        }
         sourceEditorView.foldingController.unfoldAll(animate: false)
 
         sourceEditorView.dataSource = dataSource
+
+        // Straight after the assignment, with no layout in between: `restore(from:)` reads line
+        // and column numbers, not the parse, so it does not need one (measured). It also guards
+        // itself — a state whose `documentLength` disagrees with the new text is discarded
+        // whole, and a position outside that text is dropped rather than folded — but the key
+        // is what makes it *correct*, not just safe.
+        let sourceKey = FoldStateCache.Key(source: source)
+        displayedSourceKey = sourceKey
+        if let savedState = foldStates.state(for: sourceKey) as? [AnyHashable: Any] {
+            sourceEditorView.foldingController.restore(from: savedState)
+        }
     }
 
     func applyTheme(name: String, dictionary: NSDictionary, fontSizeModifier: Int, lineNumberFont: NSFont) {
