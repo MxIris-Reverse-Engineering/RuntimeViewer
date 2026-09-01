@@ -130,8 +130,16 @@ let package = Package(
             from: "1.6.0",
         ),
         .package(
+            // Pinned exactly: 0.10.0 splits OSToolbox into its own target and
+            // makes the `.dynamic` ObjCRuntimeToolbox depend on it, so Xcode
+            // builds OSToolbox/FrameworkToolbox as shared dynamic frameworks.
+            // Every client then links them via @rpath — including the helper
+            // daemon, whose only LC_RPATH is /usr/lib/swift, so it cannot find
+            // them in the app's Contents/Frameworks and dies in dyld. That
+            // shipped in v3.0.0-beta.2. Unpin once FrameworkToolbox stops
+            // forcing the transitive dynamic build.
             url: "https://github.com/Mx-Iris/FrameworkToolbox",
-            from: "0.9.0",
+            exact: "0.9.0",
         ),
         .package(
             local: .package(
