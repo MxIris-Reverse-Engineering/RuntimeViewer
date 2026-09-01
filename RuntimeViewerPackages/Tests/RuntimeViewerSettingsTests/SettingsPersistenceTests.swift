@@ -30,10 +30,10 @@ private func waitUntilSettingsAreSaved(
     maximumAttempts: Int = 300
 ) async -> Bool {
     for _ in 0 ..< maximumAttempts {
-        if (try? await storage.decodedSettings()) != nil { return true }
+        if (try? storage.decodedSettings()) != nil { return true }
         try? await Task.sleep(for: .milliseconds(10))
     }
-    return (try? await storage.decodedSettings()) != nil
+    return (try? storage.decodedSettings()) != nil
 }
 
 /// One top-level persisted property, with a change to make to it and a way to
@@ -173,9 +173,31 @@ struct SettingsPersistenceTests {
             await waitUntilSettingsAreSaved(storage: storage),
             "The dynamic-member write never reached persistent storage."
         )
-        let persistedSettings = try await storage.decodedSettings()
+        let persistedSettings = try storage.decodedSettings()
         #expect(persistedSettings?.theme.fontSize == 17)
         #expect(persistedSettings?.mcp.fixedPort == 12_345)
+    }
+
+    @Test("a synchronous flush persists pending edits before returning")
+    func synchronousFlushOutrunsDebounce() throws {
+        let storage = InMemorySettingsStorage()
+        // A debounce far longer than the test, so only the synchronous flush
+        // can be the writer.
+        let store = SettingsStore(
+            defaultValue: Settings(),
+            storage: storage,
+            autoSaveDelay: .seconds(60)
+        )
+        let settingsAccess = SettingsAccess(store: store)
+
+        settingsAccess.theme.fontSize = 17
+        settingsAccess.flushSynchronously()
+
+        // Asserted synchronously on purpose: `applicationShouldTerminate`
+        // relies on the write being finished when the call returns, because
+        // nothing async gets to run once it replies `.terminateNow`.
+        let persistedSettings = try storage.decodedSettings()
+        #expect(persistedSettings?.theme.fontSize == 17)
     }
 
     @Test("changing one property on its own is enough to persist it")
@@ -203,7 +225,7 @@ struct SettingsPersistenceTests {
                 await waitUntilSettingsAreSaved(storage: storage),
                 "Changing only `\(property.encodedKey)` never reached storage — `Settings.accessPersistedValues()` most likely does not read it."
             )
-            let persistedSettings = try await storage.decodedSettings()
+            let persistedSettings = try storage.decodedSettings()
             #expect(
                 persistedSettings.map(property.matches) == true,
                 "`\(property.encodedKey)` scheduled a save but did not round-trip through storage."
