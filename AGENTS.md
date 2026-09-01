@@ -185,9 +185,12 @@ LLM Client
   payload's top-level keys, so a new property fails the suite until both places know about it.
 - `SettingsLifecycleController` owns both ends of the lifecycle. Loading is not a side effect of
   resolving `@Dependency(\.settings)` — call `load()` at launch before anything reads a value — and
-  quitting goes through `applicationShouldTerminate` returning `.terminateLater` so `flush()` can
-  outrun the store's one-second auto-save debounce. Do not move the flush to
-  `applicationWillTerminate`; it cannot await.
+  quitting goes through `applicationShouldTerminate`, which calls the synchronous
+  `flushSynchronously()` and returns `.terminateNow` so the write outruns the store's one-second
+  auto-save debounce. Never reply `.terminateLater` with the flush in a main-actor task: the reply
+  is then a main-queue job, and when `terminate(_:)` is itself invoked from a main-queue block (the
+  helper-reinstall relaunch does exactly that) AppKit's nested wait-for-reply run loop cannot drain
+  the main queue — the app deadlocks and can only be force-quit.
 - SwiftUI pages use the local `AppSettings` typealias, which specializes
   `UIFoundationSettings.AppSettings` for RuntimeViewer's schema.
 - Keep the persisted location compatible with existing releases:
@@ -197,11 +200,12 @@ LLM Client
   `0.17.0` or later for Settings. `0.16.0` carries the observable reference-model
   store but *not* `SettingsConfiguration`, which landed after that tag; `0.17.0`
   is the first release with both, plus the window frame restoration below. The
-  declared floor is `0.20.0`, which is where `MainMenu` — the main menu builder
-  `MainMenuController` uses — arrived.
+  declared floor is `0.22.0`, which is where the synchronous `SettingsStore.save()`
+  overload — the one `flushSynchronously()` needs at termination — arrived
+  (`0.20.0` brought `MainMenu`, the main menu builder `MainMenuController` uses).
 - UIFoundation's Settings API is macOS-only, so `SettingsAccess` keeps an
-  in-memory `Settings` on the other platforms and its `load()` / `flush()` are
-  no-ops there. That costs nothing today because nothing off macOS *writes* a
+  in-memory `Settings` on the other platforms and its `load()` /
+  `flushSynchronously()` are no-ops there. That costs nothing today because nothing off macOS *writes* a
   setting — the SwiftUI pages are the only writers and they are macOS-only, so
   a file would only ever have held defaults. Adding a settings UI to another
   platform means giving it real storage first, or the edits will vanish
