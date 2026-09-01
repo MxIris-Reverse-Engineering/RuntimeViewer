@@ -19,10 +19,6 @@ final class SettingsLifecycleController {
 
     @Dependency(\.settings) private var settings
 
-    /// Guards against re-entering the deferred termination: AppKit asks again
-    /// after `reply(toApplicationShouldTerminate:)`.
-    private var isFlushingBeforeTermination = false
-
     private init() {}
 
     /// Reads the stored settings. Call first thing at launch, so the least
@@ -33,25 +29,19 @@ final class SettingsLifecycleController {
 
     /// Backs `applicationShouldTerminate(_:)`.
     ///
-    /// `applicationWillTerminate(_:)` is too late to write anything that has to
-    /// be awaited — the process leaves as soon as it returns — so termination
-    /// is deferred until the flush lands. The store's `save()` is a single
-    /// atomic file write, and `flush()` swallows its own errors, so the reply
-    /// is never left outstanding on a failure.
-    ///
-    /// Deferring here is only safe because `Document` can never be dirty: it
-    /// overrides `updateChangeCount(_:)` to do nothing and neuters all three
-    /// save actions, so there are no unsaved documents for AppKit to review.
+    /// The flush is synchronous on purpose. The previous shape — return
+    /// `.terminateLater` and reply from a main-actor task after an async
+    /// flush — deadlocked whenever `terminate(_:)` was invoked from a
+    /// main-queue block, which is how the helper-reinstall relaunch quits:
+    /// AppKit waits for the reply by spinning a nested run loop, the main
+    /// queue's drain is not reentrant, so the task that would deliver the
+    /// reply never ran and the app could only be force-quit. The store's
+    /// save is a single atomic file write, cheap enough to block on, and
+    /// `flushSynchronously()` swallows its own errors, so termination is
+    /// never held up by a failed write.
     func shouldTerminate(_ application: NSApplication) -> NSApplication.TerminateReply {
-        guard !isFlushingBeforeTermination else { return .terminateNow }
-        isFlushingBeforeTermination = true
-
-        Task {
-            await settings.flush()
-            application.reply(toApplicationShouldTerminate: true)
-        }
-
-        return .terminateLater
+        settings.flushSynchronously()
+        return .terminateNow
     }
 }
 

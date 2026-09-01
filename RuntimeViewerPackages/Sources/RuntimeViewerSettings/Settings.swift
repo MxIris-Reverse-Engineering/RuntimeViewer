@@ -126,17 +126,27 @@ public final class SettingsAccess {
     }
 
     /// Writes pending changes immediately instead of waiting out the store's
-    /// auto-save delay, and cancels the pending write.
+    /// auto-save delay, and cancels the pending write — without suspending.
     ///
-    /// Call when the app is about to terminate. Auto-save debounces by a
-    /// second and every edit restarts that timer, so changing a value and
-    /// quitting straight away otherwise loses the change.
+    /// Call from `applicationShouldTerminate(_:)`, before replying
+    /// `.terminateNow`. Auto-save debounces by a second and every edit
+    /// restarts that timer, so changing a value and quitting straight away
+    /// otherwise loses the change.
+    ///
+    /// Synchronous on purpose — the write must not be deferred behind
+    /// `.terminateLater`: the replying task is a main-queue job, and when
+    /// `terminate(_:)` was itself invoked from a main-queue block — the
+    /// helper-reinstall relaunch does exactly that — AppKit's nested
+    /// wait-for-reply run loop cannot drain the main queue, so the reply
+    /// never arrives and the app can only be force-quit.
     ///
     /// A no-op off macOS, where there is nothing to write to.
-    public func flush() async {
+    public func flushSynchronously() {
         #if os(macOS)
         do {
-            try await store.save()
+            // Resolves to the store's synchronous save() overload — this
+            // method is not async, so the compiler cannot pick the async one.
+            try store.save()
         } catch {
             #log(.debug, "Failed to flush settings: \(error, privacy: .public)")
         }

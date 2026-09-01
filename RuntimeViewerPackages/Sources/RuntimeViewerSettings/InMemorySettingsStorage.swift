@@ -11,16 +11,25 @@ import UIFoundationSettings
 /// stub it — cannot read or overwrite the developer's real
 /// `~/Library/Application Support/RuntimeViewer[-Debug]/settings.json`.
 /// Tests use it for the same reason.
-actor InMemorySettingsStorage: SettingsStorage {
+///
+/// Synchronous like the real `FileSystemSettingsStorage`, so the store's
+/// synchronous `save()` path — the one the app takes at termination — behaves
+/// the same against it.
+final class InMemorySettingsStorage: SettingsStorage, @unchecked Sendable {
+    private let lock = NSLock()
     private var storedData: Data?
 
     init() {}
 
-    func save(_ data: Data) async throws {
+    func save(_ data: Data) throws {
+        lock.lock()
+        defer { lock.unlock() }
         storedData = data
     }
 
-    func load() async throws -> Data {
+    func load() throws -> Data {
+        lock.lock()
+        defer { lock.unlock() }
         guard let storedData else {
             // The store treats this specific error as "nothing written yet"
             // and keeps its default value, rather than reporting a failure.
@@ -29,8 +38,10 @@ actor InMemorySettingsStorage: SettingsStorage {
         return storedData
     }
 
-    /// What `save(_:)` last wrote, for tests that assert persistence happened.
+    /// What the last save wrote, for tests that assert persistence happened.
     func decodedSettings() throws -> Settings? {
+        lock.lock()
+        defer { lock.unlock() }
         guard let storedData else { return nil }
         return try JSONDecoder().decode(Settings.self, from: storedData)
     }
