@@ -32,7 +32,7 @@ final class ExportingConfigurationViewModel: ViewModel<ExportingRoute> {
     @UserDefault(key: ExportingDefaultsKey.includeMetadata, defaultValue: true)
     private var storedIncludeMetadata: Bool
 
-    @Observed private(set) var isLoading: Bool = true
+    @RxObserved private(set) var isLoading: Bool = true
 
     override var delayedLoading: Driver<Bool> {
         $isLoading.asDriver()

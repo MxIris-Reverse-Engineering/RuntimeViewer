@@ -5,7 +5,7 @@ import RuntimeViewerArchitectures
 import Testing
 @testable import RuntimeViewerApplication
 
-/// Guards the saving from the proposal *`@Observed` 惰性创建 relay*: the
+/// Guards the saving from the proposal *`@RxObserved` 惰性创建 relay*: the
 /// wrapper allocates its `BehaviorRelay` on the first `$property` access, so
 /// the bulk paths that visit every row — the text filter, the scope filter,
 /// type-select — must stay on `wrappedValue`. One stray `$appearance` in any

@@ -266,8 +266,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
       "state" : {
-        "revision" : "45a1301fce925a3e8b9a4199cb2c1aa677e50b65",
-        "version" : "0.2.4"
+        "revision" : "64a9b8c4718e993ee4601d165c3ee425d44039f0",
+        "version" : "0.2.5"
       }
     },
     {

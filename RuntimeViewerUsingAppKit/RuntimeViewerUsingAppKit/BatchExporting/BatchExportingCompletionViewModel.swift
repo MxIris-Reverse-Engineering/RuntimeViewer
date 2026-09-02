@@ -34,7 +34,7 @@ final class BatchExportingCompletionViewModel: ViewModel<ExportingRoute> {
         let rows: Driver<[BatchExportingCompletionRowViewModel]>
     }
 
-    @Observed private(set) var summary: Summary = .empty
+    @RxObserved private(set) var summary: Summary = .empty
 
     private let exportingState: BatchExportingState
 

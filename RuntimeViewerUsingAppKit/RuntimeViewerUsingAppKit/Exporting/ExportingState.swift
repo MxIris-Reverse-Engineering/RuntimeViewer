@@ -23,25 +23,25 @@ final class ExportingState {
 
     let imageName: String
 
-    @Observed
+    @RxObserved
     var allObjects: [RuntimeObject] = []
 
-    @Observed
+    @RxObserved
     var objcFormat: ExportFormat = .directory
 
-    @Observed
+    @RxObserved
     var swiftFormat: ExportFormat = .singleFile
 
-    @Observed
+    @RxObserved
     var includeMetadata: Bool = true
 
-    @Observed
+    @RxObserved
     var destinationURL: URL?
 
-    @Observed
+    @RxObserved
     var exportResult: RuntimeInterfaceExportResult?
 
-    @Observed
+    @RxObserved
     var currentStep: ExportingStep = .configuration
 
     init(imagePath: String, imageName: String) {

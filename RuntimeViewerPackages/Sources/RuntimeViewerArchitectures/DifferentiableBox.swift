@@ -14,13 +14,13 @@ import DifferenceKit
 ///   construction shows up as a main-thread bottleneck in Instruments.
 /// - The `cellViewModel`'s state is **fully determined at init time** from
 ///   the model alone and does **not** subscribe to any ongoing state
-///   (no `@Observed` properties that mutate after init, no Rx pipelines
+///   (no `@RxObserved` properties that mutate after init, no Rx pipelines
 ///   fed by external sources, no async loading).
 ///
 /// ## When NOT to use
 ///
 /// - The `cellViewModel` owns long-lived subscriptions or mutable
-///   `@Observed` state that updates over the row's lifetime — e.g.
+///   `@RxObserved` state that updates over the row's lifetime — e.g.
 ///   Sidebar's filter-aware attributed name, Inspector's async metadata
 ///   loading. Lazy reconstruction discards subscription identity;
 ///   downstream observers attached to the previous instance get dropped

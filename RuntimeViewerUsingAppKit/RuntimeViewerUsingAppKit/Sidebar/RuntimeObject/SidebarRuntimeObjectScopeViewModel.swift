@@ -12,7 +12,7 @@ import RuntimeViewerCore
 final class SidebarRuntimeObjectScopeViewModel<Route: Routable>: ViewModel<Route> {
     private let relay: BehaviorRelay<RuntimeObjectScope>
 
-    @Observed private(set) var draft: RuntimeObjectScope
+    @RxObserved private(set) var draft: RuntimeObjectScope
 
     /// Snapshot of which kinds appear in the current image. The popover
     /// uses this to hide rows for kinds nothing carries; the model itself

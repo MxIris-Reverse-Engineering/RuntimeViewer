@@ -9,9 +9,9 @@ import MemberwiseInit
 public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     public typealias CellLookup = (cell: SidebarRuntimeObjectCellViewModel, ancestors: [SidebarRuntimeObjectCellViewModel])
 
-    @Observed public private(set) var searchStringForOpenQuickly: String = ""
-    @Observed public private(set) var filteredNodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
-    @Observed public private(set) var isFilteringForOpenQuickly: Bool = false
+    @RxObserved public private(set) var searchStringForOpenQuickly: String = ""
+    @RxObserved public private(set) var filteredNodesForOpenQuickly: [SidebarRuntimeObjectCellViewModel] = []
+    @RxObserved public private(set) var isFilteringForOpenQuickly: Bool = false
 
     /// Sorted top-level objects backing Open Quickly. Rows materialize
     /// into cell view models lazily (see `openQuicklyCellViewModel(at:)`),

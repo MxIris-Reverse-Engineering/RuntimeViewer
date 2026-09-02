@@ -37,18 +37,18 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// provider observes every fetch this ViewModel performs.
     private let interfaceProvider: InterfaceProvider
 
-    @Observed
+    @RxObserved
     public private(set) var theme: ThemeProfile
 
-    @Observed
+    @RxObserved
     public private(set) var runtimeObject: RuntimeObject
 
-    @Observed
+    @RxObserved
     public private(set) var imageNameOfRuntimeObject: String?
 
     /// The rendered interface, carrying both forms of the same generation.
     ///
-    /// They travel together rather than as two `@Observed` properties because a consumer that
+    /// They travel together rather than as two `@RxObserved` properties because a consumer that
     /// needs both must never see one updated ahead of the other — the semantic runs would
     /// describe a different object than the text on screen.
     public struct RenderedInterface {
@@ -61,10 +61,10 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         public let attributedString: NSAttributedString
     }
 
-    @Observed
+    @RxObserved
     public private(set) var renderedInterface: RenderedInterface?
 
-    @Observed
+    @RxObserved
     public private(set) var attributedString: NSAttributedString?
 
     public convenience init(runtimeObject: RuntimeObject, documentState: DocumentState, router: any Router<ContentRoute>) {

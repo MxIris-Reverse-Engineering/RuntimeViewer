@@ -8,11 +8,11 @@ import RxCocoa
 import RxSwift
 
 final class BackgroundIndexingPopoverViewModel: ViewModel<MainRoute> {
-    @Observed private(set) var nodes: [BackgroundIndexingNode] = []
-    @Observed private(set) var isEnabled: Bool = false
-    @Observed private(set) var hasAnyBatch: Bool = false
-    @Observed private(set) var hasAnyHistory: Bool = false
-    @Observed private(set) var subtitle: String = ""
+    @RxObserved private(set) var nodes: [BackgroundIndexingNode] = []
+    @RxObserved private(set) var isEnabled: Bool = false
+    @RxObserved private(set) var hasAnyBatch: Bool = false
+    @RxObserved private(set) var hasAnyHistory: Bool = false
+    @RxObserved private(set) var subtitle: String = ""
 
     struct Input {
         let cancelBatch: Signal<RuntimeIndexingBatchID>

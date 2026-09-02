@@ -13,7 +13,7 @@ final class ExportingCompletionViewModel: ViewModel<ExportingRoute> {
         let summaryText: Driver<String>
     }
 
-    @Observed private(set) var summaryText: String = ""
+    @RxObserved private(set) var summaryText: String = ""
 
     private let exportingState: ExportingState
 

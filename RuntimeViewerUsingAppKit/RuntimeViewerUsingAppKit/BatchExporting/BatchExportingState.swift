@@ -129,37 +129,37 @@ struct BatchExportingAggregatedResult: Sendable {
 
 @MainActor
 final class BatchExportingState {
-    @Observed
+    @RxObserved
     var availableImages: [BatchExportingImage] = []
 
-    @Observed
+    @RxObserved
     var selectedImagePaths: Set<String> = []
 
-    @Observed
+    @RxObserved
     var searchString: String = ""
 
-    @Observed
+    @RxObserved
     var objcFormat: ExportFormat = .directory
 
-    @Observed
+    @RxObserved
     var swiftFormat: ExportFormat = .singleFile
 
-    @Observed
+    @RxObserved
     var includeMetadata: Bool = true
 
-    @Observed
+    @RxObserved
     var destinationURL: URL?
 
-    @Observed
+    @RxObserved
     var progressRowViewModels: [BatchExportingProgressRowViewModel] = []
 
-    @Observed
+    @RxObserved
     var perImageOutcomes: [BatchExportingPerImageOutcome] = []
 
-    @Observed
+    @RxObserved
     var aggregatedResult: BatchExportingAggregatedResult?
 
-    @Observed
+    @RxObserved
     var currentStep: BatchExportingStep = .imageSelection
 
     var selectedImages: [BatchExportingImage] {

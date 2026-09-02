@@ -13,18 +13,18 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
 
     let image: BatchExportingImage
 
-    @Observed
+    @RxObserved
     private(set) var status: Status = .queued
 
-    @Observed
+    @RxObserved
     private(set) var progress: Double = 0
 
-    @Observed
+    @RxObserved
     private(set) var currentObjectText: String = ""
 
     /// Objects whose interface failed during this image's export. Surfaced in the
     /// row tooltip so a partially-failed (but still "succeeded") image isn't silent.
-    @Observed
+    @RxObserved
     private(set) var objectFailures: [BatchExportingObjectFailure] = []
 
     init(image: BatchExportingImage) {

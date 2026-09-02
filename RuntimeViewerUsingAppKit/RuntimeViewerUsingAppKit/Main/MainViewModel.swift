@@ -95,7 +95,7 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
-    @Observed private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
+    @RxObserved private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
 
     private var cachedSelectedEngineName: String = RuntimeEngine.local.source.description
 

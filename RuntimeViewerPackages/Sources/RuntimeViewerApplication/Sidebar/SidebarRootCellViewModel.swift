@@ -61,7 +61,7 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
         }
     }
 
-    @Observed
+    @RxObserved
     public private(set) var appearance: Appearance
 
     /// Whether `$appearance` has been materialized. The image list filter and

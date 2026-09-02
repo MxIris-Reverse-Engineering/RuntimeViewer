@@ -101,7 +101,7 @@ struct SidebarCellAppearanceTests {
 }
 
 /// Counts `$appearance` relay emissions on a single cell view model.
-/// `@Observed` is backed by a `BehaviorRelay`, so emissions land
+/// `@RxObserved` is backed by a `BehaviorRelay`, so emissions land
 /// synchronously and the counts asserted above are exact.
 @MainActor
 private final class AppearanceEmissionCounter {

@@ -7,7 +7,7 @@ import MemberwiseInit
 
 @Loggable(.private)
 public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRuntimeObjectRoute> {
-    @Observed
+    @RxObserved
     private var runtimeObject: RuntimeObject
 
     public var runtimeObjectDisplayName: String { runtimeObject.displayName }

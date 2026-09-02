@@ -49,19 +49,19 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
     /// keep "Specialize" disabled during the fetch.
     public let isPlaceholder: Bool
 
-    @Observed
+    @RxObserved
     public private(set) var selectedCandidate: RuntimeSpecializationRequest.Candidate?
 
-    @Observed
+    @RxObserved
     public private(set) var children: [SpecializationCellViewModel]
 
-    @Observed
+    @RxObserved
     public private(set) var loadState: InnerLoadState
 
-    @Observed
+    @RxObserved
     public private(set) var buttonTitle: String
 
-    @Observed
+    @RxObserved
     public private(set) var descriptionText: NSAttributedString
 
     /// True while the row's type-picker payload (sort + box construction)
@@ -69,7 +69,7 @@ public final class SpecializationCellViewModel: NSObject, OutlineNodeType, @unch
     /// "Choose Type…" `LoadingButton`'s `isLoading` off this so the user
     /// sees inline feedback on the button instead of a main-thread freeze
     /// during popover preparation.
-    @Observed
+    @RxObserved
     public private(set) var isPreparingPicker: Bool = false
 
     /// In-flight inner-request fetch for the current `selectedCandidate`,

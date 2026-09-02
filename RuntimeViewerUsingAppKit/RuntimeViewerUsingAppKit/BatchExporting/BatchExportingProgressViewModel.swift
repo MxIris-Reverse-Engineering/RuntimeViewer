@@ -16,9 +16,9 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
         let rows: Driver<[BatchExportingProgressRowViewModel]>
     }
 
-    @Observed private(set) var titleText: String = ""
-    @Observed private(set) var progressText: String = ""
-    @Observed private(set) var overallProgress: Double = 0
+    @RxObserved private(set) var titleText: String = ""
+    @RxObserved private(set) var progressText: String = ""
+    @RxObserved private(set) var overallProgress: Double = 0
 
     private let exportingState: BatchExportingState
     private var exportTask: Task<Void, Never>?

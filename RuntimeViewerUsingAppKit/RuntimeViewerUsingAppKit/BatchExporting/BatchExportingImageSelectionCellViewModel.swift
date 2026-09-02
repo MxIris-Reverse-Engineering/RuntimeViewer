@@ -6,7 +6,7 @@ import RuntimeViewerArchitectures
 final class BatchExportingImageSelectionCellViewModel: CellViewModel {
     let image: BatchExportingImage
 
-    @Observed
+    @RxObserved
     private(set) var isSelected: Bool = false
 
     private let disposeBag = DisposeBag()

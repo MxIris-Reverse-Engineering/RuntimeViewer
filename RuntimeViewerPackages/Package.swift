@@ -211,7 +211,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
-                from: "0.2.4",
+                from: "0.2.5",
             ),
         ),
 
@@ -353,6 +353,7 @@ let package = Package(
                 .product(name: "RxSwift", package: "RxSwift"),
                 .product(name: "RxCocoa", package: "RxSwift"),
                 .product(name: "RxSwiftPlus", package: "RxSwiftPlus"),
+                .product(name: "RxSwiftPlusMacro", package: "RxSwiftPlus"),
                 .product(name: "RxDefaultsPlus", package: "RxSwiftPlus"),
                 .product(name: "RxAppKit", package: "RxAppKit", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RxUIKit", package: "RxUIKit", condition: .when(platforms: uikitPlatforms)),

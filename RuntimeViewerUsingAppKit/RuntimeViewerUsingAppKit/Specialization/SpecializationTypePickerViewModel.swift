@@ -35,7 +35,7 @@ public final class SpecializationTypePickerViewModel: ViewModel<SpecializationRo
 
     private let allRows: [CandidateBox]
 
-    @Observed
+    @RxObserved
     public private(set) var filteredRows: [CandidateBox] = []
 
     public struct Input {

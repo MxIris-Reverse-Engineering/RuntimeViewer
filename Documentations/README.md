@@ -24,7 +24,7 @@
 
 ## 提案（Evolutions）
 
-见 [`Evolutions/README.md`](Evolutions/README.md)。当前 16 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay；另有 1 篇待编号草案：RuntimeBookmarkScope（把持久化身份从显示名手里拿走）。
+见 [`Evolutions/README.md`](Evolutions/README.md)。当前 17 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏；另有 1 篇待编号草案：RuntimeBookmarkScope（把持久化身份从显示名手里拿走）。
 
 ## 设计与实现计划（Plans，归档）
 

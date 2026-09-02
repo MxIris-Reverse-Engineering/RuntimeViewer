@@ -14,9 +14,9 @@ final class ExportingProgressViewModel: ViewModel<ExportingRoute> {
         let currentObjectText: Driver<String>
     }
 
-    @Observed private(set) var phaseText: String = "Preparing..."
-    @Observed private(set) var progressValue: Double = 0
-    @Observed private(set) var currentObjectText: String = ""
+    @RxObserved private(set) var phaseText: String = "Preparing..."
+    @RxObserved private(set) var progressValue: Double = 0
+    @RxObserved private(set) var currentObjectText: String = ""
 
     private let exportingState: ExportingState
 

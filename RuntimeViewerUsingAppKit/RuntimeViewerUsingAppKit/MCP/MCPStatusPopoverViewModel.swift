@@ -54,7 +54,7 @@ enum MCPConfigType {
 final class MCPStatusPopoverViewModel<Route: Routable>: ViewModel<Route> {
     @Dependency(\.mcpService) private var mcpService
 
-    @Observed private(set) var state: MCPServerState = {
+    @RxObserved private(set) var state: MCPServerState = {
         @Dependency(\.mcpService) var mcpService
         return mcpService.serverState
     }()

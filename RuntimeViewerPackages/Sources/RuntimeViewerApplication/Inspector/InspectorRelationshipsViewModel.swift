@@ -26,16 +26,16 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
         case loaded([RuntimeObject])
     }
 
-    @Observed
+    @RxObserved
     private var runtimeObject: RuntimeObject
 
-    @Observed
+    @RxObserved
     public private(set) var state: RelationshipsState = .loading
 
-    @Observed
+    @RxObserved
     public private(set) var sectionTitle: String = ""
 
-    @Observed
+    @RxObserved
     public private(set) var emptyMessage: String = ""
 
     @MemberwiseInit(.public)

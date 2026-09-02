@@ -290,10 +290,10 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 
     /// All visual state in one stream: one subject + lock per row instead of
     /// five, and every refresh publishes atomically (proposal 0005).
-    @Observed
-    public private(set) var appearance = RuntimeObjectCellAppearance()
+    @RxObserved
+    public private(set) var appearance: RuntimeObjectCellAppearance = RuntimeObjectCellAppearance()
 
-    /// Whether `$appearance` has been materialized. `@Observed` creates its
+    /// Whether `$appearance` has been materialized. `@RxObserved` creates its
     /// relay on first `$appearance` access, so every bulk path over the tree
     /// — filter apply, scope filter, type-select — must leave this `false`;
     /// only a cell view binding the row should flip it. Guarded by

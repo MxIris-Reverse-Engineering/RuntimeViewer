@@ -19,13 +19,13 @@ public final class DocumentState {
     /// `RuntimeBackgroundIndexingCoordinator` subscribes to `$runtimeEngine`
     /// and rewires its pumps onto the new engine's `backgroundIndexingManager`,
     /// cancelling the old engine's in-flight document batches as it goes.
-    @Observed
+    @RxObserved
     public fileprivate(set) var runtimeEngine: RuntimeEngine = .local
 
     /// Currently inspected runtime image. `nil` when the sidebar is at the
     /// image-picker root. Read-only externally: mutated only via the
     /// `.switchImage` route.
-    @Observed
+    @RxObserved
     public fileprivate(set) var currentImageNode: RuntimeImageNode?
 
     /// Document-level navigation timeline, Xcode-style: one entry per
@@ -48,7 +48,7 @@ public final class DocumentState {
     /// Read-only externally: every mutation goes through `selectionRouter`,
     /// which dispatches a typed `SelectionRoute` and emits to
     /// `routeSignal` after the state update has been applied.
-    @Observed
+    @RxObserved
     public fileprivate(set) var selectionStack: [RuntimeObject] = []
 
     /// Cursor into `selectionStack`. `-1` when the stack is empty;
@@ -57,7 +57,7 @@ public final class DocumentState {
     /// shows; on an empty tab the cursor keeps its position (the most
     /// recently viewed entry) while `selectedRuntimeObject` is `nil`, so
     /// the first `.backward` can return to it.
-    @Observed
+    @RxObserved
     public fileprivate(set) var selectionIndex: Int = -1
 
     /// The object the content / inspector panes are showing, or `nil` for
@@ -65,7 +65,7 @@ public final class DocumentState {
     /// source of truth: navigation routes set it from the timeline cursor,
     /// tab routes set it from the target tab's `object`. Read-only
     /// externally: mutated only via `selectionRouter`.
-    @Observed
+    @RxObserved
     public fileprivate(set) var selectedRuntimeObject: RuntimeObject?
 
     /// Content-pane tabs. Tabs and the navigation timeline are independent
@@ -77,12 +77,12 @@ public final class DocumentState {
     /// tab. Read-only externally: mutated only via the tab selection routes
     /// (`newTab`, `openInNewTab`, `switchTab`, `closeTab`, `moveTab`) and the
     /// active-tab write-through applied after every history mutation.
-    @Observed
+    @RxObserved
     public fileprivate(set) var tabs: [DocumentTab] = [DocumentTab()]
 
     /// Index of the active tab in `tabs`. Always a valid index (there is
     /// always at least one tab).
-    @Observed
+    @RxObserved
     public fileprivate(set) var activeTabIndex: Int = 0
 
     /// The active tab, or `nil` only in the degenerate empty-`tabs` state

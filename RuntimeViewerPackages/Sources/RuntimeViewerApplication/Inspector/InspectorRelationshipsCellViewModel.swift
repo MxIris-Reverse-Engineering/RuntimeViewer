@@ -15,7 +15,7 @@ import RuntimeViewerArchitectures
 public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sendable {
     public let runtimeObject: RuntimeObject
 
-    @Observed
+    @RxObserved
     public private(set) var appearance: RuntimeObjectCellAppearance
 
     public init(runtimeObject: RuntimeObject) {

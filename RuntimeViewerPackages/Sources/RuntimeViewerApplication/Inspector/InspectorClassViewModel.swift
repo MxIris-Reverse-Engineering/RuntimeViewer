@@ -18,10 +18,10 @@ public final class InspectorClassViewModel: ViewModel<InspectorRuntimeObjectRout
         case loaded(String)
     }
 
-    @Observed
+    @RxObserved
     private var runtimeObject: RuntimeObject
 
-    @Observed
+    @RxObserved
     public private(set) var hierarchyState: HierarchyState = .loading
 
     @MemberwiseInit(.public)

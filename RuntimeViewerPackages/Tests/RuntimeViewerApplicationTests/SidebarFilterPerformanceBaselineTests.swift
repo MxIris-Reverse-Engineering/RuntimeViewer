@@ -501,7 +501,7 @@ struct SidebarFilterPerformanceBaselineTests {
 }
 
 /// Counts `$appearance` relay emissions across a set of cell view models.
-/// `@Observed` is backed by a `BehaviorRelay`, so every `filterResult`
+/// `@RxObserved` is backed by a `BehaviorRelay`, so every `filterResult`
 /// didSet that changes the published appearance lands here synchronously —
 /// the counts asserted above are exact, not scheduler-delayed. Since
 /// proposal 0005 the appearance is a single deduplicated stream: an

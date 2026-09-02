@@ -15,21 +15,21 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         false
     }
 
-    @Observed public private(set) var loadState: RuntimeImageLoadState = .unknown
-    @Observed public private(set) var searchString: String = ""
-    @Observed public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
-    @Observed public private(set) var filteredNodes: [SidebarRuntimeObjectCellViewModel] = []
-    @Observed public private(set) var isFiltering: Bool = false
+    @RxObserved public private(set) var loadState: RuntimeImageLoadState = .unknown
+    @RxObserved public private(set) var searchString: String = ""
+    @RxObserved public private(set) var nodes: [SidebarRuntimeObjectCellViewModel] = []
+    @RxObserved public private(set) var filteredNodes: [SidebarRuntimeObjectCellViewModel] = []
+    @RxObserved public private(set) var isFiltering: Bool = false
     /// Mirrors the search field's "Match Case" toggle: `true` matches case
     /// sensitively. `FilterContext` carries the inverse
     /// (`isCaseInsensitive`); `scheduleRefilter()` is the only place the two
     /// meet. Defaults to `false` so the filter ignores case until asked not
     /// to, matching the toggle's own unselected default.
-    @Observed public private(set) var isSearchCaseSensitive: Bool = false
-    @Observed public private(set) var loadingProgress: Double = 0
-    @Observed public private(set) var loadingDescription: String = ""
-    @Observed public private(set) var loadingItemCount: String = ""
-    @Observed public private(set) var scope: RuntimeObjectScope = .init()
+    @RxObserved public private(set) var isSearchCaseSensitive: Bool = false
+    @RxObserved public private(set) var loadingProgress: Double = 0
+    @RxObserved public private(set) var loadingDescription: String = ""
+    @RxObserved public private(set) var loadingItemCount: String = ""
+    @RxObserved public private(set) var scope: RuntimeObjectScope = .init()
 
     /// Distinct kinds that actually appear in the current image (top-level
     /// nodes and every descendant). The scope popover uses this to skip

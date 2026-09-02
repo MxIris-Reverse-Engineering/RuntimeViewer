@@ -19,7 +19,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
 
     public let runtimeObject: RuntimeObject
 
-    @Observed
+    @RxObserved
     public private(set) var request: RuntimeSpecializationRequest?
 
     /// Source-of-truth row tree for the outline form. The wire-level
@@ -29,7 +29,7 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     public private(set) var topLevelRows: [SpecializationCellViewModel] = []
 
     /// Re-emits the row array on every mutation so `outlineView.rx.nodes`
-    /// can diff and pick up new child rows. `@Observed` would filter
+    /// can diff and pick up new child rows. `@RxObserved` would filter
     /// duplicate-reference array writes, which is what we *don't* want here
     /// — children of an existing row mutate without changing the top-level
     /// references.
@@ -60,10 +60,10 @@ public final class SpecializationViewModel: ViewModel<SpecializationRoute> {
     /// specialize doesn't outlive the sheet.
     private var specializeTask: Task<Void, Never>?
 
-    @Observed
+    @RxObserved
     public private(set) var loadState: LoadState = .idle
 
-    @Observed
+    @RxObserved
     public private(set) var canSpecialize: Bool = false
 
     public struct Input {

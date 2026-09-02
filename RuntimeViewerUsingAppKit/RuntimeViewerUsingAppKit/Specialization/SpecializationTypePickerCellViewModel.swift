@@ -32,7 +32,7 @@ import RuntimeViewerApplication
 public final class SpecializationTypePickerCellViewModel: NSObject, @unchecked Sendable {
     public let candidate: RuntimeSpecializationRequest.Candidate
 
-    @Observed
+    @RxObserved
     public private(set) var appearance: RuntimeObjectCellAppearance
 
     public init(candidate: RuntimeSpecializationRequest.Candidate) {

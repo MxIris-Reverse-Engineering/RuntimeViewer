@@ -340,7 +340,7 @@ conclusion — the next task on this module starts by reading them.
 ### Access Control
 
 - All members should be `private` by default; only widen the access level when external access is actually needed
-- ViewModel `@Observed` state properties: `@Observed private(set) var`
+- ViewModel `@RxObserved` state properties: `@RxObserved private(set) var`
 - ViewController relays: `private let xxxRelay = PublishRelay<Void>()`
 - ViewController views: `private let xxxLabel = Label()`
 
@@ -488,14 +488,14 @@ extension MyViewController {
 
 **Base class**: All ViewModels inherit `ViewModel<Route>`, which provides `documentState`, `router`, `appDefaults`, `errorRelay`, `_commonLoading`.
 
-**State properties** — use `@Observed` (NOT `BehaviorRelay`):
+**State properties** — use `@RxObserved` (NOT `BehaviorRelay`):
 ```swift
-@Observed private(set) var currentPage: Page = .configuration
-@Observed private(set) var nodes: [CellViewModel] = []
+@RxObserved private(set) var currentPage: Page = .configuration
+@RxObserved private(set) var nodes: [CellViewModel] = []
 ```
 - Exposed as Driver/Signal via `$property.asDriver()` or `$property.asSignal()`
 - Mutate by direct assignment: `currentPage = .progress`
-- **Read the property for its current value; touch `$property` only to subscribe or bind.** `@Observed` creates its `BehaviorRelay` on the first `$property` access (proposal *`@Observed` 惰性创建 relay*), so a `$property.value` in a bulk path — a filter pass, type-select, an export loop — materializes one relay plus an `NSRecursiveLock` per row and silently undoes the saving. `SidebarFilterRelayMaterializationTests` guards the sidebar paths; keep new bulk paths on `wrappedValue`.
+- **Read the property for its current value; touch `$property` only to subscribe or bind.** `@RxObserved` creates its `BehaviorRelay` on the first `$property` access (proposal *`@RxObserved` 惰性创建 relay*), so a `$property.value` in a bulk path — a filter pass, type-select, an export loop — materializes one relay plus an `NSRecursiveLock` per row and silently undoes the saving. `SidebarFilterRelayMaterializationTests` guards the sidebar paths; keep new bulk paths on `wrappedValue`.
 
 **Input/Output transform pattern**:
 ```swift
@@ -531,7 +531,7 @@ private let requestDirectorySelectionRelay = PublishRelay<Void>()
 
 **Dependency injection**: `@Dependency(\.appDefaults) var appDefaults`
 
-**Async content — one state enum, never `isLoading` + `content` side by side.** When a pane's content comes from an `async` engine call, model loading and content as a *single* `@Observed` value:
+**Async content — one state enum, never `isLoading` + `content` side by side.** When a pane's content comes from an `async` engine call, model loading and content as a *single* `@RxObserved` value:
 
 ```swift
 public enum HierarchyState { case loading, loaded(String) }
@@ -555,7 +555,7 @@ Two independent drivers let the view observe "not loading" together with the *pr
 
 Build the pipeline in `init` and return `$state.asDriver()` from `transform`, the way `ContentTextViewModel` does. Values that build AppKit objects (cell ViewModels, `NSImage`, `NSAttributedString`) are mapped **after** `observeOnMainScheduler()`; only plain model data crosses back from the background.
 
-**Reusable panes: keep the ViewModel, swap the object.** A pane that shows a series of objects (Inspector tabs, Content text) must not build a fresh ViewModel and call `setupBindings(for:)` per object. `setupBindings` resets `rx.disposeBag`, which tears down `tableView.rx.items` and installs a *new* RxAppKit adapter starting from an empty item list — the table blanks on the spot. Instead give the ViewModel an `update(for:)` that assigns the new object to an `@Observed` property the pipeline is already keyed on, and have the coordinator hold the ViewModel:
+**Reusable panes: keep the ViewModel, swap the object.** A pane that shows a series of objects (Inspector tabs, Content text) must not build a fresh ViewModel and call `setupBindings(for:)` per object. `setupBindings` resets `rx.disposeBag`, which tears down `tableView.rx.items` and installs a *new* RxAppKit adapter starting from an empty item list — the table blanks on the spot. Instead give the ViewModel an `update(for:)` that assigns the new object to an `@RxObserved` property the pipeline is already keyed on, and have the coordinator hold the ViewModel:
 
 ```swift
 public func update(for runtimeObject: RuntimeObject) {
@@ -818,7 +818,7 @@ if let recycled = tableView.makeView(withIdentifier: identifier, owner: nil) as?
 ```
 Pass a custom builder when the cell needs non-default initialization: `outlineView.box.makeView(ofClass: SidebarRuntimeObjectCellView.self) { .init(forOpenQuickly: false) }`.
 
-**4. Cell view definition** — declare cell views as `fileprivate final class` nested inside a controller extension, inheriting `TableCellView` (UIFoundationAppKit) so `setup()` and the auto-set identifier come for free. Use `bind(to:)` with reactive bindings (`rx.disposeBag = DisposeBag()` first to drop the previous row's bindings). Reserve `configure(with:)` only for purely-static cells with no `@Observed` properties on the cell ViewModel:
+**4. Cell view definition** — declare cell views as `fileprivate final class` nested inside a controller extension, inheriting `TableCellView` (UIFoundationAppKit) so `setup()` and the auto-set identifier come for free. Use `bind(to:)` with reactive bindings (`rx.disposeBag = DisposeBag()` first to drop the previous row's bindings). Reserve `configure(with:)` only for purely-static cells with no `@RxObserved` properties on the cell ViewModel:
 ```swift
 extension MyViewController {
     fileprivate final class CandidateCellView: TableCellView {
@@ -847,16 +847,16 @@ extension MyViewController {
 }
 ```
 
-**5. Cell ViewModel wrapper** — wrap each row's domain model in a per-cell `XxxCellViewModel` (à la `SidebarRuntimeObjectCellViewModel`, `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`). Place it under the relevant `RuntimeViewerApplication` subfolder, declare it `public final class … : NSObject, @unchecked Sendable`, hold the underlying model as a stored `let`, and expose every piece of display state (icons, attributed names, filter results) as `@Observed public private(set) var` so the cell view can drive its UI off the projected `$property` driver in `bind(to:)`. The `Input` / `Output` of the parent `ViewModel` should traffic in `XxxCellViewModel`, not the raw model.
+**5. Cell ViewModel wrapper** — wrap each row's domain model in a per-cell `XxxCellViewModel` (à la `SidebarRuntimeObjectCellViewModel`, `SidebarRootCellViewModel`, `InspectorSwiftSpecializationCellViewModel`). Place it under the relevant `RuntimeViewerApplication` subfolder, declare it `public final class … : NSObject, @unchecked Sendable`, hold the underlying model as a stored `let`, and expose every piece of display state (icons, attributed names, filter results) as `@RxObserved public private(set) var` so the cell view can drive its UI off the projected `$property` driver in `bind(to:)`. The `Input` / `Output` of the parent `ViewModel` should traffic in `XxxCellViewModel`, not the raw model.
 
 ```swift
 public final class CandidateCellViewModel: NSObject, @unchecked Sendable {
     public let candidate: Candidate
 
-    @Observed
+    @RxObserved
     public private(set) var name: NSAttributedString
 
-    @Observed
+    @RxObserved
     public private(set) var icon: NSUIImage?
 
     public init(candidate: Candidate) {
@@ -906,13 +906,13 @@ let rowClicked: Signal<Candidate> = tableView.rx
 
 **Eligibility decision tree** — pick lazy mode iff **all three** are true; otherwise stay on the eager 1:1 cellViewModel pattern above:
 
-1. The cellViewModel's state is *fully determined at init time* from the model alone — no `@Observed` properties that mutate after init, no Rx pipelines fed by external sources, no `Task { … }` async loading inside the cellVM.
+1. The cellViewModel's state is *fully determined at init time* from the model alone — no `@RxObserved` properties that mutate after init, no Rx pipelines fed by external sources, no `Task { … }` async loading inside the cellVM.
 2. The data set is large enough that eager construction is visible in Instruments (typically N >= 1k, confirmed by a signpost baseline).
 3. There is no per-row UI state that cannot be derived from the model (expanded/collapsed flag, multi-select checkmark, drag-preview metadata). If you need such state, build a local `struct` conforming to `Differentiable` directly — do NOT add mutable fields onto `DifferentiableBox`.
 
 **Two different things get called "lazy" here, and the eligibility tree above governs only the first:**
 
-- **Stateless lazy (`DifferentiableBox`)** — the driver array carries identity boxes and the cellViewModel is rebuilt inside the cell builder on *every* render, so nothing survives between renders. That is why the three conditions are absolute: a cellViewModel with post-init `@Observed` mutation or an Rx subscription would silently lose it. The `SpecializationTypePicker` popover is the canonical case (10k+ candidates when a generic parameter has no constraint).
+- **Stateless lazy (`DifferentiableBox`)** — the driver array carries identity boxes and the cellViewModel is rebuilt inside the cell builder on *every* render, so nothing survives between renders. That is why the three conditions are absolute: a cellViewModel with post-init `@RxObserved` mutation or an Rx subscription would silently lose it. The `SpecializationTypePicker` popover is the canonical case (10k+ candidates when a generic parameter has no constraint).
 - **Lazily materialized behind a warm cache** — the driver array still carries fully-built cellViewModels, but each is constructed on first match and kept in a map for the rest of the session, so subscription identity and post-init state survive. Open Quickly uses this to avoid building a cellViewModel per row of a 14k-object image; see `SidebarRuntimeObjectListViewModel.openQuicklyCellViewModel(at:)`.
 
 `SidebarRuntimeObjectCellViewModel` owns filter-aware attributed names, so it fails the eligibility tree and must never take the first form — but it is the type Open Quickly materializes lazily in the second form, precisely because the cache means it is never *re*constructed. Inspector cellViewModels (`InspectorSwiftSpecializationCellViewModel`, `InspectorRelationshipsCellViewModel`) stay eager on both counts: their row counts are low enough that neither form pays for itself.
@@ -923,7 +923,7 @@ Reach for either form only once eager 1:1 construction is measurably hurting —
 // ViewModel — driver element is a value-type identity box, not the cellViewModel
 typealias CandidateBox = DifferentiableBox<RuntimeSpecializationRequest.Candidate>
 
-@Observed
+@RxObserved
 public private(set) var filteredRows: [CandidateBox] = []
 
 public init(candidates: [RuntimeSpecializationRequest.Candidate], ...) {

@@ -3,6 +3,7 @@
 
 // @_exported import RxSwiftExt
 @_exported import RxSwiftPlus
+@_exported import RxSwiftPlusMacro
 @_exported import RxCombine
 @_exported import RxDefaultsPlus
 @_exported import RxEnumKit

@@ -31,7 +31,7 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     @Dependency(\.runtimeEngineManager)
     private var runtimeEngineManager
 
-    @Observed private(set) var isAttaching: Bool = false
+    @RxObserved private(set) var isAttaching: Bool = false
 
     override var delayedLoading: Driver<Bool> {
         $isAttaching.asDriver()

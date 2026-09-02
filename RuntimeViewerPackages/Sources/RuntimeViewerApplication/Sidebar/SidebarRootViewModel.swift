@@ -12,16 +12,16 @@ public class SidebarRootViewModel: ViewModel<SidebarRootRoute> {
 
     var isFilterEmptyNodes: Bool { true }
 
-    @Observed
+    @RxObserved
     public private(set) var nodes: [SidebarRootCellViewModel] = []
 
-    @Observed
+    @RxObserved
     public private(set) var filteredNodes: [SidebarRootCellViewModel] = []
 
-    @Observed
+    @RxObserved
     public private(set) var allNodes: [String: SidebarRootCellViewModel] = [:]
 
-    @Observed
+    @RxObserved
     public private(set) var isFiltering: Bool = false
 
     /// In-flight root filter pass. Cancelled and superseded by every new

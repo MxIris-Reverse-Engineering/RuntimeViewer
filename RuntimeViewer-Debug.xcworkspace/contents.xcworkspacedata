@@ -17,6 +17,9 @@
       location = "container:../swift-semantic-string">
    </FileRef>
    <FileRef
+      location = "container:../RxSwiftPlus">
+   </FileRef>
+   <FileRef
       location = "group:RuntimeViewerCore">
    </FileRef>
    <FileRef

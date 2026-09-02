@@ -11,10 +11,10 @@ import RuntimeViewerArchitectures
 
 public final class InspectorPlaceholderViewModel: ViewModel<InspectorRoute> {}
 //public class InspectorRuntimeObjectViewModel: ViewModel<InspectorRoute> {
-//    @Observed
+//    @RxObserved
 //    var runtimeObject: RuntimeObjCRuntimeObject
 //
-//    @Observed
+//    @RxObserved
 //    var runtimeObjectHierarchy: [String] = []
 //
 //    public struct Input {}
@@ -33,7 +33,7 @@ public final class InspectorPlaceholderViewModel: ViewModel<InspectorRoute> {}
 //}
 
 public final class InspectorRuntimeNodeViewModel: ViewModel<InspectorRoute> {
-    @Observed
+    @RxObserved
     var runtimeNode: RuntimeImageNode
 
     init(runtimeNode: RuntimeImageNode, documentState: DocumentState, router: any Router<InspectorRoute>) {
