@@ -2,6 +2,7 @@ import Dependencies
 import Foundation
 import RuntimeViewerCore
 import Testing
+@testable import RuntimeViewerApplication
 
 /// Runs `operation` with the live dependency context.
 ///
@@ -9,9 +10,14 @@ import Testing
 /// makes every `@Dependency` without an explicit `testValue` trap. View
 /// models under test resolve `\.settings` / `\.appDefaults` eagerly, so
 /// they must be constructed here.
+///
+/// `appDefaults` is the one key that must not go live: its live value is
+/// file-backed under a path the running app shares, so it is pinned to an
+/// isolated instance (see `ViewModelTestEnvironment`).
 func withLiveDependencyContext<Result>(_ operation: () throws -> Result) rethrows -> Result {
     try withDependencies {
         $0.context = .live
+        $0.appDefaults = AppDefaults.isolated()
     } operation: {
         try operation()
     }

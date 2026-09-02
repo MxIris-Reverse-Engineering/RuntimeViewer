@@ -25,7 +25,10 @@ public final class ResolvedThemeStream {
     /// remains armed across document opens/closes.
     public let observable: Observable<ResolvedTheme>
 
-    private init() {
+    /// `internal` rather than `private` so the package's tests can inject an
+    /// isolated stream through `withDependencies`; production code always
+    /// resolves the shared instance via `DependencyValues.resolvedThemeStream`.
+    init() {
         @Dependency(\.settings) var settings
         let trackedSettings = settings
         observable = Observable<ResolvedTheme>

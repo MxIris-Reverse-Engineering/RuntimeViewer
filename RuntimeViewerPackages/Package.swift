@@ -496,8 +496,11 @@ let package = Package(
             name: "RuntimeViewerApplicationTests",
             dependencies: [
                 "RuntimeViewerApplication",
+                "RuntimeViewerArchitectures",
+                "RuntimeViewerSettings",
                 "RuntimeViewerUI",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
             ],
         ),
 

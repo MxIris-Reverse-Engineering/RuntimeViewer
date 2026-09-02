@@ -15,21 +15,64 @@ import OrderedCollections
 /// Reads already come from background schedulers all over the Rx pipelines, so
 /// this states an existing fact rather than granting new access.
 public final class AppDefaults: @unchecked Sendable {
-    fileprivate static let shared = AppDefaults()
+    fileprivate static let shared = AppDefaults(storageDirectoryURL: applicationSupportStorageDirectoryURL)
 
-    private init() {
+    /// The store handed out when `\.appDefaults` is resolved from a test
+    /// context without an explicit `withDependencies` override — typically a
+    /// cell ViewModel that a sidebar pipeline builds on a GCD thread, where no
+    /// task-local override can reach. Lives in a throwaway temporary directory
+    /// so a stray test access can never touch the user's files.
+    fileprivate static let testFallback = AppDefaults(
+        storageDirectoryURL: makeTemporaryStorageDirectoryURL(label: "test-fallback")
+    )
+
+    /// `~/Library/Application Support/AppStorage`, the directory the app has
+    /// always kept its bookmark files in. `nil` only when the search path
+    /// cannot be resolved, in which case the wrappers fall back to their
+    /// defaults exactly as before.
+    private static var applicationSupportStorageDirectoryURL: URL? {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("AppStorage", isDirectory: true)
+    }
+
+    /// A fresh, unique directory under the temporary directory. Backs the
+    /// test fallback above and the isolated instances the package's tests
+    /// build for themselves.
+    static func makeTemporaryStorageDirectoryURL(label: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("RuntimeViewer.AppDefaults.\(label).\(UUID().uuidString)", isDirectory: true)
+    }
+
+    /// Creates a defaults store whose bookmark files live under
+    /// `storageDirectoryURL`.
+    ///
+    /// Production only ever uses the single Application Support instance
+    /// behind `DependencyValues.appDefaults`. The initializer is `internal` so
+    /// the package's tests can build isolated instances that point at a
+    /// directory the app never reads: the storage path is not scoped by bundle
+    /// identifier and the app is not sandboxed, so a test that resolved the
+    /// shared instance would read and overwrite the user's real bookmark
+    /// files. The one-time migrations read their legacy files from the same
+    /// directory, so an isolated instance migrates nothing.
+    init(storageDirectoryURL: URL?) {
+        if let storageDirectoryURL {
+            _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directoryURL: storageDirectoryURL)
+            _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directoryURL: storageDirectoryURL)
+        } else {
+            _imageBookmarksByScope = ResilientFileStorage(wrappedValue: [:], "imageBookmarksByScope", directory: .applicationSupportDirectory)
+            _objectBookmarksByScopeAndImagePath = ResilientFileStorage(wrappedValue: [:], "objectBookmarksByScopeAndImagePath", directory: .applicationSupportDirectory)
+        }
+
         // Not a bookmark concern, but it belongs to the same one-time rekeying
         // and has to happen before a sidebar writes under its new key — which
         // it does shortly after this type is first resolved, since the sidebar
         // ViewModels reach for `@Dependency(\.appDefaults)` on the way up.
         SidebarAutosaveKeyCleanup.runIfNeeded(flagKey: Self.sidebarAutosaveCleanupFlagKey)
 
-        let applicationSupportURL = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("AppStorage", isDirectory: true)
-        guard let applicationSupportURL else { return }
-        migrateFlatBookmarkArraysIfNeeded(in: applicationSupportURL)
-        migrateBookmarksToScopeKeysIfNeeded(in: applicationSupportURL)
+        guard let storageDirectoryURL else { return }
+        migrateFlatBookmarkArraysIfNeeded(in: storageDirectoryURL)
+        migrateBookmarksToScopeKeysIfNeeded(in: storageDirectoryURL)
     }
 
     static let sidebarAutosaveCleanupFlagKey = "sidebarAutosaveKeyCleanupCompleted"
@@ -55,13 +98,13 @@ public final class AppDefaults: @unchecked Sendable {
     /// name compared equal on the way back in, and the later one silently
     /// overwrote the earlier. Renaming a peer could destroy bookmarks at load
     /// time with nothing logged.
-    @ResilientFileStorage("imageBookmarksByScope", directory: .applicationSupportDirectory)
-    public var imageBookmarksByScope: [String: [RuntimeImageBookmark]] = [:]
+    @ResilientFileStorage
+    public var imageBookmarksByScope: [String: [RuntimeImageBookmark]]
 
     /// Bookmarked objects, keyed by ``RuntimeBookmarkScope/bookmarkKey`` and
     /// then by image path.
-    @ResilientFileStorage("objectBookmarksByScopeAndImagePath", directory: .applicationSupportDirectory)
-    public var objectBookmarksByScopeAndImagePath: [String: [String: [RuntimeObjectBookmark]]] = [:]
+    @ResilientFileStorage
+    public var objectBookmarksByScopeAndImagePath: [String: [String: [RuntimeObjectBookmark]]]
 }
 
 // MARK: - Bookmark migrations
@@ -165,6 +208,12 @@ extension AppDefaults {
 }
 
 extension DependencyValues {
+    /// The property initializer becomes the key's `testValue`. It must never
+    /// be `AppDefaults.shared`: that let any test resolving this key silently
+    /// read and write the user's real bookmark files (see
+    /// `AppDefaults.init(storageDirectoryURL:)`). Tests that assert on stored
+    /// bookmarks still inject their own instance through `withDependencies`;
+    /// the fallback only covers accesses no override can reach.
     @DependencyEntry(liveValue: AppDefaults.shared)
-    public var appDefaults = AppDefaults.shared
+    public var appDefaults = AppDefaults.testFallback
 }
