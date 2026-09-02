@@ -293,6 +293,15 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     @Observed
     public private(set) var appearance = RuntimeObjectCellAppearance()
 
+    /// Whether `$appearance` has been materialized. `@Observed` creates its
+    /// relay on first `$appearance` access, so every bulk path over the tree
+    /// — filter apply, scope filter, type-select — must leave this `false`;
+    /// only a cell view binding the row should flip it. Guarded by
+    /// `SidebarFilterRelayMaterializationTests`.
+    package var hasMaterializedAppearanceRelay: Bool {
+        _appearance.hasMaterializedRelay
+    }
+
     @NSAttributedStringBuilder
     private func defaultAttributedTitle() -> NSAttributedString {
         AText(runtimeObject.displayName)

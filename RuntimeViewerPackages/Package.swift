@@ -201,9 +201,17 @@ let package = Package(
         ),
 
         .package(
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMuiltplePlatfromDirectory.libraryPath("RxSwiftPlus"),
+                isRelative: true,
+            ),
+            .package(
+                path: "../../RxSwiftPlus",
+                isRelative: true,
+            ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/RxSwiftPlus",
-                from: "0.2.3",
+                from: "0.2.4",
             ),
         ),
 

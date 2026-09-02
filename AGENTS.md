@@ -495,6 +495,7 @@ extension MyViewController {
 ```
 - Exposed as Driver/Signal via `$property.asDriver()` or `$property.asSignal()`
 - Mutate by direct assignment: `currentPage = .progress`
+- **Read the property for its current value; touch `$property` only to subscribe or bind.** `@Observed` creates its `BehaviorRelay` on the first `$property` access (proposal *`@Observed` 惰性创建 relay*), so a `$property.value` in a bulk path — a filter pass, type-select, an export loop — materializes one relay plus an `NSRecursiveLock` per row and silently undoes the saving. `SidebarFilterRelayMaterializationTests` guards the sidebar paths; keep new bulk paths on `wrappedValue`.
 
 **Input/Output transform pattern**:
 ```swift

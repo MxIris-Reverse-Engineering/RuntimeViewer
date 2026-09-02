@@ -64,6 +64,13 @@ public final class SidebarRootCellViewModel: NSObject, OutlineNodeType, @uncheck
     @Observed
     public private(set) var appearance: Appearance
 
+    /// Whether `$appearance` has been materialized. The image list filter and
+    /// type-select must leave this `false`; only a cell view binding the row
+    /// should flip it. Guarded by `SidebarFilterRelayMaterializationTests`.
+    package var hasMaterializedAppearanceRelay: Bool {
+        _appearance.hasMaterializedRelay
+    }
+
     public init(node: RuntimeImageNode) {
         self.node = node
         self.appearance = Appearance(
