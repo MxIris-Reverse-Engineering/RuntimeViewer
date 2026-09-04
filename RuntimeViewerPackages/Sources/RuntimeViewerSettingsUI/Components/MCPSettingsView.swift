@@ -3,7 +3,6 @@
 import SwiftUI
 import Dependencies
 import RuntimeViewerSettings
-import AppKit
 import UIFoundationSettingsUI
 
 struct MCPSettingsView: View {
