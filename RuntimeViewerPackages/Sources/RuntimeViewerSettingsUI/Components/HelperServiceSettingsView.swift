@@ -163,6 +163,14 @@ private struct ServiceActionButtons: View {
         HStack(spacing: 8) {
             switch manager.status {
             case .enabled:
+                Button("Reinstall") {
+                    Task {
+                        await manager.manageHelperService(action: .reinstall)
+                    }
+                }
+                .buttonStyle(.bordered)
+                .help("Unregister and register the helper service again, so a newly built daemon takes effect")
+
                 Button("Uninstall", role: .destructive) {
                     Task {
                         await manager.manageHelperService(action: .uninstall)

@@ -30,6 +30,7 @@
 | [0016](0016-application-viewmodel-tests.md) | RuntimeViewerApplication ViewModel 测试覆盖 | Implemented | 为 `RuntimeViewerApplication` 的每个 ViewModel 补一份按公共契约覆盖的 swift-testing 套件，引擎相关用例用专用的进程内 `RuntimeEngine`；加两处 internal 测试缝，并修掉 `AppDefaults` 测试默认值读写用户真实书签文件的问题。 |
 | [0017](0017-observed-lazy-relay.md) | `@Observed` 惰性创建 relay | Implemented | 上游 RxSwiftPlus 改 `@Observed`：值先放在带 `os_unfair_lock` 的小盒子里，首次访问 `$property` 才建 `BehaviorRelay`。没被订阅的属性不再背一整套 relay 加 `NSRecursiveLock`，13k 镜像行与未滚到的对象行受益；`$property` 类型不变，99 处用法零改动。0005「替代方案 B」的后续。 |
 | [0018](0018-rxobserved-macro.md) | `@RxObserved` 宏：仿 `@Observable` 的内联可观察属性 | Implemented | 0017 的下一步：`@Observed` wrapper 换成宏，存储变成内联在对象里的 `RxObservedSlot` 值类型，未观察的属性零分配零锁；`$x` 类型不变，99 处一对一替换。 |
+| [0019](0019-helper-daemon-reinstall-button.md) | Helper 设置页的重装按钮 | In Progress | 设置页面的 Helper Service 行在服务已启用时加一个 Reinstall 按钮，取代「先卸载再安装」两步操作。重装序列不是新写的——`HelperServiceManager` 里那条只有启动时版本不匹配才会走到的序列抽成共用的 `performReinstall()`，两个调用点共用同一份代码（含绕开 `SMAppService` 磁盘记账滞后的 1 秒停顿）。 |
 | [draft](draft-runtime-bookmark-scope.md) | RuntimeBookmarkScope：把持久化身份从显示名手里拿走 | Accepted | 新建稳定的 `RuntimeBookmarkScope` 取代三处各自拼出来的键（含 pid 的书签键、用进程显示名的 sidebar autosave 键、编码了 `name` 却按忽略 `name` 比较的落盘表示）。身份走 descriptor 上的 `@Default` 字段以保持混版兼容，`RuntimeSource` 不动。在 `feature/runtime-bookmark-scope` 上实现，拆三个 PR。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
@@ -40,7 +41,7 @@
 > 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`），
 > `0012` 在 `feature/uifoundation-navigation`
 > （`0012-replace-uxkit-navigation-with-uifoundation.md`，已被本分支的 0013 取代）。
-> **新提案从 `0019` 起编号**，不要只看本分支已有的文件挑下一个空号。
+> **新提案从 `0020` 起编号**，不要只看本分支已有的文件挑下一个空号。
 >
 > **`0013` 是第二次撞号，2026-08-29 合流时已解决**——`feature/inject-ios-simulator-process`
 > 与 `next` 上的 `0013-replace-uxkit-with-appkitplus.md` 同号，两者互不知情。按前一次 `0007`

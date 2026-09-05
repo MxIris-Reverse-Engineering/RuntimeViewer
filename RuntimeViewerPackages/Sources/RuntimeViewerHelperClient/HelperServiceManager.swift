@@ -132,6 +132,7 @@ public final class HelperServiceManager {
         case status
         case install
         case uninstall
+        case reinstall
     }
 
     public func manageHelperService(action: Action = .status) async {
@@ -173,13 +174,54 @@ public final class HelperServiceManager {
                 occurredError = nsError
             }
 
+        case .reinstall:
+            do {
+                try await performReinstall()
+                if Self.helperServiceDaemon.status == .requiresApproval {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+            } catch let nsError as NSError {
+                occurredError = nsError
+            }
+
         case .status:
             break
         }
 
         updateStatusMessages(occurredError: occurredError)
+        // `updateStatusMessages` can only describe the status the daemon ended up in, which after a
+        // successful reinstall is the same `.enabled` it started from. Say so explicitly instead, or
+        // the status row reads exactly as it did before the click and the reinstall looks like a no-op.
+        if action == .reinstall, occurredError == nil, Self.helperServiceDaemon.status == .enabled {
+            message = "Service successfully reinstalled."
+        }
         status = Self.helperServiceDaemon.status
         logStatusChangeIfNeeded(previousStatus: previousStatus)
+    }
+
+    /// Unregisters the daemon and registers it again, so a freshly built helper binary takes effect.
+    ///
+    /// Shared by the launch-time version check and the Settings "Reinstall" button. Neither call site
+    /// may open-code this sequence: the pause between the two halves is a workaround that is invisible
+    /// unless you have hit the failure it prevents.
+    private func performReinstall() async throws {
+        invalidateConnection()
+
+        do {
+            try await installer.unregister()
+            #log(.info, "Successfully unregistered service")
+        } catch {
+            #log(.error, "Failed to unregister service: \(error.localizedDescription, privacy: .public)")
+            // Proceed anyway; register() below may still succeed from a .notRegistered state.
+        }
+
+        // SMAppService bookkeeping on disk can lag behind the unregister await —
+        // without this short pause, the immediately-following register() call
+        // occasionally fails with a "already registered" error. See FB-radar TBD.
+        try? await Task.sleep(for: .seconds(1))
+
+        try await installer.register()
+        #log(.info, "Successfully re-registered service")
     }
 
     private func updateStatusMessages(occurredError: NSError?) {
@@ -269,9 +311,9 @@ public final class HelperServiceManager {
     ///
     /// Delegates the version query to lib `HelperClient.fetchToolVersion()` and the
     /// `unexpectedMessage`-vs-transient classification to
-    /// `HelperClient.errorIndicatesOutdatedPeer(_:)`. Install/unregister go through lib
-    /// `SMAppServiceDaemonInstaller`. On mismatch + service enabled, the daemon is
-    /// unregistered, paused briefly, and re-registered so the new binary picks up.
+    /// `HelperClient.errorIndicatesOutdatedPeer(_:)`. On mismatch + service enabled, the swap
+    /// itself goes through `performReinstall()`, the same sequence the Settings "Reinstall"
+    /// button runs.
     public func checkServiceVersionAndReinstallIfNeeded() async -> ServiceVersionCheckResult {
         let serviceVersion: String?
         do {
@@ -303,25 +345,9 @@ public final class HelperServiceManager {
             return .mismatchButNotEnabled
         }
 
-        // Uninstall the outdated service
-        invalidateConnection()
+        // Swap the outdated binary out for the current one.
         do {
-            try await installer.unregister()
-            #log(.info, "Successfully unregistered outdated service")
-        } catch {
-            #log(.error, "Failed to unregister service: \(error.localizedDescription, privacy: .public)")
-            // Proceed anyway; register() below may still succeed from a .notRegistered state.
-        }
-
-        // SMAppService bookkeeping on disk can lag behind the unregister await —
-        // without this short pause, the immediately-following register() call
-        // occasionally fails with a "already registered" error. See FB-radar TBD.
-        try? await Task.sleep(for: .seconds(1))
-
-        // Reinstall the service
-        do {
-            try await installer.register()
-            #log(.info, "Successfully re-registered service")
+            try await performReinstall()
         } catch {
             #log(.error, "Failed to re-register service: \(error.localizedDescription, privacy: .public)")
             status = Self.helperServiceDaemon.status
