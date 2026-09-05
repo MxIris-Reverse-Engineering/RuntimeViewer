@@ -161,7 +161,20 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.30.0",
+                // 0.30.1 is the 0.30.x backport of UIFoundation's AppKitPlus
+                // platform condition. Earlier releases gate that dependency on
+                // the trait alone, so enabling the trait links the macOS-only
+                // AppKitPlus xcframework on iOS too and every iOS-side release
+                // build fails. See UIFoundation evolution 0017's decision log.
+                //
+                // The fix also exists on main, but 0.31.0 raised UIFoundation's
+                // FrameworkToolbox floor to 0.12.0, and RuntimeViewerCore pins
+                // FrameworkToolbox to exactly 0.9.0 so the daemon can launch at
+                // all (v3.0.0-beta.3). Those two cannot resolve together, which
+                // is why the range below must stay resolvable down to 0.30.1 —
+                // SPM falls back to it on its own. Once the FrameworkToolbox pin
+                // is lifted, 0.31+ becomes reachable again with no edit here.
+                from: "0.30.1",
                 traits: uiFoundationTraits,
             ),
         ),

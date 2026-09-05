@@ -1,5 +1,5 @@
 {
-  "originHash" : "ec055fd78cbe4d84a70177e24a0eb5387ec0ace330eb7bf1432ec226a0bfb150",
+  "originHash" : "dd0ef4b899ed569e9a0e5b0c6b5abfeb0d6095fe3995132da89e5acfb921dc5a",
   "pins" : [
     {
       "identity" : "appkitplus-release",
@@ -564,8 +564,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "dfeebed672c993fecb86c73e45fb6ac75e8387ef",
-        "version" : "0.30.0"
+        "revision" : "d346bb71ac4d021d4d2f8ad8ad5e1dc87f255d92",
+        "version" : "0.30.1"
       }
     },
     {

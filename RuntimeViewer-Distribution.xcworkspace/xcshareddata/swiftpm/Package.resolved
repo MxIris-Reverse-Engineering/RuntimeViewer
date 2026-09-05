@@ -1,6 +1,15 @@
 {
   "pins" : [
     {
+      "identity" : "appkitplus-release",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
+      "state" : {
+        "revision" : "3871141854a2e5897aaada3c574783e59793c02b",
+        "version" : "0.3.2"
+      }
+    },
+    {
       "identity" : "associatedobject",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/AssociatedObject",
@@ -707,8 +716,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "aeb19f77093504470f9fe351e62c3613b26b77ef",
-        "version" : "0.22.0"
+        "revision" : "d346bb71ac4d021d4d2f8ad8ad5e1dc87f255d92",
+        "version" : "0.30.1"
       }
     },
     {
