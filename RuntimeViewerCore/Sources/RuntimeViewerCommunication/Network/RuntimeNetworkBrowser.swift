@@ -3,7 +3,7 @@ import Network
 public import FoundationToolbox
 
 @Loggable
-public class RuntimeNetworkBrowser {
+public final class RuntimeNetworkBrowser {
     private let browser: NWBrowser
 
     /// One host-visible effect of a browse change.
