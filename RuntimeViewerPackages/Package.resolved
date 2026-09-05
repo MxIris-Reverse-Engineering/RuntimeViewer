@@ -1,13 +1,13 @@
 {
-  "originHash" : "721f8c8f62fbed646bac3411102e157f5b95fb7ee7864d48b53ffa625a861388",
+  "originHash" : "ec055fd78cbe4d84a70177e24a0eb5387ec0ace330eb7bf1432ec226a0bfb150",
   "pins" : [
     {
       "identity" : "appkitplus-release",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "33ee33806b1a0af09920d740f74cf70ab002ed25",
-        "version" : "0.1.6"
+        "revision" : "378a6eb1debd1c8c65d24c05fef91344862b037f",
+        "version" : "0.3.1"
       }
     },
     {
@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "revision" : "2f5603c11d43fd7e6ac815a6f400fe5c2dcf80de",
-        "version" : "0.5.0"
+        "revision" : "f39e8a085cf257a55462aa08a8e917d814e2701b",
+        "version" : "0.5.1"
       }
     },
     {
@@ -213,8 +213,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
       "state" : {
-        "revision" : "8e56152efc97647f3443b13d80c443ba9463d3e9",
-        "version" : "0.5.0"
+        "revision" : "a229465b463d90485c775f0b1c91260e30f0c813",
+        "version" : "0.6.0"
       }
     },
     {
@@ -456,8 +456,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "568793c4e14165ee37a22f58c3b695f5bee13199",
-        "version" : "0.3.2"
+        "revision" : "7ba43efcaaf1f483f7bcddc60096534573c56254",
+        "version" : "0.3.3"
       }
     },
     {
@@ -564,8 +564,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "f9cdc532222b63963a2aef4001bf71fb9302e695",
-        "version" : "0.21.0"
+        "revision" : "dfeebed672c993fecb86c73e45fb6ac75e8387ef",
+        "version" : "0.30.0"
       }
     },
     {

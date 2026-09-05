@@ -93,7 +93,7 @@ let uikitPlatforms: [Platform] = [.iOS, .tvOS, .visionOS]
 
 var sharedSwiftSettings: [SwiftSetting] = []
 
-let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD"]
+let uiFoundationTraits: Set<PackageDescription.Package.Dependency.Trait> = ["AppleInternal", "FilterUI", "IDEIcons", "QuickActionBar", "NSAttributedStringBuilder", "Settings", "TabBar", "SystemHUD", "AppKitPlus"]
 
 let package = Package(
     name: "RuntimeViewerPackages",
@@ -161,7 +161,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/Mx-Iris/UIFoundation",
-                from: "0.22.0",
+                from: "0.30.0",
                 traits: uiFoundationTraits,
             ),
         ),
@@ -184,19 +184,19 @@ let package = Package(
         // may remove classes or change protocol requirements with no deprecation
         // period, so the version is pinned exactly and upgraded deliberately.
         .package(
-            local: .package(
-                path: "/Volumes/Code/Personal/AppKitPlus/build/LocalPackage/AppKitPlus-Release",
-                isRelative: false,
-                isEnabled: true
-            ),
-            .package(
-                path: "/Volumes/Repositories/Private/Personal/Library/macOS/AppKitPlus/build/LocalPackage/AppKitPlus-Release",
-                isRelative: false,
-                isEnabled: true
-            ),
+//            local: .package(
+//                path: "/Volumes/Code/Personal/AppKitPlus/build/LocalPackage/AppKitPlus-Release",
+//                isRelative: false,
+//                isEnabled: true
+//            ),
+//            .package(
+//                path: "/Volumes/Repositories/Private/Personal/Library/macOS/AppKitPlus/build/LocalPackage/AppKitPlus-Release",
+//                isRelative: false,
+//                isEnabled: true
+//            ),
             remote: .package(
                 url: "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
-                exact: "0.1.6",
+                from: "0.3.0",
             ),
         ),
 
