@@ -19,17 +19,10 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
 
     let minimumHeight: CGFloat?
 
-//    override var backgroundStyle: NSView.BackgroundStyle {
-//        didSet {
-//            guard let window else { return }
-//            print("isKeyWindow: \(window.isKeyWindow), isMainWindow: \(window.isMainWindow)")
-//        }
-//    }
-    
     convenience init() {
         self.init(contentInsets: .init())
     }
-    
+
     init(contentInsets: NSEdgeInsets, minimumHeight: CGFloat? = nil) {
         self.contentInsets = contentInsets
         self.minimumHeight = minimumHeight

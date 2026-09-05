@@ -145,7 +145,6 @@ open class BaseEffectViewController<ViewModel: ViewModelProtocol>: BaseViewContr
     private lazy var effectView: NSView = {
         if #available(macOS 26.0, *) {
             return NSView()
-//            view.backgroundColor = .windowBackgroundColor
         } else {
             return NSVisualEffectView()
         }

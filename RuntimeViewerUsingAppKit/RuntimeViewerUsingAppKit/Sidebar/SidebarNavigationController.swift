@@ -38,3 +38,10 @@ final class SidebarNavigationController: BaseNavigationController, NSNavigationC
 extension SidebarNavigationController {
 
 }
+
+extension NSView {
+    var backgroundColor: NSColor? {
+        set { setValue(newValue, forKey: "backgroundColor") }
+        get { value(forKey: "backgroundColor") as? NSColor }
+    }
+}
