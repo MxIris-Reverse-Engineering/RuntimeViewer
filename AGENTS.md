@@ -116,6 +116,7 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerService` — XPC service helpers and code injection
 - `RuntimeViewerServiceHelper` — Helper utilities
 - `RuntimeViewerHelperClient` — Helper client for XPC communication
+- `RuntimeViewerEngineManagement` — Engine discovery, lifecycle, sharing and mirroring (`RuntimeEngineManager`, `RuntimeProcessAttacher`); no AppKit / RxSwift so a headless process can link it alone
 - `RuntimeViewerSettings` — RuntimeViewer's settings schema and dependency boundary over the single `UIFoundationSettings` store
 - `RuntimeViewerSettingsUI` — RuntimeViewer's SwiftUI settings pages hosted by `UIFoundationSettingsUI`
 - `RuntimeViewerCatalystExtensions` — Mac Catalyst support
@@ -1076,6 +1077,7 @@ Design notes and the per-ViewModel coverage table: `Documentations/Evolutions/00
 - Document model: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift`
 - Coordinator/navigation: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
 - Runtime engine: `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine.swift`
+- Engine manager: `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift`
 - Document state: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/DocumentState.swift`
 - ViewModels: `RuntimeViewerPackages/Sources/RuntimeViewerApplication/`
 - MCP bridge window provider: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppMCPBridgeWindowProvider.swift`

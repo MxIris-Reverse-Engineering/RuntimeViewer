@@ -4,6 +4,7 @@ import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
+import RuntimeViewerEngineManagement
 import RuntimeViewerSettings
 
 enum MessageError: LocalizedError {
@@ -95,6 +96,8 @@ final class MainViewModel: ViewModel<MainRoute> {
 
     @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
 
+    @Dependency(\.runtimeEngineIconProvider) private var runtimeEngineIconProvider
+
     @RxObserved private(set) var selectedEngineIdentifier: String = RuntimeEngine.local.engineID
 
     private var cachedSelectedEngineName: String = RuntimeEngine.local.source.description
@@ -104,7 +107,7 @@ final class MainViewModel: ViewModel<MainRoute> {
     /// Fallback for attached processes that Launch Services knows nothing about.
     /// `NSRunningApplication(processIdentifier:)` only resolves registered GUI
     /// applications, so daemons (launchservicesd, rapportd, ...) never make it
-    /// into `RuntimeEngineManager`'s icon cache and would otherwise fall back to
+    /// into `RuntimeEngineIconProvider`'s cache and would otherwise fall back to
     /// an App Store placeholder symbol. The generic executable icon is what the
     /// attach picker already shows for those processes.
     ///
@@ -120,12 +123,12 @@ final class MainViewModel: ViewModel<MainRoute> {
             return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
         default:
             if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
-                return runtimeEngineManager.cachedIcon(for: engine) ?? Self.genericExecutableIcon
+                return runtimeEngineIconProvider.cachedIcon(for: engine) ?? Self.genericExecutableIcon
             } else {
                 let fallback = engine.hostInfo.metadata.isSimulator
                     ? NSWorkspace.shared.box.deviceSymbolIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
                     : NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                return runtimeEngineManager.cachedIcon(for: engine) ?? fallback
+                return runtimeEngineIconProvider.cachedIcon(for: engine) ?? fallback
             }
         }
     }

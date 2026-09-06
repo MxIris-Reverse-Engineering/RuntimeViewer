@@ -16,7 +16,7 @@
 ## 架构与运维
 
 - [`CommunicationAndEngineArchitecture.md`](CommunicationAndEngineArchitecture.md) —— `RuntimeViewerCommunication` 的连接实现，以及 `RuntimeEngineManager` / `ProxyServer` 的整体架构。
-- [`EngineMirroringWalkthrough.md`](EngineMirroringWalkthrough.md) —— 跨主机 RuntimeEngine 共享系统的只读走读：四类 engine 集合如何拼合、Bonjour 如何建立管理通道、runtime 数据如何流经 proxy 层。读 `RuntimeEngineManager.swift` 等源码前建议先看。
+- [`EngineMirroringWalkthrough.md`](EngineMirroringWalkthrough.md) —— 跨主机 RuntimeEngine 共享系统的只读走读：四类 engine 集合如何拼合、Bonjour 如何建立管理通道、runtime 数据如何流经 proxy 层。读 `RuntimeEngineManager.swift`（`RuntimeViewerEngineManagement`）等源码前建议先看。
 - [`SparkleRelease.md`](SparkleRelease.md) —— 发布流程、EdDSA 密钥管理与应急处理手册。
 
 ## 愿景（Visions）

@@ -1,25 +1,58 @@
 #if os(macOS)
+import Combine
 import Foundation
 import FoundationToolbox
 import UserNotifications
 import RuntimeViewerSettings
 import RuntimeViewerCore
 import RuntimeViewerCommunication
+import RuntimeViewerEngineManagement
 import Dependencies
 import DependenciesMacros
 
-/// Service responsible for sending local notifications for runtime connection events.
+/// Turns `RuntimeEngineManager`'s connection events into user notifications.
+///
+/// Lives in the app layer, not next to the manager: `UNUserNotificationCenter`
+/// needs an application bundle behind the process, and the manager is also
+/// linked by processes that have none.
 @Loggable
 @MainActor
 public final class RuntimeConnectionNotificationService: NSObject {
     fileprivate static let shared = RuntimeConnectionNotificationService()
 
+    @Dependency(\.runtimeEngineManager) private var runtimeEngineManager
+
     private let notificationCenter = UNUserNotificationCenter.current()
+
+    private var eventSubscription: AnyCancellable?
 
     private override init() {
         super.init()
         notificationCenter.delegate = self
         requestAuthorization()
+    }
+
+    // MARK: - Lifecycle
+
+    /// Subscribes to the manager's events. Call once at launch, before the run
+    /// loop reaches the connection tasks the manager scheduled on creation:
+    /// events are not replayed, so a late subscriber misses the first
+    /// connections.
+    public func start() {
+        guard eventSubscription == nil else { return }
+        eventSubscription = runtimeEngineManager.eventPublisher
+            .sink { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .engineConnected(let engine):
+                    notifyConnected(source: engine.source)
+                case .hostDisconnected(let source, let error):
+                    notifyDisconnected(source: source, error: error)
+                case .catalystHelperUnavailable:
+                    // Logged by the manager; no user-facing notification today.
+                    break
+                }
+            }
     }
 
     // MARK: - Authorization

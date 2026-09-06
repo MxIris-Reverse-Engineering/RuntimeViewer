@@ -3,7 +3,7 @@ import Foundation
 import OrderedCollections
 import RuntimeViewerCore
 import RuntimeViewerCommunication
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerEngineManagement
 
 @Suite("RuntimeEngineMirrorRegistry")
 @MainActor
