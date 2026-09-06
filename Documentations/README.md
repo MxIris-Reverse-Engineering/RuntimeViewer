@@ -21,10 +21,11 @@
 ## 愿景（Visions）
 
 - [`CodeViewEngine.md`](Visions/CodeViewEngine.md) —— **自建代码视图引擎**。把 interface 显示出来的那一层要往哪走：抄 SourceEditor 的架构而不是它的 API，自己写一台按行分层的只读视口引擎，语义由生成侧直供。统领 0009、0010 及后续的布局核心、边栏、折叠、查找等提案。
+- [`HeadlessRuntimeViewer.md`](Visions/HeadlessRuntimeViewer.md) —— **无头 RuntimeViewer**。不开窗口也能用上每一项能力：引擎管理下沉为无 UI 模块，命令行走「常驻 CLI host + 薄客户端」的命令级协议，App 在跑就由 App 充当 host，查询全覆盖而管理只带 attach 必需的。统领四篇命令行提案与将来的 MCP 无头化。
 
 ## 提案（Evolutions）
 
-见 [`Evolutions/README.md`](Evolutions/README.md)。当前 18 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏、Helper 设置页的重装按钮；另有 1 篇待编号草案：RuntimeBookmarkScope（把持久化身份从显示名手里拿走）。
+见 [`Evolutions/README.md`](Evolutions/README.md)。当前 18 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏、Helper 设置页的重装按钮；另有 5 篇待编号草案：RuntimeBookmarkScope（把持久化身份从显示名手里拿走），以及愿景《无头 RuntimeViewer》下的四篇——引擎管理下沉为无 UI 模块、`runtime-viewer-cli` 基础（协议 / 常驻 host / 本地来源）、多来源与 App 充当 host、嵌入 App 包与设置页。
 
 ## 设计与实现计划（Plans，归档）
 

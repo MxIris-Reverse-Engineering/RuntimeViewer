@@ -32,6 +32,10 @@
 | [0018](0018-rxobserved-macro.md) | `@RxObserved` 宏：仿 `@Observable` 的内联可观察属性 | Implemented | 0017 的下一步：`@Observed` wrapper 换成宏，存储变成内联在对象里的 `RxObservedSlot` 值类型，未观察的属性零分配零锁；`$x` 类型不变，99 处一对一替换。 |
 | [0019](0019-helper-daemon-reinstall-button.md) | Helper 设置页的重装按钮 | In Progress | 设置页面的 Helper Service 行在服务已启用时加一个 Reinstall 按钮，取代「先卸载再安装」两步操作。重装序列不是新写的——`HelperServiceManager` 里那条只有启动时版本不匹配才会走到的序列抽成共用的 `performReinstall()`，两个调用点共用同一份代码（含绕开 `SMAppService` 磁盘记账滞后的 1 秒停顿）。 |
 | [draft](draft-runtime-bookmark-scope.md) | RuntimeBookmarkScope：把持久化身份从显示名手里拿走 | Accepted | 新建稳定的 `RuntimeBookmarkScope` 取代三处各自拼出来的键（含 pid 的书签键、用进程显示名的 sidebar autosave 键、编码了 `name` 却按忽略 `name` 比较的落盘表示）。身份走 descriptor 上的 `@Default` 字段以保持混版兼容，`RuntimeSource` 不动。在 `feature/runtime-bookmark-scope` 上实现，拆三个 PR。 |
+| [draft](draft-engine-management-module.md) | 引擎管理下沉为无 UI 模块 `RuntimeViewerEngineManagement` | Draft | 愿景《无头 RuntimeViewer》第一步。`RuntimeEngineManager` 及伙伴从 `RuntimeViewerApplication` 搬进不依赖 AppKit / RxSwift 的新 target，开三条缝：`RuntimeEngineManagerConfiguration`（广播 / 共享 / 系统引擎 / 重连各自开关）、`RuntimeResourceLocating`（载荷与 Catalyst helper 路径不再写死 `Bundle.main`）、`RuntimeProcessAttacher`（承接 App target 里的注入收尾）。App 行为零变化。 |
+| [draft](draft-command-line-interface-foundation.md) | `runtime-viewer-cli` 基础：命令级协议、常驻 CLI host 与本地来源 | Draft | 愿景第二步，不依赖抽模块。新包 `RuntimeViewerCommandLine/`：Codable 命令与结果模型、Unix domain socket 长度前缀 JSON、常驻 host 的自动拉起 / 单例 / 空闲退出、本地来源上的全部查询命令（`images` … `export`）。`--json` 即结果模型。 |
+| [draft](draft-command-line-interface-multi-source.md) | `runtime-viewer-cli` 多来源：全部运行时来源、attach 与 App 充当 host | Draft | 愿景第三步，依赖前两篇。独立 host 换上 `.headlessHost` 的 `RuntimeEngineManager`，新增 `sources` / `attach` / `detach`，`--source` 覆盖 local / catalyst / pid / process / engine；App 启动即充当 host 并接管独立 host。 |
+| [draft](draft-command-line-interface-app-embedding.md) | `runtime-viewer-cli` 嵌入 App 包与设置页 | Draft | 愿景第四步。Xcode command-line tool target 嵌到 `Contents/Helpers/` 随 App 签名公证；Settings 新增「Command Line Tool」页做 `/usr/local/bin` 符号链接与「允许命令行访问」开关。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
