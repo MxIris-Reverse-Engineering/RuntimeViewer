@@ -4,12 +4,17 @@ import Foundation
 public enum CommandLineProtocol {
     /// Bumped whenever a message shape changes incompatibly. A client and a
     /// host that disagree do not talk; see `CommandLineHostClient.connect()`.
-    public static let version = 1
+    ///
+    /// - 1: the foundation release (local source only).
+    /// - 2: `listSources` / `attach` / `detach` and their results; a version 1
+    ///   host would silently drop those commands, so a version 2 client
+    ///   replaces it.
+    public static let version = 2
 }
 
 /// Version of the tool and of the host it starts.
 public enum CommandLineToolVersion {
-    public static let current = "0.1.0"
+    public static let current = "0.2.0"
 }
 
 /// Who is answering on the socket.

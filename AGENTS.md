@@ -125,8 +125,8 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerMCPShared` — Shared protocols and transport types
 - `RuntimeViewerMCPBridge` — Bridge server that runs inside the main app
 
-**RuntimeViewerCommandLine** (`RuntimeViewerCommandLine/`) — the `runtime-viewer-cli` tool (macOS 15+ only), built with plain `swift build`; depends on `RuntimeViewerCore` only:
-- `RuntimeViewerCommandLineInterface` — everything but `main.swift`: Codable command/result models, the length-prefixed JSON protocol over a Unix domain socket, `CommandExecutor` + `SourceResolving`, the resident CLI host (`CommandLineHostServer`, spawned on demand, idle exit) and its client, renderers, and the swift-argument-parser commands
+**RuntimeViewerCommandLine** (`RuntimeViewerCommandLine/`) — the `runtime-viewer-cli` tool (macOS 15+ only), built with plain `swift build`; depends on `RuntimeViewerCore` and on the UI-free products of `RuntimeViewerPackages` (`RuntimeViewerEngineManagement`, `RuntimeViewerHelperClient`):
+- `RuntimeViewerCommandLineInterface` — everything but `main.swift`: Codable command/result models, the length-prefixed JSON protocol over a Unix domain socket, `CommandExecutor` + `SourceResolving` (`EngineManagerSourceResolver` serves every source a `RuntimeEngineManager` holds and answers `sources` / `attach` / `detach`; `LocalSourceResolver` is the local-only fallback), the resident CLI host (`CommandLineHostServer`, spawned on demand, idle exit) and its client, `HostTakeover` / `HostRetirement` (the app replacing a standalone host, the client replacing an outdated one), renderers, and the swift-argument-parser commands. The app links this library too: `CommandLineHostController` makes the running app the host
 - `runtime-viewer-cli` — one-line executable entry point
 
 ### Application Targets
@@ -434,6 +434,7 @@ final class MyConsumer {
 - `UpdaterService` — owns the Sparkle updater lifecycle
 - `MainMenuController` — assembles the main menu in code (the replacement for `MainMenu.xib`)
 - `WindowLifecycleController` — answers `applicationShouldHandleReopen` / `applicationShouldTerminateAfterLastWindowClosed`
+- `CommandLineHostController` — makes the running app the CLI host: asks a standalone host to leave on launch, serves the socket, removes its files on quit
 
 **One-shot fixes that must beat the main menu** go in `RuntimeViewerApp.main()` (the entry point that sits above `AppDelegate` in `AppDelegate.swift`), before `NSApplication.mainMenu` is assigned — not in a lifecycle callback, which runs too late. `SystemAutoFillMenuSuppression` is the standing example: the default it registers is read, and then cached for the process, the first time AppKit customizes the main menu. A fix that lands there must say in a comment why, or the next reader will move it and it will silently stop working.
 

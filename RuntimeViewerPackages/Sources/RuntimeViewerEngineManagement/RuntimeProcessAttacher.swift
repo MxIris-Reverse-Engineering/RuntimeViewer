@@ -46,6 +46,19 @@ public final class RuntimeProcessAttacher {
         public let payloadPlatform: PayloadPlatform
     }
 
+    /// The stages ``attach(_:progress:)`` passes through, in order, for a
+    /// caller that shows progress. Each is reported once, just before the
+    /// stage starts; a stage that fails is the last one reported.
+    public enum Phase: Sendable, Hashable {
+        /// Copying the payload slice into `/Library/Frameworks` through the
+        /// helper daemon (a no-op copy when it is already there).
+        case installingPayload(PayloadPlatform)
+        /// The daemon is injecting the payload into the target.
+        case injecting
+        /// Waiting for the injected payload to reach back over `transport`.
+        case awaitingConnection(Transport)
+    }
+
     /// What ``attach(_:)`` settled on before touching the helper daemon.
     ///
     /// Pure, so the decision table is testable without a daemon or a live
@@ -94,7 +107,9 @@ public final class RuntimeProcessAttacher {
 
     // MARK: - Attach
 
-    public func attach(_ target: Target) async throws -> Outcome {
+    /// - Parameter progress: Called on the main actor as each ``Phase``
+    ///   begins. `nil` when the caller has nothing to show.
+    public func attach(_ target: Target, progress: (@MainActor (Phase) -> Void)? = nil) async throws -> Outcome {
         // Which slice the target can load. A macOS process and an iOS
         // Simulator process on this Mac share a cputype and are told apart
         // only by their LC_BUILD_VERSION, so this has to be read rather than
@@ -109,6 +124,7 @@ public final class RuntimeProcessAttacher {
             sandboxProbe: sandboxProbe,
             environmentProbe: environmentProbe
         )
+        progress?(.installingPayload(payloadPlatform))
         try await injectClient.installServerFrameworkIfNeeded(for: payloadPlatform)
         // Every other failure in this method throws and reaches the caller. A
         // bare `return` here would report nothing at all — the user clicks
@@ -120,11 +136,11 @@ public final class RuntimeProcessAttacher {
         let engine: RuntimeEngine
         switch route {
         case .xpc:
-            engine = try await attachToLocalProcess(target, isSandbox: false, dylibURL: dylibURL)
+            engine = try await attachToLocalProcess(target, isSandbox: false, dylibURL: dylibURL, progress: progress)
         case .localSocket:
-            engine = try await attachToLocalProcess(target, isSandbox: true, dylibURL: dylibURL)
+            engine = try await attachToLocalProcess(target, isSandbox: true, dylibURL: dylibURL, progress: progress)
         case .simulatorBonjour(let deviceID):
-            engine = try await attachToSimulatorProcess(target, deviceID: deviceID, dylibURL: dylibURL)
+            engine = try await attachToSimulatorProcess(target, deviceID: deviceID, dylibURL: dylibURL, progress: progress)
         }
         return Outcome(engine: engine, transport: route.transport, payloadPlatform: payloadPlatform)
     }
@@ -163,15 +179,17 @@ public final class RuntimeProcessAttacher {
 
     /// The Mac flow: bring up a client engine, inject, confirm the payload
     /// connected back to it.
-    private func attachToLocalProcess(_ target: Target, isSandbox: Bool, dylibURL: URL) async throws -> RuntimeEngine {
+    private func attachToLocalProcess(_ target: Target, isSandbox: Bool, dylibURL: URL, progress: (@MainActor (Phase) -> Void)?) async throws -> RuntimeEngine {
         let identifier = target.processIdentifier.description
         let engine = try await engineManager.launchAttachedRuntimeEngine(name: target.name, identifier: identifier, isSandbox: isSandbox)
         do {
+            progress?(.injecting)
             try await inject(processIdentifier: target.processIdentifier, dylibURL: dylibURL)
             // `connect()` only brought up the local half and optimistically
             // reported `.connected`; confirm the injected peer actually
             // connected back, so a rejected connection surfaces an error and
             // the engine is torn down instead of lingering silently.
+            progress?(.awaitingConnection(isSandbox ? .localSocket : .xpc))
             try await engineManager.confirmAttachedRuntimeEngineConnected(name: target.name, identifier: identifier, isSandbox: isSandbox)
         } catch {
             engineManager.terminateAttachedRuntimeEngine(name: target.name, identifier: identifier, isSandbox: isSandbox)
@@ -186,8 +204,10 @@ public final class RuntimeProcessAttacher {
     /// The browser already running in this process is what connects to the
     /// payload; the XPC/socket endpoint the Mac flow prepares would never be
     /// dialled.
-    private func attachToSimulatorProcess(_ target: Target, deviceID: String, dylibURL: URL) async throws -> RuntimeEngine {
+    private func attachToSimulatorProcess(_ target: Target, deviceID: String, dylibURL: URL, progress: (@MainActor (Phase) -> Void)?) async throws -> RuntimeEngine {
+        progress?(.injecting)
         try await inject(processIdentifier: target.processIdentifier, dylibURL: dylibURL)
+        progress?(.awaitingConnection(.simulatorBonjour))
         return try await engineManager.awaitInjectedBonjourEngine(
             name: target.name,
             deviceID: deviceID,

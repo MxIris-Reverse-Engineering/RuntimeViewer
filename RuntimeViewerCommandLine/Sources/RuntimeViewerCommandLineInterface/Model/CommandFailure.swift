@@ -15,6 +15,18 @@ public struct CommandFailure: Codable, Sendable, Hashable, Error {
         case invalidArgument
         case specializationFailed
         case exportFailed
+        /// The helper daemon is not installed or cannot be reached; `attach`
+        /// and the Catalyst runtime need it.
+        case helperUnavailable
+        /// No RuntimeViewer application bundle was found to take the injection
+        /// payload or the Catalyst helper from.
+        case applicationBundleNotFound
+        /// No running process matched the identifier or name.
+        case processNotFound
+        /// Several running processes share the name; the message lists their identifiers.
+        case ambiguousProcessName
+        /// Injection or the handshake after it failed.
+        case attachFailed
         /// The host is shutting down and no longer takes commands.
         case hostBusy
         case unsupportedProtocolVersion
@@ -50,7 +62,7 @@ extension CommandFailure: LocalizedError, CustomStringConvertible {
     }
 }
 
-/// Progress the host reports while a long command runs. Only `export` sends it today.
+/// Progress the host reports while a long command runs (`export`, `attach`).
 public struct CommandProgress: Codable, Sendable, Hashable {
     public let phase: String
     public let current: Int?

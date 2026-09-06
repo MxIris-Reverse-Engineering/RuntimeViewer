@@ -9,6 +9,41 @@ struct TextRendererTests {
     private static let nsObject = TypeInfo(name: "NSObject", displayName: "NSObject", kind: "Objective-C Class", imagePath: "/usr/lib/libobjc.A.dylib", imageName: "libobjc.A")
     private static let array = TypeInfo(name: "$sSaMa", displayName: "Array<Element>", kind: "Swift Struct", imagePath: "/usr/lib/swift/libswiftCore.dylib", imageName: "libswiftCore")
 
+    @Test("Sources are grouped per host with a SELECTOR / KIND / NAME / CONNECTED table")
+    func sources() {
+        let rendered = TextRenderer.render(.sources(SourcesResult(hosts: [
+            SourceHost(hostIdentifier: "host.local", hostName: "This Mac", sources: [
+                SourceInfo(engineIdentifier: "engine.local", displayName: "My Mac", kind: .local, selector: .local, stableIdentity: nil, isConnected: true),
+                SourceInfo(engineIdentifier: "engine.finder", displayName: "Finder", kind: .attachedXPC, selector: .attachedProcess(processIdentifier: 550), stableIdentity: nil, isConnected: false),
+            ]),
+            SourceHost(hostIdentifier: "host.phone", hostName: "iPhone", sources: [
+                SourceInfo(engineIdentifier: "device-1-77", displayName: "SpringBoard", kind: .bonjour, selector: .engine(identifier: "device-1-77"), stableIdentity: nil, isConnected: true),
+            ]),
+        ])))
+        #expect(rendered.output == """
+            This Mac [host.local]
+              SELECTOR  KIND         NAME    CONNECTED
+              local     local        My Mac  yes
+              pid:550   attachedXPC  Finder  no
+
+            iPhone [host.phone]
+              SELECTOR            KIND     NAME         CONNECTED
+              engine:device-1-77  bonjour  SpringBoard  yes
+
+            """)
+        #expect(TextRenderer.render(.sources(SourcesResult(hosts: []))).output == "No sources.\n")
+    }
+
+    @Test("Attach and detach print the selector to use next")
+    func attachAndDetach() {
+        let attached = AttachResult(processName: "Finder", processIdentifier: 550, transport: "xpc", payloadPlatform: "macOS", selector: .attachedProcess(processIdentifier: 550), engineIdentifier: "engine.finder", wasAlreadyAttached: false)
+        #expect(TextRenderer.render(.attached(attached)).output == "Attached to Finder (550) over xpc; use --source pid:550.\n")
+        let alreadyAttached = AttachResult(processName: "Finder", processIdentifier: 550, transport: "xpc", payloadPlatform: "macOS", selector: .attachedProcess(processIdentifier: 550), engineIdentifier: "engine.finder", wasAlreadyAttached: true)
+        #expect(TextRenderer.render(.attached(alreadyAttached)).output == "Finder (550) is already attached; use --source pid:550.\n")
+        let detached = DetachResult(selector: .attachedProcess(processIdentifier: 550), engineIdentifier: "engine.finder", displayName: "Finder", kind: .attachedXPC)
+        #expect(TextRenderer.render(.detached(detached)).output == "Detached Finder (pid:550).\n")
+    }
+
     @Test("Image list is a LOADED / NAME / PATH table")
     func imageList() {
         let rendered = TextRenderer.render(.imageList(ImageListResult(images: [

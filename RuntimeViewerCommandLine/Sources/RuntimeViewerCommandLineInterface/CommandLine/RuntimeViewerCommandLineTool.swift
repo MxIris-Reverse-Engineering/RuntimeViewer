@@ -8,9 +8,11 @@ public struct RuntimeViewerCommandLineTool: AsyncParsableCommand {
         commandName: "runtime-viewer-cli",
         abstract: "Inspect Objective-C and Swift runtime interfaces without opening RuntimeViewer.",
         discussion: """
-            The first command starts a background CLI host that keeps the runtime engine and its \
-            indexes warm; it exits on its own after \(Int(HostIdleTimeout.defaultSeconds)) s without \
-            connections or commands. Pass --json to any command for machine-readable output.
+            While the RuntimeViewer app runs, it answers these commands and every source it has \
+            (attached processes, devices on the network) is available. Otherwise the first command \
+            starts a background CLI host that keeps the runtime engines and their indexes warm; it \
+            exits on its own after \(Int(HostIdleTimeout.defaultSeconds)) s without connections or \
+            commands. Pass --json to any command for machine-readable output.
             """,
         version: CommandLineToolVersion.current,
         subcommands: [
@@ -24,6 +26,9 @@ public struct RuntimeViewerCommandLineTool: AsyncParsableCommand {
             Members.self,
             Specialize.self,
             Export.self,
+            Sources.self,
+            Attach.self,
+            Detach.self,
             Host.self,
         ]
     )

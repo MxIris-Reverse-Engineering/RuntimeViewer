@@ -17,12 +17,16 @@ public actor CommandLineHostServer {
         /// `nil` never exits on idleness.
         public var idleTimeout: Duration?
         public var version: String
+        /// The protocol version this host announces. Only tests set it to
+        /// anything but the current one, to stand in for an outdated host.
+        public var protocolVersion: Int
 
-        public init(paths: CommandLineHostPaths, kind: HostKind = .standalone, idleTimeout: Duration? = .seconds(600), version: String = CommandLineToolVersion.current) {
+        public init(paths: CommandLineHostPaths, kind: HostKind = .standalone, idleTimeout: Duration? = .seconds(600), version: String = CommandLineToolVersion.current, protocolVersion: Int = CommandLineProtocol.version) {
             self.paths = paths
             self.kind = kind
             self.idleTimeout = idleTimeout
             self.version = version
+            self.protocolVersion = protocolVersion
         }
     }
 
@@ -113,7 +117,7 @@ public actor CommandLineHostServer {
             processIdentifier: getpid(),
             kind: configuration.kind,
             version: configuration.version,
-            protocolVersion: CommandLineProtocol.version,
+            protocolVersion: configuration.protocolVersion,
             startedAt: startedAt,
             socketPath: paths.socketURL.path
         )
@@ -150,7 +154,7 @@ public actor CommandLineHostServer {
             processIdentifier: getpid(),
             kind: configuration.kind,
             version: configuration.version,
-            protocolVersion: CommandLineProtocol.version,
+            protocolVersion: configuration.protocolVersion,
             startedAt: startedAt,
             activeConnections: connections.count,
             inFlightCommands: requests.count,
@@ -230,10 +234,10 @@ public actor CommandLineHostServer {
                 switch message {
                 case .hello(let hello):
                     didGreet = true
-                    if hello.protocolVersion != CommandLineProtocol.version {
-                        HostLog.write("Client speaks protocol \(hello.protocolVersion), this host speaks \(CommandLineProtocol.version)")
+                    if hello.protocolVersion != configuration.protocolVersion {
+                        HostLog.write("Client speaks protocol \(hello.protocolVersion), this host speaks \(configuration.protocolVersion)")
                     }
-                    let welcome = Welcome(hostVersion: configuration.version, hostKind: configuration.kind, processIdentifier: getpid())
+                    let welcome = Welcome(protocolVersion: configuration.protocolVersion, hostVersion: configuration.version, hostKind: configuration.kind, processIdentifier: getpid())
                     try await connection.send(WireCoding.encodeFrame(HostMessage.welcome(welcome)))
                 case .command(let requestIdentifier, let command):
                     guard didGreet else {
@@ -395,6 +399,16 @@ public actor CommandLineHostServer {
 
     private func removeSocketFile() {
         unlink(configuration.paths.socketURL.path)
+    }
+
+    /// Removes the socket and the record of a host running in this process
+    /// without going through the actor, for a caller that cannot await — the
+    /// app's `applicationWillTerminate`. Does nothing when the record names
+    /// another process (proposal 0006's guard again).
+    public static func removeArtifactsSynchronously(at paths: CommandLineHostPaths, processIdentifier: Int32 = getpid()) {
+        guard let record = HostRecord.read(from: paths.recordURL), record.processIdentifier == processIdentifier else { return }
+        unlink(paths.socketURL.path)
+        try? FileManager.default.removeItem(at: paths.recordURL)
     }
 
     /// Deletes `host.json` only if this instance wrote it and it still names

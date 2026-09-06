@@ -78,6 +78,12 @@ extension RuntimeViewerCommandLineTool.Host {
 
     /// Runs the host in this process. Started by the client in the background;
     /// run it in the foreground to watch its log directly.
+    ///
+    /// The host serves every source a `RuntimeEngineManager` in its headless
+    /// configuration brings up: the local runtime, the Mac Catalyst runtime
+    /// when the helper daemon is installed, processes injected earlier, and
+    /// peers found over Bonjour. `--local-only` keeps the foundation
+    /// behaviour — one in-process engine, nothing else — for debugging.
     public struct Run: AsyncParsableCommand {
         public static let configuration = CommandConfiguration(abstract: "Run a CLI host in the foreground (what the client starts in the background).")
 
@@ -87,11 +93,23 @@ extension RuntimeViewerCommandLineTool.Host {
         @Option(name: .customLong("host-directory"), help: ArgumentHelp("Directory for the socket and records.", valueName: "path"))
         public var hostDirectory: String?
 
+        @Option(name: .customLong("app-bundle"), help: ArgumentHelp("RuntimeViewer.app to take the injection payload and the Catalyst helper from.", discussion: "Defaults to $\(ApplicationBundleLocator.environmentVariable), then the app enclosing this tool, then the installed app (\(ApplicationBundleLocator.defaultBundleIdentifiers.joined(separator: ", "))).", valueName: "path"))
+        public var applicationBundle: String?
+
+        @Flag(name: .customLong("local-only"), help: "Serve the local runtime from one in-process engine and nothing else.")
+        public var localOnly = false
+
         public init() {}
 
         public func run() async throws {
             let paths = CommandLineHostPaths.resolveDefault(override: hostDirectory)
-            let resolver = LocalSourceResolver()
+            let resolver: any SourceResolving
+            if localOnly {
+                resolver = LocalSourceResolver()
+            } else {
+                let applicationBundle = ApplicationBundleLocator.resolve(override: self.applicationBundle)
+                resolver = await HeadlessHostDependencies.install(applicationBundle: applicationBundle)
+            }
             let executor = CommandExecutor(sourceResolver: resolver)
             let server = CommandLineHostServer(
                 configuration: CommandLineHostServer.Configuration(

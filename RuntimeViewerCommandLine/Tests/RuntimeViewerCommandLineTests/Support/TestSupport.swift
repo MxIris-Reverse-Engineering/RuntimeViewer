@@ -59,6 +59,16 @@ actor StubSourceResolver: SourceResolving {
         throw CommandFailure(code: .sourceUnavailable, message: "stub")
     }
 
+    func listSources() async -> SourcesResult { SourcesResult(hosts: []) }
+
+    func attach(_ target: AttachTarget, progress: @escaping @Sendable (CommandProgress) async -> Void) async throws -> AttachResult {
+        throw CommandFailure(code: .sourceUnavailable, message: "stub")
+    }
+
+    func detach(_ selector: SourceSelector) async throws -> DetachResult {
+        throw CommandFailure(code: .sourceUnavailable, message: "stub")
+    }
+
     func loadedImagePaths() async -> [String] { [] }
 
     func shutdown() async {}
@@ -90,11 +100,12 @@ final class InProcessHost: Sendable {
         resolver: any SourceResolving,
         kind: HostKind = .standalone,
         idleTimeout: Duration? = nil,
-        clock: any Clock<Duration> = ContinuousClock()
+        clock: any Clock<Duration> = ContinuousClock(),
+        protocolVersion: Int = CommandLineProtocol.version
     ) async throws -> InProcessHost {
         let executor = CommandExecutor(sourceResolver: resolver)
         let server = CommandLineHostServer(
-            configuration: CommandLineHostServer.Configuration(paths: paths, kind: kind, idleTimeout: idleTimeout),
+            configuration: CommandLineHostServer.Configuration(paths: paths, kind: kind, idleTimeout: idleTimeout, protocolVersion: protocolVersion),
             executor: executor,
             clock: clock
         )

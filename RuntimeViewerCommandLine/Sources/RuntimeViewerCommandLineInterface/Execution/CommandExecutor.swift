@@ -2,7 +2,8 @@ import Foundation
 import FoundationToolbox
 import RuntimeViewerCore
 
-/// Runs engine-backed commands against whatever engine the resolver hands out.
+/// Runs engine-backed commands against whatever engine the resolver hands out,
+/// and passes the source commands (`sources`, `attach`, `detach`) through to it.
 ///
 /// Written against `RuntimeEngine` only, so the same executor serves a remote
 /// engine once a resolver produces one. Host commands (`hostStatus`,
@@ -59,6 +60,12 @@ public actor CommandExecutor {
             return try await specialize(command)
         case .export(let command):
             return .export(try await export(command, progress: progress))
+        case .listSources(let command):
+            return .sources(try await listSources(command))
+        case .attach(let command):
+            return .attached(try await sourceResolver.attach(command.target, progress: progress ?? { _ in }))
+        case .detach(let command):
+            return .detached(try await sourceResolver.detach(command.source))
         case .hostStatus, .shutdownHost:
             throw CommandFailure(code: .internalError, message: "Host commands are answered by the host, not by the executor.")
         }
@@ -286,7 +293,7 @@ public actor CommandExecutor {
             directory: directory,
             objcFormat: command.objcLayout.exportFormat,
             swiftFormat: command.swiftLayout.exportFormat,
-            generationOptions: generationOptions(for: command.options),
+            generationOptions: await generationOptions(for: command.options),
             includeMetadata: command.includeMetadata
         )
 
@@ -339,6 +346,33 @@ public actor CommandExecutor {
         )
     }
 
+    // MARK: - Sources
+
+    /// How long the source list must stay unchanged before a `--wait` answers
+    /// early. Long enough for a peer that was just discovered to finish its
+    /// handshake (connect, two seconds of preflight, engine list).
+    static let sourcesSettlePeriod: Duration = .seconds(3)
+    static let sourcesPollInterval: Duration = .milliseconds(500)
+
+    private func listSources(_ command: ListSourcesCommand) async throws -> SourcesResult {
+        var latest = await sourceResolver.listSources()
+        guard command.waitSeconds > 0 else { return latest }
+        let clock = ContinuousClock()
+        let deadline = clock.now + .seconds(command.waitSeconds)
+        var stableSince = clock.now
+        while clock.now < deadline {
+            try await clock.sleep(for: min(Self.sourcesPollInterval, deadline - clock.now))
+            let current = await sourceResolver.listSources()
+            if current != latest {
+                latest = current
+                stableSince = clock.now
+            } else if clock.now - stableSince >= Self.sourcesSettlePeriod {
+                break
+            }
+        }
+        return latest
+    }
+
     // MARK: - Shared steps
 
     /// Indexes each image and returns its objects. An image that fails to index
@@ -374,7 +408,7 @@ public actor CommandExecutor {
     private func interfaceText(for object: RuntimeObject, options choice: GenerationOptionsChoice, engine: RuntimeEngine) async throws -> String {
         let interface: RuntimeObjectInterface?
         do {
-            interface = try await engine.interface(for: object, options: generationOptions(for: choice))
+            interface = try await engine.interface(for: object, options: await generationOptions(for: choice))
         } catch {
             throw CommandFailure(code: .internalError, message: "Generating the interface of '\(object.displayName)' failed: \(error.localizedDescription)")
         }
@@ -384,14 +418,14 @@ public actor CommandExecutor {
         return interface.interfaceString.string
     }
 
-    private func generationOptions(for choice: GenerationOptionsChoice) -> RuntimeObjectInterface.GenerationOptions {
+    private func generationOptions(for choice: GenerationOptionsChoice) async -> RuntimeObjectInterface.GenerationOptions {
         switch choice {
         case .default:
             return RuntimeObjectInterface.GenerationOptions()
         case .full:
             return .mcp
         case .application:
-            return applicationOptionsReader.readGenerationOptions()
+            return await applicationOptionsReader.readGenerationOptions()
         }
     }
 }

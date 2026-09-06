@@ -2,9 +2,10 @@ import Foundation
 
 /// A request the client sends to the CLI host.
 ///
-/// Every engine-backed command carries its own ``SourceSelector``; the two host
-/// commands at the end are answered by the host itself and never reach an
-/// engine.
+/// Every engine-backed command carries its own ``SourceSelector``; the source
+/// commands (`listSources`, `attach`, `detach`) address the host's set of
+/// sources rather than one engine; the two host commands at the end are
+/// answered by the host itself and never reach an engine.
 public enum Command: Codable, Sendable, Hashable {
     case listImages(ListImagesCommand)
     case loadImage(LoadImageCommand)
@@ -16,6 +17,9 @@ public enum Command: Codable, Sendable, Hashable {
     case memberAddresses(MemberAddressesCommand)
     case specialize(SpecializeCommand)
     case export(ExportCommand)
+    case listSources(ListSourcesCommand)
+    case attach(AttachCommand)
+    case detach(DetachCommand)
     case hostStatus
     case shutdownHost(ShutdownReason)
 }
@@ -25,14 +29,16 @@ extension Command {
     /// after the connection dropped mid-flight.
     ///
     /// Everything that only reads, or that re-running leaves in the same state
-    /// (`load`), is retried once. Export writes files and a shutdown must not
-    /// be repeated against the host that replaced the one it stopped.
+    /// (`load`), is retried once. Export writes files, attach injects into a
+    /// process, detach may find its engine already gone on the replacement
+    /// host, and a shutdown must not be repeated against the host that
+    /// replaced the one it stopped.
     public var isRetryable: Bool {
         switch self {
-        case .export, .shutdownHost:
+        case .export, .attach, .detach, .shutdownHost:
             return false
         case .listImages, .loadImage, .listTypes, .searchTypes, .interface, .hierarchy,
-             .relationships, .memberAddresses, .specialize, .hostStatus:
+             .relationships, .memberAddresses, .specialize, .listSources, .hostStatus:
             return true
         }
     }
@@ -50,7 +56,8 @@ extension Command {
         case .memberAddresses(let command): return command.source
         case .specialize(let command): return command.source
         case .export(let command): return command.source
-        case .hostStatus, .shutdownHost: return nil
+        case .detach(let command): return command.source
+        case .listSources, .attach, .hostStatus, .shutdownHost: return nil
         }
     }
 
@@ -67,6 +74,9 @@ extension Command {
         case .memberAddresses: return "members"
         case .specialize: return "specialize"
         case .export: return "export"
+        case .listSources: return "sources"
+        case .attach: return "attach"
+        case .detach: return "detach"
         case .hostStatus: return "host status"
         case .shutdownHost: return "host shutdown"
         }
@@ -109,6 +119,14 @@ public enum ExportLayout: String, Codable, Sendable, Hashable, CaseIterable {
     case single
     /// One file per type under `ObjCHeaders/` or `SwiftInterfaces/`.
     case directory
+}
+
+/// Which process `attach` targets.
+public enum AttachTarget: Codable, Sendable, Hashable {
+    case processIdentifier(Int32)
+    /// Matched case-insensitively against the process name and the executable's
+    /// file name; several matches are an error that lists their identifiers.
+    case processName(String)
 }
 
 /// Why a host was asked to shut down.
@@ -267,5 +285,33 @@ public struct ExportCommand: Codable, Sendable, Hashable {
         self.swiftLayout = swiftLayout
         self.includeMetadata = includeMetadata
         self.options = options
+    }
+}
+
+public struct ListSourcesCommand: Codable, Sendable, Hashable {
+    /// Seconds to keep re-reading the sources, so Bonjour peers that are still
+    /// connecting can show up. `0` answers at once. The host answers earlier
+    /// when the list has stopped changing for a few seconds.
+    public var waitSeconds: TimeInterval
+
+    public init(waitSeconds: TimeInterval = 0) {
+        self.waitSeconds = waitSeconds
+    }
+}
+
+public struct AttachCommand: Codable, Sendable, Hashable {
+    public var target: AttachTarget
+
+    public init(target: AttachTarget) {
+        self.target = target
+    }
+}
+
+public struct DetachCommand: Codable, Sendable, Hashable {
+    /// The source to drop; must name an attached process or a Bonjour peer.
+    public var source: SourceSelector
+
+    public init(source: SourceSelector) {
+        self.source = source
     }
 }

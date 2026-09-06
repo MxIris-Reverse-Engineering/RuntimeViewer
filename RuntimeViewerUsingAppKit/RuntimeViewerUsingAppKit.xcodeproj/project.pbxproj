@@ -22,6 +22,7 @@
 		E9A9CCF12F5D884900A10DD3 /* $(RUNTIME_VIEWER_SERVICE_NAME) in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E9C9E9D72C2D161000C4AA34 /* RuntimeViewerCatalystHelperPlugin.bundle in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */; platformFilter = maccatalyst; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9CAFE010000000000000021 /* RuntimeViewerMobileServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		E9C11D0A2FAB000000000001 /* RuntimeViewerCommandLineInterface in Frameworks */ = {isa = PBXBuildFile; productRef = E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */; };
 		E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */; };
 /* End PBXBuildFile section */
 
@@ -269,6 +270,7 @@
 				E9CB2C542F69B7D4005D2135 /* RuntimeViewerUtilities in Frameworks */,
 				E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */,
 				E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */,
+				E9C11D0A2FAB000000000001 /* RuntimeViewerCommandLineInterface in Frameworks */,
 				E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */,
 				E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */,
 			);
@@ -443,6 +445,7 @@
 				E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */,
 				E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */,
 				E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */,
+				E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */,
 				E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */,
 				E910124C38FF8B6334251802 /* Sparkle */,
 			);
@@ -1777,6 +1780,10 @@
 		E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerService;
+		};
+		E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCommandLineInterface;
 		};
 		E9CB2C532F69B7D4005D2135 /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;

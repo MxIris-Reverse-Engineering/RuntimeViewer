@@ -1,12 +1,27 @@
 import Foundation
 import RuntimeViewerCore
+import RuntimeViewerCommunication
 
-/// Turns a ``SourceSelector`` into a connected engine.
+/// Turns a ``SourceSelector`` into a connected engine, and answers the source
+/// commands (`sources`, `attach`, `detach`) that address the host's set of
+/// sources rather than one engine.
 ///
-/// The seam later releases replace to serve attached processes, the Catalyst
-/// helper and Bonjour peers; this release ships ``LocalSourceResolver`` only.
+/// ``LocalSourceResolver`` serves `.local` from one in-process engine and
+/// nothing else; ``EngineManagerSourceResolver`` serves everything a
+/// `RuntimeEngineManager` knows.
 public protocol SourceResolving: Sendable {
     func resolve(_ selector: SourceSelector) async throws -> RuntimeEngine
+
+    /// Every source the host serves right now, grouped by host. Must not
+    /// start an engine.
+    func listSources() async -> SourcesResult
+
+    /// Injects into a running process and returns the source that reaches it.
+    /// `progress` is called as the attach moves through its phases.
+    func attach(_ target: AttachTarget, progress: @escaping @Sendable (CommandProgress) async -> Void) async throws -> AttachResult
+
+    /// Drops an attached process or a Bonjour peer.
+    func detach(_ selector: SourceSelector) async throws -> DetachResult
 
     /// Images the resolver's engines have indexed so far, for `host status`.
     /// Must not start an engine.
@@ -17,7 +32,7 @@ public protocol SourceResolving: Sendable {
 }
 
 /// Serves `.local` from one lazily connected in-process engine and refuses
-/// every other selector.
+/// every other selector and every source command.
 public actor LocalSourceResolver: SourceResolving {
     private var engine: RuntimeEngine?
     private var connectTask: Task<RuntimeEngine, any Error>?
@@ -57,6 +72,29 @@ public actor LocalSourceResolver: SourceResolving {
             connectTask = nil
             throw CommandFailure(code: .internalError, message: "The local runtime engine failed to start: \(error.localizedDescription)")
         }
+    }
+
+    public func listSources() async -> SourcesResult {
+        let source: SourceInfo
+        let hostIdentifier: String
+        if let engine {
+            source = SourceInfo(engine: engine)
+            hostIdentifier = engine.hostInfo.hostID
+        } else {
+            // Not started yet: describe what the first command will bring up
+            // without bringing it up.
+            source = SourceInfo(engineIdentifier: engineID, displayName: RuntimeSource.local.description, kind: .local, selector: .local, stableIdentity: nil, isConnected: false)
+            hostIdentifier = "local"
+        }
+        return SourcesResult(hosts: [SourceHost(hostIdentifier: hostIdentifier, hostName: RuntimeNetworkBonjour.localHostName, sources: [source])])
+    }
+
+    public func attach(_ target: AttachTarget, progress: @escaping @Sendable (CommandProgress) async -> Void) async throws -> AttachResult {
+        throw CommandFailure(code: .sourceUnavailable, message: "This host serves the local runtime only and cannot attach to processes.")
+    }
+
+    public func detach(_ selector: SourceSelector) async throws -> DetachResult {
+        throw CommandFailure(code: .sourceUnavailable, message: "This host serves the local runtime only; there is nothing to detach.")
     }
 
     public func loadedImagePaths() async -> [String] {

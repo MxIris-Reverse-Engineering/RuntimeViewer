@@ -26,11 +26,11 @@
 
 ## 使用指南（Guides）
 
-- [`CommandLineInterface.md`](Guides/CommandLineInterface.md) —— `runtime-viewer-cli` 的命令一览、解析规则、必须遵守的契约（相对路径在客户端解析、Debug / Release 成对、host 空闲退出、退出码）与 CLI host 的文件布局。
+- [`CommandLineInterface.md`](Guides/CommandLineInterface.md) —— `runtime-viewer-cli` 的命令一览、类型 / 镜像 / 来源的解析规则、必须遵守的契约（相对路径在客户端解析、Debug / Release 成对、host 空闲退出、退出码）、CLI host 的文件布局、App 优先与接管、attach 的前提与手动验证清单。
 
 ## 术语表
 
-- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、helper daemon、Catalyst helper、镜像引擎。
+- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、镜像引擎。
 
 ## 提案（Evolutions）
 

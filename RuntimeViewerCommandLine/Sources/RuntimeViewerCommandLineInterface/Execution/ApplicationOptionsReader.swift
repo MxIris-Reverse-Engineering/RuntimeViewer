@@ -3,8 +3,11 @@ import RuntimeViewerCore
 
 /// Reads the generation options the RuntimeViewer app has persisted, for
 /// `--options app`.
+///
+/// `async` so the app, when it is the host, can answer from its live settings
+/// on the main actor; the file-based reader below answers synchronously.
 public protocol ApplicationOptionsReading: Sendable {
-    func readGenerationOptions() -> RuntimeObjectInterface.GenerationOptions
+    func readGenerationOptions() async -> RuntimeObjectInterface.GenerationOptions
 }
 
 /// Reads the app's files the way the app writes them, without linking the app.
@@ -34,11 +37,8 @@ public struct ApplicationOptionsReader: ApplicationOptionsReading {
         )
     }
 
-    #if DEBUG
-    public static let defaultBundleIdentifiers = ["dev.JH.RuntimeViewer.arm64e", "dev.JH.RuntimeViewer"]
-    #else
-    public static let defaultBundleIdentifiers = ["com.JH.RuntimeViewer"]
-    #endif
+    /// The same identifiers the host locates the app bundle by.
+    public static var defaultBundleIdentifiers: [String] { ApplicationBundleLocator.defaultBundleIdentifiers }
 
     public static var defaultSettingsFileURL: URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?

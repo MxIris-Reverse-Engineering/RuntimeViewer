@@ -19,6 +19,10 @@ struct ProtocolCodingTests {
         .memberAddresses(MemberAddressesCommand(typeName: "NSObject", memberName: "init")),
         .specialize(SpecializeCommand(source: .attachedProcess(processIdentifier: 42), image: "Foo", typeName: "Box", arguments: ["Element": "Int"], listOnly: false, options: .application)),
         .export(ExportCommand(source: .engine(identifier: "abc"), image: "libobjc.A", outputDirectory: "/tmp/out", objcLayout: .directory, swiftLayout: .single, includeMetadata: false)),
+        .listSources(ListSourcesCommand(waitSeconds: 5)),
+        .attach(AttachCommand(target: .processIdentifier(550))),
+        .attach(AttachCommand(target: .processName("Finder"))),
+        .detach(DetachCommand(source: .attachedProcess(processIdentifier: 550))),
         .hostStatus,
         .shutdownHost(.applicationTakeover),
     ]
@@ -34,7 +38,18 @@ struct ProtocolCodingTests {
         .specializationParameters(SpecializationParametersResult(typeInfo: sampleTypeInfo, parameters: [SpecializationParameter(name: "Element", displayDescription: "Element", candidates: [SpecializationCandidate(displayName: "Int", imagePath: "/usr/lib/swift/libswiftCore.dylib", imageName: "libswiftCore", kind: "struct", isGeneric: false)])])),
         .specialized(SpecializedInterfaceResult(typeInfo: sampleTypeInfo, interfaceText: "struct Box<Int> {}", warnings: ["layout"])),
         .export(ExportResult(imagePath: "/usr/lib/libobjc.A.dylib", imageName: "libobjc.A", outputDirectory: "/tmp/out", succeeded: 10, failed: 1, objcCount: 10, swiftCount: 0, totalDuration: 1.5)),
-        .hostStatus(HostStatusResult(processIdentifier: 1, kind: .standalone, version: "0.1.0", protocolVersion: 1, startedAt: Date(timeIntervalSince1970: 1_700_000_000), activeConnections: 1, inFlightCommands: 0, idleTimeout: 600, isShuttingDown: false, loadedImagePaths: [])),
+        .sources(SourcesResult(hosts: [
+            SourceHost(hostIdentifier: "host.local", hostName: "This Mac", sources: [
+                SourceInfo(engineIdentifier: "engine.local", displayName: "My Mac", kind: .local, selector: .local, stableIdentity: "local", isConnected: true),
+                SourceInfo(engineIdentifier: "engine.finder", displayName: "Finder", kind: .attachedXPC, selector: .attachedProcess(processIdentifier: 550), stableIdentity: nil, isConnected: false),
+            ]),
+            SourceHost(hostIdentifier: "host.phone", hostName: "iPhone", sources: [
+                SourceInfo(engineIdentifier: "engine.springboard", displayName: "SpringBoard", kind: .bonjour, selector: .engine(identifier: "engine.springboard"), stableIdentity: "device-1/SpringBoard", isConnected: true),
+            ]),
+        ])),
+        .attached(AttachResult(processName: "Finder", processIdentifier: 550, transport: "xpc", payloadPlatform: "macOS", selector: .attachedProcess(processIdentifier: 550), engineIdentifier: "engine.finder", wasAlreadyAttached: false)),
+        .detached(DetachResult(selector: .attachedProcess(processIdentifier: 550), engineIdentifier: "engine.finder", displayName: "Finder", kind: .attachedXPC)),
+        .hostStatus(HostStatusResult(processIdentifier: 1, kind: .standalone, version: "0.2.0", protocolVersion: 2, startedAt: Date(timeIntervalSince1970: 1_700_000_000), activeConnections: 1, inFlightCommands: 0, idleTimeout: 600, isShuttingDown: false, loadedImagePaths: [])),
         .shutdownAcknowledged(ShutdownAcknowledgement(reason: .userRequest, processIdentifier: 1)),
     ]
 
@@ -82,6 +97,8 @@ struct ProtocolCodingTests {
     func handshakeMessages() throws {
         let hello = Hello()
         #expect(hello.protocolVersion == CommandLineProtocol.version)
+        // The source commands are new in 2; a version 1 host would drop them.
+        #expect(CommandLineProtocol.version == 2)
         let welcome = Welcome(hostKind: .application, processIdentifier: 7)
         let data = try WireCoding.makeEncoder().encode(HostMessage.welcome(welcome))
         let decoded = try WireCoding.decode(HostMessage.self, from: data)
@@ -116,6 +133,20 @@ struct ProtocolCodingTests {
         let typeInfo = try #require(object["typeInfo"] as? [String: Any])
         #expect(typeInfo["name"] as? String == "NSObject")
         #expect(object["interface"] == nil)
+    }
+
+    @Test("Source information encodes its selector as the string the user types")
+    func sourceInfoSelectorIsAString() throws {
+        let rendered = try JSONRenderer.render(CommandResult.sources(SourcesResult(hosts: [
+            SourceHost(hostIdentifier: "host.local", hostName: "This Mac", sources: [
+                SourceInfo(engineIdentifier: "engine.finder", displayName: "Finder", kind: .attachedXPC, selector: .attachedProcess(processIdentifier: 550), stableIdentity: nil, isConnected: true),
+            ]),
+        ])))
+        let object = try #require(try JSONSerialization.jsonObject(with: Data(rendered.utf8)) as? [String: Any])
+        let hosts = try #require(object["hosts"] as? [[String: Any]])
+        let sources = try #require(hosts.first?["sources"] as? [[String: Any]])
+        #expect(sources.first?["selector"] as? String == "pid:550")
+        #expect(sources.first?["kind"] as? String == "attachedXPC")
     }
 
     @Test("Failures print as an error document under --json")
