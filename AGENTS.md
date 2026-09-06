@@ -124,6 +124,10 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerMCPShared` — Shared protocols and transport types
 - `RuntimeViewerMCPBridge` — Bridge server that runs inside the main app
 
+**RuntimeViewerCommandLine** (`RuntimeViewerCommandLine/`) — the `runtime-viewer-cli` tool (macOS 15+ only), built with plain `swift build`; depends on `RuntimeViewerCore` only:
+- `RuntimeViewerCommandLineInterface` — everything but `main.swift`: Codable command/result models, the length-prefixed JSON protocol over a Unix domain socket, `CommandExecutor` + `SourceResolving`, the resident CLI host (`CommandLineHostServer`, spawned on demand, idle exit) and its client, renderers, and the swift-argument-parser commands
+- `runtime-viewer-cli` — one-line executable entry point
+
 ### Application Targets
 
 - `RuntimeViewerUsingAppKit` — Main macOS application (AppKit, document-based)
@@ -1077,6 +1081,7 @@ Design notes and the per-ViewModel coverage table: `Documentations/Evolutions/00
 - MCP bridge window provider: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppMCPBridgeWindowProvider.swift`
 - MCP server: `RuntimeViewerUsingAppKit/RuntimeViewerMCPServer/`
 - MCP bridge: `RuntimeViewerMCP/Sources/RuntimeViewerMCPBridge/`
+- Command-line tool: `RuntimeViewerCommandLine/Sources/RuntimeViewerCommandLineInterface/` (usage guide: `Documentations/Guides/CommandLineInterface.md`)
 
 ## MCP Tool Preferences
 

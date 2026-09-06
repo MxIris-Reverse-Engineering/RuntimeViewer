@@ -1,13 +1,13 @@
 # Draft - `runtime-viewer-cli` 基础：命令级协议、常驻 CLI host 与本地来源
 
-- **状态**: Draft
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-09-06
 - **最后更新**: 2026-09-06
 - **所属愿景**: [无头 RuntimeViewer](../Visions/HeadlessRuntimeViewer.md)
 - **关联提案**: [0006](0006-mcp-transport-bind-failure-teardown.md)（本地端点文件「谁绑定成功谁删」的守卫，本提案沿用）、[draft-command-line-interface-multi-source](draft-command-line-interface-multi-source.md)（在本提案的缝上接多来源与 App 充当 host）、[draft-command-line-interface-app-embedding](draft-command-line-interface-app-embedding.md)
-- **实现分支 / PR**: 待定 —— 建议 `feature/command-line-interface`，从 `next` 切出（不依赖抽模块提案，但与之共享后续交付顺序）
-- **配套文档**: 待定 —— 落地时登记 `Documentations/Guides/CommandLineInterface.md`
+- **实现分支 / PR**: `feature/command-line-interface`（worktree `.worktrees/RuntimeViewer-CLIFoundation`），从 `next`（`080b2b64`，含愿景与四篇草案的文档提交）切出；不依赖抽模块提案的分支；PR 待定
+- **配套文档**: [`Guides/CommandLineInterface.md`](../Guides/CommandLineInterface.md)（使用指南）；术语表 [`Glossary.md`](../Glossary.md) 新建并登记「CLI host」「source selector」
 
 ## 摘要
 
@@ -212,6 +212,36 @@ enum HostKind: String, Codable { case standalone, application }
   /usr/lib/libobjc.A.dylib --json`，断言含 `@interface NSObject`；`types` / `search` / `members` /
   `export` 各一条；文本渲染快照比对。
 
+### 实现记录（2026-09-06）
+
+- 落地步骤 1–5 已在 `feature/command-line-interface` 上完成。新包 `RuntimeViewerCommandLine/`
+  只依赖 `../RuntimeViewerCore`、swift-argument-parser、FrameworkToolbox（`@Loggable`）与测试用的
+  swift-clocks；库 `RuntimeViewerCommandLineInterface` 分六组源文件：`Model/`（`SourceSelector`、
+  `Command`、`CommandResult`、`CommandFailure`）、`Protocol/`（`WireMessage`、`FrameCodec`）、
+  `Execution/`（`SourceResolving` + `LocalSourceResolver`、`CommandExecutor`、`ImageResolver`、
+  `ApplicationOptionsReader`）、`Host/`（`UnixDomainSocket`、`SocketConnection`、`CommandLineHostPaths`、
+  `HostLaunching`、`CommandLineHostServer`、`CommandLineHostClient`）、`Rendering/`（`TextRenderer`、
+  `JSONRenderer`）、`CommandLine/`（swift-argument-parser 的根命令与子命令、`CommandRunner`、
+  `GlobalOptions`、`OutputStreams`）。可执行 target 只有一个 `@main` 文件。
+- 测试 `RuntimeViewerCommandLineTests`：协议往返（全部 `Command` / `CommandResult` case、selector 文本
+  形式、`--json` 文档形状）、帧解码（半包 / 粘包 / 空帧 / 超长长度）、host 生命周期（`TestClock` 下的
+  空闲退出、连接与在途命令阻止退出、两种关停原因、在途排空与 `hostBusy`、第二个 host 拒绝启动）、
+  拉起序列（假 launcher：连不上 → 加锁 → 再试 → 拉起 → 轮询；`--no-spawn`；并发客户端只拉起一个；
+  拉起后不应答；陈旧 socket 文件被替换）、端到端（进程内 host + 真实本地引擎：`interface` / `types` /
+  `search` / `members` / `hierarchy` / `relationships` / `export` / 错误码与退出码）、解析规则、
+  文本渲染快照、`--options app` 读取。共 64 项 / 9 个套件通过（`swift test` 原始退出码 0，产物目录
+  `/tmp/claude/SwiftPM/RuntimeViewerCommandLine`），运行前后 `RuntimeViewer-Debug/settings.json` 校验和未变。
+- 落地步骤 6 的活体检查已做（Debug 构建的可执行文件，`RUNTIME_VIEWER_CLI_HOST_DIRECTORY=/tmp/rvcli-smoke`、
+  `RUNTIME_VIEWER_CLI_IDLE_TIMEOUT=25`）：无 App 时 `interface NSView --image AppKit` 拉起 host 并在 5.3 s
+  内输出 `@interface NSView : NSResponder …`；`host status` 显示 `standalone`、已加载
+  `/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit`；25 s 空闲后 `host.log` 记录
+  `Idle for 25.0 seconds, exiting`，`host.sock` 与 `host.json` 消失，`host status --json` 回
+  `{"running": false}`。`swift build -c release --product runtime-viewer-cli` 退出码 0（36 MB 可执行文件）；
+  用 release 二进制再跑一遍：`interface NSObject --image libobjc.A` 拉起 host 并输出，
+  `types --image Foundation --kind objc-class --json` 得到 872 个类（首次索引 Foundation 约 1.5 s），
+  `host restart` 打印旧 host 的关停 ack 与新 host 的状态（pid 变化），`host stop` 后 `host status --json`
+  回 `{"running": false}`、目录里只剩 `host.lock` / `host.pid` / `host.log`，`images --no-spawn` 退出码 69。
+
 ## 替代方案考量
 
 方向性的（一次性进程、复用镜像协议、交互式 shell）见愿景取舍二、四。本提案层面：
@@ -271,3 +301,16 @@ macOS 15+（跟随 `RuntimeViewerPackages`，为多来源提案预留同一下�
 | 2026-09-06 | 常驻 host + 命令级协议 | 用户选定（愿景取舍二、四）；「Helper」改称 CLI host 见愿景 |
 | 2026-09-06 | 本提案只接 `.local`，但定义全部 `SourceSelector` 与全部查询命令 | 让它不依赖抽模块提案而能最早交付；selector 全集现在定，避免下一篇改 `Command` 签名 |
 | 2026-09-06 | socket 目录带 Debug 后缀、空闲 600 s、`--json` 即结果模型、生成选项三档 | 用户在收尾确认轮确认 |
+| 2026-09-06 | Accepted | 用户：「开始实现第2个提案」 |
+| 2026-09-06 | In Progress | 从 `next` 切出 `feature/command-line-interface` 开工；抽模块提案的代码留在它自己的分支上，本提案按设计不依赖它 |
+| 2026-09-06 | 前台 host 是子命令 `host run`（客户端拉起时传 `host run --idle-timeout <秒> --host-directory <目录>`），而非草案写的 `host --idle-timeout` | `host` 的默认子命令留给 `status`，用户敲 `host` 就是查看；`run` 语义明确 |
+| 2026-09-06 | 可执行 target 用 `@main enum` 单文件而非 `main.swift` | 顶层 `await Tool.main()` 会解析到同步的 `ParsableCommand.main()`，异步子命令跑不起来（编译器直接给出 "no 'async' operations" 警告） |
+| 2026-09-06 | `CommandFailure.Code` 在草案七个之外加 `imageLoadFailed` / `invalidArgument` / `specializationFailed` / `cancelled` | 「镜像存在但索引失败」「正则或 `--argument` 写错」「preflight 不通过」「超时 / 取消」四种情况用 `internalError` 兜底会让 `--json` 的调用方无法区分 |
+| 2026-09-06 | `images` 除 dyld 已映射镜像外还列引擎的镜像目录（共享缓存与框架目录，即 App 侧栏那棵树的叶子）；短名解析在 MCP 的三步之后追加「查目录」一步 | 提案自己的验证项「无 App 时 `interface NSView --image AppKit`」要求全新 host 能解析未映射的框架短名；MCP 的规则只查已映射镜像 |
+| 2026-09-06 | 单例只靠 `host.pid` 上的一把独占 `flock`；`host.json` 只做描述，退出时按「写过且 pid 是自己」的守卫删除 | 草案里「`host.json` 写入 + 另一把锁」两件事合成一件；守卫沿用 0006 |
+| 2026-09-06 | `--options app` 的生成选项从 App 的 `UserDefaults` 域（`dev.JH.RuntimeViewer[.arm64e]` / `com.JH.RuntimeViewer`）里 `generationOptions` 键读 JSON，transformer 从 `settings.json` 的 `transformer` 键读 | 调研第 5 条把 `AppDefaults.options` 的位置写成了 `AppStorage` 目录，实际 `@UserDefault`（RxDefaultsPlus）存的是 `UserDefaults.standard`；`AppStorage/*.json` 是书签。读 `settings.json` 时直接按 `GenerationOptions` 解码，只有 `transformer` 键重叠，省去引用 Settings 与 transformer 的类型 |
+| 2026-09-06 | `export` 的逐对象进度每 25 个对象发一帧（首尾必发）；客户端 stderr 是终端时单行刷新，否则按阶段与每 10% 打一行 | 大镜像上万对象，逐对象一帧对 socket 与日志都是噪音 |
+| 2026-09-06 | 协议版本不匹配：独立 host 先请它 `shutdownHost(.userRequest)`（3 s），socket 仍在就按 `Welcome.processIdentifier` 发 `SIGTERM`，然后按拉起路径起新 host；App host 报错提示更新 | 草案只说「自动重启它」；旧 host 未必能解码新命令，所以要有信号兜底 |
+| 2026-09-06 | `--timeout` 在客户端实现：到期取消 `send`，客户端向 host 发 `cancel` 帧并以 `cancelled` 退出 1 | host 侧 `cancel` 只取消该请求的 Task；引擎调用本身是否可中断取决于 Core |
+| 2026-09-06 | 测试里 `ParsableArguments` 一律经 `GlobalOptions.parse([...])` 构造 | 直接 `GlobalOptions()` 后读属性会触发 swift-argument-parser 的 "Can't read a value from a parsable argument definition" 崩溃；首轮测试因此整进程退出 |
+| 2026-09-06 | 测试的超时辅助改为轮询独立 Task，host 套件加 `.timeLimit` | `withThrowingTaskGroup` 竞赛会等子任务结束，而 `waitUntilStopped()` 不响应取消，首轮两条测试因此死锁到 600 s |
