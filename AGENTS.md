@@ -413,6 +413,7 @@ final class MyConsumer {
 - `@objc` action methods that immediately delegate to a router or injected service (one line each). The app has no nib, so these are menu actions reached through the responder chain, not Interface Builder connections
 - One-line `start()` / `install()` / `stop()` / `checkOnLaunch()` calls on injected services
 - Compile-time flag toggles like `runtimeViewerIsARM64EVariant = true` and one-shot fixes like `NSToolbarItemViewerOverflowFix.install()`
+- The `@main` `static func main()`: pre-main one-shot fixes, then set the delegate, assign `MainMenuController`'s menu, and `run()` — nothing else (see below)
 
 **Forbidden in AppDelegate**:
 - `@objc` action handlers with bodies (extract to a controller's `@objc` method)
@@ -430,18 +431,35 @@ final class MyConsumer {
 - `MainMenuController` — assembles the main menu in code (the replacement for `MainMenu.xib`)
 - `WindowLifecycleController` — answers `applicationShouldHandleReopen` / `applicationShouldTerminateAfterLastWindowClosed`
 
-**One-shot fixes that must beat the main menu** go in `RuntimeViewerApp.main()` (the entry point that sits above `AppDelegate` in `AppDelegate.swift`), before `NSApplication.mainMenu` is assigned — not in a lifecycle callback, which runs too late. `SystemAutoFillMenuSuppression` is the standing example: the default it registers is read, and then cached for the process, the first time AppKit customizes the main menu. A fix that lands there must say in a comment why, or the next reader will move it and it will silently stop working.
+**One-shot fixes that must beat the main menu** go in `AppDelegate.main()` (`AppDelegate` carries `@main` and supplies its own `static func main()`), before `NSApplication.mainMenu` is assigned — not in a lifecycle callback, which runs too late. `SystemAutoFillMenuSuppression` is the standing example: the default it registers is read, and then cached for the process, the first time AppKit customizes the main menu. A fix that lands there must say in a comment why, or the next reader will move it and it will silently stop working.
 
 AppDelegate then reduces to:
 
 ```swift
 @MainActor
+@main
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    fileprivate static let shared = AppDelegate()
+
     @Dependency(\.appearanceController)         private var appearanceController
     @Dependency(\.debugMenuController)          private var debugMenuController
     @Dependency(\.helperServiceVersionChecker)  private var helperServiceVersionChecker
     @Dependency(\.mcpService)                   private var mcpService
     @Dependency(\.updaterService)               private var updaterService
+
+    static func main() {
+        SystemAutoFillMenuSuppression.install()
+        let application = autoreleasepool {
+            @Dependency(\.mainMenuController) var mainMenuController
+
+            let application = NSApplication.shared
+            application.delegate = AppDelegate.shared
+            application.setActivationPolicy(.regular)
+            application.mainMenu = mainMenuController.makeMainMenu()
+            return application
+        }
+        application.run()
+    }
 
     func applicationDidFinishLaunching(_ note: Notification) {
         NSToolbarItemViewerOverflowFix.install()
@@ -1067,7 +1085,7 @@ Design notes and the per-ViewModel coverage table: `Documentations/Evolutions/00
 
 ## Key Source Locations
 
-- Main app entry: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift` (the `@main` `RuntimeViewerApp` enum, then the delegate)
+- Main app entry: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/AppDelegate.swift` (`AppDelegate` is itself `@main`; `static func main()` runs first, then the lifecycle callbacks)
 - Main menu: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/MainMenuController.swift`
 - Document model: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/App/Document.swift`
 - Coordinator/navigation: `RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit/Main/MainCoordinator.swift`
