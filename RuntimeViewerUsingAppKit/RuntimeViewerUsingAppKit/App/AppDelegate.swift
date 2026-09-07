@@ -5,25 +5,8 @@ import RuntimeViewerCommunication
 import RuntimeViewerMCPBridge
 import RuntimeViewerSimulatorInstaller
 
+@MainActor
 @main
-@MainActor
-enum App {
-    static func main() {
-        SystemAutoFillMenuSuppression.install()
-        let application = autoreleasepool {
-            @Dependency(\.mainMenuController) var mainMenuController
-
-            let application = NSApplication.shared
-            application.delegate = AppDelegate.shared
-            application.setActivationPolicy(.regular)
-            application.mainMenu = mainMenuController.makeMainMenu()
-            return application
-        }
-        application.run()
-    }
-}
-
-@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     fileprivate static let shared = AppDelegate()
 
@@ -41,6 +24,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private override init() {
         super.init()
+    }
+    
+    
+    static func main() {
+        SystemAutoFillMenuSuppression.install()
+        let application = autoreleasepool {
+            @Dependency(\.mainMenuController) var mainMenuController
+
+            let application = NSApplication.shared
+            application.delegate = AppDelegate.shared
+            application.setActivationPolicy(.regular)
+            application.mainMenu = mainMenuController.makeMainMenu()
+            return application
+        }
+        application.run()
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
