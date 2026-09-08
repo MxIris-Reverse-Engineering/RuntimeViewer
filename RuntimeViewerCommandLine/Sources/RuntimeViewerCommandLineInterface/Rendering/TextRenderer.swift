@@ -206,7 +206,11 @@ struct TextTable {
             var line = ""
             for (index, cell) in row.prefix(columnCount).enumerated() {
                 let isLast = index == columnCount - 1
-                line += isLast ? cell : cell.padding(toLength: widths[index] + 2, withPad: " ", startingAt: 0)
+                // Padded by hand: `padding(toLength:)` counts UTF-16 units
+                // while the widths above count characters, so a cell holding
+                // anything outside the basic plane — one flag emoji is enough —
+                // is cut mid-surrogate instead of padded.
+                line += isLast ? cell : cell + String(repeating: " ", count: max(0, widths[index] + 2 - cell.count))
             }
             lines.append(line.trimmingTrailingSpaces())
         }

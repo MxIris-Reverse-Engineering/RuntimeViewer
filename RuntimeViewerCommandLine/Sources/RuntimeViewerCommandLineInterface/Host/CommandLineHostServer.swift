@@ -52,6 +52,17 @@ public actor CommandLineHostServer {
         }
     }
 
+    /// A command being executed, and the connection that asked for it. When
+    /// that connection goes away the work must stop: an interrupted client
+    /// (Ctrl-C, a crash, a `--timeout` that fired before its cancel frame went
+    /// out) would otherwise leave a long command — an export writing thousands
+    /// of files — running to completion for nobody, and hold up the shutdown
+    /// drain with it.
+    private struct InFlightRequest {
+        let connectionIdentifier: UUID
+        let task: Task<Void, Never>
+    }
+
     private let configuration: Configuration
     private let executor: CommandExecutor
     private let clock: any Clock<Duration>
@@ -62,9 +73,10 @@ public actor CommandLineHostServer {
     private let acceptQueue = DispatchQueue(label: "dev.JH.RuntimeViewerCommandLine.HostAccept")
     private var instanceLock: FileLock?
     private var hasWrittenRecord = false
+    private var hasBoundSocket = false
 
     private var connections: [UUID: SocketConnection] = [:]
-    private var requests: [UUID: Task<Void, Never>] = [:]
+    private var requests: [UUID: InFlightRequest] = [:]
     private var idleTask: Task<Void, Never>?
 
     private var isShuttingDown = false
@@ -107,6 +119,7 @@ public actor CommandLineHostServer {
 
         do {
             listeningFileDescriptor = try UnixDomainSocket.listen(at: paths.socketURL.path)
+            hasBoundSocket = true
         } catch {
             lock.release()
             instanceLock = nil
@@ -245,9 +258,9 @@ public actor CommandLineHostServer {
                         try await connection.send(WireCoding.encodeFrame(HostMessage.failed(requestIdentifier: requestIdentifier, failure: failure)))
                         continue
                     }
-                    beginRequest(requestIdentifier, command: command, on: connection)
+                    beginRequest(requestIdentifier, command: command, on: connection, connectionIdentifier: identifier)
                 case .cancel(let requestIdentifier):
-                    requests[requestIdentifier]?.cancel()
+                    requests[requestIdentifier]?.task.cancel()
                 }
             }
         } catch {
@@ -259,12 +272,16 @@ public actor CommandLineHostServer {
     private func connectionDidClose(_ identifier: UUID) {
         guard let connection = connections.removeValue(forKey: identifier) else { return }
         connection.close()
+        for (requestIdentifier, request) in requests where request.connectionIdentifier == identifier {
+            HostLog.write("Cancelling \(requestIdentifier.uuidString.prefix(8)): its connection closed")
+            request.task.cancel()
+        }
         rearmIdleTimer()
     }
 
     // MARK: - Requests
 
-    private func beginRequest(_ requestIdentifier: UUID, command: Command, on connection: SocketConnection) {
+    private func beginRequest(_ requestIdentifier: UUID, command: Command, on connection: SocketConnection, connectionIdentifier: UUID) {
         let isHostCommand: Bool
         switch command {
         case .hostStatus, .shutdownHost: isHostCommand = true
@@ -293,7 +310,7 @@ public actor CommandLineHostServer {
             }
             self.requestDidFinish(requestIdentifier, command: command)
         }
-        requests[requestIdentifier] = task
+        requests[requestIdentifier] = InFlightRequest(connectionIdentifier: connectionIdentifier, task: task)
     }
 
     private func perform(_ command: Command, requestIdentifier: UUID, on connection: SocketConnection) async throws -> CommandResult {
@@ -377,8 +394,8 @@ public actor CommandLineHostServer {
         idleTask?.cancel()
         idleTask = nil
         stopAccepting()
-        for task in requests.values {
-            task.cancel()
+        for request in requests.values {
+            request.task.cancel()
         }
         for connection in connections.values {
             connection.close()
@@ -397,7 +414,14 @@ public actor CommandLineHostServer {
         }
     }
 
+    /// Deletes the socket only if this instance is the one that bound it — the
+    /// same guard `removeRecordIfOwned` carries, and for the same reason: an
+    /// instance that lost the race must not delete the file the winning host's
+    /// clients dial (proposal 0006). Tracked separately from
+    /// `listeningFileDescriptor`, which `stopAccepting()` has already reset by
+    /// the time this runs.
     private func removeSocketFile() {
+        guard hasBoundSocket else { return }
         unlink(configuration.paths.socketURL.path)
     }
 

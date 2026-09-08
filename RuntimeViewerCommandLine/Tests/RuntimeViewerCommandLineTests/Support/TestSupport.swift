@@ -200,3 +200,63 @@ actor ResultBox<Value: Sendable> {
         value = newValue
     }
 }
+
+/// One connected engine per test process with Foundation indexed. Foundation is
+/// what makes an export long enough to interrupt: libobjc finishes before a
+/// cancellation could be told apart from completion.
+enum TestFoundationEngine {
+    static let foundationPath = "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation"
+
+    private static let sharedTask = Task<RuntimeEngine, any Error> {
+        let engine = RuntimeEngine(source: .local, engineID: "RuntimeViewerCommandLineTests.foundation")
+        try await engine.connect()
+        _ = try await engine.objects(in: foundationPath)
+        return engine
+    }
+
+    static func shared() async throws -> RuntimeEngine {
+        try await sharedTask.value
+    }
+}
+
+/// A host made of a raw socket, so a test can send frames the real host never
+/// would: a corrupt one, or a `Welcome` that names another process.
+///
+/// The real server owns its accept loop through a `DispatchSource`; this one
+/// polls, which is enough for a single connection in a test.
+final class RawTestHost: @unchecked Sendable {
+    typealias Responder = @Sendable (SocketConnection, ClientMessage) async -> Void
+
+    private let listeningFileDescriptor: Int32
+    private let acceptTask: Task<Void, Never>
+
+    init(paths: CommandLineHostPaths, respond: @escaping Responder) throws {
+        try paths.prepareDirectory()
+        let fileDescriptor = try UnixDomainSocket.listen(at: paths.socketURL.path)
+        listeningFileDescriptor = fileDescriptor
+        acceptTask = Task.detached {
+            while !Task.isCancelled {
+                guard let accepted = try? UnixDomainSocket.accept(on: fileDescriptor), accepted >= 0 else {
+                    try? await Task.sleep(for: .milliseconds(10))
+                    continue
+                }
+                let connection = SocketConnection(fileDescriptor: accepted)
+                Task {
+                    do {
+                        for try await payload in connection.incomingPayloads {
+                            guard let message = try? WireCoding.decode(ClientMessage.self, from: payload) else { continue }
+                            await respond(connection, message)
+                        }
+                    } catch {
+                        // The client hung up; nothing else to serve.
+                    }
+                }
+            }
+        }
+    }
+
+    func stop() {
+        acceptTask.cancel()
+        close(listeningFileDescriptor)
+    }
+}

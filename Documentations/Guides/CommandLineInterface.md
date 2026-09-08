@@ -42,8 +42,12 @@ swift build -c release --product runtime-viewer-cli
 
 ### 类型与镜像怎么解析
 
+多个镜像都匹配同一个短名时（子串匹配尤其常见），按完整路径排序取第一个——同一条命令在冷 host
+与热 host 上因此得到同一个答案。`--argument Param=Type` 的候选同理，用的是与 App 类型选择器
+相同的排序。
+
 - **`--image`** 接受绝对路径或短名。短名按这个顺序找：已加载的镜像 → host 进程已映射的镜像 →
-  系统目录（共享缓存与框架目录）→ 当作字面路径。每一步都先按去掉扩展名的文件名精确匹配（不分
+  系统目录（共享缓存与框架目录）。host 不会把短名当路径解析——那会用到它自己的工作目录。每一步都先按去掉扩展名的文件名精确匹配（不分
   大小写），再退回到文件名包含该子串。所以 `--image AppKit` 在全新的 host 上也能用，`--image
   objc` 会命中 `libobjc.A.dylib`。
 - **不给 `--image`** 就在已加载的镜像里找；一个也没加载时报 `imageNotFound`，提示先 `load`。
@@ -91,7 +95,9 @@ swift build -c release --product runtime-viewer-cli
 
 1. **相对路径在客户端解析**。`load`、`export --output`、`--image` 里的路径在发给 host 之前就被
    转成绝对路径；host 的工作目录与你的终端无关。脚本里传相对路径没问题，但不要指望 host 会
-   按你的 `cwd` 去找。
+   按你的 `cwd` 去找。**裸文件名也算路径**：`--image mylib.dylib` 在当前目录下存在时同样会被
+   绝对化，host 不会拿自己的工作目录去解析任何东西（它的工作目录是当初拉起它的那个客户端的，
+   与你无关）。要指系统框架就用短名（`--image AppKit`），当前目录下没有同名文件即可。
 2. **Debug 与 Release 成对**。Debug 构建的 CLI 用 `~/Library/Application Support/RuntimeViewer-Debug/
    CommandLineHost/`，读 Debug App（`dev.JH.RuntimeViewer`）的选项；Release 构建用不带后缀的目录
    和 `com.JH.RuntimeViewer`。两套互不相见，`swift build` 默认是 Debug。
@@ -106,10 +112,15 @@ swift build -c release --product runtime-viewer-cli
    `69` 没有 host 且拉不起来（或 `--no-spawn` 时没有 host）。
 7. **协议版本不匹配时**：host 是独立进程就会被自动换掉（客户端先请它退出、等它真正退出，必要时
    `SIGTERM`，再拉起新的）；host 是 RuntimeViewer App 则报错，请更新 App 或工具。当前协议版本 2。
-8. **注入记录不分 Debug / Release**。helper daemon 里的 XPC 端点注册表与
+   落到 `SIGTERM` 这一步时，只会发给**与 `host.json` 记录相符**的 pid——握手里报的那个 pid 只是
+   一面之词，不足以据此对任何进程发信号。
+8. **`--timeout` 覆盖整条调用**，包括等 `host.lock`、拉起 host、等它应答（含它 accept 了却迟迟
+   不握手的情况），`host status` / `host stop` / `host restart` 同样受它约束。它是脚本可以依赖的
+   上限，不只是发送阶段的上限。
+9. **注入记录不分 Debug / Release**。helper daemon 里的 XPC 端点注册表与
    `~/Library/Application Support/RuntimeViewer/injected-socket-endpoints.json` 都只有一份，任何配置的
    host 启动时都会重连里面记录的进程；`detach` 会从记录里删掉它。
-9. **同一时刻只有一个进程做 Bonjour 客户端与注入者**：App 在跑就是 App，否则是独立 host。独立 host
+10. **同一时刻只有一个进程做 Bonjour 客户端与注入者**：App 在跑就是 App，否则是独立 host。独立 host
    不广播自己、不共享引擎；只做客户端。
 
 ## CLI host 的生命周期

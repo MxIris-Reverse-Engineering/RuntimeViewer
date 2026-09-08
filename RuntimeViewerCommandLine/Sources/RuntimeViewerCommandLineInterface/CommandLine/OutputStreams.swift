@@ -20,13 +20,14 @@ public struct OutputStreams: Sendable {
         standardErrorIsTerminal: isatty(STDERR_FILENO) != 0
     )
 
-    /// Streams that collect into a ``CapturedOutput``.
-    public static func capturing() -> (streams: OutputStreams, captured: CapturedOutput) {
+    /// Streams that collect into a ``CapturedOutput``. Pass
+    /// `standardErrorIsTerminal: true` to exercise the redrawn progress line.
+    public static func capturing(standardErrorIsTerminal: Bool = false) -> (streams: OutputStreams, captured: CapturedOutput) {
         let captured = CapturedOutput()
         let streams = OutputStreams(
             writeStandardOutput: { captured.appendStandardOutput($0) },
             writeStandardError: { captured.appendStandardError($0) },
-            standardErrorIsTerminal: false
+            standardErrorIsTerminal: standardErrorIsTerminal
         )
         return (streams, captured)
     }

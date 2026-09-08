@@ -82,6 +82,7 @@ public actor CommandLineHostClient {
     private var receiveTask: Task<Void, Never>?
     private var pendingRequests: [UUID: PendingRequest] = [:]
     private var welcomeContinuation: CheckedContinuation<Welcome, any Error>?
+    private var connectTask: Task<Welcome, any Error>?
     private var hasReplacedOutdatedHost = false
 
     public private(set) var welcome: Welcome?
@@ -101,6 +102,22 @@ public actor CommandLineHostClient {
         if let welcome, connection != nil {
             return welcome
         }
+        // A second caller waits for the attempt already running instead of
+        // opening a socket of its own: that one would replace `connection`,
+        // `receiveTask` and the welcome continuation, and the first caller
+        // would stay suspended for good on a continuation nobody resumes.
+        if let connectTask {
+            return try await awaitCancellably(connectTask)
+        }
+        let task = Task { try await self.establishConnection() }
+        connectTask = task
+        defer { connectTask = nil }
+        return try await awaitCancellably(task)
+    }
+
+    /// One attempt: socket, hello, welcome, and the version check that may
+    /// replace an outdated host and start over.
+    private func establishConnection() async throws -> Welcome {
         let fileDescriptor = try await establishSocket()
         let connection = SocketConnection(fileDescriptor: fileDescriptor)
         self.connection = connection
@@ -109,8 +126,18 @@ public actor CommandLineHostClient {
         let welcome: Welcome
         do {
             try await connection.send(WireCoding.encodeFrame(ClientMessage.hello(Hello())))
-            welcome = try await withCheckedThrowingContinuation { continuation in
-                welcomeContinuation = continuation
+            welcome = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    // Cancellation may already have happened: the handler below
+                    // has nothing to find until this line runs.
+                    if Task.isCancelled {
+                        continuation.resume(throwing: CancellationError())
+                        return
+                    }
+                    welcomeContinuation = continuation
+                }
+            } onCancel: {
+                Task { await self.abandonWelcome() }
             }
         } catch {
             disconnect()
@@ -121,7 +148,7 @@ public actor CommandLineHostClient {
             if welcome.hostKind == .standalone, configuration.allowsSpawning, launcher != nil, !hasReplacedOutdatedHost {
                 hasReplacedOutdatedHost = true
                 await replaceOutdatedHost(welcome)
-                return try await connect()
+                return try await establishConnection()
             }
             disconnect()
             throw ClientError.unsupportedProtocolVersion(hostVersion: welcome.protocolVersion, hostKind: welcome.hostKind)
@@ -254,6 +281,15 @@ public actor CommandLineHostClient {
         pending.continuation.resume(throwing: error)
     }
 
+    /// Gives up on a greeting that is not coming. A host that accepts the
+    /// connection and never says hello would otherwise hold the connect open
+    /// past `--timeout` and past Ctrl-C: nothing else in that path suspends.
+    private func abandonWelcome() {
+        guard let welcomeContinuation else { return }
+        self.welcomeContinuation = nil
+        welcomeContinuation.resume(throwing: CancellationError())
+    }
+
     private func failEverything(with error: any Error) {
         let pending = pendingRequests
         pendingRequests.removeAll()
@@ -273,7 +309,21 @@ public actor CommandLineHostClient {
             do {
                 for try await payload in connection.incomingPayloads {
                     guard let self else { return }
-                    let message = try WireCoding.decode(HostMessage.self, from: payload)
+                    let message: HostMessage
+                    do {
+                        message = try WireCoding.decode(HostMessage.self, from: payload)
+                    } catch {
+                        // The host drops an unreadable client frame and reads
+                        // on; do the same here. Ending the loop would fail
+                        // every request in flight over one bad frame — and
+                        // lose the answer that follows it. The cost: a frame
+                        // that was meant to answer a request in flight leaves
+                        // it waiting for `--timeout` instead of failing at
+                        // once. The version handshake is what keeps that from
+                        // happening in practice.
+                        #log(.debug, "Dropped an undecodable host message: \(error.localizedDescription, privacy: .public)")
+                        continue
+                    }
                     await self.handle(message)
                 }
             } catch {
@@ -283,7 +333,7 @@ public actor CommandLineHostClient {
         }
     }
 
-    private func handle(_ message: HostMessage) {
+    private func handle(_ message: HostMessage) async {
         switch message {
         case .welcome(let welcome):
             if let welcomeContinuation {
@@ -292,7 +342,13 @@ public actor CommandLineHostClient {
             }
         case .progress(let requestIdentifier, let progress):
             if let onProgress = pendingRequests[requestIdentifier]?.onProgress {
-                Task { await onProgress(progress) }
+                // Awaited here rather than dispatched into a Task of its own:
+                // unstructured tasks have no order among them, so a counter
+                // could go backwards and a late frame could repaint the line
+                // after `finish()` cleared it. A handler must therefore be
+                // quick — it holds up every later frame on this connection,
+                // including the result.
+                await onProgress(progress)
             }
         case .completed(let requestIdentifier, let result):
             pendingRequests.removeValue(forKey: requestIdentifier)?.continuation.resume(returning: result)

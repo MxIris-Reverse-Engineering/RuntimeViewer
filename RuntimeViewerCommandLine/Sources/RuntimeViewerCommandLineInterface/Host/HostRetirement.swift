@@ -67,6 +67,16 @@ public enum HostRetirement {
         guard processIdentifier != getpid() else {
             return Outcome(exited: !isRunning(processIdentifier: processIdentifier, paths: paths), usedSignal: false)
         }
+        // The identifier reached us in a `Welcome`, so it is a claim rather
+        // than a fact: signal it only when the host's own record agrees, and
+        // never a non-positive one — `kill(0, …)` signals this process's whole
+        // group and `kill(-1, …)` every process this user owns. Without this a
+        // host on the socket could name any process and have the client end it.
+        let recordedProcessIdentifier = HostRecord.read(from: paths.recordURL)?.processIdentifier
+        guard processIdentifier > 0, recordedProcessIdentifier == processIdentifier else {
+            HostLog.write("Not signalling process \(processIdentifier): the host record does not corroborate it")
+            return Outcome(exited: !isRunning(processIdentifier: processIdentifier, paths: paths), usedSignal: false)
+        }
         kill(processIdentifier, SIGTERM)
         let deadline = ContinuousClock.now + .seconds(timeout)
         while ContinuousClock.now < deadline, isRunning(processIdentifier: processIdentifier, paths: paths) {

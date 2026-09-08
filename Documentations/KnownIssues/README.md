@@ -167,3 +167,13 @@ when picking up follow-up work.
   decode. Also records 4 pre-existing `RuntimeViewerCore` test failures
   (reproduced on an untouched `69d8131b`) and a release path that can ship
   without the simulator payload behind a single `warning:` line.
+- [2026-09-08-pr112-review-findings.md](2026-09-08-pr112-review-findings.md) —
+  `/code-review xhigh` on `feature/command-line-interface` (PR #112, the
+  `runtime-viewer-cli` foundation), re-verified adversarially by a second
+  session that built the tool and ran the experiments. Fifteen findings plus
+  one the review missed: fifteen fixed in the same batch, three registered as
+  won't-fix. Two of the review's own claims were overturned on re-verification
+  (the follow-up app-as-host cannot reach `PR112.11`; the handshake race is
+  real but did not fire in 100 attempts), and `PR112.18` records why a
+  settings schema drift cannot be reported from this layer at all —
+  MetaCodable's `@Default` swallows it before the reader sees it.
