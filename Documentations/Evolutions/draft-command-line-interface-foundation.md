@@ -320,3 +320,6 @@ macOS 15+（跟随 `RuntimeViewerPackages`，为多来源提案预留同一下�
 | 2026-09-08 | 解析确定化：短名与泛型候选先排序再取首个；host 不再用自己的 cwd 兜底解析裸文件名 | 顺序来自 dyld / 树遍历，同一命令换台机器就换答案；cwd 兜底解析的是拉起 host 的那个客户端的目录（PR112.3 / PR112.12 / PR112.14） |
 | 2026-09-08 | `removeSocketFile()` 加 `hasBoundSocket` 守卫 | 与 `removeRecordIfOwned` 对称，提案 0006 的同一条教训；当前不可达，但那是靠调用约定而非靠代码（PR112.11） |
 | 2026-09-08 | 裁决与未修项记入 `KnownIssues/2026-09-08-pr112-review-findings.md` | 三条不修（仓库级 manifest 模板、与 MCP 的解析重复、MetaCodable `@Default` 吞掉 schema 漂移）留档，下次审查不再重走四问 |
+| 2026-09-08 | 共享资源的取消要分清所有权：客户端拨号 host 的 task 可以被调用者取消，host 侧共享的引擎连接不可以 | 修复批次复核发现这是回归——一个客户端的 `--timeout` 会让另一个客户端收到 `cancelled`（PR112.19） |
+| 2026-09-08 | `--timeout` 的应用收敛到 `CommandRunner.withOptionalTimeout(_:)`，等 `Welcome` 的 continuation 也可取消 | 「host accept 了却永不握手」实测挂死到被强杀；`host status` / `restart` 原本完全不受 `--timeout` 约束（PR112.20） |
+| 2026-09-08 | 客户端只把**常规文件**的裸名当路径，目录不算 | 项目里有 `Foundation/` 目录时 `--image Foundation` 会被劫持（PR112.21） |

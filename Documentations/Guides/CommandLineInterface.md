@@ -42,7 +42,7 @@ swift build -c release --product runtime-viewer-cli
 相同的排序。
 
 - **`--image`** 接受绝对路径或短名。短名按这个顺序找：已加载的镜像 → host 进程已映射的镜像 →
-  系统目录（共享缓存与框架目录）→ 当作字面路径。每一步都先按去掉扩展名的文件名精确匹配（不分
+  系统目录（共享缓存与框架目录）。host 不会把短名当路径解析——那会用到它自己的工作目录。每一步都先按去掉扩展名的文件名精确匹配（不分
   大小写），再退回到文件名包含该子串。所以 `--image AppKit` 在全新的 host 上也能用，`--image
   objc` 会命中 `libobjc.A.dylib`。
 - **不给 `--image`** 就在已加载的镜像里找；一个也没加载时报 `imageNotFound`，提示先 `load`。
@@ -81,7 +81,8 @@ swift build -c release --product runtime-viewer-cli
 7. **协议版本不匹配时**：host 是独立进程就会被自动换掉（客户端先请它退出，再拉起新的）；host 是
    RuntimeViewer App（后续提案）则报错，请更新 App 或工具。换掉旧 host 时若要落到 `SIGTERM`，
    只会发给**与 `host.json` 记录相符**的 pid——握手里报的 pid 只是一面之词，不足以据此发信号。
-8. **`--timeout` 覆盖整条调用**，包括等 `host.lock`、拉起 host、等它应答。它是脚本可以依赖的
+8. **`--timeout` 覆盖整条调用**，包括等 `host.lock`、拉起 host、等它应答（含它 accept 了却迟迟
+   不握手的情况），`host status` / `host stop` / `host restart` 同样受它约束。它是脚本可以依赖的
    上限，不只是发送阶段的上限。
 
 ## CLI host 的生命周期

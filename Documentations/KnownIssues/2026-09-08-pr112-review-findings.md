@@ -31,7 +31,7 @@ ID 为 `PR112.<N>`。
 | PR112.12 | Minor | `match()` 对未排序数组取 `first(where:)`：`imageList` 是 dyld 顺序、catalog 是树遍历顺序，`--image Kit` 解析到哪个镜像取决于 host 冷热。**第二问例外**：`main` 的 `MCPBridgeServer.resolveImageNameFromImageList` 自 `0ebc99e0`（2026-03-11）起就是同一模式，本 PR 复制了它 | `match()` 内部先排序 | `substringMatchIsOrderIndependent`（修前三种顺序给出 3 个不同结果） |
 | PR112.13 | Minor | `--options app` 用 `try?` 读 `settings.json`，把「文件不存在」和「读不出来」压成同一个结果 | 新增 `readSettings() -> SettingsReadOutcome`，`.unreadable` 写进 `host.log` | `undecodableSettingsFileIsReported`。**注意**：见 PR112.18，这条覆盖不了审查真正担心的场景 |
 | PR112.14 | Minor | 横向同类：`--argument Param=Type` 的候选选择同样对无序数组取 `first`，而 `Candidate.imagePath` 的存在恰恰说明同名候选是真实情况 | 抽成 `CommandExecutor.candidate(named:among:)`，按 `Candidate` 自己的 `ComparableBuildable` 顺序排序——与 app 侧类型选择器 `candidates.sorted()` 一致，两边挑中同一个 | `candidateSelectionIsOrderIndependent` |
-| PR112.15 | Minor | 横向同类：`LocalSourceResolver` 共享的 `connectTask` 也用 `Task.value` 等待，同样不传取消 | 抽出 `awaitCancellably(_:)`，客户端与 resolver 共用 | 无独立测试，与 PR112.7 是同一处理（`timeoutCoversConnecting` 覆盖客户端那半） |
+| PR112.15 | Minor | 横向同类：`LocalSourceResolver` 共享的 `connectTask` 也用 `Task.value` 等待，同样不传取消 | **改法已撤回**：`awaitCancellably(_:)` 只用于客户端；resolver 侧保持 `task.value` 并写明理由——见下文「第二轮审查」N1 | 无独立测试 |
 
 ## 无法复现但已修（PR112.9）
 
@@ -48,12 +48,20 @@ ID 为 `PR112.<N>`。
 **报告的说法**：`envEnable` / `usingLocalDependencies` / `package(local:remote:)` 定义了却从未调用，
 `USING_LOCAL_DEPENDENCIES=1` 对这个包无效，会误导下一个读者。
 
-**四问**：属实（调用数确实为 0），基线上不存在（新包），值得修但**不在这里修**——复核给出反证：
-`RuntimeViewerCore` / `RuntimeViewerPackages` / `RuntimeViewerMCP` 三个既有包在本分支上的调用数
-**同样是 0**，这是仓库级模板而非 CLI 独有的疏漏。单独删 CLI 那份会让四个 manifest 不一致，真正
-该做的是四份一起清理，属独立 PR。历史上无同类修复记录。
+**四问**：属实（CLI 包的调用数确实为 0），基线上不存在（新包），值得修但**不在这里修**。
 
-**下次的判据**：若某个包开始真正使用 `package(local:remote:)`，这条即失效，应重新裁决。
+**依据经第二轮审查订正。** 第一轮复核报的「四个包调用数都是 0，是仓库级死模板」是错的——那次
+`grep` 只匹配单行 `package(local`，而真实调用是多行的
+`.package(\n local: .package(...),\n remote: ...)`。按 `local: .package(` 重数（本分支）：
+**`RuntimeViewerCore` 5 处、`RuntimeViewerPackages` 7 处在用**，`RuntimeViewerMCP` 与
+`RuntimeViewerCommandLine` 各 0。所以它不是死模板，而是两个包活用、另两个包各带一份死拷贝。
+
+**结论仍是不在本 PR 修**，但理由换成：`RuntimeViewerMCP` 早就有同一份死拷贝，CLI 与它一致；两份
+一起清理才不会留下「一个包删了一个包没删」的新不一致。CLI 的依赖里只有 FrameworkToolbox 有本地
+覆盖的可能，收益也低。历史上无同类修复记录。
+
+**下次的判据**：CLI 或 MCP 开始真正使用 `package(local:remote:)`，或有人统一清理这两份拷贝时，
+这条关闭。
 
 ### PR112.17 — `ImageResolver` 与 `MCPBridgeServer` 的解析逻辑重复
 
@@ -93,3 +101,33 @@ ID 为 `PR112.<N>`。
 - **「握手期间断线会挂死」**：窗口存在（`send(hello)` 挂起期间接收循环先跑完 `connectionDidEnd`，
   此时 `welcomeContinuation` 还是 nil），但 100 次实验 0 次命中，因为 write 先报 EPIPE。PR112.6 的
   修复顺带收窄了它。
+
+## 第二轮审查（修复批次复核，2026-09-08）
+
+修复推送后交同一个会话复核（`6c7bc74f..42bb462c`）。方法：在 `/tmp` 副本上对每条修复做反向突变、
+重编、只跑对应测试——13 条声称有测试的修复**全部回退即红**；真机复跑上一轮的两个实验，取消后
+`export Foundation` 写 **0 个文件**（修前 1649）、`export AppKit --timeout 3` 写 **0 个文件**
+（修前 3909），`host restart --json | jq -c . | wc -l` = 1（修前 2）。
+
+复核发现修复批次自身引入三个缺陷，均已在同批次修掉：
+
+| ID | 严重度 | 缺陷 | 修复 |
+|---|---|---|---|
+| PR112.19 | **中** | **PR112.15 是回归**：`awaitCancellably` 用在 `LocalSourceResolver` 共享的引擎连接上，host 服务多个客户端时，A 的 `--timeout` 到期会取消共享的 `connect()`，B 于是收到 `cancelled`——B 根本没取消过。修复前 `Task.value` 不传取消，B 不受影响 | resolver 侧回退到 `task.value` 并写明理由：引擎连接是 host 生命周期资源，不该被单条命令的取消杀掉。`awaitCancellably` 的文档限定为「结果无人共享的任务」 |
+| PR112.20 | 低 | `--timeout` 移到覆盖 `connect()` 后仍有一个洞：等 `Welcome` 的 `withCheckedThrowingContinuation` 不响应取消，所以「host accept 了却永不握手」时 `--timeout` 完全不生效——**实测挂死到被 90 s 强杀** | 该等待包进 `withTaskCancellationHandler`，取消时 `abandonWelcome()` 以 `CancellationError` resume；并在装 continuation 前先查 `Task.isCancelled`，堵住「取消先于赋值」的窗口。测试 `timeoutCoversAGreetinglessHost`（修前挂死，修后 1.009 s） |
+| PR112.21 | 低 | PR112.3 的副作用：`fileExists(atPath:)` 对**目录**也返回 true，所以当前目录下有个 `Foundation/` 目录时 `--image Foundation` 会被它劫持，报 `imageLoadFailed` | 改用 `isRegularFile(atPath:)`（`fileExists(atPath:isDirectory:)` 且非目录）。测试 `directoryDoesNotShadowAFramework` |
+
+另外三处一并处理：
+
+- **`export` 取消的边界**：取消若落在 Core 最后一次 `checkCancellation` 之后（writing 阶段，或对象很少的镜像），export 正常结束而事件循环已退出，`completed` 为 nil，于是报 `exportFailed`「finished without a result」而非 `cancelled`（复核实测 `export CoreServices`）。已在 `exportTask.value` 之后补 `try Task.checkCancellation()`。
+- **`host status` / `host stop` / `host restart` 不受 `--timeout` 约束**（上一轮补漏项）：`--timeout` 的应用收敛到 `CommandRunner.withOptionalTimeout(_:)`，`HostReporting.perform` 改为经它调用。
+- **最弱的那条测试已换掉**：原先测的是「`stopRunningHost` 不打印」（同义反复），现在把 `Restart.run` 的主体抽成 `HostReporting.restart(_:)`，测试用 `InProcessHostLauncher` 驱动它并断言 stdout 恰好一个 JSON 文档，测的是契约本身。
+
+复核确认无问题的四处（不必重查）：`export` 的 `withTaskCancellationHandler` 无数据竞争且
+`.cancelled` 不会被 `phaseFailed` 抢；`connect()` 的递归不会自等且 `hasReplacedOutdatedHost` 仍
+生效；进度改为在 actor 上 `await` **不会**死锁（`onProgress` 是 nonisolated `async`，重入非阻塞），
+代价是背压，已写进注释；`hasBoundSocket` 守卫不影响 idle / `shutdownHost` / signal 三条正常路径。
+
+**待办（不在本 PR）**：#113 的 `HostRetirement.swift:70` 仍是无守卫的 `kill(processIdentifier, SIGTERM)`，
+合并 #113 时要同步 PR112.4 的守卫；`--options app` 察觉不了 settings schema 漂移（PR112.18），值得在
+`RuntimeViewerCore` 侧提一条 follow-up。
