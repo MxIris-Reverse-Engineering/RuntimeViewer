@@ -314,3 +314,9 @@ macOS 15+（跟随 `RuntimeViewerPackages`，为多来源提案预留同一下�
 | 2026-09-06 | `--timeout` 在客户端实现：到期取消 `send`，客户端向 host 发 `cancel` 帧并以 `cancelled` 退出 1 | host 侧 `cancel` 只取消该请求的 Task；引擎调用本身是否可中断取决于 Core |
 | 2026-09-06 | 测试里 `ParsableArguments` 一律经 `GlobalOptions.parse([...])` 构造 | 直接 `GlobalOptions()` 后读属性会触发 swift-argument-parser 的 "Can't read a value from a parsable argument definition" 崩溃；首轮测试因此整进程退出 |
 | 2026-09-06 | 测试的超时辅助改为轮询独立 Task，host 套件加 `.timeLimit` | `withThrowingTaskGroup` 竞赛会等子任务结束，而 `waitUntilStopped()` 不响应取消，首轮两条测试因此死锁到 600 s |
+| 2026-09-08 | 取消要真正传到工作本身：`export` 的非结构化 `Task` 包 `withTaskCancellationHandler`，连接关闭即取消该连接的在途请求，共享的 `connectTask` 一律经 `awaitCancellably` 等待 | PR #112 审查 + 对抗复核实测：取消后 host 仍写满 1648 个文件，`host stop` 的排空跟着卡住；`Task.value` 不传取消是三处共同的原因（PR112.1 / PR112.2 / PR112.15） |
+| 2026-09-08 | 客户端不再信任 host 的一面之词：坏帧只丢帧不断连、`SIGTERM` 只发给 `host.json` 佐证过的 pid、`connect()` 单次尝试可重入 | 与服务端行为对齐；实测假 host 能让客户端杀掉任意进程（PR112.4 / PR112.5 / PR112.6） |
+| 2026-09-08 | `--timeout` 移到覆盖 `connect()`，进度行改 `defer` 清理，`stopRunningHost` 不再自己 emit | 冷启动的 25 s 全在 deadline 之外；`host restart --json` 会吐两个 JSON 文档，违反契约 5（PR112.7 / PR112.8 / PR112.6） |
+| 2026-09-08 | 解析确定化：短名与泛型候选先排序再取首个；host 不再用自己的 cwd 兜底解析裸文件名 | 顺序来自 dyld / 树遍历，同一命令换台机器就换答案；cwd 兜底解析的是拉起 host 的那个客户端的目录（PR112.3 / PR112.12 / PR112.14） |
+| 2026-09-08 | `removeSocketFile()` 加 `hasBoundSocket` 守卫 | 与 `removeRecordIfOwned` 对称，提案 0006 的同一条教训；当前不可达，但那是靠调用约定而非靠代码（PR112.11） |
+| 2026-09-08 | 裁决与未修项记入 `KnownIssues/2026-09-08-pr112-review-findings.md` | 三条不修（仓库级 manifest 模板、与 MCP 的解析重复、MetaCodable `@Default` 吞掉 schema 漂移）留档，下次审查不再重走四问 |
