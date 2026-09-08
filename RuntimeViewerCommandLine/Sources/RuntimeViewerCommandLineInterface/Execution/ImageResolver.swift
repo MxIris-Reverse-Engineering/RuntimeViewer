@@ -10,7 +10,11 @@ import RuntimeViewerCore
 /// 1. loaded images, exact name without extension, then substring
 /// 2. images mapped into the host, exact then substring
 /// 3. the engine's catalog (shared cache and framework directories), exact then substring
-/// 4. the name as a literal path
+///
+/// A name that is none of these is not tried as a path: the client turns the
+/// paths it recognises into absolute ones, and resolving what is left against
+/// the host's own working directory would answer for a directory the caller
+/// never chose.
 struct ImageResolver {
     let engine: RuntimeEngine
 
@@ -48,9 +52,6 @@ struct ImageResolver {
         if let match = Self.match(name, in: mapped) { return match }
         let catalog = catalogPaths()
         if let match = Self.match(name, in: catalog) { return match }
-        if FileManager.default.fileExists(atPath: name) {
-            return URL(fileURLWithPath: name).standardizedFileURL.path
-        }
         return nil
     }
 
@@ -80,12 +81,18 @@ struct ImageResolver {
     }
 
     /// Exact match on the last path component without extension, then substring.
+    ///
+    /// Sorted first: `imageList` arrives in dyld order and the catalog in tree
+    /// order, so without this the image a substring picks depends on which
+    /// stage answered and on how warm the host is — the same command resolving
+    /// to a different framework between runs.
     static func match(_ name: String, in paths: [String]) -> String? {
         let needle = name.lowercased()
-        if let exact = paths.first(where: { Self.baseName(of: $0).lowercased() == needle }) {
+        let ordered = paths.sorted()
+        if let exact = ordered.first(where: { Self.baseName(of: $0).lowercased() == needle }) {
             return exact
         }
-        return paths.first { ($0 as NSString).lastPathComponent.lowercased().contains(needle) }
+        return ordered.first { ($0 as NSString).lastPathComponent.lowercased().contains(needle) }
     }
 
     static func baseName(of path: String) -> String {

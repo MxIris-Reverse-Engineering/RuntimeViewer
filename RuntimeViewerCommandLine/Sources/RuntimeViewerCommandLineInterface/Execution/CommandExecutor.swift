@@ -229,8 +229,7 @@ public actor CommandExecutor {
                     message: "Missing an argument for generic parameter '\(parameter.name)'. Pass --argument \(parameter.name)=<Type>; run with --list to see the candidates."
                 )
             }
-            let candidate = parameter.candidates.first { $0.displayName == argument }
-                ?? parameter.candidates.first { $0.displayName.lowercased() == argument.lowercased() }
+            let candidate = Self.candidate(named: argument, among: parameter.candidates)
             guard let candidate else {
                 throw CommandFailure(
                     code: .invalidArgument,
@@ -265,6 +264,24 @@ public actor CommandExecutor {
         ))
     }
 
+    /// The candidate an `--argument Param=Type` names: exact display name
+    /// first, then case-insensitively.
+    ///
+    /// Ordered first, for the reason `ImageResolver.match` is: the engine's
+    /// order is not something the user can predict, so two candidates sharing a
+    /// display name — which `Candidate.imagePath` exists to tell apart — must
+    /// not resolve differently from one run to the next. The order is the
+    /// type's own `ComparableBuildable` one, so the type picker in the app and
+    /// `--argument` here settle on the same candidate.
+    static func candidate(
+        named argument: String,
+        among candidates: [RuntimeSpecializationRequest.Candidate]
+    ) -> RuntimeSpecializationRequest.Candidate? {
+        let ordered = candidates.sorted()
+        return ordered.first { $0.displayName == argument }
+            ?? ordered.first { $0.displayName.lowercased() == argument.lowercased() }
+    }
+
     // MARK: - Export
 
     private func export(_ command: ExportCommand, progress: ProgressHandler?) async throws -> ExportResult {
@@ -297,27 +314,39 @@ public actor CommandExecutor {
 
         var completed: RuntimeInterfaceExportResult?
         var phaseFailures: [String] = []
-        for await event in reporter.events {
-            switch event {
-            case .phaseStarted(let phase):
-                await progress?(CommandProgress(phase: phase.progressName))
-            case .objectStarted(let object, let current, let total):
-                // One frame per object would be thousands for a large image;
-                // the client only needs to see movement.
-                if current == 1 || current == total || current % 25 == 0 {
-                    await progress?(CommandProgress(phase: "exporting", current: current, total: total, detail: object.displayName))
+        // The export runs in an unstructured Task, which neither inherits this
+        // task's cancellation nor passes it on through `.value`. Without the
+        // handler below, a cancelled export keeps writing files until the whole
+        // image is done — and the host's shutdown drain waits for it, because
+        // the request only finishes when the export does. Core's export loop
+        // checks `Task.checkCancellation()`, so cancelling is enough to stop it.
+        await withTaskCancellationHandler {
+            for await event in reporter.events {
+                switch event {
+                case .phaseStarted(let phase):
+                    await progress?(CommandProgress(phase: phase.progressName))
+                case .objectStarted(let object, let current, let total):
+                    // One frame per object would be thousands for a large image;
+                    // the client only needs to see movement.
+                    if current == 1 || current == total || current % 25 == 0 {
+                        await progress?(CommandProgress(phase: "exporting", current: current, total: total, detail: object.displayName))
+                    }
+                case .phaseFailed(let phase, let error):
+                    phaseFailures.append("\(phase.progressName): \(error.localizedDescription)")
+                case .completed(let result):
+                    completed = result
+                case .phaseCompleted, .objectCompleted, .objectFailed:
+                    break
                 }
-            case .phaseFailed(let phase, let error):
-                phaseFailures.append("\(phase.progressName): \(error.localizedDescription)")
-            case .completed(let result):
-                completed = result
-            case .phaseCompleted, .objectCompleted, .objectFailed:
-                break
             }
+        } onCancel: {
+            exportTask.cancel()
         }
 
         do {
             try await exportTask.value
+        } catch is CancellationError {
+            throw CommandFailure(code: .cancelled, message: "The export of '\(imageName)' was cancelled.")
         } catch {
             throw CommandFailure(code: .exportFailed, message: "Export of '\(imageName)' failed: \(error.localizedDescription)")
         }

@@ -265,8 +265,22 @@ public struct GenerationOptionsArguments: ParsableArguments, Sendable {
 }
 
 /// An `--image` value: paths become absolute, short names pass through.
+///
+/// Kept as a one-argument function so it can be handed to `ArgumentParser` as a
+/// `transform`; the seam below is what the tests drive.
 func imageArgument(_ value: String) -> String {
+    imageArgument(value, fileExists: { FileManager.default.fileExists(atPath: $0) })
+}
+
+func imageArgument(_ value: String, fileExists: (String) -> Bool) -> String {
     if value.hasPrefix("/") || value.hasPrefix("~") || value.hasPrefix(".") || value.contains("/") {
+        return GlobalOptions.absolutePath(value)
+    }
+    // A bare name that is a file here is a relative path, and only this process
+    // knows what it is relative to: the host's working directory is whatever
+    // the client that happened to start it had, so the same command would read
+    // a different file — or none — depending on who started the host.
+    if fileExists(value) {
         return GlobalOptions.absolutePath(value)
     }
     return value

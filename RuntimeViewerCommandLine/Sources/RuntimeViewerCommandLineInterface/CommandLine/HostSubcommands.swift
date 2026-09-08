@@ -46,10 +46,11 @@ extension RuntimeViewerCommandLineTool.Host {
 
         public func run() async throws {
             let runner = CommandRunner(globalOptions: globalOptions)
-            guard try await HostReporting.stopRunningHost(runner) else {
+            guard let result = try await HostReporting.stopRunningHost(runner) else {
                 try HostReporting.reportNoHost(runner)
                 return
             }
+            try runner.emit(result)
         }
     }
 
@@ -144,13 +145,17 @@ enum HostReporting {
     }
 
     /// Sends a shutdown to a running host and waits for its socket to go away.
-    /// - Returns: `false` when no host was running.
-    static func stopRunningHost(_ runner: CommandRunner) async throws -> Bool {
+    ///
+    /// - Returns: the host's acknowledgement, or `nil` when none was running.
+    ///   Printing it is the caller's business: `host stop` reports it, while
+    ///   `host restart` reports the status of the host it starts next, and
+    ///   standard output carries exactly one JSON document either way.
+    static func stopRunningHost(_ runner: CommandRunner) async throws -> CommandResult? {
         let client = runner.makeClient(allowsSpawning: false)
         do {
             try await client.connect()
         } catch let error as CommandLineHostClient.ClientError where error.isUnavailability {
-            return false
+            return nil
         }
         let paths = runner.globalOptions.hostPaths
         let record = HostRecord.read(from: paths.recordURL)
@@ -162,8 +167,7 @@ enum HostReporting {
         for _ in 0 ..< 50 where isHostStillExiting(record: record, paths: paths) {
             try await Task.sleep(for: .milliseconds(100))
         }
-        try runner.emit(result)
-        return true
+        return result
     }
 
     private static func isHostStillExiting(record: HostRecord?, paths: CommandLineHostPaths) -> Bool {

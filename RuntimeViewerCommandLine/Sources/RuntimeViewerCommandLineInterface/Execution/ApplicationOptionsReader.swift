@@ -69,8 +69,35 @@ public struct ApplicationOptionsReader: ApplicationOptionsReading {
     /// key overlaps, every other key is ignored, and the missing option groups
     /// take their defaults. That spares this module from naming the settings
     /// schema or the transformer type.
+    /// What `settings.json` yielded. A file that is there but no longer
+    /// decodes is not the same as no file at all, and must not pass for one.
+    public enum SettingsReadOutcome: Sendable {
+        case absent
+        case decoded(RuntimeObjectInterface.GenerationOptions)
+        case unreadable(String)
+    }
+
+    public func readSettings() -> SettingsReadOutcome {
+        guard let settingsFileURL, let data = try? Data(contentsOf: settingsFileURL) else { return .absent }
+        do {
+            return .decoded(try JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: data))
+        } catch {
+            return .unreadable(error.localizedDescription)
+        }
+    }
+
     private func readSettingsFile() -> RuntimeObjectInterface.GenerationOptions? {
-        guard let settingsFileURL, let data = try? Data(contentsOf: settingsFileURL) else { return nil }
-        return try? JSONDecoder().decode(RuntimeObjectInterface.GenerationOptions.self, from: data)
+        switch readSettings() {
+        case .decoded(let options):
+            return options
+        case .unreadable(let reason):
+            // Silence here means `--options app` quietly yields library
+            // defaults after a settings schema change, and the interfaces stop
+            // matching the app's with nothing to say why.
+            HostLog.write("Ignoring \(settingsFileURL?.path ?? "the settings file"): it no longer decodes (\(reason))")
+            return nil
+        case .absent:
+            return nil
+        }
     }
 }

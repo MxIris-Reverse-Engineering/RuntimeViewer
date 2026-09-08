@@ -41,7 +41,7 @@ public actor LocalSourceResolver: SourceResolving {
             return engine
         }
         if let connectTask {
-            return try await connectTask.value
+            return try await awaitCancellably(connectTask)
         }
         let task = Task { [engineID] in
             let engine = RuntimeEngine(source: .local, engineID: engineID)
@@ -50,7 +50,7 @@ public actor LocalSourceResolver: SourceResolving {
         }
         connectTask = task
         do {
-            let engine = try await task.value
+            let engine = try await awaitCancellably(task)
             self.engine = engine
             return engine
         } catch {

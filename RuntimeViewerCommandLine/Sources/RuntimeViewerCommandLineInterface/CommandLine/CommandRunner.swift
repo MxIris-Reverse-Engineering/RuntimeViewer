@@ -68,24 +68,27 @@ public struct CommandRunner: Sendable {
 
     private func sendOnce(_ command: Command) async throws -> CommandResult {
         let client = makeClient()
-        try await client.connect()
         defer { Task { await client.disconnect() } }
         // Progress goes to standard error whatever the output mode: it never
-        // reaches the JSON document on standard output.
+        // reaches the JSON document on standard output. Cleared however the
+        // command ends, or a failure prints its message onto the half-drawn
+        // line the terminal is still holding.
         let progressPrinter = ProgressPrinter(output: output)
+        defer { progressPrinter.finish() }
+        // Connecting is inside the deadline: waiting for `host.lock`, and for a
+        // host that was just started to answer, is where a cold invocation
+        // spends its time — leaving it outside makes `--timeout` worthless as
+        // the watchdog its help text promises.
         let send: @Sendable () async throws -> CommandResult = {
-            try await client.send(command) { progress in
+            try await client.connect()
+            return try await client.send(command) { progress in
                 progressPrinter.report(progress)
             }
         }
-        let result: CommandResult
         if let timeout = globalOptions.timeout, timeout > 0 {
-            result = try await Timeouts.withTimeout(seconds: timeout, operation: send)
-        } else {
-            result = try await send()
+            return try await Timeouts.withTimeout(seconds: timeout, operation: send)
         }
-        progressPrinter.finish()
-        return result
+        return try await send()
     }
 
     public func emit(_ result: CommandResult) throws {
