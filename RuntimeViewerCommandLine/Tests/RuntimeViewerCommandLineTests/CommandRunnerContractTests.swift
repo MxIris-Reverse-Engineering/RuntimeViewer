@@ -40,21 +40,40 @@ struct CommandRunnerContractTests {
         #expect(elapsed < .seconds(4), "--timeout 1 took \(elapsed): connecting is outside the deadline")
     }
 
-    @Test("Stopping a host prints nothing by itself, so host restart --json stays one document")
-    func stoppingAHostDoesNotPrint() async throws {
+    @Test("--timeout bounds a host that accepts the connection and never greets")
+    func timeoutCoversAGreetinglessHost() async throws {
         let paths = try TemporaryHostDirectory.make()
         defer { TemporaryHostDirectory.remove(paths) }
+        // Accepts, then says nothing. Waiting for the greeting is the one
+        // suspension point in connecting that has no timeout of its own.
+        let host = try RawTestHost(paths: paths) { _, _ in }
+        defer { host.stop() }
+
+        let (runner, _) = try makeRunner(paths: paths, extraArguments: ["--no-spawn", "--timeout", "1"])
+        let started = ContinuousClock.now
+        _ = try? await runner.perform(.hostStatus)
+        let elapsed = ContinuousClock.now - started
+
+        #expect(elapsed < .seconds(4), "--timeout 1 took \(elapsed) against a host that never greets")
+    }
+
+    @Test("host restart --json writes exactly one JSON document")
+    func restartWritesOneDocument() async throws {
+        let paths = try TemporaryHostDirectory.make()
+        defer { TemporaryHostDirectory.remove(paths) }
+        let launcher = InProcessHostLauncher()
+        defer { Task { await launcher.stopAll() } }
         let host = try await InProcessHost.start(paths: paths, resolver: StubSourceResolver())
 
-        let (runner, captured) = try makeRunner(paths: paths, extraArguments: ["--no-spawn", "--json"])
-        let acknowledgement = try await HostReporting.stopRunningHost(runner)
+        let (runner, captured) = try makeRunner(paths: paths, extraArguments: ["--json"], launcher: launcher)
+        try await HostReporting.restart(runner)
 
-        #expect(acknowledgement != nil, "The running host was not stopped")
-        #expect(
-            captured.standardOutput.isEmpty,
-            "stopRunningHost printed on its own; `host restart --json` then emits a second document after it"
-        )
+        let documents = captured.standardOutput
+            .split(separator: "\n", omittingEmptySubsequences: true)
+            .filter { $0.hasPrefix("{") }
+        #expect(documents.count == 1, "stdout carried \(documents.count) documents: \(captured.standardOutput)")
         await host.stop()
+        await launcher.stopAll()
     }
 
     @Test("A command that fails clears the progress line it drew")

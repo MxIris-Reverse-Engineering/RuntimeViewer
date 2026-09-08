@@ -16,13 +16,28 @@ struct ReviewFindingRegressionTests {
         // The host inherits its working directory from whichever client
         // happened to start it, so a relative path means something different
         // there — or nothing at all.
-        let resolved = imageArgument("libExample.dylib", fileExists: { $0 == "libExample.dylib" })
+        let resolved = imageArgument("libExample.dylib", isRegularFile: { $0 == "libExample.dylib" })
         #expect(resolved.hasPrefix("/"), "A file in the caller's directory was passed through for the host to resolve")
     }
 
     @Test("A short name that is not a file in the caller's directory passes through")
     func shortNameStaysAShortName() {
-        #expect(imageArgument("AppKit", fileExists: { _ in false }) == "AppKit")
+        #expect(imageArgument("AppKit", isRegularFile: { _ in false }) == "AppKit")
+    }
+
+    @Test("A directory does not count as a file, so it cannot shadow a framework of the same name")
+    func directoryDoesNotShadowAFramework() throws {
+        // A project holding a `Foundation/` directory is ordinary; treating it
+        // as the image turns `--image Foundation` into an imageLoadFailed.
+        let directory = URL(fileURLWithPath: "/tmp/rvcli-shadow-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        let shadowingDirectory = directory.appendingPathComponent("Foundation", isDirectory: true)
+        try FileManager.default.createDirectory(at: shadowingDirectory, withIntermediateDirectories: true)
+        let regularFile = directory.appendingPathComponent("libExample.dylib")
+        try Data("not really a dylib".utf8).write(to: regularFile)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        #expect(isRegularFile(atPath: shadowingDirectory.path) == false)
+        #expect(isRegularFile(atPath: regularFile.path) == true)
     }
 
     // MARK: - Short-name matching is deterministic

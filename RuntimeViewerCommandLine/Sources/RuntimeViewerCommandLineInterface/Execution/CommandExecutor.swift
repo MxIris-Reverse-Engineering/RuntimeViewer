@@ -345,6 +345,13 @@ public actor CommandExecutor {
 
         do {
             try await exportTask.value
+            // Cancellation that lands after Core's last `checkCancellation` —
+            // during the writing phase, or on an image with few objects — lets
+            // the export finish normally while the event loop above has already
+            // stopped, leaving `completed` nil. Without this the command would
+            // report `exportFailed`, "finished without a result", for what the
+            // caller itself asked to stop.
+            try Task.checkCancellation()
         } catch is CancellationError {
             throw CommandFailure(code: .cancelled, message: "The export of '\(imageName)' was cancelled.")
         } catch {

@@ -41,7 +41,14 @@ public actor LocalSourceResolver: SourceResolving {
             return engine
         }
         if let connectTask {
-            return try await awaitCancellably(connectTask)
+            // Deliberately *not* `awaitCancellably`: the engine connection is a
+            // host-lifetime resource shared by every client, so one command
+            // giving up must not cancel it out from under the others — they
+            // would see their own commands fail as `cancelled` without having
+            // cancelled anything. The cost is that a command waiting on a
+            // connection in progress can overrun its `--timeout` by however
+            // long `connect()` takes.
+            return try await connectTask.value
         }
         let task = Task { [engineID] in
             let engine = RuntimeEngine(source: .local, engineID: engineID)
@@ -50,7 +57,7 @@ public actor LocalSourceResolver: SourceResolving {
         }
         connectTask = task
         do {
-            let engine = try await awaitCancellably(task)
+            let engine = try await task.value
             self.engine = engine
             return engine
         } catch {

@@ -62,18 +62,7 @@ extension RuntimeViewerCommandLineTool.Host {
         public init() {}
 
         public func run() async throws {
-            let runner = CommandRunner(globalOptions: globalOptions)
-            _ = try await HostReporting.stopRunningHost(runner)
-            let client = runner.makeClient(allowsSpawning: true)
-            do {
-                try await client.connect()
-            } catch let error as CommandLineHostClient.ClientError {
-                runner.emit(CommandFailure(code: .internalError, message: error.description))
-                throw ExitCode(error.isUnavailability ? CommandRunner.hostUnavailableExitCode : 1)
-            }
-            defer { Task { await client.disconnect() } }
-            let result = try await HostReporting.perform(.hostStatus, with: client, runner: runner)
-            try runner.emit(result)
+            try await HostReporting.restart(CommandRunner(globalOptions: globalOptions))
         }
     }
 
@@ -134,7 +123,7 @@ enum HostReporting {
 
     static func perform(_ command: Command, with client: CommandLineHostClient, runner: CommandRunner) async throws -> CommandResult {
         do {
-            return try await client.send(command)
+            return try await runner.withOptionalTimeout { try await client.send(command) }
         } catch let failure as CommandFailure {
             runner.emit(failure)
             throw ExitCode(1)
@@ -142,6 +131,26 @@ enum HostReporting {
             runner.emit(CommandFailure(code: .internalError, message: error.description))
             throw ExitCode(error.isUnavailability ? CommandRunner.hostUnavailableExitCode : 1)
         }
+    }
+
+    /// Stops the running host, if any, then starts one and reports its status.
+    ///
+    /// Separate from `Restart.run` so a test can drive it with an in-process
+    /// launcher: the contract worth testing is that standard output carries one
+    /// JSON document, and the acknowledgement of the host that just left is not
+    /// part of it.
+    static func restart(_ runner: CommandRunner) async throws {
+        _ = try await stopRunningHost(runner)
+        let client = runner.makeClient(allowsSpawning: true)
+        do {
+            try await client.connect()
+        } catch let error as CommandLineHostClient.ClientError {
+            runner.emit(CommandFailure(code: .internalError, message: error.description))
+            throw ExitCode(error.isUnavailability ? CommandRunner.hostUnavailableExitCode : 1)
+        }
+        defer { Task { await client.disconnect() } }
+        let result = try await perform(.hostStatus, with: client, runner: runner)
+        try runner.emit(result)
     }
 
     /// Sends a shutdown to a running host and waits for its socket to go away.

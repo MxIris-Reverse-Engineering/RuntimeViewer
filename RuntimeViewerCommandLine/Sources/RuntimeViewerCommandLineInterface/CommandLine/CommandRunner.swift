@@ -23,6 +23,16 @@ public struct CommandRunner: Sendable {
         self.spawnIdleTimeout = spawnIdleTimeout
     }
 
+    /// Runs an operation under `--timeout` when one was given. Every path that
+    /// talks to a host goes through here, so the option means the same thing
+    /// for `host status` as it does for `interface`.
+    func withOptionalTimeout<Value: Sendable>(_ operation: @escaping @Sendable () async throws -> Value) async throws -> Value {
+        guard let timeout = globalOptions.timeout, timeout > 0 else {
+            return try await operation()
+        }
+        return try await Timeouts.withTimeout(seconds: timeout, operation: operation)
+    }
+
     public func makeClient(allowsSpawning: Bool? = nil) -> CommandLineHostClient {
         CommandLineHostClient(
             configuration: CommandLineHostClient.Configuration(
@@ -85,10 +95,7 @@ public struct CommandRunner: Sendable {
                 progressPrinter.report(progress)
             }
         }
-        if let timeout = globalOptions.timeout, timeout > 0 {
-            return try await Timeouts.withTimeout(seconds: timeout, operation: send)
-        }
-        return try await send()
+        return try await withOptionalTimeout(send)
     }
 
     public func emit(_ result: CommandResult) throws {

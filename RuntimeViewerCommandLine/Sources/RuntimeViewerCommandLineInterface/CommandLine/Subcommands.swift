@@ -269,10 +269,16 @@ public struct GenerationOptionsArguments: ParsableArguments, Sendable {
 /// Kept as a one-argument function so it can be handed to `ArgumentParser` as a
 /// `transform`; the seam below is what the tests drive.
 func imageArgument(_ value: String) -> String {
-    imageArgument(value, fileExists: { FileManager.default.fileExists(atPath: $0) })
+    imageArgument(value, isRegularFile: isRegularFile(atPath:))
 }
 
-func imageArgument(_ value: String, fileExists: (String) -> Bool) -> String {
+/// True for a regular file, false for a directory or nothing at all.
+func isRegularFile(atPath path: String) -> Bool {
+    var isDirectory: ObjCBool = false
+    return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && !isDirectory.boolValue
+}
+
+func imageArgument(_ value: String, isRegularFile: (String) -> Bool) -> String {
     if value.hasPrefix("/") || value.hasPrefix("~") || value.hasPrefix(".") || value.contains("/") {
         return GlobalOptions.absolutePath(value)
     }
@@ -280,7 +286,11 @@ func imageArgument(_ value: String, fileExists: (String) -> Bool) -> String {
     // knows what it is relative to: the host's working directory is whatever
     // the client that happened to start it had, so the same command would read
     // a different file — or none — depending on who started the host.
-    if fileExists(value) {
+    //
+    // Directories are excluded on purpose: a project holding a `Foundation/`
+    // or `AppKit/` directory is ordinary, and treating it as the image would
+    // shadow the framework of that name.
+    if isRegularFile(value) {
         return GlobalOptions.absolutePath(value)
     }
     return value
