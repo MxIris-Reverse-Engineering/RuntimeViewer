@@ -78,7 +78,7 @@ let package = Package(
         .package(url: "https://github.com/pointfreeco/swift-dependencies", "1.13.1" ..< "1.16.0"),
         // RuntimeViewerCore pins FrameworkToolbox exactly; a floor here resolves
         // to the same version and keeps working once that pin is lifted.
-        .package(url: "https://github.com/Mx-Iris/FrameworkToolbox", from: "0.9.0"),
+        .package(url: "https://github.com/Mx-Iris/FrameworkToolbox", from: "0.12.0"),
         // Test-only: a controllable clock for the host's idle timer.
         .package(url: "https://github.com/pointfreeco/swift-clocks", from: "1.0.0"),
     ],
