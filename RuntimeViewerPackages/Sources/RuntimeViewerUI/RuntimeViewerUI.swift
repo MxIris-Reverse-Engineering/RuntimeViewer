@@ -5,6 +5,5 @@
 
 #if os(macOS)
 @_exported import RunningApplicationKit
-@_exported import Rearrange
 #endif
 
