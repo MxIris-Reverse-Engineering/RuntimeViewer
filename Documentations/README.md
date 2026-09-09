@@ -95,6 +95,7 @@
 
 按时间倒序。
 
+- [切到 Mac Catalyst 引擎永远 loading](ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md)（2026-09-09）—— helper 与 App 各自连到不同的 helper daemon（Release helper 被嵌进 Debug-arm64e App、helper 从未翻 arm64e 标志、daemon 重装清空登记表），两端又都不报错；App 侧改为握手确认后才展示，daemon 装好即自动重拉，构建时校验 helper 变体。
 - [Sidebar 过滤的大小写开关，意思和图标反着](ResolvedIssues/2026-08-31-sidebar-match-case-toggle-polarity.md)（2026-08-31）—— 按钮叫 "Case Insensitive" 且默认高亮，于是取消高亮反而让搜索更严格；改成通用的 Match Case 极性。
 - [`--update-packages` 从来没更新过 `from:` 依赖](ResolvedIssues/2026-08-31-spm-from-dependencies-never-update.md)（2026-08-31）—— 删了 `Package.resolved`，但 `SourcePackages/workspace-state.json` 把旧版本喂了回来。
 - [折叠一段代码后切换类，SourceEditor 布局时崩溃](ResolvedIssues/2026-08-31-source-editor-stale-folds-crash.md)（2026-08-31）—— 折叠区属于 view 而非 data source，换 data source 不清空它，旧折叠区遇上更短的新行即触发 `Range` 前置条件。

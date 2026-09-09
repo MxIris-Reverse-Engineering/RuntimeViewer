@@ -25,10 +25,24 @@ and a `PBXCopyFilesBuildPhase` referencing that path embeds it.
 | Simulator payload | `RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework` | `Embed RuntimeViewerMobileServer Framework` |
 
 Both staged paths are gitignored. `ArchiveScript.sh` writes the helper there via
-`-exportArchive`; both scripts stage the payload with `ditto`, and clear it when
-its build fails so a stale one is never sealed in. The payload lands in
+`-exportArchive`, `RunScript.sh` with `ditto` from its `Debug-arm64e-maccatalyst`
+product; both scripts stage the payload with `ditto`, and clear it when its
+build fails so a stale one is never sealed in. The payload lands in
 `Contents/Resources/` because `RuntimeInjectClient` finds it with
 `Bundle.main.url(forResource:withExtension:)`, which looks nowhere else.
+
+**The staged helper must come from the same configuration as the app.** The
+helper-daemon mach service name is baked into each binary per configuration
+(`RUNTIME_VIEWER_SERVICE_NAME`: `com.mxiris…` for Release, `dev.mxiris…` for
+Debug, `dev.arm64e.mxiris…` for Debug-arm64e), and the helper's XPC handshake
+goes through that daemon. A Release helper embedded in a Debug-arm64e app asks
+the Release daemon for the app's endpoint, never finds it, and the app's Catalyst
+engine loads forever. The helper's `Info.plist` records the name it was built
+against (`RuntimeViewerServiceName`), and the app's **Verify Catalyst Helper
+Variant** phase fails the build when it differs from the app's — the message
+names both. `RUNTIME_VIEWER_ALLOW_MISMATCHED_CATALYST_HELPER=YES` downgrades it
+to a warning for a build that does not need Catalyst. Background:
+`Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md`.
 
 A plain Xcode GUI build stages neither: it embeds whatever is already at those
 paths, left there by the last script run. So **anything involving simulator
