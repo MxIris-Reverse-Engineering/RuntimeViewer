@@ -46,22 +46,9 @@ final class MainSplitViewController: NSSplitViewController {
             $0.holdingPriority = .init(261)
             $0.titlebarSeparatorStyle = .none
         }
-
-        let autosaveName = "com.JH.RuntimeViewer.\(Self.self).autosaveName"
-
-        let fullAutosaveName = "NSSplitView Subview Frames \(autosaveName)"
-
-        let isInitialSetupAutosaveName = UserDefaults.standard.array(forKey: fullAutosaveName) == nil
-
-        splitView.autosaveName = nil
-        splitView.autosaveName = autosaveName
-
-        DispatchQueue.main.async { [self] in
-            if isInitialSetupAutosaveName {
-                splitView.setPosition(Self.sidebarMinimumWidth, ofDividerAt: 0)
-                splitView.setPosition(view.bounds.width - Self.inspectorMinimumWidth, ofDividerAt: 1)
-            }
-        }
+        
+        splitView.box.restoreDividerPositions(autosaveName: "com.JH.RuntimeViewer.\(Self.self).autosaveName", initialPositions: [.distanceFromStart(Self.sidebarMinimumWidth), .distanceFromEnd(Self.inspectorMinimumWidth)])
+        
     }
 
     func setupBindings(for viewModel: MainViewModel) {
