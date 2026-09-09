@@ -33,6 +33,7 @@
 - **Swift & Objective-C Interfaces** – Generate Swift type interfaces (with type/enum layouts and VTable offsets) alongside Objective-C headers directly from Mach-O binaries
 - **Xcode-Style Syntax Highlighting** – Full AppKit text view with type-defined jumps and rendering identical to Xcode
 - **Customizable Color Themes** – Pick a syntax theme in **Settings → Theme**; duplicate the built-in Xcode preset to edit per-token colors (with bold/italic), the editor background, and selection color. Each theme carries light and dark variants that adapt to the system appearance
+- **Command Line Interface** – `runtime-viewer-cli` answers the same questions from a terminal or a script without opening a window: list images and types, print interfaces, hierarchies, relationships and member addresses, specialize generics and export whole images, as text or JSON. A background host keeps the indexes warm between calls and exits when idle
 - **MCP Integration** *(macOS 15+)* – Let LLM clients (e.g., Claude) inspect runtime information via the Model Context Protocol, with an in-process bridge and a toolbar status indicator
 - **Bonjour Multi-Device Mirroring** – Discover and connect to iOS/macOS devices on the local network; remote engines appear in the toolbar's source switcher grouped by host
 - **Export Interface Wizard** – Xcode-style multi-step wizard for exporting ObjC/Swift interfaces to single or multiple files
@@ -71,6 +72,20 @@ To expose runtime information to an LLM client:
 3. Paste it into your LLM client's MCP configuration
 
 The MCP bridge starts automatically on app launch; check the toolbar status indicator to confirm.
+
+### Command Line Interface
+
+Build the tool from the `RuntimeViewerCommandLine` package and point it at a type:
+
+```bash
+cd RuntimeViewerCommandLine
+swift build -c release --product runtime-viewer-cli
+.build/release/runtime-viewer-cli interface NSView --image AppKit
+.build/release/runtime-viewer-cli types --image Foundation --kind objc-class --json
+.build/release/runtime-viewer-cli export AppKit --output ~/Desktop/AppKit-Interfaces
+```
+
+The first call starts a background host that owns the runtime engine; later calls reuse it, and it exits on its own after ten minutes without work (`host status`, `host stop` and `host restart` manage it). This release inspects the local runtime only; attaching to processes and reaching other devices from the command line are planned. Details, contracts and exit codes: [`Documentations/Guides/CommandLineInterface.md`](Documentations/Guides/CommandLineInterface.md).
 
 ### Connecting to Other Devices
 
