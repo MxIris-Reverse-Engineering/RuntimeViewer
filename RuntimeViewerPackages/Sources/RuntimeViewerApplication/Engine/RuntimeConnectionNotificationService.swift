@@ -48,9 +48,8 @@ public final class RuntimeConnectionNotificationService: NSObject {
                     notifyConnected(source: engine.source)
                 case .hostDisconnected(let source, let error):
                     notifyDisconnected(source: source, error: error)
-                case .catalystHelperUnavailable:
-                    // Logged by the manager; no user-facing notification today.
-                    break
+                case .catalystHelperUnavailable(let error):
+                    notifyCatalystHelperUnavailable(error: error)
                 }
             }
     }
@@ -104,6 +103,21 @@ public final class RuntimeConnectionNotificationService: NSObject {
         }
 
         sendNotification(identifier: "connection.disconnected.\(source.identifier)", content: content)
+    }
+
+    /// Sends a notification when the Mac Catalyst engine could not be brought
+    /// up. Without it the failure is invisible: the engine is simply absent
+    /// from the menu, and before the handshake was confirmed it was worse — an
+    /// entry that loaded forever.
+    public func notifyCatalystHelperUnavailable(error: Error) {
+        @Dependency(\.settings) var settings
+        guard settings.notifications.isEnabled else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Mac Catalyst Runtime Unavailable"
+        content.body = error.localizedDescription
+
+        sendNotification(identifier: "connection.catalystUnavailable", content: content)
     }
 
     // MARK: - Private

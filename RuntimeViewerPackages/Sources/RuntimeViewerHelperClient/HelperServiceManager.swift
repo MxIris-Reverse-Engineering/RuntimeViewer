@@ -1,5 +1,6 @@
 #if os(macOS)
 
+import Combine
 import Foundation
 import FoundationToolbox
 import ServiceManagement
@@ -68,6 +69,24 @@ public final class HelperServiceManager {
     @ObservationIgnored
     private var hasConnectedToTool: Bool = false
 
+    /// See ``daemonAvailabilityPublisher``.
+    @ObservationIgnored
+    private let daemonAvailabilitySubject = PassthroughSubject<Void, Never>()
+
+    /// Fires each time the daemon becomes something worth (re)connecting to:
+    /// after an install or a reinstall completed, and when a status refresh
+    /// finds it enabled where it was not before.
+    ///
+    /// A reinstall matters even though the status reads `.enabled` on both
+    /// sides of it: the daemon process is replaced, and everything it kept in
+    /// memory — the endpoint registry the Mac Catalyst handshake goes through
+    /// in particular — starts empty. Whoever registered with the old process
+    /// has to do it again, which is what `RuntimeEngineManager` listens here
+    /// for.
+    public var daemonAvailabilityPublisher: AnyPublisher<Void, Never> {
+        daemonAvailabilitySubject.eraseToAnyPublisher()
+    }
+
     private init() {
         self.installer = SMAppServiceDaemonInstaller(plistName: Self.helperServicePlistName)
     }
@@ -106,10 +125,12 @@ public final class HelperServiceManager {
     // MARK: - Status Management
 
     public func refreshAllStatus() async {
-        let previousStatus = status
         checkLegacyServiceStatus()
+        // `manageHelperService` already compares against the status it
+        // started from; a second comparison here reported the same transition
+        // twice, and now that a transition relaunches the Catalyst engine,
+        // twice means one more helper killed and relaunched for nothing.
         await manageHelperService(action: .status)
-        logStatusChangeIfNeeded(previousStatus: previousStatus)
     }
 
     public func checkLegacyServiceStatus() {
@@ -197,6 +218,11 @@ public final class HelperServiceManager {
         }
         status = Self.helperServiceDaemon.status
         logStatusChangeIfNeeded(previousStatus: previousStatus)
+        // A reinstall leaves `.enabled` reading `.enabled`, so the transition
+        // check in `logStatusChangeIfNeeded` cannot see it; announce it here.
+        if action == .reinstall, occurredError == nil, status == .enabled {
+            daemonAvailabilitySubject.send()
+        }
     }
 
     /// Unregisters the daemon and registers it again, so a freshly built helper binary takes effect.
@@ -258,6 +284,7 @@ public final class HelperServiceManager {
         let currentStatus = Self.helperServiceDaemon.status
         if currentStatus == .enabled && previousStatus != .enabled {
             #log(.info, "Helper service became enabled")
+            daemonAvailabilitySubject.send()
         }
     }
 
@@ -357,6 +384,9 @@ public final class HelperServiceManager {
 
         status = Self.helperServiceDaemon.status
         updateStatusMessages(occurredError: nil)
+        if status == .enabled {
+            daemonAvailabilitySubject.send()
+        }
         return .reinstalled
     }
 

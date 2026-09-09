@@ -69,6 +69,23 @@ public final class RuntimeEngineManager {
 
     private var bonjourServerEngine: RuntimeEngine?
 
+    /// The Mac Catalyst client engine whose helper has answered, tracked by
+    /// identity so a relaunch replaces exactly this one. `nil` while none is
+    /// up, including for the whole of a launch attempt.
+    private var macCatalystRuntimeEngine: RuntimeEngine?
+
+    /// The launch or relaunch of the Mac Catalyst engine in flight, if any.
+    /// ``relaunchMacCatalystRuntimeEngine()`` cancels and awaits it before
+    /// starting over, so two attempts never race for the helper.
+    private var macCatalystLaunchTask: Task<Void, Never>?
+
+    /// How the Mac Catalyst engine and its helper are brought up; the test seam.
+    private let macCatalystLaunching: MacCatalystLaunching
+
+    /// Subscription to the helper daemon's availability; see
+    /// ``HelperServiceManager/daemonAvailabilityPublisher``.
+    private var daemonAvailabilitySubscription: AnyCancellable?
+
     private var proxyServers: [String: RuntimeEngineProxyServer] = [:]
 
     /// Icon bytes each mirrored engine's descriptor carried, keyed by engine ID.
@@ -189,15 +206,72 @@ public final class RuntimeEngineManager {
         self.init(configuration: configuration, startupHandler: nil)
     }
 
+    /// The pieces of the Mac Catalyst launch that reach outside this process:
+    /// the XPC client engine, the helper application, and how long the helper
+    /// gets to answer. Tests replace them to drive the handshake paths without
+    /// a daemon.
+    struct MacCatalystLaunching {
+        /// Creates the client engine and connects its local half.
+        var makeConnectedEngine: @MainActor () async throws -> RuntimeEngine
+
+        /// Opens a fresh helper instance through the daemon.
+        var launchHelper: @MainActor () async throws -> Void
+
+        /// Ends the running helper, if any, once its engine is torn down.
+        var terminateHelper: @MainActor () async -> Void
+
+        /// How long the helper gets to connect back. It is a cold Catalyst
+        /// app launch plus two XPC round-trips through the daemon, seconds
+        /// rather than milliseconds on a busy machine.
+        var handshakeTimeout: TimeInterval
+
+        static let live = MacCatalystLaunching(
+            makeConnectedEngine: {
+                let runtimeEngine = RuntimeEngine(source: .macCatalystClient)
+                try await runtimeEngine.connect()
+                return runtimeEngine
+            },
+            launchHelper: {
+                @Dependency(\.runtimeHelperClient) var runtimeHelperClient
+                try await runtimeHelperClient.launchMacCatalystHelper()
+            },
+            terminateHelper: {
+                @Dependency(\.runtimeHelperClient) var runtimeHelperClient
+                await runtimeHelperClient.terminateMacCatalystHelper()
+            },
+            handshakeTimeout: 15
+        )
+    }
+
+    /// Why the Mac Catalyst engine was not brought up, beyond the transport
+    /// errors the engine and the helper client throw themselves.
+    public enum MacCatalystHelperError: LocalizedError {
+        /// The helper was launched but never connected back within the
+        /// handshake timeout. The helper reached a daemon that did not hold
+        /// this process's endpoint (a different variant's daemon, or one
+        /// reinstalled after the endpoint was registered), or it never got
+        /// as far as asking.
+        case handshakeTimedOut(TimeInterval)
+
+        public var errorDescription: String? {
+            switch self {
+            case .handshakeTimedOut(let timeout):
+                return "The Mac Catalyst helper did not connect back within \(Int(timeout)) seconds. It may have reached a different helper daemon than this app; reinstalling the helper service from Settings restarts the connection."
+            }
+        }
+    }
+
     /// `startupHandler` is the test seam. When set, every step the
     /// configuration selects is handed to it and nothing is performed, so a
     /// test can assert which steps a configuration maps to without starting
     /// Bonjour or talking to the helper daemon.
     init(
         configuration: RuntimeEngineManagerConfiguration,
-        startupHandler: ((RuntimeEngineManagerConfiguration.StartupStep) -> Void)?
+        startupHandler: ((RuntimeEngineManagerConfiguration.StartupStep) -> Void)?,
+        macCatalystLaunching: MacCatalystLaunching = .live
     ) {
         self.configuration = configuration
+        self.macCatalystLaunching = macCatalystLaunching
         #log(.info,"RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public), configuration: \(String(describing: configuration), privacy: .public)")
 
         let startupSteps = configuration.startupSteps
@@ -229,6 +303,27 @@ public final class RuntimeEngineManager {
         if startupSteps.contains(.engineSharing) {
             startSharingEngines()
         }
+
+        if startupSteps.contains(.systemEngines) {
+            observeDaemonAvailability()
+        }
+    }
+
+    /// Relaunches the Mac Catalyst engine whenever the helper daemon is
+    /// (re)installed or becomes enabled. Two situations need it: the daemon
+    /// was missing at launch, so the engine was never created and nothing
+    /// else would create it until the next launch; and the daemon was
+    /// reinstalled while this process ran, which empties the registry the
+    /// helper looks this process's endpoint up in, so a helper launched
+    /// against the old daemon is waiting on a registration that no longer
+    /// exists.
+    private func observeDaemonAvailability() {
+        daemonAvailabilitySubscription = helperServiceManager.daemonAvailabilityPublisher
+            .sink { [weak self] in
+                guard let self else { return }
+                #log(.info, "Helper daemon became available; relaunching the Mac Catalyst runtime engine")
+                self.relaunchMacCatalystRuntimeEngine()
+            }
     }
 
     private func startBonjourBrowser() {
@@ -419,21 +514,94 @@ public final class RuntimeEngineManager {
         #log(.info,"Appending local runtime engine")
         systemRuntimeEngines.append(.local)
         rebuildSections()
+        // Not awaited: the handshake wait can run to its timeout when the
+        // helper is broken, and injected-process reconnection should not sit
+        // behind it. A relaunch finds the task here and supersedes it.
+        macCatalystLaunchTask = Task { @MainActor in
+            await self.launchMacCatalystRuntimeEngineReportingFailure()
+        }
+    }
+
+    /// Tears the Mac Catalyst engine down, if one is up, and brings it up
+    /// again with a fresh helper. Safe to call while a launch is in flight:
+    /// that launch is cancelled and awaited first.
+    ///
+    /// Does nothing for a configuration that does not launch system engines.
+    public func relaunchMacCatalystRuntimeEngine() {
+        guard configuration.launchesSystemEngines else { return }
+        let previousLaunchTask = macCatalystLaunchTask
+        previousLaunchTask?.cancel()
+        macCatalystLaunchTask = Task { @MainActor in
+            await previousLaunchTask?.value
+            self.terminateMacCatalystRuntimeEngine()
+            await self.macCatalystLaunching.terminateHelper()
+            await self.launchMacCatalystRuntimeEngineReportingFailure()
+        }
+    }
+
+    /// Waits for the launch or relaunch in flight, if any. Test seam: the
+    /// tasks are private so nothing outside can leave the manager half-way
+    /// through a launch.
+    func waitForMacCatalystLaunch() async {
+        await macCatalystLaunchTask?.value
+    }
+
+    /// The Mac Catalyst engine currently up, if any. Test seam.
+    var currentMacCatalystRuntimeEngine: RuntimeEngine? {
+        macCatalystRuntimeEngine
+    }
+
+    private func terminateMacCatalystRuntimeEngine() {
+        guard let runtimeEngine = macCatalystRuntimeEngine else { return }
+        #log(.info, "Tearing down the Mac Catalyst runtime engine before relaunching it")
+        terminateRuntimeEngine(for: runtimeEngine.source)
+        macCatalystRuntimeEngine = nil
+    }
+
+    private func launchMacCatalystRuntimeEngineReportingFailure() async {
         do {
             try await launchMacCatalystRuntimeEngine()
+        } catch is CancellationError {
+            #log(.info, "Mac Catalyst runtime engine launch superseded by a relaunch")
         } catch {
             #log(.error,"Failed to launch the Mac Catalyst runtime engine: \(error, privacy: .public)")
             eventSubject.send(.catalystHelperUnavailable(error))
         }
     }
 
+    /// Brings the Mac Catalyst engine up and only then makes it visible.
+    ///
+    /// `RuntimeEngine.connect()` on a client source reports `.connected` as
+    /// soon as its own listener is registered with the daemon; it does not
+    /// wait for the helper. The helper connects back through the daemon it
+    /// resolves on *its* side, and when that is not the daemon this process
+    /// registered with — the helper belongs to another build variant, or the
+    /// daemon was replaced in between — it fails quietly and the engine would
+    /// sit in the menu with nothing behind it, loading forever. So the engine
+    /// is probed until the helper answers, bounded by
+    /// ``MacCatalystLaunching/handshakeTimeout``, and appended only after that.
+    /// The attach flow does the same for injected processes with
+    /// ``confirmAttachedRuntimeEngineConnected(name:identifier:isSandbox:timeout:)``.
     private func launchMacCatalystRuntimeEngine() async throws {
         #log(.info,"Creating Mac Catalyst client runtime engine...")
-        let macCatalystClientEngine = RuntimeEngine(source: .macCatalystClient)
-        try await macCatalystClientEngine.connect()
-        #log(.info,"Mac Catalyst client engine connected, launching helper...")
-        try await runtimeHelperClient.launchMacCatalystHelper()
-        #log(.info,"Mac Catalyst helper launched successfully")
+        let macCatalystClientEngine = try await macCatalystLaunching.makeConnectedEngine()
+        do {
+            try Task.checkCancellation()
+            #log(.info,"Mac Catalyst client engine connected, launching helper...")
+            try await macCatalystLaunching.launchHelper()
+            let timeout = macCatalystLaunching.handshakeTimeout
+            #log(.info,"Mac Catalyst helper launched, waiting up to \(timeout, privacy: .public)s for it to connect back")
+            guard await Self.pollUntilPeerAnswers(engine: macCatalystClientEngine, timeout: timeout) else {
+                try Task.checkCancellation()
+                throw MacCatalystHelperError.handshakeTimedOut(timeout)
+            }
+            try Task.checkCancellation()
+        } catch {
+            await macCatalystClientEngine.stop()
+            throw error
+        }
+        #log(.info,"Mac Catalyst helper connected back")
+        macCatalystRuntimeEngine = macCatalystClientEngine
         systemRuntimeEngines.append(macCatalystClientEngine)
         observeRuntimeEngineState(macCatalystClientEngine)
         rebuildSections()
@@ -486,6 +654,9 @@ public final class RuntimeEngineManager {
             removeInjectedSocketEndpointRecord(pid: pid)
         }
         let removedEngines = runtimeEngines.filter { $0.source == source }
+        if let macCatalystRuntimeEngine, removedEngines.contains(where: { $0 === macCatalystRuntimeEngine }) {
+            self.macCatalystRuntimeEngine = nil
+        }
         for engine in removedEngines {
             remoteIconDataByEngineID.removeValue(forKey: engine.engineID)
             stopBonjourHeartbeat(for: engine)
@@ -727,10 +898,16 @@ public final class RuntimeEngineManager {
             continuation.yield(false)
         }
 
+        // Cancellation of the calling task ends the poll at once with a
+        // negative answer, so a relaunch does not wait out the deadline.
         var didConnect = false
-        for await value in stream {
-            didConnect = value
-            break
+        await withTaskCancellationHandler {
+            for await value in stream {
+                didConnect = value
+                break
+            }
+        } onCancel: {
+            continuation.yield(false)
         }
         probeTask.cancel()
         deadlineTask.cancel()

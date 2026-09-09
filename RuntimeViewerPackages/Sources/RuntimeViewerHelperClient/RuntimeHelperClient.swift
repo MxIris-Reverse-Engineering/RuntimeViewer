@@ -1,5 +1,6 @@
 #if os(macOS)
 
+import AppKit
 import Foundation
 import FoundationToolbox
 import HelperCommunication
@@ -64,15 +65,68 @@ public final class RuntimeHelperClient: @unchecked Sendable {
         await helperServiceManager.reconnect()
     }
 
+    /// Launches a fresh instance of the Mac Catalyst helper through the daemon.
+    ///
+    /// Any instance already running from the same bundle is ended first. The
+    /// daemon opens the helper with `createsNewApplicationInstance = false`,
+    /// so with an instance still alive the request returns *that* process,
+    /// which registered against whatever daemon and endpoint existed when it
+    /// started and never handshakes again — the app then owns a Catalyst
+    /// engine nothing will ever answer.
     public func launchMacCatalystHelper() async throws {
         guard let helperURL = runtimeResourceLocator.catalystHelperApplicationURL else {
             throw Error.catalystHelperNotFound
         }
+        await terminateMacCatalystHelper(at: helperURL)
         let callerPID = ProcessInfo.processInfo.processIdentifier
         try await helperServiceManager.ensureConnectedToTool()
         try await helperServiceManager.helperClient.sendToTool(
             request: OpenApplicationRequest(url: helperURL, callerPID: callerPID)
         )
+    }
+
+    /// Ends every running instance of this bundle's Mac Catalyst helper and
+    /// waits, bounded by ``helperTerminationTimeout``, for them to exit.
+    ///
+    /// Matched by bundle URL, not bundle identifier: the Debug, Debug-arm64e
+    /// and Release apps each carry their own helper under the same identifier,
+    /// and one app must not kill another's.
+    public func terminateMacCatalystHelper() async {
+        guard let helperURL = runtimeResourceLocator.catalystHelperApplicationURL else { return }
+        await terminateMacCatalystHelper(at: helperURL)
+    }
+
+    /// How long ``terminateMacCatalystHelper()`` waits for a helper to exit
+    /// before giving up on it. A helper that ignores `terminate()` is
+    /// force-terminated at the halfway mark.
+    static let helperTerminationTimeout: TimeInterval = 3
+
+    private func terminateMacCatalystHelper(at helperURL: URL) async {
+        let helperPath = helperURL.standardizedFileURL.path
+        let runningHelpers = NSWorkspace.shared.runningApplications.filter { application in
+            application.bundleURL?.standardizedFileURL.path == helperPath && !application.isTerminated
+        }
+        guard !runningHelpers.isEmpty else { return }
+        #log(.info, "Ending \(runningHelpers.count, privacy: .public) running Mac Catalyst helper instance(s) before launching a fresh one")
+        for helper in runningHelpers {
+            helper.terminate()
+        }
+        let pollInterval: TimeInterval = 0.1
+        let deadline = Date().addingTimeInterval(Self.helperTerminationTimeout)
+        let forceDeadline = Date().addingTimeInterval(Self.helperTerminationTimeout / 2)
+        var didForce = false
+        while runningHelpers.contains(where: { !$0.isTerminated }), Date() < deadline {
+            if !didForce, Date() >= forceDeadline {
+                didForce = true
+                for helper in runningHelpers where !helper.isTerminated {
+                    helper.forceTerminate()
+                }
+            }
+            try? await Task.sleep(for: .seconds(pollInterval))
+        }
+        if runningHelpers.contains(where: { !$0.isTerminated }) {
+            #log(.error, "A Mac Catalyst helper instance did not exit within \(Self.helperTerminationTimeout, privacy: .public)s; the launch request may return it instead of a fresh instance")
+        }
     }
 }
 
