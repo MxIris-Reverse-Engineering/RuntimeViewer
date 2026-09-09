@@ -37,6 +37,15 @@ BUILD_NUMBER="$(date +"%Y%m%d.%H.%M")"
 # shell script.
 MOBILE_SERVER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerMobileServer.framework"
 
+# Where the app's "Embed Catalyst Helpers" copy phase expects the Mac Catalyst
+# helper. ArchiveScript.sh exports its Release helper here; this script has to
+# stage the helper it just built in the same place, or the Debug-arm64e app
+# embeds whatever the last archive left behind. A Release helper resolves the
+# helper-daemon name to the Release daemon, never finds the Debug-arm64e app's
+# endpoint, and the app's Catalyst engine loads forever — see
+# Documentations/ResolvedIssues/2026-09-09-catalyst-helper-wrong-daemon.md.
+CATALYST_HELPER_STAGED_PATH="$PROJECT_DIR/RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app"
+
 # DerivedData prefers the dedicated /Volumes/DerivedData cache volume so the
 # SwiftPM checkouts under DerivedData/SourcePackages stay OUT of the project
 # tree (otherwise git clients like Fork index them). Falls back to a
@@ -227,6 +236,18 @@ XCODEBUILD_LOG_NAME="build-catalyst-helper" run_piped xcodebuild build \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
+
+# Stage the helper this configuration produced where the copy phase looks. The
+# helper is required, so unlike the simulator payload below a missing product
+# is fatal rather than a warning.
+CATALYST_HELPER_PRODUCT_PATH="$DERIVED_DATA/Build/Products/${CONFIGURATION}-maccatalyst/RuntimeViewerCatalystHelper.app"
+if $DRY_RUN || [[ -d "$CATALYST_HELPER_PRODUCT_PATH" ]]; then
+    run rm -rf "$CATALYST_HELPER_STAGED_PATH"
+    run ditto "$CATALYST_HELPER_PRODUCT_PATH" "$CATALYST_HELPER_STAGED_PATH"
+    log "Staged Catalyst helper at $CATALYST_HELPER_STAGED_PATH"
+else
+    fail "expected the Catalyst helper at $CATALYST_HELPER_PRODUCT_PATH"
+fi
 
 # The iOS Simulator injection payload, built before the app and staged at
 # $MOBILE_SERVER_STAGED_PATH — the fixed path referenced by the app's "Embed

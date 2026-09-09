@@ -427,6 +427,7 @@
 				E9CAFE010000000000000022 /* Embed RuntimeViewerMobileServer Framework */,
 				E9CAFE010000000000000001 /* Generate LaunchDaemon plist */,
 				E9C9E9CC2C2D0F1B00C4AA34 /* Embed LaunchServices */,
+				E9CAFE010000000000000031 /* Verify Catalyst Helper Variant */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Catalyst Helpers */,
 				E95ED17E0000000000000005 /* Embed SourceEditor Bridge */,
 			);
@@ -678,6 +679,26 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		E9CAFE010000000000000031 /* Verify Catalyst Helper Variant */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/RuntimeViewerCatalystHelper.app/Contents/Info.plist",
+			);
+			name = "Verify Catalyst Helper Variant";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nHELPER=\"${SRCROOT}/RuntimeViewerCatalystHelper.app\"\nPLIST=\"${HELPER}/Contents/Info.plist\"\nif [ ! -f \"${PLIST}\" ]; then\n  echo \"error: No Catalyst helper is staged at ${HELPER}. The Xcode GUI does not build it: run ./RunScript.sh (Debug-arm64e) or ./ArchiveScript.sh (Release) once, which builds the helper and stages it there.\"\n  exit 1\nfi\nSTAGED_NAME=$(/usr/libexec/PlistBuddy -c 'Print :RuntimeViewerServiceName' \"${PLIST}\" 2>/dev/null || true)\nif [ \"${STAGED_NAME}\" != \"${RUNTIME_VIEWER_SERVICE_NAME}\" ]; then\n  MESSAGE=\"The staged Catalyst helper targets helper daemon '${STAGED_NAME:-<unknown, predates the RuntimeViewerServiceName key>}' but this ${CONFIGURATION} build uses '${RUNTIME_VIEWER_SERVICE_NAME}'. A helper on another daemon never finds this app's endpoint, and the Catalyst engine would load forever. Re-stage it: ./RunScript.sh for Debug-arm64e, ./ArchiveScript.sh for Release, or ditto the ${CONFIGURATION}-maccatalyst product over ${HELPER}.\"\n  if [ \"${RUNTIME_VIEWER_ALLOW_MISMATCHED_CATALYST_HELPER:-NO}\" = \"YES\" ]; then\n    echo \"warning: ${MESSAGE}\"\n  else\n    echo \"error: ${MESSAGE} (Set RUNTIME_VIEWER_ALLOW_MISMATCHED_CATALYST_HELPER=YES to embed it anyway.)\"\n    exit 1\n  fi\nelse\n  echo \"Staged Catalyst helper targets ${STAGED_NAME}, matching this build\"\nfi\n";
+		};
 		E9CAFE010000000000000001 /* Generate LaunchDaemon plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -1043,6 +1064,7 @@
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_DEBUG_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUNTIME_VIEWER_SERVICE_NAME = dev.mxiris.runtimeviewer.service;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
@@ -1089,6 +1111,7 @@
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUNTIME_VIEWER_SERVICE_NAME = com.mxiris.runtimeviewer.service;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
@@ -1463,6 +1486,7 @@
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_CATALYST_HELPER_DEBUG_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				RUNTIME_VIEWER_SERVICE_NAME = dev.arm64e.mxiris.runtimeviewer.service;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
 				SUPPORTED_PLATFORMS = "iphonesimulator iphoneos";
