@@ -1,5 +1,5 @@
 #if os(macOS)
-import AppKit
+import Combine
 import Foundation
 import FoundationToolbox
 import OrderedCollections
@@ -8,14 +8,23 @@ import Dependencies
 import DependenciesMacros
 import RuntimeViewerCore
 import RuntimeViewerCommunication
-import RuntimeViewerArchitectures
 import RuntimeViewerHelperClient
 import RuntimeViewerCatalystExtensions
 
+/// Discovers, connects, groups and shares runtime engines for one process.
+///
+/// Links no UI framework on purpose: icons, Rx bridging and user notifications
+/// are layered on by `RuntimeViewerApplication`, so a headless process can own
+/// an instance of this type alone. Which responsibilities an instance takes on
+/// is fixed by its ``RuntimeEngineManagerConfiguration``; the app uses
+/// `.application`, a windowless host `.headlessHost`.
 @Loggable
 @MainActor
 public final class RuntimeEngineManager {
-    fileprivate static let shared = RuntimeEngineManager()
+    fileprivate static let shared = RuntimeEngineManager(configuration: .application)
+
+    /// What this instance was told to bring up. Fixed at construction.
+    public let configuration: RuntimeEngineManagerConfiguration
 
     // MARK: - Published State
 
@@ -62,8 +71,18 @@ public final class RuntimeEngineManager {
 
     private var proxyServers: [String: RuntimeEngineProxyServer] = [:]
 
-    /// Cache for engine icons keyed by engine ID.
-    private var engineIconCache: [String: NSImage] = [:]
+    /// Icon bytes each mirrored engine's descriptor carried, keyed by engine ID.
+    /// Kept as data: decoding an image is the app layer's job, reached through
+    /// ``remoteIconData(for:)``.
+    private var remoteIconDataByEngineID: [String: Data] = [:]
+
+    /// Connection-level events for whoever sits above the manager; see
+    /// ``eventPublisher``. Not replayed: a subscriber only hears what happens
+    /// after it subscribes.
+    private let eventSubject = PassthroughSubject<RuntimeEngineManagerEvent, Never>()
+
+    /// Subscriptions that live as long as the manager (engine sharing).
+    private var cancellables: Set<AnyCancellable> = []
 
     /// Bonjour client engines whose remotes don't support engine sharing
     /// (returned 0 descriptors). These are shown directly in the Toolbar
@@ -86,9 +105,9 @@ public final class RuntimeEngineManager {
     /// calling `stop()` on it. Without that ordering, `stop()`'s `.disconnected`
     /// emission would re-enter `terminateRuntimeEngine` and double-fire the
     /// disconnect notification. It also stops the observations from leaking —
-    /// previously one subscription per engine accumulated in the shared
-    /// disposeBag and was never released.
-    private var stateObservationTokens: [ObjectIdentifier: Disposable] = [:]
+    /// previously one subscription per engine accumulated in a shared
+    /// bag and was never released.
+    private var stateObservationTokens: [ObjectIdentifier: AnyCancellable] = [:]
 
     private static let bonjourHeartbeatInterval: UInt64 = 30_000_000_000 // 30 seconds
     /// 15 s tolerates AWDL congestion: when a remote peer (especially a
@@ -118,9 +137,6 @@ public final class RuntimeEngineManager {
 
     @Dependency(\.helperServiceManager)
     private var helperServiceManager
-
-    @Dependency(\.runtimeConnectionNotificationService)
-    private var runtimeConnectionNotificationService
 
     @Dependency(\.runtimeHelperClient)
     private var runtimeHelperClient
@@ -169,14 +185,53 @@ public final class RuntimeEngineManager {
 
     // MARK: - Initialization
 
-    private init() {
-        #log(.info,"RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public)")
+    public convenience init(configuration: RuntimeEngineManagerConfiguration) {
+        self.init(configuration: configuration, startupHandler: nil)
+    }
+
+    /// `startupHandler` is the test seam. When set, every step the
+    /// configuration selects is handed to it and nothing is performed, so a
+    /// test can assert which steps a configuration maps to without starting
+    /// Bonjour or talking to the helper daemon.
+    init(
+        configuration: RuntimeEngineManagerConfiguration,
+        startupHandler: ((RuntimeEngineManagerConfiguration.StartupStep) -> Void)?
+    ) {
+        self.configuration = configuration
+        #log(.info,"RuntimeEngineManager initializing, local instance ID: \(RuntimeNetworkBonjour.localInstanceID, privacy: .public), configuration: \(String(describing: configuration), privacy: .public)")
+
+        let startupSteps = configuration.startupSteps
+        if let startupHandler {
+            startupSteps.forEach(startupHandler)
+            return
+        }
 
         // Start Bonjour server BEFORE browser so the local service's TXT record
         // (containing localInstanceID) is registered with the Bonjour daemon
         // by the time the browser discovers it.
-        startBonjourServer()
+        if startupSteps.contains(.bonjourServer) {
+            startBonjourServer()
+        }
 
+        startBonjourBrowser()
+
+        Task { @MainActor in
+            if startupSteps.contains(.systemEngines) {
+                #log(.info,"Launching system runtime engines...")
+                await self.launchSystemRuntimeEngines()
+                #log(.info,"System runtime engines launched")
+            }
+            if startupSteps.contains(.injectedEngineReconnection) {
+                await self.reconnectInjectedEngines()
+            }
+        }
+
+        if startupSteps.contains(.engineSharing) {
+            startSharingEngines()
+        }
+    }
+
+    private func startBonjourBrowser() {
         browser.start(
             onAdded: { [weak self] endpoint in
                 guard let self else { return }
@@ -201,18 +256,6 @@ public final class RuntimeEngineManager {
                 _ = self
             }
         )
-
-        Task { @MainActor in
-            do {
-                #log(.info,"Launching system runtime engines...")
-                try await self.launchSystemRuntimeEngines()
-                #log(.info,"System runtime engines launched successfully")
-            } catch {
-                #log(.error,"Failed to launch system runtime engines with error: \(error, privacy: .public)")
-            }
-        }
-
-        startSharingEngines()
     }
 
     private func startBonjourServer() {
@@ -347,17 +390,44 @@ public final class RuntimeEngineManager {
         rebuildSections()
     }
 
+    // MARK: - Events
+
+    /// Connection-level events, delivered on the main actor. The app turns them
+    /// into user notifications; a headless host may log or ignore them.
+    ///
+    /// Nothing is replayed, so subscribe before the first engine can connect.
+    /// The app does this in `applicationDidFinishLaunching`, which runs before
+    /// the run loop gets to any of the connection tasks `init` scheduled.
+    public var eventPublisher: AnyPublisher<RuntimeEngineManagerEvent, Never> {
+        eventSubject.eraseToAnyPublisher()
+    }
+
     // MARK: - Engine Lifecycle
 
     public var runtimeEngines: [RuntimeEngine] {
         systemRuntimeEngines + attachedRuntimeEngines + bonjourRuntimeEngines + mirroredEngines.values.elements
     }
 
-    public func launchSystemRuntimeEngines() async throws {
+    /// `.local` cannot fail; the Mac Catalyst engine is best effort.
+    ///
+    /// The two used to share one `throws` path, so a Catalyst helper that would
+    /// not launch also skipped the reconnection of injected processes that ran
+    /// after it. Now the failure is logged, reported as
+    /// ``RuntimeEngineManagerEvent/catalystHelperUnavailable(_:)``, and nothing
+    /// else is held up by it.
+    private func launchSystemRuntimeEngines() async {
         #log(.info,"Appending local runtime engine")
         systemRuntimeEngines.append(.local)
         rebuildSections()
-        #if os(macOS)
+        do {
+            try await launchMacCatalystRuntimeEngine()
+        } catch {
+            #log(.error,"Failed to launch the Mac Catalyst runtime engine: \(error, privacy: .public)")
+            eventSubject.send(.catalystHelperUnavailable(error))
+        }
+    }
+
+    private func launchMacCatalystRuntimeEngine() async throws {
         #log(.info,"Creating Mac Catalyst client runtime engine...")
         let macCatalystClientEngine = RuntimeEngine(source: .macCatalystClient)
         try await macCatalystClientEngine.connect()
@@ -367,12 +437,18 @@ public final class RuntimeEngineManager {
         systemRuntimeEngines.append(macCatalystClientEngine)
         observeRuntimeEngineState(macCatalystClientEngine)
         rebuildSections()
-        #endif
+    }
+
+    private func reconnectInjectedEngines() async {
         await reconnectInjectedXPCEngines()
         await reconnectInjectedSocketEngines()
     }
 
-    public func launchAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) async throws {
+    /// Brings up the local half of the transport an injected Mac process will
+    /// connect back to, and returns the engine so the caller can confirm the
+    /// handshake with ``confirmAttachedRuntimeEngineConnected(name:identifier:isSandbox:timeout:)``.
+    @discardableResult
+    public func launchAttachedRuntimeEngine(name: String, identifier: String, isSandbox: Bool) async throws -> RuntimeEngine {
         let runtimeSource = if isSandbox {
             RuntimeSource.localSocket(name: name, identifier: .init(rawValue: identifier), role: .client)
         } else {
@@ -385,12 +461,12 @@ public final class RuntimeEngineManager {
         #log(.info,"Attached runtime engine connected: \(name, privacy: .public)")
         attachedRuntimeEngines.append(runtimeEngine)
         observeRuntimeEngineState(runtimeEngine)
-        cacheLocalAppIcon(for: runtimeEngine, processIdentifier: identifier)
 
         if isSandbox, let pid = Int32(identifier) {
             addInjectedSocketEndpointRecord(pid: pid, appName: name)
         }
         rebuildSections()
+        return runtimeEngine
     }
 
     public func terminateRuntimeEngine(for source: RuntimeSource) {
@@ -411,12 +487,12 @@ public final class RuntimeEngineManager {
         }
         let removedEngines = runtimeEngines.filter { $0.source == source }
         for engine in removedEngines {
-            engineIconCache.removeValue(forKey: engine.engineID)
+            remoteIconDataByEngineID.removeValue(forKey: engine.engineID)
             stopBonjourHeartbeat(for: engine)
             // Cancel the engine's state observation before `stop()` runs below,
             // so the `.disconnected` it emits can't re-enter this method or
             // double-fire a disconnect notification.
-            stateObservationTokens.removeValue(forKey: ObjectIdentifier(engine))?.dispose()
+            stateObservationTokens.removeValue(forKey: ObjectIdentifier(engine))?.cancel()
         }
         systemRuntimeEngines.removeAll { $0.source == source }
         attachedRuntimeEngines.removeAll { $0.source == source }
@@ -541,19 +617,22 @@ public final class RuntimeEngineManager {
     /// that was injected — but a pid namespace is per device, so the pid alone
     /// does not identify the advertisement. The endpoint key is
     /// `{deviceID}-{pid}` and both halves are required.
+    ///
+    /// Returns the engine once it has connected.
+    @discardableResult
     public func awaitInjectedBonjourEngine(
         name: String,
         deviceID: String,
         processIdentifier: pid_t,
         timeout: TimeInterval = 30
-    ) async throws {
+    ) async throws -> RuntimeEngine {
         #log(.info, "Waiting for injected Bonjour engine: \(name, privacy: .public) (pid: \(processIdentifier, privacy: .public), timeout: \(timeout, privacy: .public)s)")
 
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) != nil {
+            if let runtimeEngine = injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) {
                 #log(.info, "Injected Bonjour engine appeared for \(name, privacy: .public)")
-                return
+                return runtimeEngine
             }
             // `try`, not `try?`. Swallowing the cancellation error would turn
             // this into a main-actor spin: `Task.sleep` throws immediately once
@@ -567,9 +646,9 @@ public final class RuntimeEngineManager {
         // One last look: the engine may have arrived while the final sleep was
         // in flight, and reporting a timeout for a connection that exists would
         // tear down a perfectly good engine.
-        if injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) != nil {
+        if let runtimeEngine = injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) {
             #log(.info, "Injected Bonjour engine appeared for \(name, privacy: .public) on the final check")
-            return
+            return runtimeEngine
         }
 
         #log(.error, "Injected Bonjour engine never advertised for \(name, privacy: .public) within \(timeout, privacy: .public)s")
@@ -578,7 +657,7 @@ public final class RuntimeEngineManager {
 
     /// The Bonjour engine belonging to `processIdentifier` on `deviceID`, if it
     /// has connected.
-    private func injectedBonjourEngine(deviceID: String, processIdentifier: pid_t) -> RuntimeEngine? {
+    func injectedBonjourEngine(deviceID: String, processIdentifier: pid_t) -> RuntimeEngine? {
         let clientIdentifiers = bonjourRuntimeEngines.compactMap { runtimeEngine -> (identifier: String, engine: RuntimeEngine)? in
             guard case .bonjour(_, let identifier, let role) = runtimeEngine.source, role.isClient else {
                 return nil
@@ -684,7 +763,6 @@ public final class RuntimeEngineManager {
                     #log(.info, "Reconnected to injected app: \(injectedEndpointInfo.appName, privacy: .public) (PID: \(injectedEndpointInfo.pid))")
                     attachedRuntimeEngines.append(runtimeEngine)
                     observeRuntimeEngineState(runtimeEngine)
-                    cacheLocalAppIcon(for: runtimeEngine, processIdentifier: "\(injectedEndpointInfo.pid)")
                 } catch {
                     #log(.error, "Failed to reconnect to injected app \(injectedEndpointInfo.appName, privacy: .public) (PID: \(injectedEndpointInfo.pid)): \(error, privacy: .public)")
                     // Clean up stale endpoint
@@ -728,7 +806,6 @@ public final class RuntimeEngineManager {
                 Self.logger.info("Reconnected to injected sandboxed app: \(record.appName, privacy: .public) (PID: \(record.pid))")
                 attachedRuntimeEngines.append(runtimeEngine)
                 observeRuntimeEngineState(runtimeEngine)
-                cacheLocalAppIcon(for: runtimeEngine, processIdentifier: "\(record.pid)")
                 aliveRecords.append(record)
             } catch {
                 Self.logger.error("Failed to reconnect to injected sandboxed app \(record.appName, privacy: .public) (PID: \(record.pid)): \(error, privacy: .public)")
@@ -743,51 +820,60 @@ public final class RuntimeEngineManager {
     // MARK: - State Observation
 
     private func observeRuntimeEngineState(_ runtimeEngine: RuntimeEngine) {
-        let stateObservationToken = runtimeEngine.statePublisher.asObservable()
-            .subscribeOnNextMainActor { [weak self, weak runtimeEngine] state in
-                guard let self, let runtimeEngine else { return }
-                switch state {
-                case .initializing:
-                    #log(.info,"Initializing runtime engine: \(runtimeEngine.source.description, privacy: .public)")
-                case .connecting:
-                    #log(.info,"Connecting to runtime engine: \(runtimeEngine.source.description, privacy: .public)")
-                case .connected:
-                    #log(.info,"Connected to runtime engine: \(runtimeEngine.source.description, privacy: .public)")
-                    runtimeConnectionNotificationService.notifyConnected(source: runtimeEngine.source)
-                case .disconnected(error: let error):
-                    if let error {
-                        #log(.error,"Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public) with error: \(error, privacy: .public)")
-                    } else {
-                        #log(.info,"Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public)")
-                    }
-
-                    let disconnectedHostID = runtimeEngine.hostInfo.hostID
-                    let disconnectedSource = runtimeEngine.source
-
-                    self.cleanupMirroredEnginesOnDisconnect(of: runtimeEngine)
-
-                    terminateRuntimeEngine(for: runtimeEngine.source)
-
-                    // Only notify if the host has fully vanished from the
-                    // sidebar. A direct Bonjour engine can drop while a
-                    // forwarded mirror of the same peer (received via a
-                    // third-party Mac) keeps the host visible — firing a
-                    // "disconnected" notification then would contradict
-                    // what the user sees on screen.
-                    let stillReachable = self.runtimeEngineSections.contains { $0.hostID == disconnectedHostID }
-                    if !stillReachable {
-                        runtimeConnectionNotificationService.notifyDisconnected(source: disconnectedSource, error: error)
-                    }
-                default:
-                    break
+        // Each state hops to the main actor through its own `Task`, the way the
+        // RxSwiftPlus `subscribeOnNextMainActor` this replaced did. The state
+        // publisher emits from the engine's executor, and the hop is what keeps
+        // every mutation below on the main actor.
+        let stateObservationToken = runtimeEngine.statePublisher
+            .sink { [weak self, weak runtimeEngine] state in
+                Task { @MainActor [weak self, weak runtimeEngine] in
+                    guard let self, let runtimeEngine else { return }
+                    self.handleStateChange(state, of: runtimeEngine)
                 }
             }
         // Keep the token per engine so `terminateRuntimeEngine` can cancel this
         // observation *before* it calls `stop()` on the engine — otherwise the
         // `.disconnected` that `stop()` emits re-enters termination and
         // double-fires the disconnect notification.
-        stateObservationTokens[ObjectIdentifier(runtimeEngine)]?.dispose()
+        stateObservationTokens[ObjectIdentifier(runtimeEngine)]?.cancel()
         stateObservationTokens[ObjectIdentifier(runtimeEngine)] = stateObservationToken
+    }
+
+    private func handleStateChange(_ state: RuntimeEngine.State, of runtimeEngine: RuntimeEngine) {
+        switch state {
+        case .initializing:
+            #log(.info,"Initializing runtime engine: \(runtimeEngine.source.description, privacy: .public)")
+        case .connecting:
+            #log(.info,"Connecting to runtime engine: \(runtimeEngine.source.description, privacy: .public)")
+        case .connected:
+            #log(.info,"Connected to runtime engine: \(runtimeEngine.source.description, privacy: .public)")
+            eventSubject.send(.engineConnected(runtimeEngine))
+        case .disconnected(error: let error):
+            if let error {
+                #log(.error,"Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public) with error: \(error, privacy: .public)")
+            } else {
+                #log(.info,"Disconnected from runtime engine: \(runtimeEngine.source.description, privacy: .public)")
+            }
+
+            let disconnectedHostID = runtimeEngine.hostInfo.hostID
+            let disconnectedSource = runtimeEngine.source
+
+            cleanupMirroredEnginesOnDisconnect(of: runtimeEngine)
+
+            terminateRuntimeEngine(for: runtimeEngine.source)
+
+            // Only report the host as gone if it has fully vanished from the
+            // sidebar. A direct Bonjour engine can drop while a forwarded
+            // mirror of the same peer (received via a third-party Mac) keeps
+            // the host visible — a "disconnected" notification then would
+            // contradict what the user sees on screen.
+            let stillReachable = runtimeEngineSections.contains { $0.hostID == disconnectedHostID }
+            if !stillReachable {
+                eventSubject.send(.hostDisconnected(source: disconnectedSource, error: error))
+            }
+        default:
+            break
+        }
     }
 
     /// Cleans up mirrored engines affected by a given engine's disconnect.
@@ -820,7 +906,7 @@ public final class RuntimeEngineManager {
             for removal in ownMirrorRemovals {
                 let stopped = removal.engine
                 Task { @MainActor in await stopped.stop() }
-                engineIconCache.removeValue(forKey: removal.engineID)
+                remoteIconDataByEngineID.removeValue(forKey: removal.engineID)
             }
             mirroredEngines = mirrorRegistry.engines
             return
@@ -840,7 +926,7 @@ public final class RuntimeEngineManager {
         for removal in allRemovals {
             let stopped = removal.engine
             Task { @MainActor in await stopped.stop() }
-            engineIconCache.removeValue(forKey: removal.engineID)
+            remoteIconDataByEngineID.removeValue(forKey: removal.engineID)
         }
         if !allRemovals.isEmpty {
             mirroredEngines = mirrorRegistry.engines
@@ -883,21 +969,15 @@ public final class RuntimeEngineManager {
         bonjourHeartbeatTasks.removeValue(forKey: key)?.cancel()
     }
 
-    // MARK: - Icon Management
+    // MARK: - Remote Icons
 
-    private func cacheLocalAppIcon(for engine: RuntimeEngine, processIdentifier pidString: String) {
-        guard let pid = Int32(pidString) else { return }
-        let app = NSRunningApplication(processIdentifier: pid)
-        if let icon = app?.icon {
-            engineIconCache[engine.engineID] = icon
-        } else if let bundleURL = app?.bundleURL {
-            engineIconCache[engine.engineID] = NSWorkspace.shared.icon(forFile: bundleURL.path)
-        }
-    }
-
-    /// Returns the cached icon for a given engine, or nil if not yet available.
-    public func cachedIcon(for engine: RuntimeEngine) -> NSImage? {
-        engineIconCache[engine.engineID]
+    /// The icon bytes a mirrored engine's descriptor carried, or `nil`.
+    ///
+    /// Local engines never have an entry here: their icon comes from the
+    /// running process, which is Launch Services territory and therefore the
+    /// app layer's to resolve (`RuntimeEngineIconProvider`).
+    public func remoteIconData(for engine: RuntimeEngine) -> Data? {
+        remoteIconDataByEngineID[engine.engineID]
     }
 
     // MARK: - Engine Sharing (Server-Side)
@@ -954,29 +1034,35 @@ public final class RuntimeEngineManager {
             }
         }
 
-        rx.runtimeEngines
-            .driveOnNext { [weak self] engines in
+        // Delivered synchronously from each `@Published` `willSet`, on the main
+        // actor, which is where every mutation of these four collections
+        // happens. The `Driver` this replaced behaved the same way on the main
+        // thread; the emitted array is used rather than the stored properties
+        // because `willSet` runs before the property changes.
+        Publishers.CombineLatest4($systemRuntimeEngines, $attachedRuntimeEngines, $bonjourRuntimeEngines, $mirroredEngines)
+            .map { $0 + $1 + $2 + $3.values.elements }
+            .sink { [weak self] engines in
                 guard let self else { return }
                 let ids = engines.map { $0.source.identifier }
-                #log(.debug,"[EngineIcon] rx.runtimeEngines emitted \(engines.count, privacy: .public) engines: \(ids.joined(separator: ", "), privacy: .public)")
+                #log(.debug,"[EngineIcon] runtimeEngines emitted \(engines.count, privacy: .public) engines: \(ids.joined(separator: ", "), privacy: .public)")
                 self.updateProxyServers(for: engines)
             }
-            .disposed(by: rx.disposeBag)
+            .store(in: &cancellables)
 
         // When a Bonjour client connects to our server, push the current engine list
         if let bonjourServerEngine {
-            bonjourServerEngine.statePublisher.asObservable()
-                .subscribeOnNextMainActor { [weak self] state in
-                    guard let self else { return }
-                    if case .connected = state {
-                        #log(.info,"Bonjour server client connected, pushing engine list")
-                        Task { @MainActor in
+            bonjourServerEngine.statePublisher
+                .sink { [weak self] state in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        if case .connected = state {
+                            #log(.info,"Bonjour server client connected, pushing engine list")
                             let descriptors = await self.buildEngineDescriptors()
                             try? await bonjourServerEngine.pushEngineListChanged(descriptors)
                         }
                     }
                 }
-                .disposed(by: rx.disposeBag)
+                .store(in: &cancellables)
         }
     }
 
@@ -1099,7 +1185,7 @@ public final class RuntimeEngineManager {
             for removal in removed {
                 let stopped = removal.engine
                 Task { @MainActor in await stopped.stop() }
-                engineIconCache.removeValue(forKey: removal.engineID)
+                remoteIconDataByEngineID.removeValue(forKey: removal.engineID)
             }
 
             for addition in added {
@@ -1107,8 +1193,10 @@ public final class RuntimeEngineManager {
                 let descriptor = addition.descriptor
                 observeRuntimeEngineState(mirroredEngine)
 
-                if let iconData = descriptor.iconData, let image = NSImage(data: iconData) {
-                    engineIconCache[mirroredEngine.engineID] = image
+                // Stored before `mirroredEngines` is assigned below, so a
+                // subscriber reacting to that assignment already finds it.
+                if let iconData = descriptor.iconData {
+                    remoteIconDataByEngineID[mirroredEngine.engineID] = iconData
                 }
 
                 Task { @MainActor in
@@ -1215,30 +1303,13 @@ public final class RuntimeEngineManager {
     }
 }
 
-@MainActor
-extension RuntimeEngineManager: ReactiveCompatible {}
-
-@MainActor
-extension Reactive where Base == RuntimeEngineManager {
-    public var runtimeEngines: Driver<[RuntimeEngine]> {
-        Driver.combineLatest(
-            base.$systemRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []),
-            base.$attachedRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []),
-            base.$bonjourRuntimeEngines.asObservable().asDriver(onErrorJustReturn: []),
-            base.$mirroredEngines.asObservable().asDriver(onErrorJustReturn: [:]),
-            resultSelector: { $0 + $1 + $2 + $3.values.elements }
-        )
-    }
-
-    public var runtimeEngineSections: Driver<[RuntimeEngineSection]> {
-        base.$runtimeEngineSections.asObservable().asDriver(onErrorJustReturn: [])
-    }
-}
-
 // MARK: - Dependencies
 
 @MainActor
 extension DependencyValues {
+    /// The process-wide manager, configured as the app wants it. A headless
+    /// process overrides this at its entry point with
+    /// `prepareDependencies { $0.runtimeEngineManager = RuntimeEngineManager(configuration: .headlessHost) }`.
     @DependencyEntry(liveValue: MainActor.assumeIsolated { RuntimeEngineManager.shared })
     public var runtimeEngineManager: RuntimeEngineManager
 }

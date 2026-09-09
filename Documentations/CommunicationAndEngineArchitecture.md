@@ -354,9 +354,17 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 |------|------|------|
 | **`RuntimeEngine`**（actor） | `RuntimeViewerCore` | 单个运行时的连接 + 数据（imageList / imageNodes / 查询 RPC）。既能当 server 也能当 client。 |
 | **`RuntimeEngineProxyServer`**（actor） | `RuntimeViewerCore` | 给**一个** engine 套一层 DirectTCP server，把它转成可被远端直连、镜像的服务。 |
-| **`RuntimeEngineManager`**（@MainActor class） | `RuntimeViewerApplication` | 全局单例。发现/生命周期/分组，编排 Sharing（server 侧）与 Mirroring（client 侧）。 |
+| **`RuntimeEngineManager`**（@MainActor class） | `RuntimeViewerEngineManagement` | 进程级单例。发现/生命周期/分组，编排 Sharing（server 侧）与 Mirroring（client 侧）。 |
 
 `RuntimeEngineManager` 通过 `@Dependency(\.runtimeEngineManager)` 注入（遵循项目单例规范，`shared` 为 `fileprivate`）。
+
+`RuntimeViewerEngineManagement` 是 `RuntimeViewerPackages` 里一个**不依赖 AppKit / RxSwift / Settings** 的 target（提案
+[draft-engine-management-module](Evolutions/draft-engine-management-module.md)），无窗口的进程可以只链它。三件事因此留在模块外或以缝的形式出现：
+
+- **配置**：`RuntimeEngineManagerConfiguration` 决定 Bonjour 广播、引擎共享、系统引擎、已注入进程重连各自开不开。App 用 `.application`（全开），无头 host 用 `.headlessHost`（只浏览、只重连，不广播不共享）。
+- **事件**：manager 不再直接调用通知服务，而是发 `RuntimeEngineManagerEvent`（`engineConnected` / `hostDisconnected` / `catalystHelperUnavailable`）；App 层的 `RuntimeConnectionNotificationService.start()` 订阅 `eventPublisher` 转成系统通知。事件不重放，订阅要在第一条连接建立前完成（App 在 `applicationDidFinishLaunching` 里做）。
+- **App 层叠加**（都在 `RuntimeViewerApplication/Engine/`）：`RuntimeEngineIconProvider` 负责图标（本机进程查 Launch Services，镜像引擎解码 manager 保留的 `remoteIconData(for:)`）；`RuntimeEngineManager+Reactive` 提供 `rx.runtimeEngines` / `rx.runtimeEngineSections` 两个 `Driver`。
+- **attach 流程**：`RuntimeProcessAttacher`（同模块）承接原先散在 `AttachToProcessViewModel` 里的「选载荷 → 装载荷 → 选传输 → 注入 → 确认握手」，ViewModel 只剩调用。载荷与 Catalyst helper 的路径经 `RuntimeViewerHelperClient` 的 `RuntimeResourceLocating` 取得，默认实现读 `Bundle.main`。
 
 ---
 
@@ -412,7 +420,7 @@ port = djb2(identifier) % 16383 + 49152   // 动态端口区 49152–65535
 
 Manager 把所有引擎按来源分成五组 `@Published`，`runtimeEngines` 计算属性是前四组之和：
 
-- **`systemRuntimeEngines`**：`.local`（本机同进程）+ Mac Catalyst client 引擎。启动时 `launchSystemRuntimeEngines()` 建立。
+- **`systemRuntimeEngines`**：`.local`（本机同进程）+ Mac Catalyst client 引擎。启动时 `launchSystemRuntimeEngines()` 建立：`.local` 不会失败；Catalyst 一半尽力而为，helper 拉不起来只记日志并发 `catalystHelperUnavailable` 事件，不再连带跳过后面的已注入进程重连。
 - **`attachedRuntimeEngines`**：注入到别的 App 得到的引擎——非沙盒走 XPC（`.remote`），沙盒走 localSocket。支持从持久化记录**重连已注入进程**（`reconnectInjectedXPCEngines` 读 Mach Service 注册表；`reconnectInjectedSocketEngines` 读本地 JSON 并 `kill(pid,0)` 探活）。
 - **`bonjourRuntimeEngines`**：Bonjour 发现的对端。默认作为**管理型连接**（只跑引擎清单交换）在 UI 里隐藏；若对端不支持引擎共享（返回 0 个描述符）则升级为 `directBonjourEngines` 直接展示。
 - **`mirroredEngines`**：经由引擎共享协议**镜像**来的远端引擎（`OrderedDictionary<engineID, Engine>`），由 `RuntimeEngineMirrorRegistry` 管理。
@@ -435,8 +443,8 @@ AWDL 路由的对端（iOS/visionOS/tvOS）即使进程已死，TCP keepalive �
 ### 7.4 状态观测与断开清理
 
 `observeRuntimeEngineState` 订阅每个引擎的 `statePublisher`：
-- `.connected` → 通知 `runtimeConnectionNotificationService`。
-- `.disconnected` → `cleanupMirroredEnginesOnDisconnect` + `terminateRuntimeEngine`，并且只有当该 host **彻底从 sidebar 消失**（`runtimeEngineSections` 里不再有它）时才发"断开"通知——避免直连 Bonjour 掉线但同一对端仍有转发镜像可见时的自相矛盾提示。
+- `.connected` → 发 `RuntimeEngineManagerEvent.engineConnected`（App 层据此弹「已连接」通知）。
+- `.disconnected` → `cleanupMirroredEnginesOnDisconnect` + `terminateRuntimeEngine`，并且只有当该 host **彻底从 sidebar 消失**（`runtimeEngineSections` 里不再有它）时才发 `hostDisconnected` 事件——避免直连 Bonjour 掉线但同一对端仍有转发镜像可见时的自相矛盾提示。
 
 ---
 
@@ -459,7 +467,7 @@ AWDL 路由的对端（iOS/visionOS/tvOS）即使进程已死，TCP keepalive �
    镜像自己那条 `directTCP` 链路上——后者的 host 与 port 属于每会话新建的 proxy，拿它当键等于每次
    重连换一套。字段用 MetaCodable 的 `@Default("")` 标注：旧对端不发这个键，接收方回退到
    `RuntimeBookmarkScope.recovered(from:)`；旧对端读新数据时多出的键被忽略。**双向兼容，不要求同版本。**
-2. **`updateProxyServers(for:)`**：订阅 `rx.runtimeEngines`，为每个新引擎起一个 `RuntimeEngineProxyServer`（存入 `proxyServers[id]`），引擎消失则 `stop()` 并移除。Proxy 在 detached task 里 `start()`（不阻塞主 actor），起好后重新 `buildEngineDescriptors` 并通过 Bonjour server 引擎 `pushEngineListChanged` 推给已连的对端。
+2. **`updateProxyServers(for:)`**：订阅四个引擎集合的 `CombineLatest4`（同步、在 `willSet` 时刻送达；App 层的 `rx.runtimeEngines` 是同一组合的 Rx 桥接），为每个新引擎起一个 `RuntimeEngineProxyServer`（存入 `proxyServers[id]`），引擎消失则 `stop()` 并移除。Proxy 在 detached task 里 `start()`（不阻塞主 actor），起好后重新 `buildEngineDescriptors` 并通过 Bonjour server 引擎 `pushEngineListChanged` 推给已连的对端。
 3. **Bonjour server 引擎连上事件** → 立即推当前引擎清单。
 
 即：**每个本地引擎 → 一个 ProxyServer（DirectTCP 服务） → 一个描述符 → 通过 Bonjour 清单广播出去**。

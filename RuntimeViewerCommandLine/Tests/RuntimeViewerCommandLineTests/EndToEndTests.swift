@@ -43,6 +43,41 @@ struct EndToEndTests {
         #expect(captured.standardError.isEmpty)
     }
 
+    @Test("sources lists the local runtime of a local-only host as connected")
+    func sourcesOfLocalHost() async throws {
+        let paths = try TemporaryHostDirectory.make()
+        defer { TemporaryHostDirectory.remove(paths) }
+        let host = try await InProcessHost.startWithSharedEngine(paths: paths)
+        defer { Task { await host.stop() } }
+        let (runner, captured) = try makeRunner(paths: paths)
+
+        try await runner.run(.listSources(ListSourcesCommand()))
+
+        let document = try jsonObject(captured.standardOutput)
+        let hosts = try #require(document["hosts"] as? [[String: Any]])
+        #expect(hosts.count == 1)
+        let sources = try #require(hosts[0]["sources"] as? [[String: Any]])
+        #expect(sources.map { $0["selector"] as? String } == ["local"])
+        #expect(sources[0]["kind"] as? String == "local")
+        #expect(sources[0]["isConnected"] as? Bool == true)
+    }
+
+    @Test("attach and detach are refused by a local-only host with sourceUnavailable")
+    func attachRefusedByLocalHost() async throws {
+        let paths = try TemporaryHostDirectory.make()
+        defer { TemporaryHostDirectory.remove(paths) }
+        let host = try await InProcessHost.startWithSharedEngine(paths: paths)
+        defer { Task { await host.stop() } }
+        let (runner, captured) = try makeRunner(paths: paths)
+
+        await #expect(throws: ExitCode(1)) {
+            try await runner.run(.attach(AttachCommand(target: .processIdentifier(1))))
+        }
+
+        let error = try #require(try jsonObject(captured.standardOutput)["error"] as? [String: Any])
+        #expect(error["code"] as? String == "sourceUnavailable")
+    }
+
     @Test("The text rendering of an interface is the interface itself")
     func interfaceAsText() async throws {
         let paths = try TemporaryHostDirectory.make()

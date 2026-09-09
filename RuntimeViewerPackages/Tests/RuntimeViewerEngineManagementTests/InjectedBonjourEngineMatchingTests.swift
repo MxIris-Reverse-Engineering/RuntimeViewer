@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import RuntimeViewerApplication
+@testable import RuntimeViewerEngineManagement
 
 /// Contract suite for how a just-injected simulator payload is recognised.
 ///

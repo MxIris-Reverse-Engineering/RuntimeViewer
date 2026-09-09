@@ -37,6 +37,15 @@ public enum TextRenderer {
             return RenderedOutput(output: terminated(result.interfaceText), notes: result.warnings.map { "warning: \($0)" })
         case .export(let result):
             return render(result)
+        case .sources(let result):
+            return render(result)
+        case .attached(let result):
+            if result.wasAlreadyAttached {
+                return RenderedOutput(output: "\(result.processName) (\(result.processIdentifier)) is already attached; use --source \(result.selector).\n")
+            }
+            return RenderedOutput(output: "Attached to \(result.processName) (\(result.processIdentifier)) over \(result.transport); use --source \(result.selector).\n")
+        case .detached(let result):
+            return RenderedOutput(output: "Detached \(result.displayName) (\(result.selector)).\n")
         case .hostStatus(let result):
             return render(result)
         case .shutdownAcknowledged(let result):
@@ -122,6 +131,28 @@ public enum TextRenderer {
         let duration = String(format: "%.1f", result.totalDuration)
         let failed = result.failed == 0 ? "" : ", \(result.failed) failed"
         return RenderedOutput(output: "Exported \(result.succeeded) interface\(result.succeeded == 1 ? "" : "s") of \(result.imageName) to \(result.outputDirectory) in \(duration) s (Objective-C \(result.objcCount), Swift \(result.swiftCount)\(failed)).\n")
+    }
+
+    /// One block per host: its name and identifier, then a table of its sources.
+    private static func render(_ result: SourcesResult) -> RenderedOutput {
+        guard !result.hosts.isEmpty else {
+            return RenderedOutput(output: "No sources.\n")
+        }
+        var blocks: [String] = []
+        for host in result.hosts {
+            var block = "\(host.hostName) [\(host.hostIdentifier)]\n"
+            if host.sources.isEmpty {
+                block += "  (no sources)\n"
+            } else {
+                let table = TextTable(
+                    header: ["SELECTOR", "KIND", "NAME", "CONNECTED"],
+                    rows: host.sources.map { [$0.selector.description, $0.kind.rawValue, $0.displayName, $0.isConnected ? "yes" : "no"] }
+                )
+                block += table.render().split(separator: "\n", omittingEmptySubsequences: false).dropLast().map { "  \($0)" }.joined(separator: "\n") + "\n"
+            }
+            blocks.append(block)
+        }
+        return RenderedOutput(output: blocks.joined(separator: "\n"))
     }
 
     private static func render(_ result: HostStatusResult) -> RenderedOutput {

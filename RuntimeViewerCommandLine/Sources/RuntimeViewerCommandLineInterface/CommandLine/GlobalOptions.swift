@@ -3,7 +3,7 @@ import Foundation
 
 /// Options every subcommand accepts.
 public struct GlobalOptions: ParsableArguments, Sendable {
-    @Option(name: .long, help: ArgumentHelp("Runtime source to inspect.", discussion: "local (default), catalyst, pid:<number>, process:<name>, engine:<identifier>. This release serves local only.", valueName: "selector"))
+    @Option(name: .long, help: ArgumentHelp("Runtime source to inspect.", discussion: "local (default), catalyst, pid:<number>, process:<name>, engine:<identifier>. `sources` lists what the host can serve; `attach` adds a process.", valueName: "selector"))
     public var source: SourceSelector = .local
 
     @Flag(name: .long, help: "Print the result as one JSON document.")

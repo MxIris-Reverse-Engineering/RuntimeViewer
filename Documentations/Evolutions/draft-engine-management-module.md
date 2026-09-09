@@ -1,12 +1,12 @@
 # Draft - 引擎管理下沉为无 UI 模块 `RuntimeViewerEngineManagement`
 
-- **状态**: Draft
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-09-06
 - **最后更新**: 2026-09-06
 - **所属愿景**: [无头 RuntimeViewer](../Visions/HeadlessRuntimeViewer.md)
 - **关联提案**: [0014](0014-inject-ios-simulator-process.md)（attach 流程的 Simulator 一半来自它，本提案把它搬家）、[draft-runtime-bookmark-scope](draft-runtime-bookmark-scope.md)（同一批被搬的文件上有它的改动）、[draft-command-line-interface-multi-source](draft-command-line-interface-multi-source.md)（本提案的第一个 GUI 之外的消费者）
-- **实现分支 / PR**: 待定 —— 建议 `feature/engine-management-module`，**从 `next` 切出**（理由见「落地步骤」）
+- **实现分支 / PR**: `feature/engine-management-module`（worktree `.worktrees/RuntimeViewer-EngineManagementModule`），**从 `next` 切出**（理由见「落地步骤」）；PR 待定
 - **配套文档**: 待定 —— 落地时更新 `CommunicationAndEngineArchitecture.md` §5 / §7 与 `EngineMirroringWalkthrough.md` 的模块定位
 
 ## 摘要
@@ -258,6 +258,25 @@ public final class RuntimeProcessAttacher {
 **收尾时必须判断**：配套文档——不另写实现说明，两份既有架构文档的更新即是；术语表——本提案
 不引入新术语。
 
+### 实现记录（2026-09-06）
+
+- 步骤 1–5 已在 `feature/engine-management-module` 上完成。新 target 含 `RuntimeEngineManager`、
+  `RuntimeEngineMirrorRegistry`、`RuntimeEngineSection`、`RuntimeEngineManagerConfiguration`、
+  `RuntimeEngineManagerEvent`、`RuntimeProcessAttacher`；`RuntimeViewerHelperClient` 新增
+  `RuntimeResourceLocating`；`RuntimeViewerApplication/Engine/` 新增 `RuntimeEngineIconProvider` 与
+  `RuntimeEngineManager+Reactive`，`RuntimeConnectionNotificationService` 改订阅事件。
+- 测试：`RuntimeViewerEngineManagementTests`（搬入的两套 + `RuntimeEngineManagerConfigurationTests`
+  + `RuntimeProcessAttacherTests`）与 `RuntimeViewerHelperClientTests`（新增
+  `ApplicationBundleResourceLocatorTests`）共 62 项通过；`RuntimeViewerApplicationTests` 177 项回归通过。
+  均以 `swift test` 原始退出码判定，运行前后 `RuntimeViewer-Debug/settings.json` 校验和未变。
+- 步骤 6 的构建部分：`RunScript.sh --no-launch --derived-data <独立目录>` 跑通 Catalyst helper 与模拟器
+  载荷两步；主 App 第一次在「Embed Catalyst Helpers」拷贝阶段失败，原因是新 worktree 里没有 gitignored 的
+  staged helper（`RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper.app`，平时由 `ArchiveScript.sh`
+  写入），把本次 DerivedData 里 `Debug-arm64e-maccatalyst` 的产物 `ditto` 过去后重跑主 App，
+  `** BUILD SUCCEEDED **`。与本提案代码无关。
+- 步骤 6 的活体检查（attach 本机进程、看到 Bonjour 对端、Catalyst 引擎出现）需要在真实 App 里做，
+  尚未进行，等用户在 Debug 构建里验证。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -266,3 +285,12 @@ public final class RuntimeProcessAttacher {
 | 2026-09-06 | 先抽模块，再建 CLI | 用户选定（愿景取舍一）。否决「CLI 直接链 `RuntimeViewerApplication`」 |
 | 2026-09-06 | 模块名 `RuntimeViewerEngineManagement`，放 `RuntimeViewerPackages`，保留 `@MainActor` 与 Combine `@Published` | 用户在收尾确认轮确认。搬迁不改并发模型，回归面最小 |
 | 2026-09-06 | 分支从 `next` 切 | 调研 9 |
+| 2026-09-06 | Accepted | 用户：「开始实现第一份提案」 |
+| 2026-09-06 | In Progress | 从 `next`（`eab7eecb`）切出 `feature/engine-management-module` 开工 |
+| 2026-09-06 | `hostDisconnected` 携带 `source` 与 `error`，而非草案里的 `hostName` | 通知文案「Lost connection to X: error」两样都要；`engineConnected` 按草案传引擎 |
+| 2026-09-06 | attach 的传输决策抽成纯函数 `RuntimeProcessAttacher.route(for:payloadPlatform:sandboxProbe:environmentProbe:)`，两个探测提前到装载荷之前 | 决策表可以在没有 helper daemon 与活体目标时测试；两个探测都是本机只读，提前不改变结果，只让「无法路由」的目标不必先装一遍载荷 |
+| 2026-09-06 | `launchSystemRuntimeEngines()` 拆分后，Catalyst helper 失败不再连带跳过已注入进程重连 | 原先二者串在一个 `throws` 流程里，是失败路径上的一处潜在遗漏；成功路径行为不变 |
+| 2026-09-06 | `init` 增加内部 `startupHandler` 测试缝；`RuntimeEngineManagerConfigurationTests` 走真正的初始化器断言步骤映射 | 不启动 Bonjour、不碰 helper daemon 就能验证「配置 → 启动步骤」 |
+| 2026-09-06 | `AppDelegate.applicationDidFinishLaunching` 新增一行 `runtimeConnectionNotificationService.start()` | 事件不重放，通知服务要在连接任务跑起来前订阅；符合 AppDelegate 一行调用的约定 |
+| 2026-09-06 | `Driver` 订阅改为 Combine `sink`（同步、`willSet` 时刻）；`subscribeOnNextMainActor` 改为 `sink` + `Task { @MainActor }` | 与被替换的 RxSwiftPlus 语义一一对应；`detach(_:)` 因只做同步终止而不再 `async` |
+| 2026-09-06 | `launchAttachedRuntimeEngine` / `awaitInjectedBonjourEngine` 改为 `@discardableResult` 返回引擎 | `RuntimeProcessAttacher.Outcome.engine` 需要；既有调用方不受影响 |

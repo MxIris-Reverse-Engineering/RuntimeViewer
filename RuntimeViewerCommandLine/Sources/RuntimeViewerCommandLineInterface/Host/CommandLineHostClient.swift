@@ -233,32 +233,13 @@ public actor CommandLineHostClient {
         }
     }
 
-    /// Asks an outdated standalone host to leave and waits until its socket is
-    /// gone, falling back to `SIGTERM` on the recorded process.
+    /// Asks an outdated standalone host to leave and waits until it has
+    /// exited, falling back to `SIGTERM`; see ``HostRetirement``.
     private func replaceOutdatedHost(_ welcome: Welcome) async {
         #log(.info, "Replacing an outdated CLI host (protocol \(welcome.protocolVersion, privacy: .public))")
-        _ = try? await Timeouts.withTimeout(seconds: 3) {
-            try await self.send(.shutdownHost(.userRequest))
-        }
-        disconnect()
-        let socketPath = configuration.paths.socketURL.path
-        for _ in 0 ..< 50 where UnixDomainSocket.isHostListening(at: socketPath) {
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-        if UnixDomainSocket.isHostListening(at: socketPath) {
-            // The identifier arrives on the wire, so it is a claim, not a fact:
-            // signal it only when the host's own record agrees, and never a
-            // non-positive one — `kill(0, …)` signals this process's whole
-            // group and `kill(-1, …)` everything this user owns.
-            let recordedProcessIdentifier = HostRecord.read(from: configuration.paths.recordURL)?.processIdentifier
-            if welcome.processIdentifier > 0, recordedProcessIdentifier == welcome.processIdentifier {
-                kill(welcome.processIdentifier, SIGTERM)
-                for _ in 0 ..< 20 where UnixDomainSocket.isHostListening(at: socketPath) {
-                    try? await Task.sleep(for: .milliseconds(100))
-                }
-            } else {
-                #log(.error, "The host at \(socketPath, privacy: .public) claims to be process \(welcome.processIdentifier, privacy: .public), which its record does not corroborate; leaving it alone")
-            }
+        let outcome = await HostRetirement.retire(self, welcome: welcome, paths: configuration.paths, reason: .userRequest)
+        if !outcome.exited {
+            #log(.error, "The outdated CLI host \(welcome.processIdentifier, privacy: .public) is still running")
         }
     }
 

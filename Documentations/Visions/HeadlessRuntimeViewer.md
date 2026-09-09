@@ -161,7 +161,7 @@ DirectTCP 客户端引擎跑现有 RPC。查询零新协议；但每次调用两
 |------|------|------------------------|
 | [draft-engine-management-module](../Evolutions/draft-engine-management-module.md) | Draft | 方向一：引擎管理下沉为无 UI 模块 |
 | [draft-command-line-interface-foundation](../Evolutions/draft-command-line-interface-foundation.md) | In Progress | 方向二、四、六（独立包）：协议、常驻 host、本地来源上的全部查询命令 |
-| [draft-command-line-interface-multi-source](../Evolutions/draft-command-line-interface-multi-source.md) | Draft | 方向三、五：全部来源、attach、App 充当 host |
+| [draft-command-line-interface-multi-source](../Evolutions/draft-command-line-interface-multi-source.md) | In Progress | 方向三、五：全部来源、attach、App 充当 host |
 | [draft-command-line-interface-app-embedding](../Evolutions/draft-command-line-interface-app-embedding.md) | Draft | 方向六（嵌入 App 包）与设置页 |
 
 ---

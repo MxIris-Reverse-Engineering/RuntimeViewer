@@ -37,6 +37,8 @@ public final class RuntimeInjectClient: @unchecked Sendable {
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
 
+    @Dependency(\.runtimeResourceLocator) private var runtimeResourceLocator
+
     private init() {
         Task { @MainActor in
             observeStatusChange()
@@ -100,8 +102,11 @@ public final class RuntimeInjectClient: @unchecked Sendable {
         FileManager.default.fileExists(atPath: serverFrameworkDestinationURL(for: platform).path)
     }
 
+    /// The payload bundle to install, wherever the resource locator says this
+    /// process keeps it — the app's own bundle unless a headless host says
+    /// otherwise.
     public func serverFrameworkSourceURL(for platform: PayloadPlatform) -> URL? {
-        Bundle.main.url(forResource: platform.frameworkBundleBaseName, withExtension: "framework")
+        runtimeResourceLocator.payloadFrameworkSourceURL(for: platform)
     }
 
     /// The executable inside an installed payload bundle — the path handed to

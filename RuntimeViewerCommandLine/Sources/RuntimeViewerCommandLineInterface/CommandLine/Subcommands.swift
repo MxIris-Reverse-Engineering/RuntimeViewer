@@ -249,6 +249,88 @@ extension RuntimeViewerCommandLineTool {
     }
 }
 
+extension RuntimeViewerCommandLineTool {
+    public struct Sources: AsyncParsableCommand {
+        public static let configuration = CommandConfiguration(
+            abstract: "List the runtime sources the host can serve and the selector that reaches each.",
+            discussion: "Sources are grouped by host: this Mac (local, catalyst, attached processes), then each device or peer found over Bonjour. Peers take a few seconds to connect after the host starts; --wait keeps looking."
+        )
+
+        @OptionGroup public var globalOptions: GlobalOptions
+
+        @Option(name: .long, help: ArgumentHelp("Keep re-reading the sources for this many seconds so peers still connecting can appear; answers earlier once the list has settled.", valueName: "seconds"))
+        public var wait: Double = 0
+
+        public init() {}
+
+        public func run() async throws {
+            try await CommandRunner(globalOptions: globalOptions).run(
+                .listSources(ListSourcesCommand(waitSeconds: max(0, wait)))
+            )
+        }
+    }
+
+    public struct Attach: AsyncParsableCommand {
+        public static let configuration = CommandConfiguration(
+            abstract: "Inject into a running process and make its runtime a source.",
+            discussion: "Needs the helper daemon (RuntimeViewer → Settings → Helper Service) and a RuntimeViewer.app to take the payload from (installed, or named with `host run --app-bundle` / $\(ApplicationBundleLocator.environmentVariable)). Prints the selector to pass to --source afterwards: pid:<n> for a Mac process, engine:<id> for a simulator process."
+        )
+
+        @OptionGroup public var globalOptions: GlobalOptions
+
+        @Argument(help: "Process identifier, or a process name (matched against the process name and the executable's file name, case-insensitively).")
+        public var target: String
+
+        public init() {}
+
+        public func run() async throws {
+            let attachTarget: AttachTarget
+            if let processIdentifier = Int32(target) {
+                attachTarget = .processIdentifier(processIdentifier)
+            } else {
+                attachTarget = .processName(target)
+            }
+            try await CommandRunner(globalOptions: globalOptions).run(.attach(AttachCommand(target: attachTarget)))
+        }
+    }
+
+    public struct Detach: AsyncParsableCommand {
+        public static let configuration = CommandConfiguration(
+            abstract: "Drop an attached process or a Bonjour peer.",
+            discussion: "A detached Mac process stays injected but is no longer a source and is not reconnected on the next start. A Bonjour peer is disconnected and may be rediscovered."
+        )
+
+        @OptionGroup public var globalOptions: GlobalOptions
+
+        @Argument(help: "What to detach: a pid, pid:<n>, process:<name> or engine:<identifier>. Defaults to --source.")
+        public var target: String?
+
+        public init() {}
+
+        public func validate() throws {
+            if let target {
+                guard Self.selector(from: target) != nil else {
+                    throw ValidationError("'\(target)' is not a pid or a source selector (pid:<n>, process:<name>, engine:<identifier>).")
+                }
+            } else if globalOptions.source == .local {
+                throw ValidationError("Pass what to detach: a pid, process:<name> or engine:<identifier>.")
+            }
+        }
+
+        public func run() async throws {
+            let selector = target.flatMap(Self.selector(from:)) ?? globalOptions.source
+            try await CommandRunner(globalOptions: globalOptions).run(.detach(DetachCommand(source: selector)))
+        }
+
+        static func selector(from target: String) -> SourceSelector? {
+            if let processIdentifier = Int32(target) {
+                return .attachedProcess(processIdentifier: processIdentifier)
+            }
+            return SourceSelector(target)
+        }
+    }
+}
+
 /// `--options` and its `--full` shorthand.
 public struct GenerationOptionsArguments: ParsableArguments, Sendable {
     @Option(name: .long, help: ArgumentHelp("Interface generation options: default, full, or app (what the RuntimeViewer app has configured).", valueName: "choice"))

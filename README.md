@@ -33,7 +33,7 @@
 - **Swift & Objective-C Interfaces** – Generate Swift type interfaces (with type/enum layouts and VTable offsets) alongside Objective-C headers directly from Mach-O binaries
 - **Xcode-Style Syntax Highlighting** – Full AppKit text view with type-defined jumps and rendering identical to Xcode
 - **Customizable Color Themes** – Pick a syntax theme in **Settings → Theme**; duplicate the built-in Xcode preset to edit per-token colors (with bold/italic), the editor background, and selection color. Each theme carries light and dark variants that adapt to the system appearance
-- **Command Line Interface** – `runtime-viewer-cli` answers the same questions from a terminal or a script without opening a window: list images and types, print interfaces, hierarchies, relationships and member addresses, specialize generics and export whole images, as text or JSON. A background host keeps the indexes warm between calls and exits when idle
+- **Command Line Interface** – `runtime-viewer-cli` answers the same questions from a terminal or a script without opening a window: list images and types, print interfaces, hierarchies, relationships and member addresses, specialize generics and export whole images, as text or JSON, against any source the app has (local, Mac Catalyst, attached processes, Bonjour peers). The running app serves the tool; otherwise a background host keeps the indexes warm between calls and exits when idle
 - **MCP Integration** *(macOS 15+)* – Let LLM clients (e.g., Claude) inspect runtime information via the Model Context Protocol, with an in-process bridge and a toolbar status indicator
 - **Bonjour Multi-Device Mirroring** – Discover and connect to iOS/macOS devices on the local network; remote engines appear in the toolbar's source switcher grouped by host
 - **Export Interface Wizard** – Xcode-style multi-step wizard for exporting ObjC/Swift interfaces to single or multiple files
@@ -83,9 +83,12 @@ swift build -c release --product runtime-viewer-cli
 .build/release/runtime-viewer-cli interface NSView --image AppKit
 .build/release/runtime-viewer-cli types --image Foundation --kind objc-class --json
 .build/release/runtime-viewer-cli export AppKit --output ~/Desktop/AppKit-Interfaces
+.build/release/runtime-viewer-cli sources --wait 5              # every source, with the selector to reach it
+.build/release/runtime-viewer-cli attach Finder                  # inject; prints e.g. "use --source pid:550"
+.build/release/runtime-viewer-cli interface NSView --source pid:550 --image AppKit
 ```
 
-The first call starts a background host that owns the runtime engine; later calls reuse it, and it exits on its own after ten minutes without work (`host status`, `host stop` and `host restart` manage it). This release inspects the local runtime only; attaching to processes and reaching other devices from the command line are planned. Details, contracts and exit codes: [`Documentations/Guides/CommandLineInterface.md`](Documentations/Guides/CommandLineInterface.md).
+Every source the app can inspect is available from the terminal: the local runtime, the Mac Catalyst runtime, processes you attach to (the helper daemon and an installed RuntimeViewer.app are needed, as in the app), devices on the local network and engines other RuntimeViewers forward. While the app is running it answers the commands itself, so its attached processes and peers are visible to the tool; otherwise the first call starts a background host that owns the engines and exits on its own after ten minutes without work (`host status`, `host stop` and `host restart` manage it). Details, contracts and exit codes: [`Documentations/Guides/CommandLineInterface.md`](Documentations/Guides/CommandLineInterface.md).
 
 ### Connecting to Other Devices
 

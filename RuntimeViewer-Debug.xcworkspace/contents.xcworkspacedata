@@ -29,6 +29,9 @@
       location = "group:RuntimeViewerMCP">
    </FileRef>
    <FileRef
+      location = "group:RuntimeViewerCommandLine">
+   </FileRef>
+   <FileRef
       location = "group:RuntimeViewerUsingAppKit/RuntimeViewerUsingAppKit.xcodeproj">
    </FileRef>
    <FileRef

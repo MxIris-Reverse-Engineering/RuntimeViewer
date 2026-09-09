@@ -69,7 +69,13 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../RuntimeViewerCore"),
+        // Engine management (all runtime sources, attach) and the helper
+        // client it needs. Only the UI-free products are linked.
+        .package(path: "../RuntimeViewerPackages"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
+        // Same range as RuntimeViewerPackages, whose `@Dependency` entries the
+        // headless host overrides at its entry point.
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", "1.13.1" ..< "1.16.0"),
         // RuntimeViewerCore pins FrameworkToolbox exactly; a floor here resolves
         // to the same version and keeps working once that pin is lifted.
         .package(url: "https://github.com/Mx-Iris/FrameworkToolbox", from: "0.9.0"),
@@ -81,8 +87,12 @@ let package = Package(
             name: "RuntimeViewerCommandLineInterface",
             dependencies: [
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerEngineManagement", package: "RuntimeViewerPackages"),
+                .product(name: "RuntimeViewerHelperClient", package: "RuntimeViewerPackages"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "FoundationToolbox", package: "FrameworkToolbox"),
+                .product(name: "Dependencies", package: "swift-dependencies"),
             ]
         ),
         .executableTarget(
@@ -96,6 +106,9 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerCommandLineInterface",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerEngineManagement", package: "RuntimeViewerPackages"),
+                .product(name: "RuntimeViewerHelperClient", package: "RuntimeViewerPackages"),
                 .product(name: "Clocks", package: "swift-clocks"),
             ]
         ),

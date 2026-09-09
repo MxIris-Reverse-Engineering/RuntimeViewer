@@ -12,9 +12,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @Dependency(\.appRouter) private var appRouter
     @Dependency(\.appearanceController) private var appearanceController
+    @Dependency(\.commandLineHostController) private var commandLineHostController
     @Dependency(\.debugMenuController) private var debugMenuController
     @Dependency(\.helperServiceVersionChecker) private var helperServiceVersionChecker
     @Dependency(\.mcpService) private var mcpService
+    @Dependency(\.runtimeConnectionNotificationService) private var runtimeConnectionNotificationService
     @Dependency(\.settingsLifecycleController) private var settingsLifecycleController
     @Dependency(\.sourceEditorLoader) private var sourceEditorLoader
     @Dependency(\.tabMenuController) private var tabMenuController
@@ -49,11 +51,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSToolbarItemViewerOverflowFix.install()
 
         settingsLifecycleController.loadOnLaunch()
+        runtimeConnectionNotificationService.start()
         sourceEditorLoader.startPrewarmingWhenEnabled()
         appearanceController.start()
         debugMenuController.install()
         tabMenuController.install()
         mcpService.start(for: AppMCPBridgeDocumentProvider())
+        commandLineHostController.start()
         updaterService.start()
         helperServiceVersionChecker.checkOnLaunch()
     }
@@ -64,6 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         updaterService.stop()
+        commandLineHostController.stop()
         mcpService.stop()
     }
 

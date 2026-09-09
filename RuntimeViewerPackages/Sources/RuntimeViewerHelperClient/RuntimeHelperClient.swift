@@ -19,11 +19,14 @@ import ServiceManagement
 public final class RuntimeHelperClient: @unchecked Sendable {
     public enum Error: LocalizedError {
         case message(String)
+        case catalystHelperNotFound
 
         public var errorDescription: String? {
             switch self {
             case .message(let message):
                 return message
+            case .catalystHelperNotFound:
+                return "This process has no RuntimeViewer application bundle to launch the Mac Catalyst helper from."
             }
         }
     }
@@ -31,6 +34,8 @@ public final class RuntimeHelperClient: @unchecked Sendable {
     fileprivate static let shared = RuntimeHelperClient()
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
+
+    @Dependency(\.runtimeResourceLocator) private var runtimeResourceLocator
 
     private init() {
         Task { @MainActor in
@@ -60,17 +65,15 @@ public final class RuntimeHelperClient: @unchecked Sendable {
     }
 
     public func launchMacCatalystHelper() async throws {
+        guard let helperURL = runtimeResourceLocator.catalystHelperApplicationURL else {
+            throw Error.catalystHelperNotFound
+        }
         let callerPID = ProcessInfo.processInfo.processIdentifier
         try await helperServiceManager.ensureConnectedToTool()
         try await helperServiceManager.helperClient.sendToTool(
-            request: OpenApplicationRequest(url: RuntimeViewerCatalystHelperLauncher.helperURL, callerPID: callerPID)
+            request: OpenApplicationRequest(url: helperURL, callerPID: callerPID)
         )
     }
-}
-
-enum RuntimeViewerCatalystHelperLauncher {
-    static let appName = "RuntimeViewerCatalystHelper"
-    static let helperURL = Bundle.main.bundleURL.appendingPathComponent("Contents").appendingPathComponent("Applications").appendingPathComponent("\(appName).app")
 }
 
 // MARK: - Dependencies

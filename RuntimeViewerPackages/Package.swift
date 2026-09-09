@@ -126,6 +126,10 @@ let package = Package(
             targets: ["RuntimeViewerHelperClient"],
         ),
         .library(
+            name: "RuntimeViewerEngineManagement",
+            targets: ["RuntimeViewerEngineManagement"],
+        ),
+        .library(
             name: "RuntimeViewerSettings",
             targets: ["RuntimeViewerSettings"],
         ),
@@ -445,6 +449,7 @@ let package = Package(
                 "RuntimeViewerSettings",
                 .target(name: "RuntimeViewerSettingsUI", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
                 .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "DependenciesMacros", package: "swift-dependencies"),
@@ -494,6 +499,23 @@ let package = Package(
             ],
         ),
 
+        // Engine discovery, lifecycle, sharing and mirroring without any UI
+        // framework: no AppKit, no RxSwift, no Settings. The app layers icons,
+        // Rx bridging and user notifications on top; a headless process links
+        // this target alone.
+        .target(
+            name: "RuntimeViewerEngineManagement",
+            dependencies: [
+                .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerCatalystExtensions", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerUtilities", package: "RuntimeViewerCore"),
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "DependenciesMacros", package: "swift-dependencies"),
+            ],
+        ),
+
         .testTarget(
             name: "RuntimeViewerArchitecturesTests",
             dependencies: ["RuntimeViewerArchitectures"],
@@ -511,6 +533,16 @@ let package = Package(
             name: "RuntimeViewerHelperClientTests",
             dependencies: [
                 .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
+            ],
+        ),
+
+        .testTarget(
+            name: "RuntimeViewerEngineManagementTests",
+            dependencies: [
+                .target(name: "RuntimeViewerEngineManagement", condition: .when(platforms: appkitPlatforms)),
+                .target(name: "RuntimeViewerHelperClient", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "RuntimeViewerCommunication", package: "RuntimeViewerCore"),
             ],
         ),
 

@@ -1,12 +1,12 @@
 # Engine Mirroring Walkthrough
 
-跨主机 RuntimeEngine 共享系统的 read-only 走读：四类 engine 集合如何拼起来、Bonjour 如何建立管理通道、runtime 数据如何通过 proxy 层流动。读 `RuntimeEngineManager.swift`、`RuntimeEngineProxyServer.swift`、`RuntimeEngineMirrorRegistry.swift` 时可以当 reference 来用。
+跨主机 RuntimeEngine 共享系统的 read-only 走读：四类 engine 集合如何拼起来、Bonjour 如何建立管理通道、runtime 数据如何通过 proxy 层流动。读 `RuntimeEngineManager.swift`、`RuntimeEngineProxyServer.swift`、`RuntimeEngineMirrorRegistry.swift` 时可以当 reference 来用。前后两个文件在 `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/`（无 UI 依赖的引擎管理模块），中间那个在 `RuntimeViewerCore`；下文的行号都指这三个文件。
 
 针对此设计的具体 bug 调查见 `Documentations/KnownIssues/2026-04-30-engine-mirroring-routing-findings.md`。
 
 ## 1. 总览：四类 Engine + 两种角色
 
-`RuntimeEngineManager`（singleton, `@MainActor`）持有四类 engine 集合（`RuntimeEngineManager.swift:23-32`）：
+`RuntimeEngineManager`（singleton, `@MainActor`）持有四类 engine 集合（`RuntimeEngineManager.swift:31-44`）：
 
 | 集合 | 来源 | 作用 |
 |---|---|---|
@@ -15,7 +15,7 @@
 | `bonjourRuntimeEngines` | Bonjour 发现到的对端「管理通道」 | 跟其他设备的 control link |
 | `mirroredEngines` | 通过 Bonjour 对端转发过来、本机用 `.directTCP` 回连其代理的 engine | 远端共享给我的 engine |
 
-`runtimeEngines`（`:262-264`）是上面四个的拼接，对外统一暴露的读侧投影。
+`runtimeEngines`（`:407-409`）是上面四个的拼接，对外统一暴露的读侧投影。
 
 每台设备同时扮演两个角色：
 
@@ -26,7 +26,7 @@
 
 ### 2.1 自己作为 Server
 
-`init()` 第一件事就是 `startBonjourServer()`（`:128, :168-184`）：
+`init(configuration:)`（`:188-232`）按 `RuntimeEngineManagerConfiguration.startupSteps` 决定做哪几步；`.application` 配置下第一件事就是 `startBonjourServer()`（`:261-281`）：
 
 - 用机器名（`SCDynamicStoreCopyComputerName`）创建 `.bonjour(role: .server)` 的 RuntimeEngine，`pushesRuntimeData: false`。纯控制平面。
 - TXT record 里带 `localInstanceID`，用来识别「这条 endpoint 是不是我自己」。
@@ -34,12 +34,12 @@
 
 ### 2.2 自己作为 Client
 
-`browser.start(...)`（`:130-153`）：
+`startBonjourBrowser()`（`:234-259`）里的 `browser.start(...)`（每种配置都会执行）：
 
 - 发现新 endpoint：忽略 instanceID 等于自己的，否则调用 `connectToBonjourEndpoint`。
 - endpoint 移除：**不**清 `knownBonjourEndpointNames`。NWListener 接受连接后服务会重新注册，会出现 endpoint flap，这里清掉会导致重复连接。真正清除时机由 `terminateRuntimeEngine` 在真正 disconnect 时处理。
 
-### 2.3 `connectToBonjourEndpoint`（`:188-252`）
+### 2.3 `connectToBonjourEndpoint`（`:285-385`）
 
 1. **重名去重**（`knownBonjourEndpointNames`）：同一个 name 已有 engine 时，把新 endpoint 暂存进 `pendingReconnectEndpoints`。这是为 iOS 后台挂起场景设计的 —— iOS server 恢复后会重新广告，旧的 NWConnection 还没超时。
 2. **创建 client 端 engine**：用 `endpoint.instanceID` 作为 `hostID`，`originChain = [instanceID]`。
@@ -48,18 +48,18 @@
    - **>0 个 descriptor**：交给 `handleEngineListChanged` 走 mirror 流程。
 4. **指数退避重试**：失败时 2s/4s/8s 共 3 次。
 
-### 2.4 终止 —— `terminateRuntimeEngine(for:)`（`:306-337`）
+### 2.4 终止 —— `terminateRuntimeEngine(for:)`（`:472-522`）
 
 - 是 Bonjour client 角色就清 `knownBonjourEndpointNames`，并把 `pendingReconnectEndpoints` 里同名的拿出来准备重连。
 - 是 sandbox socket 客户端就删持久化记录。
-- 移除对应集合里的 engine、清 icon cache、清 `directBonjourEngines` 中的 ObjectIdentifier。
+- 移除对应集合里的 engine、清该 engine 的远端图标字节、清 `directBonjourEngines` 中的 ObjectIdentifier（图标缓存本身在 App 层的 `RuntimeEngineIconProvider`，它监听集合变化自行丢弃）。
 - 最后如果有 pending 重连，`Task` 异步重新 `connectToBonjourEndpoint`。
 
 ## 3. Server 端：把自己的 engine 共享出去
 
 ### 3.1 每个 engine 一个 Proxy Server
 
-`updateProxyServers(for:)`（`:595-647`）监听 `rx.runtimeEngines`（四个集合的 combineLatest）变化：
+`updateProxyServers(for:)`（`:1069-1121`）监听四个集合的 `CombineLatest4` 变化：
 
 - 移除已不存在 engine 的 proxy。
 - 给新 engine 起一个 `RuntimeEngineProxyServer`，但**跳过 `bonjourServerEngine`**（它本身就是管理通道，没必要再代理）。
@@ -77,7 +77,7 @@
 
 ### 3.3 构造 descriptor
 
-`buildEngineDescriptors()`（`:522-554`）：
+`buildEngineDescriptors()`（`:985-1022`）：
 
 ```
 engineID         = "{engine.hostInfo.hostID}/{engine.source.identifier}"  // 全局唯一
@@ -90,7 +90,7 @@ iconData         = proxy.iconData()
 
 ### 3.4 主动推送时机
 
-`startSharingEngines()`（`:556-593`）设置三个推送源：
+`startSharingEngines()`（`:1024-1067`）设置三个推送源：
 
 1. `RuntimeEngine.engineListProvider`：被远端调用 `requestEngineList()` 时返回 descriptors。
 2. `RuntimeEngine.engineListChangedHandler`：接收远端 push 过来的列表（client 路径，见 §4）。
@@ -102,22 +102,22 @@ iconData         = proxy.iconData()
 
 ### 4.1 入口
 
-`handleEngineListChanged(descriptors, from: engine)`（`:656-719`）来自两条路径：
+`handleEngineListChanged(descriptors, from: engine)`（`:1130-1214`）来自两条路径：
 
-- 主动拉：`connectToBonjourEndpoint` 里 `requestEngineList()` 的返回值（`:220, :229`）。
-- 被动收：远端 server 通过 `pushEngineListChanged` 推过来（`:562-567`）。
+- 主动拉：`connectToBonjourEndpoint` 里 `requestEngineList()` 的返回值（`:347, :354`）。
+- 被动收：远端 server 通过 `pushEngineListChanged` 推过来（`:1030-1035`）。
 
-把所有调度协议工作交给 `mirrorRegistry.reconcile(...)`，自己只负责副作用（启停 engine、icon 缓存、`mirroredEngines` 同步）。
+把所有调度协议工作交给 `mirrorRegistry.reconcile(...)`，自己只负责副作用（启停 engine、保留描述符里的图标字节、`mirroredEngines` 同步）。
 
 ### 4.2 `RuntimeEngineMirrorRegistry`
 
-纯状态容器，定义在 `RuntimeViewerPackages/Sources/RuntimeViewerApplication/Engine/RuntimeEngineMirrorRegistry.swift`，被故意设计成不依赖网络栈以便单测。三块状态：
+纯状态容器，定义在 `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineMirrorRegistry.swift`，被故意设计成不依赖网络栈以便单测。三块状态：
 
 - `engines: OrderedDictionary<engineID, RuntimeEngine>` —— 当前 mirror 出来的 engine。
 - `ownership: [engineID: 直接上游 hostID]` —— 是从哪个 peer 那转发过来的（注意是**直接**上游，不是 originChain 的最初源头）。
 - `lastDescriptorIDsBySource: [hostID: Set<engineID>]` —— 每个直接上游上次 push 的 ID 集合，用于跨 push 去重。
 
-### 4.3 `reconcile(...)` 规则（`:69-110`）
+### 4.3 `reconcile(...)` 规则（`:74-118`）
 
 按顺序：
 
@@ -134,7 +134,7 @@ iconData         = proxy.iconData()
 
 ### 4.4 mirror 用的就是 §3.2 那个 proxy
 
-注意 `engineFactory` 里给 mirror 用的 source（`:670-675`）：
+注意 `engineFactory` 里给 mirror 用的 source（`:1153-1158`）：
 
 ```swift
 .directTCP(name: descriptor.source.description,
@@ -147,12 +147,12 @@ iconData         = proxy.iconData()
 
 ## 5. 断连清理：两种情形
 
-`cleanupMirroredEnginesOnDisconnect(of:)`（`:478-501`）在 engine 状态变 `.disconnected` 时跑（`:451`）。注释里专门解释过为什么按下面两种情形分：
+`cleanupMirroredEnginesOnDisconnect(of:)`（`:902-934`）在 engine 状态变 `.disconnected` 时跑（`handleStateChange`，`:861`）。注释里专门解释过为什么按下面两种情形分：
 
 - **情形 1**：断的 engine 本身就是个 mirrored entry（也就是它跟 proxy 的 directTCP 挂了）→ `clearOwnMirror(matching:)` 只清这一项，不动 dedup cache。
 - **情形 2**：断的是直接 peer（Bonjour client / system engine），它之前向我们 push 过 descriptor → `clearAllOwnedBy(hostID:)` 把所有 ownership = 这个 peer 的 mirror 全清掉。
 
-情形 2 的关键点（`:471-477` 注释）：A→B→C 链路里 B 挂了，A 必须把对 C 的 mirror 也清掉，因为没有 B 就到不了 C。但是这里**只能用「直接上游 = B 的 hostID」匹配**，不能用 mirror 自身 `hostInfo.hostID`（那是 C），否则会漏掉。
+情形 2 的关键点（`:879-901` 注释）：A→B→C 链路里 B 挂了，A 必须把对 C 的 mirror 也清掉，因为没有 B 就到不了 C。但是这里**只能用「直接上游 = B 的 hostID」匹配**，不能用 mirror 自身 `hostInfo.hostID`（那是 C），否则会漏掉。
 
 `clearAllOwnedBy` 还会清掉对应 source 的 dedup cache，让重连后能接受新 push。
 
@@ -160,7 +160,7 @@ iconData         = proxy.iconData()
 
 ## 6. Section 构建：UI 怎么呈现
 
-`rebuildSections()`（`:723-755`）：
+`rebuildSections()`（`:1218-1250`）：
 
 1. 遍历 `runtimeEngines`，按 `hostInfo.hostID` 分组。
 2. **隐藏纯管理 Bonjour client engine**：在 `bonjourRuntimeEngines` 里、且不在 `directBonjourEngines` 里的，跳过 —— 因为它的内容已经通过 mirror 暴露了。
@@ -169,7 +169,7 @@ iconData         = proxy.iconData()
 
 ### 6.1 转发回环去重
 
-`deduplicateForwardedMirrors(in:)`（`:775-808`）解决一个具体问题：A 已经直连 B 的 iPhone，B 把这条直连**当作自己的一个 engine 转发**给 A，A mirror 之后会在同一 section 里看到「直连」和「绕道 B 走过来的」两份名字相同的项。
+`deduplicateForwardedMirrors(in:)`（`:1270-1303`）解决一个具体问题：A 已经直连 B 的 iPhone，B 把这条直连**当作自己的一个 engine 转发**给 A，A mirror 之后会在同一 section 里看到「直连」和「绕道 B 走过来的」两份名字相同的项。
 
 策略：
 
