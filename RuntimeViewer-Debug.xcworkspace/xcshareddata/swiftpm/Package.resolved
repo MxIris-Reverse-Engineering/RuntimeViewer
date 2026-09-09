@@ -1,6 +1,15 @@
 {
   "pins" : [
     {
+      "identity" : "appkitplus-release",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
+      "state" : {
+        "revision" : "0a7417c33caa20fde16723ebd2866247804b3ed1",
+        "version" : "0.4.2"
+      }
+    },
+    {
       "identity" : "associatedobject",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/AssociatedObject",
@@ -59,8 +68,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "a78120d107c6396a9a15aaa579f960f364a4ac37",
-        "version" : "0.10.0"
+        "revision" : "9fa37fa0f6eb6c3eb22fa92aca55045b6508c6dc",
+        "version" : "0.12.0"
       }
     },
     {
@@ -172,15 +181,6 @@
       }
     },
     {
-      "identity" : "rearrange",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ChimeHQ/Rearrange",
-      "state" : {
-        "revision" : "4de8be41dba304192e87dc0a11e0aa39e72aa2e8",
-        "version" : "2.1.1"
-      }
-    },
-    {
       "identity" : "runningapplicationkit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
@@ -232,15 +232,6 @@
       "state" : {
         "revision" : "132aea4f236ccadc51590b38af0357a331d51fa2",
         "version" : "6.10.2"
-      }
-    },
-    {
-      "identity" : "rxswiftplus",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
-      "state" : {
-        "revision" : "64a9b8c4718e993ee4601d165c3ee425d44039f0",
-        "version" : "0.2.5"
       }
     },
     {
@@ -671,8 +662,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "f9cdc532222b63963a2aef4001bf71fb9302e695",
-        "version" : "0.21.0"
+        "revision" : "665ccaac727fd41a5c5b0eb57da367d617d0e897",
+        "version" : "0.32.0"
       }
     },
     {

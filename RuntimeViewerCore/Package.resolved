@@ -1,5 +1,5 @@
 {
-  "originHash" : "78504a0a6d4289f0ac00f70394ed9812ef98afc1c5cb9b6b51c7c03f12dd6930",
+  "originHash" : "d63f74e0c2989a2626eced4827ce4880583bf23d56c80e9913750dfec27d60a2",
   "pins" : [
     {
       "identity" : "associatedobject",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "a78120d107c6396a9a15aaa579f960f364a4ac37",
-        "version" : "0.10.0"
+        "revision" : "9fa37fa0f6eb6c3eb22fa92aca55045b6508c6dc",
+        "version" : "0.12.0"
       }
     },
     {
@@ -258,8 +258,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/swift-helper-service",
       "state" : {
-        "revision" : "568793c4e14165ee37a22f58c3b695f5bee13199",
-        "version" : "0.3.2"
+        "revision" : "7ba43efcaaf1f483f7bcddc60096534573c56254",
+        "version" : "0.3.3"
       }
     },
     {

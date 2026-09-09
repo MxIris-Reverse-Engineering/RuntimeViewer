@@ -1,13 +1,13 @@
 {
-  "originHash" : "dd0ef4b899ed569e9a0e5b0c6b5abfeb0d6095fe3995132da89e5acfb921dc5a",
+  "originHash" : "9431509734d7d8dcd9d9d0f39d76a3ce9da63c6b19e51684834377ac551f7c1f",
   "pins" : [
     {
       "identity" : "appkitplus-release",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "378a6eb1debd1c8c65d24c05fef91344862b037f",
-        "version" : "0.3.1"
+        "revision" : "0a7417c33caa20fde16723ebd2866247804b3ed1",
+        "version" : "0.4.2"
       }
     },
     {
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
-        "revision" : "3be067f4280e0764cd4b6cd3ed623698ac981114",
-        "version" : "0.9.0"
+        "revision" : "9fa37fa0f6eb6c3eb22fa92aca55045b6508c6dc",
+        "version" : "0.12.0"
       }
     },
     {
@@ -197,15 +197,6 @@
       "state" : {
         "revision" : "cdf146ae671b2624917648b61c908d1244b98ca1",
         "version" : "4.2.1"
-      }
-    },
-    {
-      "identity" : "rearrange",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ChimeHQ/Rearrange",
-      "state" : {
-        "revision" : "4de8be41dba304192e87dc0a11e0aa39e72aa2e8",
-        "version" : "2.1.1"
       }
     },
     {
@@ -564,8 +555,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "d346bb71ac4d021d4d2f8ad8ad5e1dc87f255d92",
-        "version" : "0.30.1"
+        "revision" : "665ccaac727fd41a5c5b0eb57da367d617d0e897",
+        "version" : "0.32.0"
       }
     },
     {
