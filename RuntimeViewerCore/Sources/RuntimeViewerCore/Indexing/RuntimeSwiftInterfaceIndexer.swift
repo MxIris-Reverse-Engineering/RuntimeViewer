@@ -212,7 +212,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
             // (`mangleAsString(typeName.node)`), which is also how the
             // relationships pipeline derives the lookup key from a target
             // Swift class.
-            guard let superclassNode = try? MetadataReader.demangleType(for: superclassMangled, in: machO),
+            guard let superclassNode = try? SymbolicDemangler.demangleType(for: superclassMangled, in: machO),
                   let superclassKey = try? await mangleAsString(superclassNode)
             else { continue }
             subclassTable[superclassKey, default: []].append(childKey)
