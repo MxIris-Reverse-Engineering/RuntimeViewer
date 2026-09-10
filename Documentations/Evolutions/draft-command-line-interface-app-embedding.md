@@ -3,7 +3,7 @@
 - **状态**: Draft
 - **作者**: JH
 - **创建日期**: 2026-09-06
-- **最后更新**: 2026-09-06
+- **最后更新**: 2026-09-10
 - **所属愿景**: [无头 RuntimeViewer](../Visions/HeadlessRuntimeViewer.md)
 - **关联提案**: 依赖 [draft-command-line-interface-foundation](draft-command-line-interface-foundation.md)；「允许命令行访问」开关依赖 [draft-command-line-interface-multi-source](draft-command-line-interface-multi-source.md)；[0015](0015-build-embedded-products-in-app-phase.md)（嵌入产物的教训：能做 target 依赖就不要用脚本 staging）
 - **实现分支 / PR**: 待定 —— 在 `feature/command-line-interface` 上继续
@@ -11,8 +11,8 @@
 
 ## 摘要
 
-把同一份 `RuntimeViewerCommandLineInterface` 以 Xcode command-line tool target `runtime-viewer-cli`
-编进 App，随 App 签名公证，Copy Files 到 `Contents/Helpers/`。Settings 新增「Command Line Tool」
+把同一份 `RuntimeViewerCommandLineInterface` 以 Xcode command-line tool target
+`RuntimeViewerCommandLineTool` 编进 App，随 App 签名公证，Copy Files 到 `Contents/Applications/`。Settings 新增「Command Line Tool」
 页：显示嵌入工具的路径与 `/usr/local/bin/runtime-viewer-cli` 符号链接的状态，提供 Install /
 Repair / Uninstall；另有开关「Allow command-line access while the app is running」（默认开），关掉即
 App 不再充当 host。
@@ -35,7 +35,7 @@ App 不再充当 host。
    嵌入的工具随 App 开启 hardened runtime，若缺这一条，本地引擎 `dlopen` 第三方镜像会被库校验拦下。
 4. **Settings 的持久化契约**：新持久化属性必须登记进 `Settings.accessPersistedValues()`，
    `SettingsPersistenceTests` 会逐属性验证（`AGENTS.md`「Settings Integration」）。
-5. **`Bundle.main` 对 `Contents/Helpers/` 里的可执行文件不解析为 App 包**（CoreFoundation 只识别
+5. **`Bundle.main` 对 `Contents/Applications/` 里的可执行文件不解析为 App 包**（CoreFoundation 只识别
    `Contents/MacOS/` 布局）。*推测（高置信，实现时实测）*。因此嵌入形态也走多来源提案的定位顺序
    里「从自身可执行路径向上找 `.app`」这一步，不依赖 `Bundle.main`。
 6. **发布脚本**：`ArchiveScript.sh` 用 `xcodebuild -exportArchive` 导出并 `notarytool` 公证整个 App
@@ -44,11 +44,21 @@ App 不再充当 host。
 
 ## 提议方案
 
-- **Xcode**：新增 command-line tool target `runtime-viewer-cli`（product name 同名），源码只有
-  `main.swift`（与 SwiftPM 可执行 target 同内容），链包产品 `RuntimeViewerCommandLineInterface`；
-  entitlements 文件复制 App 的 `disable-library-validation`，不开 sandbox；App target 加 Target
-  Dependency 与 Copy Files 阶段「Embed Command Line Tool」（`dstPath = Contents/Helpers`，Code Sign
-  On Copy）。
+- **Xcode**：新增 command-line tool target `RuntimeViewerCommandLineTool`（`PRODUCT_NAME` 钉为
+  `runtime-viewer-cli`；target 不能与 SwiftPM 可执行 product 同名，否则 workspace 里两个同名
+  scheme 撞车，`xcodebuild -scheme runtime-viewer-cli` 会静默选中 SwiftPM 那个），源码只有
+  `RuntimeViewerCommandLineMain.swift`（与 SwiftPM 可执行 target 同内容，且**不能**叫
+  `main.swift`——那个文件名是顶层代码，与 `@main` 互斥），链包产品
+  `RuntimeViewerCommandLineInterface`；entitlements 文件复制 App 的 `disable-library-validation`，
+  不开 sandbox；App target 加 Target Dependency 与 Copy Files 阶段「Embed RuntimeViewerCLI」
+  （`dstPath = ../Applications` + `dstSubfolder = Executables`，即 `Contents/Applications/`，Code
+  Sign On Copy）。
+- **入口要 `import ArgumentParser`**：Xcode 新建 target 默认开
+  `SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY`，`RuntimeViewerCommandLineTool.main()` 是
+  ArgumentParser 定义的成员，靠 `RuntimeViewerCommandLineInterface` 的传递导入拿不到它。SwiftPM
+  的那份入口没开这个特性，所以两份源码在这一行上不同。
+- **部署目标跟 App 走**（`MACOSX_DEPLOYMENT_TARGET = 15.0`）。Xcode 新建 target 填的是当前 SDK
+  版本，留着会让嵌入的工具在 App 支持、而工具不支持的系统上被 dyld 直接拒绝。
 - **安装器**：`App/CommandLineToolInstaller.swift`（`@MainActor`，`@Dependency` 注册），负责
   `/usr/local/bin/runtime-viewer-cli` 符号链接的状态判断、创建、修复、移除。
 - **设置页**：`RuntimeViewerSettingsUI` 新增「Command Line Tool」页。
@@ -76,7 +86,7 @@ public final class CommandLineToolInstaller {
         case destinationNotWritable          // /usr/local/bin 不可写
         case embeddedToolMissing             // 本 App 包内没有工具（不完整的构建）
     }
-    public var embeddedToolURL: URL? { get } // Bundle.main.bundleURL/Contents/Helpers/runtime-viewer-cli
+    public var embeddedToolURL: URL? { get } // Bundle.main.bundleURL/Contents/Applications/runtime-viewer-cli
     public func status() -> Status
     public func install() throws            // 创建或覆盖符号链接
     public func uninstall() throws
@@ -108,6 +118,8 @@ public final class CommandLineToolInstaller {
 - **放 `Contents/MacOS/` 让 `Bundle.main` 直接解析为 App。** 省一步定位，但把非主可执行文件放进
   `MacOS/` 会让 `CFBundleExecutable` 之外的二进制与主程序混在一起；多来源提案已经有「向上找
   `.app`」的定位步骤，不值得为此改布局。
+- **放 `Contents/Helpers/`。** 提案最初选的位置，2026-09-10 改为 `Contents/Applications/`（见决策
+  日志）。两者在 `Bundle.main` 这一点上等价——都不解析为 App 包，都靠「向上找 `.app`」。
 - **用特权 helper 写 `/usr/local/bin`。** 多数开发机上该目录对用户可写；不可写时给出命令比引入
   一条特权写文件路径更安全。
 - **开关默认关。** 与愿景取舍三（App 优先）相悖：默认关等于默认两个 Bonjour 客户端。
@@ -117,7 +129,8 @@ public final class CommandLineToolInstaller {
 ### 用户可见变化
 
 - 设置窗口多一页「Command Line Tool」。
-- App 包内多一个 `Contents/Helpers/runtime-viewer-cli`。
+- App 包内多一个 `Contents/Applications/runtime-viewer-cli`（`Contents/Applications/` 已经有
+  `RuntimeViewerCatalystHelper.app`）。
 
 ### 可发现性
 
@@ -144,7 +157,7 @@ macOS 15+，仅 macOS。
 ## 落地步骤
 
 1. Xcode tool target、entitlements、Target Dependency、Copy Files 阶段。`RunScript.sh` 产物内
-   `Contents/Helpers/runtime-viewer-cli` 存在且 `codesign -dv` 显示与 App 同一签名；直接运行它能
+   `Contents/Applications/runtime-viewer-cli` 存在且 `codesign -dv` 显示与 App 同一签名；直接运行它能
    `interface NSObject --image /usr/lib/libobjc.A.dylib`（验证 `disable-library-validation` 生效
    要再加载一个非 Apple 签名的 dylib）。
 2. `CommandLineToolInstaller` 与测试。
@@ -162,3 +175,6 @@ macOS 15+，仅 macOS。
 | 2026-09-06 | Created as Draft | 从单篇草案「RuntimeViewer 命令行工具」拆出，用户要求分 3-4 个提案 |
 | 2026-09-06 | 嵌入 App 包与独立包都要 | 用户选定（愿景取舍六） |
 | 2026-09-06 | 放 `Contents/Helpers/`，设置页做 `/usr/local/bin` 符号链接，开关默认开 | 用户在收尾确认轮确认 |
+| 2026-09-10 | 嵌入位置改为 `Contents/Applications/` | 用户在落地 target 时指定，推翻上一行的 `Contents/Helpers/`。先定的是 `Contents/MacOS/`，同一轮内又改到 `Contents/Applications/` |
+| 2026-09-10 | target 名 `RuntimeViewerCommandLineTool`，`PRODUCT_NAME` 钉 `runtime-viewer-cli` | 落地时实测：与 SwiftPM 可执行 product 同名会让 workspace 出现两个同名 scheme，`xcodebuild -scheme runtime-viewer-cli` 静默选中 SwiftPM 那个，Xcode target 一行都不编 |
+| 2026-09-10 | 入口文件名 `RuntimeViewerCommandLineMain.swift`，且要 `import ArgumentParser` | 落地时实测：`main.swift` 是顶层代码文件，与 `@main` 互斥；Xcode target 默认开 `MemberImportVisibility`，传递导入不够 |

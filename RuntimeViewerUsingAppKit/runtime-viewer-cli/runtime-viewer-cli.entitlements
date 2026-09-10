@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The tool inherits the app's hardened runtime, and its local engine dlopens
+	     the images it inspects. Library validation would reject every image not
+	     signed by Apple or by this team, which is most of what anyone points the
+	     tool at. Same exception the app itself carries, for the same reason. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

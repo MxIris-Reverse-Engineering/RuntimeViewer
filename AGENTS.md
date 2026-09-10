@@ -86,6 +86,11 @@ serves release archives.
 - `RuntimeViewer macOS` — main app; Debug-arm64e via `RunScript.sh`, Release archives via `ArchiveScript.sh`
 - `RuntimeViewerCatalystHelper` — Mac Catalyst helper, always built before the main app
 - `RuntimeViewerUsingAppKit` — plain Debug builds of the AppKit app target
+- `RuntimeViewerCommandLineTool` — the copy of `runtime-viewer-cli` embedded in the app bundle.
+  The target is named after the scheme, not after its product (`PRODUCT_NAME` is pinned to
+  `runtime-viewer-cli`): the workspace also contains the SwiftPM package's executable product of
+  that name, and two schemes called `runtime-viewer-cli` make `xcodebuild -scheme` pick one
+  silently. The app target depends on it, so building the app builds it too.
 
 ## Branching Model
 
@@ -149,6 +154,11 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerMCPServer` — MCP server executable (stdio-based, communicates with bridge via TCP)
 - `RuntimeViewerServer` — XPC background service for inter-process communication
 - `RuntimeViewerCatalystHelper` — Mac Catalyst support bridge
+- `RuntimeViewerCommandLineTool` — `runtime-viewer-cli` built as a target dependency of the app and
+  embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
+  entitlements carry `disable-library-validation`, and its deployment target has to track the app's
+  (15.0) — Xcode fills in the current SDK version, which would make the embedded tool refuse to
+  launch on systems the app itself supports
 - `RuntimeViewerUsingUIKit` — iOS variant (secondary)
 
 ### Key Architectural Patterns
