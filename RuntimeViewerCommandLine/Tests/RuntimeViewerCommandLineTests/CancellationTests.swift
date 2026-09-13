@@ -123,6 +123,16 @@ private actor CancellationObservingSourceResolver: SourceResolving {
         throw CommandFailure(code: .cancelled, message: "The stub resolver was cancelled.")
     }
 
+    func listSources() async -> SourcesResult { SourcesResult(hosts: []) }
+
+    func attach(_ target: AttachTarget, progress: @escaping @Sendable (CommandProgress) async -> Void) async throws -> AttachResult {
+        throw CommandFailure(code: .sourceUnavailable, message: "The stub resolver has no process to attach to.")
+    }
+
+    func detach(_ selector: SourceSelector) async throws -> DetachResult {
+        throw CommandFailure(code: .sourceUnavailable, message: "The stub resolver has nothing to detach.")
+    }
+
     func loadedImagePaths() async -> [String] { [] }
 
     func shutdown() async {}
