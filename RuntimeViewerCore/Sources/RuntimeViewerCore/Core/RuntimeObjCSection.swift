@@ -217,10 +217,24 @@ actor RuntimeObjCSection {
             methods: [ObjCMethodInfo],
             typeName: String
         ) -> [RuntimeMemberAddress] {
-            // Build method name -> IMP lookup table
-            var methodIMPs: [String: UInt64] = [:]
+            // Two tables, not one. An instance method and a class method may
+            // share a selector — `-[NSObject description]` and
+            // `+[NSObject description]` both exist — so a single table keyed by
+            // name alone lets whichever is inserted last win, and an instance
+            // property's getter then reports the class method's address while
+            // still printing the instance method's symbol. MachOObjCSection's
+            // rendering context splits them the same way, which is why the
+            // interface text was right about a property the member list got
+            // wrong. Split by the metadata's own flag rather than by the order
+            // the caller concatenated its arrays in.
+            var instanceMethodImplementations: [String: UInt64] = [:]
+            var classMethodImplementations: [String: UInt64] = [:]
             for method in methods where method.imp != 0 {
-                methodIMPs[method.name] = method.imp
+                if method.isClassMethod {
+                    classMethodImplementations[method.name] = method.imp
+                } else {
+                    instanceMethodImplementations[method.name] = method.imp
+                }
             }
 
             var result: [RuntimeMemberAddress] = []
@@ -228,6 +242,7 @@ actor RuntimeObjCSection {
                 let getterName = property.customGetter ?? property.name
                 let setterName = property.customSetter ?? "set\(property.name.uppercasedFirst):"
                 let prefix = property.isClassProperty ? "+" : "-"
+                let methodIMPs = property.isClassProperty ? classMethodImplementations : instanceMethodImplementations
 
                 if let getterIMP = methodIMPs[getterName], shouldInclude(property.name) {
                     result.append(
