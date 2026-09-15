@@ -1,9 +1,9 @@
 #if os(macOS)
 
 import SwiftUI
+import Combine
 import Dependencies
 import RuntimeViewerSettings
-import RuntimeViewerUI
 import UIFoundationSettingsUI
 
 struct UpdateSettingsView: View {
