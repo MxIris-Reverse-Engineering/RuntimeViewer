@@ -28,6 +28,15 @@
       }
     },
     {
+      "identity" : "capstone",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/capstone",
+      "state" : {
+        "revision" : "948031e03ddd5835b733efb82e01ebb6fb30a35a",
+        "version" : "5.0.100"
+      }
+    },
+    {
       "identity" : "cocoacoordinator",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/CocoaCoordinator",
@@ -145,12 +154,39 @@
       }
     },
     {
+      "identity" : "machokit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
+      "state" : {
+        "branch" : "next",
+        "revision" : "61e0a436e6f083f2f6ca8b1fa893ef3c367ff3e5"
+      }
+    },
+    {
       "identity" : "machokitextensions",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
         "revision" : "5623c702a29c48c7c61579f745ee36a83ed56a15",
         "version" : "0.1.1"
+      }
+    },
+    {
+      "identity" : "machoobjcsection",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
+      "state" : {
+        "branch" : "next",
+        "revision" : "c741301a107e75bdc7213722e36cb18c0642cc07"
+      }
+    },
+    {
+      "identity" : "machoswiftsection",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
+      "state" : {
+        "branch" : "next",
+        "revision" : "eeb203033b5713b0544441ab5afc2674c93244c9"
       }
     },
     {
@@ -232,6 +268,15 @@
       "state" : {
         "revision" : "132aea4f236ccadc51590b38af0357a331d51fa2",
         "version" : "6.10.2"
+      }
+    },
+    {
+      "identity" : "rxswiftplus",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Mx-Iris/RxSwiftPlus",
+      "state" : {
+        "revision" : "64a9b8c4718e993ee4601d165c3ee425d44039f0",
+        "version" : "0.2.5"
       }
     },
     {
@@ -352,6 +397,15 @@
       }
     },
     {
+      "identity" : "swift-capstone",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-capstone",
+      "state" : {
+        "revision" : "33998b4516d65fef2e0bb23876b2b04a91d47bfc",
+        "version" : "5.0.0"
+      }
+    },
+    {
       "identity" : "swift-case-paths",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-case-paths",
@@ -415,6 +469,15 @@
       }
     },
     {
+      "identity" : "swift-demangling",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
+      "state" : {
+        "revision" : "8f32e30bfdc9c9cc0d3aeb010739dd7e74ccdbed",
+        "version" : "0.6.3"
+      }
+    },
+    {
       "identity" : "swift-dependencies",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
@@ -475,6 +538,15 @@
       "state" : {
         "revision" : "322d9ffeeba85c9f7c4984b39422ec7cc3c56597",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-issue-reporting",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-issue-reporting",
+      "state" : {
+        "revision" : "71c7c9a761d1ca6ed4ccb6ced040fe1c1a39e8e7",
+        "version" : "2.1.0"
       }
     },
     {
@@ -595,21 +667,21 @@
       }
     },
     {
+      "identity" : "swift-semantic-string",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
+      "state" : {
+        "branch" : "next",
+        "revision" : "ff626b0f9d2d163b08270644ceaf08605ee0e6ff"
+      }
+    },
+    {
       "identity" : "swift-service-lifecycle",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/swift-server/swift-service-lifecycle.git",
       "state" : {
         "revision" : "7f9326b0326ff86e3646295ea6e891f68c471c5e",
         "version" : "2.12.0"
-      }
-    },
-    {
-      "identity" : "swift-snapshot-testing",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
-      "state" : {
-        "revision" : "59a99c458de4d2dee580529b61b4f78dca7b7fa6",
-        "version" : "1.19.4"
       }
     },
     {
@@ -653,8 +725,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "revision" : "4f67b80d2d21b0968ec6c6c45aa01389f1f1ed05",
-        "version" : "0.5.104"
+        "revision" : "7cd9e0944fde324d08832b7737a4b4470e2cde43",
+        "version" : "0.5.105"
       }
     },
     {

@@ -84,7 +84,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOKit",
-                exact: "0.52.101",
+                branch: "next"
             ),
         ),
         .package(
@@ -94,7 +94,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
-                exact: "0.8.105",
+                branch: "next"
             ),
         ),
         .package(
@@ -104,7 +104,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
-                exact: "0.17.1",
+                branch: "next"
             ),
         ),
         .package(
@@ -114,7 +114,7 @@ let package = Package(
             ),
             remote: .package(
                 url: "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
-                from: "0.3.0",
+                branch: "next"
             ),
         ),
         .package(
@@ -167,10 +167,6 @@ let package = Package(
             url: "https://github.com/MxIris-Reverse-Engineering/LaunchServicesPrivate",
             from: "0.1.0",
         ),
-//        .package(
-//            url: "https://github.com/CheekyGhost-Labs/OSLogClient",
-//            from: "2.0.0"
-//        ),
     ],
     targets: [
         .target(

@@ -698,8 +698,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "revision" : "4f67b80d2d21b0968ec6c6c45aa01389f1f1ed05",
-        "version" : "0.5.104"
+        "revision" : "7cd9e0944fde324d08832b7737a4b4470e2cde43",
+        "version" : "0.5.105"
       }
     },
     {
