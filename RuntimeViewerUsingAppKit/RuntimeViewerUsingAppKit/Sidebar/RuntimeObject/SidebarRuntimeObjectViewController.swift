@@ -78,14 +78,18 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         }
 
         tabView.do {
+            // Style before content. Until these three land the tab view still
+            // reserves room for a tab strip and a border, and subtracting that
+            // from the not-yet-laid-out zero bounds gives a negative content
+            // rect — which macOS 27 reports as "Invalid view geometry".
+            $0.tabViewType = .noTabsNoBorder
+            $0.tabPosition = .none
+            $0.tabViewBorderType = .none
             $0.addTabViewItem(NSTabViewItem(view: imageNotLoadedView, loadState: .notLoaded))
             $0.addTabViewItem(NSTabViewItem(view: imageLoadingView, loadState: .loading))
             $0.addTabViewItem(NSTabViewItem(view: imageLoadedView, loadState: .loaded))
             $0.addTabViewItem(NSTabViewItem(view: imageLoadErrorView, loadState: .loadError(NSTabViewItem.PlaceholderLoadStateError.main)))
             $0.addTabViewItem(NSTabViewItem(view: imageUnknownView, loadState: .unknown))
-            $0.tabViewType = .noTabsNoBorder
-            $0.tabPosition = .none
-            $0.tabViewBorderType = .none
         }
 
         imageLoadedView.filterModeButton.do {

@@ -26,7 +26,16 @@ class TabViewController: NSLayerBackedViewController {
         }
     }()
 
-    private let tabView = NSTabView()
+    /// The style is applied here rather than in `viewDidLoad` on purpose:
+    /// `setTabViewItems` runs before the view ever loads — it only touches this
+    /// stored property — and until the style lands AppKit still reserves room
+    /// for a tab strip and a border. Subtracted from a zero bounds that gives a
+    /// negative content rect, which macOS 27 reports as "Invalid view geometry".
+    private let tabView = NSTabView().then {
+        $0.tabViewType = .noTabsNoBorder
+        $0.tabPosition = .none
+        $0.tabViewBorderType = .none
+    }
 
     /// Invoked when the user changes the active tab by tapping the
     /// segmented control. Programmatic selection (e.g. `set` / `select`
@@ -78,10 +87,6 @@ class TabViewController: NSLayerBackedViewController {
         segmentedControl.selectedSegment = 0
         segmentedControl.target = self
         segmentedControl.action = #selector(handleSegmentedControlAction(_:))
-
-        tabView.tabViewType = .noTabsNoBorder
-        tabView.tabPosition = .none
-        tabView.tabViewBorderType = .none
     }
 
     @objc private func handleSegmentedControlAction(_ sender: Any) {
