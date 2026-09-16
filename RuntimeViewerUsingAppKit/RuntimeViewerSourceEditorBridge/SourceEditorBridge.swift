@@ -55,6 +55,8 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
 
     weak var navigationDelegate: SourceEditorBridgingNavigationDelegate?
 
+    weak var minimapLandmarkIconProvider: SourceEditorBridgingMinimapLandmarkIconProvider?
+
     var editorView: NSView { sourceEditorView }
 
     override init() {
@@ -77,6 +79,11 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         // Held weakly by the view, and the view is owned by this object, so this does not
         // retain-cycle and does not need clearing.
         sourceEditorView.contextualMenuItemProvider = self
+
+        // Registered here, unconditionally, and not once the app supplies its provider: the
+        // minimap draws no hover label at all — not merely no icon — while it has nobody to ask
+        // for the icon. See the conformance at the end of this file. Held weakly by the view.
+        sourceEditorView.setMinimapLandmarkIconProvider(self)
     }
 
     func setSource(
@@ -408,6 +415,95 @@ extension SourceEditorBridge {
             }
             bridge?.reportCommandClick(at: position)
             return true
+        }
+    }
+}
+
+// MARK: - Minimap Landmark Icons
+
+/// The framework builds a hover label's layers only when it has somewhere to ask for the icon:
+/// `MinimapView.showExpandedLandmarks(_:mainLandmark:availableWidth:)` returns before creating
+/// one when its weak `iconProvider` is nil. The accent-coloured scope highlight is drawn by an
+/// earlier call and appears regardless, which is why a missing provider looks like "the frame
+/// shows but no text" rather than like nothing happening. So the bridge always registers itself
+/// and answers with whatever the app supplies, nil included — nil only costs the icon, and the
+/// label then starts at its left edge instead of after the icon's square.
+extension SourceEditorBridge: MinimapLandmarkIconProvider {
+    /// The side of the square the framework lays the icon out in. It sizes the icon at the
+    /// label's height minus 4pt (`showExpandedLandmarks`, 26.6 @ 0x1B75E8), and the label is
+    /// 18pt tall — read off Xcode's own layer tree, where a hovered
+    /// `MinimapExpandedLandmarkLayer` is 18pt and its `MinimapLandmarkLayer` child starts at
+    /// x = 18, which is 2 + 14 + 2.
+    private static let iconPointSize: CGFloat = 14
+
+    func icon(for landmarkType: LandmarkType) -> CGImage? {
+        guard let minimapLandmarkIconProvider,
+              let image = minimapLandmarkIconProvider.sourceEditorBridge(
+                  self,
+                  minimapIconForLandmarkOfKind: Self.landmarkKind(for: landmarkType),
+                  pointSize: Self.iconPointSize
+              )
+        else { return nil }
+        return rasterize(image, pointSize: Self.iconPointSize)
+    }
+
+    /// The framework never draws the image itself — it assigns it as a layer's `contents` and
+    /// copies the content layer's `contentsScale` over — so what it needs is a bitmap already at
+    /// the screen's scale, and, for an image drawn by a handler, already resolved against the
+    /// editor's appearance. Both are decided here rather than left to `NSImage`'s defaults.
+    private func rasterize(_ image: NSImage, pointSize: CGFloat) -> CGImage? {
+        let scale = sourceEditorView.window?.backingScaleFactor ?? 2
+        let pixelLength = Int((pointSize * scale).rounded(.up))
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelLength,
+            pixelsHigh: pixelLength,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return nil }
+        // In points, so the context below draws at `scale` rather than one pixel per point.
+        bitmap.size = NSSize(width: pointSize, height: pointSize)
+        guard let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = context
+        sourceEditorView.effectiveAppearance.performAsCurrentDrawingAppearance {
+            image.draw(in: NSRect(origin: .zero, size: bitmap.size), from: .zero, operation: .sourceOver, fraction: 1)
+        }
+        return bitmap.cgImage
+    }
+
+    /// Declaration and definition fold together — Xcode draws them alike, and this pane shows
+    /// interfaces, where everything is a declaration anyway. `@unknown default` is required:
+    /// the enum is resilient, and a case Xcode adds later must not stop the label.
+    private static func landmarkKind(for landmarkType: LandmarkType) -> SourceEditorBridgingLandmarkKind {
+        switch landmarkType {
+        case .mark: .mark
+        case .file: .file
+        case .actorDef: .actor
+        case .classDecl, .classDef: .class
+        case .extensionDecl, .extensionDef: .extension
+        case .protocolDecl, .protocolDef: .protocol
+        case .methodDecl, .methodDef: .method
+        case .functionDecl, .functionDef: .function
+        case .propertyDecl, .propertyDef: .property
+        case .enumDef: .enum
+        case .structDef: .struct
+        case .unionDef: .union
+        case .typeDef: .typeAlias
+        case .include: .include
+        case .define: .define
+        case .macro: .macro
+        case .blockDirective, .rule, .entity, .attribute, .anchorTarget, .anchorLink,
+             .key, .style, .heading, .probe, .process, .thread:
+            .other
+        @unknown default: .other
         }
     }
 }

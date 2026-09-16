@@ -24,6 +24,69 @@ public protocol SourceEditorLanguage {
 public protocol SourceEditorLanguageService : AnyObject {
 }
 
+// What a landmark is — a class, a method, a `// MARK:` line. Declared **in full and in the
+// framework's own order**: this is a resilient enum, so which case a value is comes from its
+// index in this declaration (see the note on resilient enums at the end of
+// ../../../../README.md). The only reason to spell out cases the bridge never expects —
+// `heading`, `probe`, `thread` — is to keep the ones it does expect at the right index.
+// Copied from the 26.6 dump; 27.0 declares the same 34 cases in the same order.
+public enum LandmarkType {
+  public enum MarkStyle {
+    case plain
+    case attention
+    case fixMe
+    case question
+    case toDo
+    case separator
+  }
+  case mark(SourceEditor.LandmarkType.MarkStyle)
+  case file
+  case actorDef
+  case classDecl
+  case classDef
+  case extensionDecl
+  case extensionDef
+  case protocolDecl
+  case protocolDef
+  case methodDecl
+  case methodDef
+  case functionDecl
+  case functionDef
+  case propertyDecl
+  case propertyDef
+  case enumDef
+  case structDef
+  case unionDef
+  case typeDef
+  case include
+  case define
+  case macro
+  case blockDirective
+  case rule
+  case entity
+  case attribute
+  case anchorTarget
+  case anchorLink
+  case key
+  case style
+  case heading
+  case probe
+  case process
+  case thread
+}
+
+// Asked for the icon that leads the minimap's hover label. **Without a provider there is no
+// label at all**: `MinimapView.showExpandedLandmarks(_:mainLandmark:availableWidth:)` (26.6 @
+// 0x1B75E8) returns before building a single layer when its weak `iconProvider` is nil, while
+// the accent-coloured scope highlight comes from an earlier call and appears regardless — so
+// "the frame shows but no text" is the symptom of a missing provider, not of missing landmark
+// data. Xcode's `IDESourceEditorView` conforms and hands itself over; the bridge does the same.
+//
+// One requirement, so witness-table order cannot go wrong (PWT offset 0x8 in the dump).
+public protocol MinimapLandmarkIconProvider : AnyObject {
+  func icon(for landmarkType: SourceEditor.LandmarkType) -> CoreGraphics.CGImage?
+}
+
 public protocol SourceEditorColorTheme {
 }
 
@@ -358,6 +421,10 @@ extension SourceEditor.TextAttributeOverrideProvider {
   public var isMinimapShown: Swift.Bool {
     get
   }
+  // Writes the provider to the minimap config and, when a minimap is already installed, to its
+  // view as well (0x3DB958), so the order relative to `installMinimap()` does not matter.
+  // Both hold it weakly.
+  public func setMinimapLandmarkIconProvider(_ provider: SourceEditor.MinimapLandmarkIconProvider)
   // Genuinely idempotent, unlike the pairs above: both read the old flag and skip the work
   // when it did not change. `areScopeGuidesShown` is a stored property with no exported
   // accessor, so these two functions are the only way in.

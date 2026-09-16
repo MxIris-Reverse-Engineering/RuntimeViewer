@@ -24,6 +24,14 @@ protocol SourceEditorBridging: NSObjectProtocol {
     /// Receives the ⌘-click notifications. Held weakly.
     var navigationDelegate: SourceEditorBridgingNavigationDelegate? { get set }
 
+    /// Supplies the icon that leads each of the minimap's hover labels. Held weakly.
+    ///
+    /// Optional in the sense that labels still appear without one — the bridge itself is what
+    /// the framework asks, and it answers nil when there is nobody to forward to — but the
+    /// framework's own rule is worth knowing: it builds a label only when it has a provider to
+    /// ask, so the bridge registers itself unconditionally rather than only once this is set.
+    var minimapLandmarkIconProvider: SourceEditorBridgingMinimapLandmarkIconProvider? { get set }
+
     /// Replaces the displayed source, together with what each range of it actually is.
     ///
     /// The framework parses plain text, so it cannot tell `NSString` from any other identifier
@@ -135,4 +143,50 @@ protocol SourceEditorBridgingNavigationDelegate: NSObjectProtocol {
     ///
     /// - Parameter characterRange: as above, the token's UTF-16 range in the current source.
     func sourceEditorBridge(_ bridge: SourceEditorBridging, contextualMenuItemsForTokenIn characterRange: NSRange) -> [NSMenuItem]
+}
+
+/// Asked for the icon that leads each of the minimap's hover labels — the `[M]` in
+/// `[M] -copyWithZone:`.
+///
+/// The framework asks by its own `LandmarkType`, a resilient enum that cannot cross the bundle
+/// boundary, so the bridge folds it into `SourceEditorBridgingLandmarkKind` first. The answer is
+/// an `NSImage` rather than the `CGImage` the framework wants, because that is what the app's
+/// icon renderer produces and because an image drawn by a handler resolves light and dark at
+/// draw time; the bridge rasterises it against the editor's own appearance and screen scale.
+@objc(RuntimeViewerSourceEditorBridgingMinimapLandmarkIconProvider)
+protocol SourceEditorBridgingMinimapLandmarkIconProvider: NSObjectProtocol {
+    /// - Parameter pointSize: the side of the square the icon is laid out in. Draw for that
+    ///   size rather than returning a larger image to be scaled down, or the glyph goes soft.
+    /// - Returns: nil for a kind that gets no icon; the label then starts at its left edge.
+    func sourceEditorBridge(
+        _ bridge: SourceEditorBridging,
+        minimapIconForLandmarkOfKind kind: SourceEditorBridgingLandmarkKind,
+        pointSize: CGFloat
+    ) -> NSImage?
+}
+
+/// What a landmark is, as far as choosing an icon goes.
+///
+/// The framework tells a declaration from a definition — `classDecl` against `classDef` — and
+/// Xcode draws the two alike, so they are folded here. The kinds that only other languages
+/// produce (Markdown headings, CSS rules, and so on) all fold into `other`.
+@objc(RuntimeViewerSourceEditorBridgingLandmarkKind)
+enum SourceEditorBridgingLandmarkKind: Int {
+    case mark
+    case file
+    case actor
+    case `class`
+    case `extension`
+    case `protocol`
+    case method
+    case function
+    case property
+    case `enum`
+    case `struct`
+    case union
+    case typeAlias
+    case include
+    case define
+    case macro
+    case other
 }

@@ -47,11 +47,16 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// why the bridge takes them all at once and diffs them itself.
     private var displayOptionsObserveToken: ObserveToken?
 
+    /// The language the current source was handed over as. The minimap's hover icons colour
+    /// type-level landmarks by it, the way the sidebar colours Objective-C and Swift apart.
+    private var displayedLanguageIdentifier: String?
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
         guard let bridge else { return }
         bridge.navigationDelegate = self
+        bridge.minimapLandmarkIconProvider = self
 
         effectiveAppearanceObservation = view.observe(\.effectiveAppearance) { [weak self] _, _ in
             MainActor.assumeIsolated {
@@ -112,9 +117,11 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
                 // The parse the editor makes of this text cannot tell what an identifier is;
                 // these runs can, so they are handed over to correct it.
                 let (semanticRanges, nodeTypeNames) = Self.semanticNodeTypes(of: renderedInterface.semanticString)
+                let languageIdentifier = Self.languageIdentifier(for: runtimeObject.kind)
+                displayedLanguageIdentifier = languageIdentifier
                 bridge?.setSource(
                     renderedInterface.attributedString.string,
-                    languageIdentifier: Self.languageIdentifier(for: runtimeObject.kind),
+                    languageIdentifier: languageIdentifier,
                     semanticRanges: semanticRanges,
                     semanticNodeTypeNames: nodeTypeNames
                 )
@@ -242,5 +249,17 @@ extension ContentSourceEditorViewController: SourceEditorBridgingNavigationDeleg
 
     @objc private func openInNewTabAction(_ sender: RuntimeObjectMenuItem) {
         openInNewTabRelay.accept(sender.runtimeObject)
+    }
+}
+
+// MARK: - Minimap Landmark Icons
+
+extension ContentSourceEditorViewController: SourceEditorBridgingMinimapLandmarkIconProvider {
+    func sourceEditorBridge(
+        _ bridge: SourceEditorBridging,
+        minimapIconForLandmarkOfKind kind: SourceEditorBridgingLandmarkKind,
+        pointSize: CGFloat
+    ) -> NSImage? {
+        SourceEditorLandmarkIcon.image(for: kind, isSwift: displayedLanguageIdentifier == "swift", pointSize: pointSize)
     }
 }
