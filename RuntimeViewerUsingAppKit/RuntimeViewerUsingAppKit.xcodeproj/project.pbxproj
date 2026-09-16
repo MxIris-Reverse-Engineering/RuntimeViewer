@@ -1232,13 +1232,10 @@
 				MARKETING_VERSION = 3.0.0;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
-					"-framework",
-					SourceEditor,
-					"-framework",
-					SourceModelSupport,
-					"-framework",
-					SourceModel,
+					"-undefined",
+					dynamic_lookup,
 				);
+				OTHER_SWIFT_FLAGS = "-Xfrontend -disable-autolink-framework -Xfrontend SourceEditor -Xfrontend -disable-autolink-framework -Xfrontend SourceModelSupport -Xfrontend -disable-autolink-framework -Xfrontend SourceModel";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1267,13 +1264,10 @@
 				MARKETING_VERSION = 3.0.0;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
-					"-framework",
-					SourceEditor,
-					"-framework",
-					SourceModelSupport,
-					"-framework",
-					SourceModel,
+					"-undefined",
+					dynamic_lookup,
 				);
+				OTHER_SWIFT_FLAGS = "-Xfrontend -disable-autolink-framework -Xfrontend SourceEditor -Xfrontend -disable-autolink-framework -Xfrontend SourceModelSupport -Xfrontend -disable-autolink-framework -Xfrontend SourceModel";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1302,13 +1296,10 @@
 				MARKETING_VERSION = 3.0.0;
 				ONLY_ACTIVE_ARCH = NO;
 				OTHER_LDFLAGS = (
-					"-framework",
-					SourceEditor,
-					"-framework",
-					SourceModelSupport,
-					"-framework",
-					SourceModel,
+					"-undefined",
+					dynamic_lookup,
 				);
+				OTHER_SWIFT_FLAGS = "-Xfrontend -disable-autolink-framework -Xfrontend SourceEditor -Xfrontend -disable-autolink-framework -Xfrontend SourceModelSupport -Xfrontend -disable-autolink-framework -Xfrontend SourceModel";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_SOURCE_EDITOR_BRIDGE_BUNDLE_IDENTIFIER)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

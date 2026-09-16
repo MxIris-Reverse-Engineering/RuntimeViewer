@@ -1,8 +1,12 @@
 # Stubs
 
-Hand-written link stubs for the private Swift frameworks that ship inside Xcode
+Hand-written stubs for the private Swift frameworks that ship inside Xcode
 (`Xcode.app/Contents/SharedFrameworks/`). They exist so `RuntimeViewerSourceEditorBridge`
-can be compiled and linked without Apple's binaries being present in this repository.
+can be **compiled** without Apple's binaries being present in this repository — and so
+`RuntimeViewerSourceEditorBridgeTests`, which still links them, can be built.
+
+**The bridge itself no longer links against the `.tbd` files.** See *How the bridge links*
+below; it matters for what the `.tbd` half of this directory is still for.
 
 Nothing here is Apple-authored. Each Swift framework directory holds two text files:
 
@@ -32,6 +36,43 @@ a node type name to its id.
 The Swift frameworks enable library evolution, so a `.swiftinterface` is all the compiler needs —
 it compiles the interface into its module cache on demand. No binary `.swiftmodule` is
 required, and no Apple binary is redistributed.
+
+## How the bridge links
+
+`RuntimeViewerSourceEditorBridge` links with `-undefined dynamic_lookup`, and suppresses Swift's
+autolink directives with `-Xfrontend -disable-autolink-framework -Xfrontend <framework>` for each
+of the three. It therefore carries **no load command naming any of these frameworks**, and the
+symbols resolve at load time in the flat namespace that `SourceEditorLoader`'s
+`dlopen(…, RTLD_GLOBAL)` has already built.
+
+Suppressing autolink is not optional: `import SourceEditor` writes a linker directive into the
+object file, so without it the linker adds `-framework SourceEditor` back and the load command
+returns.
+
+**Why:** a recorded dependency is matched against the string in the framework's own
+`LC_ID_DYLIB`, and that string is not a stable interface. Xcode 27 changed
+`@rpath/SourceEditor.framework/…` to `@rpath/SharedFrameworks/SourceEditor.framework/…`, which
+made every Xcode-27 machine fall silently back to `NSTextView` — dyld could not match the
+image the loader had already brought up. See
+`Documentations/ResolvedIssues/2026-09-16-xcode27-shared-frameworks-install-name.md`.
+
+**What this costs, and what it does not.** Symbol existence is no longer checked when the bridge
+links. It is still checked at load: a symbol that no loaded image exports makes `dlopen` fail and
+name it (`symbol not found in flat namespace '_$s12SourceEditor0aB4ViewCMn'`), which is the path
+`SourceEditorLoader` already logs. Two tests cover the arrangement:
+
+- `RuntimeViewerSourceEditorBridgeTests/SourceEditorBridgeLinkageTests.swift` reads the built
+  file's load commands and fails if any names these frameworks — that is, if `-framework` comes
+  back.
+- `./VerifyAcrossXcodes.sh <bridge bundle>` loads the bundle against every installed Xcode, one
+  process each, and drives the whole bridging surface. The per-process part is the point: the
+  frameworks are `dlopen`ed once and never unloaded, so a single test bundle can only ever
+  exercise one version.
+
+**The `.tbd` files are still needed** — `RuntimeViewerSourceEditorBridgeTests` links them
+(`-weak_framework`, resolved through `LD_RUNPATH_SEARCH_PATHS`), so `UsedSymbols.txt`,
+`Trim.py` and `Generate.sh` all remain in use. The `.swiftinterface` files are needed by both
+targets and by every compile.
 
 ## Regenerating the `.tbd`
 
@@ -124,9 +165,13 @@ runtime skips a resilient witness whose requirement descriptor is NULL (`initial
 in the runtime's `Metadata.cpp` — it is the mechanism for requirements added in a later version).
 Declaring both is legal because only a *call* would be ambiguous, and the bridge only implements.
 
-Weak or not, **the linker still insists every referenced symbol resolves**, so the stub has to
-describe the union of the versions rather than whichever Xcode generated it. `Trim.py` does that:
-after trimming it appends any `CrossVersionSymbols.txt` entry that the bridge references and the
-generated `.tbd` lacks. Note `--full` skips trimming and therefore skips this too — after a `--full`
-run, re-run `Trim.py` by hand on that framework before linking, or the link fails on the very
-symbol the file exists for.
+Weak or not, **a linker insists every referenced symbol resolves**, so a stub that is linked has
+to describe the union of the versions rather than whichever Xcode generated it. `Trim.py` does
+that: after trimming it appends any `CrossVersionSymbols.txt` entry the generated `.tbd` lacks.
+Note `--full` skips trimming and therefore skips this too — after a `--full` run, re-run `Trim.py`
+by hand on that framework before linking, or the link fails on the very symbol the file exists for.
+
+Since the bridge stopped linking (see *How the bridge links*), this constraint binds only the
+targets that still do, which today is the test bundle. `CrossVersionSymbols.txt` is kept anyway:
+it costs two lines, it is the record of *which* requirement changed shape, and it is what the
+stub would need again the moment anything links these frameworks.

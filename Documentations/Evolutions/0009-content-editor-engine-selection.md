@@ -992,6 +992,96 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 - **新术语** —— `PWT 偏移`、`dispatch thunk` 与 `直接符号` 的区分属于跨项目通用概念，
   应登记进全局术语表；`stub framework` 在本项目的特定含义登记进项目术语表。
 
+### 切换 Xcode，以及 Xcode 27 的安装名变更（2026-09-16，已批准并落地）
+
+**摘要。** 两件事一起做：
+
+1. **Bug —— Xcode 27.0 下编辑器静默退回 `NSTextView`。** 27.0 把这几个框架的 `LC_ID_DYLIB`
+   从 `@rpath/SourceEditor.framework/Versions/A/SourceEditor` 改成了
+   `@rpath/SharedFrameworks/SourceEditor.framework/Versions/A/SourceEditor`。bridge bundle 的
+   `LC_LOAD_DYLIB` 记的仍是旧那串（它来自 stub 的 `.tbd`），于是 dyld 认不出 loader 已经按绝对
+   路径 `dlopen` 进来的那份框架，转去 rpath 与默认路径里找文件，找不到即报 `Library not loaded`，
+   `SourceEditorLoader` 归类成 `bridgeBundleLoadFailed` 并回落。**与上一条 Xcode 27 修复
+   （`adjustNodeType(for:)` 改返回 `Bool`）无关** —— 那条修的是 conformance 绑定，而这条根本走
+   不到那一步。
+2. **功能 —— 让用户选用哪个 Xcode 的编辑器。** 现在的顺序写死为
+   `Bundle.main.privateFrameworksURL` → LaunchServices 给 `com.apple.dt.Xcode` 的那一个 →
+   `/Applications/Xcode.app`。装了多个 Xcode 时用户既无从指定，也无从绕开坏掉的那一版。
+
+**根因证据（全部实测，无推断）：**
+
+| 事实 | 取证方式 |
+|---|---|
+| 27.0 的框架安装名多了 `SharedFrameworks/` 一段 | `otool -l … \| grep -A3 LC_ID_DYLIB`，26.5 / 26.6 / 27.0 三版对照 |
+| bundle 加载失败的确切报错 | 探针进程按 loader 的同一套顺序 `dlopen` 四个框架，再 `Bundle.loadAndReturnError()`：26.6 成功，27.0 报 `Library not loaded: @rpath/SourceEditor.framework/Versions/A/SourceEditor` |
+| 改安装名即可修好 | 把已构建的 bundle 复制一份、`install_name_tool -change` 三处、ad-hoc 重签，27.0 下加载成功并跑通整个 `SourceEditorBridging` 面 |
+| 27 没有别的破坏性变更 | `UsedSymbols.txt` 的 135 个符号逐个对 27.0 的二进制核对，只有 Xcode 26 专属的那个 `adjustNodeType` descriptor 缺席（已由 `@_weakLinked` 覆盖）；`Default (Dark).xccolortheme` 等资源仍在原处 |
+
+**方案 A —— 修复：bridge 不再链接 Xcode 的框架，符号改走运行时扁平查找。**
+
+`RuntimeViewerSourceEditorBridge` 的三个 configuration 同改：
+
+- `OTHER_LDFLAGS`：删掉 `-framework SourceEditor / SourceModelSupport / SourceModel`，换成
+  `-undefined dynamic_lookup`。
+- `OTHER_SWIFT_FLAGS`：加三组 `-Xfrontend -disable-autolink-framework -Xfrontend <框架名>`，
+  否则 Swift 的 autolink 指令会把 `-framework` 又塞回去。
+
+产物里从此没有指向这三个框架的 `LC_LOAD_DYLIB`，安装名叫什么都不再相干；符号在
+`dlopen(…, RTLD_GLOBAL)` 建立的扁平命名空间里解析。**实测同一个 bundle 在 26.5 / 26.6 / 27.0
+上全部跑通**：构建、加载、实例化、七项显示开关全开、`applyTheme`、objc 与 swift 各一次
+`setSource`、布局与绘制。
+
+代价，以及并没有付出的代价：
+
+- **失去的是链接期符号校验**；`Stubs/*.tbd` 从此只服务测试 target。
+- **没有失去「符号缺了会被发现」**：实测在框架未加载的情况下 `dlopen` 该 bundle 仍然硬失败并
+  点名符号（`symbol not found in flat namespace '_$s12SourceEditor0aB4ViewCMn'`）。报错点从链接
+  期挪到了加载期，而加载期失败恰好就是 `SourceEditorLoader` 已经在记日志的那条路径。
+- `@_weakLinked` 照常成立：两个 `adjustNodeType` descriptor 在产物里仍是
+  `weak external (dynamically looked up)`。
+
+**方案 B —— 功能：Settings › Editor 加一个 Xcode 选择器。**
+
+- `Settings.Editor` 新增 `@Default("") public var sourceEditorXcodePath: String`，空串表示
+  Automatic（沿用现有查找顺序）。`accessPersistedValues()` 已按 top-level 的 `editor` 覆盖，无需
+  改动；`SettingsPersistenceTests` 按其既有规则补一条。
+- `XcodeSourceEditorLocator` 增加两件事：`installedXcodes()` 走
+  `NSWorkspace.urlsForApplications(withBundleIdentifier:)` 并读 `CFBundleShortVersionString`；
+  `frameworksDirectory(preferring:)` 把显式选择排在最前 —— **显式选择要压过内嵌副本**，用户既然
+  点了名，内嵌副本再赢就反直觉。
+- `SourceEditorLoader` 把设置里的路径传给 locator，并暴露「实际加载自哪里」供设置页显示。
+- `EditorSettingsView` 的 Engine section 加 Picker：Automatic / 每个已安装 Xcode（带版本号）/
+  当前自定义路径（若有）/ `Other…`（走 `NSOpenPanel`）。选中的 Xcode 缺框架时就地提示。
+- 生效方式：**一个进程只能 `dlopen` 一次，换 Xcode 必须重启 app**。footer 写明这一点，并给一个
+  `Relaunch RuntimeViewer` 按钮。
+- 重启逻辑目前是 `HelperServiceVersionChecker.relaunchApplication()` 的 private 方法。抽成
+  `RuntimeViewerSettings` 里的一个 `@Dependency` 服务（`XcodeSourceEditorLocator` 已经是同一模块
+  里「不属于 schema、但 app 与设置页都要用」的先例），`HelperServiceVersionChecker` 改用它，不留
+  第二份实现。
+
+**回归测试。** 两层，都永久保留：
+
+- **单元测试（任何机器可跑）**：`RuntimeViewerSourceEditorBridgeTests` 断言 bridge bundle 的
+  `LC_LOAD_DYLIB` 里没有任何 SourceEditor 系框架。红绿可验 —— 把 `-framework` 改回去即失败。
+- **跨 Xcode 脚本**：`Stubs/VerifyAcrossXcodes.sh`，对本机每个已安装 Xcode 起一个独立进程，按
+  loader 的顺序加载框架与 bundle，再跑完整的 `SourceEditorBridging` 面。单元测试做不到这一层：
+  框架一个进程只能加载一版，换版必须换进程。
+
+**落地时实测的结果：**
+
+- **测试 target 不需要改，已实测。** 它仍 `-weak_framework` 链接 stub，但 `@rpath` 是靠
+  `LD_RUNPATH_SEARCH_PATHS` 里的 `$(DEVELOPER_DIR)/../SharedFrameworks` 去找**文件**、而不是靠
+  「已加载」匹配，所以旧式依赖照样能落到 27 的二进制上。把测试包的 rpath 改指向
+  `Xcode-27.0.app` 并用 27 的 `xctest` 跑，6 个测试全过（含两个真正驱动框架的折叠测试）。
+  注意 rpath 必须连同 `xctest` 一起换：`SharedFrameworks` 里还有 `libXCTestSwiftSupport.dylib`，
+  只换 rpath 会让 27 的它撞上 26 的 `XCTestCore`，报的是 XCTest 的符号缺失、与本主题无关。
+- **语义着色在 27 下是否真的生效，仍未验证。** 探针验到的是「不崩、能渲染」；`adjustNodeType` 的
+  `Bool` witness 是否被调用、颜色是否真的落上去，要实机开着 27 看一眼才算数。
+
+**文档。** 本节与决策日志；另写
+`Documentations/ResolvedIssues/2026-09-16-xcode27-shared-frameworks-install-name.md` 并登记进
+`Documentations/README.md`；`Stubs/README.md` 更新链接方式那一节。
+
 ## 决策日志
 
 | 日期 | 变更 | 说明 |
@@ -1035,3 +1125,6 @@ header / 查找栏）尚未逐项验证。设置面板的说明文案需要随�
 | 2026-08-31 | 折叠状态跨接口保留 | 崩溃修复要求每次换 source 前展开全部折叠，代价是离开一个类再回来永远全展开。改为在展开**之前**把 `FoldingController.stateDictionaryForSaving`（`0x57C5C`，内容是 `{"folds": [{start:{line,col}, end:{line,col}}], "documentLength": Int}`）存进会话内 LRU，换完 data source 立刻 `restore(from:)`（`0x580C0`）。三点实测：**restore 不需要先布局或解析**——它读的是行列数字，赋值 data source 后紧接着调即可生效；**框架自己有两道保护**——`documentLength` 不符则整份丢弃，位置越界的 fold 单独丢掉，所以恢复路径不会把崩溃带回来；**但保护不能当键用**——一份等长且行结构相同的接口（只改类名）能顺利通过两道保护，拿到别人的折叠。故键取自文本内容（`hashValue` + 字符数），而不是 `RuntimeObject`：bridge 只拿得到 `String`，且任何影响渲染的生成选项一变文本就变、键随之失效，用对象作键反而要追着每个选项跑。容量 24，不持久化（折叠描述的是某一次渲染，跨启动无意义）。**第一版的键测试是假的**——用反转文本当「等长冒充者」，行结构全乱，框架自己就拒了，键退化成只看长度时测试照样通过；换成同构文本后，退化键会让且只让该测试失败。stub 增 2 个符号。 |
 | 2026-09-16 | Xcode 27 改了 `SourceModelNodeTypeAdjuster.adjustNodeType(for:)` 的签名，stub 同时声明两版 | 27.0 起该 requirement 返回 `Bool`（"已处理，跳过 `StandardIdentifierNodeTypeAdjuster`"，反编译 27.0 的 `SourceModelSyntaxTokenProvider.adjustNodeType(for:sourceModel:)` @ 0x63DD8 确认只在回答 false 时才走兜底），旧签名不再导出；每个 Xcode 恰好导出两个 method descriptor 之一，conformance 引用另一个就绑不上。解法：stub 里两版都声明并标 `@_weakLinked`，不存在的那个绑成 NULL，Swift runtime 的 `initializeResilientWitnessTable`（Metadata.cpp）对 NULL requirement 直接跳过——它本就是为"后加的 requirement"设计的。两版都声明合法：只有*调用*才会歧义，而这里只实现。**但 weak 引用在链接期仍要能解析**（实测 `ld: symbol(s) not found`），所以 stub 得描述两个版本的并集：新增 `CrossVersionSymbols.txt`，`Trim.py` 在裁剪时把其中本 Xcode 没有的符号补进 `.tbd`。`SemanticNodeTypeAdjuster` 两个方法共用一个 `retypeNode`。已在构建产物里验证两个 descriptor 均为 `weak external`。88/88 个 SourceEditor 符号在 27.0 里仍在，这是唯一的破坏性变化。 |
 | 2026-09-16 | minimap 悬停浮层从未出现，真因是没注册 icon provider | 用户要的是 Xcode 里贴在 minimap 分割线**左侧**的 `[M] -copyWithZone:` 浮层。八轮探针把 landmark 数据、裁剪、宽度门槛、`layoutWidth`、mouseMoved 投递、`gestureState`、`deltaY` 阈值、行号匹配全部排除后，读 `MinimapView.showExpandedLandmarks(_:mainLandmark:availableWidth:)`（26.6 @ 0x1B75E8）发现开头三道 guard 之一是 weak 的 `iconProvider`，为 nil 就一层不建；而选中框由更早的 `MinimapView.highlightLandmark(_:scopeHighlight:)` 画，不看 provider，所以"有框没字"。修复：stub 补 `LandmarkType`（34 case 按 dump 顺序全写）、`MinimapLandmarkIconProvider`、`setMinimapLandmarkIconProvider(_:)`；bridge 在 `init` 里**无条件**把自己注册为 provider，图标经 `@objc` 桥接协议向 App 要 `NSImage`、在 editor 的 appearance 与窗口倍率下栅格化成 `CGImage`（框架只设 `contents`，不自己画）；App 侧复用 sidebar 的 `RuntimeObjectIcon`。图标边长 14pt = 标签高 18 − 4，取自 Xcode 自己的图层捕获。详见 ResolvedIssues 同名纪要，含排除表。 |
+| 2026-09-16 | Xcode 27 的回退是安装名变了，不是 API 变了 | 27 把四个框架的 `LC_ID_DYLIB` 从 `@rpath/SourceEditor.framework/…` 改成 `@rpath/SharedFrameworks/SourceEditor.framework/…`。框架之间照常互相解析（各自用的就是新名），只有 bridge bundle 记的是 stub `.tbd` 里的旧名，dyld 于是不把已经 `dlopen` 进来的那份算数，转去文件系统找、找不到，bundle 加载失败 → `SourceEditorLoader` 回落到 `NSTextView`。**回落天生静默**，因为它同时也是"这台机器没装 Xcode"的正常行为。与同日那条 `adjustNodeType` 返回 `Bool` 的修复无关：那条修的是 conformance 绑定，发生在 bundle 已加载之后。取证：三版 `otool -l` 对照安装名；探针分离出"框架成功、bundle 失败"这一步；`install_name_tool -change` 反向验证改这一个字符串即可修好；`UsedSymbols.txt` 的 135 个符号逐个核对 27.0，只有 26 专属的那个 descriptor 缺席（已由 `@_weakLinked` 覆盖）。详见 ResolvedIssues 同名纪要。 |
+| 2026-09-16 | bridge 改为 `-undefined dynamic_lookup`，不再记录任何安装名 | 改成 27 的安装名会弄坏 26；双 bundle 变体要多一个签名产物且每次布局变动都要再加一个。采用的做法是让 bridge 根本不链接这些框架：`OTHER_LDFLAGS = -undefined dynamic_lookup`，外加三组 `-Xfrontend -disable-autolink-framework`（**必需** —— 不抑制的话 Swift 的 autolink 指令会把 `-framework` 加回来，改 `OTHER_LDFLAGS` 等于没改）。符号落到 `dynamically looked up`，在 loader 用 `RTLD_GLOBAL` 建立的扁平命名空间里解析。**丢掉的是链接期符号校验**（`Stubs/*.tbd` 从此只服务测试 target）；**没丢掉"符号缺了会被发现"** —— 实测框架未加载时 `dlopen` 该 bundle 仍硬失败并点名符号，只是报错点挪到了加载期，而那正是 loader 已经在记日志的那条路。`@_weakLinked` 照常成立，两个 descriptor 仍是 `weak external (dynamically looked up)`。同一个 bundle 在 26.5 / 26.6 / 27.0 上跑通完整 `SourceEditorBridging` 面；Release 双架构无警告。 |
+| 2026-09-16 | 回归测试分两层，因为单元测试覆盖不到跨版本 | 框架 `dlopen` 一次就不卸载，一个进程只能验一版，所以"换个 Xcode 还能不能加载"这件事测试 bundle 天然做不到。分成：`SourceEditorBridgeLinkageTests` 自己解析产物的 Mach-O 加载命令、逐 slice 断言没有指向这四个框架的依赖（把 `-framework` 改回去即红，且不需要装 Xcode）；`Stubs/VerifyAcrossXcodes.sh` 对每个已安装 Xcode 起独立进程跑完整功能面。 |
