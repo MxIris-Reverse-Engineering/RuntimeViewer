@@ -64,7 +64,7 @@ public final class InspectorRelationshipsViewModel: ViewModel<InspectorRuntimeOb
         // such guard, so a slow cross-image union could land on top of a newer
         // object's results.
         $runtimeObject
-            .flatMapLatest { runtimeObject -> Observable<RelationshipsResult> in
+            .flatMapLatest { [unowned self] runtimeObject -> Observable<RelationshipsResult> in
                 Observable<RelationshipsResult>.async { [weak self] in
                     // `weak` + guard, not `unowned`: the async Task outlives
                     // disposal (cancellation is cooperative), and the
