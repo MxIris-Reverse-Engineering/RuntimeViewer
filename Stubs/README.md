@@ -110,3 +110,23 @@ and only correcting the superclass does.
 Resilient enums are ordered too: case indices come from declaration order, so a partially
 copied enum silently mismatches. `SourceEditorTokenType` is therefore declared with no cases
 at all — values of it are only passed through, never matched on.
+
+## When two Xcodes disagree on a requirement's signature
+
+`CrossVersionSymbols.txt`, next to a framework's `UsedSymbols.txt`, lists symbols the bridge
+references that *this* Xcode does not export but another one does. Xcode 27 is the standing case:
+it changed `SourceModelNodeTypeAdjuster.adjustNodeType(for:)` to return `Bool` and dropped the
+old descriptor, so each Xcode exports exactly one of the two.
+
+The interface declares **both** requirements and marks each `@_weakLinked`. A conformance then
+references both descriptors weakly; the absent one binds to NULL at load time, and the Swift
+runtime skips a resilient witness whose requirement descriptor is NULL (`initializeResilientWitnessTable`
+in the runtime's `Metadata.cpp` — it is the mechanism for requirements added in a later version).
+Declaring both is legal because only a *call* would be ambiguous, and the bridge only implements.
+
+Weak or not, **the linker still insists every referenced symbol resolves**, so the stub has to
+describe the union of the versions rather than whichever Xcode generated it. `Trim.py` does that:
+after trimming it appends any `CrossVersionSymbols.txt` entry that the bridge references and the
+generated `.tbd` lacks. Note `--full` skips trimming and therefore skips this too — after a `--full`
+run, re-run `Trim.py` by hand on that framework before linking, or the link fails on the very
+symbol the file exists for.

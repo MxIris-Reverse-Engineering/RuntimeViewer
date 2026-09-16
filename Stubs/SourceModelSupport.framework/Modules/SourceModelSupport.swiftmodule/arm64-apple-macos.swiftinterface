@@ -22,8 +22,29 @@ public struct SourceModelEditorLanguage : SourceEditor.SourceEditorLanguage {
 //
 // Requirement order follows the PWT offsets in the dump (0x8, 0x10). `invalidateCache` has a
 // default implementation, so only `adjustNodeType(for:)` has to be written.
+//
+// **`adjustNodeType(for:)` is declared twice because Xcode changed its signature.** Under
+// Xcode 26 it returns nothing; under Xcode 27 it returns `Bool`, meaning "I handled this node,
+// skip `StandardIdentifierNodeTypeAdjuster`" (verified by decompiling
+// `SourceModelSyntaxTokenProvider.adjustNodeType(for:sourceModel:)` in 27.0 @ 0x63DD8 — the
+// fallback runs only when the adjuster answers false). Xcode 27 did not keep the old signature
+// around, so each version exports exactly one of the two method descriptors and a conformance
+// naming the other would fail to bind.
+//
+// `@_weakLinked` is what makes one bundle serve both. It turns each descriptor reference into a
+// weak one, so the version that is not present binds to NULL instead of failing to load, and
+// the Swift runtime skips a resilient witness whose requirement descriptor is NULL — see
+// `initializeResilientWitnessTable` in the runtime's Metadata.cpp: "The requirement descriptor
+// may be NULL, in which case this is a requirement introduced in a later version of the
+// protocol." Each Xcode therefore gets exactly the witness it asks for, and the other is
+// ignored rather than mis-dispatched.
+//
+// Declaring both is legal Swift: requirements may differ in return type alone, and one type may
+// witness both. Only a *call* would be ambiguous, and nothing here calls these — the framework
+// does.
 public protocol SourceModelNodeTypeAdjuster {
-  func adjustNodeType(for item: SourceModel.SMSourceModelItem)
+  @_weakLinked func adjustNodeType(for item: SourceModel.SMSourceModelItem)
+  @_weakLinked func adjustNodeType(for item: SourceModel.SMSourceModelItem) -> Swift.Bool
   func invalidateCache()
 }
 

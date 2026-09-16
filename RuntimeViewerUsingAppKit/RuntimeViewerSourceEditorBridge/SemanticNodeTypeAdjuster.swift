@@ -79,10 +79,28 @@ final class SemanticNodeTypeAdjuster: SourceModelNodeTypeAdjuster {
     // render — the default evidently does work the parse depends on. Requirements that come
     // with a default are the framework's business unless there is a reason to take them over.
 
+    /// Xcode 26's signature. The framework runs `StandardIdentifierNodeTypeAdjuster` after this
+    /// one either way, so there is nothing to report back.
     func adjustNodeType(for item: SMSourceModelItem) {
+        _ = retypeNode(item)
+    }
+
+    /// Xcode 27's signature, whose `Bool` means "handled — do not run the standard identifier
+    /// fallback on this node". Answering `true` only for nodes actually retyped keeps every
+    /// other node on the path it took under Xcode 26.
+    ///
+    /// Both are declared because the protocol requirement changed shape between the two; see
+    /// the stub interface for why one bundle can satisfy both at once.
+    func adjustNodeType(for item: SMSourceModelItem) -> Bool {
+        retypeNode(item)
+    }
+
+    /// - Returns: whether the node's type was replaced.
+    private func retypeNode(_ item: SMSourceModelItem) -> Bool {
         let itemRange = item.range
-        guard itemRange.length > 0, let identifier = nodeTypeIdentifier(fullyContaining: itemRange) else { return }
+        guard itemRange.length > 0, let identifier = nodeTypeIdentifier(fullyContaining: itemRange) else { return false }
         item.setNodeType(identifier)
+        return true
     }
 
     /// A node is retyped only when one semantic run contains **all** of it.

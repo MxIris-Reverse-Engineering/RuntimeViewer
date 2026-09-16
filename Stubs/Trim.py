@@ -13,6 +13,7 @@ Usage: Trim.py <tbd> <used-symbols-file>
 """
 
 import json
+import os
 import sys
 
 
@@ -46,6 +47,20 @@ def trim(tbd_path: str, used_symbols_path: str) -> None:
                         del data[category]
 
     missing = wanted - _all_symbols(document)
+
+    # A symbol the bridge references can be absent from *this* Xcode and present in another —
+    # Xcode 27 changed SourceModelNodeTypeAdjuster's requirement, so each version exports one of
+    # the two method descriptors and neither exports both. The bundle references both weakly and
+    # lets the runtime ignore the one that binds to nothing, but the *linker* still insists every
+    # symbol resolves, weak or not. So the stub has to describe the union of the versions rather
+    # than whichever Xcode generated it, and these are the symbols that says so.
+    supplied = missing & _read_symbols(_sibling(used_symbols_path, "CrossVersionSymbols.txt"))
+    if supplied:
+        _append_symbols(document, sorted(supplied))
+        kept_total += len(supplied)
+        missing -= supplied
+        print(f"  added {len(supplied)} cross-version symbols absent from this Xcode")
+
     if missing:
         print(f"  warning: {len(missing)} referenced symbols absent from the .tbd", file=sys.stderr)
         for symbol in sorted(missing)[:10]:
@@ -56,6 +71,32 @@ def trim(tbd_path: str, used_symbols_path: str) -> None:
         handle.write("\n")
 
     print(f"  kept {kept_total} symbols, dropped {dropped_total}")
+
+
+def _sibling(path: str, name: str) -> str:
+    return os.path.join(os.path.dirname(path), name)
+
+
+def _read_symbols(path: str) -> set:
+    if not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as handle:
+        return {line.strip() for line in handle if line.strip()}
+
+
+def _append_symbols(document, symbols: list) -> None:
+    for library_key in ("main_library", "libraries"):
+        libraries = document.get(library_key)
+        if libraries is None:
+            continue
+        for library in libraries if isinstance(libraries, list) else [libraries]:
+            for section in library.get("exported_symbols", []):
+                data = section.get("data")
+                if not isinstance(data, dict):
+                    continue
+                data["global"] = sorted(set(data.get("global", [])) | set(symbols))
+                return
+    raise SystemExit("no exported_symbols section to append cross-version symbols to")
 
 
 def _all_symbols(document) -> set:
