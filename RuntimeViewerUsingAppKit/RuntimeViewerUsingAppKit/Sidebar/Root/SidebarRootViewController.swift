@@ -120,8 +120,8 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
             .asObservable()
             .first()
             .asObservable()
-            .subscribeOnNext { [weak self] _ in
-                guard let self else { return }
+            .subscribeOnNext { [weak self, weak viewModel] _ in
+                guard let self, let viewModel else { return }
                 
                 // Keyed on the scope, never on `source.description`. That is the
                 // peer's *process* display name, so two devices each running a
