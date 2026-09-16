@@ -3,6 +3,7 @@ import FoundationToolbox
 import ServiceManagement
 import RuntimeViewerArchitectures
 import RuntimeViewerHelperClient
+import RuntimeViewerSettings
 import DependenciesMacros
 
 @MainActor
@@ -11,6 +12,8 @@ final class HelperServiceVersionChecker {
     fileprivate static let shared = HelperServiceVersionChecker()
 
     @Dependency(\.helperServiceManager) private var helperServiceManager
+
+    @Dependency(\.applicationRelauncher) private var applicationRelauncher
 
     private init() {}
 
@@ -41,7 +44,7 @@ final class HelperServiceVersionChecker {
         alert.addButton(withTitle: "Later")
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            relaunchApplication()
+            applicationRelauncher.relaunch()
         }
     }
 
@@ -55,17 +58,6 @@ final class HelperServiceVersionChecker {
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
             SMAppService.openSystemSettingsLoginItems()
-        }
-    }
-
-    private func relaunchApplication() {
-        let executableURL = Bundle.main.bundleURL
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: executableURL, configuration: configuration) { _, _ in
-            DispatchQueue.main.async {
-                NSApp.terminate(nil)
-            }
         }
     }
 }

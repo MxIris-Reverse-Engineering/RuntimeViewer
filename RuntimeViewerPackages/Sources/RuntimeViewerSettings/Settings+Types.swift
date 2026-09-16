@@ -51,6 +51,20 @@ extension Settings {
         @Default(false)
         public var usesSourceEditor: Bool
 
+        /// Which Xcode the editor is loaded from, as the path of an `Xcode.app`. Empty means
+        /// automatic, which is the search order ``XcodeSourceEditorLocator/candidateDirectories()``
+        /// applies on its own.
+        ///
+        /// Stored as a path rather than as a version, because a version has to be resolved back
+        /// to a bundle anyway and several copies of one version can be installed at once. An
+        /// entry that no longer exists — a beta the user deleted — falls back to automatic
+        /// rather than turning the editor off; the frameworks are what matter, not the choice.
+        ///
+        /// **Takes effect at the next launch.** A process can only `dlopen` one version of the
+        /// frameworks, so the Settings pane offers to relaunch rather than pretending otherwise.
+        @Default("")
+        public var sourceEditorXcodePath: String
+
         /// Everything below drives Xcode's editor only. The built-in `NSTextView` has no
         /// gutter, ribbon or minimap to turn on, so with `usesSourceEditor` off these are
         /// stored but not read — which is why the Settings pane disables them rather than

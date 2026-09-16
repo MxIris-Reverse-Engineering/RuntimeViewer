@@ -86,6 +86,16 @@ final class SourceEditorLoader {
         settings.editor.usesSourceEditor
     }
 
+    /// The `Xcode.app` the user picked in Settings › Editor, or `nil` for the automatic order.
+    ///
+    /// Read fresh rather than cached: it is only ever consulted on the one resolution this
+    /// process performs, and caching it would add a second place for a stale answer to live.
+    private var preferredXcodeBundleURL: URL? {
+        let path = settings.editor.sourceEditorXcodePath
+        guard !path.isEmpty else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
     /// Whether a bridge can be created. Resolves on first call and is cached — including the
     /// failure, since a failed `dlopen` will not start succeeding within one launch.
     var isAvailable: Bool {
@@ -152,8 +162,9 @@ final class SourceEditorLoader {
         guard isEnabledByUser, !isPrewarming, case .notAttempted = state else { return }
         isPrewarming = true
 
+        let preferredXcodeBundleURL = preferredXcodeBundleURL
         DispatchQueue.global(qos: .userInitiated).async {
-            let resolved = Self.resolve()
+            let resolved = Self.resolve(preferring: preferredXcodeBundleURL)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self.isPrewarming = false
@@ -216,7 +227,7 @@ final class SourceEditorLoader {
 
     private func resolvedState() -> State {
         if case .notAttempted = state {
-            state = Self.resolve()
+            state = Self.resolve(preferring: preferredXcodeBundleURL)
             logResolution(of: state, wasPrewarmed: false)
         }
         return state
@@ -240,9 +251,10 @@ final class SourceEditorLoader {
     /// `nonisolated` so `prewarm()` can run it off the main thread. Nothing in it touches the
     /// loader's own state — the result is handed back and stored by the caller — and its two
     /// halves, `dlopen` and `Bundle`, are both usable from any thread.
-    private nonisolated static func resolve() -> State {
-        guard let frameworksDirectory = XcodeSourceEditorLocator.frameworksDirectory() else {
-            return .unavailable(.frameworksNotFound(searched: XcodeSourceEditorLocator.candidateDirectories().map(\.path)))
+    private nonisolated static func resolve(preferring preferredXcodeBundleURL: URL?) -> State {
+        guard let frameworksDirectory = XcodeSourceEditorLocator.frameworksDirectory(preferring: preferredXcodeBundleURL) else {
+            let searched = XcodeSourceEditorLocator.candidateDirectories(preferring: preferredXcodeBundleURL).map(\.path)
+            return .unavailable(.frameworksNotFound(searched: searched))
         }
 
         if let failure = loadFrameworks(from: frameworksDirectory) {
