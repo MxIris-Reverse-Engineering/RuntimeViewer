@@ -91,7 +91,7 @@ public actor RuntimeEngine {
     public static let local: RuntimeEngine = {
         let runtimeEngine = RuntimeEngine(source: .local)
         Task {
-            try await runtimeEngine.connect()
+            await runtimeEngine.connectReportingFailure()
         }
         return runtimeEngine
     }()
@@ -264,6 +264,20 @@ public actor RuntimeEngine {
         self.swiftSectionFactory = .init()
         self.relationshipsResolver = .init(objcSectionFactory: objcSectionFactory, swiftSectionFactory: swiftSectionFactory)
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
+    }
+
+    /// Connects and reports a failure to the log rather than dropping it.
+    ///
+    /// `RuntimeEngine.local` kicks off its connection from an unstructured
+    /// `Task` that nobody awaits, so a thrown error would have no one to reach.
+    /// The logging has to live in an instance method: `#log` expands to a
+    /// reference to `Self`, which a stored property initializer cannot make.
+    func connectReportingFailure() async {
+        do {
+            try await connect()
+        } catch {
+            #log(.error, "Local engine failed to connect: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     public func connect(credential: RuntimeConnectionCredential? = nil) async throws {
@@ -528,14 +542,18 @@ public actor RuntimeEngine {
                 return
             }
             #log(.debug, "Sending remote data change \(String(describing: change), privacy: .public)")
-            if case .fullReload(let isReloadImageNodes) = change {
-                try await connection.sendMessage(name: .imageList, request: imageList)
-                if isReloadImageNodes {
-                    try await connection.sendMessage(name: .imageNodes, request: imageNodes)
+            do {
+                if case .fullReload(let isReloadImageNodes) = change {
+                    try await connection.sendMessage(name: .imageList, request: imageList)
+                    if isReloadImageNodes {
+                        try await connection.sendMessage(name: .imageNodes, request: imageNodes)
+                    }
                 }
+                try await connection.sendMessage(name: .dataDidChange, request: change)
+                #log(.debug, "Remote data change sent successfully")
+            } catch {
+                #log(.error, "Failed to send remote data change \(String(describing: change), privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
-            try await connection.sendMessage(name: .dataDidChange, request: change)
-            #log(.debug, "Remote data change sent successfully")
         }
     }
 
@@ -563,8 +581,12 @@ public actor RuntimeEngine {
     private func sendRemoteImageDidLoadIfNeeded(path: String) {
         guard let role = source.remoteRole, role.isServer, let connection else { return }
         Task {
-            try await connection.sendMessage(name: .imageDidLoad, request: path)
-            #log(.debug, "Remote imageDidLoad sent for path: \(path, privacy: .public)")
+            do {
+                try await connection.sendMessage(name: .imageDidLoad, request: path)
+                #log(.debug, "Remote imageDidLoad sent for path: \(path, privacy: .public)")
+            } catch {
+                #log(.error, "Failed to send remote imageDidLoad for path: \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
