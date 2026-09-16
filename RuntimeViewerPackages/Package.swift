@@ -303,7 +303,7 @@ let package = Package(
         
         .package(
             url: "https://github.com/pointfreeco/swift-dependencies",
-            "1.13.1" ..< "1.16.0",
+            from: "1.17.1",
         ),
         
         .package(
@@ -328,7 +328,7 @@ let package = Package(
         
         .package(
             url: "https://github.com/MxIris-Library-Forks/swift-navigation",
-            from: "2.8.100",
+            from: "2.11.100",
         ),
 
     ],

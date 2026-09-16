@@ -1,5 +1,5 @@
 {
-  "originHash" : "9431509734d7d8dcd9d9d0f39d76a3ce9da63c6b19e51684834377ac551f7c1f",
+  "originHash" : "bde5c81806cb6e70f4b7df5b8014611039e0222fcbf71e6ccb97a6a99ab259fe",
   "pins" : [
     {
       "identity" : "appkitplus-release",
@@ -29,6 +29,15 @@
       }
     },
     {
+      "identity" : "capstone",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/capstone",
+      "state" : {
+        "revision" : "948031e03ddd5835b733efb82e01ebb6fb30a35a",
+        "version" : "5.0.100"
+      }
+    },
+    {
       "identity" : "cocoacoordinator",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/CocoaCoordinator",
@@ -42,8 +51,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/combine-schedulers",
       "state" : {
-        "revision" : "dcccb979a2183b8df3334237e3dc1ae2b4116a86",
-        "version" : "1.2.0"
+        "revision" : "114354e8c1667a2edc4993700fb9fa4f90157b56",
+        "version" : "1.2.2"
       }
     },
     {
@@ -141,8 +150,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
-        "revision" : "fec9503cdf3d595ef8cf4abac1602e299a8c3be4",
-        "version" : "0.52.101"
+        "branch" : "next",
+        "revision" : "61e0a436e6f083f2f6ca8b1fa893ef3c367ff3e5"
       }
     },
     {
@@ -159,8 +168,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
-        "revision" : "442fb7e84e4cff70fa3db487c2bb6f7eb8c7e635",
-        "version" : "0.8.105"
+        "branch" : "next",
+        "revision" : "c741301a107e75bdc7213722e36cb18c0642cc07"
       }
     },
     {
@@ -168,8 +177,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "revision" : "6ab2cd30f12c6fda97d8d94a754cf4c30d9fd6a6",
-        "version" : "0.17.1"
+        "branch" : "next",
+        "revision" : "eeb203033b5713b0544441ab5afc2674c93244c9"
       }
     },
     {
@@ -330,8 +339,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-asn1.git",
       "state" : {
-        "revision" : "a9a5efd40eaf558a2bcd48d64b1d1646be686008",
-        "version" : "1.7.1"
+        "revision" : "9f542610331815e29cc3821d3b6f488db8715517",
+        "version" : "1.6.0"
       }
     },
     {
@@ -353,12 +362,21 @@
       }
     },
     {
+      "identity" : "swift-capstone",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/MxIris-Reverse-Engineering/swift-capstone",
+      "state" : {
+        "revision" : "33998b4516d65fef2e0bb23876b2b04a91d47bfc",
+        "version" : "5.0.0"
+      }
+    },
+    {
       "identity" : "swift-case-paths",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-case-paths",
       "state" : {
-        "revision" : "794f4b0a9cf32042592388d014f6a1ea987d323a",
-        "version" : "1.9.1"
+        "revision" : "cb4cba6a8a46a86db0d37dbe09935ead6b24c91a",
+        "version" : "1.10.0"
       }
     },
     {
@@ -366,8 +384,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-clocks",
       "state" : {
-        "revision" : "72d749bf341b78851203066ab421869b783ec42a",
-        "version" : "1.1.0"
+        "revision" : "82440fa0a8b1c381a6d1e8e0fc7bbba53ec63204",
+        "version" : "1.1.1"
       }
     },
     {
@@ -402,8 +420,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-custom-dump",
       "state" : {
-        "revision" : "e9c34fd54ece006b491a0e6d23fe9a6024b9a828",
-        "version" : "1.7.0"
+        "revision" : "4fb9e7cbb4b8f5a7354005db39447f570d6b3e19",
+        "version" : "1.7.3"
       }
     },
     {
@@ -411,8 +429,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "a3477d387bbd004af5d602dcec68e40e70c49f6f",
-        "version" : "0.6.1"
+        "revision" : "8f32e30bfdc9c9cc0d3aeb010739dd7e74ccdbed",
+        "version" : "0.6.3"
       }
     },
     {
@@ -420,8 +438,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "9381ab822de01c4e9f3a7eb8eabb6ae808febed3",
-        "version" : "1.15.0"
+        "revision" : "b476cc5761057d8d857de063fe7ac8daecf5c06b",
+        "version" : "1.17.1"
       }
     },
     {
@@ -461,6 +479,15 @@
       }
     },
     {
+      "identity" : "swift-issue-reporting",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-issue-reporting",
+      "state" : {
+        "revision" : "71c7c9a761d1ca6ed4ccb6ced040fe1c1a39e8e7",
+        "version" : "2.1.0"
+      }
+    },
+    {
       "identity" : "swift-literal-type-inference",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-literal-type-inference.git",
@@ -492,8 +519,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Library-Forks/swift-navigation",
       "state" : {
-        "revision" : "ad18e298db21474f9516c6d5d014942d05661dff",
-        "version" : "2.10.104"
+        "revision" : "98f78ffb256bdc623682d032a576f263672baee9",
+        "version" : "2.11.100"
       }
     },
     {
@@ -519,8 +546,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-perception",
       "state" : {
-        "revision" : "de219a1cf34e958134e75a9ebb134cf09bf52fc6",
-        "version" : "2.0.11"
+        "revision" : "597afd46249f4a71885b95d26b26cc5b893daf32",
+        "version" : "2.0.12"
       }
     },
     {
@@ -528,8 +555,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
       "state" : {
-        "revision" : "1021589b85fc647435b383307aa6aea2af1079ce",
-        "version" : "0.3.0"
+        "branch" : "next",
+        "revision" : "ff626b0f9d2d163b08270644ceaf08605ee0e6ff"
       }
     },
     {
@@ -546,8 +573,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
       "state" : {
-        "revision" : "4f67b80d2d21b0968ec6c6c45aa01389f1f1ed05",
-        "version" : "0.5.104"
+        "revision" : "7cd9e0944fde324d08832b7737a4b4470e2cde43",
+        "version" : "0.5.105"
       }
     },
     {
@@ -575,15 +602,6 @@
       "state" : {
         "revision" : "1d35f8bf10b9cf0ab49736493d2d8b6c27fc63c0",
         "version" : "3.0.0-beta.1"
-      }
-    },
-    {
-      "identity" : "xctest-dynamic-overlay",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
-      "state" : {
-        "revision" : "8f6abcf4c8950e2679d5b2fee4ca284fd7c34886",
-        "version" : "1.11.0"
       }
     },
     {

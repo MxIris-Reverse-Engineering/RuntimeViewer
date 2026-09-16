@@ -482,8 +482,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/swift-dependencies",
       "state" : {
-        "revision" : "9381ab822de01c4e9f3a7eb8eabb6ae808febed3",
-        "version" : "1.15.0"
+        "revision" : "b476cc5761057d8d857de063fe7ac8daecf5c06b",
+        "version" : "1.17.1"
       }
     },
     {
@@ -754,15 +754,6 @@
       "state" : {
         "revision" : "1d35f8bf10b9cf0ab49736493d2d8b6c27fc63c0",
         "version" : "3.0.0-beta.1"
-      }
-    },
-    {
-      "identity" : "xctest-dynamic-overlay",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
-      "state" : {
-        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
-        "version" : "1.13.1"
       }
     },
     {

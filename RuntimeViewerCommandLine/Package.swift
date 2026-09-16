@@ -73,9 +73,9 @@ let package = Package(
         // client it needs. Only the UI-free products are linked.
         .package(path: "../RuntimeViewerPackages"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
-        // Same range as RuntimeViewerPackages, whose `@Dependency` entries the
+        // Same floor as RuntimeViewerPackages, whose `@Dependency` entries the
         // headless host overrides at its entry point.
-        .package(url: "https://github.com/pointfreeco/swift-dependencies", "1.13.1" ..< "1.16.0"),
+        .package(url: "https://github.com/pointfreeco/swift-dependencies", from: "1.17.1"),
         // RuntimeViewerCore pins FrameworkToolbox exactly; a floor here resolves
         // to the same version and keeps working once that pin is lifted.
         .package(url: "https://github.com/Mx-Iris/FrameworkToolbox", from: "0.12.0"),
