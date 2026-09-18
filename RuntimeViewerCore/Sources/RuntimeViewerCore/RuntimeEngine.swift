@@ -52,6 +52,11 @@ public actor RuntimeEngine {
         case imageList
         case imageNodes
         case loadImage
+        /// `loadImage` as a `RuntimeEngineProgressRequest`: same work, but the
+        /// section factories' indexing progress is pushed back to the caller.
+        /// A separate command rather than a widening of `loadImage`, because
+        /// a progress request ships a different wire envelope.
+        case loadImageWithProgress
         case isImageLoaded
         case isImageIndexed
         case mainExecutablePath
@@ -864,6 +869,21 @@ extension RuntimeEngine {
         _ = try await dispatch(LoadImageRequest(path: path))
     }
 
+    /// `loadImage(at:)` that reports the indexing it performs.
+    ///
+    /// Loading is not just `dlopen`: it also builds the image's ObjC and
+    /// Swift sections, which for a large framework is by far the longest step
+    /// and the same work the sidebar shows a progress bar for. `onProgress`
+    /// receives the section factories' phase-by-phase counts, so a caller
+    /// that loads an image before working on it (batch export) can show that
+    /// progress instead of appearing idle until the index is built.
+    public func loadImage(
+        at path: String,
+        onProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void
+    ) async throws {
+        _ = try await dispatch(LoadImageWithProgressRequest(path: path), onProgress: onProgress)
+    }
+
     /// Local implementation of `loadImage(at:)`. Canonicalizes on entry so
     /// internal storage (loadedImagePaths, section factory caches) stays
     /// symmetric with reader-side lookups (isImageLoaded, isImageIndexed,
@@ -871,15 +891,27 @@ extension RuntimeEngine {
     /// Simulator it applies DYLD_ROOT_PATH so dyld's own image-name reports
     /// match. patchImagePathForDyld is idempotent — re-patching an already
     /// patched path is safe.
-    func _loadImage(at path: String) async throws {
+    ///
+    /// `progressContinuation` is handed to both section factories, which
+    /// report their indexing phases through it while they build a section
+    /// that is not cached yet.
+    func _loadImage(at path: String, progressContinuation: LoadingEventContinuation? = nil) async throws {
         let canonical = DyldUtilities.patchImagePathForDyld(path)
         try DyldUtilities.loadImage(at: canonical)
-        _ = try await objcSectionFactory.section(for: canonical)
-        _ = try await swiftSectionFactory.section(for: canonical)
+        _ = try await objcSectionFactory.section(for: canonical, progressContinuation: progressContinuation)
+        _ = try await swiftSectionFactory.section(for: canonical, progressContinuation: progressContinuation)
         reloadData(isReloadImageNodes: false)
         loadedImagePaths.insert(canonical)
         imageDidLoadSubject.send(canonical)
         sendRemoteImageDidLoadIfNeeded(path: canonical)
+    }
+
+    /// Local arm of `LoadImageWithProgressRequest`'s progress-bearing
+    /// `perform`. See `_objects(in:reportProgress:)` for the bridging.
+    func _loadImage(at path: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws {
+        try await pumpingIndexingProgress(to: reportProgress) { continuation in
+            try await _loadImage(at: path, progressContinuation: continuation)
+        }
     }
 
     public func imageName(ofObjectName name: RuntimeObject) async throws -> String? {
@@ -915,12 +947,21 @@ extension RuntimeEngine {
     }
 
     /// Local arm of `ObjectsInImageRequest`'s progress-bearing `perform`.
+    func _objects(in image: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
+        try await pumpingIndexingProgress(to: reportProgress) { continuation in
+            try await _localObjectsWithProgress(in: image, continuation: continuation)
+        }
+    }
+
     /// Bridges the continuation-based indexing internals (section factories
     /// take a `LoadingEventContinuation`) to the closure-based
     /// `RuntimeEngineProgressRequest` reporting surface. The pump task awaits
     /// `reportProgress` per event, preserving order; it is drained before
     /// returning so no progress event can trail the response on the wire.
-    func _objects(in image: String, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> [RuntimeObject] {
+    private func pumpingIndexingProgress<Result>(
+        to reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void,
+        _ body: (LoadingEventContinuation) async throws -> Result
+    ) async throws -> Result {
         let (stream, continuation) = AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error>.makeStream()
         let pump = Task {
             for try await event in stream {
@@ -930,10 +971,10 @@ extension RuntimeEngine {
             }
         }
         do {
-            let objects = try await _localObjectsWithProgress(in: image, continuation: continuation)
+            let result = try await body(continuation)
             continuation.finish()
             _ = await pump.result
-            return objects
+            return result
         } catch {
             continuation.finish()
             _ = await pump.result

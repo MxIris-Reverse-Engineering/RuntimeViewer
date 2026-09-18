@@ -97,6 +97,8 @@ final class BatchExportingProgressViewController: BaseViewController<BatchExport
 
 extension BatchExportingProgressViewController {
     private final class CellView: TableCellView {
+        private static let progressBarWidth: CGFloat = 160
+
         private let statusIcon = ImageView().then {
             $0.imageScaling = .scaleProportionallyUpOrDown
         }
@@ -113,14 +115,18 @@ extension BatchExportingProgressViewController {
             $0.lineBreakMode = .byTruncatingMiddle
         }
 
-        private let progressBar = NSProgressIndicator().then {
-            $0.style = .bar
-            $0.isIndeterminate = false
-            $0.minValue = 0
-            $0.maxValue = 1
-            $0.controlSize = .small
+        /// Hosts the row's `NSProgressIndicator`, which is replaced on every
+        /// `bind(to:)` — see `installFreshProgressBar()`. The container keeps
+        /// the layout stable while the bar underneath it changes.
+        private let progressBarContainer = NSView()
+
+        private var progressBar: NSProgressIndicator?
+
+        private lazy var detailStack = HStackView(alignment: .center, spacing: 8) {
+            detailLabel
+            progressBarContainer
         }
-        
+
         private var isSymbolEffectRunning = false
 
         override func setup() {
@@ -129,8 +135,7 @@ extension BatchExportingProgressViewController {
             hierarchy {
                 statusIcon
                 nameLabel
-                detailLabel
-                progressBar
+                detailStack
             }
 
             statusIcon.snp.makeConstraints { make in
@@ -145,42 +150,80 @@ extension BatchExportingProgressViewController {
                 make.trailing.lessThanOrEqualToSuperview().inset(8)
             }
 
-            detailLabel.snp.makeConstraints { make in
+            detailStack.snp.makeConstraints { make in
                 make.leading.equalTo(nameLabel)
                 make.trailing.equalToSuperview().inset(8)
                 make.top.equalTo(nameLabel.snp.bottom).offset(2)
             }
 
-            progressBar.snp.makeConstraints { make in
-                make.leading.equalTo(nameLabel)
-                make.trailing.equalToSuperview().inset(8)
-                make.centerY.equalTo(detailLabel)
+            progressBarContainer.snp.makeConstraints { make in
+                make.width.equalTo(Self.progressBarWidth)
                 make.height.equalTo(6)
             }
+
+            // The label yields to the bar: it stretches into whatever width
+            // is left and truncates before the bar gives up a point.
+            detailLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            detailLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            progressBarContainer.setContentHuggingPriority(.required, for: .horizontal)
+            progressBarContainer.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
 
         func bind(to rowViewModel: BatchExportingProgressRowViewModel) {
             rx.disposeBag = DisposeBag()
 
+            installFreshProgressBar()
             nameLabel.stringValue = rowViewModel.image.name
 
             Driver.combineLatest(
                 rowViewModel.$status.asDriver(),
                 rowViewModel.$progress.asDriver(),
-                rowViewModel.$currentObjectText.asDriver(),
+                rowViewModel.$progressText.asDriver(),
                 rowViewModel.$objectFailures.asDriver(),
             )
-            .driveOnNext { [weak self] status, progress, currentObject, objectFailures in
+            .driveOnNext { [weak self] status, progress, progressText, objectFailures in
                 guard let self else { return }
-                applyState(status: status, progress: progress, currentObject: currentObject, objectFailures: objectFailures)
+                applyState(status: status, progress: progress, progressText: progressText, objectFailures: objectFailures)
             }
             .disposed(by: rx.disposeBag)
+        }
+
+        /// Replaces the progress bar with a new instance so the first value
+        /// the new row writes is applied without animation.
+        ///
+        /// `NSProgressIndicator` animates every `doubleValue` change and
+        /// offers no way to opt out: on macOS 26 the value goes to a private
+        /// `ProgressIndicatorLayer`, which adds an explicit `CAAnimation` from
+        /// its previous progress to the new one — `CATransaction` and
+        /// `NSAnimationContext` do not reach it, AppKit already disables
+        /// implicit actions around the update itself. The only path that
+        /// applies the value directly is a layer with no previous progress,
+        /// which is what a fresh indicator has. Reusing one bar across rows
+        /// therefore animates the previous row's value into the next row's
+        /// on every scroll. Evidence and addresses:
+        /// `Documentations/ResolvedIssues/2026-09-18-batch-export-row-stays-queued-while-indexing.md`.
+        private func installFreshProgressBar() {
+            progressBar?.removeFromSuperview()
+            let freshProgressBar = NSProgressIndicator().then {
+                $0.style = .bar
+                $0.isIndeterminate = false
+                $0.minValue = 0
+                $0.maxValue = 1
+                $0.controlSize = .small
+            }
+            progressBarContainer.hierarchy {
+                freshProgressBar
+            }
+            freshProgressBar.snp.makeConstraints { make in
+                make.edges.equalToSuperview()
+            }
+            progressBar = freshProgressBar
         }
 
         private func applyState(
             status: BatchExportingProgressRowViewModel.Status,
             progress: Double,
-            currentObject: String,
+            progressText: String,
             objectFailures: [BatchExportingObjectFailure],
         ) {
             toolTip = objectFailures.exportFailureTooltip
@@ -190,12 +233,12 @@ extension BatchExportingProgressViewController {
                 statusIcon.contentTintColor = .tertiaryLabelColor
                 detailLabel.stringValue = "Queued"
                 detailLabel.textColor = .tertiaryLabelColor
-                detailLabel.isHidden = false
-                progressBar.isHidden = true
+                progressBarContainer.isHidden = true
             case .running:
-                progressBar.doubleValue = progress
-                progressBar.isHidden = false
-                detailLabel.isHidden = true
+                progressBar?.doubleValue = progress
+                progressBarContainer.isHidden = false
+                detailLabel.stringValue = progressText
+                detailLabel.textColor = .secondaryLabelColor
                 if !isSymbolEffectRunning {
                     statusIcon.image = .symbol(systemName: .arrowTriangle2Circlepath)
                     statusIcon.contentTintColor = .systemBlue
@@ -218,15 +261,13 @@ extension BatchExportingProgressViewController {
                 ]
                 detailLabel.stringValue = parts.compactMap(\.self).joined(separator: " · ")
                 detailLabel.textColor = result.failed > 0 ? .systemOrange : .secondaryLabelColor
-                detailLabel.isHidden = false
-                progressBar.isHidden = true
+                progressBarContainer.isHidden = true
             case .failed(let description):
                 statusIcon.image = .symbol(systemName: .xmarkCircleFill)
                 statusIcon.contentTintColor = .systemRed
                 detailLabel.stringValue = "Failed: \(description)"
                 detailLabel.textColor = .systemRed
-                detailLabel.isHidden = false
-                progressBar.isHidden = true
+                progressBarContainer.isHidden = true
             }
             if isSymbolEffectRunning {
                 statusIcon.removeAllSymbolEffects()

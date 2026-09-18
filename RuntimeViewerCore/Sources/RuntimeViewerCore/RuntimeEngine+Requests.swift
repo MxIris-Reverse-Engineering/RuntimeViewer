@@ -36,6 +36,20 @@ extension RuntimeEngine {
         }
     }
 
+    struct LoadImageWithProgressRequest: RuntimeEngineProgressRequest {
+        let path: String
+        static var commandName: String { CommandNames.loadImageWithProgress.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
+            try await engine._loadImage(at: path)
+            return RuntimeEngineEmpty()
+        }
+
+        func perform(on engine: RuntimeEngine, reportProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void) async throws -> RuntimeEngineEmpty {
+            try await engine._loadImage(at: path, reportProgress: reportProgress)
+            return RuntimeEngineEmpty()
+        }
+    }
+
     struct LoadImageForBackgroundIndexingRequest: RuntimeEngineRequest {
         let path: String
         static var commandName: String { CommandNames.loadImageForBackgroundIndexing.commandName }

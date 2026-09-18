@@ -95,6 +95,7 @@
 
 按时间倒序。
 
+- [批量导出：镜像在索引时行一直显示 Queued](ResolvedIssues/2026-09-18-batch-export-row-stays-queued-while-indexing.md)（2026-09-18）—— `loadImage` 顺手把镜像的两个 section 建完才返回，而行到它返回之后才离开 Queued，PhotosUICore 那种体量的索引就整段隐形。引擎新增带进度的 `loadImage`，行先标 running 再加载并显示索引阶段；附 macOS 26 `NSProgressIndicator` 值动画关不掉的反编译证据，进度条改为每次绑定新建实例。
 - [Debug-arm64e 装不上 helper daemon](ResolvedIssues/2026-09-18-arm64e-variant-selected-after-window-restoration.md)（2026-09-18）—— `runtimeViewerIsARM64EVariant` 翻在 `applicationDidFinishLaunching`，而窗口恢复跑在它之前，恢复出来的文档窗口一路把 `HelperServiceManager` 建了出来，installer 存下非 arm64e 的 plist 名；查状态是现算的所以一直显示正常，只有点 Install 才炸。标志移到 `main()` 最前面，并新增「名字发出去之后才翻」的断言。
 - [Xcode 27 下编辑器静默退回 NSTextView](ResolvedIssues/2026-09-16-xcode27-shared-frameworks-install-name.md)（2026-09-16）—— 27 把私有框架的安装名改成了 `@rpath/SharedFrameworks/…`，bridge bundle 记的还是旧串，dyld 认不出已经 `dlopen` 进来的那份，bundle 加载失败即回落。改为 `-undefined dynamic_lookup`，产物不再记录任何安装名；同一个 bundle 在 26.5 / 26.6 / 27.0 上实测全通。
 - [minimap 悬停只有选中框、没有名字浮层](ResolvedIssues/2026-09-16-minimap-hover-label-needs-icon-provider.md)（2026-09-16）—— `MinimapView.showExpandedLandmarks` 没有 icon provider 就一层浮层都不建，而选中框由更早一步画出、不受影响；bridge 无条件把自己注册为 provider，图标复用 sidebar 的 `RuntimeObjectIcon`。附八条已排除的假设。

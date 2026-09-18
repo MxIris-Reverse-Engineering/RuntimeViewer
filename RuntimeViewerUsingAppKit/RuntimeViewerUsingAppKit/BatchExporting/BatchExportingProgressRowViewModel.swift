@@ -16,11 +16,17 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
     @RxObserved
     private(set) var status: Status = .queued
 
+    /// Fraction of the current phase that is done. Each phase — every indexing
+    /// pass the engine reports, then the interface export — runs its own
+    /// 0…1 sweep, so the bar restarts at a phase boundary.
     @RxObserved
     private(set) var progress: Double = 0
 
+    /// What the row is doing right now, shown beside the progress bar while
+    /// `status` is `.running`: the indexing phase and its counts, the object
+    /// being exported, or the export phase name.
     @RxObserved
-    private(set) var currentObjectText: String = ""
+    private(set) var progressText: String = ""
 
     /// Objects whose interface failed during this image's export. Surfaced in the
     /// row tooltip so a partially-failed (but still "succeeded") image isn't silent.
@@ -31,31 +37,46 @@ final class BatchExportingProgressRowViewModel: CellViewModel {
         self.image = image
     }
 
+    /// The row leaves the queue. Called before the image is loaded, so the
+    /// time spent loading and indexing it counts as work in progress rather
+    /// than as waiting.
     func markRunning() {
         status = .running
         progress = 0
-        currentObjectText = "Preparing…"
+        progressText = "Loading image…"
+    }
+
+    /// One indexing report from the engine while the image's sections are
+    /// built. Phases without a total (a preparation step) only update the
+    /// text; the bar keeps its last value rather than snapping to zero.
+    func updateIndexingProgress(_ indexingProgress: RuntimeObjectsLoadingProgress) {
+        if indexingProgress.totalCount > 0 {
+            progress = Double(indexingProgress.currentCount) / Double(indexingProgress.totalCount)
+            progressText = "\(indexingProgress.phase.displayDescription) \(indexingProgress.currentCount)/\(indexingProgress.totalCount)"
+        } else {
+            progressText = indexingProgress.phase.displayDescription
+        }
     }
 
     func updatePhase(_ phaseText: String) {
-        currentObjectText = phaseText
+        progressText = phaseText
     }
 
-    func updateProgress(_ value: Double, currentObject: String) {
+    func updateProgress(_ value: Double, text: String) {
         progress = value
-        currentObjectText = currentObject
+        progressText = text
     }
 
     func markSucceeded(_ result: RuntimeInterfaceExportResult, objectFailures: [BatchExportingObjectFailure] = []) {
         self.objectFailures = objectFailures
         status = .succeeded(result)
         progress = 1
-        currentObjectText = ""
+        progressText = ""
     }
 
     func markFailed(_ description: String) {
         status = .failed(errorDescription: description)
-        currentObjectText = ""
+        progressText = ""
     }
 }
 

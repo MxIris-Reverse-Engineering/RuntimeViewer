@@ -151,6 +151,7 @@ extension RuntimeEngine {
         register(IsImageIndexedRequest.self, on: connection, engine: engine)
         register(MainExecutablePathRequest.self, on: connection, engine: engine)
         register(LoadImageRequest.self, on: connection, engine: engine)
+        registerProgress(LoadImageWithProgressRequest.self, on: connection, engine: engine)
         register(LoadImageForBackgroundIndexingRequest.self, on: connection, engine: engine)
         register(CanOpenImageRequest.self, on: connection, engine: engine)
         register(RpathsRequest.self, on: connection, engine: engine)

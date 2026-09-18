@@ -154,9 +154,19 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
     ) async -> BatchExportingPerImageOutcome {
         let image = rowViewModel.image
 
+        // Running starts here, not after the load: loading an image also
+        // indexes it, and for a large framework that index is the longest
+        // step of the whole export. Keyed on "indexed" rather than "loaded"
+        // because an image dyld pulled in as a dependency is loaded but has
+        // no sections yet, and the export needs the sections either way.
+        rowViewModel.markRunning()
         do {
-            if try await !runtimeEngine.isImageLoaded(path: image.path) {
-                try await runtimeEngine.loadImage(at: image.path)
+            if try await !runtimeEngine.isImageIndexed(path: image.path) {
+                try await runtimeEngine.loadImage(at: image.path) { indexingProgress in
+                    await MainActor.run {
+                        rowViewModel.updateIndexingProgress(indexingProgress)
+                    }
+                }
             }
         } catch {
             let description = error.localizedDescription
@@ -164,7 +174,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
             return .init(image: image, outcome: .failure(errorDescription: description))
         }
 
-        rowViewModel.markRunning()
+        rowViewModel.updateProgress(0, text: "Preparing…")
 
         let sanitizedName = sanitize(image.name)
         let perImageDirectory = baseDirectory.appendingPathComponent(sanitizedName, isDirectory: true)
@@ -204,7 +214,7 @@ final class BatchExportingProgressViewModel: ViewModel<ExportingRoute> {
                 case .objectStarted(let object, let current, let totalObjects):
                     rowViewModel.updateProgress(
                         Double(current - 1) / Double(totalObjects),
-                        currentObject: "\(object.displayName) (\(current)/\(totalObjects))",
+                        text: "\(object.displayName) (\(current)/\(totalObjects))",
                     )
                 case .objectFailed(let object, let error):
                     objectFailures.append(
