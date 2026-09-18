@@ -30,6 +30,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     
     static func main() {
+        // Has to run before AppKit does anything, not from a lifecycle callback. Window restoration
+        // is driven by the open-application Apple Event inside `NSApplication.run()`, which lands
+        // *before* `applicationDidFinishLaunching`: the restored document window builds its
+        // coordinator, which resolves `RuntimeEngineManager` and through it `HelperServiceManager`,
+        // whose installer stores the `SMAppService` built from `RuntimeViewerMachServiceName`.
+        // Selecting the variant afterwards left that installer pinned to the non-arm64e daemon, so
+        // installing the helper failed with "Unable to read plist" while every status read, being
+        // recomputed, looked correct. See
+        // Documentations/ResolvedIssues/2026-09-18-arm64e-variant-selected-after-window-restoration.md.
+        #if RUNTIMEVIEWER_ARM64E
+        runtimeViewerIsARM64EVariant = true
+        #endif
+
         SystemAutoFillMenuSuppression.install()
         let application = autoreleasepool {
             @Dependency(\.mainMenuController) var mainMenuController
@@ -44,10 +57,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        #if RUNTIMEVIEWER_ARM64E
-        runtimeViewerIsARM64EVariant = true
-        #endif
-
         NSToolbarItemViewerOverflowFix.install()
 
         settingsLifecycleController.loadOnLaunch()
