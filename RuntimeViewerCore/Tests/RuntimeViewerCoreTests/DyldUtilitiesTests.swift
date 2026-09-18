@@ -122,3 +122,124 @@ struct DyldUtilitiesMachOImageMainExecutableTests {
                 "expected redirect to .debug.dylib (lots of dependencies), got the stub instead (\(dependencyCount) deps)")
     }
 }
+
+/// RuntimeViewer inspects a foreign process by loading itself into it, so dyld
+/// reports the payload bundle (`RuntimeViewerServer.framework`, or
+/// `RuntimeViewerMobileServer.framework` in a simulator) among the target's
+/// images. It used to show up in the sidebar's "Others" tree — and in every
+/// other catalog fed from the same list — as if the user had asked to inspect
+/// RuntimeViewer's own scaffolding.
+@Suite("DyldUtilities.inspectableImagePaths")
+struct DyldUtilitiesInspectableImagePathsTests {
+    private static let targetExecutablePath = "/System/Applications/Photos.app/Contents/MacOS/Photos"
+    private static let injectedPayloadPath = "/Library/Frameworks/RuntimeViewerServer.framework/Versions/A/RuntimeViewerServer"
+
+    // MARK: - Injected payload
+
+    @Test("drops the injected payload from a target process's image list")
+    func dropsInjectedPayload() {
+        let imagePaths = [
+            Self.targetExecutablePath,
+            Self.injectedPayloadPath,
+            "/usr/lib/libobjc-trampolines.dylib",
+        ]
+
+        let result = DyldUtilities.inspectableImagePaths(
+            from: imagePaths,
+            hostingImagePath: Self.injectedPayloadPath,
+            mainExecutablePath: Self.targetExecutablePath
+        )
+
+        #expect(result == [Self.targetExecutablePath, "/usr/lib/libobjc-trampolines.dylib"])
+    }
+
+    @Test("drops the simulator payload behind a DYLD_ROOT_PATH prefix")
+    func dropsSimulatorPayload() {
+        let simulatorPayloadPath = "/sim_root/Library/Frameworks/RuntimeViewerMobileServer.framework/RuntimeViewerMobileServer"
+        let simulatorExecutablePath = "/sim_root/Applications/MobileNotes.app/MobileNotes"
+
+        let result = DyldUtilities.inspectableImagePaths(
+            from: [simulatorExecutablePath, simulatorPayloadPath],
+            hostingImagePath: simulatorPayloadPath,
+            mainExecutablePath: simulatorExecutablePath
+        )
+
+        #expect(result == [simulatorExecutablePath])
+    }
+
+    // MARK: - The host's own binary stays
+
+    @Test("keeps the main executable when this code is linked into it")
+    func keepsMainExecutable() {
+        let imagePaths = [Self.targetExecutablePath, "/usr/lib/libobjc.A.dylib"]
+
+        let result = DyldUtilities.inspectableImagePaths(
+            from: imagePaths,
+            hostingImagePath: Self.targetExecutablePath,
+            mainExecutablePath: Self.targetExecutablePath
+        )
+
+        #expect(result == imagePaths)
+    }
+
+    /// A Debug build puts the code in the `.debug.dylib` Xcode emits beside the
+    /// stub executable, so the hosting image is not spelled like the main
+    /// executable even though it *is* the host.
+    @Test("keeps the Debug stub's sibling .debug.dylib")
+    func keepsDebugDylib() {
+        let debugDylibPath = Self.targetExecutablePath + ".debug.dylib"
+        let imagePaths = [Self.targetExecutablePath, debugDylibPath]
+
+        let result = DyldUtilities.inspectableImagePaths(
+            from: imagePaths,
+            hostingImagePath: debugDylibPath,
+            mainExecutablePath: Self.targetExecutablePath
+        )
+
+        #expect(result == imagePaths)
+    }
+
+    @Test("returns the list unchanged when the hosting image is unknown")
+    func keepsEverythingWithoutHostingImage() {
+        let imagePaths = [Self.targetExecutablePath, Self.injectedPayloadPath]
+
+        let result = DyldUtilities.inspectableImagePaths(
+            from: imagePaths,
+            hostingImagePath: nil,
+            mainExecutablePath: Self.targetExecutablePath
+        )
+
+        #expect(result == imagePaths)
+    }
+}
+
+/// `hostingImagePath()` has to name the image by the exact string dyld reports,
+/// because the exclusion above is a string comparison against `imageNames()`.
+@Suite("DyldUtilities.hostingImagePath")
+struct DyldUtilitiesHostingImagePathTests {
+    @Test("names an image dyld has actually registered")
+    func matchesARegisteredImage() throws {
+        let hostingImagePath = try #require(DyldUtilities.hostingImagePath(),
+                                            "this code is compiled into some loaded image")
+        #expect(DyldUtilities.imageNames().contains(hostingImagePath),
+                "hostingImagePath() must be spelled the way imageNames() spells it")
+    }
+
+    @Test("excludes itself from the inspectable list unless it is the host binary")
+    func excludesItselfFromInspectableNames() throws {
+        let hostingImagePath = try #require(DyldUtilities.hostingImagePath())
+        let mainExecutablePath = DyldUtilities.mainExecutablePath()
+        let inspectableImageNames = DyldUtilities.inspectableImageNames()
+
+        // Under `swift test` the test code lives in a bundle loaded by
+        // `swiftpm-testing-helper`, so it stands in for the injected payload.
+        // Under `xcodebuild test` the host may be the main executable itself,
+        // in which case nothing is dropped.
+        if hostingImagePath == mainExecutablePath || hostingImagePath == mainExecutablePath + ".debug.dylib" {
+            #expect(inspectableImageNames.contains(hostingImagePath))
+        } else {
+            #expect(!inspectableImageNames.contains(hostingImagePath))
+            #expect(inspectableImageNames.contains(mainExecutablePath))
+        }
+    }
+}

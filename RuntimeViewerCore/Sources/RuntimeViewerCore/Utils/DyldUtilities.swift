@@ -59,6 +59,61 @@ package enum DyldUtilities {
         return names
     }
 
+    /// Every image dyld has mapped, minus RuntimeViewer's own injected payload.
+    ///
+    /// Inspecting a foreign process means loading this very code into it, so
+    /// dyld reports the payload bundle (`RuntimeViewerServer.framework`, or
+    /// `RuntimeViewerMobileServer.framework` in a simulator) next to the
+    /// target's real images. That bundle is RuntimeViewer's own scaffolding
+    /// rather than something the user asked to inspect, so it is dropped from
+    /// every user-facing catalog — the sidebar tree, Open Quickly, the command
+    /// line tool's `images` and the MCP image list all originate here or in
+    /// ``otherImageRootNode``.
+    ///
+    /// Locally there is nothing to drop: this code then lives in the host's own
+    /// main executable, which is always kept.
+    package static func inspectableImageNames() -> [String] {
+        inspectableImagePaths(
+            from: imageNames(),
+            hostingImagePath: hostingImagePath(),
+            mainExecutablePath: mainExecutablePath()
+        )
+    }
+
+    /// Pure overload that takes both paths explicitly so callers (and tests)
+    /// can drive the exclusion without a real injection.
+    package static func inspectableImagePaths(
+        from imagePaths: [String],
+        hostingImagePath: String?,
+        mainExecutablePath: String
+    ) -> [String] {
+        guard let hostingImagePath else { return imagePaths }
+        // The host's own binary is never the payload. A Debug build puts the
+        // code in the `<main executable>.debug.dylib` Xcode emits beside the
+        // stub executable, so that spelling names the host as well and stays.
+        guard hostingImagePath != mainExecutablePath,
+              hostingImagePath != mainExecutablePath + ".debug.dylib"
+        else { return imagePaths }
+        return imagePaths.filter { $0 != hostingImagePath }
+    }
+
+    /// The dyld-registered path of the image this code is compiled into, or
+    /// `nil` when dyld has no image with that mach header.
+    ///
+    /// `#dsohandle` is that image's mach header, so matching it against
+    /// `_dyld_get_image_header` yields the exact spelling ``imageNames()``
+    /// reports — `dladdr`'s `dli_fname` carries no such guarantee, and an
+    /// injected payload is excluded by string equality against that list.
+    package static func hostingImagePath() -> String? {
+        let hostingImageHeader: UnsafeRawPointer = #dsohandle
+        for index in 0..<_dyld_image_count() {
+            guard let header = _dyld_get_image_header(index) else { continue }
+            guard UnsafeRawPointer(header) == hostingImageHeader else { continue }
+            return _dyld_get_image_name(index).map { String(cString: $0) }
+        }
+        return nil
+    }
+
     /// Path of the host process's main executable.
     ///
     /// Uses `_NSGetExecutablePath()` rather than `imageNames().first` because
@@ -239,7 +294,7 @@ package enum DyldUtilities {
     package static var otherImageRootNode: RuntimeImageNode {
         #log(.debug, "Building other image root node")
         let dyldSharedCacheImagePaths = dyldSharedCacheImagePaths()
-        let allImagePaths = imageNames()
+        let allImagePaths = inspectableImageNames()
         let otherImagePaths = allImagePaths.filter { !dyldSharedCacheImagePaths.contains($0) }
         let node = RuntimeImageNode.rootNode(for: otherImagePaths, name: "Others")
         #log(.debug, "Built other images root node with \(otherImagePaths.count, privacy: .public) images")
