@@ -15,6 +15,7 @@
 		E95ED17E0000000000000001 /* RuntimeViewerSourceEditorBridge.bundle in Embed SourceEditor Bridge */ = {isa = PBXBuildFile; fileRef = E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Embed RuntimeViewerServer Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
+		E927C2322E9444F300084A7B /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E927C2312E9444F300084A7B /* RuntimeViewerCommunication */; };
 		E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D92D9AF7E5005A573C /* RuntimeViewerService */; };
 		E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */ = {isa = PBXBuildFile; productRef = E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */; };
 		E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */; };
@@ -341,6 +342,7 @@
 			files = (
 				E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */,
 				E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */,
+				E927C2322E9444F300084A7B /* RuntimeViewerCommunication in Frameworks */,
 			);
 		};
 		E9E900E52C2D0D5B00FADDCC /* Frameworks */ = {
@@ -617,6 +619,7 @@
 			name = RuntimeViewerCatalystHelperPlugin;
 			packageProductDependencies = (
 				E985A9CD2D9AF505005A573C /* RuntimeViewerCore */,
+				E927C2312E9444F300084A7B /* RuntimeViewerCommunication */,
 				E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */,
 			);
 			productName = RuntimeViewerCatalystHelperPlugin;
@@ -1921,6 +1924,10 @@
 		E985A9CD2D9AF505005A573C /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCore;
+		};
+		E927C2312E9444F300084A7B /* RuntimeViewerCommunication */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCommunication;
 		};
 		E985A9D92D9AF7E5005A573C /* RuntimeViewerService */ = {
 			isa = XCSwiftPackageProductDependency;
