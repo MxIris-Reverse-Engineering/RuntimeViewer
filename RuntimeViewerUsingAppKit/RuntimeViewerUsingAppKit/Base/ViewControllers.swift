@@ -141,6 +141,15 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewCo
     }
 }
 
+/// A `BaseViewController` whose `contentView` is an `NSVisualEffectView` before macOS 26 and a plain
+/// `NSView` from macOS 26 on.
+///
+/// From macOS 26 the split view wraps a sidebar or inspector item in an `NSGlassEffectView` whose
+/// colour the window server composes live; no colour, material or nested glass matches it, so the
+/// page stays transparent and sits on the glass directly. The opaque backdrop the sidebar's push /
+/// pop needs is inserted under the sliding pages for the length of the transition by
+/// `NavigationTransitionBackdropController`, not carried by the pages. Background:
+/// `Documentations/ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md`.
 open class BaseEffectViewController<ViewModel: ViewModelProtocol>: BaseViewController<ViewModel> {
     private lazy var effectView: NSView = {
         if #available(macOS 26.0, *) {

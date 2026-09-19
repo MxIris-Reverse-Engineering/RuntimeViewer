@@ -1,47 +1,17 @@
 import AppKit
 import AppKitPlus
 import RuntimeViewerUI
+import RuntimeViewerArchitectures
 
-final class SidebarNavigationController: BaseNavigationController, NSNavigationControllerDelegate {
+final class SidebarNavigationController: BaseNavigationController {
+    /// Inserts the backdrop under the sliding pages when a push / pop starts and removes it when the
+    /// transition completes; see its documentation for what it inserts on which macOS and the
+    /// measurements behind that.
+    private let navigationTransitionBackdropController = NavigationTransitionBackdropController()
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        delegate = self
-    }
-
-    func navigationController(_ navigationController: NSNavigationController, willShow viewController: NSViewController) {
-        if #available(macOS 26.0, *) {
-            guard let coordinator = navigationController.transitionCoordinator,
-                  let fromViewController = coordinator.viewController(forKey: .from),
-                  let toViewController = coordinator.viewController(forKey: .to)
-            else { return }
-
-            let fromOriginalBackgroundColor = fromViewController.view.backgroundColor
-            let toOriginalBackgroundColor = toViewController.view.backgroundColor
-            coordinator.animate(alongsideTransition: { context in
-                fromViewController.view.backgroundColor = .windowBackgroundColor
-                toViewController.view.backgroundColor = .windowBackgroundColor
-            }, completion: { context in
-                fromViewController.view.backgroundColor = fromOriginalBackgroundColor
-                toViewController.view.backgroundColor = toOriginalBackgroundColor
-            })
-        }
-    }
-
-    func navigationController(_ navigationController: NSNavigationController, didShow viewController: NSViewController) {
-        if #available(macOS 26.0, *) {
-            navigationController.view.needsDisplay = true
-        }
-    }
-}
-
-extension SidebarNavigationController {
-
-}
-
-extension NSView {
-    var backgroundColor: NSColor? {
-        set { setValue(newValue, forKey: "backgroundColor") }
-        get { value(forKey: "backgroundColor") as? NSColor }
+        delegate = navigationTransitionBackdropController
     }
 }

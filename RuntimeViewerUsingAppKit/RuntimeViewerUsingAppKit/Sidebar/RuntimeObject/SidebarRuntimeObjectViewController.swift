@@ -461,6 +461,7 @@ extension SidebarRuntimeObjectViewController {
 
             scrollView.do {
                 $0.autohidesScrollers = true
+                $0.isHiddenVisualEffectView = true
             }
 
             bottomSeparatorView.do {

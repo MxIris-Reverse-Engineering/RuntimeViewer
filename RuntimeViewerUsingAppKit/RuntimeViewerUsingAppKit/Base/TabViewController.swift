@@ -10,6 +10,10 @@ struct TabViewItem {
 }
 
 class TabViewController: NSLayerBackedViewController {
+    /// Transparent from macOS 26: the page sits directly on the split view item's glass, which no
+    /// colour or material reproduces. The opaque backdrop a push / pop needs is inserted under the
+    /// page for the length of the transition by `NavigationTransitionBackdropController` and removed
+    /// afterwards. Background: `Documentations/ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md`.
     private let contentView: NSView = {
         if #available(macOS 26.0, *) {
             NSLayerBackedView()

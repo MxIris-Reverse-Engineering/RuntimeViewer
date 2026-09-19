@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "0a7417c33caa20fde16723ebd2866247804b3ed1",
-        "version" : "0.4.2"
+        "revision" : "36a83101d0d43bae7d3166cf4b949f461386e386",
+        "version" : "0.4.3"
       }
     },
     {
@@ -734,8 +734,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "665ccaac727fd41a5c5b0eb57da367d617d0e897",
-        "version" : "0.32.0"
+        "revision" : "72d6c5ee748e6b0e03fd14e64db674c04af21eb2",
+        "version" : "0.34.0"
       }
     },
     {

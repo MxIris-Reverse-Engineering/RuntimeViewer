@@ -519,7 +519,7 @@ If a lifecycle responsibility doesn't fit one of these one-liners, **make it a n
 ### ViewController Base Class Selection
 
 - **`BaseViewController<VM>`**: Default choice. A plain `NSViewController` carrying the ViewModel plumbing plus `contentView`, loading indicator (`CommonLoadingView`) and skeleton support. AppKitPlus's navigation stack takes plain `NSViewController`s, so nothing has to inherit a navigation-specific base.
-- **`BaseEffectViewController<VM>`**: Use when a visual effect background is needed (inherits `BaseViewController`)
+- **`BaseEffectViewController<VM>`**: Use when a visual effect background is needed (inherits `BaseViewController`). Before macOS 26 that background is an `NSVisualEffectView`; from macOS 26 it is a plain `NSView`, because the split view wraps the item in an `NSGlassEffectView` that no colour or material matches, so the page stays transparent and sits on that glass directly. The opaque backdrop the sidebar's push / pop needs is inserted under both sliding pages for the transition's duration by `NavigationTransitionBackdropController` (the sidebar navigation controller's delegate): UIFoundation's `GlassEffectReplicaView` on macOS 27+, a glass that copies the enclosing glass and shares its backdrop group, and `windowBackgroundColor` on macOS 26. Do not give pages a resident background of their own; see `Documentations/ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md`
 
 ### UI Component Selection
 
