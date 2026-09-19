@@ -11,6 +11,14 @@ SMPrivilegedExecutable = $(RUNTIME_VIEWER_DEBUG_SM_PRIVILEGED_EXECUTABLE)
 // reads it back: launchd env for the daemon, Info.plist for the app.
 RUNTIME_VIEWER_SERVICE_NAME = dev.mxiris.runtimeviewer.service
 
+// Which of the two Icon Composer documents under Resources/ the app ships. ArchiveScript.sh
+// overrides it with AppIconBeta on the beta / RC channel; every other build keeps AppIcon.
+// It goes through a variable rather than overriding ASSETCATALOG_COMPILER_APPICON_NAME on the
+// xcodebuild command line, because a command-line override reaches every target in the scheme —
+// including RuntimeViewerCatalystHelper, whose AppIcon lives in its own asset catalog and has
+// no beta variant to switch to.
+RUNTIME_VIEWER_APP_ICON_NAME = AppIcon
+
 RUNTIME_VIEWER_BUILD_DATE = unknown
 RUNTIME_VIEWER_GIT_BRANCH = unknown
 RUNTIME_VIEWER_GIT_COMMIT = unknown

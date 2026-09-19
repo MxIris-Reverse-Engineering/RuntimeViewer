@@ -323,7 +323,19 @@ COMMON_XCODEBUILD_SETTINGS=(
     "RUNTIME_VIEWER_GIT_COMMIT=$GIT_COMMIT"
 )
 
+# Pre-release builds ship the BETA-badged icon. Both Resources/AppIcon.icon and
+# Resources/AppIconBeta.icon are resources of the app target; RUNTIME_VIEWER_APP_ICON_NAME feeds
+# the app target's ASSETCATALOG_COMPILER_APPICON_NAME, and
+# ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS=NO (already set in the project) keeps the
+# unselected one out of the bundle. Overriding ASSETCATALOG_COMPILER_APPICON_NAME directly would
+# also hit RuntimeViewerCatalystHelper, which has no beta variant of its own icon.
+MAIN_APP_XCODEBUILD_SETTINGS=("${COMMON_XCODEBUILD_SETTINGS[@]}")
+if [[ "$CHANNEL" == "beta" ]]; then
+    MAIN_APP_XCODEBUILD_SETTINGS+=("RUNTIME_VIEWER_APP_ICON_NAME=AppIconBeta")
+fi
+
 log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
+log "app_icon=$([[ "$CHANNEL" == "beta" ]] && echo AppIconBeta || echo AppIcon)"
 
 log "Archiving Catalyst helper"
 XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
@@ -392,7 +404,7 @@ XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -archivePath "$MAIN_ARCHIVE" \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
-    "${COMMON_XCODEBUILD_SETTINGS[@]}"
+    "${MAIN_APP_XCODEBUILD_SETTINGS[@]}"
 
 run rm -rf "$EXPORT_PATH"
 XCODEBUILD_LOG_NAME="export-main" run_piped xcodebuild -exportArchive \
@@ -403,6 +415,19 @@ XCODEBUILD_LOG_NAME="export-main" run_piped xcodebuild -exportArchive \
 
 APP_PATH=$(find "$EXPORT_PATH" -maxdepth 1 -type d -name '*.app' | head -1)
 [[ -n "$APP_PATH" && -d "$APP_PATH" ]] || fail "expected exported *.app under $EXPORT_PATH"
+
+# Check the shipped bundle here too, for the same reason as the payload below. When the icon
+# named by ASSETCATALOG_COMPILER_APPICON_NAME is not among actool's inputs, actool exits 0 and
+# writes an *empty* partial Info.plist: no error, no icon. A mis-wired AppIconBeta would
+# therefore ship as an app with no icon at all rather than failing the build.
+if ! $DRY_RUN; then
+    EXPECTED_APP_ICON="AppIcon"
+    [[ "$CHANNEL" == "beta" ]] && EXPECTED_APP_ICON="AppIconBeta"
+    EXPORTED_APP_ICON=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$APP_PATH/Contents/Info.plist" 2>/dev/null || true)
+    [[ "$EXPORTED_APP_ICON" == "$EXPECTED_APP_ICON" ]] \
+        || fail "exported app icon is '${EXPORTED_APP_ICON:-<none>}', expected '$EXPECTED_APP_ICON'. Check that Resources/${EXPECTED_APP_ICON}.icon is in the app target's Resources build phase."
+    log "app_icon ok: $EXPORTED_APP_ICON"
+fi
 
 # Check the shipped bundle, not the intermediate step that was supposed to fill
 # it. The embed phase reports a missing payload with `warning:` and exits 0, so

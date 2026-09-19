@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
+		E927C2302E9444F300084A7B /* AppIconBeta.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E9444F300084A7B /* AppIconBeta.icon */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E910124C38FF8B6334251802 /* Sparkle */; };
@@ -163,6 +164,7 @@
 
 /* Begin PBXFileReference section */
 		E927C22D2E9444F300084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
+		E927C22F2E9444F300084A7B /* AppIconBeta.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconBeta.icon; path = ../Resources/AppIconBeta.icon; sourceTree = SOURCE_ROOT; };
 		E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RuntimeViewer-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerCatalystHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/RuntimeViewerService/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
@@ -365,6 +367,7 @@
 				E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */,
 				E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */,
 				E927C22D2E9444F300084A7B /* AppIcon.icon */,
+				E927C22F2E9444F300084A7B /* AppIconBeta.icon */,
 				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
 				E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */,
 				E9DAF4962FEE740D00DD20CB /* RuntimeViewerUsingAppKit */,
@@ -721,6 +724,7 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */,
+				E927C2302E9444F300084A7B /* AppIconBeta.icon in Resources */,
 			);
 		};
 		E947C3652C2A4D0400296B2E /* Resources */ = {
@@ -1014,7 +1018,7 @@
 			baseConfigurationReference = E95CDA672DAA970300D97B03 /* Debug.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "$(RUNTIME_VIEWER_APP_ICON_NAME)";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -1069,7 +1073,7 @@
 			baseConfigurationReference = E95CDA682DAA970900D97B03 /* Release.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "$(RUNTIME_VIEWER_APP_ICON_NAME)";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -1528,7 +1532,7 @@
 			baseConfigurationReference = E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "$(RUNTIME_VIEWER_APP_ICON_NAME)";
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;

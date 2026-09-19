@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- White ring around the disc. Measured off the original bitmap: outer radius 225, stroke
+     width 16.5, so the stroke centreline sits at r=216.75 and matches Disc.svg's fill edge. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 824 824">
+ <circle cx="411.5" cy="412.5" r="216.75" fill="none" stroke="#FCFCFC" stroke-width="16.5"/>
+</svg>

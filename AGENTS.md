@@ -92,6 +92,50 @@ serves release archives.
   that name, and two schemes called `runtime-viewer-cli` make `xcodebuild -scheme` pick one
   silently. The app target depends on it, so building the app builds it too.
 
+## App Icon
+
+Two Icon Composer documents sit side by side under `Resources/`, both in the app target's
+Resources build phase: `AppIcon.icon` and `AppIconBeta.icon`, the latter being the former plus a
+BETA badge lifted from Xcode's own icon. Which one ships is decided by
+`RUNTIME_VIEWER_APP_ICON_NAME`, defined in the app's Debug / Release xcconfigs and feeding
+`ASSETCATALOG_COMPILER_APPICON_NAME`. `ArchiveScript.sh` overrides it with `AppIconBeta` when the
+release channel is `beta` (inferred from a `-beta` / `-RC` / `-alpha` version tag); everything
+else — local Debug builds included — gets `AppIcon`. The indirection exists because a plain
+`ASSETCATALOG_COMPILER_APPICON_NAME=` override on the `xcodebuild` command line reaches every
+target in the scheme, including `RuntimeViewerCatalystHelper`, whose icon lives in its own asset
+catalog and has no beta variant.
+
+**`actool` fails silently here.** Ask for an app icon that is not among its inputs and it exits 0
+with an *empty* partial `Info.plist`: no error, no icon, a shipped app with a blank tile. That is
+why `ArchiveScript.sh` re-reads `CFBundleIconName` out of the exported bundle and fails the run
+when it does not match the channel.
+
+**The badge borrows Xcode's shapes, not its colours.** Both SVGs come from Xcode's own `.icon`,
+but the pale glass lozenge was replaced by the disc's near-black with a white wordmark, so the
+badge follows the same dark-plate-carrying-white-content pairing as the rest of the icon instead
+of putting a second blue on a blue background. Two consequences worth knowing before touching
+that group: Xcode's wordmark layer uses the `multiply` blend mode, which renders white as
+*nothing at all* — the whole group is on `normal` now — and Xcode's second lozenge pass, which
+existed only to lift the pale glass in dark appearance, was deleted rather than left at zero
+opacity.
+
+Three things to know before editing either document:
+
+- **Four visible groups is a hard ceiling** — `actool` rejects a fifth with
+  `Too many visible groups`. `AppIconBeta.icon` already uses all four, so adding a layer group
+  means merging two existing ones first.
+- **An SVG layer's viewBox units and a bitmap layer's pixels are the same unit.** Every layer
+  here uses an 824-unit viewBox at `scale: 1.3`, which is what the original 824-pixel bitmap
+  foreground occupied.
+- **The dark-appearance background gradient is not yours to set.** A `dark` entry under the
+  top-level `fill` is ignored — verified by compiling one with deliberately absurd colours and
+  finding the system's own grey pair in the output. Per-layer `fill-specializations` do work, and
+  are how the disc, outline, magnifier and code listing adapt.
+
+`Resources/AppIconTools/GenerateCodeListingLayer.swift` regenerates the code-listing layer, which
+is a few hundred glyph outlines and cannot be hand-edited. Its header records the metrics the
+layer was fitted to.
+
 ## Branching Model
 
 - **`main`** — the release branch. Protected by a "changes must be made through

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Magnifying glass sitting on the disc. Measured off the original bitmap: ring centre
+     (385.8, 385.8), outer radius 91.8 and ring width 16 (centreline r=83.8); the handle runs
+     at 45 degrees from the ring's edge to (521, 523) with a round cap. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 824 824">
+ <g fill="none" stroke="#FCFCFC" stroke-width="16" stroke-linecap="round">
+  <circle cx="385.8" cy="385.8" r="83.8"/>
+  <line x1="445" y1="445" x2="521" y2="523"/>
+ </g>
+</svg>
