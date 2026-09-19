@@ -21,8 +21,12 @@ on:
       runner:
         description: 'Runner to use'
         type: choice
-        default: 'macos-26'
-        options: [macos-26, macos-latest, self-hosted]
+        default: 'xcode-27'
+        # xcode-27 is GitHub's macOS 27 + Xcode 27 image. It is still marked preview, so it can
+        # queue longer than the GA images; fall back to self-hosted if that becomes a problem.
+        # macos-26 cannot build this project any more — the code carries #available(macOS 27.0, *)
+        # and is adapted to Xcode 27 API changes.
+        options: [xcode-27, macos-26, macos-latest, self-hosted]
       create_release:
         description: 'Create GitHub Release and update appcast'
         type: boolean
@@ -30,7 +34,7 @@ on:
 
 jobs:
   release:
-    runs-on: ${{ inputs.runner || 'macos-26' }}
+    runs-on: ${{ inputs.runner || 'xcode-27' }}
     permissions:
       contents: write
       pull-requests: write
@@ -45,7 +49,9 @@ jobs:
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1.7.0
         with:
-          xcode-version: '26.4'
+          # Matches the Xcode the project is developed against (27.0, build 27A266a), which is
+          # also the only one on the xcode-27 image.
+          xcode-version: '27.0'
 
       - name: Import code signing certificates
         env:
