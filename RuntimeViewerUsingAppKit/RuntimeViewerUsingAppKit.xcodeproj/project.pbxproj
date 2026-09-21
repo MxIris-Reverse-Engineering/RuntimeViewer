@@ -7,15 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E9186330306120AA00DCEAC1 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9186332306120AA00DCEAC1 /* RuntimeViewerCore */; };
+		E9186331306120AA00DCEAC1 /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */; };
+		E918631B30611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
 		E927C2302E9444F300084A7B /* AppIconBeta.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E9444F300084A7B /* AppIconBeta.icon */; };
+		E927C2322E9444F300084A7B /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E927C2312E9444F300084A7B /* RuntimeViewerCommunication */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
 		E94EC5BECB0E94F4C6ABB6B3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E910124C38FF8B6334251802 /* Sparkle */; };
 		E95ED17E0000000000000001 /* RuntimeViewerSourceEditorBridge.bundle in Embed SourceEditor Bridge */ = {isa = PBXBuildFile; fileRef = E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E961FEEC2F54513E00ED3419 /* RuntimeViewerServer.framework in Embed RuntimeViewerServer Framework */ = {isa = PBXBuildFile; fileRef = E98BF6372F1D4ABB0041DB20 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E985A9CE2D9AF505005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9CD2D9AF505005A573C /* RuntimeViewerCore */; };
-		E927C2322E9444F300084A7B /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E927C2312E9444F300084A7B /* RuntimeViewerCommunication */; };
 		E985A9DA2D9AF7E5005A573C /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D92D9AF7E5005A573C /* RuntimeViewerService */; };
 		E9862AD32F377D2B00139991 /* RuntimeViewerMCPBridge in Frameworks */ = {isa = PBXBuildFile; productRef = E9862AD22F377D2B00139991 /* RuntimeViewerMCPBridge */; };
 		E98BF6282F1D4A690041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6272F1D4A690041DB20 /* RuntimeViewerCatalystExtensions */; };
@@ -31,6 +34,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		E918631830611D0200DCEAC1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E9432FDA2C0D614900362862 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E918631030611D0200DCEAC1;
+			remoteInfo = RuntimeViewerLocalRuntimeService;
+		};
 		E94C1B8E2F35E7AC005DF968 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */;
@@ -90,6 +100,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		E918631A30611D0200DCEAC1 /* Embed XPC Services */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/XPCServices";
+			dstSubfolder = Product;
+			files = (
+				E918631B30611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc in Embed XPC Services */,
+			);
+			name = "Embed XPC Services";
+		};
 		E95ED17E0000000000000005 /* Embed SourceEditor Bridge */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = "";
@@ -164,6 +183,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = RuntimeViewerLocalRuntimeService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		E927C22D2E9444F300084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		E927C22F2E9444F300084A7B /* AppIconBeta.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconBeta.icon; path = ../Resources/AppIconBeta.icon; sourceTree = SOURCE_ROOT; };
 		E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RuntimeViewer-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -192,6 +212,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		E918632030611D0200DCEAC1 /* Exceptions for "RuntimeViewerLocalRuntimeService" folder in "RuntimeViewerLocalRuntimeService" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = E918631030611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */;
+		};
 		E95ED17E0000000000000006 /* Exceptions for "RuntimeViewerSourceEditorBridge" folder in "RuntimeViewerUsingAppKit" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -237,6 +264,14 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		E918631230611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				E918632030611D0200DCEAC1 /* Exceptions for "RuntimeViewerLocalRuntimeService" folder in "RuntimeViewerLocalRuntimeService" target */,
+			);
+			path = RuntimeViewerLocalRuntimeService;
+			sourceTree = "<group>";
+		};
 		E95ED17E0000000000000007 /* RuntimeViewerSourceEditorBridge */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -299,6 +334,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		E918630E30611D0200DCEAC1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				E9186330306120AA00DCEAC1 /* RuntimeViewerCore in Frameworks */,
+				E9186331306120AA00DCEAC1 /* RuntimeViewerCommunication in Frameworks */,
+			);
+		};
 		E9432FDF2C0D614900362862 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -380,6 +422,7 @@
 				E95ED17E0000000000000007 /* RuntimeViewerSourceEditorBridge */,
 				E99510EB3052AA7800D3FAB2 /* runtime-viewer-cli */,
 				E9CF000A2FF0010000000001 /* Configurations */,
+				E918631230611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */,
 				E9432FE32C0D614900362862 /* Products */,
 				E9432FF32C0D637500362862 /* Frameworks */,
 				E92139E3300BCF5C00B1EFB0 /* Recovered References */,
@@ -397,6 +440,7 @@
 				E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */,
 				E95ED17F0000000000000001 /* RuntimeViewerSourceEditorBridgeTests.xctest */,
 				E99510EA3052AA7800D3FAB2 /* runtime-viewer-cli */,
+				E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -461,6 +505,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		E918631030611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E918631F30611D0200DCEAC1 /* Build configuration list for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */;
+			buildPhases = (
+				E918630D30611D0200DCEAC1 /* Sources */,
+				E918630E30611D0200DCEAC1 /* Frameworks */,
+				E918630F30611D0200DCEAC1 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				E918631230611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */,
+			);
+			name = RuntimeViewerLocalRuntimeService;
+			packageProductDependencies = (
+				E9186332306120AA00DCEAC1 /* RuntimeViewerCore */,
+				E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */,
+			);
+			productName = RuntimeViewerLocalRuntimeService;
+			productReference = E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
 		E9432FE12C0D614900362862 /* RuntimeViewerUsingAppKit */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = E9432FEF2C0D614A00362862 /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingAppKit" */;
@@ -476,6 +542,7 @@
 				E9CAFE010000000000000031 /* Verify Catalyst Helper Variant */,
 				E9C9E9EB2C2D33F500C4AA34 /* Embed Catalyst Helpers */,
 				E95ED17E0000000000000005 /* Embed SourceEditor Bridge */,
+				E918631A30611D0200DCEAC1 /* Embed XPC Services */,
 			);
 			buildRules = (
 			);
@@ -484,6 +551,7 @@
 				E9A9CCE92F5D882E00A10DD3 /* PBXTargetDependency */,
 				E9862A292F36F66400139991 /* PBXTargetDependency */,
 				E95ED17E000000000000000F /* PBXTargetDependency */,
+				E918631930611D0200DCEAC1 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				E9DAF4962FEE740D00DD20CB /* RuntimeViewerUsingAppKit */,
@@ -653,6 +721,9 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					E918631030611D0200DCEAC1 = {
+						CreatedOnToolsVersion = 26.6;
+					};
 					E9432FE12C0D614900362862 = {
 						CreatedOnToolsVersion = 15.4;
 						LastSwiftMigration = 2610;
@@ -701,6 +772,7 @@
 				E95ED17E0000000000000004 /* RuntimeViewerSourceEditorBridge */,
 				E95ED17F000000000000000B /* RuntimeViewerSourceEditorBridgeTests */,
 				E99510E93052AA7800D3FAB2 /* RuntimeViewerCommandLineTool */,
+				E918631030611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */,
 			);
 		};
 /* End PBXProject section */
@@ -723,6 +795,11 @@
 /* End PBXReferenceProxy section */
 
 /* Begin PBXResourcesBuildPhase section */
+		E918630F30611D0200DCEAC1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 		E9432FE02C0D614900362862 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -809,6 +886,11 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		E918630D30611D0200DCEAC1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		E9432FDE2C0D614900362862 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -852,6 +934,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		E918631930611D0200DCEAC1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E918631030611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService */;
+			targetProxy = E918631830611D0200DCEAC1 /* PBXContainerItemProxy */;
+		};
 		E95ED17E000000000000000F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = E95ED17E0000000000000004 /* RuntimeViewerSourceEditorBridge */;
@@ -886,6 +973,96 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		E918631C30611D0200DCEAC1 /* Debug configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RuntimeViewerLocalRuntimeService/RuntimeViewerLocalRuntimeService.entitlements;
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = D5Q73692VW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RuntimeViewerLocalRuntimeService/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerLocalRuntimeService;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 3.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E918631D30611D0200DCEAC1 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RuntimeViewerLocalRuntimeService/RuntimeViewerLocalRuntimeService.entitlements;
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = D5Q73692VW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RuntimeViewerLocalRuntimeService/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerLocalRuntimeService;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 3.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = "Debug-arm64e";
+		};
+		E918631E30611D0200DCEAC1 /* Release configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = RuntimeViewerLocalRuntimeService/RuntimeViewerLocalRuntimeService.entitlements;
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = D5Q73692VW;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_POINTER_AUTHENTICATION = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RuntimeViewerLocalRuntimeService/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewerLocalRuntimeService;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 3.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_RELEASE_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		E9432FED2C0D614A00362862 /* Debug configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */;
@@ -1817,6 +1994,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		E918631F30611D0200DCEAC1 /* Build configuration list for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E918631C30611D0200DCEAC1 /* Debug configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */,
+				E918631D30611D0200DCEAC1 /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */,
+				E918631E30611D0200DCEAC1 /* Release configuration for PBXNativeTarget "RuntimeViewerLocalRuntimeService" */,
+			);
+			defaultConfigurationName = Release;
+		};
 		E9432FDD2C0D614900362862 /* Build configuration list for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1912,10 +2098,22 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		E9186332306120AA00DCEAC1 /* RuntimeViewerCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCore;
+		};
+		E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCommunication;
+		};
 		E910124C38FF8B6334251802 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		E927C2312E9444F300084A7B /* RuntimeViewerCommunication */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerCommunication;
 		};
 		E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -1924,10 +2122,6 @@
 		E985A9CD2D9AF505005A573C /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCore;
-		};
-		E927C2312E9444F300084A7B /* RuntimeViewerCommunication */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = RuntimeViewerCommunication;
 		};
 		E985A9D92D9AF7E5005A573C /* RuntimeViewerService */ = {
 			isa = XCSwiftPackageProductDependency;

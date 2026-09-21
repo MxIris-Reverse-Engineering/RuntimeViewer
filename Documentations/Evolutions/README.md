@@ -1,3 +1,4 @@
+| [draft](draft-local-runtime-xpc-service.md) | 本地运行时引擎搬进内嵌 XPC service | In Progress | 「My Mac」引擎今天在 App 进程里 `dlopen` 并索引用户选中的镜像，一个坏镜像就带走整个 App。搬进随 App 打包的普通 XPC service（无 Mach service、无 daemon）：引擎身份仍是 `.local`，新增「进程内 / XPC service」执行方式；SwiftyXPC 直连，复用共享命令表；service 崩溃后同一引擎对象自动重连（3 次退避后按需），镜像丢失、文档回到镜像列表根并发系统通知。iOS / 测试 / CLI 独立 host 继续进程内。 |
 # Evolution 提案索引
 
 - **项目类型**: App（macOS，AppKit）

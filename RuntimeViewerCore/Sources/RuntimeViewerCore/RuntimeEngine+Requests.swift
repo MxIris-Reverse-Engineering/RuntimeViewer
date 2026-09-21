@@ -59,6 +59,15 @@ extension RuntimeEngine {
         }
     }
 
+    struct ReloadDataRequest: RuntimeEngineRequest {
+        let isReloadImageNodes: Bool
+        static var commandName: String { CommandNames.reloadData.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeEngineEmpty {
+            await engine.reloadLocalData(isReloadImageNodes: isReloadImageNodes)
+            return RuntimeEngineEmpty()
+        }
+    }
+
     /// Server-side answer to `imageName(ofObjectName:)`. Symmetric with the
     /// pre-refactor behavior where the local arm always returned `nil` and
     /// only the remote arm answered meaningfully — so a proxy / server engine

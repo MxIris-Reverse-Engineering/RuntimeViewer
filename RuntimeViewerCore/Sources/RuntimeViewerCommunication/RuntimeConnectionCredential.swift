@@ -20,6 +20,7 @@ public import HelperCommunication
 /// |---------------------------------|---------------------------|-----------|
 /// | `.bonjour` + `.client`          | `.bonjour(endpoint)`      | Required  |
 /// | `.remote` + `.client` (reconnect) | `.xpcServer(endpoint)` | Optional, enables direct reconnect |
+/// | `.local` run in the XPC service | `.xpcService(target)`     | Required to get a connection at all; without it `.local` has none |
 /// | All other cases                 | `nil`                     | —         |
 public enum RuntimeConnectionCredential: Sendable {
     /// Bonjour endpoint resolved by service discovery.
@@ -35,5 +36,14 @@ public enum RuntimeConnectionCredential: Sendable {
     /// reconnects directly to the existing peer instead of going through XPC service lookup —
     /// used for reattaching to previously-injected processes.
     case xpcServer(HelperPeerEndpoint)
+
+    /// The embedded XPC service a `.local` engine forwards its work to.
+    ///
+    /// `.local` names this Mac, not a transport, so on its own it yields no connection. This is
+    /// the one thing that gives it one: which service to reach (the app's, by bundle identifier,
+    /// or an anonymous listener in a test). It is a credential rather than part of the source
+    /// for the same reason the Bonjour endpoint is — the engine's identity, and everything keyed
+    /// on it, must not change because its work moved to another process.
+    case xpcService(RuntimeXPCServiceTarget)
     #endif
 }

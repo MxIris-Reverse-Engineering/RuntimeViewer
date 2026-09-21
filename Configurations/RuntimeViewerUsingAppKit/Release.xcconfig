@@ -17,6 +17,10 @@ RUNTIME_VIEWER_SERVICE_NAME = com.mxiris.runtimeviewer.service
 // no beta variant to switch to.
 RUNTIME_VIEWER_APP_ICON_NAME = AppIcon
 
+// The local-runtime XPC service this configuration embeds; feeds the app Info.plist key
+// RuntimeViewerLocalRuntimeServiceBundleIdentifier. (Debug-arm64e overrides it.)
+RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_BUNDLE_IDENTIFIER = $(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_RELEASE_BUNDLE_IDENTIFIER)
+
 RUNTIME_VIEWER_BUILD_DATE = unknown
 RUNTIME_VIEWER_GIT_BRANCH = unknown
 RUNTIME_VIEWER_GIT_COMMIT = unknown

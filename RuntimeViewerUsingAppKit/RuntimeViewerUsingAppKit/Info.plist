@@ -34,6 +34,8 @@
 	<string>$(RUNTIME_VIEWER_GIT_BRANCH)</string>
 	<key>RuntimeViewerGitCommit</key>
 	<string>$(RUNTIME_VIEWER_GIT_COMMIT)</string>
+	<key>RuntimeViewerLocalRuntimeServiceBundleIdentifier</key>
+	<string>$(RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_BUNDLE_IDENTIFIER)</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<true/>
 	<key>SUEnableAutomaticChecks</key>

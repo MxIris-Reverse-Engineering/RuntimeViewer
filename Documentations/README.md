@@ -34,7 +34,7 @@
 
 ## 提案（Evolutions）
 
-见 [`Evolutions/README.md`](Evolutions/README.md)。当前 18 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏、Helper 设置页的重装按钮；另有 5 篇待编号草案：RuntimeBookmarkScope（把持久化身份从显示名手里拿走），以及愿景《无头 RuntimeViewer》下的四篇——引擎管理下沉为无 UI 模块、`runtime-viewer-cli` 基础（协议 / 常驻 host / 本地来源）、多来源与 App 充当 host、嵌入 App 包与设置页。
+见 [`Evolutions/README.md`](Evolutions/README.md)。当前 18 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏、Helper 设置页的重装按钮；另有 6 篇待编号草案：本地运行时引擎搬进内嵌 XPC service（`.local` 身份不变，执行方式改为 XPC service）、RuntimeBookmarkScope（把持久化身份从显示名手里拿走），以及愿景《无头 RuntimeViewer》下的四篇——引擎管理下沉为无 UI 模块、`runtime-viewer-cli` 基础（协议 / 常驻 host / 本地来源）、多来源与 App 充当 host、嵌入 App 包与设置页。
 
 ## 设计与实现计划（Plans，归档）
 

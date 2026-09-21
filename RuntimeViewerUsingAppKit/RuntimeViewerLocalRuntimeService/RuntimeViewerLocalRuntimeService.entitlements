@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- This process is where the app's "My Mac" engine dlopens whatever image the
+	     user picks. Under the hardened runtime, library validation would refuse any
+	     image not signed by Apple or by this team, so the service carries the same
+	     exception the app carried when the loading happened in the app.
+
+	     No App Sandbox: the engine reads Mach-O files at arbitrary paths and maps
+	     them executable, both of which the sandbox denies. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

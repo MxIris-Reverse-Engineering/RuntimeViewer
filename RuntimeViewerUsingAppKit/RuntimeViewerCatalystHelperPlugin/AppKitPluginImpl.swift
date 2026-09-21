@@ -72,7 +72,7 @@ final class AppKitPluginImpl: NSObject, AppKitPlugin {
     /// the app runs; the helper has to look after itself as well.
     ///
     /// Registration in the injected-endpoint registry is deliberately off for
-    /// the helper (`RuntimeXPCServerConnection.shouldAnnounceListenerEndpoint`),
+    /// the helper (`RuntimeXPCMachServiceServerConnection.shouldAnnounceListenerEndpoint`),
     /// so unlike an injected server nothing ever reconnects to it: a
     /// disconnected helper is a dead helper.
     private func observeEngineState(of runtimeEngine: RuntimeEngine) {

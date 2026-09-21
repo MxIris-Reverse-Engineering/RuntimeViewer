@@ -13,7 +13,7 @@ public import HelperCommunication
 ///
 /// | Implementation | Transport | Use Case |
 /// |----------------|-----------|----------|
-/// | `RuntimeXPCConnection` | XPC Mach Service | Cross-process on macOS (requires privileged helper) |
+/// | `RuntimeXPCMachServiceConnection` | XPC Mach Service | Cross-process on macOS (requires privileged helper) |
 /// | `RuntimeNetworkConnection` | Bonjour/TCP | iOS device to Mac via local network |
 /// | `RuntimeLocalSocketConnection` | TCP localhost | Code injection into sandboxed apps |
 /// | `RuntimeStdioConnection` | stdin/stdout | CLI tools, language servers |

@@ -197,6 +197,22 @@ The project uses three Swift Package Manager packages:
 - `RuntimeViewerUsingAppKit` — Main macOS application (AppKit, document-based)
 - `RuntimeViewerMCPServer` — MCP server executable (stdio-based, communicates with bridge via TCP)
 - `RuntimeViewerServer` — XPC background service for inter-process communication
+- `RuntimeViewerLocalRuntimeService` — the plain XPC service (no mach service, no daemon) the app's
+  "My Mac" engine runs in, embedded at `Contents/XPCServices/`. **The app process never dlopens or
+  indexes an image itself.** `RuntimeEngine.local` decides where its work happens from the process's
+  own `Info.plist`: the app's names the service it embeds under
+  `RuntimeViewerLocalRuntimeServiceBundleIdentifier`, so the app's `.local` forwards to it, while the
+  service itself, the standalone CLI host, the Catalyst helper and the tests (no key) stay in
+  process — launchd only finds an embedded service inside the calling process's own bundle, so the
+  bundle is the configuration; nothing is set before first use. The "Load Frameworks…" picker goes
+  through `engine.loadImage(at:)`, not `Bundle.load`. A service crash costs the loaded images, not
+  the app: the connection reattaches on its own, the engine only sees `.disconnected` then
+  `.connected`, documents walk back to the image list and the app posts a notification. **All
+  XPC-service code lives in two places** — `RuntimeViewerCommunication/Connections/RuntimeXPCServiceConnection.swift`
+  (transport, `hello`, reattach) and `RuntimeViewerCore/LocalRuntimeService/` (`Info.plist` key and
+  credential, the service-side host); `RuntimeEngine` and `RuntimeEngineManager` know nothing about
+  XPC, keep it that way. Background: `Documentations/Evolutions/draft-local-runtime-xpc-service.md`;
+  the transport: `Documentations/CommunicationAndEngineArchitecture.md` §3.6
 - `RuntimeViewerCatalystHelper` — Mac Catalyst support bridge
 - `RuntimeViewerCommandLineTool` — `runtime-viewer-cli` built as a target dependency of the app and
   embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
@@ -211,7 +227,8 @@ The project uses three Swift Package Manager packages:
 - **MVVM-C (MVVM + Coordinator)**: Navigation via CocoaCoordinator (macOS) / XCoordinator (iOS)
 - **Reactive Streams**: Heavy RxSwift usage for UI state and data flow
 - **Dependency Injection**: Uses swift-dependencies for service injection
-- **Multi-Process**: XPC services enable safe inspection of external processes
+- **Multi-Process**: XPC services enable safe inspection of external processes, and the local
+  runtime itself runs out of process in `RuntimeViewerLocalRuntimeService.xpc`
 - **MCP Bridge**: TCP bridge pattern — app hosts bridge server, external MCP server connects as client
 
 ### MCP Integration

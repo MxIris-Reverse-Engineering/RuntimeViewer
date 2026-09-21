@@ -13,6 +13,12 @@ private struct SendableImage: @unchecked Sendable {
 }
 #endif
 
+/// Shares one engine with peers over a localhost TCP listener.
+///
+/// The serving itself — command table, pushes, initial data — is
+/// `RuntimeEngineConnectionServer`; this type owns the TCP transport, wires
+/// the server up for each client that connects, and adds the proxy-only icon
+/// request.
 @Loggable(.private)
 public actor RuntimeEngineProxyServer {
     /// Command name for icon requests from remote clients.
@@ -22,13 +28,8 @@ public actor RuntimeEngineProxyServer {
 
     private let communicator = RuntimeCommunicator()
     private var connection: (any RuntimeConnection)?
+    private var server: RuntimeEngineConnectionServer?
     private var subscriptions: Set<AnyCancellable> = []
-    /// Push-relay subscriptions are re-established on every `.connected`
-    /// transition (each new/reconnecting client). They live in their own set so
-    /// `setupPushRelay()` can drop the previous client's relays before wiring
-    /// new ones — otherwise each reconnect would stack another relay and every
-    /// data change would be sent N times.
-    private var pushRelaySubscriptions: Set<AnyCancellable> = []
     private let identifier: String
 
     public private(set) var port: UInt16 = 0
@@ -47,8 +48,9 @@ public actor RuntimeEngineProxyServer {
             role: .server
         )
         #log(.info, "[PROXY \(self.identifier, privacy: .public)] starting...")
-        connection = try await communicator.connect(to: source, waitForConnection: false)
-        if let info = connection?.connectionInfo {
+        let connection = try await communicator.connect(to: source, waitForConnection: false)
+        self.connection = connection
+        if let info = connection.connectionInfo {
             host = info.host
             port = info.port
         }
@@ -56,19 +58,22 @@ public actor RuntimeEngineProxyServer {
         let proxyPort = self.port
         #log(.info, "[PROXY \(self.identifier, privacy: .public)] listening on \(proxyHost, privacy: .public):\(proxyPort, privacy: .public)")
 
+        let server = RuntimeEngineConnectionServer(engine: engine, connection: connection, label: "PROXY \(identifier)")
+        self.server = server
+
         let id = self.identifier
-        connection?.statePublisher
+        connection.statePublisher
             .sink { [weak self] state in
                 guard let self else { return }
                 #log(.info, "[PROXY \(id, privacy: .public)] connection state: \(String(describing: state), privacy: .public)")
                 if state == .connected {
                     Task {
                         #log(.info, "[PROXY \(id, privacy: .public)] client connected, setting up handlers...")
-                        await self.setupRequestHandlers()
-                        #log(.info, "[PROXY \(id, privacy: .public)] request handlers registered")
-                        await self.setupPushRelay()
+                        await server.registerRequestHandlers()
+                        await self.registerIconHandler(on: connection)
+                        await server.installPushRelay()
                         #log(.info, "[PROXY \(id, privacy: .public)] push relay set up, sending initial data...")
-                        await self.sendInitialData()
+                        await server.sendInitialData()
                         #log(.info, "[PROXY \(id, privacy: .public)] initial data sent")
                     }
                 }
@@ -76,70 +81,19 @@ public actor RuntimeEngineProxyServer {
             .store(in: &subscriptions)
     }
 
-    private func sendInitialData() async {
-        guard let connection else {
-            #log(.error, "[PROXY \(self.identifier, privacy: .public)] sendInitialData: connection is nil!")
-            return
-        }
-        let imageList = await engine.imageList
-        let imageNodes = engine.imageNodes
-        #log(.info, "[PROXY \(self.identifier, privacy: .public)] sendInitialData: imageList=\(imageList.count, privacy: .public), imageNodes=\(imageNodes.count, privacy: .public)")
-        do {
-            try await connection.sendMessage(
-                name: RuntimeEngine.CommandNames.imageList.commandName,
-                request: imageList
-            )
-            #log(.info, "[PROXY \(self.identifier, privacy: .public)] sent imageList OK")
-        } catch {
-            #log(.error, "[PROXY \(self.identifier, privacy: .public)] failed to send imageList: \(error, privacy: .public)")
-        }
-        do {
-            try await connection.sendMessage(
-                name: RuntimeEngine.CommandNames.imageNodes.commandName,
-                request: imageNodes
-            )
-            #log(.info, "[PROXY \(self.identifier, privacy: .public)] sent imageNodes OK")
-        } catch {
-            #log(.error, "[PROXY \(self.identifier, privacy: .public)] failed to send imageNodes: \(error, privacy: .public)")
-        }
-        do {
-            try await connection.sendMessage(
-                name: RuntimeEngine.CommandNames.dataDidChange.commandName,
-                request: RuntimeDataChange.fullReload(isReloadImageNodes: true)
-            )
-            #log(.info, "[PROXY \(self.identifier, privacy: .public)] sent dataDidChange(fullReload) OK")
-        } catch {
-            #log(.error, "[PROXY \(self.identifier, privacy: .public)] failed to send dataDidChange: \(error, privacy: .public)")
-        }
-    }
-
-    public func stop() {
+    public func stop() async {
         #log(.info, "[PROXY \(self.identifier, privacy: .public)] stopping")
+        await server?.stop()
+        server = nil
         connection?.stop()
         subscriptions.removeAll()
-        pushRelaySubscriptions.removeAll()
     }
 
-    // MARK: - Request Handlers
+    // MARK: - Icon
 
-    private func setupRequestHandlers() {
-        guard let connection else {
-            #log(.error, "[PROXY \(self.identifier, privacy: .public)] setupRequestHandlers: connection is nil!")
-            return
-        }
-
-        // Shared registry — same set of commands `RuntimeEngine`'s own server
-        // arm installs. Adding a new shared command in
-        // `RuntimeEngine.registerSharedHandlers(on:engine:)` automatically
-        // takes effect here too, eliminating the parallel-edit hazard that
-        // used to bite us every time a new command landed. Progress-bearing
-        // commands need no proxy-specific code either: `registerProgress`
-        // relays their progress pushes back to the requesting peer, including
-        // across chained client engines (e.g. the Mac Catalyst helper).
-        RuntimeEngine.registerSharedHandlers(on: connection, engine: engine)
-
+    /// Proxy-only: serve the running app icon to whichever client connects.
+    private func registerIconHandler(on connection: any RuntimeConnection) {
         #if canImport(AppKit)
-        // Proxy-only: serve the running app icon to whichever client connects.
         let engineSource = engine.source
         connection.setMessageHandler(name: Self.iconRequestCommand) {
             () -> Data? in
@@ -149,11 +103,7 @@ public actor RuntimeEngineProxyServer {
             return Self.encodeIconToPNG(wrapper.image)
         }
         #endif
-
-        #log(.info, "[PROXY \(self.identifier, privacy: .public)] all handlers registered")
     }
-
-    // MARK: - Icon
 
     /// Returns the app icon PNG data for this engine's attached process, or nil.
     public func iconData() async -> Data? {
@@ -193,56 +143,6 @@ public actor RuntimeEngineProxyServer {
         }
     }
     #endif
-
-    // MARK: - Push Relay
-
-    private func setupPushRelay() {
-        guard let connection else {
-            #log(.error, "[PROXY \(self.identifier, privacy: .public)] setupPushRelay: connection is nil!")
-            return
-        }
-
-        // Drop the previous client's relays before wiring new ones, so a
-        // reconnect doesn't stack duplicate subscriptions (which would resend
-        // every change once per past connection).
-        pushRelaySubscriptions.removeAll()
-
-        let id = self.identifier
-        engine.imageNodesPublisher
-            .dropFirst()
-            .sink { imageNodes in
-                #log(.info, "[PROXY \(id, privacy: .public)] relaying imageNodes (\(imageNodes.count, privacy: .public) nodes)")
-                Task {
-                    try? await connection.sendMessage(
-                        name: RuntimeEngine.CommandNames.imageNodes.commandName,
-                        request: imageNodes
-                    )
-                }
-            }
-            .store(in: &pushRelaySubscriptions)
-
-        engine.dataChangePublisher
-            .sink { [weak self] change in
-                guard let self else { return }
-                #log(.info, "[PROXY \(id, privacy: .public)] relaying dataChange \(String(describing: change), privacy: .public)")
-                Task {
-                    // Keep the client's `imageList` mirror current on full reloads;
-                    // other change kinds don't affect it so we skip the extra round-trip.
-                    if case .fullReload = change {
-                        let imageList = await self.engine.imageList
-                        try? await connection.sendMessage(
-                            name: RuntimeEngine.CommandNames.imageList.commandName,
-                            request: imageList
-                        )
-                    }
-                    try? await connection.sendMessage(
-                        name: RuntimeEngine.CommandNames.dataDidChange.commandName,
-                        request: change
-                    )
-                }
-            }
-            .store(in: &pushRelaySubscriptions)
-    }
 }
 
 #endif

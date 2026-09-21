@@ -56,7 +56,8 @@ public final class RuntimeCommunicator {
     ///   - source: The runtime source to connect to.
     ///   - credential: Session-scoped credential resolved at connect time. Required for
     ///     `.bonjour` + `.client` (the discovered `NWEndpoint`); optional for `.remote` + `.client`
-    ///     (a previously-handshaked XPC peer endpoint enables direct reconnect). See
+    ///     (a previously-handshaked XPC peer endpoint enables direct reconnect); the only way
+    ///     `.local` gets a connection at all (`.xpcService(target)`, the embedded service). See
     ///     `RuntimeConnectionCredential` for the full matrix.
     ///   - waitForConnection: For `.directTCP` server only — whether to block until the first
     ///     client connects.
@@ -72,6 +73,17 @@ public final class RuntimeCommunicator {
         #log(.info, "Connecting to source: \(String(describing: source), privacy: .public)")
         switch source {
         case .local:
+            #if os(macOS)
+            // `.local` is an identity, not a transport. The one connection it
+            // can have is to the embedded XPC service, and which service that
+            // is arrives as the credential — see `LocalRuntimeService` in RuntimeViewerCore.
+            if case .xpcService(let target) = credential {
+                #log(.debug, "Creating XPC service client connection: \(String(describing: target), privacy: .public)")
+                let connection = try await RuntimeXPCServiceClientConnection(target: target, modifier: modifier)
+                #log(.info, "XPC service client connection established")
+                return connection
+            }
+            #endif
             #log(.error, "Local connection is not supported")
             throw RuntimeCommunicatorError.localConnectionNotSupported
 
@@ -79,18 +91,18 @@ public final class RuntimeCommunicator {
             #if os(macOS)
             if role.isServer {
                 #log(.debug, "Creating XPC server connection with identifier: \(String(describing: identifier), privacy: .public)")
-                let connection = try await RuntimeXPCServerConnection(identifier: identifier, modifier: modifier)
+                let connection = try await RuntimeXPCMachServiceServerConnection(identifier: identifier, modifier: modifier)
                 #log(.info, "XPC server connection established")
                 return connection
             } else {
                 if case .xpcServer(let serverEndpoint) = credential {
                     #log(.debug, "Creating XPC client connection (direct reconnect) with identifier: \(String(describing: identifier), privacy: .public)")
-                    let connection = try await RuntimeXPCClientConnection(identifier: identifier, serverEndpoint: serverEndpoint, modifier: modifier)
+                    let connection = try await RuntimeXPCMachServiceClientConnection(identifier: identifier, serverEndpoint: serverEndpoint, modifier: modifier)
                     #log(.info, "XPC client direct reconnection established")
                     return connection
                 } else {
                     #log(.debug, "Creating XPC client connection with identifier: \(String(describing: identifier), privacy: .public)")
-                    let connection = try await RuntimeXPCClientConnection(identifier: identifier, modifier: modifier)
+                    let connection = try await RuntimeXPCMachServiceClientConnection(identifier: identifier, modifier: modifier)
                     #log(.info, "XPC client connection established")
                     return connection
                 }

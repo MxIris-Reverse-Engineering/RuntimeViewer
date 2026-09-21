@@ -147,6 +147,13 @@ let package = Package(
                 from: "0.3.3",
             ),
         ),
+        // Direct dependency for the XPC-service connection pair. Already
+        // resolved transitively through swift-helper-service at this very
+        // requirement, so no new version enters the graph.
+        .package(
+            url: "https://github.com/MxIris-macOS-Library-Forks/SwiftyXPC",
+            from: "0.5.104",
+        ),
         .package(
             url: "https://github.com/gohanlon/swift-memberwise-init-macro",
             from: "0.6.0",
@@ -212,6 +219,7 @@ let package = Package(
                 .product(name: "FilesServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "InjectionServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
+                .product(name: "SwiftyXPC", package: "SwiftyXPC", condition: .when(platforms: appkitPlatforms)),
                 .product(name: "Asynchrone", package: "Asynchrone"),
                 .product(name: "Semaphore", package: "Semaphore"),
                 .product(name: "MemberwiseInit", package: "swift-memberwise-init-macro"),

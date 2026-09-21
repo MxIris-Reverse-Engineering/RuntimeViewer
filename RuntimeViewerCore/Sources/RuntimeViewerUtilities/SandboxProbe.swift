@@ -6,7 +6,7 @@ import RuntimeViewerObjC
 /// Runtime probe deciding whether a process's sandbox forces the localhost-socket
 /// transport instead of the XPC Mach-service transport.
 ///
-/// The choice between `RuntimeXPCConnection` (XPC Mach service) and
+/// The choice between `RuntimeXPCMachServiceConnection` (XPC Mach service) and
 /// `RuntimeLocalSocketConnection` (localhost socket) hinges on a single question:
 /// can the target process look up the RuntimeViewer helper's Mach service? Two
 /// unrelated sandbox mechanisms answer "no":

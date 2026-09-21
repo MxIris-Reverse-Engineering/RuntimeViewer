@@ -140,13 +140,19 @@ final class MainViewModel: ViewModel<MainRoute> {
 
         let requestFrameworkSelection = input.loadFrameworksClick.asSignal()
 
+        // The picked framework is loaded by the document's engine, in whatever
+        // process that engine runs in. It used to be `Bundle.load` — a dlopen
+        // into this process — which is exactly what moving the local engine
+        // into the XPC service exists to stop.
         input.frameworksSelected.emitOnNext { [weak self] urls in
             guard let self else { return }
             Task { @MainActor in
                 for url in urls {
                     do {
-                        try Bundle(url: url)?.loadAndReturnError()
-                        await self.documentState.runtimeEngine.reloadData(isReloadImageNodes: false)
+                        guard let executableURL = Bundle(url: url)?.executableURL else {
+                            throw MessageError.message("\(url.lastPathComponent) has no executable to load.")
+                        }
+                        try await self.documentState.runtimeEngine.loadImage(at: executableURL.path)
                     } catch {
                         self.errorRelay.accept(error)
                     }

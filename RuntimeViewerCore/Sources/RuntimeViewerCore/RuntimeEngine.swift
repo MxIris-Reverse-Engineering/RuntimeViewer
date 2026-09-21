@@ -87,16 +87,25 @@ public actor RuntimeEngine {
         case runtimePreflight
         case specialize
         case dataDidChange
+        /// `reloadData(isReloadImageNodes:)` forwarded to the process that
+        /// owns the images, so a client engine never reads its own dyld state.
+        case reloadData
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
         }
     }
 
+    /// This Mac's runtime. Where its work happens is the process's own
+    /// business: a process whose bundle embeds the local-runtime XPC
+    /// service — the app — connects to it and forwards everything, so it
+    /// never dlopens an image itself; every other process (the service
+    /// itself, the standalone CLI host, the Catalyst helper, a test) loads
+    /// and indexes in process. See ``LocalRuntimeService``.
     public static let local: RuntimeEngine = {
         let runtimeEngine = RuntimeEngine(source: .local)
         Task {
-            await runtimeEngine.connectReportingFailure()
+            await runtimeEngine.connectReportingFailure(credential: LocalRuntimeService.embeddedServiceCredential)
         }
         return runtimeEngine
     }()
@@ -132,6 +141,14 @@ public actor RuntimeEngine {
     /// Whether this engine should load and push runtime data to connected clients.
     /// Set to `false` for management-only engines (e.g. Bonjour server) that only handle engine list operations.
     public nonisolated let pushesRuntimeData: Bool
+
+    /// Whether requests leave this process: a client of a remote source, or
+    /// the `.local` engine handing its work to the process that runs this
+    /// Mac's runtime. Everything that used to test
+    /// `source.remoteRole?.isClient` tests this instead.
+    public var forwardsRequests: Bool {
+        source.remoteRole?.isClient == true || forwardsToLocalService
+    }
 
     // MARK: - State Management
 
@@ -237,6 +254,11 @@ public actor RuntimeEngine {
     /// The connection to the sender or receiver, established by `connect()`.
     private var connection: (any RuntimeConnection)?
 
+    /// `connect(credential:)` was given a credential for the `.local`
+    /// source: this engine's work happens in another process, and
+    /// `connection` leads there.
+    private var forwardsToLocalService = false
+
     /// Coordinator for background indexing batches that load and index images
     /// without blocking the main runtime data flow. `lazy` so it captures
     /// `self` only after all other stored properties are initialized; the
@@ -277,9 +299,9 @@ public actor RuntimeEngine {
     /// `Task` that nobody awaits, so a thrown error would have no one to reach.
     /// The logging has to live in an instance method: `#log` expands to a
     /// reference to `Self`, which a stored property initializer cannot make.
-    func connectReportingFailure() async {
+    func connectReportingFailure(credential: RuntimeConnectionCredential? = nil) async {
         do {
-            try await connect()
+            try await connect(credential: credential)
         } catch {
             #log(.error, "Local engine failed to connect: \(error.localizedDescription, privacy: .public)")
         }
@@ -303,21 +325,38 @@ public actor RuntimeEngine {
                 }
                 stateSubject.send(.connected)
             case .client:
-                #log(.info, "Starting as client for source: \(String(describing: self.source), privacy: .public)")
-                connection = try await communicator.connect(to: source, credential: credential) { connection in
-                    #log(.debug, "[EngineMirroring] client connection modifier called for \(String(describing: self.source), privacy: .public), connection state: \(String(describing: connection.state), privacy: .public)")
-                    self.connection = connection
-                    self.setupMessageHandlerForClient()
-                    self.observeConnectionState(connection)
-                }
-                #log(.info, "Client connected successfully to \(String(describing: self.source), privacy: .public)")
-                stateSubject.send(.connected)
+                try await connectAsClient(credential: credential)
             }
+        } else if source == .local, let credential {
+            // `.local` is an identity, not a transport; a credential is the
+            // one thing that gives it a connection — to the process that runs
+            // this Mac's runtime — and from here on this engine is a client
+            // like any other: same handlers, same state observation, same
+            // forwarding in `dispatch`. What comes back over that connection
+            // is the transport's business, including the service being
+            // relaunched: this engine only sees `.disconnected` and then
+            // `.connected` again.
+            forwardsToLocalService = true
+            stateSubject.send(.connecting)
+            try await connectAsClient(credential: credential)
         } else {
+            forwardsToLocalService = false
             #log(.debug, "No remote role, observing local runtime")
             await observeRuntime()
             stateSubject.send(.localOnly)
         }
+    }
+
+    private func connectAsClient(credential: RuntimeConnectionCredential?) async throws {
+        #log(.info, "Starting as client for source: \(String(describing: self.source), privacy: .public)")
+        connection = try await communicator.connect(to: source, credential: credential) { connection in
+            #log(.debug, "[EngineMirroring] client connection modifier called for \(String(describing: self.source), privacy: .public), connection state: \(String(describing: connection.state), privacy: .public)")
+            self.connection = connection
+            self.setupMessageHandlerForClient()
+            self.observeConnectionState(connection)
+        }
+        #log(.info, "Client connected successfully to \(String(describing: self.source), privacy: .public)")
+        stateSubject.send(.connected)
     }
 
     /// Observes the connection state and updates the engine state accordingly.
@@ -522,7 +561,30 @@ public actor RuntimeEngine {
         }
     }
 
-    public func reloadData(isReloadImageNodes: Bool) {
+    /// Re-reads the image list (and, on request, the image nodes) of the
+    /// process that owns the images, then broadcasts a full reload.
+    ///
+    /// On an engine that forwards requests this is itself forwarded: a client
+    /// engine reading *its own* dyld state would overwrite the mirrored image
+    /// list with the app's, which is what this method used to do on the Mac
+    /// Catalyst engine. A forwarding failure is logged, never thrown — the
+    /// callers (background indexing batch endings, the framework picker) are
+    /// nudges, not operations with a result.
+    public func reloadData(isReloadImageNodes: Bool) async {
+        if forwardsRequests {
+            do {
+                _ = try await dispatch(ReloadDataRequest(isReloadImageNodes: isReloadImageNodes))
+            } catch {
+                #log(.error, "Forwarded reloadData failed: \(error.localizedDescription, privacy: .public)")
+            }
+            return
+        }
+        reloadLocalData(isReloadImageNodes: isReloadImageNodes)
+    }
+
+    /// The local arm of `reloadData(isReloadImageNodes:)`: this process's own
+    /// dyld state. Only meaningful where the images live.
+    func reloadLocalData(isReloadImageNodes: Bool) {
         #log(.info, "Reloading data, isReloadImageNodes=\(isReloadImageNodes, privacy: .public)")
         imageList = DyldUtilities.inspectableImageNames()
         #log(.debug, "Loaded \(self.imageList.count, privacy: .public) images")
@@ -794,7 +856,7 @@ extension RuntimeEngine {
     /// Lives in this file rather than `RuntimeEngineRequest.swift` so it can read
     /// the file-private `connection` directly without widening visibility.
     func dispatch<R: RuntimeEngineRequest>(_ request: R) async throws -> R.Response {
-        if let remoteRole = source.remoteRole, remoteRole.isClient {
+        if forwardsRequests {
             guard let connection else { throw RequestError.senderConnectionIsLose }
             return try await connection.sendMessage(name: R.commandName, request: request)
         }
@@ -825,7 +887,7 @@ extension RuntimeEngine {
         _ request: R,
         onProgress: (@Sendable (R.Progress) async -> Void)?
     ) async throws -> R.Response {
-        if let remoteRole = source.remoteRole, remoteRole.isClient {
+        if forwardsRequests {
             guard let connection else { throw RequestError.senderConnectionIsLose }
             guard let onProgress else {
                 return try await connection.sendMessage(
@@ -900,7 +962,7 @@ extension RuntimeEngine {
         try DyldUtilities.loadImage(at: canonical)
         _ = try await objcSectionFactory.section(for: canonical, progressContinuation: progressContinuation)
         _ = try await swiftSectionFactory.section(for: canonical, progressContinuation: progressContinuation)
-        reloadData(isReloadImageNodes: false)
+        reloadLocalData(isReloadImageNodes: false)
         loadedImagePaths.insert(canonical)
         imageDidLoadSubject.send(canonical)
         sendRemoteImageDidLoadIfNeeded(path: canonical)

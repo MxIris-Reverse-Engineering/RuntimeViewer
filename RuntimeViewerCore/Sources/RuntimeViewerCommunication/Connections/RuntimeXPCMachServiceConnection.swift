@@ -8,11 +8,11 @@ import HelperPeer
 import HelperClient
 import InjectedEndpointRegistryServiceInterface
 
-// MARK: - RuntimeXPCConnection
+// MARK: - RuntimeXPCMachServiceConnection
 
 /// XPC-based connection for cross-process communication on macOS.
 ///
-/// `RuntimeXPCConnection` is a thin adapter over `HelperPeer.HelperPeerClient`
+/// `RuntimeXPCMachServiceConnection` is a thin adapter over `HelperPeer.HelperPeerClient`
 /// / `HelperPeerServer`. It delegates the entire handshake, reconnect, and
 /// state-stream lifecycle to the brokered peer and exposes the result as a
 /// `RuntimeConnection`. Subclasses choose which peer role to bring up.
@@ -26,7 +26,7 @@ import InjectedEndpointRegistryServiceInterface
 ///   Combine `CurrentValueSubject<RuntimeConnectionState, Never>` for
 ///   compatibility with the rest of `RuntimeEngine`.
 /// - The peer's listener endpoint is cached at init time so server-side
-///   self-registration (see `RuntimeXPCServerConnection`) is synchronous.
+///   self-registration (see `RuntimeXPCMachServiceServerConnection`) is synchronous.
 ///
 /// ## Use Cases
 ///
@@ -37,7 +37,7 @@ import InjectedEndpointRegistryServiceInterface
 /// - Note: For code injection into sandboxed apps, use `RuntimeLocalSocketConnection`
 ///   instead, as XPC requires the target process to explicitly participate.
 @Loggable(.fileprivate)
-class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
+class RuntimeXPCMachServiceConnection: RuntimeConnection, @unchecked Sendable {
     fileprivate let identifier: RuntimeSource.Identifier
 
     fileprivate let peer: any PeerConnection
@@ -77,7 +77,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
                 }
             }
         }
-        #log(.info, "RuntimeXPCConnection adapter created for identifier: \(self.identifier.rawValue, privacy: .public)")
+        #log(.info, "RuntimeXPCMachServiceConnection adapter created for identifier: \(self.identifier.rawValue, privacy: .public)")
     }
 
     deinit {
@@ -89,7 +89,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
         let peer = peer
         Task { await peer.cancel() }
         stateSubject.send(.disconnected(error: nil))
-        #log(.info, "RuntimeXPCConnection stopped for identifier: \(self.identifier.rawValue, privacy: .public)")
+        #log(.info, "RuntimeXPCMachServiceConnection stopped for identifier: \(self.identifier.rawValue, privacy: .public)")
     }
 
     // MARK: - Typed RPC
@@ -144,7 +144,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
     }
 }
 
-// MARK: - RuntimeXPCClientConnection
+// MARK: - RuntimeXPCMachServiceClientConnection
 
 /// XPC client connection for the main application side.
 ///
@@ -159,7 +159,7 @@ class RuntimeXPCConnection: RuntimeConnection, @unchecked Sendable {
 ///   (e.g. from the injected-endpoint registry). The lib peer opens its own
 ///   listener, direct-connects to the server endpoint, and sends
 ///   `ClientReconnected` so the server swaps its peer connection.
-final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendable {
+final class RuntimeXPCMachServiceClientConnection: RuntimeXPCMachServiceConnection, @unchecked Sendable {
     // IMPORTANT: the order `init lib peer → super.init → modifier → peer.activate()`
     // is load-bearing. The modifier wires business message handlers onto the
     // peer's listener; `peer.activate()` then activates the listener and
@@ -167,7 +167,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
     // us once handlers are in place. Collapsing the handshake into the lib
     // peer's init races against handler installation — see Catalyst connection
     // regression fixed by the two-phase split.
-    init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
+    init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCMachServiceConnection) async throws -> Void)? = nil) async throws {
         let peer = try await HelperPeerClient(
             machServiceName: RuntimeViewerMachServiceName,
             isPrivilegedHelperTool: true,
@@ -182,7 +182,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
     ///
     /// Used for reconnecting to an already-injected app whose endpoint was retrieved
     /// from the Mach Service injected endpoint registry. Bypasses the normal handshake.
-    init(identifier: RuntimeSource.Identifier, serverEndpoint: HelperPeerEndpoint, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
+    init(identifier: RuntimeSource.Identifier, serverEndpoint: HelperPeerEndpoint, modifier: ((RuntimeXPCMachServiceConnection) async throws -> Void)? = nil) async throws {
         let peer = try await HelperPeerClient(
             machServiceName: RuntimeViewerMachServiceName,
             isPrivilegedHelperTool: true,
@@ -195,7 +195,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
     }
 }
 
-// MARK: - RuntimeXPCServerConnection
+// MARK: - RuntimeXPCMachServiceServerConnection
 
 /// XPC server connection for the service provider side.
 ///
@@ -205,7 +205,7 @@ final class RuntimeXPCClientConnection: RuntimeXPCConnection, @unchecked Sendabl
 /// registers its own listener endpoint so the host can later reconnect
 /// directly. A `ClientReconnected` handler is installed on the listener so
 /// subsequent host reconnects swap the peer connection in place.
-final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendable {
+final class RuntimeXPCMachServiceServerConnection: RuntimeXPCMachServiceConnection, @unchecked Sendable {
     // IMPORTANT: the modifier MUST run before `peer.activate()`. The modifier
     // installs the engine's server-side handlers (imageList, loadImage,
     // runtimeObjectsInImage, …) on the peer's listener; `peer.activate()`
@@ -213,7 +213,7 @@ final class RuntimeXPCServerConnection: RuntimeXPCConnection, @unchecked Sendabl
     // sent ServerLaunched inside its own init, the host would start firing
     // business requests before this side's handlers existed — code-injection
     // regression fixed by the two-phase split.
-    init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCConnection) async throws -> Void)? = nil) async throws {
+    init(identifier: RuntimeSource.Identifier, modifier: ((RuntimeXPCMachServiceConnection) async throws -> Void)? = nil) async throws {
         let peer = try await HelperPeerServer(
             machServiceName: RuntimeViewerMachServiceName,
             isPrivilegedHelperTool: true,

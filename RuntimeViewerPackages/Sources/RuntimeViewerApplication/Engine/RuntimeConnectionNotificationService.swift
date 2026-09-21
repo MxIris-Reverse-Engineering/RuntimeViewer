@@ -26,6 +26,14 @@ public final class RuntimeConnectionNotificationService: NSObject {
 
     private var eventSubscription: AnyCancellable?
 
+    /// Subscription to the "My Mac" engine's state; see ``observeLocalRuntimeRestarts()``.
+    private var localRuntimeSubscription: AnyCancellable?
+
+    /// The local engine reported `.disconnected` since it was last
+    /// `.connected`, so the next `.connected` is a restart, not the first
+    /// connection.
+    private var localRuntimeWasDisconnected = false
+
     private override init() {
         super.init()
         notificationCenter.delegate = self
@@ -52,6 +60,37 @@ public final class RuntimeConnectionNotificationService: NSObject {
                     notifyCatalystHelperUnavailable(error: error)
                 }
             }
+        observeLocalRuntimeRestarts()
+    }
+
+    /// Watches "My Mac" for the one edge the manager never reports: the
+    /// local-runtime XPC service exiting and the same engine reattaching to a
+    /// relaunched one. The manager does not observe the local engine at all —
+    /// it is the one engine a disconnect must not remove — and the engine's
+    /// own state tells the whole story: `.disconnected` while the service is
+    /// gone, `.connected` again once the connection reattached. The first
+    /// `.connected` is not announced: "My Mac" being available is not news.
+    private func observeLocalRuntimeRestarts() {
+        localRuntimeSubscription = RuntimeEngine.local.statePublisher
+            .sink { [weak self] state in
+                Task { @MainActor [weak self] in
+                    self?.handleLocalRuntimeStateChange(state)
+                }
+            }
+    }
+
+    private func handleLocalRuntimeStateChange(_ state: RuntimeEngine.State) {
+        switch state {
+        case .disconnected:
+            localRuntimeWasDisconnected = true
+        case .connected:
+            guard localRuntimeWasDisconnected else { return }
+            localRuntimeWasDisconnected = false
+            #log(.info, "Local runtime engine reattached to a relaunched XPC service")
+            notifyLocalRuntimeRestarted()
+        case .initializing, .connecting, .localOnly:
+            break
+        }
     }
 
     // MARK: - Authorization
@@ -118,6 +157,25 @@ public final class RuntimeConnectionNotificationService: NSObject {
         content.body = error.localizedDescription
 
         sendNotification(identifier: "connection.catalystUnavailable", content: content)
+    }
+
+    /// Sends a notification when the local-runtime XPC service was relaunched.
+    ///
+    /// The engine stays in the source menu and every document on it walks
+    /// itself back to the image list, so without this the only trace of what
+    /// happened would be the images the user loaded being silently gone.
+    /// Gated on notifications being enabled at all, not on the connect /
+    /// disconnect toggles: this is neither, and it is the one event here the
+    /// user has to act on.
+    public func notifyLocalRuntimeRestarted() {
+        @Dependency(\.settings) var settings
+        guard settings.notifications.isEnabled else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Local Runtime Restarted"
+        content.body = "The local runtime service exited and was started again. Images loaded in My Mac have to be loaded again."
+
+        sendNotification(identifier: "connection.localRuntimeRestarted", content: content)
     }
 
     // MARK: - Private

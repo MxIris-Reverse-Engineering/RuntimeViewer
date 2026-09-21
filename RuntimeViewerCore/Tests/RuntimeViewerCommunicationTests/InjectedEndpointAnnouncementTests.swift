@@ -20,7 +20,7 @@ struct InjectedEndpointAnnouncementTests {
     /// The ghost-entry reproduction: the helper must stay out of the registry.
     @Test("The Mac Catalyst helper does not announce itself")
     func macCatalystHelperDoesNotAnnounce() {
-        #expect(!RuntimeXPCServerConnection.shouldAnnounceListenerEndpoint(identifier: .macCatalyst))
+        #expect(!RuntimeXPCMachServiceServerConnection.shouldAnnounceListenerEndpoint(identifier: .macCatalyst))
     }
 
     /// Injected apps are what the registry exists for: their identifier is the
@@ -28,7 +28,7 @@ struct InjectedEndpointAnnouncementTests {
     /// ability to reconnect to them after a restart.
     @Test("Injected servers keep announcing")
     func injectedServersKeepAnnouncing() {
-        #expect(RuntimeXPCServerConnection.shouldAnnounceListenerEndpoint(identifier: .init(rawValue: "42475")))
+        #expect(RuntimeXPCMachServiceServerConnection.shouldAnnounceListenerEndpoint(identifier: .init(rawValue: "42475")))
     }
 
     /// The identifier is shared vocabulary between the app (client side) and

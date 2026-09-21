@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Observation
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
@@ -8,7 +9,13 @@ import UIKit
 
 @MainActor
 public final class DocumentState {
-    public init() {}
+    /// - Parameter runtimeEngine: The engine the document opens on. The app
+    ///   passes its manager's "My Mac" engine; the default is the in-process
+    ///   engine, for tests and for platforms without an engine manager.
+    public init(runtimeEngine: RuntimeEngine = .local) {
+        self.runtimeEngine = runtimeEngine
+        observeReadiness(of: runtimeEngine)
+    }
 
     /// The runtime engine backing this Document. Read-only externally:
     /// mutated only via the `.switchEngine` route. `MainCoordinator` is
@@ -20,7 +27,48 @@ public final class DocumentState {
     /// and rewires its pumps onto the new engine's `backgroundIndexingManager`,
     /// cancelling the old engine's in-flight document batches as it goes.
     @RxObserved
-    public fileprivate(set) var runtimeEngine: RuntimeEngine = .local
+    public fileprivate(set) var runtimeEngine: RuntimeEngine
+
+    /// Subscription to the current engine's readiness; see ``observeReadiness(of:)``.
+    private var engineReadinessSubscription: AnyCancellable?
+
+    /// Whether the current engine was ready at the last readiness event, so
+    /// a `false → true` edge can be told apart from the replayed current state.
+    private var engineWasReady = false
+
+    /// Walks the document back to the image list when its engine stops being
+    /// ready and then becomes ready again.
+    ///
+    /// That edge is the local-runtime XPC service having been relaunched:
+    /// the engine object survives, but the process behind it is new and holds
+    /// none of the images this document was browsing, so every request from
+    /// where the user stands would fail. The `.switchEngine` route onto the
+    /// same engine is the existing "start over on this engine" reset, and its
+    /// own guard makes it a no-op when nothing is open — which covers the
+    /// engine's very first connection as well.
+    ///
+    /// Keyed on `isReady`, not on a particular state: an in-process engine
+    /// goes `.localOnly` rather than `.connected`, and a test can drive the
+    /// same edge with `stop()` followed by `connect()`.
+    fileprivate func observeReadiness(of engine: RuntimeEngine) {
+        engineWasReady = engine.state.isReady
+        engineReadinessSubscription = engine.statePublisher
+            .map(\.isReady)
+            .sink { [weak self, weak engine] isReady in
+                Task { @MainActor [weak self, weak engine] in
+                    guard let self, let engine else { return }
+                    self.handleReadinessChange(isReady, of: engine)
+                }
+            }
+    }
+
+    private func handleReadinessChange(_ isReady: Bool, of engine: RuntimeEngine) {
+        guard engine === runtimeEngine else { return }
+        let becameReadyAgain = isReady && !engineWasReady
+        engineWasReady = isReady
+        guard becameReadyAgain else { return }
+        selectionRouter.trigger(.switchEngine(engine))
+    }
 
     /// Currently inspected runtime image. `nil` when the sidebar is at the
     /// image-picker root. Read-only externally: mutated only via the
@@ -177,6 +225,9 @@ private final class SelectionRouter: Router {
         switch route {
         case .switchEngine(let engine):
             if documentState.runtimeEngine === engine, documentState.currentImageNode == nil, documentState.selectionStack.isEmpty { return }
+            if documentState.runtimeEngine !== engine {
+                documentState.observeReadiness(of: engine)
+            }
             documentState.runtimeEngine = engine
             documentState.currentImageNode = nil
             resetHistory()

@@ -15,6 +15,16 @@ RUNTIME_VIEWER_PRIVILEGED_HELPER_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerService
 RUNTIME_VIEWER_CATALYST_HELPER_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerCatalystHelper
 RUNTIME_VIEWER_CATALYST_HELPER_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerCatalystHelper
 
+// Local-runtime XPC service (RuntimeViewerLocalRuntimeService target), the process the
+// app's "My Mac" engine runs in. One identifier per configuration: launchd resolves an
+// embedded service inside the calling app's own bundle, so the three app variants could
+// share one name without colliding, but distinct names keep logs and Activity Monitor
+// unambiguous. The app reads its configuration's value back from its Info.plist
+// (RuntimeViewerLocalRuntimeServiceBundleIdentifier) to open the connection.
+RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerLocalRuntimeService
+RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_DEBUG_ARM64E_BUNDLE_IDENTIFIER = dev.JH.RuntimeViewerLocalRuntimeService.arm64e
+RUNTIME_VIEWER_LOCAL_RUNTIME_SERVICE_RELEASE_BUNDLE_IDENTIFIER = com.JH.RuntimeViewerLocalRuntimeService
+
 // Mac Catalyst helper plugin bundle (RuntimeViewerCatalystHelperPlugin target).
 // Plugin uses one identifier across all configurations because the helper app
 // loads it by exact bundle identifier and a debug variant would silently fail
