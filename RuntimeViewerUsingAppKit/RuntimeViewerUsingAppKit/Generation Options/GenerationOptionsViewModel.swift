@@ -5,12 +5,12 @@ import RuntimeViewerApplication
 import Dependencies
 import RuntimeViewerCore
 
-typealias OptionKeyPath = WritableKeyPath<RuntimeObjectInterface.GenerationOptions, Bool>
-typealias OptionsMutation = (inout RuntimeObjectInterface.GenerationOptions) -> Void
+typealias GenerationOptionKeyPath = WritableKeyPath<RuntimeObjectInterface.GenerationOptions, Bool>
+typealias GenerationOptionsMutation = (inout RuntimeObjectInterface.GenerationOptions) -> Void
 
 final class GenerationOptionsViewModel<Route: Routable>: ViewModel<Route> {
     struct Input {
-        let updateOption: Signal<OptionsMutation>
+        let updateOption: Signal<GenerationOptionsMutation>
     }
 
     struct Output {

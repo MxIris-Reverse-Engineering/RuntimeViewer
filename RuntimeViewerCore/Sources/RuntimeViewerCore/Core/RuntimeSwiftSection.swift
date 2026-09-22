@@ -53,6 +53,9 @@ public struct SwiftGenerationOptions: Sendable, Equatable, Hashable {
     @Default(MemberSortOrder.byCategory)
     public var memberSortOrder: MemberSortOrder
 
+    @Default(false)
+    public var infersObjCOverridesFromSelectorNames: Bool
+
     public static let `default` = Self()
 }
 
@@ -82,11 +85,11 @@ actor RuntimeSwiftSection {
 
     private let printer: SwiftDeclarationPrinter<MachOImage>
 
-    // Keyed by `RuntimeObjectKey` (identity without `children`) so the
-    // sidebar's `parent.withAppendedChild(child)` replacement after a
-    // user-driven specialization doesn't invalidate the cached parent
-    // mapping — otherwise the next click on the parent generic would miss
-    // both maps and throw `invalidRuntimeObject`.
+    /// Keyed by `RuntimeObjectKey` (identity without `children`) so the
+    /// sidebar's `parent.withAppendedChild(child)` replacement after a
+    /// user-driven specialization doesn't invalidate the cached parent
+    /// mapping — otherwise the next click on the parent generic would miss
+    /// both maps and throw `invalidRuntimeObject`.
     private var interfaceByObject: OrderedDictionary<RuntimeObjectKey, RuntimeObjectInterface> = [:]
 
     private var specializedDefinitionByObject: [RuntimeObjectKey: TypeDefinition] = [:]
@@ -169,7 +172,9 @@ actor RuntimeSwiftSection {
     private var allObjectsCache: [RuntimeObject]?
 
     func allObjects() async throws -> [RuntimeObject] {
-        if let allObjectsCache { return allObjectsCache }
+        if let allObjectsCache {
+            return allObjectsCache
+        }
         #log(.debug, "Getting all Swift objects")
         let rootTypeName = try indexer.rootTypeDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
         let rootProtocolName = try indexer.rootProtocolDefinitions.map { try makeRuntimeObject(for: $0.value, isChild: false) }
@@ -184,8 +189,8 @@ actor RuntimeSwiftSection {
     }
 
     private func makeRuntimeObject(for extensionDefintions: [ExtensionDefinition], extensionName: ExtensionName, kind: RuntimeObjectKind, definitionName: InterfaceDefinitionName) throws -> RuntimeObject {
-        let typeChildren = try extensionDefintions.flatMap { $0.types }.map { try makeRuntimeObject(for: $0, isChild: true) }
-        let protocolChildren = try extensionDefintions.flatMap { $0.protocols }.map { try makeRuntimeObject(for: $0, isChild: true) }
+        let typeChildren = try extensionDefintions.flatMap(\.types).map { try makeRuntimeObject(for: $0, isChild: true) }
+        let protocolChildren = try extensionDefintions.flatMap(\.protocols).map { try makeRuntimeObject(for: $0, isChild: true) }
         let mangledName = try mangleAsString(extensionName.node)
         let runtimeObjectName = RuntimeObject(name: mangledName, displayName: extensionName.name, kind: kind, secondaryKind: nil, imagePath: imagePath, children: typeChildren + protocolChildren)
         interfaceDefinitionNameByObject[runtimeObjectName.key] = definitionName
@@ -208,7 +213,7 @@ actor RuntimeSwiftSection {
     private func makeRuntimeObject(
         for typeDefinition: TypeDefinition,
         isChild: Bool,
-        unspecializedTypeName: SwiftDeclaration.TypeName? = nil
+        unspecializedTypeName: SwiftDeclaration.TypeName? = nil,
     ) throws -> RuntimeObject {
         let mangledName = try mangleAsString(typeDefinition.typeName.node)
         let typeChildren = try typeDefinition.typeChildren.map {
@@ -219,7 +224,7 @@ actor RuntimeSwiftSection {
             try makeRuntimeObject(
                 for: $0,
                 isChild: true,
-                unspecializedTypeName: typeDefinition.typeName
+                unspecializedTypeName: typeDefinition.typeName,
             )
         }
         let allChildren = typeChildren + protocolChildren + specializedChildren
@@ -241,7 +246,7 @@ actor RuntimeSwiftSection {
             secondaryKind: nil,
             imagePath: imagePath,
             children: allChildren,
-            properties: properties
+            properties: properties,
         )
         if isSpecialized, let unspecializedTypeName {
             interfaceDefinitionNameByObject[runtimeObject.key] = .specializedType(unspecialized: unspecializedTypeName, specialized: typeDefinition.typeName)
@@ -403,15 +408,15 @@ extension RuntimeSwiftSection {
             return name.lowercased().contains(filter.lowercased())
         }
 
-        func collect(from definition: any Definition, prefix: String = "") {
+        func collect(from definition: some Definition, prefix: String = "") {
             for funcDef in definition.functions where shouldInclude(funcDef.name) {
                 result.append(
                     RuntimeMemberAddress(
                         name: funcDef.name,
                         kind: prefix + "func",
                         symbolName: funcDef.symbol.symbol.name,
-                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO)
-                    )
+                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO),
+                    ),
                 )
             }
             for funcDef in definition.staticFunctions where shouldInclude(funcDef.name) {
@@ -420,8 +425,8 @@ extension RuntimeSwiftSection {
                         name: funcDef.name,
                         kind: prefix + "static func",
                         symbolName: funcDef.symbol.symbol.name,
-                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO)
-                    )
+                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO),
+                    ),
                 )
             }
             for funcDef in definition.constructors where shouldInclude(funcDef.name) {
@@ -430,8 +435,8 @@ extension RuntimeSwiftSection {
                         name: funcDef.name,
                         kind: prefix + "init",
                         symbolName: funcDef.symbol.symbol.name,
-                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO)
-                    )
+                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO),
+                    ),
                 )
             }
             for funcDef in definition.allocators where shouldInclude(funcDef.name) {
@@ -440,8 +445,8 @@ extension RuntimeSwiftSection {
                         name: funcDef.name,
                         kind: prefix + "allocator",
                         symbolName: funcDef.symbol.symbol.name,
-                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO)
-                    )
+                        address: funcDef.symbol.symbol.addressString(format: .hex, in: machO),
+                    ),
                 )
             }
             for varDef in definition.variables where shouldInclude(varDef.name) {
@@ -451,8 +456,8 @@ extension RuntimeSwiftSection {
                             name: varDef.name,
                             kind: prefix + accessor.kind.kindString,
                             symbolName: accessor.symbol.symbol.name,
-                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO)
-                        )
+                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO),
+                        ),
                     )
                 }
             }
@@ -463,8 +468,8 @@ extension RuntimeSwiftSection {
                             name: varDef.name,
                             kind: prefix + "static \(accessor.kind.kindString)",
                             symbolName: accessor.symbol.symbol.name,
-                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO)
-                        )
+                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO),
+                        ),
                     )
                 }
             }
@@ -475,8 +480,8 @@ extension RuntimeSwiftSection {
                             name: "subscript",
                             kind: prefix + "subscript.\(accessor.kind.kindString)",
                             symbolName: accessor.symbol.symbol.name,
-                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO)
-                        )
+                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO),
+                        ),
                     )
                 }
             }
@@ -487,8 +492,8 @@ extension RuntimeSwiftSection {
                             name: "subscript",
                             kind: prefix + "static subscript.\(accessor.kind.kindString)",
                             symbolName: accessor.symbol.symbol.name,
-                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO)
-                        )
+                            address: accessor.symbol.symbol.addressString(format: .hex, in: machO),
+                        ),
                     )
                 }
             }
@@ -504,7 +509,7 @@ extension RuntimeSwiftSection {
             if let specializedDefinition = specializedDefinitionByObject[object.key] {
                 collect(from: specializedDefinition)
             } else if let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
-               let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName }) {
+                      let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName }) {
                 collect(from: specializedDefinition)
             }
         case .derivedSpecializedType:
@@ -560,7 +565,7 @@ extension RuntimeSwiftSection {
             secondaryKind: nil,
             imagePath: imagePath,
             children: [],
-            properties: properties
+            properties: properties,
         )
     }
 
@@ -580,7 +585,7 @@ extension RuntimeSwiftSection {
             kind: protocolName.runtimeObjectKind,
             secondaryKind: nil,
             imagePath: imagePath,
-            children: []
+            children: [],
         )
     }
 
@@ -636,7 +641,7 @@ extension RuntimeSwiftSection {
     /// might live in a different image once the aggregate is consulted.
     func specializationRequest(
         forCandidateID candidateID: String,
-        in imagePath: String
+        in imagePath: String,
     ) async throws -> RuntimeSpecializationRequest {
         guard let matched = await factory.indexedType(forCandidateID: candidateID) else {
             // No human-readable name available on a cold-cache miss — surface
@@ -652,7 +657,7 @@ extension RuntimeSwiftSection {
         let candidateSpecializer = GenericSpecializer<MachOImage>(
             machO: matched.entry.machO,
             conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream),
-            indexer: factory.indexer.upstream
+            indexer: factory.indexer.upstream,
         )
         candidateSpecializer.maxBindingDepth = Self.maxSpecializationDepth
         do {
@@ -668,7 +673,7 @@ extension RuntimeSwiftSection {
 
     func specialize(
         for object: RuntimeObject,
-        with selection: RuntimeSpecializationSelection
+        with selection: RuntimeSpecializationSelection,
     ) async throws -> RuntimeObject {
         try Task.checkCancellation()
         let baseTypeDefinition = try requireGenericTypeDefinition(for: object)
@@ -696,7 +701,7 @@ extension RuntimeSwiftSection {
             derivingNestedSpecializationsWith: specializer,
             selection: upstreamSelection,
             typeArgumentNodesByParameter: resolved.nodesByParameter,
-            in: machO
+            in: machO,
         )
         // After the lone suspension point — bail out before mutating section
         // caches if the caller (UI sheet, MCP request) was cancelled while the
@@ -715,7 +720,7 @@ extension RuntimeSwiftSection {
         let runtimeObject = try makeRuntimeObject(
             for: specializedDefinition,
             isChild: true,
-            unspecializedTypeName: baseTypeDefinition.typeName
+            unspecializedTypeName: baseTypeDefinition.typeName,
         )
         // Force the parent generic's interface to be re-rendered next time it
         // is requested so that any consumers iterating its
@@ -726,7 +731,7 @@ extension RuntimeSwiftSection {
 
     func runtimePreflight(
         for object: RuntimeObject,
-        with selection: RuntimeSpecializationSelection
+        with selection: RuntimeSpecializationSelection,
     ) async throws -> RuntimeSpecializationValidation {
         try Task.checkCancellation()
         let typeDefinition = try requireGenericTypeDefinition(for: object)
@@ -742,7 +747,7 @@ extension RuntimeSwiftSection {
         RuntimeSpecializationValidation(
             isValid: validation.isValid,
             errors: validation.errors.map(translate(_:)),
-            warnings: validation.warnings.map(translate(_:))
+            warnings: validation.warnings.map(translate(_:)),
         )
     }
 
@@ -754,25 +759,25 @@ extension RuntimeSwiftSection {
             return .protocolRequirementNotSatisfied(
                 parameterName: parameterName,
                 protocolName: protocolName,
-                actualType: actualType
+                actualType: actualType,
             )
         case .layoutRequirementNotSatisfied(let parameterName, let expectedLayout, let actualType):
             return .layoutRequirementNotSatisfied(
                 parameterName: parameterName,
                 expectedLayout: String(describing: expectedLayout),
-                actualType: actualType
+                actualType: actualType,
             )
         case .baseClassRequirementNotSatisfied(let parameterName, let expectedBaseClass, let actualType):
             return .baseClassRequirementNotSatisfied(
                 parameterName: parameterName,
                 expectedBaseClass: expectedBaseClass,
-                actualType: actualType
+                actualType: actualType,
             )
         case .sameTypeRequirementNotSatisfied(let parameterName, let expectedType, let actualType):
             return .sameTypeRequirementNotSatisfied(
                 parameterName: parameterName,
                 expectedType: expectedType,
-                actualType: actualType
+                actualType: actualType,
             )
         case .metadataResolutionFailed(let parameterName, let reason):
             return .metadataResolutionFailed(parameterName: parameterName, reason: reason)
@@ -780,7 +785,7 @@ extension RuntimeSwiftSection {
             return .protocolDescriptorResolutionFailed(
                 parameterName: parameterName,
                 protocolName: protocolName,
-                reason: reason
+                reason: reason,
             )
         }
     }
@@ -808,42 +813,44 @@ extension RuntimeSwiftSection {
         else {
             throw Error.invalidRuntimeObject
         }
-        if let root = indexer.rootTypeDefinitions[typeName] { return root }
-        if let any = indexer.allTypeDefinitions[typeName] { return any }
+        if let root = indexer.rootTypeDefinitions[typeName] {
+            return root
+        }
+        if let any = indexer.allTypeDefinitions[typeName] {
+            return any
+        }
         throw Error.invalidRuntimeObject
     }
 
     /// Project the upstream `SpecializationRequest` into the public Codable
     /// `RuntimeSpecializationRequest` that crosses the wire.
     private func makeRuntimeSpecializationRequest(
-        from upstream: SpecializationRequest
+        from upstream: SpecializationRequest,
     ) throws -> RuntimeSpecializationRequest {
         let parameters = try upstream.parameters.map { upstreamParameter -> RuntimeSpecializationRequest.Parameter in
             let candidates = try upstreamParameter.candidates.map { upstreamCandidate -> RuntimeSpecializationRequest.Candidate in
                 let id = try mangleAsString(upstreamCandidate.typeName.node)
-                let imagePath: String
-                switch upstreamCandidate.source {
+                let imagePath: String = switch upstreamCandidate.source {
                 case .image(let path):
-                    imagePath = path
+                    path
                 }
-                let kind: RuntimeSpecializationRequest.Candidate.Kind
-                switch upstreamCandidate.typeName.kind {
-                case .enum: kind = .enum
-                case .struct: kind = .struct
-                case .class: kind = .class
+                let kind: RuntimeSpecializationRequest.Candidate.Kind = switch upstreamCandidate.typeName.kind {
+                case .enum: .enum
+                case .struct: .struct
+                case .class: .class
                 }
                 return RuntimeSpecializationRequest.Candidate(
                     id: id,
                     displayName: upstreamCandidate.typeName.name,
                     imagePath: imagePath,
                     isGeneric: upstreamCandidate.isGeneric,
-                    kind: kind
+                    kind: kind,
                 )
             }
             return RuntimeSpecializationRequest.Parameter(
                 name: upstreamParameter.name,
                 displayDescription: makeParameterDescription(upstreamParameter),
-                candidates: candidates
+                candidates: candidates,
             )
         }
         return RuntimeSpecializationRequest(parameters: parameters)
@@ -887,7 +894,7 @@ extension RuntimeSwiftSection {
     private func resolveUpstreamArguments(
         _ runtimeArguments: [String: RuntimeSpecializationSelection.Argument],
         against request: SpecializationRequest,
-        depth: Int = 0
+        depth: Int = 0,
     ) throws -> ResolvedUpstreamArguments {
         var result = ResolvedUpstreamArguments(arguments: [:], nodesByParameter: [:])
         for (parameterName, runtimeArgument) in runtimeArguments {
@@ -904,7 +911,7 @@ extension RuntimeSwiftSection {
     private func resolveUpstreamArgument(
         _ runtimeArgument: RuntimeSpecializationSelection.Argument,
         for parameter: SpecializationRequest.Parameter,
-        depth: Int
+        depth: Int,
     ) throws -> (argument: SpecializationSelection.Argument, node: Node) {
         switch runtimeArgument {
         case .candidate(let runtimeCandidate):
@@ -914,7 +921,7 @@ extension RuntimeSwiftSection {
             guard depth < Self.maxSpecializationDepth else {
                 throw RuntimeEngine.EngineError.boundGenericInnerFailed(
                     parameterName: parameter.name,
-                    underlying: "Nested specialization depth exceeds the limit of \(Self.maxSpecializationDepth)."
+                    underlying: "Nested specialization depth exceeds the limit of \(Self.maxSpecializationDepth).",
                 )
             }
             let matchedBase = try matchUpstreamCandidate(runtimeBase, in: parameter)
@@ -933,13 +940,13 @@ extension RuntimeSwiftSection {
             guard let innerEntry = factory.indexer.allAllTypeDefinitions[matchedBase.typeName] else {
                 throw RuntimeEngine.EngineError.unindexedCandidate(
                     displayName: runtimeBase.displayName,
-                    imagePath: runtimeBase.imagePath
+                    imagePath: runtimeBase.imagePath,
                 )
             }
             let innerSpecializer = GenericSpecializer<MachOImage>(
                 machO: innerEntry.machO,
                 conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream),
-                indexer: factory.indexer.upstream
+                indexer: factory.indexer.upstream,
             )
             innerSpecializer.maxBindingDepth = Self.maxSpecializationDepth
             let innerRequest: SpecializationRequest
@@ -951,20 +958,20 @@ extension RuntimeSwiftSection {
             let innerResolved = try resolveUpstreamArguments(
                 innerRuntimeArguments,
                 against: innerRequest,
-                depth: depth + 1
+                depth: depth + 1,
             )
             let innerNodes: [Node] = innerRequest.parameters.compactMap { innerResolved.nodesByParameter[$0.name] }
             let boundNode = Self.buildBoundGenericNode(base: matchedBase, innerNodes: innerNodes)
             return (
                 .boundGeneric(baseCandidate: matchedBase, innerArguments: innerResolved.arguments),
-                boundNode
+                boundNode,
             )
         }
     }
 
     private func matchUpstreamCandidate(
         _ runtimeCandidate: RuntimeSpecializationRequest.Candidate,
-        in parameter: SpecializationRequest.Parameter
+        in parameter: SpecializationRequest.Parameter,
     ) throws -> SpecializationRequest.Candidate {
         for upstreamCandidate in parameter.candidates {
             guard case .image(let path) = upstreamCandidate.source,
@@ -976,7 +983,7 @@ extension RuntimeSwiftSection {
         }
         throw RuntimeEngine.EngineError.specializationCandidateNotFound(
             parameterName: parameter.name,
-            candidateDisplayName: runtimeCandidate.displayName
+            candidateDisplayName: runtimeCandidate.displayName,
         )
     }
 
@@ -988,13 +995,12 @@ extension RuntimeSwiftSection {
     /// when the input is already `.type`-wrapped.
     private static func buildBoundGenericNode(
         base: SpecializationRequest.Candidate,
-        innerNodes: [Node]
+        innerNodes: [Node],
     ) -> Node {
-        let boundKind: Node.Kind
-        switch base.typeName.kind {
-        case .struct: boundKind = .boundGenericStructure
-        case .class: boundKind = .boundGenericClass
-        case .enum: boundKind = .boundGenericEnum
+        let boundKind: Node.Kind = switch base.typeName.kind {
+        case .struct: .boundGenericStructure
+        case .class: .boundGenericClass
+        case .enum: .boundGenericEnum
         }
         let baseNode = wrappedAsType(base.typeName.node.materialize())
         let normalizedInners = innerNodes.map(wrappedAsType)
@@ -1019,7 +1025,7 @@ extension RuntimeSwiftSection {
         case .boundGenericInnerFailed(let parameterName, let underlying):
             return RuntimeEngine.EngineError.boundGenericInnerFailed(
                 parameterName: parameterName,
-                underlying: (underlying as? LocalizedError)?.errorDescription ?? "\(underlying)"
+                underlying: (underlying as? LocalizedError)?.errorDescription ?? "\(underlying)",
             )
         default:
             return error
@@ -1084,7 +1090,7 @@ extension RuntimeSwiftSection {
             from: options,
             oldConfiguration: oldPrintConfiguration,
             transformer: transformer,
-            transformerChanged: transformerChanged
+            transformerChanged: transformerChanged,
         )
         printer.updateConfiguration(newPrintConfiguration)
 
@@ -1112,7 +1118,7 @@ extension RuntimeSwiftSection {
         from options: SwiftGenerationOptions,
         oldConfiguration: SwiftDeclarationPrintConfiguration,
         transformer: Transformer.SwiftConfiguration,
-        transformerChanged: Bool
+        transformerChanged: Bool,
     ) -> SwiftDeclarationPrintConfiguration {
         let swiftInterfaceMemberSortOrder: SwiftDeclarationMemberSortOrder = switch options.memberSortOrder {
         case .byCategory: .byCategory
@@ -1126,6 +1132,7 @@ extension RuntimeSwiftSection {
             printMemberAddress: options.printMemberAddress,
             printVTableOffset: options.printVTableOffset,
             printPWTOffset: options.printPWTOffset,
+            infersObjCOverridesFromSelectorNames: options.infersObjCOverridesFromSelectorNames,
             memberSortOrder: swiftInterfaceMemberSortOrder,
             printTypeLayout: options.printTypeLayout,
             printEnumLayout: options.printEnumLayout,
@@ -1134,7 +1141,7 @@ extension RuntimeSwiftSection {
             fieldOffsetTransformer: oldConfiguration.fieldOffsetTransformer,
             typeLayoutTransformer: oldConfiguration.typeLayoutTransformer,
             enumLayoutTransformer: oldConfiguration.enumLayoutTransformer,
-            enumLayoutCaseTransformer: oldConfiguration.enumLayoutCaseTransformer
+            enumLayoutCaseTransformer: oldConfiguration.enumLayoutCaseTransformer,
         )
 
         // The transformer templates render library-side
@@ -1148,7 +1155,6 @@ extension RuntimeSwiftSection {
         }
         return newConfiguration
     }
-
 }
 
 extension RuntimeSwiftSection {
@@ -1226,7 +1232,7 @@ extension RuntimeSwiftSection {
                 phase: phase,
                 itemDescription: itemDescription,
                 currentCount: currentCount,
-                totalCount: totalCount
+                totalCount: totalCount,
             )))
         }
     }
@@ -1289,7 +1295,7 @@ extension SwiftDeclaration.ExtensionName {
     }
 }
 
-extension Array where Element == SemanticString {
+extension [SemanticString] {
     func join(separator: SemanticString = "") -> Element {
         var result: SemanticString = ""
         for (index, element) in enumerated() {
@@ -1344,7 +1350,7 @@ actor RuntimeSwiftSectionFactory {
     /// driven by the opaque mangled candidate ID.
     typealias IndexedTypeEntry = (
         typeName: SwiftDeclaration.TypeName,
-        entry: MachOIndexedValue<MachOImage, TypeDefinition>
+        entry: MachOIndexedValue<MachOImage, TypeDefinition>,
     )
 
     /// Pair of (originating protocolName, defining image) produced by
@@ -1353,7 +1359,7 @@ actor RuntimeSwiftSectionFactory {
     /// kept symmetric with `IndexedTypeEntry` for diagnostics.
     typealias IndexedProtocolEntry = (
         protocolName: SwiftDeclaration.ProtocolName,
-        machO: MachOImage
+        machO: MachOImage,
     )
 
     let indexer: RuntimeSwiftInterfaceIndexer

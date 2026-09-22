@@ -6,8 +6,8 @@ import RuntimeViewerCore
 
 final class GenerationOptionsViewController: BaseViewController<GenerationOptionsViewModel<MainRoute>> {
     private enum OptionItem {
-        case checkbox(title: String, keyPath: OptionKeyPath)
-        case segmentedControl(title: String, labels: [String], selectedIndex: (RuntimeObjectInterface.GenerationOptions) -> Int, mutation: (Int) -> OptionsMutation)
+        case checkbox(title: String, keyPath: GenerationOptionKeyPath)
+        case segmentedControl(title: String, labels: [String], selectedIndex: (RuntimeObjectInterface.GenerationOptions) -> Int, mutation: (Int) -> GenerationOptionsMutation)
 
         static func enumOption<EnumType: CaseIterable & Equatable>(
             title: String,
@@ -56,7 +56,8 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
             .checkbox(title: "Print Member Address", keyPath: \.swiftInterfaceOptions.printMemberAddress),
             .checkbox(title: "Print Type Layout", keyPath: \.swiftInterfaceOptions.printTypeLayout),
             .checkbox(title: "Print Enum Layout", keyPath: \.swiftInterfaceOptions.printEnumLayout),
-            .checkbox(title: "Synthesize Opaque Type (WIP)", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
+            .checkbox(title: "Synthesize Opaque Type", keyPath: \.swiftInterfaceOptions.synthesizeOpaqueType),
+            .checkbox(title: "Infers ObjC Overrides From Selector Names", keyPath: \.swiftInterfaceOptions.infersObjCOverridesFromSelectorNames),
             .enumOption(title: "Member Sort Order", labels: ["By Category", "By Offset"], keyPath: \.swiftInterfaceOptions.memberSortOrder),
         ]),
     ]
@@ -67,11 +68,11 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
         generationOptionsLabel
     }
 
-    private var checkboxMap: [OptionKeyPath: CheckboxButton] = [:]
+    private var checkboxMap: [GenerationOptionKeyPath: CheckboxButton] = [:]
 
-    private var segmentedControlBindings: [(control: NSSegmentedControl, selectedIndex: (RuntimeObjectInterface.GenerationOptions) -> Int, mutation: (Int) -> OptionsMutation)] = []
+    private var segmentedControlBindings: [(control: NSSegmentedControl, selectedIndex: (RuntimeObjectInterface.GenerationOptions) -> Int, mutation: (Int) -> GenerationOptionsMutation)] = []
 
-    private let updateRelay = PublishRelay<OptionsMutation>()
+    private let updateRelay = PublishRelay<GenerationOptionsMutation>()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -138,7 +139,7 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
 
         for (keyPath, checkbox) in checkboxMap {
             checkbox.rx.state.asSignal()
-                .map { state -> OptionsMutation in
+                .map { state -> GenerationOptionsMutation in
                     let isOn = state == .on
                     return { $0[keyPath: keyPath] = isOn }
                 }
