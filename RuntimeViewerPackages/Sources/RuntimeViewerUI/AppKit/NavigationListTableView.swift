@@ -42,7 +42,7 @@ extension SelfSizingTableView {
         }
 
         scrollView.do {
-            $0.isHiddenVisualEffectView = true
+            $0.hidesVisualEffectView = true
             $0.autohidesScrollers = true
             $0.backgroundColor = .clear
             $0.minimumContentSize.height = 80

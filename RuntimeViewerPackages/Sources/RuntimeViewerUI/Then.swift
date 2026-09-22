@@ -11,7 +11,7 @@ import UIKit.UIGeometry
 
 protocol Then {}
 
-extension Then where Self: Any {
+extension Then {
     /// Makes it available to set properties with closures just after initializing and copying the value types.
     ///
     ///     let frame = CGRect().with {
@@ -19,7 +19,7 @@ extension Then where Self: Any {
     ///       $0.size.width = 100
     ///     }
     @inlinable
-    func with(_ block: (inout Self) throws -> Void) rethrows -> Self {
+    func with<E: Error>(_ block: (inout Self) throws(E) -> Void) throws(E) -> Self {
         var copy = self
         try block(&copy)
         return copy
@@ -33,7 +33,7 @@ extension Then where Self: Any {
     ///       $0.synchronize()
     ///     }
     @inlinable
-    func `do`(_ block: (Self) throws -> Void) rethrows {
+    func `do`<E: Error>(_ block: (Self) throws(E) -> Void) throws(E) {
         try block(self)
     }
 }
@@ -48,7 +48,7 @@ extension Then where Self: AnyObject {
     ///     }
     @inlinable
     @discardableResult
-    func then(_ block: (Self) throws -> Void) rethrows -> Self {
+    func then<E: Error>(_ block: (Self) throws(E) -> Void) throws(E) -> Self {
         try block(self)
         return self
     }
@@ -56,7 +56,7 @@ extension Then where Self: AnyObject {
 
 extension Then {
     @inlinable
-    func `as`<T>(_ transform: (Self) throws -> T) rethrows -> T {
+    func `as`<T, E: Error>(_ transform: (Self) throws(E) -> T) throws(E) -> T {
         try transform(self)
     }
 }
