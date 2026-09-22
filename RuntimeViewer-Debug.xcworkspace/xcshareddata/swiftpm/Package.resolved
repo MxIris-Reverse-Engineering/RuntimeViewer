@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "36a83101d0d43bae7d3166cf4b949f461386e386",
-        "version" : "0.4.3"
+        "revision" : "519891773628dff3673143744dc72c7a9afdd36e",
+        "version" : "0.4.4"
       }
     },
     {
@@ -186,7 +186,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "7d429938a62cf86e5f58b3225be1f6d35f19d41c"
+        "revision" : "b3e93a80a768a71cbfc723dc06c9b472c446f44f"
       }
     },
     {
@@ -230,8 +230,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RxAppKit",
       "state" : {
-        "revision" : "cc84d4f0d9b86a1a3b8e042150254128998d1dc0",
-        "version" : "0.5.4"
+        "revision" : "c196e6f69c8a4508ed602363e31a41fd347a0514",
+        "version" : "0.6.0"
       }
     },
     {
@@ -541,15 +541,6 @@
       }
     },
     {
-      "identity" : "swift-issue-reporting",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-issue-reporting",
-      "state" : {
-        "revision" : "71c7c9a761d1ca6ed4ccb6ced040fe1c1a39e8e7",
-        "version" : "2.1.0"
-      }
-    },
-    {
       "identity" : "swift-literal-type-inference",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-literal-type-inference.git",
@@ -734,8 +725,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "72d6c5ee748e6b0e03fd14e64db674c04af21eb2",
-        "version" : "0.34.0"
+        "revision" : "95918bb23f9d907afc72dfc6fb3f10db7ae9f99a",
+        "version" : "0.35.1"
       }
     },
     {
@@ -754,6 +745,15 @@
       "state" : {
         "revision" : "1d35f8bf10b9cf0ab49736493d2d8b6c27fc63c0",
         "version" : "3.0.0-beta.1"
+      }
+    },
+    {
+      "identity" : "xctest-dynamic-overlay",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
+      "state" : {
+        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
+        "version" : "1.13.1"
       }
     },
     {
