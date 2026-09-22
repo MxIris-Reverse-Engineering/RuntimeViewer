@@ -308,7 +308,6 @@ struct RuntimeEngineSpecializeRequestTests {
             name: "$s4Test3BoxV",
             displayName: "Box",
             kind: .swift(.type(.struct)),
-            secondaryKind: nil,
             imagePath: "/test",
             children: []
         )

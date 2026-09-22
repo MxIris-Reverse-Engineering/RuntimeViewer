@@ -359,7 +359,6 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             name: runtimeObject.name,
             displayName: runtimeObject.displayName,
             kind: runtimeObject.kind,
-            secondaryKind: runtimeObject.secondaryKind,
             imagePath: runtimeObject.imagePath,
             children: _children.map { $0.materializedRuntimeObject() },
             properties: runtimeObject.properties

@@ -116,6 +116,9 @@ public enum RuntimeObjectIcon {
         if object.properties.contains(.isObjCImplementation) {
             return iconForObjCImplementation(size: size, style: style)
         }
-        return object.secondaryKind.map { icon(for: $0, size: size, style: style) }
+        if object.properties.contains(.isSwiftClass) {
+            return icon(for: .swift(.type(.class)), size: size, style: style)
+        }
+        return nil
     }
 }

@@ -99,9 +99,9 @@ extension SemanticString {
                     name: string,
                     displayName: string,
                     kind: targetKind,
-                    secondaryKind: runtimeObjectName.secondaryKind,
                     imagePath: runtimeObjectName.imagePath,
-                    children: runtimeObjectName.children
+                    children: runtimeObjectName.children,
+                    properties: runtimeObjectName.properties.intersection(.isSwiftClass)
                 )
             }
             #endif
@@ -151,7 +151,6 @@ extension SemanticString {
                 name: identifier,
                 displayName: displayNameByIdentifier[identifier] ?? identifier,
                 kind: kind,
-                secondaryKind: nil,
                 imagePath: runtimeObjectName.imagePath,
                 children: []
             )

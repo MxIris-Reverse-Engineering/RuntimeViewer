@@ -125,7 +125,6 @@ struct SidebarReloadInvalidationTests {
                 name: "SeededType\(index)",
                 displayName: "SeededType\(index)",
                 kind: .swift(.type(.class)),
-                secondaryKind: nil,
                 imagePath: "/System/Library/Frameworks/TestFramework.framework/TestFramework",
                 children: [],
                 properties: []

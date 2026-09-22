@@ -25,7 +25,7 @@ struct RuntimeObjectIconTests {
 
     @Test("a bridged Swift class keeps the blue badge")
     func bridgedSwiftClassKeepsBlue() {
-        let object = Fixtures.runtimeObject(kind: .objc(.type(.class)), secondaryKind: .swift(.type(.class)))
+        let object = Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isSwiftClass])
 
         #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.icon(for: .swift(.type(.class))))
     }
@@ -33,7 +33,7 @@ struct RuntimeObjectIconTests {
     @Test("the two badges are different images")
     func theTwoBadgesDiffer() {
         let objcImplementation = Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isObjCImplementation])
-        let bridged = Fixtures.runtimeObject(kind: .objc(.type(.class)), secondaryKind: .swift(.type(.class)))
+        let bridged = Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isSwiftClass])
 
         #expect(RuntimeObjectIcon.secondaryIcon(for: objcImplementation) !== RuntimeObjectIcon.secondaryIcon(for: bridged))
     }
@@ -41,12 +41,11 @@ struct RuntimeObjectIconTests {
     /// The binary cannot produce both at once, but the function still has to
     /// answer if something upstream ever hands it both — silently painting the
     /// blue one over the pink would be the harder bug to spot.
-    @Test("the implementation flag wins over a secondary kind")
+    @Test("the implementation flag wins over the bridged-Swift flag")
     func implementationFlagWins() {
         let object = Fixtures.runtimeObject(
             kind: .objc(.type(.class)),
-            secondaryKind: .swift(.type(.class)),
-            properties: [.isObjCImplementation]
+            properties: [.isObjCImplementation, .isSwiftClass]
         )
 
         #expect(RuntimeObjectIcon.secondaryIcon(for: object) === RuntimeObjectIcon.iconForObjCImplementation())

@@ -209,7 +209,6 @@ struct RuntimeInterfaceCacheTests {
             name: authoritativeType.name,
             displayName: authoritativeType.displayName + authoritativeType.displayName,
             kind: authoritativeType.kind,
-            secondaryKind: nil,
             imagePath: authoritativeType.imagePath,
             children: [strayChild],
             properties: []
@@ -434,7 +433,6 @@ struct RuntimeInterfaceCacheTests {
             name: "TestFramework.\(name)",
             displayName: "TestFramework.\(name)",
             kind: .swift(.type(.class)),
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/TestFramework.framework/TestFramework",
             children: [],
             properties: []

@@ -10,7 +10,6 @@ struct MCPRuntimeTypeInfoTests {
             name: "_TtC6AppKit6NSView",
             displayName: "NSView",
             kind: .objc(.type(.class)),
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
             children: []
         )
@@ -29,7 +28,6 @@ struct MCPRuntimeTypeInfoTests {
             name: "NSObject",
             displayName: "NSObject",
             kind: .objc(.type(.class)),
-            secondaryKind: nil,
             imagePath: "/usr/lib/libobjc.A.dylib",
             children: []
         )
@@ -55,7 +53,6 @@ struct MCPRuntimeTypeInfoTests {
             name: "TestType",
             displayName: "TestType",
             kind: kind,
-            secondaryKind: nil,
             imagePath: "/test/path",
             children: []
         )

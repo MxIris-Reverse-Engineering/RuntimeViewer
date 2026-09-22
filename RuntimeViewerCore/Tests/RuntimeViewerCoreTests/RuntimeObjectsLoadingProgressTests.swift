@@ -298,7 +298,6 @@ struct RuntimeObjectsLoadingEventTests {
                 name: "NSObject",
                 displayName: "NSObject",
                 kind: .objc(.type(.class)),
-                secondaryKind: nil,
                 imagePath: "/usr/lib/libobjc.dylib",
                 children: []
             ),

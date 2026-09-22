@@ -109,7 +109,6 @@ struct SidebarSearchCaseSensitivityTests {
             name: name,
             displayName: name,
             kind: .swift(.type(.class)),
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/TestFramework.framework/TestFramework",
             children: [],
             properties: []

@@ -11,7 +11,6 @@ enum Fixtures {
         name: String = "Sample",
         displayName: String? = nil,
         kind: RuntimeObjectKind = .swift(.type(.class)),
-        secondaryKind: RuntimeObjectKind? = nil,
         imagePath: String = sampleImagePath,
         children: [RuntimeObject] = [],
         properties: RuntimeObject.Properties = []
@@ -20,7 +19,6 @@ enum Fixtures {
             name: name,
             displayName: displayName ?? name,
             kind: kind,
-            secondaryKind: secondaryKind,
             imagePath: imagePath,
             children: children,
             properties: properties

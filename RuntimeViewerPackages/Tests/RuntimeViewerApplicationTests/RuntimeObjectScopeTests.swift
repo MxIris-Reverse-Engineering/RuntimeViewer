@@ -254,7 +254,6 @@ struct RuntimeObjectScopeTests {
             name: "Sample",
             displayName: "Sample",
             kind: kind,
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/Sample.framework/Sample",
             children: children,
             properties: properties

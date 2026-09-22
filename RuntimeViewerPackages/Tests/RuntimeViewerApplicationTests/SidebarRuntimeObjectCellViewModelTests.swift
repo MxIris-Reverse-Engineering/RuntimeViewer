@@ -174,7 +174,6 @@ struct SidebarRuntimeObjectCellViewModelTests {
             name: name,
             displayName: displayName,
             kind: kind,
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/SwiftUICore.framework/SwiftUICore",
             children: children,
             properties: properties

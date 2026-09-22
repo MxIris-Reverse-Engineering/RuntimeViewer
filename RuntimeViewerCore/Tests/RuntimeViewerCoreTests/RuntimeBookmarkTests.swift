@@ -89,7 +89,6 @@ struct RuntimeObjectBookmarkTests {
             name: name,
             displayName: name,
             kind: kind,
-            secondaryKind: nil,
             imagePath: imagePath,
             children: children
         )

@@ -20,7 +20,6 @@ struct BookmarkScopeMigrationTests {
             name: name,
             displayName: name,
             kind: .objc(.type(.class)),
-            secondaryKind: nil,
             imagePath: imagePath,
             children: []
         ))

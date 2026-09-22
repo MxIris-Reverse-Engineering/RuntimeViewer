@@ -40,7 +40,6 @@ struct MCPBridgeServerExtendedTests {
             name: name,
             displayName: displayName ?? name,
             kind: kind,
-            secondaryKind: nil,
             imagePath: imagePath,
             children: []
         )

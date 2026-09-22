@@ -18,10 +18,17 @@ MachOSwiftSection 的 `next` 分支新增了识别这类类的能力（`ObjCImpl
 ## 方案
 
 **数据侧**——`RuntimeObject.Properties` 增加一位 `isObjCImplementation`（`1 << 2`），与既有的
-`isGeneric` / `isSpecialized` 同一套机制。不给 `RuntimeObjectKind` 加新 case，也不复用
-`secondaryKind`：`secondaryKind` 的语义严格对应 class data 指针的 Swift 位，而给这个 enum 加 case 会牵动它的
+`isGeneric` / `isSpecialized` 同一套机制。不给 `RuntimeObjectKind` 加新 case：加 case 会牵动它的
 `Comparable`（靠手写的 `level`）、`allCases`、CLI 的类型过滤和跨进程编码，代价与收益不成比例。
 `Properties` 是 `OptionSet` + `@Default([])`，旧版本解码新负载不受影响。
+
+**`secondaryKind` 随之删除**——这个字段类型上是一个完整的 `RuntimeObjectKind?`，但全代码库只有
+`RuntimeObjCSection` 写过它，且只写得出一个值：桥出的 Swift 类得到 `.swift(.type(.class))`，其余一律
+`nil`。也就是说它实际承载的是一个布尔量「这个 ObjC 类其实是 Swift 类」，却让每一个
+`RuntimeObject` 构造点都要多写一个 `secondaryKind: nil`，并让图标那边要处理一个理论上有二十几种取值、
+实际只会出现一种的 enum。新增 `isObjCImplementation` 之后，「这个 ObjC 类底下是 Swift」这件事变成两位
+标记里的一位，两位放在同一个 `OptionSet` 里才能把互斥关系写清楚。因此把这一位改叫
+`Properties.isSwiftClass`（`1 << 3`），`secondaryKind` 整个删掉。
 
 **事实来源**——`SwiftInspection` 的 `ObjCImplementationClasses.all(in:)`（RuntimeViewerCore 已经
 `@_spi(Internals) import SwiftInspection`）。它把 ObjC 侧的 `__objc_classlist` 与 Swift 侧的符号证据做
@@ -37,8 +44,8 @@ ivar 的 Swift 风格类型编码可依据）。**两档都标粉色角标**，�
 
 **图标侧**——`RuntimeObjectIcon` 增加粉色 `C`，以及一个统一的
 `secondaryIcon(for object: RuntimeObject, size:)`，互斥关系（有 `isObjCImplementation` 就给粉色 `C`，
-否则回落到 `secondaryKind` 映射）只写在这一个函数里。Sidebar、Inspector 的 Relationships 与
-Specializations 三处 cell ViewModel 今天各自抄了一遍 `secondaryKind.map { icon(for:) }`，一并收拢到这个
+有 `isSwiftClass` 就给蓝色 `C`，都没有就不挂角标）只写在这一个函数里。Sidebar、Inspector 的
+Relationships 与 Specializations 三处 cell ViewModel 原本各自抄了一遍同样的映射，一并收拢到这个
 入口，三个面板因此自动保持一致。
 
 **不做**：`runtime-viewer-cli` 与 MCP 工具的输出模型不动；ObjC interface 的渲染文本不加注释。
@@ -53,7 +60,7 @@ Specializations 三处 cell ViewModel 今天各自抄了一遍 `secondaryKind.ma
 
 **验证**——`RuntimeObjCImplementationClassTests` 锚在 macOS 26 的 AppKit 上（`NSGlassEffectView`
 是被这样重写的几十个类之一，`NSView` / `NSWindow` 是反例），覆盖 `allObjects()` 与
-`makeRuntimeObject(forClassName:)` 两条出口，并断言被标记的对象 `secondaryKind` 一律为 `nil`——
+`makeRuntimeObject(forClassName:)` 两条出口，并断言被标记的对象一律不带 `isSwiftClass`——
 互斥关系一旦不成立，图标那边就会悄悄用一个盖掉另一个。`RuntimeObjectIconTests` 钉住选择本身，
 包括同时拿到两个标记时取粉色这条契约。
 
@@ -67,4 +74,5 @@ Specializations 三处 cell ViewModel 今天各自抄了一遍 `secondaryKind.ma
 | 2026-09-22 | 三个 UI 面板统一走新的 `secondaryIcon(for:)` | 它们今天各自抄了一遍同样的映射，互斥规则只该有一处实现 |
 | 2026-09-22 | 先无条件启用，用 signpost 实测，不预先加设置开关 | 索引成本未知，开关是要维护和落盘的长期负担，数据出来再定 |
 | 2026-09-22 | 状态置为 Accepted，开始实现 | 用户「直接写就好了」 |
+| 2026-09-22 | 删除 `RuntimeObject.secondaryKind`，那一位改为 `Properties.isSwiftClass`（`1 << 3`） | 该字段类型是完整的 `RuntimeObjectKind?`，但唯一的写入方是 `RuntimeObjCSection`，唯一写得出的非 `nil` 值是 `.swift(.type(.class))`；本质是布尔量，却让每个构造点都要写 `secondaryKind: nil`。与 `isObjCImplementation` 同在一个 `OptionSet` 里，互斥关系才写得清楚 |
 | 2026-09-22 | 这一轮不做性能测量 | 用户「性能问题后面再说」；索引改为惰性构建，未列出过对象的镜像不付成本 |

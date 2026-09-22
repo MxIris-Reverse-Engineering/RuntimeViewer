@@ -106,7 +106,6 @@ struct SidebarFilterFastPathTests {
             name: name,
             displayName: displayName,
             kind: .swift(.type(.struct)),
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/SwiftUICore.framework/SwiftUICore",
             children: children,
             properties: []

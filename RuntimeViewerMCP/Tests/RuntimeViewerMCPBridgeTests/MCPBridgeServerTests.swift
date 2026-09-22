@@ -55,7 +55,6 @@ struct MCPBridgeServerTests {
             name: "NSView",
             displayName: "NSView",
             kind: .objc(.type(.class)),
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
             children: []
         )

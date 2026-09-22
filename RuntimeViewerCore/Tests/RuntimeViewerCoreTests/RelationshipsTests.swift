@@ -231,12 +231,12 @@ struct RelationshipsTests {
         try await engine.connect()
         try await engine.loadAndAwaitIndexed(Anchors.foundationPath)
 
-        // Find any Swift class with secondaryKind that signals it's bridged
+        // Find any Swift class marked `.isSwiftClass`, which signals it's bridged
         // to ObjC, AND has a same-image subclass (so the three-layer chain
         // exists). If no such anchor is available, skip.
         let allObjects = try await engine.objects(in: Anchors.foundationPath)
         let bridgedSwiftClasses = allObjects.filter {
-            $0.kind == .swift(.type(.class)) || ($0.kind == .objc(.type(.class)) && $0.secondaryKind == .swift(.type(.class)))
+            $0.kind == .swift(.type(.class)) || ($0.kind == .objc(.type(.class)) && $0.properties.contains(.isSwiftClass))
         }
         var anchor: RuntimeObject?
         for candidate in bridgedSwiftClasses {

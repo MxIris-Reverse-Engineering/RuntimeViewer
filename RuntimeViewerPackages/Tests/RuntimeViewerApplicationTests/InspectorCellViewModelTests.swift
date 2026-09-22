@@ -35,11 +35,11 @@ struct InspectorRelationshipsCellViewModelTests {
         #expect(specialized.appearance.tertiaryIcon != nil)
     }
 
-    @Test("the secondary icon appears only for objects with a secondary kind")
-    func secondaryIconFollowsSecondaryKind() {
+    @Test("the secondary icon appears only for bridged Swift classes")
+    func secondaryIconFollowsBridgedSwiftClassFlag() {
         let single = InspectorRelationshipsCellViewModel(runtimeObject: Fixtures.runtimeObject())
         let bridged = InspectorRelationshipsCellViewModel(
-            runtimeObject: Fixtures.runtimeObject(kind: .objc(.type(.class)), secondaryKind: .swift(.type(.class)))
+            runtimeObject: Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isSwiftClass])
         )
 
         #expect(single.appearance.secondaryIcon == nil)
@@ -70,11 +70,11 @@ struct InspectorSwiftSpecializationCellViewModelTests {
         #expect(specialized.appearance.tertiaryIcon != nil)
     }
 
-    @Test("the secondary icon appears only for objects with a secondary kind")
-    func secondaryIconFollowsSecondaryKind() {
+    @Test("the secondary icon appears only for bridged Swift classes")
+    func secondaryIconFollowsBridgedSwiftClassFlag() {
         let single = InspectorSwiftSpecializationCellViewModel(runtimeObject: Fixtures.runtimeObject())
         let bridged = InspectorSwiftSpecializationCellViewModel(
-            runtimeObject: Fixtures.runtimeObject(kind: .objc(.type(.class)), secondaryKind: .swift(.type(.class)))
+            runtimeObject: Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isSwiftClass])
         )
 
         #expect(single.appearance.secondaryIcon == nil)

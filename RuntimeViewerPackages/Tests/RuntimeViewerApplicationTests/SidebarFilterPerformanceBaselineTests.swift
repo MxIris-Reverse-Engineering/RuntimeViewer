@@ -429,7 +429,6 @@ struct SidebarFilterPerformanceBaselineTests {
             name: displayName,
             displayName: displayName,
             kind: .swift(.type(.class)),
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/TestFramework.framework/TestFramework",
             children: children,
             properties: properties

@@ -103,11 +103,11 @@ actor RuntimeObjCSection {
         var results: [RuntimeObject] = []
 
         for structName in objcIndexer.structNames {
-            results.append(.init(name: structName, displayName: structName, kind: .c(.struct), secondaryKind: nil, imagePath: imagePath, children: []))
+            results.append(.init(name: structName, displayName: structName, kind: .c(.struct), imagePath: imagePath, children: []))
         }
 
         for unionName in objcIndexer.unionNames {
-            results.append(.init(name: unionName, displayName: unionName, kind: .c(.union), secondaryKind: nil, imagePath: imagePath, children: []))
+            results.append(.init(name: unionName, displayName: unionName, kind: .c(.union), imagePath: imagePath, children: []))
         }
 
         for className in objcIndexer.classNames {
@@ -116,7 +116,6 @@ actor RuntimeObjCSection {
                 name: className,
                 displayName: className,
                 kind: .objc(.type(.class)),
-                secondaryKind: isSwiftStable ? .swift(.type(.class)) : nil,
                 imagePath: imagePath,
                 children: [],
                 properties: properties(forClassNamed: className, isSwiftStable: isSwiftStable)
@@ -124,11 +123,11 @@ actor RuntimeObjCSection {
         }
 
         for proto in objcIndexer.protocolNames {
-            results.append(.init(name: proto, displayName: proto, kind: .objc(.type(.protocol)), secondaryKind: nil, imagePath: imagePath, children: []))
+            results.append(.init(name: proto, displayName: proto, kind: .objc(.type(.protocol)), imagePath: imagePath, children: []))
         }
 
         for category in objcIndexer.categoryNames {
-            results.append(.init(name: category, displayName: category, kind: .objc(.category(.class)), secondaryKind: nil, imagePath: imagePath, children: []))
+            results.append(.init(name: category, displayName: category, kind: .objc(.category(.class)), imagePath: imagePath, children: []))
         }
 
         #log(.debug, "Found \(results.count, privacy: .public) ObjC objects")
@@ -338,21 +337,18 @@ actor RuntimeObjCSection {
 
     /// Materialize an Objective-C class `RuntimeObject` for a known class
     /// name within this image. Mirrors the shape `allObjects()` emits
-    /// (including `secondaryKind == .swift(.type(.class))` for bridged
-    /// classes), so relationship rows render identically to the sidebar's
-    /// regular ObjC class entries. Returns `nil` when the class is not in
-    /// this section.
+    /// (including `.isSwiftClass` for bridged classes), so relationship rows
+    /// render identically to the sidebar's regular ObjC class entries.
+    /// Returns `nil` when the class is not in this section.
     func makeRuntimeObject(forClassName className: String) -> RuntimeObject? {
         guard let classGroup = objcIndexer.classGroup(forName: className) else { return nil }
-        let isSwiftStable = classGroup.objcClass.isSwiftStable
         return RuntimeObject(
             name: className,
             displayName: className,
             kind: .objc(.type(.class)),
-            secondaryKind: isSwiftStable ? .swift(.type(.class)) : nil,
             imagePath: imagePath,
             children: [],
-            properties: properties(forClassNamed: className, isSwiftStable: isSwiftStable)
+            properties: properties(forClassNamed: className, isSwiftStable: classGroup.objcClass.isSwiftStable)
         )
     }
 
@@ -362,8 +358,8 @@ actor RuntimeObjCSection {
     /// class that is already `isSwiftStable` is never looked up in the
     /// `@implementation` index.
     private func properties(forClassNamed className: String, isSwiftStable: Bool) -> RuntimeObject.Properties {
-        guard !isSwiftStable, objcImplementationClassNames.contains(className) else { return [] }
-        return [.isObjCImplementation]
+        if isSwiftStable { return [.isSwiftClass] }
+        return objcImplementationClassNames.contains(className) ? [.isObjCImplementation] : []
     }
 
     /// Materialize an Objective-C protocol `RuntimeObject`. Used by the
@@ -374,7 +370,6 @@ actor RuntimeObjCSection {
             name: protocolName,
             displayName: protocolName,
             kind: .objc(.type(.protocol)),
-            secondaryKind: nil,
             imagePath: imagePath,
             children: []
         )

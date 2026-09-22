@@ -300,7 +300,6 @@ struct ContentTextPipelineTests {
             name: "TestFramework.ContentPipelineFixture",
             displayName: "TestFramework.ContentPipelineFixture",
             kind: .swift(.type(.class)),
-            secondaryKind: nil,
             imagePath: "/System/Library/Frameworks/TestFramework.framework/TestFramework",
             children: [],
             properties: []

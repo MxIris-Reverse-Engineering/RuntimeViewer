@@ -747,7 +747,7 @@ public actor RuntimeEngine {
         }
 
         if let objcReference = Self.objcReference(forSwiftMangledName: mangledName) {
-            let objcObject = RuntimeObject(name: objcReference.name, displayName: objcReference.name, kind: objcReference.kind, secondaryKind: nil, imagePath: "", children: [])
+            let objcObject = RuntimeObject(name: objcReference.name, displayName: objcReference.name, kind: objcReference.kind, imagePath: "", children: [])
             let objcTransformer = options.transformer.objc
             switch objcReference.kind {
             case .objc(.type(.class)):

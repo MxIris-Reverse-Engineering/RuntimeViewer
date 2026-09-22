@@ -22,12 +22,17 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// Marks an Objective-C class whose implementation is written in Swift
         /// as an `@objc @implementation extension` (SE-0436). The compiler
         /// emits such a class as a PURE Objective-C class — the Swift bit of
-        /// its class data pointer is clear — so it never gets the
-        /// `secondaryKind == .swift(.type(.class))` a bridged Swift class
-        /// carries. The two are mutually exclusive for that reason, and the
-        /// badge they drive is picked in one place:
+        /// its class data pointer is clear — so it never gets `isSwiftClass`.
+        /// The two are mutually exclusive for that reason, and the badge they
+        /// drive is picked in one place:
         /// `RuntimeObjectIcon.secondaryIcon(for:)`.
         public static let isObjCImplementation = Self(rawValue: 1 << 2)
+
+        /// Marks an Objective-C class that is really a Swift class bridged out
+        /// to the Objective-C runtime — the Swift bit of its class data
+        /// pointer is set (`isSwiftStable`). Mutually exclusive with
+        /// `isObjCImplementation`; see that case for why.
+        public static let isSwiftClass = Self(rawValue: 1 << 3)
     }
 
     public let name: String
@@ -35,8 +40,6 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     public let displayName: String
 
     public let kind: RuntimeObjectKind
-
-    public let secondaryKind: RuntimeObjectKind?
 
     public let imagePath: String
 
@@ -51,7 +54,7 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
 
     public func withImagePath(_ imagePath: String) -> RuntimeObject {
-        .init(name: name, displayName: displayName, kind: kind, secondaryKind: secondaryKind, imagePath: imagePath, children: children, properties: properties)
+        .init(name: name, displayName: displayName, kind: kind, imagePath: imagePath, children: children, properties: properties)
     }
 
     /// Returns a copy of this object with `child` appended to its `children`.
@@ -62,7 +65,6 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
             name: name,
             displayName: displayName,
             kind: kind,
-            secondaryKind: secondaryKind,
             imagePath: imagePath,
             children: children + [child],
             properties: properties,

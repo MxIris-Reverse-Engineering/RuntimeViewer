@@ -78,6 +78,6 @@ struct RuntimeObjCImplementationClassTests {
 
         let marked = objects.filter { $0.properties.contains(.isObjCImplementation) }
         #expect(!marked.isEmpty, "AppKit on macOS 26 implements several dozen classes this way")
-        #expect(marked.allSatisfy { $0.secondaryKind == nil })
+        #expect(marked.allSatisfy { !$0.properties.contains(.isSwiftClass) })
     }
 }
