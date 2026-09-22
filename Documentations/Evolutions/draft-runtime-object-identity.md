@@ -1,13 +1,13 @@
 # Draft - RuntimeObject 的相等性只表达身份
 
-- **状态**: Accepted
+- **状态**: Implemented
 - **作者**: JH
 - **创建日期**: 2026-09-23
 - **最后更新**: 2026-09-23
 - **所属愿景**: 无
 - **关联提案**: [给 @objc @implementation 实现的 ObjC 类加粉色角标](draft-objc-implementation-class-badge.md)（`secondaryKind` 折叠成 `Properties.isSwiftClass` 在那份里）
 - **实现分支 / PR**: `feature/runtime-object-identity`（从 `next` 切，并回 `next`）
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**: 无 —— 判定理由见决策日志
 
 ## 摘要
 
@@ -140,8 +140,11 @@ set key when lookups must survive `parent.withAppendedChild(child)` replacements
 - **`OrderedSet` 去重不会遇到「同身份而 `properties` 不同」**：
   `RuntimeRelationshipsResolver` 在 `objcKey` 与 `swiftMangledKey` 同时存在时会跳过 Swift 臂，
   正是为了避免同一个类被 materialize 两次。**这是当前代码的性质，不是类型层面的保证。**
-- **`@EquatableIgnored` 与 `@Default` / `@Init` 能否共存于同一个属性上，尚未验证**（推测可以，
-  三者都是 peer/accessor 宏，作用互不重叠）。落地第一步就会知道；不行就手写 `==` 与 `hash(into:)`。
+- **`@EquatableIgnored` 不可用——实测推翻了原先的推测。** 原以为冲突会出现在 `@Default` /
+  `@Init` 上，实际冲突方是 `@MemberwiseInit`：它也读这个 peer macro，被标注的属性直接从生成的
+  构造器里消失，`withImagePath` 与 `withAppendedChild` 当场编译失败
+  （`extra arguments at positions #2, #5 in call`）。因此走备选路径，手写 `==` 与
+  `hash(into:)`。
 
 ## 提议方案
 
@@ -370,5 +373,13 @@ children 子树，见「非目标」。
 | 2026-09-23 | 测试先全量 characterization 锁住当前行为（含 bug 行为），改完逐条裁决 | 用户要求「确保改前的正确逻辑和改后一致」。语义翻转是静默的，编译器不报错，只有基线测试能证明「没有顺手改坏一个没人提到的行为」 |
 | 2026-09-23 | 覆盖边界含间接依赖 | `OrderedSet` 去重、书签的合成 `Hashable`、`DocumentState` 历史与 tab、DifferenceKit diff 都会因 `==` 翻语义而静默改变行为 |
 | 2026-09-23 | 从 `next` 切 feature 分支并回 `next`，不走 main | `next` 领先 `main` 272 个提交且依赖 MachOSwiftSection 的未发布分支（`main` 钉 `exact: 0.15.2`）。从 main 切虽能让这个修复独立进发布分支，但要在还带着 `secondaryKind` 的 `RuntimeObject` 上重做一遍，并在 `next` 合并时手工解冲突 |
+| 2026-09-23 | 不写配套实现说明 | 「`==` 是身份、`hasSameContent(as:)` 是内容」这条契约写在 `RuntimeObject` 的 `==` extension 注释上，浅层比较的限制写在方法上，不用 `@EquatableIgnored` 的原因写在紧邻的注释里，完整推理在本提案。再单开一份会变成两处记同一件事，必然漂移 |
+| 2026-09-23 | 不新增术语表条目 | 「身份 / 内容」是通用编程概念，不是本项目特有的说法 |
+| 2026-09-23 | 验收通过，状态置为 Implemented | 整包 `./RunScript.sh --no-launch` 三个 Build Succeeded 零 error；`RuntimeViewerCore` 505 个测试仅剩那条与本提案无关的快照失败，`RuntimeViewerPackages` 299 个测试全绿 |
 | 2026-09-23 | 不动 `ComparableBuildable` | 用户明确：它只在 sidebar 排序用，是故意的 |
 | 2026-09-23 | 状态置为 Accepted，开始实现 | 用户：「提案先提交到 next，然后改成 Accepted 开工」 |
+| 2026-09-23 | 手写 `==` / `hash(into:)`，放弃 `@EquatableIgnored` | 实测：`@MemberwiseInit` 也读这个 peer macro，被标注的属性从生成的构造器里消失。提案原先猜的冲突方（`@Default` / `@Init`）猜错了 |
+| 2026-09-23 | 16 条断言显式翻转，9 条 Contract 断言原样通过 | 翻转的理由逐条写在测试旁边而不是这里——两处记同一件事必然漂移。关键在于分布：改动落地后红的 8 条全部是标记为 Defect 的，Contract 一条未红，这就是「改动精确命中目标且没有误伤」的证据 |
+| 2026-09-23 | `RelationshipsEquivalenceSnapshotTests` 的失败判定为与本提案无关 | 把 `RuntimeObject.swift` 退回改动前重跑，同样的 4 行 missing / 4 行 unexpected（`__C.Decimal.FormatStyle` ↔ `__C.NSDecimal.FormatStyle`）。是上游 demangling 的打印差异，基线快照录制时的上游版本与现在不同 |
+| 2026-09-23 | 一处调用点没有测试覆盖：`ContentCoordinator.swift:129` | 它在 `RuntimeViewerUsingAppKit` 这个 app target 里，而该 target 下只有 `RuntimeViewerSourceEditorBridgeTests`，没有针对 app 代码的测试 target。语义翻转让它少一次无谓重绑，方向与另外八处一致，但只有整包构建验证了它能编译，没有测试证明行为 |
+| 2026-09-23 | 记录一个挡路的项目状态问题：`RuntimeViewerPackages/Package.resolved` 的 MachOSwiftSection pin 比 `RuntimeViewerCore/Package.resolved` 旧 | 单独 `swift build` 这个包会因为缺 `ObjCImplementationClasses` 而失败，跑包测试前得临时对齐 pin。workspace 构建不受影响（它有自己的 resolved）。不属于本提案范围，未改动 |
