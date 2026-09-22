@@ -57,10 +57,10 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
 extension InspectorRelationshipsCellViewModel: Differentiable {
-    public var differenceIdentifier: RuntimeObject { runtimeObject }
+    public var differenceIdentifier: RuntimeObjectKey { runtimeObject.key }
 
     public func isContentEqual(to source: InspectorRelationshipsCellViewModel) -> Bool {
-        runtimeObject == source.runtimeObject
+        runtimeObject.hasSameContent(as: source.runtimeObject)
     }
 }
 

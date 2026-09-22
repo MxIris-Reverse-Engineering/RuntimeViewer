@@ -37,8 +37,8 @@ struct RuntimeObjectTests {
 
     // MARK: - Identifiable
 
-    @Test("id is self")
-    func idIsSelf() {
+    @Test("id is the object's key")
+    func idIsTheKey() {
         let object = RuntimeObject(
             name: "NSObject",
             displayName: "NSObject",
@@ -46,7 +46,7 @@ struct RuntimeObjectTests {
             imagePath: "/usr/lib/libobjc.A.dylib",
             children: []
         )
-        #expect(object.id == object)
+        #expect(object.id == object.key)
     }
 
     // MARK: - imageName

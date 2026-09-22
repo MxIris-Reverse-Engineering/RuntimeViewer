@@ -100,8 +100,7 @@ extension SemanticString {
                     displayName: string,
                     kind: targetKind,
                     imagePath: runtimeObjectName.imagePath,
-                    children: runtimeObjectName.children,
-                    properties: runtimeObjectName.properties.intersection(.isSwiftClass)
+                    children: runtimeObjectName.children
                 )
             }
             #endif

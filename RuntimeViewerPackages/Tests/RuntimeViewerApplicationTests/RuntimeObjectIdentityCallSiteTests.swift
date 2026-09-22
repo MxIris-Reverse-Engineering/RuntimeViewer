@@ -47,39 +47,40 @@ struct RuntimeObjectIdentityCallSiteTests {
 
     // MARK: - findCell
 
-    /// **Defect.** This is the sidebar highlight that stays behind after a jump.
-    @Test("findCell misses the cell when the object carries extra properties")
-    func findCellMissesOnPropertiesDifference() {
+    /// **Fixed.** This was the sidebar highlight that stayed behind after a
+    /// jump: the link payload carried a badge the sidebar's own listing did not.
+    @Test("findCell finds the cell when the object carries extra properties")
+    func findCellFindsDespitePropertiesDifference() {
         let environment = ViewModelTestEnvironment()
         let cell = environment.make {
             SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative, forOpenQuickly: false)
         }
 
-        #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithExtraProperties, in: [cell]) == nil)
+        #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithExtraProperties, in: [cell])?.cell === cell)
     }
 
-    /// **Defect.** The Swift half of the same fault: a link payload's
+    /// **Fixed.** The Swift half of the same fault: a link payload's
     /// `displayName` is the qualified name printed from its tokens.
-    @Test("findCell misses the cell when the object's displayName differs")
-    func findCellMissesOnDisplayNameDifference() {
+    @Test("findCell finds the cell when the object's displayName differs")
+    func findCellFindsDespiteDisplayNameDifference() {
         let environment = ViewModelTestEnvironment()
         let cell = environment.make {
             SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritative, forOpenQuickly: false)
         }
 
-        #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithQualifiedDisplayName, in: [cell]) == nil)
+        #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithQualifiedDisplayName, in: [cell])?.cell === cell)
     }
 
-    /// **Defect.** And the third: a payload never carries the children the
+    /// **Fixed.** And the third: a payload never carries the children the
     /// authoritative listing has.
-    @Test("findCell misses the cell when the object has no children")
-    func findCellMissesOnChildrenDifference() {
+    @Test("findCell finds the cell when the object has no children")
+    func findCellFindsDespiteChildrenDifference() {
         let environment = ViewModelTestEnvironment()
         let cell = environment.make {
             SidebarRuntimeObjectCellViewModel(runtimeObject: Self.authoritativeWithChildren, forOpenQuickly: false)
         }
 
-        #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithoutChildren, in: [cell]) == nil)
+        #expect(SidebarRuntimeObjectListViewModel.findCell(for: Self.payloadWithoutChildren, in: [cell])?.cell === cell)
     }
 
     /// **Contract.** The identical object is found — whatever else changes,
@@ -170,29 +171,29 @@ struct RuntimeObjectIdentityCallSiteTests {
 
     // MARK: - differenceIdentifier
 
-    /// **Defect.** DifferenceKit treats two rows as the same row when their
-    /// difference identifiers match. Today a badge change makes the Inspector
-    /// see a *different* row — a delete plus an insert — rather than an update.
-    @Test("inspector cells give two identities to one type that differs only in properties")
-    func inspectorCellsSplitIdentityOnProperties() {
+    /// **Fixed.** DifferenceKit treats two rows as the same row when their
+    /// difference identifiers match. A badge change is now an update of one
+    /// row rather than a delete plus an insert of two different ones.
+    @Test("inspector cells give one identity to one type whatever its properties")
+    func inspectorCellsKeepOneIdentityAcrossProperties() {
         let plain = InspectorRelationshipsCellViewModel(runtimeObject: Self.authoritative)
         let bridged = InspectorRelationshipsCellViewModel(runtimeObject: Self.payloadWithExtraProperties)
 
-        #expect(plain.differenceIdentifier != bridged.differenceIdentifier)
+        #expect(plain.differenceIdentifier == bridged.differenceIdentifier)
     }
 
     // MARK: - DocumentState
 
-    /// **Defect.** Two forms of one type make two timeline entries, so a single
-    /// step back returns to the type you are already looking at.
-    @Test("pushing two forms of one type records two timeline entries")
-    func timelineRecordsBothFormsOfOneType() {
+    /// **Fixed.** Two forms of one type used to make two timeline entries, so
+    /// a single step back returned to the type already on screen.
+    @Test("pushing two forms of one type records one timeline entry")
+    func timelineCollapsesBothFormsOfOneType() {
         let documentState = DocumentState()
 
         documentState.selectionRouter.trigger(.push(Self.authoritative))
         documentState.selectionRouter.trigger(.push(Self.payloadWithExtraProperties))
 
-        #expect(documentState.selectionStack.count == 2)
+        #expect(documentState.selectionStack.count == 1)
     }
 
     /// **Contract.** Pushing the very same object twice must stay one entry —
@@ -227,12 +228,12 @@ struct RuntimeObjectIdentityCallSiteTests {
     private let addSpecializationRelay = PublishRelay<Void>()
     private let selectSpecializationRelay = PublishRelay<InspectorSwiftSpecializationCellViewModel>()
 
-    /// **Defect.** `update(for:)` is supposed to be a no-op when the pane is
-    /// already showing that type. Handed the same type in its other form, the
-    /// guard lets it through and the pane refetches — visibly, because the
-    /// loading placeholder flashes over content that was already correct.
-    @Test("the class pane refetches when handed the same type carrying extra properties")
-    func classPaneRefetchesOnPropertiesDifference() async throws {
+    /// **Fixed.** `update(for:)` is a no-op when the pane already shows that
+    /// type — including when the type arrives in its other form. Before, the
+    /// guard let it through and the loading placeholder flashed over content
+    /// that was already correct.
+    @Test("the class pane does not refetch when handed the same type carrying extra properties")
+    func classPaneDoesNotRefetchOnPropertiesDifference() async throws {
         let environment = ViewModelTestEnvironment()
         let viewModel = environment.make {
             InspectorClassViewModel(
@@ -252,7 +253,7 @@ struct RuntimeObjectIdentityCallSiteTests {
         try await settleMainQueue()
         viewModel.update(for: Self.payloadWithExtraProperties)
 
-        #expect(try await !emissions.isEmpty)
+        #expect(try await emissions.isEmpty)
     }
 
     /// **Contract.** The very same object must not refetch. This is the half
@@ -281,9 +282,9 @@ struct RuntimeObjectIdentityCallSiteTests {
         #expect(try await emissions.isEmpty)
     }
 
-    /// **Defect.** Same guard, relationships pane.
-    @Test("the relationships pane refetches when handed the same type carrying extra properties")
-    func relationshipsPaneRefetchesOnPropertiesDifference() async throws {
+    /// **Fixed.** Same guard, relationships pane.
+    @Test("the relationships pane does not refetch when handed the same type carrying extra properties")
+    func relationshipsPaneDoesNotRefetchOnPropertiesDifference() async throws {
         let environment = ViewModelTestEnvironment()
         let viewModel = environment.make {
             InspectorRelationshipsViewModel(
@@ -303,13 +304,13 @@ struct RuntimeObjectIdentityCallSiteTests {
         try await settleMainQueue()
         viewModel.update(for: Self.payloadWithExtraProperties)
 
-        #expect(try await !emissions.isEmpty)
+        #expect(try await emissions.isEmpty)
     }
 
-    /// **Defect.** Same guard, specialization pane. Its rows come off a
+    /// **Fixed.** Same guard, specialization pane. Its rows come off a
     /// synchronous map over the object, so no load has to settle first.
-    @Test("the specialization pane rebuilds its rows when handed the same type carrying extra properties")
-    func specializationPaneRebuildsOnPropertiesDifference() async throws {
+    @Test("the specialization pane does not rebuild its rows when handed the same type carrying extra properties")
+    func specializationPaneDoesNotRebuildOnPropertiesDifference() async throws {
         let environment = ViewModelTestEnvironment()
         let viewModel = environment.make {
             InspectorSwiftSpecializationViewModel(
@@ -336,6 +337,6 @@ struct RuntimeObjectIdentityCallSiteTests {
         try await settleMainQueue()
         viewModel.update(for: grownWithExtraProperties)
 
-        #expect(try await !emissions.isEmpty)
+        #expect(try await emissions.isEmpty)
     }
 }

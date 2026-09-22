@@ -46,10 +46,10 @@ public final class InspectorSwiftSpecializationCellViewModel: NSObject, @uncheck
 #if canImport(AppKit) && !targetEnvironment(macCatalyst)
 
 extension InspectorSwiftSpecializationCellViewModel: Differentiable {
-    public var differenceIdentifier: RuntimeObject { runtimeObject }
+    public var differenceIdentifier: RuntimeObjectKey { runtimeObject.key }
 
     public func isContentEqual(to source: InspectorSwiftSpecializationCellViewModel) -> Bool {
-        runtimeObject == source.runtimeObject
+        runtimeObject.hasSameContent(as: source.runtimeObject)
     }
 }
 

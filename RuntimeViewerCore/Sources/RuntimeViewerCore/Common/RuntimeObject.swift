@@ -3,7 +3,6 @@ import MemberwiseInit
 public import SwiftStdlibToolbox
 
 @Codable
-@Equatable
 @MemberwiseInit(.public)
 public struct RuntimeObject: Hashable, Identifiable, Sendable {
     public struct Properties: OptionSet, Codable, Hashable, Sendable {
@@ -37,19 +36,30 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
 
     public let name: String
 
+    /// The name shown to the reader. Deliberately outside identity: one
+    /// mangled `name` always prints the same `displayName`, except on the
+    /// link payloads the content pane builds, whose `displayName` is the
+    /// qualified name assembled from the tokens it spans — and those are
+    /// exactly the objects that have to compare equal to the authoritative
+    /// one they name.
     public let displayName: String
 
     public let kind: RuntimeObjectKind
 
     public let imagePath: String
 
+    /// Deliberately outside identity: `withAppendedChild(_:)` returns the
+    /// same type carrying one more child, and a lookup for it has to keep
+    /// hitting.
     public let children: [RuntimeObject]
 
+    /// Deliberately outside identity: the same type reaches different call
+    /// sites with different marks depending on which path materialized it.
     @Default([])
     @Init(default: [])
     public let properties: Properties
 
-    public var id: RuntimeObject { self }
+    public var id: RuntimeObjectKey { key }
 
     public var imageName: String { imagePath.lastPathComponent.deletingPathExtension }
 
@@ -69,6 +79,46 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
             children: children + [child],
             properties: properties,
         )
+    }
+}
+
+/// Identity is `(imagePath, name, kind)` — the same triple `RuntimeObjectKey`
+/// carries, so `a == b` and `a.key == b.key` always agree.
+///
+/// `displayName`, `children` and `properties` are excluded on purpose: they
+/// differ between two materializations of one type, and every caller that asks
+/// `==` is asking "is this the same type", not "is this byte-identical". The
+/// question they are not asking has its own method, `hasSameContent(as:)`.
+///
+/// Hand-written rather than `@Equatable` + `@EquatableIgnored`: that peer macro
+/// is also read by `@MemberwiseInit`, which then drops the annotated property
+/// from the generated initializer.
+extension RuntimeObject {
+    public static func == (lhs: RuntimeObject, rhs: RuntimeObject) -> Bool {
+        lhs.imagePath == rhs.imagePath && lhs.name == rhs.name && lhs.kind == rhs.kind
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(imagePath)
+        hasher.combine(name)
+        hasher.combine(kind)
+    }
+
+    /// Whether these two describe the same type in the same state — what `==`
+    /// asks, plus the three fields identity leaves out.
+    ///
+    /// Shallow by design: `children` are compared by identity, one element at a
+    /// time, so a child appearing, disappearing or being replaced is visible
+    /// while a change buried inside a grandchild is not. That is enough because
+    /// the only writer, `SidebarRuntimeObjectViewModel.applySpecializationAdded`,
+    /// locates the cell whose direct children are about to change. A writer that
+    /// mutates a grandchild without touching its ancestors would need this to
+    /// recurse.
+    public func hasSameContent(as other: RuntimeObject) -> Bool {
+        self == other
+            && displayName == other.displayName
+            && properties == other.properties
+            && children == other.children
     }
 }
 

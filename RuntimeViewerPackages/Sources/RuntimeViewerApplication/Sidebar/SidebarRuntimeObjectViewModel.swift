@@ -552,7 +552,7 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         in viewModels: [SidebarRuntimeObjectCellViewModel]
     ) -> SidebarRuntimeObjectCellViewModel? {
         for viewModel in viewModels {
-            if viewModel.runtimeObject.key == object.key { return viewModel }
+            if viewModel.runtimeObject == object { return viewModel }
             if let matchedViewModel = locate(object, in: viewModel.children) {
                 return matchedViewModel
             }

@@ -37,7 +37,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     /// viewmodel itself.
     public var runtimeObject: RuntimeObject {
         didSet {
-            guard oldValue != runtimeObject else { return }
+            guard !oldValue.hasSameContent(as: runtimeObject) else { return }
             rebuildChildren()
             refreshAppearance()
         }
@@ -368,7 +368,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     @discardableResult
     func appendRuntimeObjectChildPreservingCurrentDescendants(_ child: RuntimeObject) -> Bool {
         let currentRuntimeObject = materializedRuntimeObject()
-        guard !currentRuntimeObject.children.contains(where: { $0.key == child.key }) else {
+        guard !currentRuntimeObject.children.contains(child) else {
             return false
         }
         runtimeObject = currentRuntimeObject.withAppendedChild(child)
@@ -414,7 +414,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
 extension SidebarRuntimeObjectCellViewModel: Differentiable {
     public var differenceIdentifier: StableID { stableID }
     public func isContentEqual(to source: SidebarRuntimeObjectCellViewModel) -> Bool {
-        runtimeObject == source.runtimeObject
+        runtimeObject.hasSameContent(as: source.runtimeObject)
     }
 }
 
