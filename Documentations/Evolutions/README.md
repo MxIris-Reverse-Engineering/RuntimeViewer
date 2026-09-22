@@ -39,6 +39,7 @@
 | [draft](draft-command-line-interface-multi-source.md) | `runtime-viewer-cli` 多来源：全部运行时来源、attach 与 App 充当 host | In Progress | 愿景第三步，依赖前两篇。独立 host 换上 `.headlessHost` 的 `RuntimeEngineManager`，新增 `sources` / `attach` / `detach`，`--source` 覆盖 local / catalyst / pid / process / engine；App 启动即充当 host 并接管独立 host。 |
 | [draft](draft-command-line-interface-app-embedding.md) | `runtime-viewer-cli` 嵌入 App 包与设置页 | Draft | 愿景第四步。Xcode command-line tool target 嵌到 `Contents/Helpers/` 随 App 签名公证；Settings 新增「Command Line Tool」页做 `/usr/local/bin` 符号链接与「允许命令行访问」开关。 |
 | [draft](draft-objc-implementation-class-badge.md) | 给 `@objc @implementation` 实现的 ObjC 类加粉色角标 | Accepted | SE-0436 的 `@objc @implementation` 产出的是纯 ObjC 类，拿不到桥出 Swift 类那个蓝色 `C` 角标，在列表里和 clang 类无从分辨。接 MachOSwiftSection 的 `ObjCImplementationClasses` 识别这类类，`RuntimeObject.Properties` 新增一位驱动一个粉色 `C` 角标，两种角标互斥；Sidebar 与 Inspector 两个面板统一走新的 `secondaryIcon(for:)`。 |
+| [draft](draft-runtime-object-identity.md) | RuntimeObject 的相等性只表达身份 | Accepted | `RuntimeObject.==` 现在比较全部存储属性，于是代码里九处问「是不是同一个类型」的比较全部得到错误答案（跳转后 sidebar 不高亮、历史栈重复入栈、面板无谓重取）。把 `==` / `hash` / `Identifiable.id` 改成只看 `RuntimeObjectKey` 的 `(imagePath, name, kind)`，「内容变了没」搬到显式的 `hasSameContent(as:)`。改动靠先落地的 characterization 测试兜底——语义翻转是静默的，编译器不报错。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
