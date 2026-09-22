@@ -23,7 +23,7 @@ public final class InspectorSwiftSpecializationCellViewModel: NSObject, @uncheck
         let iconSize = RuntimeObjectIcon.defaultIconSize
         var composedAppearance = RuntimeObjectCellAppearance(
             primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
-            secondaryIcon: runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) },
+            secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
             title: NSAttributedString {
                 AText(runtimeObject.displayName)
                     .foregroundColor(.labelColor)

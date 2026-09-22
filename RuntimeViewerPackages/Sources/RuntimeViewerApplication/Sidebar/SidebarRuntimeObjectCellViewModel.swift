@@ -384,7 +384,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         let iconSize = forOpenQuickly ? 24 : RuntimeObjectIcon.defaultIconSize
         var refreshedAppearance = RuntimeObjectCellAppearance(
             primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
-            secondaryIcon: runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) },
+            secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
             title: composedTitle()
         )
 

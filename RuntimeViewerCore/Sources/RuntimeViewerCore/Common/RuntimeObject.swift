@@ -18,6 +18,16 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// non-nil `metadata` and is rendered with concrete generic arguments
         /// substituted in.
         public static let isSpecialized = Self(rawValue: 1 << 1)
+
+        /// Marks an Objective-C class whose implementation is written in Swift
+        /// as an `@objc @implementation extension` (SE-0436). The compiler
+        /// emits such a class as a PURE Objective-C class — the Swift bit of
+        /// its class data pointer is clear — so it never gets the
+        /// `secondaryKind == .swift(.type(.class))` a bridged Swift class
+        /// carries. The two are mutually exclusive for that reason, and the
+        /// badge they drive is picked in one place:
+        /// `RuntimeObjectIcon.secondaryIcon(for:)`.
+        public static let isObjCImplementation = Self(rawValue: 1 << 2)
     }
 
     public let name: String

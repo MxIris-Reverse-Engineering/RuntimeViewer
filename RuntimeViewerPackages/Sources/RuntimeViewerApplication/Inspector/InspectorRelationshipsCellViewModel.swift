@@ -24,7 +24,7 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
         let iconSize: CGFloat = 20
         var composedAppearance = RuntimeObjectCellAppearance(
             primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
-            secondaryIcon: runtimeObject.secondaryKind.map { RuntimeObjectIcon.icon(for: $0, size: iconSize) },
+            secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
             title: NSAttributedString {
                 AText(runtimeObject.displayName)
                     .foregroundColor(.labelColor)

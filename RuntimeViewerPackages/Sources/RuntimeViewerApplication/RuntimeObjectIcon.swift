@@ -92,8 +92,30 @@ public enum RuntimeObjectIcon {
         return icon(text: "Sp", color: .pink, size: size, style: style)
     }
 
+    /// The badge for an Objective-C class implemented in Swift through
+    /// SE-0436's `@objc @implementation extension`. Pink `C` against the blue
+    /// `C` a bridged Swift class gets, because the two say different things:
+    /// a bridged class is a Swift class the ObjC runtime can see, while this
+    /// one is a real ObjC class whose header is still ObjC and whose bodies
+    /// happen to be Swift.
+    public static func iconForObjCImplementation(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
+        return icon(text: "C", color: .pink, size: size, style: style)
+    }
+
     public static func icon(for kind: RuntimeObjectKind, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         let (text, color) = iconInfo(for: kind)
         return icon(text: text, color: color, size: size, style: style)
+    }
+
+    /// The badge that sits beside `icon(for: object.kind)`. An ObjC class
+    /// reaches it two ways and they are mutually exclusive — the Swift bit of
+    /// a class data pointer is either set (a bridged Swift class, blue `C`)
+    /// or clear (possibly an `@objc @implementation`, pink `C`) — so the
+    /// choice is made here, once, rather than at each call site.
+    public static func secondaryIcon(for object: RuntimeObject, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage? {
+        if object.properties.contains(.isObjCImplementation) {
+            return iconForObjCImplementation(size: size, style: style)
+        }
+        return object.secondaryKind.map { icon(for: $0, size: size, style: style) }
     }
 }

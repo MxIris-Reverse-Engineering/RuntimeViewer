@@ -6,6 +6,7 @@ import ObjCTypeDecodeKit
 import OrderedCollections
 private import RuntimeViewerObjC
 import Semantic
+import SwiftInspection
 import Utilities
 import MetaCodable
 
@@ -48,6 +49,24 @@ actor RuntimeObjCSection {
     /// methods without an actor hop — `RuntimeObjCInterfaceIndexer` is
     /// `Sendable` and protects its own state with its own locks.
     nonisolated let objcIndexer: RuntimeObjCInterfaceIndexer
+
+    /// Bare names of the classes this image implements through SE-0436's
+    /// `@objc @implementation extension`. Such a class is a PURE Objective-C
+    /// class — `objcIndexer` sees it and `isSwiftStable` is false for it — so
+    /// nothing in the ObjC metadata alone tells it apart from a clang class.
+    /// MachOSwiftSection joins the ObjC classlist with the image's Swift
+    /// symbols to recognize it; both of this section's `RuntimeObject`
+    /// factories read the answer from here so the sidebar and the Inspector's
+    /// relationship rows agree.
+    ///
+    /// Lazy because the join costs a pass over the classlist: an image whose
+    /// objects are never listed never pays for it. Both evidence tiers count,
+    /// the inferred one included — a stripped image is exactly where this is
+    /// worth having, and the ivar type encodings it reads (`?` or empty) are
+    /// shapes clang never writes.
+    private lazy var objcImplementationClassNames: Set<String> = Set(
+        ObjCImplementationClasses.all(in: machO).map(\.className)
+    )
 
     init(imagePath: String, factory: RuntimeObjCSectionFactory, progressContinuation: LoadingEventContinuation? = nil) async throws {
         #log(.info, "Initializing ObjC section for image: \(imagePath, privacy: .public)")
@@ -93,7 +112,15 @@ actor RuntimeObjCSection {
 
         for className in objcIndexer.classNames {
             let isSwiftStable = objcIndexer.classGroup(forName: className)?.objcClass.isSwiftStable ?? false
-            results.append(.init(name: className, displayName: className, kind: .objc(.type(.class)), secondaryKind: isSwiftStable ? .swift(.type(.class)) : nil, imagePath: imagePath, children: []))
+            results.append(.init(
+                name: className,
+                displayName: className,
+                kind: .objc(.type(.class)),
+                secondaryKind: isSwiftStable ? .swift(.type(.class)) : nil,
+                imagePath: imagePath,
+                children: [],
+                properties: properties(forClassNamed: className, isSwiftStable: isSwiftStable)
+            ))
         }
 
         for proto in objcIndexer.protocolNames {
@@ -317,14 +344,26 @@ actor RuntimeObjCSection {
     /// this section.
     func makeRuntimeObject(forClassName className: String) -> RuntimeObject? {
         guard let classGroup = objcIndexer.classGroup(forName: className) else { return nil }
+        let isSwiftStable = classGroup.objcClass.isSwiftStable
         return RuntimeObject(
             name: className,
             displayName: className,
             kind: .objc(.type(.class)),
-            secondaryKind: classGroup.objcClass.isSwiftStable ? .swift(.type(.class)) : nil,
+            secondaryKind: isSwiftStable ? .swift(.type(.class)) : nil,
             imagePath: imagePath,
-            children: []
+            children: [],
+            properties: properties(forClassNamed: className, isSwiftStable: isSwiftStable)
         )
+    }
+
+    /// The two ways an ObjC class can turn out to be Swift underneath are
+    /// mutually exclusive: a bridged Swift class has the Swift bit set in its
+    /// class data pointer, an `@objc @implementation` one has it clear. So a
+    /// class that is already `isSwiftStable` is never looked up in the
+    /// `@implementation` index.
+    private func properties(forClassNamed className: String, isSwiftStable: Bool) -> RuntimeObject.Properties {
+        guard !isSwiftStable, objcImplementationClassNames.contains(className) else { return [] }
+        return [.isObjCImplementation]
     }
 
     /// Materialize an Objective-C protocol `RuntimeObject`. Used by the
