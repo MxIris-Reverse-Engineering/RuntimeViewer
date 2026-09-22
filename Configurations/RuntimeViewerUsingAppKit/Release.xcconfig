@@ -9,13 +9,24 @@ SMPrivilegedExecutable = $(RUNTIME_VIEWER_RELEASE_SM_PRIVILEGED_EXECUTABLE)
 // back: launchd env for the daemon, Info.plist for the app.
 RUNTIME_VIEWER_SERVICE_NAME = com.mxiris.runtimeviewer.service
 
-// Which of the two Icon Composer documents under Resources/ the app ships. ArchiveScript.sh
-// overrides it with AppIconBeta on the beta / RC channel; every other build keeps AppIcon.
-// It goes through a variable rather than overriding ASSETCATALOG_COMPILER_APPICON_NAME on the
-// xcodebuild command line, because a command-line override reaches every target in the scheme —
-// including RuntimeViewerCatalystHelper, whose AppIcon lives in its own asset catalog and has
-// no beta variant to switch to.
-RUNTIME_VIEWER_APP_ICON_NAME = AppIcon
+// Which of the Icon Composer documents under Resources/ the app ships, along two axes.
+//
+// The channel picks the base name: ArchiveScript.sh overrides RUNTIME_VIEWER_APP_ICON_BASE_NAME
+// with AppIconBeta on the beta / RC channel, and every other build keeps AppIcon. It goes
+// through a variable rather than overriding ASSETCATALOG_COMPILER_APPICON_NAME on the xcodebuild
+// command line, because a command-line override reaches every target in the scheme — including
+// RuntimeViewerCatalystHelper, whose AppIcon lives in its own asset catalog and has no beta
+// variant to switch to.
+//
+// The toolchain then picks the variant: Xcode 26's actool cannot open an Icon Composer 27
+// document at all — a top-level "features" key makes it fail with `Could not open` and write no
+// output whatsoever — so a build under Xcode 26 gets the generated AppIconXcode26 /
+// AppIconBetaXcode26 documents. An undefined RUNTIME_VIEWER_APP_ICON_VARIANT_<version> expands
+// to nothing, so Xcode 27 and everything after it get the Icon Composer 27 originals.
+// Regenerate the variants with Resources/AppIconTools/GenerateXcode26IconDocuments.swift.
+RUNTIME_VIEWER_APP_ICON_BASE_NAME = AppIcon
+RUNTIME_VIEWER_APP_ICON_VARIANT_2600 = Xcode26
+RUNTIME_VIEWER_APP_ICON_NAME = $(RUNTIME_VIEWER_APP_ICON_BASE_NAME)$(RUNTIME_VIEWER_APP_ICON_VARIANT_$(XCODE_VERSION_MAJOR))
 
 // The local-runtime XPC service this configuration embeds; feeds the app Info.plist key
 // RuntimeViewerLocalRuntimeServiceBundleIdentifier. (Debug-arm64e overrides it.)

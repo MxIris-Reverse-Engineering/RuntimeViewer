@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E918631B30611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E9186330306120AA00DCEAC1 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9186332306120AA00DCEAC1 /* RuntimeViewerCore */; };
 		E9186331306120AA00DCEAC1 /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */; };
-		E918631B30611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
 		E927C2302E9444F300084A7B /* AppIconBeta.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E9444F300084A7B /* AppIconBeta.icon */; };
 		E927C2322E9444F300084A7B /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E927C2312E9444F300084A7B /* RuntimeViewerCommunication */; };
@@ -1198,7 +1198,7 @@
 			baseConfigurationReference = E95CDA672DAA970300D97B03 /* Debug.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "$(RUNTIME_VIEWER_APP_ICON_NAME)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -1253,7 +1253,7 @@
 			baseConfigurationReference = E95CDA682DAA970900D97B03 /* Release.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "$(RUNTIME_VIEWER_APP_ICON_NAME)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -1712,7 +1712,7 @@
 			baseConfigurationReference = E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = "$(RUNTIME_VIEWER_APP_ICON_NAME)";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -2098,6 +2098,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		E910124C38FF8B6334251802 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		E9186332306120AA00DCEAC1 /* RuntimeViewerCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCore;
@@ -2105,11 +2110,6 @@
 		E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerCommunication;
-		};
-		E910124C38FF8B6334251802 /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = E9E85E6F23C412C62255F106 /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
 		};
 		E927C2312E9444F300084A7B /* RuntimeViewerCommunication */ = {
 			isa = XCSwiftPackageProductDependency;

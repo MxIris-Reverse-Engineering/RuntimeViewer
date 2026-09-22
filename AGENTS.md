@@ -94,21 +94,38 @@ serves release archives.
 
 ## App Icon
 
-Two Icon Composer documents sit side by side under `Resources/`, both in the app target's
-Resources build phase: `AppIcon.icon` and `AppIconBeta.icon`, the latter being the former plus a
-BETA badge lifted from Xcode's own icon. Which one ships is decided by
-`RUNTIME_VIEWER_APP_ICON_NAME`, defined in the app's Debug / Release xcconfigs and feeding
-`ASSETCATALOG_COMPILER_APPICON_NAME`. `ArchiveScript.sh` overrides it with `AppIconBeta` when the
-release channel is `beta` (inferred from a `-beta` / `-RC` / `-alpha` version tag); everything
-else — local Debug builds included — gets `AppIcon`. The indirection exists because a plain
-`ASSETCATALOG_COMPILER_APPICON_NAME=` override on the `xcodebuild` command line reaches every
-target in the scheme, including `RuntimeViewerCatalystHelper`, whose icon lives in its own asset
-catalog and has no beta variant.
+Four Icon Composer documents sit under `Resources/`, all four in the app target's Resources build
+phase. Two axes pick the one that ships, and both reach `ASSETCATALOG_COMPILER_APPICON_NAME`
+through `RUNTIME_VIEWER_APP_ICON_NAME` in the app's Debug / Release xcconfigs:
+
+- **Channel** — `AppIcon` versus `AppIconBeta`, the latter being the former plus a BETA badge
+  lifted from Xcode's own icon. `ArchiveScript.sh` overrides `RUNTIME_VIEWER_APP_ICON_BASE_NAME`
+  with `AppIconBeta` when the release channel is `beta` (inferred from a `-beta` / `-RC` /
+  `-alpha` version tag); everything else — local Debug builds included — gets `AppIcon`. The
+  indirection exists because a plain `ASSETCATALOG_COMPILER_APPICON_NAME=` override on the
+  `xcodebuild` command line reaches every target in the scheme, including
+  `RuntimeViewerCatalystHelper`, whose icon lives in its own asset catalog and has no beta
+  variant.
+- **Toolchain** — the originals versus their `Xcode26` variants. **Xcode 26's actool cannot open
+  an Icon Composer 27 document at all**: a top-level `"features"` key makes it fail with
+  `Could not open "…"` and write no output whatsoever — no icns, no `Assets.car`, no partial
+  `Info.plist`. A build under Xcode 26 therefore gets `AppIconXcode26.icon` /
+  `AppIconBetaXcode26.icon`, selected by
+  `RUNTIME_VIEWER_APP_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`, which is undefined for 2700 and
+  later — so every Xcode after 26 gets the originals.
+
+**Edit the originals, then regenerate the pair in the same commit.** `AppIcon.icon` and
+`AppIconBeta.icon` are the Icon Composer 27 documents to open and edit; `AppIconXcode26.icon` and
+`AppIconBetaXcode26.icon` come out of
+`swift Resources/AppIconTools/GenerateXcode26IconDocuments.swift`, run from the repository root.
+Background: evolution 0020.
 
 **`actool` fails silently here.** Ask for an app icon that is not among its inputs and it exits 0
 with an *empty* partial `Info.plist`: no error, no icon, a shipped app with a blank tile. That is
 why `ArchiveScript.sh` re-reads `CFBundleIconName` out of the exported bundle and fails the run
-when it does not match the channel.
+when it does not match the name the channel and the toolchain imply. That check restates the
+xcconfig's rule in shell on purpose: two independent derivations, so getting either one wrong
+fails the archive instead of shipping the wrong icon.
 
 **The badge borrows Xcode's shapes, not its colours.** Both SVGs come from Xcode's own `.icon`,
 but the pale glass lozenge was replaced by the disc's near-black with a white wordmark, so the
@@ -119,8 +136,15 @@ that group: Xcode's wordmark layer uses the `multiply` blend mode, which renders
 existed only to lift the pale glass in dark appearance, was deleted rather than left at zero
 opacity.
 
-Three things to know before editing either document:
+Four things to know before editing any of them:
 
+- **Never use `stroke` in these SVG assets.** Icon Composer's SVG pipeline through Icon Composer
+  1.6 ignores `stroke` and fills the shape instead, so a `fill="none"` ring renders as a solid
+  disc. `DiscOutline.svg` and `Magnifier.svg` were stroked until 2026-09-21 and covered the whole
+  foreground on macOS 26 while looking perfectly correct in Icon Composer 27. Convert strokes to
+  filled outlines — and remember a `round` line cap extends the line by half the stroke width at
+  each end, which the outline has to reproduce.
+  `Documentations/ResolvedIssues/2026-09-21-icon-strokes-rendered-as-fills.md`
 - **Four visible groups is a hard ceiling** — `actool` rejects a fifth with
   `Too many visible groups`. `AppIconBeta.icon` already uses all four, so adding a layer group
   means merging two existing ones first.

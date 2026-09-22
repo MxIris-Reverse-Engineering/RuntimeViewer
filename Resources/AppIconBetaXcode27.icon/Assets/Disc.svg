@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Translucent disc the code listing shows through. Geometry measured off the original
+     824x824 bitmap foreground: centre (411.5, 412.5), fill reaching the outline's centreline
+     at r=216.75, colour rgba(12, 12, 12, 0.753). The outline lives in DiscOutline.svg so the
+     two can carry separate appearance fills. -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 824 824">
+ <circle cx="411.5" cy="412.5" r="216.75" fill="#0C0C0C" fill-opacity="0.753"/>
+</svg>

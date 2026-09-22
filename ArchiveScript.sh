@@ -323,19 +323,33 @@ COMMON_XCODEBUILD_SETTINGS=(
     "RUNTIME_VIEWER_GIT_COMMIT=$GIT_COMMIT"
 )
 
-# Pre-release builds ship the BETA-badged icon. Both Resources/AppIcon.icon and
-# Resources/AppIconBeta.icon are resources of the app target; RUNTIME_VIEWER_APP_ICON_NAME feeds
-# the app target's ASSETCATALOG_COMPILER_APPICON_NAME, and
-# ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS=NO (already set in the project) keeps the
-# unselected one out of the bundle. Overriding ASSETCATALOG_COMPILER_APPICON_NAME directly would
-# also hit RuntimeViewerCatalystHelper, which has no beta variant of its own icon.
+# Pre-release builds ship the BETA-badged icon. All four Icon Composer documents under
+# Resources/ are resources of the app target; RUNTIME_VIEWER_APP_ICON_BASE_NAME reaches the app
+# target's ASSETCATALOG_COMPILER_APPICON_NAME through the xcconfig, which appends the toolchain
+# variant suffix, and ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS=NO (already set in the
+# project) keeps the unselected ones out of the bundle. Overriding
+# ASSETCATALOG_COMPILER_APPICON_NAME directly would also hit RuntimeViewerCatalystHelper, which
+# has no beta variant of its own icon.
 MAIN_APP_XCODEBUILD_SETTINGS=("${COMMON_XCODEBUILD_SETTINGS[@]}")
+APP_ICON_BASE_NAME="AppIcon"
 if [[ "$CHANNEL" == "beta" ]]; then
-    MAIN_APP_XCODEBUILD_SETTINGS+=("RUNTIME_VIEWER_APP_ICON_NAME=AppIconBeta")
+    APP_ICON_BASE_NAME="AppIconBeta"
+    MAIN_APP_XCODEBUILD_SETTINGS+=("RUNTIME_VIEWER_APP_ICON_BASE_NAME=$APP_ICON_BASE_NAME")
 fi
 
+# Restates the xcconfig's toolchain rule independently, so that the exported-bundle check below
+# catches a build whose icon did not resolve the way this archive expects. Xcode 26's actool
+# cannot open an Icon Composer 27 document — it fails with `Could not open` and writes nothing —
+# so builds under it get the generated AppIconXcode26 / AppIconBetaXcode26 documents instead.
+XCODE_MAJOR_VERSION=$(xcodebuild -version 2>/dev/null | sed -n '1s/^Xcode \([0-9]*\).*/\1/p')
+APP_ICON_VARIANT_SUFFIX=""
+if [[ "$XCODE_MAJOR_VERSION" == "26" ]]; then
+    APP_ICON_VARIANT_SUFFIX="Xcode26"
+fi
+EXPECTED_APP_ICON="${APP_ICON_BASE_NAME}${APP_ICON_VARIANT_SUFFIX}"
+
 log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
-log "app_icon=$([[ "$CHANNEL" == "beta" ]] && echo AppIconBeta || echo AppIcon)"
+log "app_icon=$EXPECTED_APP_ICON (xcode=${XCODE_MAJOR_VERSION:-unknown})"
 
 log "Archiving Catalyst helper"
 XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
@@ -421,8 +435,6 @@ APP_PATH=$(find "$EXPORT_PATH" -maxdepth 1 -type d -name '*.app' | head -1)
 # writes an *empty* partial Info.plist: no error, no icon. A mis-wired AppIconBeta would
 # therefore ship as an app with no icon at all rather than failing the build.
 if ! $DRY_RUN; then
-    EXPECTED_APP_ICON="AppIcon"
-    [[ "$CHANNEL" == "beta" ]] && EXPECTED_APP_ICON="AppIconBeta"
     EXPORTED_APP_ICON=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$APP_PATH/Contents/Info.plist" 2>/dev/null || true)
     [[ "$EXPORTED_APP_ICON" == "$EXPECTED_APP_ICON" ]] \
         || fail "exported app icon is '${EXPORTED_APP_ICON:-<none>}', expected '$EXPECTED_APP_ICON'. Check that Resources/${EXPECTED_APP_ICON}.icon is in the app target's Resources build phase."

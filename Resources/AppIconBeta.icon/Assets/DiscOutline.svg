@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- White ring around the disc. Measured off the original bitmap: outer radius 225, stroke
-     width 16.5, so the stroke centreline sits at r=216.75 and matches Disc.svg's fill edge. -->
+     width 16.5, so the ring's centreline sits at r=216.75 and matches Disc.svg's fill edge.
+
+     Written as a filled two-circle path rather than a stroked circle, because Icon Composer's
+     SVG pipeline through Icon Composer 1.6 / Xcode 26 ignores `stroke` and fills the shape
+     instead: this ring rendered as a solid white disc that covered Disc.svg underneath. Icon
+     Composer 27 handles the stroke correctly, which is why the defect only ever showed on
+     macOS 26. Filled paths render identically on both.
+     See Documentations/ResolvedIssues/2026-09-21-icon-strokes-rendered-as-fills.md -->
 <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 824 824">
- <circle cx="411.5" cy="412.5" r="216.75" fill="none" stroke="#FCFCFC" stroke-width="16.5"/>
+ <path fill="#FCFCFC" fill-rule="evenodd" d="M186.5,412.5 A225,225 0 1,0 636.5,412.5 A225,225 0 1,0 186.5,412.5 Z M203,412.5 A208.5,208.5 0 1,0 620,412.5 A208.5,208.5 0 1,0 203,412.5 Z"/>
 </svg>
