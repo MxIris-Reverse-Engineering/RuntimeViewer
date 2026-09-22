@@ -172,7 +172,7 @@ public actor RuntimeEngine {
 
     /// Publisher that emits engine state changes.
     public nonisolated var statePublisher: some Publisher<State, Never> {
-        stateSubject.eraseToAnyPublisher()
+        stateSubject
     }
 
     /// The current engine state.
@@ -194,14 +194,14 @@ public actor RuntimeEngine {
 
     /// Publisher that emits image node changes. Accessible from any isolation context.
     public nonisolated var imageNodesPublisher: some Publisher<[RuntimeImageNode], Never> {
-        imageNodesSubject.eraseToAnyPublisher()
+        imageNodesSubject
     }
 
     /// Fine-grained data-change events. Prefer this over `reloadDataPublisher`
     /// when the consumer can apply incremental updates (e.g. the sidebar
     /// inserting a single specialized child rather than rebuilding its tree).
     public nonisolated var dataChangePublisher: some Publisher<RuntimeDataChange, Never> {
-        dataChangeSubject.eraseToAnyPublisher()
+        dataChangeSubject
     }
 
     private nonisolated let dataChangeSubject = PassthroughSubject<RuntimeDataChange, Never>()
@@ -215,7 +215,6 @@ public actor RuntimeEngine {
                 if case .fullReload = change { return () }
                 return nil
             }
-            .eraseToAnyPublisher()
     }
 
     /// Publisher that emits the image path each time `loadImage(at:)` succeeds.
@@ -228,7 +227,7 @@ public actor RuntimeEngine {
     /// Marked `nonisolated` so subscribers (including Combine sinks in tests
     /// and downstream coordinators) can attach without an actor hop.
     public nonisolated var imageDidLoadPublisher: some Publisher<String, Never> {
-        imageDidLoadSubject.eraseToAnyPublisher()
+        imageDidLoadSubject
     }
 
     private nonisolated let imageDidLoadSubject = PassthroughSubject<String, Never>()

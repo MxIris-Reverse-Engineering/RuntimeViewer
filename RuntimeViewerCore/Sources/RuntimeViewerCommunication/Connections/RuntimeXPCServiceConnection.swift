@@ -4,6 +4,7 @@ public import Foundation
 import FoundationToolbox
 public import Combine
 import SwiftyXPC
+public import HelperCommunication
 
 // MARK: - Target
 

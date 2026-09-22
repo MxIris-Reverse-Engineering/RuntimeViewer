@@ -55,8 +55,8 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
-    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
-        stateSubject.eraseToAnyPublisher()
+    var statePublisher: some Publisher<RuntimeConnectionState, Never> {
+        stateSubject
     }
 
     var state: RuntimeConnectionState {
@@ -296,7 +296,9 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
 ///
 /// - Note: The endpoint is typically obtained from `RuntimeNetworkBrowser`.
 final class RuntimeNetworkClientConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    private(set) var underlyingConnection: RuntimeNetworkConnection?
+    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+
+    private var _underlyingConnection: RuntimeNetworkConnection?
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
@@ -319,7 +321,7 @@ final class RuntimeNetworkClientConnection: RuntimeForwardingConnection, @unchec
     /// - Throws: `RuntimeNetworkError` if connection cannot be established.
     init(endpoint: RuntimeNetworkEndpoint) throws {
         let connection = try RuntimeNetworkConnection(endpoint: endpoint.endpoint)
-        self.underlyingConnection = connection
+        self._underlyingConnection = connection
         self.underlyingStateCancellable = connection.statePublisher
             .sink { [weak self] connectionState in
                 self?.stateSubject.send(connectionState)
@@ -348,7 +350,9 @@ final class RuntimeNetworkClientConnection: RuntimeForwardingConnection, @unchec
 /// - Note: The server automatically restarts listening after a client disconnects.
 @Loggable
 final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    private(set) var underlyingConnection: RuntimeNetworkConnection?
+    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+
+    private var _underlyingConnection: RuntimeNetworkConnection?
 
     private var listener: NWListener?
     private var connectionStateCancellable: AnyCancellable?
@@ -517,7 +521,7 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
 
                 do {
                     let connection = try RuntimeNetworkConnection(connection: newConnection)
-                    self.underlyingConnection = connection
+                    self._underlyingConnection = connection
 
                     // Observe connection state
                     self.connectionStateCancellable = connection.statePublisher
@@ -619,7 +623,7 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
 
             do {
                 let connection = try RuntimeNetworkConnection(connection: newConnection)
-                self.underlyingConnection = connection
+                self._underlyingConnection = connection
 
                 self.connectionStateCancellable = connection.statePublisher
                     .sink { [weak self] state in
@@ -650,7 +654,7 @@ final class RuntimeNetworkServerConnection: RuntimeForwardingConnection, @unchec
         #log(.info, "Stopping Bonjour server connection")
         connectionStateCancellable?.cancel()
         connectionStateCancellable = nil
-        underlyingConnection?.stop()
+        _underlyingConnection?.stop()
         listener?.cancel()
         listener = nil
         stateSubject.send(.disconnected(error: nil))

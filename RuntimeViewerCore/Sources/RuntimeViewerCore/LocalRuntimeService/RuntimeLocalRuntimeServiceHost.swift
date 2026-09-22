@@ -1,6 +1,6 @@
 #if os(macOS)
 
-public import Foundation
+import Foundation
 import Combine
 public import FoundationToolbox
 public import RuntimeViewerCommunication

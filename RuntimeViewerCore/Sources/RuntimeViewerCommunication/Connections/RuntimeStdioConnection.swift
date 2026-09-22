@@ -93,8 +93,8 @@ final class RuntimeStdioConnection: RuntimeUnderlyingConnection, @unchecked Send
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
-    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
-        stateSubject.eraseToAnyPublisher()
+    var statePublisher: some Publisher<RuntimeConnectionState, Never> {
+        stateSubject
     }
 
     var state: RuntimeConnectionState {
@@ -322,7 +322,9 @@ enum RuntimeStdioError: Error, LocalizedError, Sendable {
 /// let result: String = try await client.sendMessage(name: "echo", request: "hello")
 /// ```
 final class RuntimeStdioClientConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    private(set) var underlyingConnection: RuntimeStdioConnection?
+    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+
+    private var _underlyingConnection: RuntimeStdioConnection?
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
@@ -347,7 +349,7 @@ final class RuntimeStdioClientConnection: RuntimeForwardingConnection, @unchecke
     /// - Throws: `RuntimeStdioError` if connection cannot be started.
     init(inputHandle: FileHandle, outputHandle: FileHandle) throws {
         let connection = RuntimeStdioConnection(inputHandle: inputHandle, outputHandle: outputHandle)
-        self.underlyingConnection = connection
+        self._underlyingConnection = connection
         self.underlyingStateCancellable = connection.statePublisher
             .sink { [weak self] connectionState in
                 self?.stateSubject.send(connectionState)
@@ -384,7 +386,9 @@ final class RuntimeStdioClientConnection: RuntimeForwardingConnection, @unchecke
 /// RunLoop.main.run()
 /// ```
 final class RuntimeStdioServerConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    private(set) var underlyingConnection: RuntimeStdioConnection?
+    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+
+    private var _underlyingConnection: RuntimeStdioConnection?
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
@@ -409,7 +413,7 @@ final class RuntimeStdioServerConnection: RuntimeForwardingConnection, @unchecke
     /// - Throws: `RuntimeStdioError` if connection cannot be started.
     init(inputHandle: FileHandle, outputHandle: FileHandle) throws {
         let connection = RuntimeStdioConnection(inputHandle: inputHandle, outputHandle: outputHandle)
-        self.underlyingConnection = connection
+        self._underlyingConnection = connection
         self.underlyingStateCancellable = connection.statePublisher
             .sink { [weak self] connectionState in
                 self?.stateSubject.send(connectionState)

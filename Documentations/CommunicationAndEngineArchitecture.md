@@ -149,6 +149,8 @@ RuntimeConnection (protocol, associatedtype StatePublisher)
 │       转发给 underlyingConnection（协议只要求 { get }）
 │     · underlyingConnection 负责真正的收发 + RuntimeMessageChannel 组帧
 │     · 各实现类自持 private stateSubject，以 some Publisher 作 witness
+│     · underlyingConnection 同样只以 (some RuntimeUnderlyingConnection)? 作 witness，
+│       具体传输类型仅存在于各实现类的 private _underlyingConnection
 │     │
 │     ├── RuntimeNetworkClient/ServerConnection      → RuntimeNetworkConnection
 │     ├── RuntimeLocalSocketClient/ServerConnection  → RuntimeLocalSocketConnection

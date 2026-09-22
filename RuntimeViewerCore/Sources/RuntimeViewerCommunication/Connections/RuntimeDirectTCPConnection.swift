@@ -69,8 +69,8 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
-    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
-        stateSubject.eraseToAnyPublisher()
+    var statePublisher: some Publisher<RuntimeConnectionState, Never> {
+        stateSubject
     }
 
     var state: RuntimeConnectionState {
@@ -319,7 +319,9 @@ final class RuntimeDirectTCPConnection: RuntimeUnderlyingConnection, @unchecked 
 /// ```
 @Loggable
 final class RuntimeDirectTCPClientConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    private(set) var underlyingConnection: RuntimeDirectTCPConnection?
+    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+
+    private var _underlyingConnection: RuntimeDirectTCPConnection?
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
@@ -348,7 +350,7 @@ final class RuntimeDirectTCPClientConnection: RuntimeForwardingConnection, @unch
         #log(.info, "Connecting to direct TCP server at \(host, privacy: .public):\(port, privacy: .public) (timeout: \(timeout, privacy: .public)s)")
 
         let connection = RuntimeDirectTCPConnection(host: host, port: port)
-        self.underlyingConnection = connection
+        self._underlyingConnection = connection
         self.underlyingStateCancellable = connection.statePublisher
             .sink { [weak self] connectionState in
                 self?.stateSubject.send(connectionState)
@@ -421,7 +423,7 @@ final class RuntimeDirectTCPClientConnection: RuntimeForwardingConnection, @unch
     func stop() {
         connectionStateCancellable?.cancel()
         connectionStateCancellable = nil
-        underlyingConnection?.stop()
+        _underlyingConnection?.stop()
     }
 }
 
@@ -446,7 +448,9 @@ final class RuntimeDirectTCPClientConnection: RuntimeForwardingConnection, @unch
 /// ```
 @Loggable
 final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    private(set) var underlyingConnection: RuntimeDirectTCPConnection?
+    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+
+    private var _underlyingConnection: RuntimeDirectTCPConnection?
 
     private var listener: NWListener?
     private var connectionStateCancellable: AnyCancellable?
@@ -550,7 +554,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unch
                 #log(.info, "Accepted new direct TCP connection: \(newConnection.debugDescription, privacy: .public)")
 
                 let tcpConnection = RuntimeDirectTCPConnection(connection: newConnection)
-                self.underlyingConnection = tcpConnection
+                self._underlyingConnection = tcpConnection
 
                 // Observe connection state
                 self.connectionStateCancellable = tcpConnection.statePublisher
@@ -650,7 +654,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unch
             #log(.info, "Accepted new direct TCP connection after restart: \(newConnection.debugDescription, privacy: .public)")
 
             let tcpConnection = RuntimeDirectTCPConnection(connection: newConnection)
-            self.underlyingConnection = tcpConnection
+            self._underlyingConnection = tcpConnection
 
             self.connectionStateCancellable = tcpConnection.statePublisher
                 .sink { [weak self] state in
@@ -688,7 +692,7 @@ final class RuntimeDirectTCPServerConnection: RuntimeForwardingConnection, @unch
         #log(.info, "Stopping direct TCP server on \(self.host, privacy: .public):\(self.port, privacy: .public)")
         connectionStateCancellable?.cancel()
         connectionStateCancellable = nil
-        underlyingConnection?.stop()
+        _underlyingConnection?.stop()
         listener?.cancel()
         listener = nil
         stateSubject.send(.disconnected(error: nil))

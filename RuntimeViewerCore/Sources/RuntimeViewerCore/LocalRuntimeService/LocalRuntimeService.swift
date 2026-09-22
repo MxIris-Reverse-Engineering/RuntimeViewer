@@ -1,4 +1,4 @@
-public import Foundation
+import Foundation
 public import RuntimeViewerCommunication
 
 /// The local-runtime XPC service, as seen from the process that ships it.

@@ -102,8 +102,8 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
 
     private let stateSubject = CurrentValueSubject<RuntimeConnectionState, Never>(.connecting)
 
-    var statePublisher: AnyPublisher<RuntimeConnectionState, Never> {
-        stateSubject.eraseToAnyPublisher()
+    var statePublisher: some Publisher<RuntimeConnectionState, Never> {
+        stateSubject
     }
 
     var state: RuntimeConnectionState {
@@ -532,7 +532,9 @@ enum RuntimeLocalSocketPortDiscovery {
 ///   to compute the deterministic port number.
 @Loggable
 final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    private(set) var underlyingConnection: RuntimeLocalSocketConnection?
+    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+
+    private var _underlyingConnection: RuntimeLocalSocketConnection?
 
     private let identifier: String
     private let port: UInt16
@@ -595,7 +597,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
         while Date().timeIntervalSince(startTime) < timeout {
             do {
                 let connection = try RuntimeLocalSocketConnection(port: port)
-                self.underlyingConnection = connection
+                self._underlyingConnection = connection
                 applyPendingHandlers(to: connection)
                 observeUnderlyingConnectionState(connection)
                 try connection.start()
@@ -620,7 +622,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
         self.port = port
 
         let connection = try RuntimeLocalSocketConnection(port: port)
-        self.underlyingConnection = connection
+        self._underlyingConnection = connection
         applyPendingHandlers(to: connection)
         observeUnderlyingConnectionState(connection)
         try connection.start()
@@ -637,7 +639,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -650,7 +652,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -662,7 +664,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -674,7 +676,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -686,7 +688,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -750,8 +752,8 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
 
             do {
                 let newConnection = try RuntimeLocalSocketConnection(port: port)
-                self.underlyingConnection?.stop()
-                self.underlyingConnection = newConnection
+                self._underlyingConnection?.stop()
+                self._underlyingConnection = newConnection
                 applyPendingHandlers(to: newConnection)
                 observeUnderlyingConnectionState(newConnection)
                 try newConnection.start()
@@ -773,7 +775,7 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
             current?.cancel()
             current = nil
         }
-        underlyingConnection?.stop()
+        _underlyingConnection?.stop()
         stateSubject.send(.disconnected(error: nil))
     }
 
@@ -832,7 +834,9 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
 ///   to compute the deterministic port number.
 @Loggable
 final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @unchecked Sendable {
-    private(set) var underlyingConnection: RuntimeLocalSocketConnection?
+    var underlyingConnection: (some RuntimeUnderlyingConnection)? { _underlyingConnection }
+
+    private var _underlyingConnection: RuntimeLocalSocketConnection?
 
     private var serverSocketFD: Int32 = -1
     private let identifier: String
@@ -896,7 +900,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -909,7 +913,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -921,7 +925,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -933,7 +937,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -945,7 +949,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
             }
         }
         pendingHandlers.append(setupHandler)
-        if let connection = underlyingConnection {
+        if let connection = _underlyingConnection {
             setupHandler(connection)
         }
     }
@@ -1050,7 +1054,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
         setsockopt(clientFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
 
         let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD)
-        self.underlyingConnection = socketConnection
+        self._underlyingConnection = socketConnection
 
         // Apply all pending message handlers to the new connection
         applyPendingHandlers(to: socketConnection)
@@ -1092,7 +1096,7 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
             current?.cancel()
             current = nil
         }
-        underlyingConnection?.stop()
+        _underlyingConnection?.stop()
         if serverSocketFD >= 0 {
             // shutdown() before close() to unblock accept() on the background accept loop.
             shutdown(serverSocketFD, SHUT_RDWR)
