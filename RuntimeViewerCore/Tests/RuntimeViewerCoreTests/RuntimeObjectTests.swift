@@ -237,7 +237,7 @@ struct RuntimeObjectTests {
     func codable() throws {
         let original = RuntimeObject(
             name: "NSView",
-            displayName: "NSView",
+            displayName: "AppKit.NSView",
             kind: .objc(.type(.class)),
             imagePath: "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit",
             children: [
@@ -251,6 +251,9 @@ struct RuntimeObjectTests {
         let decoded = try decoder.decode(RuntimeObject.self, from: data)
 
         #expect(decoded == original)
+        // `==` compares identity only, so it cannot notice `displayName`,
+        // `properties` or a child lost on the way; this can.
+        #expect(decoded.hasSameContent(as: original))
         #expect(decoded.name == "NSView")
         #expect(decoded.properties == [.isSwiftClass])
         #expect(decoded.children.count == 1)

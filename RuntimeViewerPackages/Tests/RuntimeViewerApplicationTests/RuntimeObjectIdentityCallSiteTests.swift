@@ -161,12 +161,20 @@ struct RuntimeObjectIdentityCallSiteTests {
         #expect(!plain.isContentEqual(to: bridged))
     }
 
+    /// Compared against a copy that keeps the children, so the generic badge
+    /// is the only difference.
     @Test("inspector specialization cell reports a properties-only difference as changed content")
     func specializationCellSeesPropertiesChange() {
-        let plain = InspectorSwiftSpecializationCellViewModel(runtimeObject: Self.payloadWithoutChildren)
-        let specialized = InspectorSwiftSpecializationCellViewModel(runtimeObject: Self.authoritativeWithChildren)
+        let generic = InspectorSwiftSpecializationCellViewModel(runtimeObject: Self.authoritativeWithChildren)
+        let unmarked = InspectorSwiftSpecializationCellViewModel(
+            runtimeObject: Fixtures.runtimeObject(
+                name: "Box",
+                kind: .swift(.type(.struct)),
+                children: Self.authoritativeWithChildren.children
+            )
+        )
 
-        #expect(!plain.isContentEqual(to: specialized))
+        #expect(!generic.isContentEqual(to: unmarked))
     }
 
     // MARK: - differenceIdentifier
