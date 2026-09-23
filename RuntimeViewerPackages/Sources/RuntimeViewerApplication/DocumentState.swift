@@ -87,7 +87,8 @@ public final class DocumentState {
     /// a tab switch, `.openInNewTab`, `.newTab`) truncates the forward
     /// portion first (browser-style) so a new branch overwrites the
     /// abandoned future. Consecutive duplicates are collapsed: reaching
-    /// the object already at the top only moves the cursor.
+    /// the type already at the top only moves the cursor, though the entry
+    /// takes on the form just reached when that form differs.
     ///
     /// The timeline is deliberately independent of the tab strip: it
     /// survives tab switches and closes, and it may retain objects whose
@@ -366,11 +367,22 @@ private final class SelectionRouter: Router {
     }
 
     /// Records viewing `object` on the timeline: truncates the forward
-    /// branch, appends the entry unless it already sits at the top
+    /// branch, appends the entry unless the same type already sits at the top
     /// (consecutive duplicates only move the cursor), and shows it.
+    ///
+    /// A duplicate still replaces the top entry when it arrives in another
+    /// form — the sidebar's object after a link payload, or the reverse — so
+    /// the entry holds what is on screen. Keeping the first form instead would
+    /// have back / forward restore a form the user has already navigated away
+    /// from, with whatever `displayName` and `properties` it carried.
     private func pushOntoTimeline(_ object: RuntimeObject) {
         truncateForwardBranch()
-        if documentState.selectionStack.last != object {
+        let selectionStack = documentState.selectionStack
+        if let topEntry = selectionStack.last, topEntry == object {
+            if !topEntry.hasSameContent(as: object) {
+                documentState.selectionStack[selectionStack.count - 1] = object
+            }
+        } else {
             documentState.selectionStack.append(object)
         }
         documentState.selectionIndex = documentState.selectionStack.count - 1
@@ -401,12 +413,20 @@ private final class SelectionRouter: Router {
 
     /// Writes the current `selectedRuntimeObject` through to the active tab, so
     /// the active tab's title tracks navigation. No-op (no emission) when the
-    /// object is already in sync.
+    /// tab already holds that object in that state. Compared by content, not
+    /// identity: the same type arriving in another form carries another
+    /// `displayName` for the title and other `properties` for the panes a tab
+    /// switch hands it back to.
     private func syncActiveTabObject() {
         let index = documentState.activeTabIndex
         guard index >= 0, index < documentState.tabs.count else { return }
         let currentObject = documentState.selectedRuntimeObject
-        guard documentState.tabs[index].object != currentObject else { return }
+        let isInSync = switch (documentState.tabs[index].object, currentObject) {
+        case (nil, nil): true
+        case (let tabObject?, let selectedObject?): tabObject.hasSameContent(as: selectedObject)
+        default: false
+        }
+        guard !isInSync else { return }
         documentState.tabs[index].object = currentObject
     }
 }
