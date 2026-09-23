@@ -100,7 +100,7 @@ extension SemanticString {
                     displayName: string,
                     kind: targetKind,
                     imagePath: runtimeObjectName.imagePath,
-                    children: runtimeObjectName.children
+                    children: []
                 )
             }
             #endif
