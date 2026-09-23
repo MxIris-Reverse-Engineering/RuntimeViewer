@@ -1,5 +1,5 @@
 #include "../CodeSigning.xcconfig"
-//#include "../Shared/Release.xcconfig"
+#include "Shared.xcconfig"
 
 SMPrivilegedExecutable = $(RUNTIME_VIEWER_RELEASE_SM_PRIVILEGED_EXECUTABLE)
 

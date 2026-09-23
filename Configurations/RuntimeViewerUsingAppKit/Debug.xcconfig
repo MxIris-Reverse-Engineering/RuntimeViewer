@@ -1,5 +1,5 @@
 #include "../CodeSigning.xcconfig"
-//#include "../Shared/Debug.xcconfig"
+#include "Shared.xcconfig"
 
 SMPrivilegedExecutable = $(RUNTIME_VIEWER_DEBUG_SM_PRIVILEGED_EXECUTABLE)
 
@@ -42,3 +42,4 @@ RUNTIME_VIEWER_GIT_COMMIT = unknown
 // comment rule makes URL values awkward to express here.
 // Matching EdDSA private key lives in the login Keychain; see Documentations/SparkleRelease.md.
 SPARKLE_PUBLIC_ED_KEY = jlL11Arlrn0YtrQn66hxwUZeBI6dFxP2Wluq6eEYzss=
+

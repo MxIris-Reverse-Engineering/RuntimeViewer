@@ -1,8 +1,4 @@
 {
-  "features" : [
-    "refractivity",
-    "specular-location"
-  ],
   "fill" : {
     "linear-gradient" : [
       "display-p3:0.34500,0.74500,0.96100,1.00000",

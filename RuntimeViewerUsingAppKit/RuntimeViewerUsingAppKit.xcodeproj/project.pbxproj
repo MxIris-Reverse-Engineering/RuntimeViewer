@@ -10,8 +10,6 @@
 		E918631B30611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E9186330306120AA00DCEAC1 /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9186332306120AA00DCEAC1 /* RuntimeViewerCore */; };
 		E9186331306120AA00DCEAC1 /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E9186333306120AA00DCEAC1 /* RuntimeViewerCommunication */; };
-		E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22D2E9444F300084A7B /* AppIcon.icon */; };
-		E927C2302E9444F300084A7B /* AppIconBeta.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E9444F300084A7B /* AppIconBeta.icon */; };
 		E927C2322E9444F300084A7B /* RuntimeViewerCommunication in Frameworks */ = {isa = PBXBuildFile; productRef = E927C2312E9444F300084A7B /* RuntimeViewerCommunication */; };
 		E9381D032EC8BFDE007F6333 /* RuntimeViewerCatalystHelper.app in Embed Catalyst Helpers */ = {isa = PBXBuildFile; fileRef = E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E942AC882C274DF600A2F3D3 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E942AC872C274DF600A2F3D3 /* RuntimeViewerApplication */; };
@@ -25,6 +23,10 @@
 		E98BF62A2F1D4A750041DB20 /* RuntimeViewerCatalystExtensions in Frameworks */ = {isa = PBXBuildFile; productRef = E98BF6292F1D4A750041DB20 /* RuntimeViewerCatalystExtensions */; };
 		E99510F33052AA8100D3FAB2 /* RuntimeViewerCommandLineInterface in Frameworks */ = {isa = PBXBuildFile; productRef = E99510F23052AA8100D3FAB2 /* RuntimeViewerCommandLineInterface */; };
 		E99510F43052AAA700D3FAB2 /* runtime-viewer-cli in Embed RuntimeViewerCLI */ = {isa = PBXBuildFile; fileRef = E99510EA3052AA7800D3FAB2 /* runtime-viewer-cli */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		E9A2B52D306373AB00D5A652 /* AppIconBetaXcode26.icon in Resources */ = {isa = PBXBuildFile; fileRef = E9A2B52B306373AB00D5A652 /* AppIconBetaXcode26.icon */; };
+		E9A2B52E306373AB00D5A652 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E9A2B529306373AB00D5A652 /* AppIcon.icon */; };
+		E9A2B52F306373AB00D5A652 /* AppIconBeta.icon in Resources */ = {isa = PBXBuildFile; fileRef = E9A2B52A306373AB00D5A652 /* AppIconBeta.icon */; };
+		E9A2B530306373AB00D5A652 /* AppIconXcode26.icon in Resources */ = {isa = PBXBuildFile; fileRef = E9A2B52C306373AB00D5A652 /* AppIconXcode26.icon */; };
 		E9A9CCE22F5D880400A10DD3 /* RuntimeViewerService in Frameworks */ = {isa = PBXBuildFile; productRef = E9A9CCDE2F5D880400A10DD3 /* RuntimeViewerService */; };
 		E9A9CCF12F5D884900A10DD3 /* $(RUNTIME_VIEWER_SERVICE_NAME) in Embed LaunchServices */ = {isa = PBXBuildFile; fileRef = E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		E9C11D0A2FAB000000000001 /* RuntimeViewerCommandLineInterface in Frameworks */ = {isa = PBXBuildFile; productRef = E9C11D0A2FAB000000000002 /* RuntimeViewerCommandLineInterface */; };
@@ -184,8 +186,6 @@
 
 /* Begin PBXFileReference section */
 		E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = RuntimeViewerLocalRuntimeService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
-		E927C22D2E9444F300084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
-		E927C22F2E9444F300084A7B /* AppIconBeta.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconBeta.icon; path = ../Resources/AppIconBeta.icon; sourceTree = SOURCE_ROOT; };
 		E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RuntimeViewer-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerCatalystHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/RuntimeViewerService/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
@@ -197,6 +197,11 @@
 		E95ED17F0000000000000001 /* RuntimeViewerSourceEditorBridgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerSourceEditorBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = ../RuntimeViewerServer/RuntimeViewerServer.xcodeproj; sourceTree = SOURCE_ROOT; };
 		E99510EA3052AA7800D3FAB2 /* runtime-viewer-cli */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "runtime-viewer-cli"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9A2B529306373AB00D5A652 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
+		E9A2B52A306373AB00D5A652 /* AppIconBeta.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconBeta.icon; path = ../Resources/AppIconBeta.icon; sourceTree = SOURCE_ROOT; };
+		E9A2B52B306373AB00D5A652 /* AppIconBetaXcode26.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconBetaXcode26.icon; path = ../Resources/AppIconBetaXcode26.icon; sourceTree = SOURCE_ROOT; };
+		E9A2B52C306373AB00D5A652 /* AppIconXcode26.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconXcode26.icon; path = ../Resources/AppIconXcode26.icon; sourceTree = SOURCE_ROOT; };
+		E9A2B5D5306375F600D5A652 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Shared.xcconfig; path = ../Configurations/RuntimeViewerUsingAppKit/Shared.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Config.xcconfig; path = ../Configurations/RuntimeViewerService/Config.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
@@ -408,10 +413,12 @@
 		E9432FD92C0D614900362862 = {
 			isa = PBXGroup;
 			children = (
+				E9A2B529306373AB00D5A652 /* AppIcon.icon */,
+				E9A2B52A306373AB00D5A652 /* AppIconBeta.icon */,
+				E9A2B52B306373AB00D5A652 /* AppIconBetaXcode26.icon */,
+				E9A2B52C306373AB00D5A652 /* AppIconXcode26.icon */,
 				E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */,
 				E98BF5E92F1CE6810041DB20 /* RuntimeViewerServer.xcodeproj */,
-				E927C22D2E9444F300084A7B /* AppIcon.icon */,
-				E927C22F2E9444F300084A7B /* AppIconBeta.icon */,
 				E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */,
 				E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */,
 				E9DAF4962FEE740D00DD20CB /* RuntimeViewerUsingAppKit */,
@@ -498,6 +505,7 @@
 				E95CDA672DAA970300D97B03 /* Debug.xcconfig */,
 				E95CDA682DAA970900D97B03 /* Release.xcconfig */,
 				E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */,
+				E9A2B5D5306375F600D5A652 /* Shared.xcconfig */,
 			);
 			name = RuntimeViewerUsingAppKit;
 			sourceTree = "<group>";
@@ -803,8 +811,10 @@
 		E9432FE02C0D614900362862 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
-				E927C22E2E9444F300084A7B /* AppIcon.icon in Resources */,
-				E927C2302E9444F300084A7B /* AppIconBeta.icon in Resources */,
+				E9A2B52D306373AB00D5A652 /* AppIconBetaXcode26.icon in Resources */,
+				E9A2B52E306373AB00D5A652 /* AppIcon.icon in Resources */,
+				E9A2B52F306373AB00D5A652 /* AppIconBeta.icon in Resources */,
+				E9A2B530306373AB00D5A652 /* AppIconXcode26.icon in Resources */,
 			);
 		};
 		E947C3652C2A4D0400296B2E /* Resources */ = {
@@ -1198,7 +1208,6 @@
 			baseConfigurationReference = E95CDA672DAA970300D97B03 /* Debug.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -1253,7 +1262,6 @@
 			baseConfigurationReference = E95CDA682DAA970900D97B03 /* Release.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
@@ -1712,7 +1720,6 @@
 			baseConfigurationReference = E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				AUTOMATION_APPLE_EVENTS = NO;
