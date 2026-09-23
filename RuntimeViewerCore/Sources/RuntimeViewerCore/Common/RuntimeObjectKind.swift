@@ -123,8 +123,8 @@ public enum RuntimeObjectKind: Codable, Hashable, Identifiable, Comparable, Case
         }
     }
 
-    public static func < (lhs: RuntimeObjectKind, rhs: RuntimeObjectKind) -> Bool {
-        lhs.level < rhs.level
+    public static func < (leftKind: RuntimeObjectKind, rightKind: RuntimeObjectKind) -> Bool {
+        leftKind.level < rightKind.level
     }
 
     public static let allCases: [RuntimeObjectKind] = {

@@ -597,8 +597,8 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
 }
 
 extension RuntimeImageLoadState: @retroactive Equatable {
-    public static func == (lhs: RuntimeViewerCore.RuntimeImageLoadState, rhs: RuntimeViewerCore.RuntimeImageLoadState) -> Bool {
-        switch (lhs, rhs) {
+    public static func == (leftState: RuntimeViewerCore.RuntimeImageLoadState, rightState: RuntimeViewerCore.RuntimeImageLoadState) -> Bool {
+        switch (leftState, rightState) {
         case (.unknown, .unknown): return true
         case (.loaded, .loaded): return true
         case (.loading, .loading): return true

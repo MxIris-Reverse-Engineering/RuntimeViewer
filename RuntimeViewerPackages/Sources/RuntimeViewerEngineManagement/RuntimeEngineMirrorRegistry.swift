@@ -43,16 +43,16 @@ public final class RuntimeEngineMirrorRegistry {
         public struct Removal: Equatable {
             public let engineID: String
             public let engine: RuntimeEngine
-            public static func == (lhs: Removal, rhs: Removal) -> Bool {
-                lhs.engineID == rhs.engineID && lhs.engine === rhs.engine
+            public static func == (leftRemoval: Removal, rightRemoval: Removal) -> Bool {
+                leftRemoval.engineID == rightRemoval.engineID && leftRemoval.engine === rightRemoval.engine
             }
         }
 
         public struct Addition: Equatable {
             public let descriptor: RuntimeRemoteEngineDescriptor
             public let engine: RuntimeEngine
-            public static func == (lhs: Addition, rhs: Addition) -> Bool {
-                lhs.descriptor.engineID == rhs.descriptor.engineID && lhs.engine === rhs.engine
+            public static func == (leftAddition: Addition, rightAddition: Addition) -> Bool {
+                leftAddition.descriptor.engineID == rightAddition.descriptor.engineID && leftAddition.engine === rightAddition.engine
             }
         }
     }
