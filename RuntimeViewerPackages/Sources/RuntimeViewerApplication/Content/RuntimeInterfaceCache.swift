@@ -47,12 +47,10 @@ public final class RuntimeInterfaceCache {
     /// The object half is `RuntimeObjectKey` — `(imagePath, name, kind)` —
     /// not the whole `RuntimeObject`. It is the identity
     /// `RuntimeSwiftSection.interfaceByObject` already uses for the very
-    /// interfaces this cache stores, so a finer key here can only produce
-    /// misses the engine itself does not have. `RuntimeObject` additionally
-    /// folds in `children` (recursive), `displayName` and `properties`, so
-    /// the old key walked a whole subtree on every lookup, and a synthetic
-    /// link target carrying the displaying object's `children` could never
-    /// match the authoritative object it resolved to.
+    /// interfaces this cache stores, so a finer key here could only produce
+    /// misses the engine itself does not have. `RuntimeObject` compares and
+    /// hashes by the same identity, but keying on the object would keep each
+    /// entry's whole `children` subtree alive for as long as the entry lives.
     private struct Key: Hashable {
         let objectKey: RuntimeObjectKey
         let options: RuntimeObjectInterface.GenerationOptions

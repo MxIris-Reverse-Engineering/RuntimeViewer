@@ -36,12 +36,13 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
 
     public let name: String
 
-    /// The name shown to the reader. Deliberately outside identity: one
-    /// mangled `name` always prints the same `displayName`, except on the
-    /// link payloads the content pane builds, whose `displayName` is the
-    /// qualified name assembled from the tokens it spans — and those are
-    /// exactly the objects that have to compare equal to the authoritative
-    /// one they name.
+    /// The name shown to the reader. Deliberately outside identity, because
+    /// one type reaches the app under more than one printed name: the sidebar
+    /// lists a protocol nested in a type by its own short name while a jump
+    /// materializes it under its qualified one, and a link payload the content
+    /// pane builds carries the qualified name its tokens spell. Each has to
+    /// compare equal to the object it names — so nothing that decides *which*
+    /// type this is may read `displayName`; look a type up by `name`.
     public let displayName: String
 
     public let kind: RuntimeObjectKind
@@ -82,8 +83,9 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
     }
 }
 
-/// Identity is `(imagePath, name, kind)` — the same triple `RuntimeObjectKey`
-/// carries, so `a == b` and `a.key == b.key` always agree.
+/// Identity is `RuntimeObjectKey` — `(imagePath, name, kind)` — and both
+/// operators below are defined through it, so `a == b` and `a.key == b.key`
+/// agree by construction rather than by two field lists kept in step.
 ///
 /// `displayName`, `children` and `properties` are excluded on purpose: they
 /// differ between two materializations of one type, and every caller that asks
@@ -94,14 +96,12 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
 /// is also read by `@MemberwiseInit`, which then drops the annotated property
 /// from the generated initializer.
 extension RuntimeObject {
-    public static func == (lhs: RuntimeObject, rhs: RuntimeObject) -> Bool {
-        lhs.imagePath == rhs.imagePath && lhs.name == rhs.name && lhs.kind == rhs.kind
+    public static func == (leftObject: RuntimeObject, rightObject: RuntimeObject) -> Bool {
+        leftObject.key == rightObject.key
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(imagePath)
-        hasher.combine(name)
-        hasher.combine(kind)
+        hasher.combine(key)
     }
 
     /// Whether these two describe the same type in the same state — what `==`
@@ -130,11 +130,11 @@ extension RuntimeObject: ComparableBuildable {
     }
 }
 
-/// Stable identity for a `RuntimeObject` that intentionally excludes
-/// `RuntimeObject.children`. Use this as a dictionary / set key when
-/// lookups must survive `parent.withAppendedChild(child)` replacements — the
-/// underlying type is unchanged across that operation but `RuntimeObject ==`
-/// would otherwise flip false because `children` participates in identity.
+/// The identity of a `RuntimeObject` — `(imagePath, name, kind)` — as a value
+/// of its own; `RuntimeObject`'s `==` and `hash(into:)` are defined through
+/// it. Use the key rather than the object as a dictionary or set key: the two
+/// compare and hash alike, but an object stored as a key keeps its whole
+/// `children` subtree alive for as long as the entry does.
 ///
 /// All stored fingerprint fields are private so the only valid construction
 /// path is `RuntimeObjectKey(_:)`; callers can not assemble a key by hand

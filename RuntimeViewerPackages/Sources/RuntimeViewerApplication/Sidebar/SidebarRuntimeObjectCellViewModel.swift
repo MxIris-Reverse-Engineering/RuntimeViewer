@@ -18,15 +18,13 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     /// matches its previous instance.
     ///
     /// `parentFingerprint` folds the entire ancestry chain into a single
-    /// `Int`, which is what lets two cells with the same `(imagePath, name,
-    /// kind)` but different sidebar positions stay distinct — e.g. the
+    /// `Int`, which is what lets two cells with the same object key but
+    /// different sidebar positions stay distinct — e.g. the
     /// `Phase.Value<Event>` produced by directly specializing the inner
     /// generic vs. the `Phase<Event>.Value` derived when the outer generic
     /// gets specialized.
     public struct StableID: Hashable {
-        public let imagePath: String
-        public let name: String
-        public let kind: RuntimeObjectKind
+        public let objectKey: RuntimeObjectKey
         public let parentFingerprint: Int
     }
 
@@ -52,26 +50,19 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
     public private(set) weak var parent: SidebarRuntimeObjectCellViewModel?
 
     /// Recursive identity hash folding `parent.fingerprint` into the cell's
-    /// own `(imagePath, name, kind)`. Not cached: `stableID` reads it on
-    /// demand so a late-binding `parent` change (or `parent` deallocation)
-    /// just shows up next access. `runtimeObject.children` is intentionally
-    /// excluded — splicing a child must not flip the parent's fingerprint.
+    /// own object key. Not cached: `stableID` reads it on demand so a
+    /// late-binding `parent` change (or `parent` deallocation) just shows up
+    /// next access. The key leaves `runtimeObject.children` out, which is what
+    /// keeps splicing a child from flipping the parent's fingerprint.
     public var fingerprint: Int {
         var hasher = Hasher()
         hasher.combine(parent?.fingerprint ?? 0)
-        hasher.combine(runtimeObject.imagePath)
-        hasher.combine(runtimeObject.name)
-        hasher.combine(runtimeObject.kind)
+        hasher.combine(runtimeObject.key)
         return hasher.finalize()
     }
 
     public var stableID: StableID {
-        StableID(
-            imagePath: runtimeObject.imagePath,
-            name: runtimeObject.name,
-            kind: runtimeObject.kind,
-            parentFingerprint: parent?.fingerprint ?? 0
-        )
+        StableID(objectKey: runtimeObject.key, parentFingerprint: parent?.fingerprint ?? 0)
     }
 
     public var children: [SidebarRuntimeObjectCellViewModel] {
@@ -331,12 +322,7 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
             uniquingKeysWith: { firstViewModel, _ in firstViewModel }
         )
         let rebuiltChildren = runtimeObject.children.map { childRuntimeObject -> SidebarRuntimeObjectCellViewModel in
-            let childStableID = StableID(
-                imagePath: childRuntimeObject.imagePath,
-                name: childRuntimeObject.name,
-                kind: childRuntimeObject.kind,
-                parentFingerprint: parentFingerprint
-            )
+            let childStableID = StableID(objectKey: childRuntimeObject.key, parentFingerprint: parentFingerprint)
             if let recycledChild = recycledChildrenByStableID[childStableID] {
                 recycledChild.runtimeObject = childRuntimeObject // recurses via didSet
                 return recycledChild
