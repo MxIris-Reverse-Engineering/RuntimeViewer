@@ -699,6 +699,8 @@ public func update(for runtimeObject: RuntimeObject) {
 
 The identity guard matters: re-entering the same object (a `.back` route from a tab close or a history cursor move) must not refetch, or the loading placeholder flashes over content that is already correct.
 
+**`==` on `RuntimeObject` is identity only** — `(imagePath, name, kind)`, the same triple as `RuntimeObjectKey`; `displayName`, `children` and `properties` do not take part (Evolution 0021). That is the right guard for a pane that *fetches* by the object, and the wrong one for a pane that *renders the object's own fields*: the Inspector's Specialization tab lists `runtimeObject.children`, so it guards with `hasSameContent(as:)`, or a type that has grown a specialization never shows it. Ask which one a new pane is before copying the guard above. The same applies to anything that stores the form of a type it was last given — the navigation timeline and the active tab replace an entry whose content differs even when `==` holds. And never decide *which* type an object is from its `displayName`: one type prints under more than one name (a nested protocol is listed by its short name in the sidebar and by its qualified name after a jump).
+
 ### ViewController Conventions
 
 **Base classes**: `BaseViewController<VM>` (default) or `BaseEffectViewController<VM>` (visual effect background).

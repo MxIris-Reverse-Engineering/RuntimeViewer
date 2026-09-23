@@ -9,7 +9,7 @@ import Testing
 /// caller sees.
 ///
 /// Written as a characterization suite *before* the identity change in the
-/// proposal `draft-runtime-object-identity`. Two kinds of assertion live here
+/// proposal `runtime-object-identity`. Two kinds of assertion live here
 /// and they are labelled:
 ///
 /// - **Contract** — behaviour that must survive the change untouched. These are
