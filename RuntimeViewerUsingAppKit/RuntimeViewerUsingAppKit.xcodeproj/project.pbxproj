@@ -188,10 +188,6 @@
 		E918631130611D0200DCEAC1 /* RuntimeViewerLocalRuntimeService.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = RuntimeViewerLocalRuntimeService.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9432FE22C0D614900362862 /* RuntimeViewer-Debug.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RuntimeViewer-Debug.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E947C3672C2A4D0400296B2E /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerCatalystHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/RuntimeViewerService/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
-		E95CDA662DAA6FA900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = ../Configurations/RuntimeViewerService/Release.xcconfig; sourceTree = SOURCE_ROOT; };
-		E95CDA672DAA970300D97B03 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/RuntimeViewerUsingAppKit/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
-		E95CDA682DAA970900D97B03 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = ../Configurations/RuntimeViewerUsingAppKit/Release.xcconfig; sourceTree = SOURCE_ROOT; };
 		E95D79C02F62A9EC0033D4CE /* RuntimeViewerUsingAppKit.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = RuntimeViewerUsingAppKit.xctestplan; sourceTree = "<group>"; };
 		E95ED17E0000000000000002 /* RuntimeViewerSourceEditorBridge.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerSourceEditorBridge.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		E95ED17F0000000000000001 /* RuntimeViewerSourceEditorBridgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerSourceEditorBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -201,19 +197,12 @@
 		E9A2B52A306373AB00D5A652 /* AppIconBeta.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconBeta.icon; path = ../Resources/AppIconBeta.icon; sourceTree = SOURCE_ROOT; };
 		E9A2B52B306373AB00D5A652 /* AppIconBetaXcode26.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconBetaXcode26.icon; path = ../Resources/AppIconBetaXcode26.icon; sourceTree = SOURCE_ROOT; };
 		E9A2B52C306373AB00D5A652 /* AppIconXcode26.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIconXcode26.icon; path = ../Resources/AppIconXcode26.icon; sourceTree = SOURCE_ROOT; };
-		E9A2B5D5306375F600D5A652 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Shared.xcconfig; path = ../Configurations/RuntimeViewerUsingAppKit/Shared.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9A9CCE72F5D880400A10DD3 /* dev.mxiris.runtimeviewer.service */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = dev.mxiris.runtimeviewer.service; sourceTree = BUILT_PRODUCTS_DIR; };
-		E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Config.xcconfig; path = ../Configurations/RuntimeViewerService/Config.xcconfig; sourceTree = SOURCE_ROOT; };
 		E9C9E9EF2C2D379200C4AA34 /* RuntimeViewerCatalystHelper.app */ = {isa = PBXFileReference; lastKnownFileType = wrapper.application; path = RuntimeViewerCatalystHelper.app; sourceTree = "<group>"; };
 		E9CAFE010000000000000020 /* RuntimeViewerMobileServer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = RuntimeViewerMobileServer.framework; sourceTree = "<group>"; };
 		E9CAFE020000000000000002 /* $(RUNTIME_VIEWER_SERVICE_NAME) */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "$(RUNTIME_VIEWER_SERVICE_NAME)"; sourceTree = BUILT_PRODUCTS_DIR; };
-		E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "Debug-arm64e.xcconfig"; path = "../Configurations/RuntimeViewerUsingAppKit/Debug-arm64e.xcconfig"; sourceTree = SOURCE_ROOT; };
 		E9E900DC2C2CF9A500FADDCC /* RuntimeViewerCatalystHelperPlugin.bundle */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RuntimeViewerCatalystHelperPlugin.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9E900E82C2D0D5B00FADDCC /* com.JH.RuntimeViewerService */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = com.JH.RuntimeViewerService; sourceTree = BUILT_PRODUCTS_DIR; };
-		E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Shared.xcconfig; path = ../Configurations/Shared/Shared.xcconfig; sourceTree = SOURCE_ROOT; };
-		E9F2E9B52ED3BD2B001DCC3E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Release.xcconfig; path = ../Configurations/Shared/Release.xcconfig; sourceTree = SOURCE_ROOT; };
-		E9F2E9B72ED3BD36001DCC3E /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Debug.xcconfig; path = ../Configurations/Shared/Debug.xcconfig; sourceTree = SOURCE_ROOT; };
-		E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = CodeSigning.xcconfig; path = ../Configurations/CodeSigning.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -294,6 +283,12 @@
 		E99510EB3052AA7800D3FAB2 /* runtime-viewer-cli */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "runtime-viewer-cli";
+			sourceTree = "<group>";
+		};
+		E9CF000A2FF0010000000001 /* Configurations */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			name = Configurations;
+			path = ../Configurations;
 			sourceTree = "<group>";
 		};
 		E9DAF4962FEE740D00DD20CB /* RuntimeViewerUsingAppKit */ = {
@@ -466,48 +461,6 @@
 				E94C1B8F2F35E7AC005DF968 /* RuntimeViewerServer.framework */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		E9CF000A2FF0010000000001 /* Configurations */ = {
-			isa = PBXGroup;
-			children = (
-				E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */,
-				E9CF000B2FF0010000000002 /* Shared */,
-				E9CF000C2FF0010000000003 /* RuntimeViewerService */,
-				E9CF000D2FF0010000000004 /* RuntimeViewerUsingAppKit */,
-			);
-			name = Configurations;
-			sourceTree = "<group>";
-		};
-		E9CF000B2FF0010000000002 /* Shared */ = {
-			isa = PBXGroup;
-			children = (
-				E9F2E9B32ED3BCFC001DCC3E /* Shared.xcconfig */,
-				E9F2E9B72ED3BD36001DCC3E /* Debug.xcconfig */,
-				E9F2E9B52ED3BD2B001DCC3E /* Release.xcconfig */,
-			);
-			name = Shared;
-			sourceTree = "<group>";
-		};
-		E9CF000C2FF0010000000003 /* RuntimeViewerService */ = {
-			isa = PBXGroup;
-			children = (
-				E9C9E9C92C2D0E3C00C4AA34 /* Config.xcconfig */,
-				E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */,
-				E95CDA662DAA6FA900D97B03 /* Release.xcconfig */,
-			);
-			name = RuntimeViewerService;
-			sourceTree = "<group>";
-		};
-		E9CF000D2FF0010000000004 /* RuntimeViewerUsingAppKit */ = {
-			isa = PBXGroup;
-			children = (
-				E95CDA672DAA970300D97B03 /* Debug.xcconfig */,
-				E95CDA682DAA970900D97B03 /* Release.xcconfig */,
-				E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */,
-				E9A2B5D5306375F600D5A652 /* Shared.xcconfig */,
-			);
-			name = RuntimeViewerUsingAppKit;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -1075,7 +1028,8 @@
 		};
 		E9432FED2C0D614A00362862 /* Debug configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = CodeSigning.xcconfig;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1144,7 +1098,8 @@
 		};
 		E9432FEE2C0D614A00362862 /* Release configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = CodeSigning.xcconfig;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1205,7 +1160,8 @@
 		};
 		E9432FF02C0D614A00362862 /* Debug configuration for PBXNativeTarget "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E95CDA672DAA970300D97B03 /* Debug.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKit/Debug.xcconfig;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1259,7 +1215,8 @@
 		};
 		E9432FF12C0D614A00362862 /* Release configuration for PBXNativeTarget "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E95CDA682DAA970900D97B03 /* Release.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerUsingAppKit/Release.xcconfig;
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1648,7 +1605,8 @@
 		};
 		E9958CD62FAB79100073036F /* Debug-arm64e configuration for PBXProject "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E9F2E9B92ED3BD3E001DCC3E /* CodeSigning.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = CodeSigning.xcconfig;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -1717,7 +1675,8 @@
 		};
 		E9958CD72FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "RuntimeViewerUsingAppKit" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E9CAFE030000000000000003 /* Debug-arm64e.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = "RuntimeViewerUsingAppKit/Debug-arm64e.xcconfig";
 			buildSettings = {
 				ALLOW_TARGET_PLATFORM_SPECIALIZATION = NO;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -1841,7 +1800,8 @@
 		};
 		E9958CDA2FAB79100073036F /* Debug-arm64e configuration for PBXNativeTarget "com.JH.RuntimeViewerService" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerService/Debug.xcconfig;
 			buildSettings = {
 				CODE_SIGN_STYLE = Manual;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
@@ -1961,7 +1921,8 @@
 		};
 		E9E900ED2C2D0D5B00FADDCC /* Debug configuration for PBXNativeTarget "com.JH.RuntimeViewerService" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E95CDA652DAA6FA300D97B03 /* Debug.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerService/Debug.xcconfig;
 			buildSettings = {
 				CODE_SIGN_STYLE = Manual;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
@@ -1981,7 +1942,8 @@
 		};
 		E9E900EE2C2D0D5B00FADDCC /* Release configuration for PBXNativeTarget "com.JH.RuntimeViewerService" */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = E95CDA662DAA6FA900D97B03 /* Release.xcconfig */;
+			baseConfigurationReferenceAnchor = E9CF000A2FF0010000000001 /* Configurations */;
+			baseConfigurationReferenceRelativePath = RuntimeViewerService/Release.xcconfig;
 			buildSettings = {
 				CODE_SIGN_STYLE = Manual;
 				CREATE_INFOPLIST_SECTION_IN_BINARY = YES;
