@@ -278,4 +278,42 @@ struct RelationshipsTests {
         #expect(relationships.subclasses.isEmpty)
         #expect(relationships.conformingTypes.isEmpty)
     }
+
+    // MARK: - Test 9: Swift conformers follow the protocol, not its printed name
+
+    /// One protocol reaches `relationships(for:)` under more than one printed
+    /// name: the sidebar lists a protocol nested in a type by its own short
+    /// name, while a jump materializes it under its qualified one. Both name
+    /// the same protocol and must find the same conformers. The short form is
+    /// built from a root protocol by swapping its `displayName`, because
+    /// Foundation declares no nested protocol to take one from.
+    @Test("Swift protocol conformers do not depend on the name the protocol is printed under")
+    func swiftProtocolConformersIgnoreDisplayName() async throws {
+        let engine = RuntimeEngine(source: .local, engineID: "test-rel-9")
+        try await engine.connect()
+        try await engine.loadAndAwaitIndexed(Anchors.foundationPath)
+
+        let allObjects = try await engine.objects(in: Anchors.foundationPath)
+        var anchor: (qualifiedForm: RuntimeObject, conformers: [RuntimeObject])?
+        for candidate in allObjects where candidate.kind == .swift(.type(.protocol)) && candidate.displayName.contains(".") {
+            let conformers = try await engine.relationships(for: candidate).conformingTypes
+            if !conformers.isEmpty {
+                anchor = (candidate, conformers)
+                break
+            }
+        }
+        let (qualifiedForm, expectedConformers) = try #require(anchor, "No Swift protocol with conformers found in Foundation.")
+        let shortForm = RuntimeObject(
+            name: qualifiedForm.name,
+            displayName: qualifiedForm.displayName.components(separatedBy: ".").last ?? qualifiedForm.displayName,
+            kind: qualifiedForm.kind,
+            imagePath: qualifiedForm.imagePath,
+            children: qualifiedForm.children,
+            properties: qualifiedForm.properties
+        )
+
+        let conformers = try await engine.relationships(for: shortForm).conformingTypes
+
+        #expect(conformers.map(\.name) == expectedConformers.map(\.name))
+    }
 }
