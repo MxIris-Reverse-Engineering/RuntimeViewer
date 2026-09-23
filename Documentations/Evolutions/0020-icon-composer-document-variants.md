@@ -2,7 +2,7 @@
 
 - **状态**: Implemented
 - **创建日期**: 2026-09-21
-- **最后更新**: 2026-09-21
+- **最后更新**: 2026-09-23
 - **所属愿景**: 无
 
 ## 摘要
@@ -103,6 +103,15 @@ RUNTIME_VIEWER_APP_ICON_NAME = $(RUNTIME_VIEWER_APP_ICON_BASE_NAME)$(RUNTIME_VIE
 本机是 macOS 26，没有可靠的验证手段，不适合凭空填数。等主图标真用上新特性，重跑一次生成脚本
 即可，无需改任何构建配置。`AppIconBeta.icon` 那对已经有真实差异（BETA 徽章那组带
 `refractivity` 与 `specular`）。
+
+**2026-09-23：接线在落地时就断了，已修。** 落地本提案的同一个提交（5d16aad6）把 app target 三个
+配置里的 `ASSETCATALOG_COMPILER_APPICON_NAME` 从 `$(RUNTIME_VIEWER_APP_ICON_NAME)` 改回了字面量
+`AppIcon`。target 级的值压过所有 xcconfig，所以从落地起渠道和工具链两个维度都没生效过：每次构建都编
+`AppIcon`，beta 归档会在 `ArchiveScript.sh` 的图标校验处失败。Beta 那对文档的名字也标反了——带
+`features` 的是名为 `AppIconBetaXcode27.icon` 的副本。e5e4f560 把两个副本改名为 `…Xcode26`、对调
+`features`、删掉 target 级设置；随后赋值集中到 `Configurations/RuntimeViewerUsingAppKit/Shared.xcconfig`
+的 `ASSETCATALOG_COMPILER_APPICON_NAME = $(RUNTIME_VIEWER_APP_ICON_NAME)` 一行，AGENTS.md 的 App Icon
+一节写明 target 不得再设这个值。
 
 ## 未完成
 
