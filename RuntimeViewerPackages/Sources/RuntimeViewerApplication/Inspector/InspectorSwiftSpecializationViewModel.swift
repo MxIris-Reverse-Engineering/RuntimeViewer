@@ -55,8 +55,16 @@ public final class InspectorSwiftSpecializationViewModel: ViewModel<InspectorRun
     /// relationships tabs this needs no placeholder: the specialized children
     /// are already in memory on the `RuntimeObject`, so `$runtimeObject` maps
     /// straight to the new rows with no fetch in between.
+    ///
+    /// The guard compares content, not identity, because the rows *are* the
+    /// object's content. After a specialization the app jumps to the
+    /// specialized type, which has no specialization tab, so this ViewModel is
+    /// left holding the generic type as it was; coming back hands it the same
+    /// type carrying one more child, and that child has to appear. Rebuilding
+    /// the rows for a difference they do not show costs nothing here — there
+    /// is no fetch to repeat and no placeholder to flash.
     public func update(for runtimeObject: RuntimeObject) {
-        guard self.runtimeObject != runtimeObject else { return }
+        guard !self.runtimeObject.hasSameContent(as: runtimeObject) else { return }
         self.runtimeObject = runtimeObject
     }
 }

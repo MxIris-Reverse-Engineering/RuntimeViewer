@@ -121,9 +121,12 @@ actor RuntimeRelationshipsResolver {
             }
             if isSwiftProtocol {
                 // Swift protocols are stored in the indexer under their demangled name
-                // (e.g. "Foundation.LocalizedError"); RuntimeObject.displayName carries
-                // exactly that string.
-                for reference in swiftSectionFactory.indexer.conformingTypes(of: object.displayName) {
+                // (e.g. "Foundation.LocalizedError"). Recover it from the mangled `name`
+                // rather than reading `displayName`: one protocol arrives here under more
+                // than one printed name — the sidebar lists a protocol nested in a type by
+                // its own short name — and only the qualified one is a key in that table.
+                let qualifiedProtocolName = swiftSectionFactory.indexer.protocolName(forMangledName: object.name)?.name ?? object.displayName
+                for reference in swiftSectionFactory.indexer.conformingTypes(of: qualifiedProtocolName) {
                     if let runtimeObject = await materializeSwiftReference(reference) {
                         conformers.append(runtimeObject)
                     }

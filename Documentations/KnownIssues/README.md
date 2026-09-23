@@ -177,3 +177,16 @@ when picking up follow-up work.
   real but did not fire in 100 attempts), and `PR112.18` records why a
   settings schema drift cannot be reported from this layer at all —
   MetaCodable's `@Default` swallows it before the reader sees it.
+- [2026-09-23-runtime-object-identity-review-findings.md](2026-09-23-runtime-object-identity-review-findings.md) —
+  `/code-review xhigh` on Evolution 0021, which made `RuntimeObject`'s `==`
+  mean identity (`dc0b739c`, `727720cc`, merged into `next` as `2f224d81`),
+  IDs `OBJID.<N>`. Twelve findings: two regressions the change introduced —
+  three guards it counted as identity questions actually depended on content
+  (the Specialization pane stopped listing a newly generated specialization;
+  the timeline and the active tab kept whichever form of a type arrived
+  first) — and one older defect it froze in place (Swift conformers looked up
+  by `displayName`, which a protocol nested in a type prints as its short
+  name). Nine fixed or tidied in the same batch; `OBJID.8` is a **false
+  positive** (Objective-C objects never have children to copy); `OBJID.4`
+  stays as the user already decided (`ComparableBuildable` left alone);
+  `OBJID.11` (renaming the other `lhs` / `rhs` operators) awaits the user.

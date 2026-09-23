@@ -7,7 +7,7 @@ import Testing
 /// the seam a caller sees.
 ///
 /// Written as a characterization suite *before* the identity change in the
-/// proposal `draft-runtime-object-identity`: at this point every assertion
+/// proposal `runtime-object-identity`: at this point every assertion
 /// below states the pre-change behaviour, including the parts that proposal
 /// calls defects. Assertions that have to flip are flipped explicitly, one at a
 /// time, with the reason recorded in the proposal's decision log — never
@@ -197,7 +197,7 @@ struct RuntimeObjectIdentityTests {
     /// The documented limit of the shallow comparison, pinned so a future
     /// reader sees it is a decision rather than an oversight: a grandchild
     /// changing state under an unchanged child is invisible here. See the
-    /// proposal `draft-runtime-object-identity` for why that is enough today,
+    /// proposal `runtime-object-identity` for why that is enough today,
     /// and what would have to change for it to stop being enough.
     @Test("hasSameContent does not see a change buried in a grandchild")
     func sameContentIsShallow() {

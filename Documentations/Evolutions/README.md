@@ -33,13 +33,13 @@
 | [0018](0018-rxobserved-macro.md) | `@RxObserved` 宏：仿 `@Observable` 的内联可观察属性 | Implemented | 0017 的下一步：`@Observed` wrapper 换成宏，存储变成内联在对象里的 `RxObservedSlot` 值类型，未观察的属性零分配零锁；`$x` 类型不变，99 处一对一替换。 |
 | [0019](0019-helper-daemon-reinstall-button.md) | Helper 设置页的重装按钮 | In Progress | 设置页面的 Helper Service 行在服务已启用时加一个 Reinstall 按钮，取代「先卸载再安装」两步操作。重装序列不是新写的——`HelperServiceManager` 里那条只有启动时版本不匹配才会走到的序列抽成共用的 `performReinstall()`，两个调用点共用同一份代码（含绕开 `SMAppService` 磁盘记账滞后的 1 秒停顿）。 |
 | [0020](0020-icon-composer-document-variants.md) | App 图标按 Icon Composer 版本分两份文档 | Implemented | Xcode 26 的 actool 打不开 Icon Composer 27 的文档——顶层 `"features"` 键让它报 `Could not open` 且一个文件都不产出，`AppIconBeta.icon` 自 2026-09-20 起就已经只能用 Xcode 27 构建。每个图标拆成「27 原件 + 去掉 `features` 的生成副本」，xcconfig 按 `XCODE_VERSION_MAJOR` 选，渠道轴改走 `RUNTIME_VIEWER_APP_ICON_BASE_NAME`。 |
+| [0021](0021-runtime-object-identity.md) | RuntimeObject 的相等性只表达身份 | Implemented | `RuntimeObject.==` 原先比较全部存储属性，于是问「是不是同一个类型」的调用点都会答错（跳转后 sidebar 不高亮、历史栈重复入栈、面板无谓重取）。改为 `==` / `hash` / `Identifiable.id` 只看 `RuntimeObjectKey` 的 `(imagePath, name, kind)`，「内容变了没」由显式的 `hasSameContent(as:)` 回答，靠先落地的 characterization 测试兜底。复审发现其中三处其实依赖内容（Specialization 页、历史栈顶、活动标签页），已改回按内容比较，见[复审裁决](../KnownIssues/2026-09-23-runtime-object-identity-review-findings.md)。 |
 | [draft](draft-runtime-bookmark-scope.md) | RuntimeBookmarkScope：把持久化身份从显示名手里拿走 | Accepted | 新建稳定的 `RuntimeBookmarkScope` 取代三处各自拼出来的键（含 pid 的书签键、用进程显示名的 sidebar autosave 键、编码了 `name` 却按忽略 `name` 比较的落盘表示）。身份走 descriptor 上的 `@Default` 字段以保持混版兼容，`RuntimeSource` 不动。在 `feature/runtime-bookmark-scope` 上实现，拆三个 PR。 |
 | [draft](draft-engine-management-module.md) | 引擎管理下沉为无 UI 模块 `RuntimeViewerEngineManagement` | In Progress | 愿景《无头 RuntimeViewer》第一步。`RuntimeEngineManager` 及伙伴从 `RuntimeViewerApplication` 搬进不依赖 AppKit / RxSwift 的新 target，开三条缝：`RuntimeEngineManagerConfiguration`（广播 / 共享 / 系统引擎 / 重连各自开关）、`RuntimeResourceLocating`（载荷与 Catalyst helper 路径不再写死 `Bundle.main`）、`RuntimeProcessAttacher`（承接 App target 里的注入收尾）。App 行为零变化。 |
 | [draft](draft-command-line-interface-foundation.md) | `runtime-viewer-cli` 基础：命令级协议、常驻 CLI host 与本地来源 | In Progress | 愿景第二步，不依赖抽模块。新包 `RuntimeViewerCommandLine/`：Codable 命令与结果模型、Unix domain socket 长度前缀 JSON、常驻 host 的自动拉起 / 单例 / 空闲退出、本地来源上的全部查询命令（`images` … `export`）。`--json` 即结果模型。 |
 | [draft](draft-command-line-interface-multi-source.md) | `runtime-viewer-cli` 多来源：全部运行时来源、attach 与 App 充当 host | In Progress | 愿景第三步，依赖前两篇。独立 host 换上 `.headlessHost` 的 `RuntimeEngineManager`，新增 `sources` / `attach` / `detach`，`--source` 覆盖 local / catalyst / pid / process / engine；App 启动即充当 host 并接管独立 host。 |
 | [draft](draft-command-line-interface-app-embedding.md) | `runtime-viewer-cli` 嵌入 App 包与设置页 | Draft | 愿景第四步。Xcode command-line tool target 嵌到 `Contents/Helpers/` 随 App 签名公证；Settings 新增「Command Line Tool」页做 `/usr/local/bin` 符号链接与「允许命令行访问」开关。 |
 | [draft](draft-objc-implementation-class-badge.md) | 给 `@objc @implementation` 实现的 ObjC 类加粉色角标 | Accepted | SE-0436 的 `@objc @implementation` 产出的是纯 ObjC 类，拿不到桥出 Swift 类那个蓝色 `C` 角标，在列表里和 clang 类无从分辨。接 MachOSwiftSection 的 `ObjCImplementationClasses` 识别这类类，`RuntimeObject.Properties` 新增一位驱动一个粉色 `C` 角标，两种角标互斥；Sidebar 与 Inspector 两个面板统一走新的 `secondaryIcon(for:)`。 |
-| [draft](draft-runtime-object-identity.md) | RuntimeObject 的相等性只表达身份 | Implemented | `RuntimeObject.==` 现在比较全部存储属性，于是代码里九处问「是不是同一个类型」的比较全部得到错误答案（跳转后 sidebar 不高亮、历史栈重复入栈、面板无谓重取）。把 `==` / `hash` / `Identifiable.id` 改成只看 `RuntimeObjectKey` 的 `(imagePath, name, kind)`，「内容变了没」搬到显式的 `hasSameContent(as:)`。改动靠先落地的 characterization 测试兜底——语义翻转是静默的，编译器不报错。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
@@ -49,7 +49,7 @@
 > 尚未合入本分支的占用：`0005` 在 `feature/node-store-adoption`（`0005-cellvm-appearance-single-observed.md`），
 > `0012` 在 `feature/uifoundation-navigation`
 > （`0012-replace-uxkit-navigation-with-uifoundation.md`，已被本分支的 0013 取代）。
-> **新提案从 `0020` 起编号**，不要只看本分支已有的文件挑下一个空号。
+> **新提案从 `0022` 起编号**，不要只看本分支已有的文件挑下一个空号。
 >
 > **`0013` 是第二次撞号，2026-08-29 合流时已解决**——`feature/inject-ios-simulator-process`
 > 与 `next` 上的 `0013-replace-uxkit-with-appkitplus.md` 同号，两者互不知情。按前一次 `0007`

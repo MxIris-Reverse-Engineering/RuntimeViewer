@@ -1,4 +1,4 @@
-# Draft - RuntimeObject 的相等性只表达身份
+# 0021 - RuntimeObject 的相等性只表达身份
 
 - **状态**: Implemented
 - **作者**: JH
@@ -6,7 +6,7 @@
 - **最后更新**: 2026-09-23
 - **所属愿景**: 无
 - **关联提案**: [给 @objc @implementation 实现的 ObjC 类加粉色角标](draft-objc-implementation-class-badge.md)（`secondaryKind` 折叠成 `Properties.isSwiftClass` 在那份里）
-- **实现分支 / PR**: `feature/runtime-object-identity`（从 `next` 切，并回 `next`）
+- **实现分支 / PR**: `feature/runtime-object-identity`（从 `next` 切，并回 `next`）；复审修复在 `feature/runtime-object-identity-review-fixes`
 - **配套文档**: 无 —— 判定理由见决策日志
 
 ## 摘要
@@ -373,9 +373,6 @@ children 子树，见「非目标」。
 | 2026-09-23 | 测试先全量 characterization 锁住当前行为（含 bug 行为），改完逐条裁决 | 用户要求「确保改前的正确逻辑和改后一致」。语义翻转是静默的，编译器不报错，只有基线测试能证明「没有顺手改坏一个没人提到的行为」 |
 | 2026-09-23 | 覆盖边界含间接依赖 | `OrderedSet` 去重、书签的合成 `Hashable`、`DocumentState` 历史与 tab、DifferenceKit diff 都会因 `==` 翻语义而静默改变行为 |
 | 2026-09-23 | 从 `next` 切 feature 分支并回 `next`，不走 main | `next` 领先 `main` 272 个提交且依赖 MachOSwiftSection 的未发布分支（`main` 钉 `exact: 0.15.2`）。从 main 切虽能让这个修复独立进发布分支，但要在还带着 `secondaryKind` 的 `RuntimeObject` 上重做一遍，并在 `next` 合并时手工解冲突 |
-| 2026-09-23 | 不写配套实现说明 | 「`==` 是身份、`hasSameContent(as:)` 是内容」这条契约写在 `RuntimeObject` 的 `==` extension 注释上，浅层比较的限制写在方法上，不用 `@EquatableIgnored` 的原因写在紧邻的注释里，完整推理在本提案。再单开一份会变成两处记同一件事，必然漂移 |
-| 2026-09-23 | 不新增术语表条目 | 「身份 / 内容」是通用编程概念，不是本项目特有的说法 |
-| 2026-09-23 | 验收通过，状态置为 Implemented | 整包 `./RunScript.sh --no-launch` 三个 Build Succeeded 零 error；`RuntimeViewerCore` 505 个测试仅剩那条与本提案无关的快照失败，`RuntimeViewerPackages` 299 个测试全绿 |
 | 2026-09-23 | 不动 `ComparableBuildable` | 用户明确：它只在 sidebar 排序用，是故意的 |
 | 2026-09-23 | 状态置为 Accepted，开始实现 | 用户：「提案先提交到 next，然后改成 Accepted 开工」 |
 | 2026-09-23 | 手写 `==` / `hash(into:)`，放弃 `@EquatableIgnored` | 实测：`@MemberwiseInit` 也读这个 peer macro，被标注的属性从生成的构造器里消失。提案原先猜的冲突方（`@Default` / `@Init`）猜错了 |
@@ -383,3 +380,11 @@ children 子树，见「非目标」。
 | 2026-09-23 | `RelationshipsEquivalenceSnapshotTests` 的失败判定为与本提案无关 | 把 `RuntimeObject.swift` 退回改动前重跑，同样的 4 行 missing / 4 行 unexpected（`__C.Decimal.FormatStyle` ↔ `__C.NSDecimal.FormatStyle`）。是上游 demangling 的打印差异，基线快照录制时的上游版本与现在不同 |
 | 2026-09-23 | 一处调用点没有测试覆盖：`ContentCoordinator.swift:129` | 它在 `RuntimeViewerUsingAppKit` 这个 app target 里，而该 target 下只有 `RuntimeViewerSourceEditorBridgeTests`，没有针对 app 代码的测试 target。语义翻转让它少一次无谓重绑，方向与另外八处一致，但只有整包构建验证了它能编译，没有测试证明行为 |
 | 2026-09-23 | 记录一个挡路的项目状态问题：`RuntimeViewerPackages/Package.resolved` 的 MachOSwiftSection pin 比 `RuntimeViewerCore/Package.resolved` 旧 | 单独 `swift build` 这个包会因为缺 `ObjCImplementationClasses` 而失败，跑包测试前得临时对齐 pin。workspace 构建不受影响（它有自己的 resolved）。不属于本提案范围，未改动 |
+| 2026-09-23 | 不写配套实现说明 | 「`==` 是身份、`hasSameContent(as:)` 是内容」这条契约写在 `RuntimeObject` 的 `==` extension 注释上，浅层比较的限制写在方法上，不用 `@EquatableIgnored` 的原因写在紧邻的注释里，完整推理在本提案。再单开一份会变成两处记同一件事，必然漂移 |
+| 2026-09-23 | 不新增术语表条目 | 「身份 / 内容」是通用编程概念，不是本项目特有的说法 |
+| 2026-09-23 | 验收通过，状态置为 Implemented | 整包 `./RunScript.sh --no-launch` 三个 Build Succeeded 零 error；`RuntimeViewerCore` 505 个测试仅剩那条与本提案无关的快照失败，`RuntimeViewerPackages` 299 个测试全绿 |
+| 2026-09-23 | 复审：`/code-review xhigh` 报 12 条，逐条裁决 | 四问与裁决记在 [`KnownIssues/2026-09-23-runtime-object-identity-review-findings.md`](../KnownIssues/2026-09-23-runtime-object-identity-review-findings.md)，编号 `OBJID.<N>`；修复在 `feature/runtime-object-identity-review-fixes` |
+| 2026-09-23 | 「一个字不改」的七处里有三处其实依赖内容，改回按内容比较 | Specialization 页的 `update(for:)` 守卫：它的行就是 `children`，生成特化后回到父类型时新特化不显示。历史栈的连续去重与活动标签页同步：保留了先到的形态，后退或切回标签页时恢复的是链接载荷。本提案把这三处归成了「身份比较」，而 characterization 测试的数据恰好没有长出子节点，也没有让两种形态先后到达，所以没拦住（OBJID.1、OBJID.2） |
+| 2026-09-23 | 翻回 `specializationPaneDoesNotRebuildOnPropertiesDifference` | 改为「同一类型带不同 properties 进入时，重建出相同的行」。当初把「不重建」当作修好钉住，但这个面板不取数据、没有加载占位，重建相同的行看不出来；它改按内容守卫后属性不同就会重建，断言因此改成重建前后的行一致 |
+| 2026-09-23 | 「已验证的事实」第一条（`displayName` 可以安全排除出相等判定）的前提不成立 | 协议嵌套在类型里时，sidebar 用它自己的短名（`currentName`），跳转路径用限定名，并非「只有链接载荷例外」。排除 `displayName` 的结论不变，但 Relationships 按 `displayName` 查遵循者，所以 resolver 改为从 mangled `name` 反查限定名（OBJID.3）。正文保持落地时的原样，更正只记在这里 |
+| 2026-09-23 | 补上编号 0021 | 落到 `next` 时漏了编号：规则是在落到长期共享分支的那次提交里编号，0019、0020 都是这么做的。同一批把「不写配套实现说明」起的三行收尾记录挪回它们实际发生的位置，它们原先被插在了「不动 `ComparableBuildable`」之前 |
