@@ -6,7 +6,7 @@
 
 `/code-review xhigh` 报了 12 条，逐条读代码复核：3 条影响行为（2 条是这次引入的回归，1 条是旧问题
 被这次放大），6 条是文档、测试与代码整洁问题，1 条误报，1 条早已由用户裁决不改，1 条是命名规则
-问题、待用户决定。
+问题——用户决定全仓一起改，在后续批次里完成。
 
 **第二问的基线**：「这次引入」对照改动前的 `next`（`a721f1e7`），「main 上也有」对照 `main`
 （`4aff02b7`）。`main` 上 `==` 仍比较全部字段，所以本批的两条回归在 `main` 上都不存在。
@@ -23,7 +23,7 @@ ID 为 `OBJID.<N>`，与审查报告的顺序一致。修复在 `feature/runtime
 | OBJID.5 | Minor | 测试缺口：没有测「子节点变多」；标着「只差 properties」的 Specialization cell 测试两边还差 `children`；编解码往返的 `decoded == original` 只剩身份比较；`activeTabTracksTheSelection` 的注释称身份变化「观察不到」 | `c06817ab`（第一项与最后一项）、`630b37d3`（中间两项） | 第一项即 OBJID.1 的测试；其余是收紧既有断言 |
 | OBJID.6 | Minor | `displayName` 的注释称「同一个 mangled name 必然印出同一个 `displayName`，只有链接载荷例外」，嵌套协议就是反例；提案「已验证的事实」第一条同样 | `b961449c`（注释改写，并写明判定类型身份的代码不得读 `displayName`）；提案按决策快照规则不改正文，更正追加在决策日志 | — |
 | OBJID.7 | Minor | `RuntimeObjectKey` 与接口缓存键的注释仍说 `==` 会比较 `children`。全仓搜过，其余提到 `RuntimeObjectKey` 的注释仍然成立 | `b961449c` | — |
-| OBJID.9 | Minor | 提案以 Implemented 合进 `next` 却没编号（0019、0020 都是在落到 `next` 的那次提交里编的号） | 本批文档提交：改名为 `0021-runtime-object-identity.md`，更新两个索引与「新提案从哪号起编」的提示，测试注释改引用短名 `runtime-object-identity`，决策日志里被插错位置的三行收尾记录挪回实际位置 | — |
+| OBJID.9 | Minor | 提案以 Implemented 合进 `next` 却没编号（0019、0020 都是在落到 `next` 的那次提交里编的号） | `735d94e4`：改名为 `0021-runtime-object-identity.md`，更新两个索引与「新提案从哪号起编」的提示，测试注释改引用短名 `runtime-object-identity`，决策日志里被插错位置的三行收尾记录挪回实际位置 | — |
 | OBJID.10 | Minor | `==` / `hash(into:)` 把 `(imagePath, name, kind)` 又抄一遍，没委托给 `key`，「`a == b` 等价于 `a.key == b.key`」只靠手工同步 | `b961449c` | 既有 `RuntimeObjectIdentityTests` |
 | OBJID.12 | Minor | sidebar cell 的 `fingerprint` / `StableID` 第三次手写同一组三元组（`039cd217` 起） | `b961449c`：两者改用 `RuntimeObjectKey`。`StableID` 不落盘，app target 也不读它的字段 | 既有 `SidebarRuntimeObjectCellViewModelTests` |
 
@@ -72,14 +72,17 @@ ID 为 `OBJID.<N>`，与审查报告的顺序一致。修复在 `feature/runtime
 落地后的提案是决策快照，偏差已记在决策日志「手写 `==` / `hash(into:)`，放弃 `@EquatableIgnored`」
 一行与「已验证的事实」里，「详细设计」本身也写了手写的备选。
 
-## 待用户决定
+## 用户决定后修复
 
 ### OBJID.11 — 参数名 `lhs` / `rhs` 违反「不许缩写」规则
 
 1. 成立。
 2. 是新代码，但项目里另有 11 处 `static func ==` 用 `lhs` / `rhs`（`main` 上 9 处），FrameworkToolbox
    也这样写。
-3. 新写的那处已在 `b961449c` 改为 `leftObject` / `rightObject`。另外 11 处要不要一起改，等用户决定。
+3. 新写的那处已在 `b961449c` 改为 `leftObject` / `rightObject`。用户决定其余一起改：`bb1b1b08` 把全仓
+   12 个文件里的 11 处 `==`、1 处 `<`、4 个排序闭包和 1 段注释掉的旧代码改成描述性名字，
+   `RuntimeSource.==` 里 `lId` / `rRole` / `lHost` 这类前缀缩写一并改掉。行为不变：Core 相关的 8 个
+   套件 120 个测试、Packages 全量 302 个测试通过。
 4. 无既往修复。
 
 ## 另行排查、确认无问题的点
@@ -110,5 +113,7 @@ ID 为 `OBJID.<N>`，与审查报告的顺序一致。修复在 `feature/runtime
   把失败测试所在的套件单独跑（两次共 90 个测试，各自 2 秒内跑完）全部通过；改动前的基线 `2f224d81` 在同样的全量并行
   运行里也挂同一批（505 个测试中 7 个，外加上面那条快照）。它们不经过本批改动的任何代码，判为本机
   满载时的既有问题，不是回归。
-- 未做 App 整包构建：本批没有改 app target 的代码，改到的公开 API（`StableID` 的字段）在 app target
-  里没有使用者。
+- App 整包构建：修复这一批本身没有做（它没改 app target 的代码，改到的公开 API——`StableID` 的字段——
+  在 app target 里没有使用者）。合进 `next` 之后、推送之前，用 `RunScript.sh`（Xcode 27、
+  Debug-arm64e）整包构建了连同 OBJID.11 在内的最终状态：Catalyst helper、模拟器载荷、主 App 三段均
+  成功，零 error。
