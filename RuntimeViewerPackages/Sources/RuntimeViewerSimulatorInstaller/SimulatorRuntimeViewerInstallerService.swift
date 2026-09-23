@@ -56,8 +56,8 @@ final class SimulatorRuntimeViewerInstallerService {
             return SimulatorRuntimeViewerArtifact(version: version, appURL: appURL, downloadedAt: downloadedAt)
         }
 
-        return artifacts.sorted { lhs, rhs in
-            lhs.version.localizedStandardCompare(rhs.version) == .orderedDescending
+        return artifacts.sorted { leftArtifact, rightArtifact in
+            leftArtifact.version.localizedStandardCompare(rightArtifact.version) == .orderedDescending
         }
     }
 
@@ -129,11 +129,11 @@ final class SimulatorRuntimeViewerInstallerService {
             }
         }
 
-        return devices.sorted { lhs, rhs in
-            if lhs.runtimeName == rhs.runtimeName {
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        return devices.sorted { leftDevice, rightDevice in
+            if leftDevice.runtimeName == rightDevice.runtimeName {
+                return leftDevice.name.localizedStandardCompare(rightDevice.name) == .orderedAscending
             }
-            return lhs.runtimeName.localizedStandardCompare(rhs.runtimeName) == .orderedDescending
+            return leftDevice.runtimeName.localizedStandardCompare(rightDevice.runtimeName) == .orderedDescending
         }
     }
 

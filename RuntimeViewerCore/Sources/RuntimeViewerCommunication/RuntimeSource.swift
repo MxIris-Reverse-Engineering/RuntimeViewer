@@ -153,18 +153,18 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
 }
 
 extension RuntimeSource: Equatable {
-    public static func == (lhs: RuntimeSource, rhs: RuntimeSource) -> Bool {
-        switch (lhs, rhs) {
+    public static func == (leftSource: RuntimeSource, rightSource: RuntimeSource) -> Bool {
+        switch (leftSource, rightSource) {
         case (.local, .local):
             return true
-        case (.remote(_, let lId, let lRole), .remote(_, let rId, let rRole)):
-            return lId == rId && lRole == rRole
-        case (.bonjour(_, let lId, let lRole), .bonjour(_, let rId, let rRole)):
-            return lId == rId && lRole == rRole
-        case (.localSocket(_, let lId, let lRole), .localSocket(_, let rId, let rRole)):
-            return lId == rId && lRole == rRole
-        case (.directTCP(_, let lHost, let lPort, let lRole), .directTCP(_, let rHost, let rPort, let rRole)):
-            return lHost == rHost && lPort == rPort && lRole == rRole
+        case (.remote(_, let leftIdentifier, let leftRole), .remote(_, let rightIdentifier, let rightRole)):
+            return leftIdentifier == rightIdentifier && leftRole == rightRole
+        case (.bonjour(_, let leftIdentifier, let leftRole), .bonjour(_, let rightIdentifier, let rightRole)):
+            return leftIdentifier == rightIdentifier && leftRole == rightRole
+        case (.localSocket(_, let leftIdentifier, let leftRole), .localSocket(_, let rightIdentifier, let rightRole)):
+            return leftIdentifier == rightIdentifier && leftRole == rightRole
+        case (.directTCP(_, let leftHost, let leftPort, let leftRole), .directTCP(_, let rightHost, let rightPort, let rightRole)):
+            return leftHost == rightHost && leftPort == rightPort && leftRole == rightRole
         default:
             return false
         }

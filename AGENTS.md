@@ -114,6 +114,13 @@ through `RUNTIME_VIEWER_APP_ICON_NAME` in the app's Debug / Release xcconfigs:
   `RUNTIME_VIEWER_APP_ICON_VARIANT_$(XCODE_VERSION_MAJOR)`, which is undefined for 2700 and
   later — so every Xcode after 26 gets the originals.
 
+**The assignment lives in `Configurations/RuntimeViewerUsingAppKit/Shared.xcconfig`, and the target
+must not set `ASSETCATALOG_COMPILER_APPICON_NAME` itself.** A target-level value in the project file
+outranks every xcconfig, so a literal there pins one icon for both channels and both toolchains.
+5d16aad6 put `AppIcon` back at the target level exactly like that, and from then until the
+2026-09-23 fix no variant and no beta badge was ever picked. The App Icon field in the target's
+General tab edits that target-level setting, so leave it alone.
+
 **Edit the originals, then regenerate the pair in the same commit.** `AppIcon.icon` and
 `AppIconBeta.icon` are the Icon Composer 27 documents to open and edit; `AppIconXcode26.icon` and
 `AppIconBetaXcode26.icon` come out of

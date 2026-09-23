@@ -189,4 +189,5 @@ when picking up follow-up work.
   name). Nine fixed or tidied in the same batch; `OBJID.8` is a **false
   positive** (Objective-C objects never have children to copy); `OBJID.4`
   stays as the user already decided (`ComparableBuildable` left alone);
-  `OBJID.11` (renaming the other `lhs` / `rhs` operators) awaits the user.
+  `OBJID.11` — `lhs` / `rhs` across every comparison operator and sort
+  closure — was fixed repository-wide in a follow-up at the user's call.

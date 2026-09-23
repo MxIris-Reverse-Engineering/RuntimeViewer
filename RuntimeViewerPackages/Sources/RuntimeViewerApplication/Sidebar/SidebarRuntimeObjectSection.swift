@@ -41,8 +41,8 @@ public struct SidebarRuntimeObjectSection: Sendable {
 }
 
 extension SidebarRuntimeObjectSection: Hashable {
-    public static func == (lhs: SidebarRuntimeObjectSection, rhs: SidebarRuntimeObjectSection) -> Bool {
-        lhs.kind == rhs.kind
+    public static func == (leftSection: SidebarRuntimeObjectSection, rightSection: SidebarRuntimeObjectSection) -> Bool {
+        leftSection.kind == rightSection.kind
     }
 
     public func hash(into hasher: inout Hasher) {

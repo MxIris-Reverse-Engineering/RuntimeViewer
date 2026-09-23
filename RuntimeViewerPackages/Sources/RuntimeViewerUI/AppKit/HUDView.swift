@@ -352,8 +352,8 @@ extension NSWindow {
 //        hasher.combine(bottom)
 //    }
 //
-//    public static func == (lhs: Self, rhs: Self) -> Bool {
-//        return lhs.top == rhs.top && lhs.left == rhs.left && lhs.right == rhs.right && lhs.bottom == rhs.bottom
+//    public static func == (firstInsets: Self, secondInsets: Self) -> Bool {
+//        return firstInsets.top == secondInsets.top && firstInsets.left == secondInsets.left && firstInsets.right == secondInsets.right && firstInsets.bottom == secondInsets.bottom
 //    }
 // }
 

@@ -90,8 +90,8 @@ public final class RuntimeImageNode: Codable {
 }
 
 extension RuntimeImageNode: Hashable {
-    public static func == (lhs: RuntimeImageNode, rhs: RuntimeImageNode) -> Bool {
-        lhs.name == rhs.name && lhs.children == rhs.children && lhs.absolutePath == rhs.absolutePath
+    public static func == (leftNode: RuntimeImageNode, rightNode: RuntimeImageNode) -> Bool {
+        leftNode.name == rightNode.name && leftNode.children == rightNode.children && leftNode.absolutePath == rightNode.absolutePath
     }
 
     public func hash(into hasher: inout Hasher) {

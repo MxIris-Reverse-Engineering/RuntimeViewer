@@ -155,8 +155,8 @@ public struct ResolvedTheme: ThemeProfile, @unchecked Sendable {
 extension ResolvedTheme: Equatable {
     /// Identity is fully determined by the source `preset` and `fontSize`;
     /// the precomputed color/font caches are derived state.
-    public static func == (lhs: ResolvedTheme, rhs: ResolvedTheme) -> Bool {
-        lhs.preset == rhs.preset && lhs.fontSize == rhs.fontSize
+    public static func == (leftTheme: ResolvedTheme, rightTheme: ResolvedTheme) -> Bool {
+        leftTheme.preset == rightTheme.preset && leftTheme.fontSize == rightTheme.fontSize
     }
 }
 

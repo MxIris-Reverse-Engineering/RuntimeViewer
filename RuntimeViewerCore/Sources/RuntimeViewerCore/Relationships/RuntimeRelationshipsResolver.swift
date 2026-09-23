@@ -134,11 +134,11 @@ actor RuntimeRelationshipsResolver {
             }
         }
 
-        let sortedSubclasses = Array(subclasses).sorted { lhs, rhs in
-            lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        let sortedSubclasses = Array(subclasses).sorted { leftObject, rightObject in
+            leftObject.displayName.localizedCaseInsensitiveCompare(rightObject.displayName) == .orderedAscending
         }
-        let sortedConformers = Array(conformers).sorted { lhs, rhs in
-            lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+        let sortedConformers = Array(conformers).sorted { leftObject, rightObject in
+            leftObject.displayName.localizedCaseInsensitiveCompare(rightObject.displayName) == .orderedAscending
         }
         return RuntimeRelationships(subclasses: sortedSubclasses, conformingTypes: sortedConformers)
     }

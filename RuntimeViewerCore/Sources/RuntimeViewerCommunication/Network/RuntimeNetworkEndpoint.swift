@@ -79,8 +79,8 @@ public struct RuntimeNetworkEndpoint: Sendable, Hashable {
     }
 
     // Exclude instanceID and hostName from equality — they are metadata, not identity.
-    public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.name == rhs.name && lhs.endpoint == rhs.endpoint
+    public static func == (leftEndpoint: Self, rightEndpoint: Self) -> Bool {
+        leftEndpoint.name == rightEndpoint.name && leftEndpoint.endpoint == rightEndpoint.endpoint
     }
 
     public func hash(into hasher: inout Hasher) {

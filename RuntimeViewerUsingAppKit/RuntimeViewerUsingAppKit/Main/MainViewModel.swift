@@ -30,11 +30,11 @@ struct SwitchSourceState: Equatable {
     let isDisconnected: Bool
     let selectedEngineIdentifier: String
 
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.title == rhs.title
-            && lhs.isDisconnected == rhs.isDisconnected
-            && lhs.selectedEngineIdentifier == rhs.selectedEngineIdentifier
-            && lhs.image === rhs.image
+    static func == (leftState: Self, rightState: Self) -> Bool {
+        leftState.title == rightState.title
+            && leftState.isDisconnected == rightState.isDisconnected
+            && leftState.selectedEngineIdentifier == rightState.selectedEngineIdentifier
+            && leftState.image === rightState.image
     }
 }
 
