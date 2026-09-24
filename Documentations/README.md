@@ -95,6 +95,7 @@
 
 按时间倒序。
 
+- [Relationships 面板丢掉了全部桥出的 Swift 子类](ResolvedIssues/2026-09-24-relationships-dropped-every-bridged-subclass.md)（2026-09-24）—— 用 ObjC 运行时名找 Swift 类时整棵 remangle，`_TtC…` 的 demangle 结果是完整的类型 mangling，remangle 出符号 `$s…CD`，而 Swift 侧的键是 `Type` 节点单独 mangle 的 `…C`，从未对上；原测试只查「不重复」没发现。改为只 remangle `Type` 节点，补回归测试；sidebar 的互相跳转共用这段。
 - [侧栏点击后高亮变灰、右键菜单要点很多次](ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md)（2026-09-24）—— AppKitPlus 导航控制器在转场结束时把第一响应者交给页面的普通容器视图，而第一响应者是表格的祖先容器时，AppKit 既不在点击行时把焦点交给表格（选中画成灰色），也不在右键时打开表格菜单；纯 AppKit 探针复现，与 macOS 27 SDK 的点击路由改动无关。侧栏页面改为把焦点交给列表，AppKitPlus 提案 0041 改默认值。
 
 - [侧栏转场背景在 macOS 27 上永远差一点](ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md)（2026-09-18）—— 26 起 split view 给 sidebar 塞了 `NSGlassEffectView`，任何颜色或材质都对不上，27 又改了玻璃样式，转场时原本的 `windowBackgroundColor` 变成明显一块深色。页面不再常驻背景，改由 `NavigationTransitionBackdropController` 在 push / pop 期间给两页各插一块复刻同组玻璃的 `GlassEffectReplicaView`，转场结束即卸载。

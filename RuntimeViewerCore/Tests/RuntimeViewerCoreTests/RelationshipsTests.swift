@@ -194,6 +194,28 @@ struct RelationshipsTests {
         }
     }
 
+    /// The dedup above holds just as well when a bridged subclass is dropped
+    /// altogether — which every one was: the lookup remangled the whole
+    /// `_TtC…` demangling, a type mangling (`$s…CD`), against keys that are
+    /// the bare type (`…C`), so no bridged class ever materialized. Foundation's
+    /// Swift half has classes deriving straight from `NSObject`; they reach the
+    /// Objective-C class list as bridged classes and must come back as their
+    /// Swift selves.
+    @Test("Bridged subclasses surface as their Swift classes")
+    func bridgedSubclassesSurface() async throws {
+        let engine = RuntimeEngine(source: .local, engineID: "test-rel-bridged-surface")
+        try await engine.connect()
+        try await engine.loadAndAwaitIndexed(Anchors.libobjcPath)
+        try await engine.loadAndAwaitIndexed(Anchors.foundationPath)
+
+        let nsObject = try await engine.findNSObject()
+        let relationships = try await engine.relationships(for: nsObject)
+
+        // An `NSObject` target takes only the Objective-C arm, so every Swift
+        // class here came through the bridged lookup.
+        #expect(relationships.subclasses.contains { $0.kind == .swift(.type(.class)) }, "no bridged Swift subclass of NSObject surfaced")
+    }
+
     // MARK: - Test 7: Transitive exclusion
 
     @Test("Transitive protocol conformance is not synthesized")

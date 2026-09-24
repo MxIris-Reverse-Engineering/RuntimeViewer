@@ -615,6 +615,47 @@ extension RuntimeSwiftSection {
 }
 
 extension RuntimeSwiftSection {
+    // MARK: - Objective-C Counterparts
+
+    /// The Swift class that an Objective-C class of this image is the other
+    /// face of, found by the class's runtime name. `nil` for a name that is no
+    /// Swift mangling (`@objc(CustomName)`) or that names no type here.
+    ///
+    /// The Inspector's relationship rows reach bridged subclasses through this
+    /// too, so the sidebar's jump and those rows cannot disagree.
+    func makeRuntimeObject(forObjCRuntimeClassName className: String) -> RuntimeObject? {
+        guard let mangledTypeName = Self.mangledTypeName(forObjCRuntimeClassName: className) else { return nil }
+        return makeRuntimeObject(forMangledTypeName: mangledTypeName)
+    }
+
+    /// An Objective-C runtime name demangled and remangled: for a Swift class
+    /// (`_TtC6AppKitP33_…24FontPanelBIUSPopUpButton`) that is the very name its
+    /// Swift `RuntimeObject` carries. `nil` for a name that is no Swift
+    /// mangling.
+    ///
+    /// Only the `Type` node is remangled. The runtime name demangles as a whole
+    /// type mangling — `Global(TypeMangling(Type(Class(…))))` — whose remangling
+    /// is a symbol (`$s…CD`), while a Swift type's name is its `Type` node
+    /// alone, the shape `SymbolicDemangler.demangleContext` builds (`…C`).
+    /// Remangling the whole tree matched nothing, and until 2026-09-24 every
+    /// bridged subclass the Inspector's relationship rows looked up this way
+    /// was dropped.
+    ///
+    /// The tree is thrown away once remangled, so it is demangled
+    /// transiently: `demangleAsNode` would intern it into the library's global
+    /// cache, which never evicts. Remangling a transient tree is sound because
+    /// the remangler's substitution table compares nodes structurally.
+    static func mangledTypeName(forObjCRuntimeClassName className: String) -> String? {
+        guard var node = try? demangleAsNodeTransient(className, isType: false) else { return nil }
+        while node.kind == .global || node.kind == .typeMangling, let child = node.children.first {
+            node = child
+        }
+        guard node.kind == .type else { return nil }
+        return try? mangleAsString(node)
+    }
+}
+
+extension RuntimeSwiftSection {
     // MARK: - Generic Specialization
 
     func specializationRequest(for object: RuntimeObject) async throws -> RuntimeSpecializationRequest {
