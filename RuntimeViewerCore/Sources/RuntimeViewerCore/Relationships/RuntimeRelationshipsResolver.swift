@@ -1,6 +1,5 @@
 import Foundation
 import OrderedCollections
-import Demangling
 
 /// Cross-image relationship resolver backing the Inspector's Relationships tab.
 ///
@@ -162,32 +161,11 @@ actor RuntimeRelationshipsResolver {
     /// never the intent. The equivalence snapshot covers the practical case.
     private func materializeObjCReference(_ reference: RuntimeObjCClassReference) async -> RuntimeObject? {
         if reference.isSwiftStable {
-            // The tree is discarded the moment it has been remangled, so
-            // demangle it transiently: `demangleAsNode` interns every node it
-            // produces into the library's global cache, which never evicts, so
-            // a one-shot use like this one keeps the whole tree resident for
-            // the rest of the process. `demangleAsNodeTransient` ships sync
-            // only — a single-symbol demangle costs microseconds, so there is
-            // nothing worth hopping for. `mangleAsString` still has both a
-            // sync and an async overload and the compiler picks the async one
-            // inside this `async` context, which is why only that line awaits.
-            //
-            // A transient tree is not canonical — structurally equal nodes are
-            // not guaranteed to be distinct instances, and the reverse does not
-            // hold either — so remangling it would be unsound if the remangler
-            // keyed its substitution table by node identity. It does not:
-            // `SubstitutionEntry` compares nodes structurally (`deepEquals`),
-            // and identity is only ever a memoization fast path that falls back
-            // to recomputation on a miss. So `swiftMangled` comes out identical
-            // to what an interned tree would produce, which is what keeps it in
-            // the same key space as `makeRuntimeObject(forMangledTypeName:)`.
-            if let node = try? demangleAsNodeTransient(reference.className, isType: false),
-               let swiftMangled = try? await mangleAsString(node),
-               let swiftSection = await swiftSectionFactory.existingSection(for: reference.imagePath),
-               let runtimeObject = await swiftSection.makeRuntimeObject(forMangledTypeName: swiftMangled) {
-                return runtimeObject
-            }
-            return nil
+            // The runtime name remangles to the Swift section's own key; the
+            // section does that in one place, which the sidebar's jump between
+            // a class's two faces goes through as well.
+            guard let swiftSection = await swiftSectionFactory.existingSection(for: reference.imagePath) else { return nil }
+            return await swiftSection.makeRuntimeObject(forObjCRuntimeClassName: reference.className)
         }
         guard let objcSection = await objcSectionFactory.existingSection(for: reference.imagePath) else { return nil }
         return await objcSection.makeRuntimeObject(forClassName: reference.className)

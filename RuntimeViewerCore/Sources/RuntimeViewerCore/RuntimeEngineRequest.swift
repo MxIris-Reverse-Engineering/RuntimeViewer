@@ -163,6 +163,7 @@ extension RuntimeEngine {
         register(InterfaceRequest.self, on: connection, engine: engine)
         register(HierarchyRequest.self, on: connection, engine: engine)
         register(RelationshipsRequest.self, on: connection, engine: engine)
+        register(CounterpartRequest.self, on: connection, engine: engine)
         register(MemberAddressesRequest.self, on: connection, engine: engine)
         register(SpecializationRequestForObjectRequest.self, on: connection, engine: engine)
         register(SpecializationRequestForCandidateRequest.self, on: connection, engine: engine)

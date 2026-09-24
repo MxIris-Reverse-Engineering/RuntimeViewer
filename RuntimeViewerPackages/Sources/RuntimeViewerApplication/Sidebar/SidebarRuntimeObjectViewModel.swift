@@ -190,6 +190,11 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         /// no such control pass `.just(false)` for the case-insensitive
         /// default.
         public let isSearchCaseSensitive: Driver<Bool>
+        /// Row context menu "Jump to Swift Class" / "Jump to Objective-C
+        /// Class": push the other face of the row's class
+        /// (`RuntimeEngine.counterpart(for:)`). macOS only.
+        @Init(default: Signal<SidebarRuntimeObjectCellViewModel>.empty())
+        public let runtimeObjectCounterpartRequested: Signal<SidebarRuntimeObjectCellViewModel>
     }
 
     public struct Output {
@@ -211,6 +216,29 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
         public let reloadRow: Signal<SidebarRuntimeObjectCellViewModel>
+    }
+
+    /// One answer to a counterpart request, carried with the object it was
+    /// asked about so a miss can name it.
+    struct CounterpartLookup {
+        let runtimeObject: RuntimeObject
+        let result: Result<RuntimeObject?, any Error>
+    }
+
+    /// The row's marks promised another face that its image then could not
+    /// find — in practice a class renamed with `@objc(…)`, whose runtime name
+    /// is no Swift mangling.
+    public struct CounterpartNotFoundError: LocalizedError {
+        public let runtimeObject: RuntimeObject
+
+        public var errorDescription: String? {
+            "No counterpart was found for \(runtimeObject.displayName)."
+        }
+
+        public var recoverySuggestion: String? {
+            guard runtimeObject.counterpartKind == .swiftClass else { return nil }
+            return "Its Objective-C name is not a Swift mangled name — the class was probably renamed with @objc(…) — so it cannot be matched to its Swift class."
+        }
     }
 
     @MainActor
@@ -272,6 +300,37 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
                 #endif
             }
             .disposed(by: rx.disposeBag)
+
+        #if os(macOS)
+        // Pushed like a row click, so the jump enters the history and the
+        // sidebar selects the other face's row.
+        input.runtimeObjectCounterpartRequested
+            .flatMapLatest { [weak self] cellViewModel -> Signal<CounterpartLookup> in
+                guard let self else { return .empty() }
+                let runtimeObject = cellViewModel.runtimeObject
+                let runtimeEngine = self.runtimeEngine
+                return Observable<CounterpartLookup>.async {
+                    do {
+                        return CounterpartLookup(runtimeObject: runtimeObject, result: .success(try await runtimeEngine.counterpart(for: runtimeObject)))
+                    } catch {
+                        return CounterpartLookup(runtimeObject: runtimeObject, result: .failure(error))
+                    }
+                }
+                .asSignal(onErrorSignalWith: .empty())
+            }
+            .emitOnNextMainActor { [weak self] lookup in
+                guard let self else { return }
+                switch lookup.result {
+                case .success(let counterpart?):
+                    documentState.selectionRouter.trigger(.push(counterpart))
+                case .success(nil):
+                    errorRelay.accept(CounterpartNotFoundError(runtimeObject: lookup.runtimeObject))
+                case .failure(let error):
+                    errorRelay.accept(error)
+                }
+            }
+            .disposed(by: rx.disposeBag)
+        #endif
 
         input.loadImageClicked.emitOnNextMainActor { [weak self] in
             guard let self else { return }

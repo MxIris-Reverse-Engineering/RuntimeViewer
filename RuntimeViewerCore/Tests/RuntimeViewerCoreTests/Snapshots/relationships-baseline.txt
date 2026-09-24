@@ -1,4 +1,5 @@
-## subclasses of NSObject (307)
+## subclasses of NSObject (315)
+Swift Class|__C.NSNotificationCenter.NotificationMessageKey|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|__IncompleteProtocol|/usr/lib/libobjc.A.dylib
 Objective-C Class|__NSBundleTables|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|__NSObserver|/System/Library/Frameworks/Foundation.framework/Foundation
@@ -78,6 +79,13 @@ Objective-C Class|_NSXPCConnectionImportInfo|/System/Library/Frameworks/Foundati
 Objective-C Class|_NSXPCConnectionRequestedReplies|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|_NSXPCDistantObject|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|_NSXPCRemoteTransport|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Class|Foundation.__KVOKeyPathBridgeMachinery|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Class|Foundation.__KVOKeyPathBridgeMachinery.BridgeKey|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Class|Foundation._BridgedURL|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Class|Foundation._CombineRunLoopAction|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Class|Foundation._NotificationCenterActorQueueManagerNSObjectWrapper|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Class|Foundation.NSKeyValueObservation.Helper|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Class|Foundation.URLSessionAsyncBytesDelegate|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|NSAEDescriptorTranslator|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|NSAffineTransform|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|NSAKDeserializer|/System/Library/Frameworks/Foundation.framework/Foundation
@@ -318,7 +326,8 @@ Objective-C Class|NSScriptObjectSpecifier|/System/Library/Frameworks/Foundation.
 Objective-C Class|NSScriptWhoseTest|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|NSUserNotification|/System/Library/Frameworks/Foundation.framework/Foundation
 
-## conformers of NSCopying (68)
+## conformers of NSCopying (70)
+Swift Class|__C.NSNotificationCenter.NotificationMessageKey|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|_NSAttributedStringGrammar|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|_NSAttributedStringGrammarInflection|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|_NSKeyValueObjectAndKeyPair|/System/Library/Frameworks/Foundation.framework/Foundation
@@ -330,6 +339,7 @@ Objective-C Class|_NSSharedKeySetS|/System/Library/Frameworks/Foundation.framewo
 Objective-C Class|_NSStringFormattingOptions|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|_NSUndoActionInfo|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|_NSUUIDBridge|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Class|Foundation.__KVOKeyPathBridgeMachinery.BridgeKey|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|NSAffineTransform|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|NSAppleEventDescriptor|/System/Library/Frameworks/Foundation.framework/Foundation
 Objective-C Class|NSAppleScript|/System/Library/Frameworks/Foundation.framework/Foundation

@@ -34,7 +34,7 @@
 
 ## 提案（Evolutions）
 
-见 [`Evolutions/README.md`](Evolutions/README.md)。当前 21 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、高基数 Cell ViewModel 的 Appearance 单流化、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏、Helper 设置页的重装按钮、App 图标按 Icon Composer 版本分两份文档、RuntimeObject 的相等性只表达身份；另有 7 篇待编号草案：本地运行时引擎搬进内嵌 XPC service（`.local` 身份不变，执行方式改为 XPC service）、RuntimeBookmarkScope（把持久化身份从显示名手里拿走）、给 `@objc @implementation` 实现的 ObjC 类加粉色角标，以及愿景《无头 RuntimeViewer》下的四篇——引擎管理下沉为无 UI 模块、`runtime-viewer-cli` 基础（协议 / 常驻 host / 本地来源）、多来源与 App 充当 host、嵌入 App 包与设置页。
+见 [`Evolutions/README.md`](Evolutions/README.md)。当前 21 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、高基数 Cell ViewModel 的 Appearance 单流化、MCP Transport 绑定失败回收、ObjC 关系索引归还应用侧、ObjC 与 Swift 索引层对称化、内容视图编辑器选型、接口导出成图片、接入 UIFoundation Settings、用 AppKitPlus 取代 UXKit、支持注入 iOS Simulator 进程、构建阶段产出嵌入的 iOS-family 产物（已撤回）、RuntimeViewerApplication ViewModel 测试覆盖、`@Observed` 惰性创建 relay、`@RxObserved` 宏、Helper 设置页的重装按钮、App 图标按 Icon Composer 版本分两份文档、RuntimeObject 的相等性只表达身份；另有 8 篇待编号草案：本地运行时引擎搬进内嵌 XPC service（`.local` 身份不变，执行方式改为 XPC service）、RuntimeBookmarkScope（把持久化身份从显示名手里拿走）、给 `@objc @implementation` 实现的 ObjC 类加粉色角标、ObjC 类与 Swift 类互标角标并互相跳转，以及愿景《无头 RuntimeViewer》下的四篇——引擎管理下沉为无 UI 模块、`runtime-viewer-cli` 基础（协议 / 常驻 host / 本地来源）、多来源与 App 充当 host、嵌入 App 包与设置页。
 
 ## 设计与实现计划（Plans，归档）
 
@@ -95,6 +95,7 @@
 
 按时间倒序。
 
+- [Relationships 面板丢掉了全部桥出的 Swift 子类](ResolvedIssues/2026-09-24-relationships-dropped-every-bridged-subclass.md)（2026-09-24）—— 用 ObjC 运行时名找 Swift 类时整棵 remangle，`_TtC…` 的 demangle 结果是完整的类型 mangling，remangle 出符号 `$s…CD`，而 Swift 侧的键是 `Type` 节点单独 mangle 的 `…C`，从未对上；原测试只查「不重复」没发现。改为只 remangle `Type` 节点，补回归测试；sidebar 的互相跳转共用这段。
 - [侧栏点击后高亮变灰、右键菜单要点很多次](ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md)（2026-09-24）—— AppKitPlus 导航控制器在转场结束时把第一响应者交给页面的普通容器视图，而第一响应者是表格的祖先容器时，AppKit 既不在点击行时把焦点交给表格（选中画成灰色），也不在右键时打开表格菜单；纯 AppKit 探针复现，与 macOS 27 SDK 的点击路由改动无关。侧栏页面改为把焦点交给列表，AppKitPlus 提案 0041 改默认值。
 
 - [侧栏转场背景在 macOS 27 上永远差一点](ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md)（2026-09-18）—— 26 起 split view 给 sidebar 塞了 `NSGlassEffectView`，任何颜色或材质都对不上，27 又改了玻璃样式，转场时原本的 `windowBackgroundColor` 变成明显一块深色。页面不再常驻背景，改由 `NavigationTransitionBackdropController` 在 push / pop 期间给两页各插一块复刻同组玻璃的 `GlassEffectReplicaView`，转场结束即卸载。

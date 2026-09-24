@@ -35,6 +35,8 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     private let openInNewTabRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
+    private let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+
     @Dependency(\.appDefaults)
     private var appDefaults
 
@@ -180,6 +182,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 filterModeDidChange.asDriver(),
             ),
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
+            runtimeObjectCounterpartRequested: counterpartRequestedRelay.asSignal(),
         )
 
         let output = viewModel.transform(input)
@@ -312,16 +315,35 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
     }
 
     /// Context-menu entries for the clicked row. Override point: this base
-    /// class contributes only "Open in New Tab"; subclasses call `super` and
-    /// append their own entries. Because every entry carries its own `action`,
-    /// the base never needs to know which items a subclass added.
+    /// class contributes "Open in New Tab" and, for a class both lists show,
+    /// the jump to its other face; subclasses call `super` and append their
+    /// own entries. Because every entry carries its own `action`, the base
+    /// never needs to know which items a subclass added.
     func contextMenuItems(for cellViewModel: SidebarRuntimeObjectCellViewModel, clickedRow: Int) -> [SidebarRuntimeObjectMenuItem] {
-        [
+        var menuItems = [
             SidebarRuntimeObjectMenuItem(title: "Open in New Tab", image: SFSymbols(name: RuntimeViewerSymbols.tabbarTopRectangle).nsImage) { [weak self] in
                 guard let self else { return }
                 openInNewTabRelay.accept(cellViewModel)
             },
         ]
+        if let counterpartKind = cellViewModel.runtimeObject.counterpartKind {
+            menuItems.append(SidebarRuntimeObjectMenuItem(title: Self.counterpartMenuItemTitle(for: counterpartKind), image: SFSymbols(systemName: .arrowLeftArrowRight).nsuiImgae) { [weak self] in
+                guard let self else { return }
+                counterpartRequestedRelay.accept(cellViewModel)
+            })
+        }
+        return menuItems
+    }
+
+    private static func counterpartMenuItemTitle(for counterpartKind: RuntimeObjectCounterpartKind) -> String {
+        switch counterpartKind {
+        case .swiftClass:
+            return "Jump to Swift Class"
+        case .swiftImplementation:
+            return "Jump to Swift Implementation"
+        case .objcClass:
+            return "Jump to Objective-C Class"
+        }
     }
 }
 

@@ -10,6 +10,7 @@ import Foundation
 import FoundationToolbox
 import FrameworkToolbox
 import MachOKit
+import MachOObjCSection
 import MachOSwiftSection
 import OrderedCollections
 import Semantic
@@ -105,6 +106,23 @@ actor RuntimeSwiftSection {
     /// interactions.
     private lazy var specializer: GenericSpecializer<MachOImage> = .init(machO: machO, conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream), indexer: factory.indexer.upstream)
 
+    /// Mangled type name → Objective-C runtime name, for every Swift class
+    /// this image registers with the Objective-C runtime: the
+    /// `__objc_classlist` entries with the Swift bit set, whose runtime names
+    /// (`_TtC6AppKitP33_…24FontPanelBIUSPopUpButton`) remangle to exactly the
+    /// name a Swift `RuntimeObject` carries. One table answers both the
+    /// `isObjCClass` mark and the jump to the Objective-C face. An
+    /// `@objc(CustomName)` class is absent — its name is no mangling.
+    ///
+    /// Lazy, but `allObjects()` reads it while `init` runs.
+    private lazy var objcClassNameByMangledTypeName: [String: String] = Self.objcClassNamesByMangledTypeName(in: machO)
+
+    /// The `@objc @implementation` extensions `allObjects()` listed, by the
+    /// Objective-C class each one implements, and the way back.
+    private var objcImplementationExtensionObjectByClassName: [String: RuntimeObject] = [:]
+
+    private var objcImplementationClassNameByExtensionMangledName: [String: String] = [:]
+
     private enum InterfaceDefinitionName {
         case rootType(SwiftDeclaration.TypeName)
         case childType(SwiftDeclaration.TypeName)
@@ -192,8 +210,22 @@ actor RuntimeSwiftSection {
         let typeChildren = try extensionDefintions.flatMap(\.types).map { try makeRuntimeObject(for: $0, isChild: true) }
         let protocolChildren = try extensionDefintions.flatMap(\.protocols).map { try makeRuntimeObject(for: $0, isChild: true) }
         let mangledName = try mangleAsString(extensionName.node)
-        let runtimeObjectName = RuntimeObject(name: mangledName, displayName: extensionName.name, kind: kind, imagePath: imagePath, children: typeChildren + protocolChildren)
+        // An `@objc @implementation extension` is the Swift face of the
+        // Objective-C class it implements; MachOSwiftSection records which.
+        let objcImplementationClassName = extensionDefintions.lazy.compactMap { $0.objcImplementation?.className }.first
+        let runtimeObjectName = RuntimeObject(
+            name: mangledName,
+            displayName: extensionName.name,
+            kind: kind,
+            imagePath: imagePath,
+            children: typeChildren + protocolChildren,
+            properties: objcImplementationClassName == nil ? [] : [.isObjCImplementation]
+        )
         interfaceDefinitionNameByObject[runtimeObjectName.key] = definitionName
+        if let objcImplementationClassName {
+            objcImplementationExtensionObjectByClassName[objcImplementationClassName] = runtimeObjectName
+            objcImplementationClassNameByExtensionMangledName[mangledName] = objcImplementationClassName
+        }
         return runtimeObjectName
     }
 
@@ -237,7 +269,10 @@ actor RuntimeSwiftSection {
         if isSpecialized {
             properties.insert(.isSpecialized)
         }
-        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.name
+        if objcClassNameByMangledTypeName[mangledName] != nil {
+            properties.insert(.isObjCClass)
+        }
+        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric).union(.showPrivateDiscriminators)) : typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.union(.showPrivateDiscriminators))
 
         let runtimeObject = RuntimeObject(
             name: mangledName,
@@ -554,6 +589,9 @@ extension RuntimeSwiftSection {
         if isSpecialized {
             properties.insert(.isSpecialized)
         }
+        if objcClassNameByMangledTypeName[mangledName] != nil {
+            properties.insert(.isObjCClass)
+        }
         let displayName = isSpecialized
             ? typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric))
             : typeName.name
@@ -611,6 +649,93 @@ extension RuntimeSwiftSection {
             result[mangled] = (protocolName, machO)
         }
         return result
+    }
+}
+
+extension RuntimeSwiftSection {
+    // MARK: - Objective-C Counterparts
+
+    /// The Swift class that an Objective-C class of this image is the other
+    /// face of, found by the class's runtime name. `nil` for a name that is no
+    /// Swift mangling (`@objc(CustomName)`) or that names no type here.
+    ///
+    /// The Inspector's relationship rows reach bridged subclasses through this
+    /// too, so the sidebar's jump and those rows cannot disagree.
+    func makeRuntimeObject(forObjCRuntimeClassName className: String) -> RuntimeObject? {
+        guard let mangledTypeName = Self.mangledTypeName(forObjCRuntimeClassName: className) else { return nil }
+        return makeRuntimeObject(forMangledTypeName: mangledTypeName)
+    }
+
+    /// The `@objc @implementation` extension holding the Swift bodies of the
+    /// Objective-C class `className`, as `allObjects()` listed it.
+    func makeRuntimeObject(forObjCImplementationClassNamed className: String) -> RuntimeObject? {
+        objcImplementationExtensionObjectByClassName[className]
+    }
+
+    /// The runtime name of the Objective-C class `object` is the Swift face
+    /// of: a Swift class registered with the Objective-C runtime, or an
+    /// `@objc @implementation` extension. `nil` for anything else.
+    func objcClassName(forCounterpartOf object: RuntimeObject) -> String? {
+        switch object.kind {
+        case .swift(.type(.class)):
+            return objcClassNameByMangledTypeName[object.name]
+        case .swift(.extension):
+            return objcImplementationClassNameByExtensionMangledName[object.name]
+        default:
+            return nil
+        }
+    }
+
+    /// An Objective-C runtime name demangled and remangled: for a Swift class
+    /// (`_TtC6AppKitP33_…24FontPanelBIUSPopUpButton`) that is the very name its
+    /// Swift `RuntimeObject` carries. `nil` for a name that is no Swift
+    /// mangling.
+    ///
+    /// Only the `Type` node is remangled. The runtime name demangles as a whole
+    /// type mangling — `Global(TypeMangling(Type(Class(…))))` — whose remangling
+    /// is a symbol (`$s…CD`), while a Swift type's name is its `Type` node
+    /// alone, the shape `SymbolicDemangler.demangleContext` builds (`…C`).
+    /// Remangling the whole tree matched nothing, and until 2026-09-24 every
+    /// bridged subclass the Inspector's relationship rows looked up this way
+    /// was dropped.
+    ///
+    /// The tree is thrown away once remangled, so it is demangled
+    /// transiently: `demangleAsNode` would intern it into the library's global
+    /// cache, which never evicts. Remangling a transient tree is sound because
+    /// the remangler's substitution table compares nodes structurally.
+    static func mangledTypeName(forObjCRuntimeClassName className: String) -> String? {
+        guard var node = try? demangleAsNodeTransient(className, isType: false) else { return nil }
+        while node.kind == .global || node.kind == .typeMangling, let child = node.children.first {
+            node = child
+        }
+        guard node.kind == .type else { return nil }
+        return try? mangleAsString(node)
+    }
+
+    fileprivate static func objcClassNamesByMangledTypeName(in machO: MachOImage) -> [String: String] {
+        var objcClassNameByMangledTypeName: [String: String] = [:]
+        for objcClass in machO.objc.classes64 ?? [] where objcClass.isSwiftStable {
+            guard let className = runtimeName(of: objcClass, in: machO),
+                  let mangledTypeName = mangledTypeName(forObjCRuntimeClassName: className)
+            else { continue }
+            objcClassNameByMangledTypeName[mangledTypeName] = className
+        }
+        return objcClassNameByMangledTypeName
+    }
+
+    /// The name in the class's `class_ro_t`. Once the runtime has realized a
+    /// class — as it has most classes of an image in use — its data pointer
+    /// leads to `class_rw_t` instead, which holds the read-only data either
+    /// directly or through its extension.
+    private static func runtimeName(of objcClass: ObjCClass64, in machO: MachOImage) -> String? {
+        if let readOnlyData = objcClass.classROData(in: machO) {
+            return readOnlyData.name(in: machO)
+        }
+        guard let readWriteData = objcClass.classRWData(in: machO) else { return nil }
+        if let readOnlyData = readWriteData.classROData(in: machO) {
+            return readOnlyData.name(in: machO)
+        }
+        return readWriteData.ext(in: machO)?.classROData(in: machO)?.name(in: machO)
     }
 }
 
