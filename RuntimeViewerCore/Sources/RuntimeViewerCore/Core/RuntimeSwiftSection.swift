@@ -237,7 +237,7 @@ actor RuntimeSwiftSection {
         if isSpecialized {
             properties.insert(.isSpecialized)
         }
-        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric)) : typeDefinition.typeName.name
+        let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric).union(.showPrivateDiscriminators)) : typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.union(.showPrivateDiscriminators))
 
         let runtimeObject = RuntimeObject(
             name: mangledName,
