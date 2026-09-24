@@ -864,6 +864,8 @@ Two causes account for every flicker found so far — check them first:
 
 Full write-up, including the frame table that pinned it down: `Documentations/ResolvedIssues/2026-08-05-sidebar-selection-highlight-flicker.md`.
 
+**A selection that stays grey in a key window, and a context menu that will not open, is not flicker.** It means focus is parked on a plain container *above* the list: while an ancestor container is first responder, AppKit neither moves focus into a table the user clicks nor opens its menu on a right-click. AppKitPlus's navigation controller hands the first responder to the page's `preferredFirstResponder` at the end of every push, pop and `set`, so a page that holds a list overrides it to return the list, only while it is in the window — `TabViewController` forwards it to the tab on screen. Reproduce this with a real navigation, not by making the outline first responder first: that skips the very state that triggers it. Write-up: `Documentations/ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md`.
+
 ### RxSwift Subscription Style
 
 **Always use trailing-closure variants** (NOT `.emit(onNext:)` / `.drive(onNext:)` / `.subscribe(onNext:)` label syntax):
