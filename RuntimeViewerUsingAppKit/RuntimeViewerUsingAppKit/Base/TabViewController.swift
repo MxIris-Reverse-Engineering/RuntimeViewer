@@ -108,9 +108,9 @@ class TabViewController: NSLayerBackedViewController {
     /// what gets focus.
     ///
     /// An answer that refuses focus is not passed on: up to 0.4.4 AppKitPlus answers a page's plain
-    /// root view by default, and while an ancestor container is first responder, AppKit does not
-    /// move focus into a table the user clicks — the selection draws grey — and right-clicking a
-    /// row no longer opens the table's menu. `nil` makes the window first responder, which clicks
+    /// root view by default, and while an ancestor container is first responder, right-clicking a
+    /// row's text does not open the table's menu, and on macOS 27 a click no longer moves focus into
+    /// the table — the selection draws grey. `nil` makes the window first responder, which clicks
     /// move off normally. Background:
     /// `Documentations/ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md`.
     override var preferredFirstResponder: NSResponder? {
