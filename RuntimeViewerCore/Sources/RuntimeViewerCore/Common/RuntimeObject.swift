@@ -18,11 +18,12 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// substituted in.
         public static let isSpecialized = Self(rawValue: 1 << 1)
 
-        /// Marks an Objective-C class whose implementation is written in Swift
-        /// as an `@objc @implementation extension` (SE-0436). The compiler
-        /// emits such a class as a PURE Objective-C class — the Swift bit of
-        /// its class data pointer is clear — so it never gets `isSwiftClass`.
-        /// The two are mutually exclusive for that reason, and the badge they
+        /// Marks both faces of a class implemented through an
+        /// `@objc @implementation extension` (SE-0436): the Objective-C class,
+        /// and the Swift `extension` carrying its bodies. The compiler emits
+        /// such a class as a PURE Objective-C class — the Swift bit of its
+        /// class data pointer is clear — so it never gets `isSwiftClass`. The
+        /// two are mutually exclusive for that reason, and the badge they
         /// drive is picked in one place:
         /// `RuntimeObjectIcon.secondaryIcon(for:)`.
         public static let isObjCImplementation = Self(rawValue: 1 << 2)
@@ -32,6 +33,12 @@ public struct RuntimeObject: Hashable, Identifiable, Sendable {
         /// pointer is set (`isSwiftStable`). Mutually exclusive with
         /// `isObjCImplementation`; see that case for why.
         public static let isSwiftClass = Self(rawValue: 1 << 3)
+
+        /// The Swift face of `isSwiftClass`: a Swift class whose class object
+        /// its image registers with the Objective-C runtime, so the Objective-C
+        /// class list carries it too. Generic and specialized classes have no
+        /// static class object and never get it.
+        public static let isObjCClass = Self(rawValue: 1 << 4)
     }
 
     public let name: String

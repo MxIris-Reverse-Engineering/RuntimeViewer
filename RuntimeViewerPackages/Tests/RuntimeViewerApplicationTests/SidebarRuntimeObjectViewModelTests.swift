@@ -90,19 +90,75 @@ struct SidebarRuntimeObjectViewModelTests {
         #expect(errorText.contains(TestImages.libobjc))
     }
 
+    // MARK: - Counterpart
+
+    @Test("a counterpart request pushes the other face of the row's class")
+    func counterpartRequestPushesTheOtherFace() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let bridgedClass = try await bridgedClassWithSwiftFace(in: engine)
+        let expectedCounterpart = try #require(try await engine.counterpart(for: bridgedClass))
+        let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+        let (viewModel, _) = try makeViewModel(imagePath: TestImages.foundation, counterpartRequested: counterpartRequestedRelay.asSignal(), in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        counterpartRequestedRelay.accept(environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: bridgedClass, forOpenQuickly: false) })
+
+        let selected = try await nextValue(from: environment.documentState.$selectedRuntimeObject) { $0 == expectedCounterpart }
+        #expect(selected?.kind == .swift(.type(.class)))
+        #expect(router.triggeredRoutes.isEmpty)
+    }
+
+    /// The marks promise a face the image may not find: a class renamed with
+    /// `@objc(…)` is bridged like any other, but its runtime name is no Swift
+    /// mangling.
+    @Test("a counterpart the image cannot find is reported and nothing is pushed")
+    func missingCounterpartIsReported() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let unmatchableClass = Fixtures.runtimeObject(name: "RenamedWithObjCAttribute", kind: .objc(.type(.class)), imagePath: TestImages.foundation, properties: [.isSwiftClass])
+        let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
+        let (viewModel, _) = try makeViewModel(imagePath: TestImages.foundation, counterpartRequested: counterpartRequestedRelay.asSignal(), in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let disposeBag = DisposeBag()
+        let reportedErrors = ReplaySubject<any Error>.create(bufferSize: 1)
+        viewModel.errorRelay.bind(to: reportedErrors).disposed(by: disposeBag)
+
+        counterpartRequestedRelay.accept(environment.make { SidebarRuntimeObjectCellViewModel(runtimeObject: unmatchableClass, forOpenQuickly: false) })
+
+        let reportedError = try await nextValue(from: reportedErrors)
+        let notFound = try #require(reportedError as? SidebarRuntimeObjectViewModel.CounterpartNotFoundError)
+        #expect(notFound.runtimeObject == unmatchableClass)
+        #expect(notFound.recoverySuggestion != nil, "a bridged class that finds no Swift face should say why")
+        #expect(environment.documentState.selectedRuntimeObject == nil)
+    }
+
     // MARK: - Helpers
+
+    /// A class of Foundation that is a Swift class bridged out and does find
+    /// its Swift face — whichever the running system has first.
+    private func bridgedClassWithSwiftFace(in engine: RuntimeEngine) async throws -> RuntimeObject {
+        for object in try await engine.objects(in: TestImages.foundation) where object.counterpartKind == .swiftClass && object.name.hasPrefix("_Tt") {
+            if try await engine.counterpart(for: object) != nil {
+                return object
+            }
+        }
+        throw MissingRuntimeObject(name: "a bridged Swift class with a Swift face", imagePath: TestImages.foundation)
+    }
 
     private func makeViewModel(
         imagePath: String,
+        counterpartRequested: Signal<SidebarRuntimeObjectCellViewModel> = .empty(),
         in environment: ViewModelTestEnvironment
     ) throws -> (SidebarRuntimeObjectViewModel, SidebarRuntimeObjectViewModel.Output) {
         let tree = Fixtures.imageTree(rootName: "Root", imagePaths: [imagePath])
         let leaf = try #require(tree.leaf(forImagePath: imagePath))
-        return try makeViewModel(imageNode: leaf, in: environment)
+        return try makeViewModel(imageNode: leaf, counterpartRequested: counterpartRequested, in: environment)
     }
 
     private func makeViewModel(
         imageNode: RuntimeImageNode,
+        counterpartRequested: Signal<SidebarRuntimeObjectCellViewModel> = .empty(),
         in environment: ViewModelTestEnvironment
     ) throws -> (SidebarRuntimeObjectViewModel, SidebarRuntimeObjectViewModel.Output) {
         let viewModel = environment.make {
@@ -114,7 +170,8 @@ struct SidebarRuntimeObjectViewModelTests {
                 runtimeObjectOpenedInNewTab: .empty(),
                 loadImageClicked: loadImageRelay.asSignal(),
                 searchString: .just(""),
-                isSearchCaseSensitive: .just(false)
+                isSearchCaseSensitive: .just(false),
+                runtimeObjectCounterpartRequested: counterpartRequested
             )
         )
         return (viewModel, output)

@@ -107,17 +107,23 @@ public enum RuntimeObjectIcon {
         return icon(text: text, color: color, size: size, style: style)
     }
 
-    /// The badge that sits beside `icon(for: object.kind)`. An ObjC class
-    /// reaches it two ways and they are mutually exclusive — the Swift bit of
-    /// a class data pointer is either set (a bridged Swift class, blue `C`)
-    /// or clear (possibly an `@objc @implementation`, pink `C`) — so the
-    /// choice is made here, once, rather than at each call site.
+    /// The badge that sits beside `icon(for: object.kind)`: the other face of a
+    /// class both lists show, so the choice is made here, once, rather than at
+    /// each call site. A bridged class's two faces badge each other — the
+    /// Objective-C entry gets a blue Swift `C` (`isSwiftClass`), the Swift
+    /// entry an orange Objective-C `C` (`isObjCClass`). An `@objc
+    /// @implementation` pair carries the pink `C` on both faces, the class and
+    /// its extension. On the Objective-C side the first two are mutually
+    /// exclusive — the Swift bit of a class data pointer is either set or clear.
     public static func secondaryIcon(for object: RuntimeObject, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage? {
         if object.properties.contains(.isObjCImplementation) {
             return iconForObjCImplementation(size: size, style: style)
         }
         if object.properties.contains(.isSwiftClass) {
             return icon(for: .swift(.type(.class)), size: size, style: style)
+        }
+        if object.properties.contains(.isObjCClass) {
+            return icon(for: .objc(.type(.class)), size: size, style: style)
         }
         return nil
     }

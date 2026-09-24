@@ -134,6 +134,14 @@ extension RuntimeEngine {
         }
     }
 
+    struct CounterpartRequest: RuntimeEngineRequest {
+        let object: RuntimeObject
+        static var commandName: String { CommandNames.runtimeCounterpartForObject.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeObject? {
+            await engine._counterpart(for: object)
+        }
+    }
+
     struct MemberAddressesRequest: RuntimeEngineRequest {
         let object: RuntimeObject
         let memberName: String?

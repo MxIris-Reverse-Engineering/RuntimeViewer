@@ -67,6 +67,7 @@ public actor RuntimeEngine {
         case patchImagePathForDyld
         case runtimeObjectHierarchy
         case runtimeRelationshipsForObject
+        case runtimeCounterpartForObject
         case runtimeObjectInfo
         case imageNameOfClassName
         case observeRuntime
@@ -1089,6 +1090,36 @@ extension RuntimeEngine {
 
     func _relationships(for object: RuntimeObject) async -> RuntimeRelationships {
         await relationshipsResolver.relationships(for: object)
+    }
+
+    /// The other face of a class both lists show: the Swift class of a bridged
+    /// Objective-C class, the extension implementing an `@objc @implementation`
+    /// class, or the Objective-C class of either Swift face — whichever
+    /// `object.counterpartKind` names. `nil` when the object has no other face,
+    /// or its image cannot find it (an `@objc(CustomName)` class, whose runtime
+    /// name is no mangling).
+    ///
+    /// The answer is keyed like the sidebar's own entry for it, so pushing it
+    /// selects that row. Both faces live in the object's own image.
+    public func counterpart(for object: RuntimeObject) async throws -> RuntimeObject? {
+        try await dispatch(CounterpartRequest(object: object))
+    }
+
+    func _counterpart(for object: RuntimeObject) async -> RuntimeObject? {
+        guard let counterpartKind = object.counterpartKind,
+              let swiftSection = await swiftSectionFactory.existingSection(for: object.imagePath)
+        else { return nil }
+        switch counterpartKind {
+        case .swiftClass:
+            return await swiftSection.makeRuntimeObject(forObjCRuntimeClassName: object.name)
+        case .swiftImplementation:
+            return await swiftSection.makeRuntimeObject(forObjCImplementationClassNamed: object.name)
+        case .objcClass:
+            guard let className = await swiftSection.objcClassName(forCounterpartOf: object),
+                  let objcSection = await objcSectionFactory.existingSection(for: object.imagePath)
+            else { return nil }
+            return await objcSection.makeRuntimeObject(forClassName: className)
+        }
     }
 
     public func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {

@@ -40,6 +40,7 @@
 | [draft](draft-command-line-interface-multi-source.md) | `runtime-viewer-cli` 多来源：全部运行时来源、attach 与 App 充当 host | In Progress | 愿景第三步，依赖前两篇。独立 host 换上 `.headlessHost` 的 `RuntimeEngineManager`，新增 `sources` / `attach` / `detach`，`--source` 覆盖 local / catalyst / pid / process / engine；App 启动即充当 host 并接管独立 host。 |
 | [draft](draft-command-line-interface-app-embedding.md) | `runtime-viewer-cli` 嵌入 App 包与设置页 | Draft | 愿景第四步。Xcode command-line tool target 嵌到 `Contents/Helpers/` 随 App 签名公证；Settings 新增「Command Line Tool」页做 `/usr/local/bin` 符号链接与「允许命令行访问」开关。 |
 | [draft](draft-objc-implementation-class-badge.md) | 给 `@objc @implementation` 实现的 ObjC 类加粉色角标 | Accepted | SE-0436 的 `@objc @implementation` 产出的是纯 ObjC 类，拿不到桥出 Swift 类那个蓝色 `C` 角标，在列表里和 clang 类无从分辨。接 MachOSwiftSection 的 `ObjCImplementationClasses` 识别这类类，`RuntimeObject.Properties` 新增一位驱动一个粉色 `C` 角标，两种角标互斥；Sidebar 与 Inspector 两个面板统一走新的 `secondaryIcon(for:)`。 |
+| [draft](draft-objc-swift-class-counterparts.md) | ObjC 类与 Swift 类互标角标、互相跳转 | Implemented | 上一篇只标了 ObjC 那一侧。Swift 侧的对应条目（Swift class、`@objc @implementation` 的那个 `extension`）也挂角标：新增 `isObjCClass` 给橙色 `C`，`isObjCImplementation` 两侧共用粉色 `C`。配对靠名字：ObjC 运行时名里的类型节点 remangle 出来就是 Swift 侧的键，private 类靠 MachOSwiftSection 从 `_symbolic` 符号还原的鉴别符对上。新增引擎命令 `counterpart(for:)`，sidebar 右键菜单加「Jump to Swift Class / Swift Implementation / Objective-C Class」。顺带修好 Relationships 面板一直丢掉全部桥出子类的问题。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
