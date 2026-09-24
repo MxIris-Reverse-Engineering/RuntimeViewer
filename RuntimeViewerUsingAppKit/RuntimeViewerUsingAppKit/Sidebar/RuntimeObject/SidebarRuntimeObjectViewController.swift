@@ -42,6 +42,13 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         imageLoadedView.outlineView
     }
 
+    /// The list takes keyboard focus once the sidebar has navigated here — but only when it is on
+    /// screen. While the image is still loading the outline sits in an unselected tab, outside the
+    /// window, and `nil` then leaves the window first responder until the user clicks a row.
+    override var preferredFirstResponder: NSResponder? {
+        outlineView.window != nil ? outlineView : nil
+    }
+
     /// Move the visual selection to `row`, bringing it on screen first.
     ///
     /// The order matters. `NSOutlineView` materializes a row view only as the

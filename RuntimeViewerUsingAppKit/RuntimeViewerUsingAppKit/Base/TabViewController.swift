@@ -103,6 +103,24 @@ class TabViewController: NSLayerBackedViewController {
         onUserSelectIndex?(index)
     }
 
+    /// What an AppKitPlus navigation controller makes first responder once this page is on top —
+    /// after a push, a pop or a `set`. Forwarded to the tab on screen, so the list inside it is
+    /// what gets focus.
+    ///
+    /// An answer that refuses focus is not passed on: up to 0.4.4 AppKitPlus answers a page's plain
+    /// root view by default, and while an ancestor container is first responder, AppKit does not
+    /// move focus into a table the user clicks — the selection draws grey — and right-clicking a
+    /// row no longer opens the table's menu. `nil` makes the window first responder, which clicks
+    /// move off normally. Background:
+    /// `Documentations/ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md`.
+    override var preferredFirstResponder: NSResponder? {
+        guard let preferredFirstResponder = tabView.selectedTabViewItem?.viewController?.preferredFirstResponder else { return nil }
+        if let preferredView = preferredFirstResponder as? NSView, !preferredView.acceptsFirstResponder {
+            return nil
+        }
+        return preferredFirstResponder
+    }
+
     var selectedTabViewItemIndex: Int {
         set {
             guard newValue >= 0, newValue < tabView.numberOfTabViewItems else { return }

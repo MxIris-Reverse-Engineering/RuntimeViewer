@@ -19,6 +19,12 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
         true
     }
 
+    /// The list takes keyboard focus when the sidebar pops back to it — see the same override in
+    /// `SidebarRuntimeObjectViewController`.
+    override var preferredFirstResponder: NSResponder? {
+        outlineView.window != nil ? outlineView : nil
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
