@@ -95,7 +95,7 @@
 
 按时间倒序。
 
-- [侧栏点击后高亮变灰、右键菜单要点很多次](ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md)（2026-09-24）—— AppKitPlus 导航控制器在转场结束时把第一响应者交给页面的普通容器视图，而第一响应者是表格的祖先容器时，AppKit 既不在点击行时把焦点交给表格（选中画成灰色），也不在右键时打开表格菜单；纯 AppKit 探针复现，与 macOS 27 SDK 的点击路由改动无关。侧栏页面改为把焦点交给列表，AppKitPlus 提案 0041 改默认值。
+- [侧栏点击后高亮变灰、右键菜单要点很多次](ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md)（2026-09-24）—— AppKitPlus 导航控制器在转场结束时把第一响应者交给页面的普通容器视图。第一响应者是表格的祖先容器时，右键点行内文字打不开表格菜单；macOS 27 起表格的鼠标点击改由手势识别器处理、只为 Sidecar 触摸取焦，左键点行也就不再把焦点交给表格（选中画成灰色）。后一半与编译 SDK 无关，macOS 26 上被表格自己的 `mouseDown:` 掩盖。侧栏页面改为把焦点交给列表，AppKitPlus 提案 0041 改默认值。
 
 - [侧栏转场背景在 macOS 27 上永远差一点](ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md)（2026-09-18）—— 26 起 split view 给 sidebar 塞了 `NSGlassEffectView`，任何颜色或材质都对不上，27 又改了玻璃样式，转场时原本的 `windowBackgroundColor` 变成明显一块深色。页面不再常驻背景，改由 `NavigationTransitionBackdropController` 在 push / pop 期间给两页各插一块复刻同组玻璃的 `GlassEffectReplicaView`，转场结束即卸载。
 - [批量导出：镜像在索引时行一直显示 Queued](ResolvedIssues/2026-09-18-batch-export-row-stays-queued-while-indexing.md)（2026-09-18）—— `loadImage` 顺手把镜像的两个 section 建完才返回，而行到它返回之后才离开 Queued，PhotosUICore 那种体量的索引就整段隐形。引擎新增带进度的 `loadImage`，行先标 running 再加载并显示索引阶段；附 macOS 26 `NSProgressIndicator` 值动画关不掉的反编译证据，进度条改为每次绑定新建实例。
