@@ -190,6 +190,32 @@ open class StatefulOutlineView: OutlineView {
         selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
     }
 
+    // MARK: - Mouse Tracking
+
+    /// Overridden only so that AppKit keeps this outline on the mouse tracking loop instead of its
+    /// gesture recognizers; the body is just `super`. Do not remove it.
+    ///
+    /// From macOS 27 every `NSTableView` and `NSOutlineView` handles the mouse with gesture
+    /// recognizers, whatever SDK the app links against, and their drag handler
+    /// (`-[NSTableView _handleDragSelectionGestureRecognizer:]`) moves the selection with the
+    /// pointer only when `allowsMultipleSelection` is on. In a single-selection list such as the
+    /// sidebar's, pressing a row and dragging leaves the selection where the drag began, even while
+    /// the list autoscrolls under the pointer. macOS 26's tracking loop in `-[NSTableView mouseDown:]`
+    /// moved the selection to whichever row the pointer was over.
+    ///
+    /// AppKit installs none of those recognizers in a table subclass that overrides `mouseDown:` —
+    /// the compatibility fallback TN3212 describes — and logs an error for each such view, "Gesture
+    /// recognizer support has been disabled because NSTableView subclass … overrides either
+    /// mouseDown: or mouseDragged:". That is expected. The tracking loop also makes the outline
+    /// first responder on every click, as on macOS 26. What it costs: no native Sidecar touch
+    /// handling for these lists (touches reach them through the system's mouse emulation), and none
+    /// of what AppKit later adds to the gesture path. `StatefulOutlineViewTrackingLoopTests` fails
+    /// if the recognizers come back. Background:
+    /// `Documentations/ResolvedIssues/2026-09-25-single-selection-drag-stopped-following-the-pointer.md`.
+    open override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+    }
+
     // MARK: - Reload
 
     open override func reloadData() {
