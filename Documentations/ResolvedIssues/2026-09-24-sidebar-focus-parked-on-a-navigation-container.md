@@ -12,6 +12,10 @@ tab，并挡掉不接受焦点的视图）、`Sidebar/RuntimeObject/SidebarRunti
 **后续更正：** 同日。初版在「根因」里写了「与 macOS 27 的点击路由改动无关」，依据是改标 SDK 26 结果不变 ——
 那只排除了按 SDK 切换的行为。用户在 macOS 26 上用改动前的代码验证没有这个问题，重查后确认：左键不取焦是
 macOS 27 系统（不分 SDK）把表格点击改走手势识别器之后才出现的，见「macOS 26 为什么没有这个问题」
+**后续（2026-09-25）：** 侧栏列表（`StatefulOutlineView`）改为覆写 `mouseDown(with:)`、退回跟踪循环 —— macOS 27
+的表格手势连单选时的拖动跟随也丢了，见 [2026-09-25](2026-09-25-single-selection-drag-stopped-following-the-pointer.md)。
+这两个列表在 27 上点击重新会取焦；本篇的 `preferredFirstResponder` 修复保留，「修复」一节不采用 TN3212 退路的那条
+被推翻
 
 ---
 
@@ -111,7 +115,8 @@ shared cache，与在 26.6.2 上用 lldb 抓到的偏移一致），调用栈来
 **这是系统行为，与编译用的 SDK 无关。** 装手势识别器的路径上没有任何 SDK 版本判断，唯一的退出条件是子类覆写
 了 `mouseDown:`（`_subclassOverrides_mouseDown`；这时控制台会打出 "Gesture recognizer support has been disabled
 because NSTableView subclass … overrides either mouseDown: or mouseDragged:"）。`StatefulOutlineView` 和它的父类
-`OutlineView`（UIFoundation）都没有覆写 `mouseDown:`，所以走新路径。
+`OutlineView`（UIFoundation）都没有覆写 `mouseDown:`，所以走新路径（2026-09-25 起 `StatefulOutlineView` 覆写了，
+见页首的后续）。
 
 **官方出处。** [TN3212](https://developer.apple.com/documentation/technotes/tn3212-adopting-gesture-recognizers-for-sidecar-touch-support)
 说 macOS 27 的 AppKit 继续把输入处理统一到手势识别器上；手势识别器不走响应链，按下时从命中视图往上一路收集到
@@ -143,7 +148,9 @@ AppKitPlus 最初照搬 UXKit，以控制器的 `acceptsFirstResponder` 为闸�
   侧栏不依赖它。
 - **不采用 TN3212 给的退路。** 让 outline 子类覆写 `mouseDown:` 能退回旧路径、找回 macOS 26 的点击取焦，但
   TN3212 和 WWDC26 session 289 都把旧路径定为兼容路径、要求迁走（289：「Prioritize user intent over tracking
-  loops」）。让焦点一开始就在列表上、不依赖点击取焦，与新模型一致。
+  loops」）。让焦点一开始就在列表上、不依赖点击取焦，与新模型一致。**2026-09-25 推翻**：单选时的拖动跟随在
+  手势路径上没有公开挂点可补，侧栏列表最终还是走了这条退路，见
+  [2026-09-25](2026-09-25-single-selection-drag-stopped-following-the-pointer.md)。
 
 ---
 

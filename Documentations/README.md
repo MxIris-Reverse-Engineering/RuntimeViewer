@@ -95,6 +95,7 @@
 
 按时间倒序。
 
+- [侧栏按住拖动不再逐行选中](ResolvedIssues/2026-09-25-single-selection-drag-stopped-following-the-pointer.md)（2026-09-25）—— macOS 27 的表格把鼠标拖动交给手势识别器，处理函数只在允许多选时把选中扩展到指针下的行；单选的侧栏列表选中停在原处，列表却照样自动滚动。与编译 SDK、与焦点都无关。`StatefulOutlineView` 覆写 `mouseDown(with:)`，退回 macOS 26 的跟踪循环。
 - [侧栏点击后高亮变灰、右键菜单要点很多次](ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md)（2026-09-24）—— AppKitPlus 导航控制器在转场结束时把第一响应者交给页面的普通容器视图。第一响应者是表格的祖先容器时，右键点行内文字打不开表格菜单；macOS 27 起表格的鼠标点击改由手势识别器处理、只为 Sidecar 触摸取焦，左键点行也就不再把焦点交给表格（选中画成灰色）。后一半与编译 SDK 无关，macOS 26 上被表格自己的 `mouseDown:` 掩盖。侧栏页面改为把焦点交给列表，AppKitPlus 提案 0041 改默认值。
 
 - [侧栏转场背景在 macOS 27 上永远差一点](ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md)（2026-09-18）—— 26 起 split view 给 sidebar 塞了 `NSGlassEffectView`，任何颜色或材质都对不上，27 又改了玻璃样式，转场时原本的 `windowBackgroundColor` 变成明显一块深色。页面不再常驻背景，改由 `NavigationTransitionBackdropController` 在 push / pop 期间给两页各插一块复刻同组玻璃的 `GlassEffectReplicaView`，转场结束即卸载。
