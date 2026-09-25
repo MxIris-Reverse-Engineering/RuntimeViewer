@@ -59,6 +59,10 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
     /// external imperative call.
     private let pendingSelectRelay = PublishRelay<RuntimeObject>()
 
+    /// Requests from `revealSelectedRuntimeObject()`, each carrying the
+    /// object that was on screen when the command ran.
+    private let revealRequestRelay = PublishRelay<RuntimeObject>()
+
     /// In-flight Open Quickly fuzzy match. Cancelled and superseded by
     /// every new (debounced) query so two searches never mutate the same
     /// cell view models concurrently, and a slow older match can never
@@ -120,9 +124,26 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         for object: RuntimeObject,
         in nodes: [SidebarRuntimeObjectCellViewModel]
     ) -> CellLookup? {
+        findCell(for: object, in: nodes, children: \.children)
+    }
+
+    /// `findCell(for:in:)` over every row, the ones the filter currently
+    /// hides included: a cell's `children` is the filtered view of its subtree.
+    static func findCellIgnoringFilter(
+        for object: RuntimeObject,
+        in nodes: [SidebarRuntimeObjectCellViewModel]
+    ) -> CellLookup? {
+        findCell(for: object, in: nodes, children: \.unfilteredChildren)
+    }
+
+    private static func findCell(
+        for object: RuntimeObject,
+        in nodes: [SidebarRuntimeObjectCellViewModel],
+        children: KeyPath<SidebarRuntimeObjectCellViewModel, [SidebarRuntimeObjectCellViewModel]>
+    ) -> CellLookup? {
         for node in nodes {
             if node.runtimeObject == object { return (node, []) }
-            if let inner = findCell(for: object, in: node.children) {
+            if let inner = findCell(for: object, in: node[keyPath: children], children: children) {
                 return (inner.cell, [node] + inner.ancestors)
             }
         }
@@ -140,6 +161,89 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
         public let runtimeObjectsForOpenQuickly: Driver<[SidebarRuntimeObjectCellViewModel]>
         public let selectRuntimeObject: Signal<SidebarRuntimeObjectCellViewModel>
         public let selectCell: Signal<CellLookup>
+        /// The row to bring into view for `revealSelectedRuntimeObject()`,
+        /// with its ancestors outermost first. A search text or scope that hid
+        /// the row has already been cleared when this fires.
+        public let revealCell: Signal<CellLookup>
+        /// A reveal request for an object this image's list does not contain.
+        public let revealFailed: Signal<Void>
+    }
+
+    /// What a reveal request comes to; split into `Output.revealCell` and
+    /// `Output.revealFailed`.
+    private enum RevealOutcome {
+        case revealed(CellLookup)
+        case notFound
+
+        var revealedCell: CellLookup? {
+            guard case .revealed(let cellLookup) = self else { return nil }
+            return cellLookup
+        }
+
+        var isNotFound: Bool {
+            guard case .notFound = self else { return false }
+            return true
+        }
+    }
+
+    /// Brings the object on screen into view in this list — Navigate ▸
+    /// Reveal in Sidebar Navigator. Answered through `Output.revealCell`, or
+    /// through `Output.revealFailed` when the list does not contain the object.
+    ///
+    /// The follow set up in `transform(_:)` fires only when
+    /// `selectedRuntimeObject` changes. This answers every call, because the
+    /// object is usually the one already selected — since scrolled away,
+    /// collapsed or filtered out. A request made while the list is still
+    /// loading waits for the load, and a newer request replaces one still
+    /// waiting.
+    public func revealSelectedRuntimeObject() {
+        guard let selectedRuntimeObject = documentState.selectedRuntimeObject else { return }
+        revealRequestRelay.accept(selectedRuntimeObject)
+    }
+
+    /// Waits for the list to be loaded, then resolves the request once.
+    ///
+    /// Keyed on `filteredNodes` emissions, and only on those seen once
+    /// `loadState` is `.loaded`: a reload publishes `.loaded` *before* it
+    /// installs the new cells, in the same main-actor block, so waking on the
+    /// load state would resolve against the previous load's cells. The relay
+    /// replays its current value, which answers a request against an already
+    /// loaded list straight away.
+    ///
+    /// The resolution itself runs a main-queue turn later, outside the
+    /// emission that woke it: clearing the filter reassigns `filteredNodes`,
+    /// which would re-enter the relay while it is still delivering.
+    private func revealOutcome(for runtimeObject: RuntimeObject) -> Observable<RevealOutcome> {
+        switch loadState {
+        case .notLoaded, .loadError:
+            // Nothing is listed until the user loads the image.
+            return .just(.notFound)
+        case .unknown, .loading, .loaded:
+            return $filteredNodes
+                .asObservable()
+                .filter { [weak self] _ in self?.loadState == .loaded }
+                .take(1)
+                .observe(on: MainScheduler.asyncInstance)
+                .compactMap { [weak self] _ in self?.resolveReveal(of: runtimeObject) }
+        }
+    }
+
+    /// Finds the row for `runtimeObject` in the list as displayed, clearing
+    /// the search text and the scope first when they are what hides it.
+    private func resolveReveal(of runtimeObject: RuntimeObject) -> RevealOutcome {
+        if let displayedCell = Self.findCell(for: runtimeObject, in: filteredNodes) {
+            return .revealed(displayedCell)
+        }
+        // Only clear a filter that is actually in the way: for an object the
+        // list does not contain at all, the user would lose it for nothing.
+        guard Self.findCellIgnoringFilter(for: runtimeObject, in: nodes) != nil else {
+            return .notFound
+        }
+        clearFilter()
+        guard let revealedCell = Self.findCell(for: runtimeObject, in: filteredNodes) else {
+            return .notFound
+        }
+        return .revealed(revealedCell)
     }
 
     override func buildRuntimeObjects() async throws -> [RuntimeObject] {
@@ -490,10 +594,20 @@ public class SidebarRuntimeObjectListViewModel: SidebarRuntimeObjectViewModel {
             }
             .asSignal(onErrorSignalWith: .empty())
 
+        let revealOutcomes: Signal<RevealOutcome> = revealRequestRelay
+            .asObservable()
+            .flatMapLatest { [weak self] runtimeObject -> Observable<RevealOutcome> in
+                guard let self else { return .empty() }
+                return revealOutcome(for: runtimeObject)
+            }
+            .asSignal(onErrorSignalWith: .empty())
+
         return Output(
             runtimeObjectsForOpenQuickly: $filteredNodesForOpenQuickly.asDriver().skip(1),
             selectRuntimeObject: input.runtimeObjectClickedForOpenQuickly,
-            selectCell: pendingResolved
+            selectCell: pendingResolved,
+            revealCell: revealOutcomes.compactMap(\.revealedCell),
+            revealFailed: revealOutcomes.filter(\.isNotFound).mapToVoid()
         )
     }
 }

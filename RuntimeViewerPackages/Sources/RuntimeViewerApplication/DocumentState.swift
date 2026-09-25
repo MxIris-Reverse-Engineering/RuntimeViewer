@@ -155,6 +155,17 @@ public final class DocumentState {
     /// history entry. Drives toolbar next-button enablement.
     public var canGoNext: Bool { selectionIndex < selectionStack.count - 1 }
 
+    /// True when the object on screen belongs to the image the sidebar lists
+    /// (`currentImageNode`), the only image whose rows the sidebar holds.
+    /// False on an empty tab and at the image-list root, and after a content
+    /// link or an Inspector relationship reaches an object in another image —
+    /// those push the object without moving the sidebar. Drives the enablement
+    /// of Navigate ▸ Reveal in Sidebar Navigator.
+    public var isSelectedRuntimeObjectInCurrentImage: Bool {
+        guard let selectedRuntimeObject, let currentImageNode else { return false }
+        return selectedRuntimeObject.imagePath == currentImageNode.path
+    }
+
     /// Mutation surface for every observable state on this `DocumentState`.
     /// View models trigger routes on this router
     /// (`documentState.selectionRouter.trigger(.push(x))`). The router

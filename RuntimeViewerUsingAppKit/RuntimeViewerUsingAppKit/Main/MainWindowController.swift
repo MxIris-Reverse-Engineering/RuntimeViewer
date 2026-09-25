@@ -319,10 +319,18 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         documentState.selectionRouter.trigger(.switchTab(index: previousIndex))
     }
 
+    // MARK: - Navigate Actions
+
+    @objc func revealInSidebarNavigator(_ sender: Any?) {
+        viewModel?.router.trigger(.revealInSidebarNavigator)
+    }
+
     override func responds(to aSelector: Selector!) -> Bool {
         switch aSelector {
         case #selector(exportInterface(_:)):
             return documentState.currentImageNode != nil
+        case #selector(revealInSidebarNavigator(_:)):
+            return documentState.isSelectedRuntimeObjectInCurrentImage
         case #selector(exportMultipleImages(_:)):
             return documentState.runtimeEngine.imageNodes.count >= 2
         case #selector(selectNextTab(_:)), #selector(selectPreviousTab(_:)):

@@ -61,6 +61,51 @@ final class SidebarRuntimeObjectListViewController: SidebarRuntimeObjectViewCont
             selectRowBringingIntoView(outlineView.row(forItem: result.cell))
         }
         .disposed(by: rx.disposeBag)
+
+        // Runs a main-actor turn after the view model resolved the request, by
+        // when the coordinator has switched to this tab and a filter the view
+        // model cleared has been reloaded into the outline.
+        output.revealCell.emitOnNextMainActor { [weak self] result in
+            guard let self else { return }
+            revealRow(for: result)
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.revealFailed.emitOnNext {
+            NSSound.beep()
+        }
+        .disposed(by: rx.disposeBag)
+    }
+
+    /// Expands everything between the list's root and the cell — its kind
+    /// section, then its ancestors — selects its row, brings the row on screen
+    /// and gives the list keyboard focus, so the arrow keys continue from it.
+    private func revealRow(for result: SidebarRuntimeObjectListViewModel.CellLookup) {
+        let topLevelCell = result.ancestors.first ?? result.cell
+        if let section = sectionItem(containing: topLevelCell), !outlineView.isItemExpanded(section) {
+            outlineView.expandItem(section)
+        }
+        for ancestor in result.ancestors where !outlineView.isItemExpanded(ancestor) {
+            outlineView.expandItem(ancestor)
+        }
+        selectRowBringingIntoView(outlineView.row(forItem: result.cell))
+        view.window?.makeFirstResponder(outlineView)
+    }
+
+    /// The kind-section group row a top-level cell sits under. Sections can be
+    /// collapsed, and a collapsed section's objects have no rows at all.
+    ///
+    /// The outline finds a section item by equality, which for
+    /// `SidebarRuntimeObjectSection` is its kind alone — the same lookup the
+    /// sections adapter relies on when it expands every section after a reload.
+    private func sectionItem(containing topLevelCell: SidebarRuntimeObjectCellViewModel) -> SidebarRuntimeObjectSection? {
+        for sectionIndex in 0 ..< outlineView.numberOfChildren(ofItem: nil) {
+            guard let section = outlineView.child(sectionIndex, ofItem: nil) as? SidebarRuntimeObjectSection,
+                  section.kind == topLevelCell.runtimeObject.kind
+            else { continue }
+            return section
+        }
+        return nil
     }
 
     @ArrayBuilder<Selector>

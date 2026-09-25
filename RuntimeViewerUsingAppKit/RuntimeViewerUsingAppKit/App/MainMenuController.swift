@@ -16,6 +16,7 @@ final class MainMenuController {
             fileMenuItem()
             editMenuItem()
             MainMenu.view()
+            navigateMenuItem()
             MainMenu.window()
             MainMenu.help()
         }
@@ -92,6 +93,26 @@ final class MainMenuController {
         MainMenu.edit { builder in
             builder.item(for: .Edit.Find.find)?.action = #selector(NSResponder.performTextFinderAction(_:))
         }
+    }
+
+    // MARK: - Navigate
+
+    /// Between View and Window, where Xcode keeps its own Navigate menu.
+    private func navigateMenuItem() -> NSMenuItem {
+        NSMenuItem("Navigate") {
+            revealInSidebarNavigatorItem()
+        }
+    }
+
+    /// Xcode's Reveal in Project Navigator, shortcut included.
+    private func revealInSidebarNavigatorItem() -> NSMenuItem {
+        NSMenuItem(
+            "Reveal in Sidebar Navigator",
+            action: #selector(MainWindowController.revealInSidebarNavigator(_:)),
+            keyEquivalent: "J",
+            modifiers: [.shift, .command],
+        )
+        .image(SFSymbols(systemName: .sidebarLeft).nsImage)
     }
 }
 

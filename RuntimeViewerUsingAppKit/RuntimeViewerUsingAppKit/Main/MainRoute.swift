@@ -20,4 +20,7 @@ public enum MainRoute: Routable {
     /// specializing the supplied generic Swift type. Forwarded by
     /// `InspectorCoordinator` via its delegate.
     case beginSpecializationSheet(RuntimeObject)
+    /// Navigate ▸ Reveal in Sidebar Navigator: show the sidebar and have its
+    /// object list select and scroll to the object on screen.
+    case revealInSidebarNavigator
 }

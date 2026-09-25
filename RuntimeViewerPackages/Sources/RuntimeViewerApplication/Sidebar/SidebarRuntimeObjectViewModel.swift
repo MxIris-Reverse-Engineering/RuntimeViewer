@@ -85,6 +85,9 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     /// `reloadRow` signal in `SpecializationViewModel`.
     private let reloadRowRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
+    /// Fires from `clearFilter()`; see `Output.filterCleared`.
+    private let filterClearedRelay = PublishRelay<Void>()
+
     /// Currently-running reload task. `scheduleReload` cancels this before
     /// starting a new one, so trigger sources that fire concurrently (init,
     /// `.fullReload` broadcasts, bookmark mutations) never end up with two
@@ -216,6 +219,12 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
         public let didChangeFiltering: Signal<Void>
         public let didEndFiltering: Signal<Void>
         public let reloadRow: Signal<SidebarRuntimeObjectCellViewModel>
+        /// The view model dropped its search text and scope on its own (a
+        /// reveal whose row they hid). The search field's text is the view's,
+        /// so the view has to empty it — and feed the empty string back through
+        /// `Input.searchString`, whose `combineLatest` would otherwise replay the
+        /// old text the next time the filter mode changes.
+        public let filterCleared: Signal<Void>
     }
 
     /// One answer to a counterpart request, carried with the object it was
@@ -376,7 +385,8 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             didBeginFiltering: $isFiltering.asSignal(onErrorJustReturn: false).filter { $0 }.mapToVoid(),
             didChangeFiltering: $filteredNodes.asSignal(onErrorJustReturn: []).withLatestFrom($isFiltering.asSignal(onErrorJustReturn: false)).filter { $0 }.mapToVoid(),
             didEndFiltering: $isFiltering.skip(1).asSignal(onErrorJustReturn: false).filter { !$0 }.mapToVoid(),
-            reloadRow: reloadRowRelay.asSignal()
+            reloadRow: reloadRowRelay.asSignal(),
+            filterCleared: filterClearedRelay.asSignal()
         )
     }
 
@@ -560,6 +570,25 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
             }
             self.currentFilterTask = nil
         }
+    }
+
+    /// Drops the search text and the scope, so every object is listed again.
+    ///
+    /// The list is unfiltered by the time this returns: with neither a query
+    /// nor an active scope, `scheduleRefilter()` takes its synchronous fast
+    /// path. The search field's own text is emptied by the view through
+    /// `Output.filterCleared`.
+    @MainActor
+    func clearFilter() {
+        searchString = ""
+        // Only an active scope needs resetting. Assigning one also reaches the
+        // `$scope` subscription, which refilters once more a main-actor turn
+        // later — harmless, but pointless when nothing was scoped.
+        if scope.isActive {
+            scope = RuntimeObjectScope()
+        }
+        scheduleRefilter()
+        filterClearedRelay.accept(())
     }
 
     /// Hop for the matching recursion: `nonisolated async` runs on the

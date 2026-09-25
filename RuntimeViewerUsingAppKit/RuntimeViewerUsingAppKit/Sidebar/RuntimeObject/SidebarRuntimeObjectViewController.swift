@@ -37,6 +37,11 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
     private let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
 
+    /// The empty string, sent when the view model clears its filter on its
+    /// own. Setting the search field's `stringValue` does not reach
+    /// `rx.stringValue`, so the cleared text is fed into the search input here.
+    private let clearedSearchStringRelay = PublishRelay<String>()
+
     @Dependency(\.appDefaults)
     private var appDefaults
 
@@ -178,7 +183,10 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
                 imageLoadErrorView.loadImageButton.rx.click.asSignal(),
             ).merge(),
             searchString: .combineLatestFirstResult(
-                imageLoadedView.filterSearchField.rx.stringValue.asDriver(),
+                Driver.merge(
+                    imageLoadedView.filterSearchField.rx.stringValue.asDriver(),
+                    clearedSearchStringRelay.asDriver(onErrorDriveWith: .empty()),
+                ),
                 filterModeDidChange.asDriver(),
             ),
             isSearchCaseSensitive: imageLoadedView.matchCaseButton.rx.state.asDriver().map { $0 == .on },
@@ -236,6 +244,13 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
         output.didEndFiltering.emitOnNext { [weak self] in
             guard let self else { return }
             imageLoadedView.outlineView.endFiltering()
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.filterCleared.emitOnNext { [weak self] in
+            guard let self else { return }
+            imageLoadedView.filterSearchField.stringValue = ""
+            clearedSearchStringRelay.accept("")
         }
         .disposed(by: rx.disposeBag)
 
