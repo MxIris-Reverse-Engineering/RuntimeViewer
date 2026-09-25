@@ -24,7 +24,9 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
         let iconSize: CGFloat = 20
         var composedAppearance = RuntimeObjectCellAppearance(
             primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
+            primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
             secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
+            secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
             title: NSAttributedString {
                 AText(runtimeObject.displayName)
                     .foregroundColor(.labelColor)
@@ -35,9 +37,11 @@ public final class InspectorRelationshipsCellViewModel: NSObject, @unchecked Sen
         )
         if runtimeObject.properties.contains(.isGeneric) {
             composedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
+            composedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForGeneric
         }
         if runtimeObject.properties.contains(.isSpecialized) {
             composedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
+            composedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForSpecialized
         }
         let imageName = runtimeObject.imageName
         if !imageName.isEmpty {

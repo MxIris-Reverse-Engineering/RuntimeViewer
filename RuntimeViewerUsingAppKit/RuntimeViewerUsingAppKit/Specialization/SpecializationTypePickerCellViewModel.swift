@@ -26,6 +26,7 @@ import RuntimeViewerApplication
 /// - `secondaryIcon` shows the generic badge when `candidate.isGeneric` is
 ///   true (selecting a generic candidate opens a nested specialization);
 ///   otherwise it stays `nil` so the row collapses the icon slot.
+/// - Each icon carries the tooltip `RuntimeObjectIcon` gives it.
 /// - `title` is the candidate's display name, `subtitle` is the originating
 ///   image path so users can disambiguate same-named types defined in
 ///   different images.
@@ -40,7 +41,9 @@ public final class SpecializationTypePickerCellViewModel: NSObject, @unchecked S
         let iconSize = RuntimeObjectIcon.defaultIconSize
         self.appearance = RuntimeObjectCellAppearance(
             primaryIcon: RuntimeObjectIcon.icon(for: candidate.kind.runtimeObjectKind, size: iconSize),
+            primaryTooltip: RuntimeObjectIcon.tooltip(for: candidate.kind.runtimeObjectKind),
             secondaryIcon: candidate.isGeneric ? RuntimeObjectIcon.iconForGeneric(size: iconSize) : nil,
+            secondaryTooltip: candidate.isGeneric ? RuntimeObjectIcon.tooltipForGeneric : nil,
             title: NSAttributedString {
                 AText(candidate.displayName)
                     .foregroundColor(.labelColor)

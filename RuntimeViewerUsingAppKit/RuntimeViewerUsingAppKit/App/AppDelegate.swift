@@ -1,4 +1,5 @@
 import AppKit
+import RuntimeViewerUI
 import RuntimeViewerArchitectures
 import RuntimeViewerApplication
 import RuntimeViewerCommunication
@@ -58,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         NSToolbarItemViewerOverflowFix.install()
+        CustomToolTipManager.install()
 
         settingsLifecycleController.loadOnLaunch()
         runtimeConnectionNotificationService.start()

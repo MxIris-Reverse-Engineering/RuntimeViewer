@@ -369,16 +369,20 @@ public final class SidebarRuntimeObjectCellViewModel: NSObject, OutlineNodeType,
         let iconSize = forOpenQuickly ? 24 : RuntimeObjectIcon.defaultIconSize
         var refreshedAppearance = RuntimeObjectCellAppearance(
             primaryIcon: RuntimeObjectIcon.icon(for: runtimeObject.kind, size: iconSize),
+            primaryTooltip: RuntimeObjectIcon.tooltip(for: runtimeObject.kind),
             secondaryIcon: RuntimeObjectIcon.secondaryIcon(for: runtimeObject, size: iconSize),
+            secondaryTooltip: RuntimeObjectIcon.secondaryTooltip(for: runtimeObject),
             title: composedTitle()
         )
 
         if runtimeObject.properties.contains(.isGeneric) {
             refreshedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForGeneric(size: iconSize)
+            refreshedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForGeneric
         }
 
         if runtimeObject.properties.contains(.isSpecialized) {
             refreshedAppearance.tertiaryIcon = RuntimeObjectIcon.iconForSpecialized(size: iconSize)
+            refreshedAppearance.tertiaryTooltip = RuntimeObjectIcon.tooltipForSpecialized
         }
 
         publishAppearance(refreshedAppearance)

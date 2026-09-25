@@ -81,4 +81,48 @@ struct RuntimeObjectIconTests {
 
         #expect(RuntimeObjectIcon.secondaryIcon(for: object) == nil)
     }
+
+    // MARK: - Tooltips
+
+    /// The glyph alone cannot tell every kind apart — an Objective-C and a
+    /// Swift class are both `C`, told apart by colour alone, and every Swift
+    /// extension and conformance is `Ex` — so the tooltip has to.
+    @Test("every kind gets a tooltip of its own")
+    func everyKindGetsItsOwnTooltip() {
+        let tooltips = Set(RuntimeObjectKind.allCases.map { RuntimeObjectIcon.tooltip(for: $0) })
+
+        #expect(tooltips.count == RuntimeObjectKind.allCases.count)
+    }
+
+    @Test(
+        "each secondary badge explains itself",
+        arguments: [
+            (RuntimeObjectKind.objc(.type(.class)), RuntimeObject.Properties.isObjCImplementation, "Implemented in Swift (@objc @implementation)"),
+            (RuntimeObjectKind.swift(.extension(.class)), RuntimeObject.Properties.isObjCImplementation, "Implements an Objective-C Class (@objc @implementation)"),
+            (RuntimeObjectKind.objc(.type(.class)), RuntimeObject.Properties.isSwiftClass, "Also Listed as a Swift Class"),
+            (RuntimeObjectKind.swift(.type(.class)), RuntimeObject.Properties.isObjCClass, "Also Listed as an Objective-C Class"),
+        ]
+    )
+    func secondaryTooltipExplainsTheBadge(kind: RuntimeObjectKind, properties: RuntimeObject.Properties, expectedTooltip: String) {
+        let object = Fixtures.runtimeObject(kind: kind, properties: properties)
+
+        #expect(RuntimeObjectIcon.secondaryTooltip(for: object) == expectedTooltip)
+    }
+
+    @Test("a row without a secondary badge has no secondary tooltip")
+    func noSecondaryBadgeNoSecondaryTooltip() {
+        let object = Fixtures.runtimeObject(kind: .objc(.type(.class)))
+
+        #expect(RuntimeObjectIcon.secondaryTooltip(for: object) == nil)
+    }
+
+    @Test("the tooltip follows the pink badge when both flags are set")
+    func tooltipFollowsTheWinningBadge() {
+        let object = Fixtures.runtimeObject(
+            kind: .objc(.type(.class)),
+            properties: [.isObjCImplementation, .isSwiftClass]
+        )
+
+        #expect(RuntimeObjectIcon.secondaryTooltip(for: object) == "Implemented in Swift (@objc @implementation)")
+    }
 }

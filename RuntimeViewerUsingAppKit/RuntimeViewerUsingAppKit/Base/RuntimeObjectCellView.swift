@@ -94,14 +94,17 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
         titleLabel.do {
             $0.alignment = .left
             $0.maximumNumberOfLines = 1
-            $0.syncStringValueToolTip = true
         }
 
         subtitleLabel.do {
             $0.alignment = .left
             $0.maximumNumberOfLines = 1
             $0.isHidden = true
-            $0.syncStringValueToolTip = true
+        }
+
+        let viewsWithTooltip: [NSView] = [primaryIconImageView, secondaryIconImageView, tertiaryIconImageView, titleLabel, subtitleLabel]
+        for viewWithTooltip in viewsWithTooltip {
+            viewWithTooltip.customTooltipStyle = .runtimeObjectCell
         }
     }
 
@@ -117,16 +120,32 @@ final class RuntimeObjectCellView<ViewModel: RuntimeObjectCellDisplayable>: Tabl
 
     private func apply(_ appearance: RuntimeObjectCellAppearance) {
         primaryIconImageView.image = appearance.primaryIcon
+        primaryIconImageView.toolTip = appearance.primaryTooltip
 
         secondaryIconImageView.image = appearance.secondaryIcon
+        secondaryIconImageView.toolTip = appearance.secondaryTooltip
         secondaryIconImageView.isHidden = appearance.secondaryIcon == nil
 
         tertiaryIconImageView.image = appearance.tertiaryIcon
+        tertiaryIconImageView.toolTip = appearance.tertiaryTooltip
         tertiaryIconImageView.isHidden = appearance.tertiaryIcon == nil
 
         titleLabel.attributedStringValue = appearance.title
 
         subtitleLabel.attributedStringValue = appearance.subtitle ?? NSAttributedString()
         subtitleLabel.isHidden = appearance.subtitle == nil
+    }
+}
+
+extension ToolTipStyle {
+    /// Every tooltip in a runtime-object cell: the three icons and both
+    /// labels. Built on `.default`, not `.system`: a corner radius makes
+    /// UIFoundation swap the system's blurred background for a plain layer,
+    /// and a style without a colour of its own would then have that layer
+    /// filled with AppKit's private `toolTipColor`, which is made to go with
+    /// the blur. `.default` brings a solid background, a hairline border and a
+    /// light shadow.
+    fileprivate static let runtimeObjectCell = ToolTipStyle.default.with {
+        $0.cornerRadius = 8
     }
 }

@@ -155,6 +155,28 @@ struct SidebarRuntimeObjectCellViewModelTests {
         #expect(phaseViewModel.children.count == 2)
     }
 
+    @Test("each icon carries a tooltip naming it")
+    func iconsCarryTooltips() {
+        let bridged = makeCell(for: object(name: "Bridged", displayName: "Bridged", kind: .objc(.type(.class)), properties: [.isSwiftClass]))
+        let generic = makeCell(for: object(name: "Box", displayName: "Box", properties: [.isGeneric]))
+
+        #expect(bridged.appearance.primaryTooltip == "Objective-C Class")
+        #expect(bridged.appearance.secondaryTooltip == "Also Listed as a Swift Class")
+        #expect(bridged.appearance.tertiaryTooltip == nil)
+        #expect(generic.appearance.tertiaryTooltip == "Generic Type")
+    }
+
+    /// A specialized type can carry `isGeneric` as well. The third slot then
+    /// shows the specialized badge, and its tooltip has to follow the icon
+    /// rather than whichever flag happens to be checked first.
+    @Test("a type both generic and specialized shows the specialized badge with its own tooltip")
+    func specializedBadgeKeepsItsTooltip() {
+        let cell = makeCell(for: object(name: "Box.Int", displayName: "Box<Int>", properties: [.isGeneric, .isSpecialized]))
+
+        #expect(cell.appearance.tertiaryIcon === RuntimeObjectIcon.iconForSpecialized())
+        #expect(cell.appearance.tertiaryTooltip == "Specialized Generic Type")
+    }
+
     private func makeCell(for runtimeObject: RuntimeObject) -> SidebarRuntimeObjectCellViewModel {
         withDependencies {
             $0.appDefaults = appDefaults

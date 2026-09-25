@@ -88,9 +88,13 @@ public enum RuntimeObjectIcon {
         return icon(text: "G", color: .teal, size: size, style: style)
     }
 
+    public static let tooltipForGeneric = "Generic Type"
+
     public static func iconForSpecialized(size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage {
         return icon(text: "Sp", color: .pink, size: size, style: style)
     }
+
+    public static let tooltipForSpecialized = "Specialized Generic Type"
 
     /// The badge for an Objective-C class implemented in Swift through
     /// SE-0436's `@objc @implementation extension`. Pink `C` against the blue
@@ -107,6 +111,13 @@ public enum RuntimeObjectIcon {
         return icon(text: text, color: color, size: size, style: style)
     }
 
+    /// Spells out what `icon(for: kind)` cannot: an Objective-C and a Swift
+    /// class are both `C`, told apart by colour alone, and every Swift
+    /// extension and conformance is `Ex`.
+    public static func tooltip(for kind: RuntimeObjectKind) -> String {
+        kind.description
+    }
+
     /// The badge that sits beside `icon(for: object.kind)`: the other face of a
     /// class both lists show, so the choice is made here, once, rather than at
     /// each call site. A bridged class's two faces badge each other — the
@@ -116,14 +127,56 @@ public enum RuntimeObjectIcon {
     /// its extension. On the Objective-C side the first two are mutually
     /// exclusive — the Swift bit of a class data pointer is either set or clear.
     public static func secondaryIcon(for object: RuntimeObject, size: CGFloat = Self.defaultIconSize, style: IDEIconStyle = Self.defaultIconStyle) -> NSUIImage? {
-        if object.properties.contains(.isObjCImplementation) {
+        switch secondaryBadge(for: object) {
+        case .objcImplementation:
             return iconForObjCImplementation(size: size, style: style)
+        case .swiftClass:
+            return icon(for: .swift(.type(.class)), size: size, style: style)
+        case .objcClass:
+            return icon(for: .objc(.type(.class)), size: size, style: style)
+        case nil:
+            return nil
+        }
+    }
+
+    /// The tooltip of `secondaryIcon(for:)`, `nil` exactly when that is. The
+    /// pink badge reads differently on its two faces: the Objective-C class is
+    /// implemented in Swift, the Swift extension implements it.
+    public static func secondaryTooltip(for object: RuntimeObject) -> String? {
+        switch secondaryBadge(for: object) {
+        case .objcImplementation:
+            return object.kind.isObjC
+                ? "Implemented in Swift (@objc @implementation)"
+                : "Implements an Objective-C Class (@objc @implementation)"
+        case .swiftClass:
+            return "Also Listed as a Swift Class"
+        case .objcClass:
+            return "Also Listed as an Objective-C Class"
+        case nil:
+            return nil
+        }
+    }
+
+    private enum SecondaryBadge {
+        case objcImplementation
+        case swiftClass
+        case objcClass
+    }
+
+    /// The one place that orders the flags, so the icon and its tooltip can
+    /// never pick different badges. The implementation flag goes first: the
+    /// binary never sets it together with `isSwiftClass`, but if something
+    /// upstream ever does, painting the blue badge over the pink one would be
+    /// the harder bug to spot.
+    private static func secondaryBadge(for object: RuntimeObject) -> SecondaryBadge? {
+        if object.properties.contains(.isObjCImplementation) {
+            return .objcImplementation
         }
         if object.properties.contains(.isSwiftClass) {
-            return icon(for: .swift(.type(.class)), size: size, style: style)
+            return .swiftClass
         }
         if object.properties.contains(.isObjCClass) {
-            return icon(for: .objc(.type(.class)), size: size, style: style)
+            return .objcClass
         }
         return nil
     }

@@ -45,6 +45,21 @@ struct InspectorRelationshipsCellViewModelTests {
         #expect(single.appearance.secondaryIcon == nil)
         #expect(bridged.appearance.secondaryIcon != nil)
     }
+
+    @Test("each icon carries a tooltip naming it")
+    func iconsCarryTooltips() {
+        let bridged = InspectorRelationshipsCellViewModel(
+            runtimeObject: Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isSwiftClass])
+        )
+        let generic = InspectorRelationshipsCellViewModel(runtimeObject: Fixtures.runtimeObject(properties: [.isGeneric]))
+        let specialized = InspectorRelationshipsCellViewModel(runtimeObject: Fixtures.runtimeObject(properties: [.isSpecialized]))
+
+        #expect(bridged.appearance.primaryTooltip == "Objective-C Class")
+        #expect(bridged.appearance.secondaryTooltip == "Also Listed as a Swift Class")
+        #expect(bridged.appearance.tertiaryTooltip == nil)
+        #expect(generic.appearance.tertiaryTooltip == "Generic Type")
+        #expect(specialized.appearance.tertiaryTooltip == "Specialized Generic Type")
+    }
 }
 
 @Suite("InspectorSwiftSpecializationCellViewModel")
@@ -79,5 +94,20 @@ struct InspectorSwiftSpecializationCellViewModelTests {
 
         #expect(single.appearance.secondaryIcon == nil)
         #expect(bridged.appearance.secondaryIcon != nil)
+    }
+
+    @Test("each icon carries a tooltip naming it")
+    func iconsCarryTooltips() {
+        let bridged = InspectorSwiftSpecializationCellViewModel(
+            runtimeObject: Fixtures.runtimeObject(kind: .objc(.type(.class)), properties: [.isSwiftClass])
+        )
+        let generic = InspectorSwiftSpecializationCellViewModel(runtimeObject: Fixtures.runtimeObject(properties: [.isGeneric]))
+        let specialized = InspectorSwiftSpecializationCellViewModel(runtimeObject: Fixtures.runtimeObject(properties: [.isSpecialized]))
+
+        #expect(bridged.appearance.primaryTooltip == "Objective-C Class")
+        #expect(bridged.appearance.secondaryTooltip == "Also Listed as a Swift Class")
+        #expect(bridged.appearance.tertiaryTooltip == nil)
+        #expect(generic.appearance.tertiaryTooltip == "Generic Type")
+        #expect(specialized.appearance.tertiaryTooltip == "Specialized Generic Type")
     }
 }
