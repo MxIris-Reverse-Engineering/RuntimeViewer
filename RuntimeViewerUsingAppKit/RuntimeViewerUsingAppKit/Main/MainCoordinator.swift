@@ -108,6 +108,14 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             specializationCoordinator.delegate = self
             addChild(specializationCoordinator)
             return .beginSheet(specializationCoordinator)
+        case .revealInSidebarNavigator:
+            // Split view item 0 is the sidebar. `.multiple` runs the reveal
+            // once the expansion has finished, and `.trigger` prepares the
+            // sidebar's transition only then, against the sidebar on screen.
+            return .multiple(
+                .expand(itemAt: 0),
+                .trigger(.revealSelectedRuntimeObject, on: sidebarCoordinator)
+            )
         }
     }
 

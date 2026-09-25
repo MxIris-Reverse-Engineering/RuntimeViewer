@@ -160,6 +160,143 @@ struct SidebarRuntimeObjectListViewModelTests {
         #expect(stored.map(\.object) == [nsObjectCell.runtimeObject])
     }
 
+    // MARK: - Reveal in Sidebar Navigator
+
+    /// The follow behind `selectCell` fires only when the selection changes;
+    /// the command is usually run for the object that is already selected.
+    @Test("a reveal answers every request, including for the object already selected")
+    func revealAnswersRepeatedRequests() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        let nsObject = try await harness.nsObject()
+        harness.environment.documentState.selectionRouter.trigger(.push(nsObject))
+
+        for _ in 0 ..< 2 {
+            async let revealed = nextValue(from: harness.listOutput.revealCell)
+            try await settleMainQueue()
+
+            harness.viewModel.revealSelectedRuntimeObject()
+
+            let lookup = try await revealed
+            #expect(lookup.cell.runtimeObject == nsObject)
+            #expect(lookup.ancestors.isEmpty)
+        }
+    }
+
+    @Test("a search text that hides the row is cleared before the reveal")
+    func revealClearsHidingSearchText() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        let nsObject = try await harness.nsObject()
+        harness.environment.documentState.selectionRouter.trigger(.push(nsObject))
+        searchStringRelay.accept("NoRuntimeObjectIsNamedLikeThis")
+        _ = try await nextValue(from: harness.baseOutput.runtimeObjects) { rows in
+            !rows.contains { $0.runtimeObject == nsObject }
+        }
+
+        async let cleared: Void = nextValue(from: harness.baseOutput.filterCleared)
+        async let revealed = nextValue(from: harness.listOutput.revealCell)
+        try await settleMainQueue()
+
+        harness.viewModel.revealSelectedRuntimeObject()
+
+        try await cleared
+        let lookup = try await revealed
+        #expect(lookup.cell.runtimeObject == nsObject)
+        #expect(harness.viewModel.searchString.isEmpty)
+        #expect(harness.viewModel.isFiltering == false)
+        #expect(harness.viewModel.filteredNodes.contains { $0.runtimeObject == nsObject })
+    }
+
+    @Test("a scope that hides the row is reset before the reveal")
+    func revealResetsHidingScope() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        let nsObject = try await harness.nsObject()
+        harness.environment.documentState.selectionRouter.trigger(.push(nsObject))
+        var protocolsOnly = RuntimeObjectScope()
+        protocolsOnly.includedKinds = [.objc(.type(.protocol))]
+        harness.viewModel.$scope.accept(protocolsOnly)
+        _ = try await nextValue(from: harness.baseOutput.runtimeObjects) { rows in
+            !rows.isEmpty && rows.allSatisfy { $0.runtimeObject.kind == .objc(.type(.protocol)) }
+        }
+
+        async let revealed = nextValue(from: harness.listOutput.revealCell)
+        try await settleMainQueue()
+
+        harness.viewModel.revealSelectedRuntimeObject()
+
+        let lookup = try await revealed
+        #expect(lookup.cell.runtimeObject == nsObject)
+        #expect(harness.viewModel.scope.isActive == false)
+        #expect(harness.viewModel.isFiltering == false)
+    }
+
+    @Test("a request made before the list has loaded is answered once it has")
+    func revealWaitsForTheLoad() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let nsObject = try await engine.runtimeObject(named: "NSObject", kind: .objc(.type(.class)), in: TestImages.libobjc)
+        let harness = try await makeHarness(showing: nsObject)
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        // Subscribed synchronously rather than through `nextValue`, which only
+        // subscribes once this test suspends: the output is cold, so a request
+        // sent before anyone listens goes nowhere.
+        var revealedCells: [RuntimeObject] = []
+        let subscription = harness.listOutput.revealCell.emitOnNext { revealedCells.append($0.cell.runtimeObject) }
+        defer { subscription.dispose() }
+        // Nothing has suspended since the view model was built, so its first
+        // reload has not even started: this request has to wait.
+        #expect(harness.viewModel.loadState != .loaded)
+
+        harness.viewModel.revealSelectedRuntimeObject()
+
+        let answered = await pollUntil(timeout: .seconds(60)) { !revealedCells.isEmpty }
+        #expect(answered, "the request made before the load was never answered; loadState=\(harness.viewModel.loadState)")
+        #expect(revealedCells == [nsObject])
+    }
+
+    /// Clearing the filter first would cost the user their filter and still
+    /// find nothing.
+    @Test("an object the list does not contain fails the reveal and keeps the filter")
+    func revealOfAMissingObjectFails() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        let fullCount = try await harness.loadedRows().count
+        let missingObject = Fixtures.runtimeObject(name: "NoSuchClass", kind: .objc(.type(.class)), imagePath: TestImages.libobjc)
+        harness.environment.documentState.selectionRouter.trigger(.push(missingObject))
+        searchStringRelay.accept("NSObject")
+        _ = try await nextValue(from: harness.baseOutput.runtimeObjects) { rows in
+            !rows.isEmpty && rows.count < fullCount
+        }
+
+        async let failed: Void = nextValue(from: harness.listOutput.revealFailed)
+        async let revealedCells = values(from: harness.listOutput.revealCell, during: 0.5)
+        try await settleMainQueue()
+
+        harness.viewModel.revealSelectedRuntimeObject()
+
+        try await failed
+        #expect(try await revealedCells.isEmpty)
+        #expect(harness.viewModel.searchString == "NSObject")
+        #expect(harness.viewModel.isFiltering)
+    }
+
+    @Test("with nothing on screen a reveal request is ignored")
+    func revealWithoutAnObjectIsIgnored() async throws {
+        let harness = try await makeHarness()
+        defer { withExtendedLifetime(harness.viewModel) {} }
+        _ = try await harness.loadedRows()
+
+        async let revealedCells = values(from: harness.listOutput.revealCell, during: 0.5)
+        async let failures: [Void] = values(from: harness.listOutput.revealFailed, during: 0.5)
+        try await settleMainQueue()
+
+        harness.viewModel.revealSelectedRuntimeObject()
+
+        #expect(try await revealedCells.isEmpty)
+        #expect(try await failures.isEmpty)
+    }
+
     // MARK: - Helpers
 
     private struct Harness {
@@ -182,9 +319,15 @@ struct SidebarRuntimeObjectListViewModelTests {
         }
     }
 
-    private func makeHarness() async throws -> Harness {
+    /// - Parameter runtimeObject: Put on screen before the view model exists,
+    ///   so the view model is built — and its first reload scheduled — with
+    ///   no suspension point in between.
+    private func makeHarness(showing runtimeObject: RuntimeObject? = nil) async throws -> Harness {
         let engine = try await TestRuntimeEngine.shared()
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        if let runtimeObject {
+            environment.documentState.selectionRouter.trigger(.push(runtimeObject))
+        }
         let tree = Fixtures.imageTree(rootName: "Others", imagePaths: [TestImages.libobjc])
         let leaf = try #require(tree.leaf(forImagePath: TestImages.libobjc))
         let viewModel = environment.make {

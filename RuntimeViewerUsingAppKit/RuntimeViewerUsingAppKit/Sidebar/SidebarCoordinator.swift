@@ -37,6 +37,12 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
             runtimeObjectCoordinator?.removeFromParent()
             runtimeObjectCoordinator = nil
             return .pop(animated: true)
+        case .revealSelectedRuntimeObject:
+            // Only the page of the image on screen can hold the object's row;
+            // the command is disabled whenever the object belongs to another
+            // image, which also means a page is always open here.
+            guard let runtimeObjectCoordinator else { return .none() }
+            return .route(on: runtimeObjectCoordinator, to: .revealSelectedRuntimeObject)
         case .selectedObject, .selectedNode:
             // iOS-only cases; on macOS the runtime-object list scrolls to
             // and highlights the root selection by observing
