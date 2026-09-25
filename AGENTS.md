@@ -321,9 +321,13 @@ LLM Client
   `0.17.0` or later for Settings. `0.16.0` carries the observable reference-model
   store but *not* `SettingsConfiguration`, which landed after that tag; `0.17.0`
   is the first release with both, plus the window frame restoration below. The
-  declared floor is `0.22.0`, which is where the synchronous `SettingsStore.save()`
-  overload — the one `flushSynchronously()` needs at termination — arrived
-  (`0.20.0` brought `MainMenu`, the main menu builder `MainMenuController` uses).
+  declared floor is `0.36.1`, the first release whose `Label` mirrors
+  `attributedStringValue` into its tooltip: `RuntimeObjectCellView` feeds its
+  labels attributed strings and relies on that for the title and subtitle
+  tooltips instead of setting them by hand. Settings alone would need `0.22.0`,
+  which is where the synchronous `SettingsStore.save()` overload — the one
+  `flushSynchronously()` needs at termination — arrived (`0.20.0` brought
+  `MainMenu`, the main menu builder `MainMenuController` uses).
 - UIFoundation's Settings API is macOS-only, so `SettingsAccess` keeps an
   in-memory `Settings` on the other platforms and its `load()` /
   `flushSynchronously()` are no-ops there. That costs nothing today because nothing off macOS *writes* a
