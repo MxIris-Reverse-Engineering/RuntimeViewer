@@ -28,7 +28,7 @@ class SidebarRootViewController<ViewModel: SidebarRootViewModel>: BaseViewContro
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             scrollView
             bottomSeparatorView
             filterSearchField

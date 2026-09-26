@@ -69,7 +69,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
             bridge.applyDisplayOptions(from: settings.editor)
         }
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             bridge.editorView
         }
 
@@ -168,7 +168,7 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         // the end of the document, and the container behind the editor.
         if let backgroundColor = currentTheme?.backgroundColor {
             bridge.applyBackgroundColor(backgroundColor)
-            contentView._backgroundColor = backgroundColor
+            containerView._backgroundColor = backgroundColor
             commonLoadingView.backgroundColor = backgroundColor
         }
     }

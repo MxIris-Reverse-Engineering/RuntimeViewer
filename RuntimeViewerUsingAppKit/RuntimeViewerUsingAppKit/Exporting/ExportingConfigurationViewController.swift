@@ -120,7 +120,7 @@ final class ExportingConfigurationViewController: BaseViewController<ExportingCo
             $0.font = .systemFont(ofSize: 13)
         }
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             contentStack
         }
 

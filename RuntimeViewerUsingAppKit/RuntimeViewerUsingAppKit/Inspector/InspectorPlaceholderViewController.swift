@@ -6,12 +6,12 @@ import RuntimeViewerArchitectures
 final class InspectorPlaceholderViewController: BaseEffectViewController<InspectorPlaceholderViewModel> {
     private let placeholderLabel = Label("No Selection")
 
-    override var contentViewUsingSafeArea: Bool { true }
+    override var containerViewUsingSafeArea: Bool { true }
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        contentView.hierarchy {
+        containerView.hierarchy {
             placeholderLabel
         }
 

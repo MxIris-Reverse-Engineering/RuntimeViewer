@@ -95,7 +95,7 @@ final class BackgroundIndexingPopoverViewController: BaseViewController<Backgrou
 
         scrollView.documentView = outlineView
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             headerStack
             headerSeparator
             scrollView

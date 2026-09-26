@@ -14,12 +14,12 @@ final class InspectorRelationshipsViewController: BaseEffectViewController<Inspe
 
     private let skeletonPlaceholderView = SkeletonPlaceholderView.runtimeObjectList()
 
-    override var contentViewUsingSafeArea: Bool { true }
+    override var containerViewUsingSafeArea: Bool { true }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             headerLabel
             scrollView
             emptyLabel

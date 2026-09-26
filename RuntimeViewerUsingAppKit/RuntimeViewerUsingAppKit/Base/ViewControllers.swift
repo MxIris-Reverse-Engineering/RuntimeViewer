@@ -9,7 +9,7 @@ import RuntimeViewerArchitectures
 ///
 /// The stack of `NSNavigationController` takes plain `NSViewController`s, so there is no base
 /// class to adopt for navigation — this one exists only to carry the ViewModel plumbing
-/// (`viewModel`, `setupBindings(for:)`, `errorRelay` alert presentation) plus the `contentView` /
+/// (`viewModel`, `setupBindings(for:)`, `errorRelay` alert presentation) plus the `containerView` /
 /// loading-indicator / skeleton machinery the panes share.
 open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewController {
     public private(set) var viewModel: ViewModel?
@@ -18,13 +18,13 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewCo
     /// `backgroundColor` — the content panes use the editor's, to be covered while they load.
     let commonLoadingView = CommonLoadingView()
 
-    public private(set) var contentView = NSView()
+    public private(set) var containerView = NSView()
 
     open var contentInsets: NSDirectionalEdgeInsets { .init() }
 
     open var shouldDisplayCommonLoading: Bool { false }
 
-    open var contentViewUsingSafeArea: Bool { false }
+    open var containerViewUsingSafeArea: Bool { false }
 
     private var usesSkeletonReplaceCommonLoading: Bool { false }
 
@@ -41,14 +41,14 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewCo
         super.viewDidLoad()
 
         hierarchy {
-            contentView
+            containerView
             if _shouldSetupCommonLoading {
                 commonLoadingView
             }
         }
 
-        contentView.snp.makeConstraints { make in
-            if contentViewUsingSafeArea {
+        containerView.snp.makeConstraints { make in
+            if containerViewUsingSafeArea {
                 make.top.equalTo(view.safeAreaLayoutGuide).inset(contentInsets.top)
                 make.leading.equalTo(view.safeAreaLayoutGuide).inset(contentInsets.leading)
                 make.trailing.equalTo(view.safeAreaLayoutGuide).inset(contentInsets.trailing)
@@ -87,9 +87,9 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewCo
                 viewModel.delayedLoading.driveOnNextMainActor { [weak self] isLoading in
                     guard let self else { return }
                     if isLoading {
-                        contentView.showSkeleton()
+                        containerView.showSkeleton()
                     } else {
-                        contentView.hideSkeleton()
+                        containerView.hideSkeleton()
                     }
                 }
                 .disposed(by: rx.disposeBag)
@@ -145,7 +145,7 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewCo
     }
 }
 
-/// A `BaseViewController` whose `contentView` is an `NSVisualEffectView` before macOS 26 and a plain
+/// A `BaseViewController` whose `containerView` is an `NSVisualEffectView` before macOS 26 and a plain
 /// `NSView` from macOS 26 on.
 ///
 /// From macOS 26 the split view wraps a sidebar or inspector item in an `NSGlassEffectView` whose
@@ -163,7 +163,7 @@ open class BaseEffectViewController<ViewModel: ViewModelProtocol>: BaseViewContr
         }
     }()
 
-    open override var contentView: NSView { effectView }
+    open override var containerView: NSView { effectView }
 }
 
 open class BaseNavigationController: NSNavigationController {

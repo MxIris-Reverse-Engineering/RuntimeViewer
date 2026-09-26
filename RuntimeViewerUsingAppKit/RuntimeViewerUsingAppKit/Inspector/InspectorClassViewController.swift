@@ -13,12 +13,12 @@ final class InspectorClassViewController: BaseEffectViewController<InspectorClas
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             contentStackView
         }
 
         contentStackView.snp.makeConstraints { make in
-            make.edges.equalTo(contentView.safeAreaLayoutGuide)
+            make.edges.equalTo(containerView.safeAreaLayoutGuide)
         }
     }
 

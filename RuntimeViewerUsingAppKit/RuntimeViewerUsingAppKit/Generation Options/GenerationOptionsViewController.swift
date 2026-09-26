@@ -77,7 +77,7 @@ final class GenerationOptionsViewController: BaseViewController<GenerationOption
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             stackView
         }
 

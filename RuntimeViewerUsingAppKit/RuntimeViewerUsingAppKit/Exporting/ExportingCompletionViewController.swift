@@ -41,7 +41,7 @@ final class ExportingCompletionViewController: BaseViewController<ExportingCompl
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             contentStackView
         }
 

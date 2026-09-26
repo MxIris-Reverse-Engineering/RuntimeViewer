@@ -22,7 +22,7 @@ final class BatchExportingImageSelectionViewController: BaseViewController<Batch
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             searchField
             selectAllButton
             deselectAllButton

@@ -56,7 +56,7 @@ final class BatchExportingCompletionViewController: BaseViewController<BatchExpo
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             headerStack
             statsStack
             scrollView

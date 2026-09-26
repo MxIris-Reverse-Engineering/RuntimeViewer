@@ -7,17 +7,17 @@ import RuntimeViewerApplication
 final class ContentPlaceholderViewController: BaseViewController<ContentPlaceholderViewModel> {
     private let placeholderLabel = Label("Select a runtime object")
 
-    override var contentViewUsingSafeArea: Bool { true }
+    override var containerViewUsingSafeArea: Bool { true }
     
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             placeholderLabel
         }
 
         placeholderLabel.snp.makeConstraints { make in
-            make.center.equalTo(contentView)
+            make.center.equalTo(containerView)
         }
 
         placeholderLabel.do {

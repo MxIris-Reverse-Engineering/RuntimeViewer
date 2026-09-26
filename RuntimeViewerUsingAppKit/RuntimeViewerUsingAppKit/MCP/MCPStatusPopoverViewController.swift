@@ -52,7 +52,7 @@ final class MCPStatusPopoverViewController: BaseViewController<MCPStatusPopoverV
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             contentStack
         }
 

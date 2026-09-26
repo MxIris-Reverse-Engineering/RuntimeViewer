@@ -16,14 +16,14 @@ final class InspectorSwiftSpecializationViewController: BaseEffectViewController
         titleFont: .systemFont(ofSize: 13)
     )
 
-    override var contentViewUsingSafeArea: Bool { true }
+    override var containerViewUsingSafeArea: Bool { true }
 
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             headerLabel
             scrollView
             emptyLabel

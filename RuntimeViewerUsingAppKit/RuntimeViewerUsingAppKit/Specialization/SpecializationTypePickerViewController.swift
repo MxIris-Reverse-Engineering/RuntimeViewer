@@ -18,7 +18,7 @@ final class SpecializationTypePickerViewController: BaseViewController<Specializ
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             searchField
             scrollView
         }

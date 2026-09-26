@@ -28,7 +28,7 @@ final class BatchExportingProgressViewController: BaseViewController<BatchExport
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             titleLabel
             progressLabel
             overallProgressBar

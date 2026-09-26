@@ -29,7 +29,7 @@ final class ExportingProgressViewController: BaseViewController<ExportingProgres
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        contentView.hierarchy {
+        containerView.hierarchy {
             progressPhaseLabel
             progressIndicator
             progressObjectLabel

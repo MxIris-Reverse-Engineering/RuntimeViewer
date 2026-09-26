@@ -40,7 +40,7 @@ final class AttachToProcessViewController: BaseViewController<AttachToProcessVie
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             pickerViewController
         }
 

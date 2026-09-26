@@ -55,7 +55,7 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             scrollView
         }
 
@@ -113,7 +113,7 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
         .disposed(by: rx.disposeBag)
 
         output.theme.drive(with: self) {
-            $0.contentView._backgroundColor = $1.backgroundColor
+            $0.containerView._backgroundColor = $1.backgroundColor
             $0.commonLoadingView.backgroundColor = $1.backgroundColor
             $0.textView.backgroundColor = $1.backgroundColor
             $0.scrollView.backgroundColor = $1.backgroundColor

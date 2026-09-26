@@ -83,7 +83,7 @@ class SidebarRuntimeObjectViewController<ViewModel: SidebarRuntimeObjectViewMode
 
         tabView = NSTabView()
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             tabView
         }
 

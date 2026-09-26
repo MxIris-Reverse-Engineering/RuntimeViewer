@@ -119,7 +119,7 @@ final class BatchExportingConfigurationViewController: BaseViewController<BatchE
             $0.font = .systemFont(ofSize: 13)
         }
 
-        contentView.hierarchy {
+        containerView.hierarchy {
             contentStack
         }
 
