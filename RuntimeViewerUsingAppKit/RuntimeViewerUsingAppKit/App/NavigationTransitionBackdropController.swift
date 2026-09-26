@@ -58,14 +58,14 @@ final class NavigationTransitionBackdropController: NSObject, NSNavigationContro
                 toBackdropView.removeFromSuperview()
             }
         case .color(let backdropColor):
-            let fromOriginalBackgroundColor = fromViewController.view.backgroundColor
-            let toOriginalBackgroundColor = toViewController.view.backgroundColor
+            let fromOriginalBackgroundColor = fromViewController.view._backgroundColor
+            let toOriginalBackgroundColor = toViewController.view._backgroundColor
             coordinator.animate { _ in
-                fromViewController.view.backgroundColor = backdropColor
-                toViewController.view.backgroundColor = backdropColor
+                fromViewController.view._backgroundColor = backdropColor
+                toViewController.view._backgroundColor = backdropColor
             } completion: { _ in
-                fromViewController.view.backgroundColor = fromOriginalBackgroundColor
-                toViewController.view.backgroundColor = toOriginalBackgroundColor
+                fromViewController.view._backgroundColor = fromOriginalBackgroundColor
+                toViewController.view._backgroundColor = toOriginalBackgroundColor
             }
         case .material(let backdropMaterial):
             let fromBackdropView = NavigationTransitionBackdropController.installTransitionBackdropView(NavigationTransitionBackdropController.makeMaterialBackdropView(backdropMaterial), in: fromViewController.view)
@@ -101,11 +101,11 @@ final class NavigationTransitionBackdropController: NSObject, NSNavigationContro
     }
 }
 
-extension NSView {
+extension FrameworkToolbox where Base: NSView {
     /// AppKitPlus's `NSView (Appearance).backgroundColor`, reached through key-value coding because
     /// the category header is framework-internal.
-    var backgroundColor: NSColor? {
-        set { setValue(newValue, forKey: "backgroundColor") }
-        get { value(forKey: "backgroundColor") as? NSColor }
+    var _backgroundColor: NSColor? {
+        set { base.setValue(newValue, forKey: "backgroundColor") }
+        get { base.value(forKey: "backgroundColor") as? NSColor }
     }
 }

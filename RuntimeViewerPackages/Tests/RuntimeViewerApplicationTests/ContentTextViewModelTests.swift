@@ -1,5 +1,6 @@
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
+import RuntimeViewerSettings
 import Testing
 @testable import RuntimeViewerApplication
 
@@ -88,6 +89,28 @@ struct ContentTextViewModelTests {
 
         try await notFound
         #expect(environment.documentState.selectedRuntimeObject == nil)
+    }
+
+    @Test("a content loading delay from Settings › Developer holds back even an interface that is already cached")
+    func developerDelayHoldsBackCachedInterface() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let nsObject = try await engine.runtimeObject(named: "NSObject", kind: .objc(.type(.class)), in: TestImages.libobjc)
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        // Warms the document's interface cache, so what follows would come back at once
+        // without the delay — which is what makes a slow result attributable to it.
+        let (warmingViewModel, warmingOutput) = makeViewModel(for: nsObject, in: environment)
+        _ = try await nextValue(from: warmingOutput.renderedInterface, timeout: 120)
+        withExtendedLifetime(warmingViewModel) {}
+
+        environment.settings.developer.isEnabled = true
+        environment.settings.developer.contentLoadingDelay = 0.8
+        let clock = ContinuousClock()
+        let startInstant = clock.now
+        let (delayedViewModel, delayedOutput) = makeViewModel(for: nsObject, in: environment)
+        defer { withExtendedLifetime(delayedViewModel) {} }
+        _ = try await nextValue(from: delayedOutput.renderedInterface, timeout: 60)
+
+        #expect(clock.now - startInstant >= .milliseconds(800))
     }
 
     // MARK: - Helpers

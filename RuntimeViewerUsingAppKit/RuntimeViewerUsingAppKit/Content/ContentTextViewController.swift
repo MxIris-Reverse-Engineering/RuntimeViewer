@@ -113,7 +113,8 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
         .disposed(by: rx.disposeBag)
 
         output.theme.drive(with: self) {
-            $0.contentView.backgroundColor = $1.backgroundColor
+            $0.contentView._backgroundColor = $1.backgroundColor
+            $0.commonLoadingView.backgroundColor = $1.backgroundColor
             $0.textView.backgroundColor = $1.backgroundColor
             $0.scrollView.backgroundColor = $1.backgroundColor
             $0.lineNumberRulerView.gutterBackgroundColor = $1.backgroundColor

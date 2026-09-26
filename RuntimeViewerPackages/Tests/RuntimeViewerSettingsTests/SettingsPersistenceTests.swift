@@ -98,6 +98,11 @@ private let persistedProperties: [PersistedProperty] = [
         apply: { $0.theme.fontSize = 17 },
         matches: { $0.theme.fontSize == 17 }
     ),
+    PersistedProperty(
+        encodedKey: "developer",
+        apply: { $0.developer.contentLoadingDelay = 2 },
+        matches: { $0.developer.contentLoadingDelay == 2 }
+    ),
 ]
 
 @MainActor

@@ -168,7 +168,8 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         // the end of the document, and the container behind the editor.
         if let backgroundColor = currentTheme?.backgroundColor {
             bridge.applyBackgroundColor(backgroundColor)
-            contentView.backgroundColor = backgroundColor
+            contentView._backgroundColor = backgroundColor
+            commonLoadingView.backgroundColor = backgroundColor
         }
     }
 

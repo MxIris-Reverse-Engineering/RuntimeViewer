@@ -34,6 +34,9 @@ public final class Settings {
     @Default(Theme.default)
     public var theme: Theme = .init()
 
+    @Default(Developer.default)
+    public var developer: Developer = .init()
+
     internal init() {}
 
     #if os(macOS)
@@ -70,6 +73,7 @@ extension Settings: PersistentSettings {
         _ = indexing
         _ = update
         _ = theme
+        _ = developer
     }
 }
 #endif

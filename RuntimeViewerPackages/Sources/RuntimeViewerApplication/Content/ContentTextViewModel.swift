@@ -29,7 +29,8 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// default implementation routes through the document's
     /// `RuntimeInterfaceCache`, which reads the current runtime engine at
     /// call time (the engine can be swapped mid-document) and flushes
-    /// itself on engine swaps and data-change events.
+    /// itself on engine swaps and data-change events. It first waits out
+    /// the delay Settings › Developer may set; an injected provider does not.
     typealias InterfaceProvider = @Sendable (RuntimeObject, RuntimeObjectInterface.GenerationOptions) async throws -> RuntimeObjectInterface?
 
     /// Single fetch path shared by the content pipeline's fetch half and
@@ -80,8 +81,12 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
         self.runtimeObject = runtimeObject
         self.theme = ResolvedTheme.fallback
         let interfaceCache = documentState.interfaceCache
+        let contentLoadingDelay = Self.contentLoadingDelay()
         self.interfaceProvider = interfaceProvider ?? { [interfaceCache] runtimeObject, options in
-            try await interfaceCache.interface(for: runtimeObject, options: options)
+            if contentLoadingDelay > 0 {
+                try await Task.sleep(for: .seconds(contentLoadingDelay))
+            }
+            return try await interfaceCache.interface(for: runtimeObject, options: options)
         }
         super.init(documentState: documentState, router: router)
 
@@ -200,6 +205,21 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
             .map { $0?.attributedString }
             .bind(to: $attributedString)
             .disposed(by: rx.disposeBag)
+    }
+
+    /// The wait Settings › Developer puts ahead of every fetch; zero while its master switch is
+    /// off, and wherever that page does not exist.
+    ///
+    /// Read once per ViewModel rather than per fetch: the fetch runs off the main actor, where
+    /// settings cannot be read, and the pane builds a new ViewModel for every object it shows,
+    /// so a changed delay still applies from the next selection on.
+    private static func contentLoadingDelay() -> TimeInterval {
+        #if canImport(AppKit) && !targetEnvironment(macCatalyst)
+        @Dependency(\.settings) var settings
+        return settings.developer.effectiveContentLoadingDelay
+        #else
+        return 0
+        #endif
     }
 
     /// Builds both forms of a fetched interface in one pass, so the semantic runs and the

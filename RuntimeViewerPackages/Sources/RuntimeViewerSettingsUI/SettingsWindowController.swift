@@ -34,6 +34,11 @@ package final class SettingsWindowController: UIFoundationSettingsUI.SettingsWin
             SettingsPage("Helper", id: "helper", plainSymbol: "wrench.and.screwdriver") {
                 HelperServiceSettingsView()
             }
+            #if DEBUG
+            SettingsPage("Developer", id: "developer", plainSymbol: "hammer") {
+                DeveloperSettingsView()
+            }
+            #endif
         }
     }
 }

@@ -14,9 +14,11 @@ import RuntimeViewerArchitectures
 open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewController {
     public private(set) var viewModel: ViewModel?
 
-    private let commonLoadingView = CommonLoadingView()
+    /// Frosted glass before macOS 26 and transparent from 26 on, unless a pane gives it a
+    /// `backgroundColor` — the content panes use the editor's, to be covered while they load.
+    let commonLoadingView = CommonLoadingView()
 
-    public private(set) var contentView: NSView = NSView()
+    public private(set) var contentView = NSView()
 
     open var contentInsets: NSDirectionalEdgeInsets { .init() }
 
@@ -59,9 +61,11 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewCo
             }
         }
 
+        // The whole view, not the safe area: a painted background has to cover the strip under
+        // the toolbar as well. The spinner still centres in the safe area.
         if _shouldSetupCommonLoading {
             commonLoadingView.snp.makeConstraints { make in
-                make.edges.equalTo(view.safeAreaLayoutGuide)
+                make.edges.equalToSuperview()
             }
         }
     }

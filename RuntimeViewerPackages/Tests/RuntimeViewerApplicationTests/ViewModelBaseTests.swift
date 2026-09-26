@@ -49,30 +49,31 @@ struct ViewModelBaseTests {
         #expect(try await nextValue(from: viewModel.commonLoading, where: { !$0 }) == false)
     }
 
-    @Test("delayedLoading never reports work that finishes within half a second")
+    @Test("delayedLoading never reports work that finishes within its 100 ms grace period")
     func delayedLoadingIgnoresShortWork() async throws {
         let viewModel = makePlaceholder()
-        async let observed = values(from: viewModel.delayedLoading, during: 0.9)
+        async let observed = values(from: viewModel.delayedLoading, during: 0.5)
         try await settleMainQueue()
 
         let inFlightWork = Observable<Never>.never().trackActivity(viewModel._commonLoading).subscribe()
-        try await Task.sleep(for: .milliseconds(150))
+        try await Task.sleep(for: .milliseconds(30))
         inFlightWork.dispose()
 
         #expect(try await observed.contains(true) == false)
     }
 
-    @Test("delayedLoading reports work that outlives the half-second grace period")
+    /// Measures the wait rather than watching a quiet window: a window has to end before the
+    /// grace period does, which at 100 ms leaves too little slack to be reliable.
+    @Test("delayedLoading reports work that outlives its 100 ms grace period, and not before")
     func delayedLoadingReportsLongWork() async throws {
         let viewModel = makePlaceholder()
-        async let quietWindow = values(from: viewModel.delayedLoading, during: 0.4)
-        try await settleMainQueue()
-
+        let clock = ContinuousClock()
+        let workStartInstant = clock.now
         let inFlightWork = Observable<Never>.never().trackActivity(viewModel._commonLoading).subscribe()
         defer { inFlightWork.dispose() }
 
-        #expect(try await quietWindow.contains(true) == false)
         #expect(try await nextValue(from: viewModel.delayedLoading, where: { $0 }) == true)
+        #expect(clock.now - workStartInstant >= .milliseconds(100))
     }
 
     private func makePlaceholder() -> ContentPlaceholderViewModel {

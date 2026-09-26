@@ -38,7 +38,7 @@ open class ViewModel<Route: Routable>: NSObject, ViewModelProtocol {
                     // If 'isLoading' becomes false before the delay finishes,
                     // flatMapLatest will dispose this subscription, cancelling the 'true' emission.
                     return Driver.just(true)
-                        .delay(.milliseconds(500))
+                        .delay(.milliseconds(100))
                 } else {
                     // If loading ends, emit 'false' immediately to hide the spinner.
                     return Driver.just(false)
