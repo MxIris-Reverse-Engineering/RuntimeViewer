@@ -572,7 +572,9 @@ extension RuntimeBackgroundIndexingCoordinator {
     ///   from the gate, reset edited ones, dispatch fresh entries.
     ///
     /// `depth` / `maxConcurrency` changes are intentional no-ops; next
-    /// `startBatch` picks up the new values.
+    /// `startBatch` picks up the new values. The manager counts
+    /// `maxConcurrency` across all batches, so from then on it bounds the
+    /// batches still running too.
     private func handleSettingsChange() {
         let indexing = currentIndexingSettings()
         let wasMaster = lastKnownMasterEnabled

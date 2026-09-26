@@ -409,6 +409,11 @@ actor RuntimeObjCSectionFactory {
     /// Per-image sections, keyed by the dyld-canonical image path.
     private var sections: [String: RuntimeObjCSection] = [:]
 
+    /// Builds under way, keyed like `sections`. A request for an image that is
+    /// being built waits for that build instead of starting a second one; see
+    /// `RuntimeSectionBuild`.
+    private var sectionBuilds: [String: RuntimeSectionBuild<RuntimeObjCSection>] = [:]
+
     init() {
         let machO = MachOImage.current()
         self.indexer = RuntimeObjCInterfaceIndexer(machO: machO, imagePath: machO.imagePath)
@@ -436,11 +441,10 @@ actor RuntimeObjCSectionFactory {
             #log(.debug, "Using cached ObjC section for: \(imagePath, privacy: .public)")
             return (true, section)
         }
-        #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
-        let section = try await RuntimeObjCSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
-        sections[imagePath] = section
-        indexer.addSubIndexer(section.objcIndexer)
-        #log(.debug, "ObjC section created and cached")
+        let section = try await sectionBuild(for: imagePath) { factory, relayContinuation in
+            try await RuntimeObjCSection(imagePath: imagePath, factory: factory, progressContinuation: relayContinuation)
+        }
+        .section(forwardingProgressTo: progressContinuation)
         return (false, section)
     }
 
@@ -457,15 +461,58 @@ actor RuntimeObjCSectionFactory {
                 return existObjCSection
             }
 
-            #log(.debug, "Creating ObjC section from MachO: \(machO.imagePath, privacy: .public)")
-            let objcSection = try await RuntimeObjCSection(machO: machO, factory: self)
-            sections[machO.imagePath] = objcSection
-            indexer.addSubIndexer(objcSection.objcIndexer)
-            return objcSection
+            // `MachOImage` is not `Sendable` because it wraps a pointer into
+            // the image's mapped header, which stays valid for as long as dyld
+            // keeps the image loaded — the same assumption every section makes.
+            nonisolated(unsafe) let machOImage = machO
+            return try await sectionBuild(for: machO.imagePath) { factory, relayContinuation in
+                try await RuntimeObjCSection(machO: machOImage, factory: factory, progressContinuation: relayContinuation)
+            }
+            .section(forwardingProgressTo: nil)
         } catch {
             #log(.error, "Failed to create ObjC section: \(error, privacy: .public)")
             return nil
         }
+    }
+
+    /// The build under way for `imagePath`, starting one when there is none.
+    ///
+    /// The finished section is registered from inside the build, before any
+    /// waiter is released, so every waiter returns a section that is already
+    /// cached and attached to the aggregate. A build that fails leaves nothing
+    /// behind, and the next request starts afresh.
+    private func sectionBuild(
+        for imagePath: String,
+        makingSectionWith makeSection: @escaping @Sendable (RuntimeObjCSectionFactory, LoadingEventContinuation) async throws -> RuntimeObjCSection
+    ) -> RuntimeSectionBuild<RuntimeObjCSection> {
+        if let sectionBuild = sectionBuilds[imagePath] {
+            #log(.debug, "Joining the ObjC section build under way for: \(imagePath, privacy: .public)")
+            return sectionBuild
+        }
+        #log(.debug, "Creating ObjC section for: \(imagePath, privacy: .public)")
+        let sectionBuild = RuntimeSectionBuild<RuntimeObjCSection> { [self] relayContinuation in
+            do {
+                let section = try await makeSection(self, relayContinuation)
+                await registerBuiltSection(section, for: imagePath)
+                return section
+            } catch {
+                await discardSectionBuild(for: imagePath)
+                throw error
+            }
+        }
+        sectionBuilds[imagePath] = sectionBuild
+        return sectionBuild
+    }
+
+    private func registerBuiltSection(_ section: RuntimeObjCSection, for imagePath: String) {
+        sections[imagePath] = section
+        indexer.addSubIndexer(section.objcIndexer)
+        sectionBuilds[imagePath] = nil
+        #log(.debug, "ObjC section created and cached")
+    }
+
+    private func discardSectionBuild(for imagePath: String) {
+        sectionBuilds[imagePath] = nil
     }
 
     /// Drop an image's section, detaching its indexer from the aggregate first.

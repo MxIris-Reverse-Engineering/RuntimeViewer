@@ -1,13 +1,17 @@
 import Foundation
-import Semaphore
 import DequeModule
 
 public actor RuntimeBackgroundIndexingManager {
     struct BatchState {
         var batch: RuntimeIndexingBatch
-        var maxConcurrency: Int
         var drivingTask: Task<Void, Never>?
         var priorityBoostPaths: Set<String> = []
+    }
+
+    /// A batch waiting for its turn to start one more background load.
+    private struct BackgroundLoadSlotWaiter {
+        let identifier: UInt64
+        let continuation: CheckedContinuation<Void, any Error>
     }
 
     /// `unowned` because the engine owns this manager
@@ -19,6 +23,29 @@ public actor RuntimeBackgroundIndexingManager {
     private let continuation: AsyncStream<RuntimeIndexingEvent>.Continuation
 
     private var activeBatches: [RuntimeIndexingBatchID: BatchState] = [:]
+
+    /// How many background loads may run at once, counted across every batch.
+    ///
+    /// Settings describe Max Concurrent Tasks as one limit for all background
+    /// indexing, and each "always index" entry is a batch of its own, so a
+    /// limit counted per batch let five entries build five images at once
+    /// whatever the setting said. Several builds in one process slow each
+    /// other down — and slow the image the user opens alongside them, which
+    /// QoS cannot help with (proposal draft-background-indexing-yields-to-foreground).
+    /// Every `startBatch` passes the current setting, so the latest call's
+    /// value is the one in force.
+    private var backgroundLoadLimit = 1
+
+    private var runningBackgroundLoadCount = 0
+
+    /// Image loads the engine is running for the user rather than for this
+    /// manager. While any is in flight, no new background load starts; the
+    /// ones already running are left to finish.
+    private var foregroundLoadCount = 0
+
+    private var backgroundLoadSlotWaiters: Deque<BackgroundLoadSlotWaiter> = []
+
+    private var nextBackgroundLoadSlotWaiterIdentifier: UInt64 = 0
 
     public nonisolated var events: AsyncStream<RuntimeIndexingEvent> { stream }
 
@@ -90,12 +117,21 @@ public actor RuntimeBackgroundIndexingManager {
         }
     }
 
+    /// Starts indexing `rootImagePath` and its dependencies down to `depth`.
+    ///
+    /// `maxConcurrency` is the Max Concurrent Tasks setting and bounds the
+    /// background loads of every batch together, not of this one alone; the
+    /// value passed last is the one in force. Lowering it lets running loads
+    /// finish and holds new ones back until the count is under it.
     public func startBatch(
         rootImagePath: String,
         depth: Int,
         maxConcurrency: Int,
         reason: RuntimeIndexingBatchReason
     ) async -> RuntimeIndexingBatchID {
+        backgroundLoadLimit = max(1, maxConcurrency)
+        grantBackgroundLoadSlots()
+
         // Dedup before doing any expansion work. Real-world trigger:
         // `documentDidOpen` dispatches `.appLaunch` on the main executable
         // and the user simultaneously toggles the master switch off / on,
@@ -136,7 +172,7 @@ public actor RuntimeBackgroundIndexingManager {
             reason: reason, items: items,
             isCancelled: false, isFinished: false
         )
-        let state = BatchState(batch: batch, maxConcurrency: max(1, maxConcurrency))
+        let state = BatchState(batch: batch)
         activeBatches[id] = state
         continuation.yield(.batchStarted(batch))
 
@@ -244,7 +280,6 @@ public actor RuntimeBackgroundIndexingManager {
 
     private func runBatch(id: RuntimeIndexingBatchID) async {
         guard let startState = activeBatches[id] else { return }
-        let maxConcurrency = startState.maxConcurrency
 
         // Pending paths in FIFO order, skipping already-terminal items.
         var pending = startState.batch.items
@@ -256,31 +291,99 @@ public actor RuntimeBackgroundIndexingManager {
             return
         }
 
-        let semaphore = AsyncSemaphore(value: maxConcurrency)
         var wasCancelled = false
 
         await withTaskGroup(of: Void.self) { group in
             while !pending.isEmpty {
-                let path = popNextPrioritizedPath(batchID: id, pending: &pending)
+                // Take the slot before choosing the path: a wait can be long
+                // (a foreground load holds every new start back), and a
+                // `prioritize` that lands during it should still decide what
+                // goes next.
                 do {
-                    try await semaphore.waitUnlessCancelled()
+                    try await acquireBackgroundLoadSlot()
                 } catch {
                     wasCancelled = true
                     break
                 }
-                if Task.isCancelled { wasCancelled = true; break }
+                if Task.isCancelled {
+                    releaseBackgroundLoadSlot()
+                    wasCancelled = true
+                    break
+                }
+                let path = popNextPrioritizedPath(batchID: id, pending: &pending)
                 // Mirror the parent driving task's `.utility` priority: child
                 // tasks inherit the parent here, but spelling it out makes the
                 // QoS contract explicit and guards against future changes that
                 // might wrap `runBatch` in a higher-priority Task.
                 group.addTask(priority: .utility) { [weak self] in
-                    defer { semaphore.signal() }
-                    await self?.runSingleIndex(batchID: id, path: path)
+                    guard let self else { return }
+                    await runSingleIndex(batchID: id, path: path)
+                    await releaseBackgroundLoadSlot()
                 }
             }
             await group.waitForAll()
         }
         finalize(id: id, cancelled: wasCancelled || Task.isCancelled)
+    }
+
+    // MARK: - Background load slots
+
+    /// Called by the engine when it starts an image load for the user.
+    func foregroundLoadDidBegin() {
+        foregroundLoadCount += 1
+    }
+
+    /// Called by the engine when an image load for the user ends, however it ends.
+    func foregroundLoadDidEnd() {
+        foregroundLoadCount = max(0, foregroundLoadCount - 1)
+        grantBackgroundLoadSlots()
+    }
+
+    private var canStartBackgroundLoad: Bool {
+        foregroundLoadCount == 0 && runningBackgroundLoadCount < backgroundLoadLimit
+    }
+
+    /// Waits until one more background load may start, and counts it as running.
+    ///
+    /// Waiters are served first come, first served, so batches take turns.
+    /// Throws `CancellationError` if the waiting task is cancelled first; a
+    /// slot granted to a task that is cancelled afterwards is the caller's to
+    /// release.
+    private func acquireBackgroundLoadSlot() async throws {
+        try Task.checkCancellation()
+        if backgroundLoadSlotWaiters.isEmpty, canStartBackgroundLoad {
+            runningBackgroundLoadCount += 1
+            return
+        }
+        let identifier = nextBackgroundLoadSlotWaiterIdentifier
+        nextBackgroundLoadSlotWaiterIdentifier &+= 1
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                backgroundLoadSlotWaiters.append(BackgroundLoadSlotWaiter(identifier: identifier, continuation: continuation))
+            }
+        } onCancel: {
+            // Runs on the cancelling thread; the hop cannot overtake the
+            // append above, which happens before this actor is released.
+            Task { await self.cancelBackgroundLoadSlotWaiter(identifier) }
+        }
+    }
+
+    private func releaseBackgroundLoadSlot() {
+        runningBackgroundLoadCount -= 1
+        grantBackgroundLoadSlots()
+    }
+
+    private func grantBackgroundLoadSlots() {
+        while canStartBackgroundLoad, let waiter = backgroundLoadSlotWaiters.popFirst() {
+            runningBackgroundLoadCount += 1
+            waiter.continuation.resume()
+        }
+    }
+
+    private func cancelBackgroundLoadSlotWaiter(_ identifier: UInt64) {
+        guard let waiterIndex = backgroundLoadSlotWaiters.firstIndex(where: { $0.identifier == identifier }) else { return }
+        let waiter = backgroundLoadSlotWaiters.remove(at: waiterIndex)
+        waiter.continuation.resume(throwing: CancellationError())
     }
 
     /// Selects the next path to dispatch. Priority-boosted paths jump to the head.
