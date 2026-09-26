@@ -256,6 +256,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
     private func bindHistoryMenu(_ menu: NSMenu, to items: Driver<[NavigationHistoryItem]>) -> Disposable {
         menu.rx.items(source: items.asObservable())({ menuItem, item in
             menuItem.image = item.icon
+            if #available(macOS 27.0, *) {
+                menuItem.preferredImageVisibility = .visible
+            }
         })
     }
 
