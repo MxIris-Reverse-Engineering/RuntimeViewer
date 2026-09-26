@@ -24,7 +24,11 @@ class TabViewController: NSLayerBackedViewController {
 
     private let segmentedControl: any SegmentedControl = {
         if #available(macOS 26.0, *) {
-            NSSegmentedControl()
+            NSSegmentedControl().then {
+                if #available(macOS 27.0, *) {
+                    $0.role = .tabs
+                }
+            }
         } else {
             AreaSegmentedControl()
         }
