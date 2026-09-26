@@ -150,8 +150,11 @@ extension Settings {
         @Default(false)
         public var isEnabled: Bool
 
-        /// Shared worker pool capacity used by both sub-modes (Settings UI
-        /// clamps to 1...processorCount).
+        /// How many images background indexing builds at the same time, across
+        /// every batch of both sub-modes (Settings UI clamps to
+        /// 1...processorCount). Builds in one process slow each other down,
+        /// the image the user opens included, so while one is loading no new
+        /// background build starts.
         @Default(4)
         public var maxConcurrency: Int
 

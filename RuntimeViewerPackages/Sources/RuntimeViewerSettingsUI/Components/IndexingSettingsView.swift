@@ -26,7 +26,7 @@ struct IndexingSettingsView: View {
             } header: {
                 Text("Background Indexing")
             } footer: {
-                Text("Master switch for all background indexing. When off, neither sub-mode below runs. Max Concurrent Tasks limits how many images both sub-modes can index in parallel; higher values finish faster but use more CPU.")
+                Text("Master switch for all background indexing. When off, neither sub-mode below runs. Max Concurrent Tasks limits how many images both sub-modes together index at the same time. Higher values finish sooner, but an image you open while they run loads more slowly; no new background work starts until it has loaded.")
             }
 
             Section {

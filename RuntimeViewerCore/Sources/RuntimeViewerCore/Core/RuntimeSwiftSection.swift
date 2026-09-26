@@ -1488,6 +1488,11 @@ actor RuntimeSwiftSectionFactory {
 
     private var sections: [String: RuntimeSwiftSection] = [:]
 
+    /// Builds under way, keyed like `sections`. A request for an image that is
+    /// being built waits for that build instead of starting a second one; see
+    /// `RuntimeSectionBuild`.
+    private var sectionBuilds: [String: RuntimeSectionBuild<RuntimeSwiftSection>] = [:]
+
     /// Cross-image mangled candidate ID → indexed type, populated as each
     /// section registers. Replaces the prior O(n) walk over
     /// `indexer.allAllTypeDefinitions` (which re-mangled every typeName on
@@ -1546,13 +1551,46 @@ actor RuntimeSwiftSectionFactory {
             #log(.debug, "Using cached Swift section for: \(imagePath, privacy: .public)")
             return (true, section)
         }
+        let section = try await sectionBuild(for: imagePath).section(forwardingProgressTo: progressContinuation)
+        return (false, section)
+    }
+
+    /// The build under way for `imagePath`, starting one when there is none.
+    ///
+    /// The finished section is registered — cached, set up and its candidate
+    /// IDs recorded — from inside the build, before any waiter is released. A
+    /// build that fails leaves nothing behind, and the next request starts
+    /// afresh.
+    private func sectionBuild(for imagePath: String) -> RuntimeSectionBuild<RuntimeSwiftSection> {
+        if let sectionBuild = sectionBuilds[imagePath] {
+            #log(.debug, "Joining the Swift section build under way for: \(imagePath, privacy: .public)")
+            return sectionBuild
+        }
         #log(.debug, "Creating Swift section for: \(imagePath, privacy: .public)")
-        let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self, progressContinuation: progressContinuation)
+        let sectionBuild = RuntimeSectionBuild<RuntimeSwiftSection> { [self] relayContinuation in
+            do {
+                let section = try await RuntimeSwiftSection(imagePath: imagePath, factory: self, progressContinuation: relayContinuation)
+                await registerBuiltSection(section, for: imagePath)
+                return section
+            } catch {
+                await discardSectionBuild(for: imagePath)
+                throw error
+            }
+        }
+        sectionBuilds[imagePath] = sectionBuild
+        return sectionBuild
+    }
+
+    private func registerBuiltSection(_ section: RuntimeSwiftSection, for imagePath: String) async {
         sections[imagePath] = section
+        sectionBuilds[imagePath] = nil
         await section.setupForFactory(self)
         await registerCandidateIDs(from: section)
         #log(.debug, "Swift section created and cached")
-        return (false, section)
+    }
+
+    private func discardSectionBuild(for imagePath: String) {
+        sectionBuilds[imagePath] = nil
     }
 
     /// Drop an image's section, detaching its indexer from the aggregate first.

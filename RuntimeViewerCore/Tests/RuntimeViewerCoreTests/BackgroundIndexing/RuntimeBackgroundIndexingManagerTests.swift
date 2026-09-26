@@ -198,6 +198,75 @@ import Testing
         #expect(counter.peak <= 2)
     }
 
+    /// Settings describe Max Concurrent Tasks as one limit for all background
+    /// indexing, and every "always index" entry is a batch of its own: a limit
+    /// counted per batch let five entries index five images at once whatever
+    /// the setting said.
+    @Test func concurrencyLimitIsSharedAcrossBatches() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        let rootPaths = ["/AppA", "/AppB", "/AppC"]
+        for rootPath in rootPaths {
+            let dependencies = (0..<3).map { index in
+                (installName: "\(rootPath)/Dependency\(index)", resolvedPath: "\(rootPath)/Dependency\(index)")
+            }
+            engine.program(path: rootPath, .init(dependencies: dependencies))
+            for dependency in dependencies {
+                engine.program(path: dependency.installName, .init())
+            }
+        }
+        let counter = ConcurrencyCounter()
+        let wrapped = keep(InstrumentedEngine(base: engine, counter: counter))
+        let manager = RuntimeBackgroundIndexingManager(engine: wrapped)
+
+        let events = manager.events
+        let consumer = Task {
+            var finishedBatchCount = 0
+            for await event in events {
+                if case .batchFinished = event {
+                    finishedBatchCount += 1
+                    if finishedBatchCount == rootPaths.count { return }
+                }
+            }
+        }
+        for rootPath in rootPaths {
+            _ = await manager.startBatch(rootImagePath: rootPath, depth: 1,
+                                         maxConcurrency: 2, reason: .manual)
+        }
+        await consumer.value
+
+        #expect(counter.peak <= 2)
+    }
+
+    /// Builds in one process slow each other down, so while the user is
+    /// loading an image no new background load starts; the batch resumes once
+    /// the user's load has ended.
+    @Test func noBackgroundLoadStartsWhileAForegroundLoadIsInFlight() async throws {
+        let engine = keep(MockBackgroundIndexingEngine())
+        engine.program(path: "/App",
+                       .init(dependencies: [("/A", "/A"), ("/B", "/B")]))
+        engine.program(path: "/A", .init())
+        engine.program(path: "/B", .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        await manager.foregroundLoadDidBegin()
+        let events = manager.events
+        let consumer = Task { () -> RuntimeIndexingBatch? in
+            for await event in events {
+                if case .batchFinished(let batch) = event { return batch }
+            }
+            return nil
+        }
+        _ = await manager.startBatch(rootImagePath: "/App", depth: 1,
+                                     maxConcurrency: 4, reason: .manual)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        #expect(engine.loadedOrder().isEmpty,
+                "a background load ran while a foreground load was in flight")
+
+        await manager.foregroundLoadDidEnd()
+        let finishedBatch = try #require(await consumer.value)
+        #expect(finishedBatch.items.allSatisfy { $0.state == .completed })
+    }
+
     @Test func batchFailedLoadYieldsFailedTaskState() async throws {
         struct LoadError: Error {}
         let engine = keep(MockBackgroundIndexingEngine())

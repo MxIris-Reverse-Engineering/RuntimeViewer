@@ -928,7 +928,9 @@ extension RuntimeEngine {
     }
 
     public func loadImage(at path: String) async throws {
-        _ = try await dispatch(LoadImageRequest(path: path))
+        try await performingForegroundLoad {
+            _ = try await dispatch(LoadImageRequest(path: path))
+        }
     }
 
     /// `loadImage(at:)` that reports the indexing it performs.
@@ -943,7 +945,9 @@ extension RuntimeEngine {
         at path: String,
         onProgress: @escaping @Sendable (RuntimeObjectsLoadingProgress) async -> Void
     ) async throws {
-        _ = try await dispatch(LoadImageWithProgressRequest(path: path), onProgress: onProgress)
+        try await performingForegroundLoad {
+            _ = try await dispatch(LoadImageWithProgressRequest(path: path), onProgress: onProgress)
+        }
     }
 
     /// Local implementation of `loadImage(at:)`. Canonicalizes on entry so
@@ -985,7 +989,7 @@ extension RuntimeEngine {
     }
 
     public func objects(in image: String) async throws -> [RuntimeObject] {
-        try await dispatch(ObjectsInImageRequest(image: image), onProgress: nil)
+        try await foregroundObjects(in: image, onProgress: nil)
     }
 
     public func objectsWithProgress(in image: String) -> AsyncThrowingStream<RuntimeObjectsLoadingEvent, Swift.Error> {
@@ -996,7 +1000,7 @@ extension RuntimeEngine {
                     return
                 }
                 do {
-                    let objects = try await dispatch(ObjectsInImageRequest(image: image)) { progress in
+                    let objects = try await foregroundObjects(in: image) { progress in
                         continuation.yield(.progress(progress))
                     }
                     continuation.yield(.completed(objects))
@@ -1005,6 +1009,36 @@ extension RuntimeEngine {
                     continuation.finish(throwing: error)
                 }
             }
+        }
+    }
+
+    private func foregroundObjects(
+        in image: String,
+        onProgress: (@Sendable (RuntimeObjectsLoadingProgress) async -> Void)?
+    ) async throws -> [RuntimeObject] {
+        try await performingForegroundLoad {
+            try await dispatch(ObjectsInImageRequest(image: image), onProgress: onProgress)
+        }
+    }
+
+    /// Runs one image load made for the user, holding back new background
+    /// indexing work until it ends.
+    ///
+    /// Several image builds in one process slow each other down — for a large
+    /// framework, enough that the image being opened takes about as long as
+    /// the whole background batch — and QoS cannot help, because they contend
+    /// over structures the process shares, not over CPU cores (proposal
+    /// draft-background-indexing-yields-to-foreground). Builds the background
+    /// indexer already started are left to finish.
+    private func performingForegroundLoad<Result>(_ load: () async throws -> Result) async throws -> Result {
+        await backgroundIndexingManager.foregroundLoadDidBegin()
+        do {
+            let result = try await load()
+            await backgroundIndexingManager.foregroundLoadDidEnd()
+            return result
+        } catch {
+            await backgroundIndexingManager.foregroundLoadDidEnd()
+            throw error
         }
     }
 
