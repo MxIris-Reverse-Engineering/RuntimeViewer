@@ -383,6 +383,14 @@ extension SourceEditor.TextAttributeOverrideProvider {
     get
     set
   }
+  // `@objc dynamic`: reached through `objc_msgSend` on the Objective-C getter, so no Swift symbol
+  // is referenced and neither rule in the README applies. The framework declares it as
+  // `@property (nonatomic, strong) SourceEditorScrollView *scrollView`; that class has no header
+  // here, so it is typed as the `NSScrollView` it inherits from. `installScrollView()` adds it as a
+  // direct subview of this view.
+  @objc dynamic public var scrollView: AppKit.NSScrollView {
+    get
+  }
   // Nil until a gutter is installed; that is also what turns line numbers on.
   public var gutter: SourceEditor.SourceEditorGutter? {
     get

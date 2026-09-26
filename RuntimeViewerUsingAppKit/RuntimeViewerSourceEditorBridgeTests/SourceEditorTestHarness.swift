@@ -30,6 +30,9 @@ final class SourceEditorTestHarness {
     /// The view's folding controller, which is where the state under test lives.
     let foldingController: FoldingController
 
+    /// The scroll view the editor builds for itself and keeps as a direct subview.
+    let scrollView: NSScrollView
+
     init() throws {
         let bundleURL = Bundle(for: BundleAnchor.self)
             .bundleURL
@@ -53,6 +56,7 @@ final class SourceEditorTestHarness {
             throw HarnessError.editorViewUnexpectedType(type(of: bridge.editorView))
         }
         self.foldingController = editorView.foldingController
+        self.scrollView = editorView.scrollView
 
         // Off-screen is enough — measured. What the crash needs is a layer-backed view whose
         // layoutSublayers(of:) runs inside a CoreAnimation transaction, not a visible window.

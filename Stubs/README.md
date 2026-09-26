@@ -152,6 +152,15 @@ Resilient enums are ordered too: case indices come from declaration order, so a 
 copied enum silently mismatches. `SourceEditorTokenType` is therefore declared with no cases
 at all — values of it are only passed through, never matched on.
 
+**A member the framework exposes to Objective-C can skip all of this.** Declare it
+`@objc dynamic` and the call goes through `objc_msgSend` by selector, so it references no Swift
+symbol: rule 1 does not apply, and `UsedSymbols.txt` and the `.tbd` stay as they are. The dump's
+`ObjCHeaders/` says whether a member qualifies — it has to appear there with a getter or `IMP`
+address. `SourceEditorView.scrollView` is declared this way, typed as `NSScrollView` because its
+real class, `SourceEditorScrollView`, is Objective-C with no header here. The cost is that a
+selector missing from some Xcode fails when it is sent, not when the bridge loads — which is
+what `VerifyAcrossXcodes.sh` is for.
+
 ## When two Xcodes disagree on a requirement's signature
 
 `CrossVersionSymbols.txt`, next to a framework's `UsedSymbols.txt`, lists symbols the bridge
