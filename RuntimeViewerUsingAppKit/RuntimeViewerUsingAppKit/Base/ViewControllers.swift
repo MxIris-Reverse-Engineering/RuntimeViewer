@@ -5,13 +5,20 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import RuntimeViewerArchitectures
 
-/// `NSViewController`-based VM-hosting base for every AppKit view controller in the app.
+/// VM-hosting base for every AppKit view controller in the app, built on UIFoundation's
+/// `LayerBackedViewController` — AppKitPlus's `NSLayerBackedViewController` underneath, with the
+/// `AppKitPlus` trait on.
+///
+/// The root view is the superclass's `contentView`, a UIFoundation `LayerBackedView`. A pane lays
+/// its content out in `containerView` instead: the plain view inside the root that applies
+/// `contentInsets` and, when `containerViewUsingSafeArea` is on, the safe area, and that stays under
+/// the loading indicator. Content added straight to `contentView` gets neither.
 ///
 /// The stack of `NSNavigationController` takes plain `NSViewController`s, so there is no base
 /// class to adopt for navigation — this one exists only to carry the ViewModel plumbing
 /// (`viewModel`, `setupBindings(for:)`, `errorRelay` alert presentation) plus the `containerView` /
 /// loading-indicator / skeleton machinery the panes share.
-open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewController {
+open class BaseViewController<ViewModel: ViewModelProtocol>: LayerBackedViewController<LayerBackedView> {
     public private(set) var viewModel: ViewModel?
 
     /// Frosted glass before macOS 26 and transparent from 26 on, unless a pane gives it a
@@ -34,11 +41,16 @@ open class BaseViewController<ViewModel: ViewModelProtocol>: NSLayerBackedViewCo
 
     public init(viewModel: ViewModel? = nil) {
         self.viewModel = viewModel
-        super.init(nibName: nil, bundle: nil)
+        super.init(viewGenerator: LayerBackedView())
     }
 
     open override func viewDidLoad() {
         super.viewDidLoad()
+
+        // `layerBackedView` exists only on AppKitPlus's `NSLayerBackedViewController`. Should a build
+        // ever drop UIFoundation's `AppKitPlus` trait, `LayerBackedViewController` would quietly fall
+        // back to `NSViewController`; this line makes that a compile error instead.
+        assert(layerBackedView === contentView)
 
         hierarchy {
             containerView

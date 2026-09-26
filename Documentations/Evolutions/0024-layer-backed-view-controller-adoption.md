@@ -1,8 +1,9 @@
 # 0024 - `BaseViewController` 改接 UIFoundation 的 `LayerBackedViewController`
 
-- **状态**: In Progress
+- **状态**: Implemented
 - **创建日期**: 2026-09-26
 - **最后更新**: 2026-09-26
+- **配套文档**: 无独立指南——契约写在 `AGENTS.md` 的「ViewController Base Class Selection」一节
 
 ## 摘要
 
@@ -58,3 +59,5 @@
 | 2026-09-26 | 不加「根视图里只能有 `containerView` 与加载遮罩」的 DEBUG 断言 | 讨论时提过，用来防新页面把内容误装进根视图 `contentView`。但 `SpecializationViewController`、`SidebarRuntimeObjectScopeViewController`、`SidebarRootBookmarkViewController` 本来就直接往根视图里加视图，断言会立刻触发；改它们超出本次范围。另记一条现状：`SidebarRootBookmarkViewController` 的「No Bookmark」标签加在根视图上、位于加载遮罩之上 |
 | 2026-09-26 | `TabViewController` 不在本次范围 | 见「不做的事」 |
 | 2026-09-26 | 第一步完成，落地编号 0024 | 第一次构建故意留下 `ContentTextViewController.swift:116` 一处旧引用，编译器只在这一行报错：`has no dynamic member 'contentView' using key path from root type 'FrameworkToolbox<ContentTextViewController>'`。FrameworkToolbox 给类型提供了 `@dynamicMemberLookup`，是旧引用可能被悄悄绑走的另一条路，这次没有绑上。改掉这一处后构建通过；剩下的 `contentView` 都与此无关 |
+| 2026-09-26 | 第二步完成，状态 In Progress → Implemented | 父类换成 `LayerBackedViewController<LayerBackedView>`，init 走 `init(viewGenerator:)`，Debug 构建通过、无新增警告。trait 检查写成 `viewDidLoad` 里的 `assert(layerBackedView === contentView)`：Release 下断言不求值但仍参与类型检查，所以两种配置都能拦住 trait 丢失；运行时这个等式由 UIFoundation 的 `LayerBackedViewControllerTests` 覆盖。没有单独让它变红——那要在关掉 trait 的情况下重建 UIFoundation；依据是 `NSViewController` 没有 `layerBackedView` 成员。只做了编译验证，没有启动 App，也没有做界面检查 |
+| 2026-09-26 | 不写独立指南，不加术语表条目 | 基类的用法与两个视图的分工写进 `AGENTS.md` 的「ViewController Base Class Selection」，`_backgroundColor` 的适用范围写进同文件的 layer-backed 视图一节；`containerView` 是代码标识符，不是项目术语 |
