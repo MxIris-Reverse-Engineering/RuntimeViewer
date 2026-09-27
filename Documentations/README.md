@@ -95,6 +95,7 @@
 
 按时间倒序。
 
+- [侧栏对象列表两行叠在一起](ResolvedIssues/2026-09-27-sidebar-rows-drawn-over-each-other.md)（2026-09-27）—— 按种类分组的 source list 行高不一致，AppKit 对没测量过的行按估算高度排布；列表跳到靠后位置后重载（每次筛选按键）或展开嵌套类型时，估算在中途被修正，已摆好的行不会挪回去，再一滚动新行就画在它们上面。`-[NSOutlineView setDelegate:]` 每次都会重新打开估算，RxCocoa 的 delegate 代理又会自己重设 delegate。`StatefulOutlineView` 在每次 delegate 变化后用 UIFoundation 的 `box.estimatesRowHeights` 关掉估算；15.5、26.6.2、27.0 行为一致。
 - [侧栏按住拖动不再逐行选中](ResolvedIssues/2026-09-25-single-selection-drag-stopped-following-the-pointer.md)（2026-09-25）—— macOS 27 的表格把鼠标拖动交给手势识别器，处理函数只在允许多选时把选中扩展到指针下的行；单选的侧栏列表选中停在原处，列表却照样自动滚动。与编译 SDK、与焦点都无关。`StatefulOutlineView` 覆写 `mouseDown(with:)`，退回 macOS 26 的跟踪循环。
 - [Relationships 面板丢掉了全部桥出的 Swift 子类](ResolvedIssues/2026-09-24-relationships-dropped-every-bridged-subclass.md)（2026-09-24）—— 用 ObjC 运行时名找 Swift 类时整棵 remangle，`_TtC…` 的 demangle 结果是完整的类型 mangling，remangle 出符号 `$s…CD`，而 Swift 侧的键是 `Type` 节点单独 mangle 的 `…C`，从未对上；原测试只查「不重复」没发现。改为只 remangle `Type` 节点，补回归测试；sidebar 的互相跳转共用这段。
 - [侧栏点击后高亮变灰、右键菜单要点很多次](ResolvedIssues/2026-09-24-sidebar-focus-parked-on-a-navigation-container.md)（2026-09-24）—— AppKitPlus 导航控制器在转场结束时把第一响应者交给页面的普通容器视图。第一响应者是表格的祖先容器时，右键点行内文字打不开表格菜单；macOS 27 起表格的鼠标点击改由手势识别器处理、只为 Sidecar 触摸取焦，左键点行也就不再把焦点交给表格（选中画成灰色）。后一半与编译 SDK 无关，macOS 26 上被表格自己的 `mouseDown:` 掩盖。侧栏页面改为把焦点交给列表，AppKitPlus 提案 0041 改默认值。
