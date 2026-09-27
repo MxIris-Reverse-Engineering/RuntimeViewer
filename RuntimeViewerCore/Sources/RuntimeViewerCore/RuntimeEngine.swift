@@ -1130,8 +1130,7 @@ extension RuntimeEngine {
     /// Objective-C class, the extension implementing an `@objc @implementation`
     /// class, or the Objective-C class of either Swift face — whichever
     /// `object.counterpartKind` names. `nil` when the object has no other face,
-    /// or its image cannot find it (an `@objc(CustomName)` class, whose runtime
-    /// name is no mangling).
+    /// or its image cannot find it.
     ///
     /// The answer is keyed like the sidebar's own entry for it, so pushing it
     /// selects that row. Both faces live in the object's own image.

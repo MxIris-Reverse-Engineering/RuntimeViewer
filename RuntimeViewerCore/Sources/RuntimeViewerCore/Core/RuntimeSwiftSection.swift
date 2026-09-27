@@ -106,22 +106,26 @@ actor RuntimeSwiftSection {
     /// interactions.
     private lazy var specializer: GenericSpecializer<MachOImage> = .init(machO: machO, conformanceProvider: IndexerConformanceProvider(indexer: factory.indexer.upstream), indexer: factory.indexer.upstream)
 
-    /// Mangled type name → Objective-C runtime name, for every Swift class
-    /// this image registers with the Objective-C runtime: the
-    /// `__objc_classlist` entries with the Swift bit set, whose runtime names
-    /// (`_TtC6AppKitP33_…24FontPanelBIUSPopUpButton`) remangle to exactly the
-    /// name a Swift `RuntimeObject` carries. One table answers both the
-    /// `isObjCClass` mark and the jump to the Objective-C face. An
-    /// `@objc(CustomName)` class is absent — its name is no mangling.
+    /// Every Swift class this image registers with the Objective-C runtime,
+    /// paired with its Objective-C runtime name both ways round. One table
+    /// answers the `isObjCClass` mark, the jump between a class's two faces
+    /// and the Inspector's rows for bridged subclasses; `makeObjCClassPairs()`
+    /// says how a class is matched to its Swift type.
     ///
-    /// Lazy, but `allObjects()` reads it while `init` runs.
-    private lazy var objcClassNameByMangledTypeName: [String: String] = Self.objcClassNamesByMangledTypeName(in: machO)
+    /// Lazy, but `allObjects()` reads it while `init` runs — after
+    /// `indexer.prepare()`, whose type definitions it is matched against.
+    private lazy var objcClassPairs: ObjCClassPairs = makeObjCClassPairs()
 
     /// The `@objc @implementation` extensions `allObjects()` listed, by the
     /// Objective-C class each one implements, and the way back.
     private var objcImplementationExtensionObjectByClassName: [String: RuntimeObject] = [:]
 
     private var objcImplementationClassNameByExtensionMangledName: [String: String] = [:]
+
+    private struct ObjCClassPairs {
+        var objcClassNameByMangledTypeName: [String: String] = [:]
+        var mangledTypeNameByObjCClassName: [String: String] = [:]
+    }
 
     private enum InterfaceDefinitionName {
         case rootType(SwiftDeclaration.TypeName)
@@ -269,7 +273,7 @@ actor RuntimeSwiftSection {
         if isSpecialized {
             properties.insert(.isSpecialized)
         }
-        if objcClassNameByMangledTypeName[mangledName] != nil {
+        if objcClassPairs.objcClassNameByMangledTypeName[mangledName] != nil {
             properties.insert(.isObjCClass)
         }
         let displayName = isSpecialized ? typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.subtracting(.removeBoundGeneric).union(.showPrivateDiscriminators)) : typeDefinition.typeName.name(using: .interfaceTypeBuilderOnly.union(.showPrivateDiscriminators))
@@ -589,7 +593,7 @@ extension RuntimeSwiftSection {
         if isSpecialized {
             properties.insert(.isSpecialized)
         }
-        if objcClassNameByMangledTypeName[mangledName] != nil {
+        if objcClassPairs.objcClassNameByMangledTypeName[mangledName] != nil {
             properties.insert(.isObjCClass)
         }
         let displayName = isSpecialized
@@ -656,13 +660,14 @@ extension RuntimeSwiftSection {
     // MARK: - Objective-C Counterparts
 
     /// The Swift class that an Objective-C class of this image is the other
-    /// face of, found by the class's runtime name. `nil` for a name that is no
-    /// Swift mangling (`@objc(CustomName)`) or that names no type here.
+    /// face of, found by the class's runtime name — a Swift mangling
+    /// (`_TtC6AppKit…`) and a name spelled in `@objc(…)` (`NSColorModel`)
+    /// alike. `nil` for a class that is no Swift class of this image.
     ///
     /// The Inspector's relationship rows reach bridged subclasses through this
     /// too, so the sidebar's jump and those rows cannot disagree.
     func makeRuntimeObject(forObjCRuntimeClassName className: String) -> RuntimeObject? {
-        guard let mangledTypeName = Self.mangledTypeName(forObjCRuntimeClassName: className) else { return nil }
+        guard let mangledTypeName = objcClassPairs.mangledTypeNameByObjCClassName[className] else { return nil }
         return makeRuntimeObject(forMangledTypeName: mangledTypeName)
     }
 
@@ -678,7 +683,7 @@ extension RuntimeSwiftSection {
     func objcClassName(forCounterpartOf object: RuntimeObject) -> String? {
         switch object.kind {
         case .swift(.type(.class)):
-            return objcClassNameByMangledTypeName[object.name]
+            return objcClassPairs.objcClassNameByMangledTypeName[object.name]
         case .swift(.extension):
             return objcImplementationClassNameByExtensionMangledName[object.name]
         default:
@@ -686,41 +691,41 @@ extension RuntimeSwiftSection {
         }
     }
 
-    /// An Objective-C runtime name demangled and remangled: for a Swift class
-    /// (`_TtC6AppKitP33_…24FontPanelBIUSPopUpButton`) that is the very name its
-    /// Swift `RuntimeObject` carries. `nil` for a name that is no Swift
-    /// mangling.
+    /// Pairs every Swift class this image registers with the Objective-C
+    /// runtime — the `__objc_classlist` entries with the Swift bit set — with
+    /// its Swift type, through the class object rather than through names.
     ///
-    /// Only the `Type` node is remangled. The runtime name demangles as a whole
-    /// type mangling — `Global(TypeMangling(Type(Class(…))))` — whose remangling
-    /// is a symbol (`$s…CD`), while a Swift type's name is its `Type` node
-    /// alone, the shape `SymbolicDemangler.demangleContext` builds (`…C`).
-    /// Remangling the whole tree matched nothing, and until 2026-09-24 every
-    /// bridged subclass the Inspector's relationship rows looked up this way
-    /// was dropped.
+    /// A Swift class's class object is its Swift class metadata, which points
+    /// at the class's nominal type descriptor: the record the indexer built the
+    /// class's `TypeDefinition`, and so its `RuntimeObject`, from. The runtime
+    /// name cannot stand in for that pointer. A class declared
+    /// `@objc(NSColorModel)` is registered under exactly that name, which
+    /// carries neither its module nor its enclosing types, and until
+    /// 2026-09-27 such a class found no Swift face and dropped out of the
+    /// Inspector's relationship rows.
     ///
-    /// The tree is thrown away once remangled, so it is demangled
-    /// transiently: `demangleAsNode` would intern it into the library's global
-    /// cache, which never evicts. Remangling a transient tree is sound because
-    /// the remangler's substitution table compares nodes structurally.
-    static func mangledTypeName(forObjCRuntimeClassName className: String) -> String? {
-        guard var node = try? demangleAsNodeTransient(className, isType: false) else { return nil }
-        while node.kind == .global || node.kind == .typeMangling, let child = node.children.first {
-            node = child
-        }
-        guard node.kind == .type else { return nil }
-        return try? mangleAsString(node)
-    }
-
-    fileprivate static func objcClassNamesByMangledTypeName(in machO: MachOImage) -> [String: String] {
-        var objcClassNameByMangledTypeName: [String: String] = [:]
+    /// A class object that points at a generic descriptor is left out: a
+    /// generic class has no class object of its own, and the type the sidebar
+    /// lists must not be marked by one of its specializations.
+    private func makeObjCClassPairs() -> ObjCClassPairs {
+        var objcClassNameByDescriptorOffset: [Int: String] = [:]
         for objcClass in machO.objc.classes64 ?? [] where objcClass.isSwiftStable {
-            guard let className = runtimeName(of: objcClass, in: machO),
-                  let mangledTypeName = mangledTypeName(forObjCRuntimeClassName: className)
+            guard let classDescriptor = try? ClassMetadataObjCInterop.resolve(from: objcClass.offset, in: machO).descriptor(in: machO),
+                  let className = Self.runtimeName(of: objcClass, in: machO)
             else { continue }
-            objcClassNameByMangledTypeName[mangledTypeName] = className
+            objcClassNameByDescriptorOffset[classDescriptor.offset] = className
         }
-        return objcClassNameByMangledTypeName
+        var objcClassPairs = ObjCClassPairs()
+        for (typeName, typeDefinition) in indexer.allTypeDefinitions {
+            guard case .class(let classDescriptor) = typeDefinition.typeContextDescriptorWrapper,
+                  !classDescriptor.layout.flags.isGeneric,
+                  let className = objcClassNameByDescriptorOffset[classDescriptor.offset],
+                  let mangledTypeName = try? mangleAsString(typeName.node)
+            else { continue }
+            objcClassPairs.objcClassNameByMangledTypeName[mangledTypeName] = className
+            objcClassPairs.mangledTypeNameByObjCClassName[className] = mangledTypeName
+        }
+        return objcClassPairs
     }
 
     /// The name in the class's `class_ro_t`. Once the runtime has realized a

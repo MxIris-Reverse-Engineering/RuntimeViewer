@@ -20,9 +20,9 @@ extension RuntimeObject {
     /// the jump without asking the engine. `nil` when the object has no other
     /// face.
     ///
-    /// A mark promises a face, not that the jump succeeds: an
-    /// `@objc(CustomName)` class is marked `isSwiftClass` like any bridged
-    /// class, but its runtime name is no mangling, so the engine finds nothing.
+    /// A mark promises a face, not that the jump succeeds: the engine answers
+    /// from the object's own image, and finds nothing when that image is not
+    /// indexed or its Swift section knows no matching type.
     public var counterpartKind: RuntimeObjectCounterpartKind? {
         switch kind {
         case .objc(.type(.class)):

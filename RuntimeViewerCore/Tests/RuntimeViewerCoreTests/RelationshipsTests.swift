@@ -7,6 +7,7 @@ import RuntimeViewerCore
 private enum Anchors {
     static let foundationPath = "/System/Library/Frameworks/Foundation.framework/Foundation"
     static let swiftUIPath = "/System/Library/Frameworks/SwiftUI.framework/SwiftUI"
+    static let appKitPath = "/System/Library/Frameworks/AppKit.framework/Versions/C/AppKit"
     static let libobjcPath = "/usr/lib/libobjc.A.dylib"
 }
 
@@ -214,6 +215,32 @@ struct RelationshipsTests {
         // An `NSObject` target takes only the Objective-C arm, so every Swift
         // class here came through the bridged lookup.
         #expect(relationships.subclasses.contains { $0.kind == .swift(.type(.class)) }, "no bridged Swift subclass of NSObject surfaced")
+    }
+
+    /// `NSScrollPocket` is AppKit's Swift class declared `@objc(NSScrollPocket)`:
+    /// a bridged subclass of `NSView` whose runtime name is no Swift mangling.
+    /// It must come back as its Swift class like any other bridged subclass,
+    /// not drop out of the list.
+    @Test(
+        "A bridged subclass renamed with @objc(…) surfaces as its Swift class",
+        .enabled(
+            if: ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 26, minorVersion: 0, patchVersion: 0)),
+            "NSScrollPocket ships with macOS 26's AppKit"
+        )
+    )
+    func renamedBridgedSubclassSurfaces() async throws {
+        let engine = RuntimeEngine(source: .local, engineID: "test-rel-renamed-bridged-surface")
+        try await engine.connect()
+        try await engine.loadAndAwaitIndexed(Anchors.appKitPath)
+
+        let objects = try await engine.objects(in: Anchors.appKitPath)
+        let nsView = try #require(objects.first { $0.name == "NSView" && $0.kind == .objc(.type(.class)) })
+        let relationships = try await engine.relationships(for: nsView)
+
+        #expect(
+            relationships.subclasses.contains { $0.kind == .swift(.type(.class)) && $0.displayName == "AppKit.NSScrollPocket" },
+            "NSScrollPocket did not surface as a Swift subclass of NSView"
+        )
     }
 
     // MARK: - Test 7: Transitive exclusion

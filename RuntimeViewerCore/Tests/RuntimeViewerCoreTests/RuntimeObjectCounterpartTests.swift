@@ -5,16 +5,14 @@ import Testing
 /// A class that both the Objective-C and the Swift lists show, and the jump
 /// between its two faces (`RuntimeEngine.counterpart(for:)`).
 ///
-/// A bridged class pairs by name: its Objective-C runtime name
-/// (`_TtC6AppKitP33_<discriminator>24FontPanelBIUSPopUpButton`) remangles to
-/// the name its Swift entry carries — which, for a private class in an OS
-/// framework, holds only since MachOSwiftSection recovers the private
-/// discriminator from the image's `_symbolic` symbols. An
-/// `@objc @implementation` pair goes through the extension MachOSwiftSection
-/// recognized instead.
+/// A bridged class pairs whatever its Objective-C runtime name looks like: a
+/// Swift mangling, private discriminator included
+/// (`_TtC6AppKitP33_<discriminator>24FontPanelBIUSPopUpButton`), or a name
+/// spelled in `@objc(…)` (`NSScrollPocket`). An `@objc @implementation` pair
+/// goes through the extension MachOSwiftSection recognized instead.
 ///
-/// Anchored on macOS 26's AppKit, which has both kinds, private ones
-/// included. Every answer is checked against the sidebar's own entry: an
+/// Anchored on macOS 26's AppKit, which has both kinds, private and renamed
+/// ones included. Every answer is checked against the sidebar's own entry: an
 /// object that does not compare equal to it would push without selecting
 /// anything.
 @Suite(.serialized)
@@ -36,14 +34,23 @@ struct RuntimeObjectCounterpartTests {
 
     @Test("a private bridged class and its Swift class jump to each other", .enabled(if: runsOnMacOS26OrLater, "the anchor classes ship with macOS 26's AppKit"))
     func privateBridgedClassJumpsBothWays() async throws {
-        try await Self.expectBridgedClassJumpsBothWays(runtimeNamePrefix: "_TtC6AppKitP33_", runtimeNameSuffix: "24FontPanelBIUSPopUpButton")
+        try await Self.expectBridgedClassJumpsBothWays { $0.hasPrefix("_TtC6AppKitP33_") && $0.hasSuffix("24FontPanelBIUSPopUpButton") }
     }
 
     /// Private and nested in a type: the discriminator sits on the nested name
     /// (`AppKit.NSScrollPocket.(ElementContainerModel in _…)`).
     @Test("a private nested bridged class and its Swift class jump to each other", .enabled(if: runsOnMacOS26OrLater, "the anchor classes ship with macOS 26's AppKit"))
     func privateNestedBridgedClassJumpsBothWays() async throws {
-        try await Self.expectBridgedClassJumpsBothWays(runtimeNamePrefix: "_TtCC6AppKit14NSScrollPocketP33_", runtimeNameSuffix: "21ElementContainerModel")
+        try await Self.expectBridgedClassJumpsBothWays { $0.hasPrefix("_TtCC6AppKit14NSScrollPocketP33_") && $0.hasSuffix("21ElementContainerModel") }
+    }
+
+    /// Declared `@objc(NSScrollPocket)`: the runtime name is the one the source
+    /// spelled, not a Swift mangling, and says nothing about the module or the
+    /// type it belongs to.
+    @Test("a class renamed with @objc(…) and its Swift class jump to each other", .enabled(if: runsOnMacOS26OrLater, "the anchor classes ship with macOS 26's AppKit"))
+    func renamedBridgedClassJumpsBothWays() async throws {
+        let swiftObject = try await Self.expectBridgedClassJumpsBothWays { $0 == "NSScrollPocket" }
+        #expect(swiftObject.displayName == "AppKit.NSScrollPocket")
     }
 
     @Test("an @objc @implementation class and its extension jump to each other", .enabled(if: runsOnMacOS26OrLater, "NSGlassEffectView ships with macOS 26"))
@@ -62,15 +69,16 @@ struct RuntimeObjectCounterpartTests {
         #expect(try await engine.counterpart(for: extensionObject) == objcObject)
     }
 
-    /// Every bridged class whose runtime name is a Swift mangling finds its
-    /// Swift face and comes back to itself, and every Swift class marked as
-    /// registered with the Objective-C runtime finds its Objective-C face —
-    /// the two marks describe the same set of classes.
+    /// Every bridged class — whether its runtime name is a Swift mangling or
+    /// one spelled in `@objc(…)` — finds its Swift face and comes back to
+    /// itself, and every Swift class marked as registered with the Objective-C
+    /// runtime finds its Objective-C face — the two marks describe the same set
+    /// of classes.
     @Test("every bridged class and every marked Swift class round-trips", .enabled(if: runsOnMacOS26OrLater, "the anchor classes ship with macOS 26's AppKit"))
     func everyPairRoundTrips() async throws {
         let (engine, objects) = try await Self.sharedAppKit.value
         let bridgedObjCClasses = objects.filter {
-            $0.kind == .objc(.type(.class)) && $0.properties.contains(.isSwiftClass) && $0.name.hasPrefix("_Tt")
+            $0.kind == .objc(.type(.class)) && $0.properties.contains(.isSwiftClass)
         }
         var failures: [String] = []
         for objcObject in bridgedObjCClasses {
@@ -129,10 +137,12 @@ struct RuntimeObjectCounterpartTests {
 
     // MARK: - Helpers
 
-    private static func expectBridgedClassJumpsBothWays(runtimeNamePrefix: String, runtimeNameSuffix: String) async throws {
+    /// Returns the Swift face, for a caller that wants to check which type it is.
+    @discardableResult
+    private static func expectBridgedClassJumpsBothWays(whereRuntimeName isAnchor: (String) -> Bool) async throws -> RuntimeObject {
         let (engine, objects) = try await sharedAppKit.value
         let objcObject = try #require(objects.first {
-            $0.kind == .objc(.type(.class)) && $0.name.hasPrefix(runtimeNamePrefix) && $0.name.hasSuffix(runtimeNameSuffix)
+            $0.kind == .objc(.type(.class)) && isAnchor($0.name)
         })
         #expect(objcObject.counterpartKind == .swiftClass)
 
@@ -143,6 +153,7 @@ struct RuntimeObjectCounterpartTests {
         #expect(sidebarEntry.properties.contains(.isObjCClass))
 
         #expect(try await engine.counterpart(for: swiftObject) == objcObject)
+        return swiftObject
     }
 
     /// The listed objects with every nested child, the way the sidebar's

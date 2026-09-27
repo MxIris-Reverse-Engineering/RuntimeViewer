@@ -51,3 +51,12 @@
 
 private 类另有一层：它们的 Swift 侧名字要带私有鉴别符才对得上，这靠 MachOSwiftSection 从 `_symbolic` 符号还原鉴别符
 （MachOSwiftSection 流水账 2026-09-24 两节）。
+
+## 后续（2026-09-27）：改过名的桥出子类仍被丢掉
+
+这次修复之后还剩一类桥出子类查不到：用 `@objc(CustomName)` 改过名的 Swift 类。它们的运行时名就是源码写的那个名字
+（`NSScrollPocket`、`NSColorModel`），不是 mangling，remangle 不出 Swift 侧的键，于是照样被丢掉——`NSView` 的子类里没有
+`NSScrollPocket`，macOS 27 的 AppKit 里这样的类有 74 个。配对随后改为顺着类对象里的类型描述符指针，不再经过名字（提案
+[draft-objc-swift-class-counterparts](../Evolutions/draft-objc-swift-class-counterparts.md) 决策日志 2026-09-27），上文的
+`mangledTypeName(forObjCRuntimeClassName:)` 已删除，private 类的配对也不再依赖鉴别符还原。回归测试是 `RelationshipsTests`
+的「A bridged subclass renamed with @objc(…) surfaces as its Swift class」，修复前红、修复后绿。

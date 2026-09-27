@@ -145,12 +145,11 @@ actor RuntimeRelationshipsResolver {
     /// Materialize an `RuntimeObjCClassReference` into the `RuntimeObject`
     /// the relationships query should surface. Bridged classes
     /// (`isSwiftStable == true`) are materialized as Swift `RuntimeObject`s
-    /// (`kind == .swift(.type(.class))`) per AC6, by demangling the raw
-    /// ObjC class name (`_TtC<n>module<m>name` form) and looking the
-    /// corresponding Swift type definition up in the same image's Swift
-    /// section. When that lookup fails (e.g. an `@objc(customName)` class
-    /// whose raw name isn't a Swift mangling), the entry is dropped rather
-    /// than fall back to `.objc(.type(.class))`.
+    /// (`kind == .swift(.type(.class))`) per AC6, through the same image's
+    /// Swift section, which pairs each of its bridged class objects with the
+    /// Swift type it belongs to — `@objc(customName)` classes included. When
+    /// that lookup fails, the entry is dropped rather than fall back to
+    /// `.objc(.type(.class))`.
     ///
     /// Note the indexed-image predicate this no longer applies. The walk this
     /// replaced unioned over images with *both* sections cached, so an image
@@ -161,9 +160,9 @@ actor RuntimeRelationshipsResolver {
     /// never the intent. The equivalence snapshot covers the practical case.
     private func materializeObjCReference(_ reference: RuntimeObjCClassReference) async -> RuntimeObject? {
         if reference.isSwiftStable {
-            // The runtime name remangles to the Swift section's own key; the
-            // section does that in one place, which the sidebar's jump between
-            // a class's two faces goes through as well.
+            // The Swift section pairs its bridged classes in one place, which
+            // the sidebar's jump between a class's two faces goes through as
+            // well.
             guard let swiftSection = await swiftSectionFactory.existingSection(for: reference.imagePath) else { return nil }
             return await swiftSection.makeRuntimeObject(forObjCRuntimeClassName: reference.className)
         }
