@@ -249,7 +249,11 @@ The project uses three Swift Package Manager packages:
   embedded at `Contents/Applications/runtime-viewer-cli`, signed and notarized with the app. Its
   entitlements carry `disable-library-validation`, and its deployment target has to track the app's
   (15.0) — Xcode fills in the current SDK version, which would make the embedded tool refuse to
-  launch on systems the app itself supports
+  launch on systems the app itself supports. It also sets `SKIP_INSTALL = YES`: a command-line tool
+  otherwise installs itself into the archive's `usr/local/bin`, the archive stops being an app
+  archive, and the Developer ID export fails with `expected one {} but found developer-id`. The
+  same goes for any new target that produces its own product; `ArchiveScript.sh` fails right after
+  archiving and names the stray files
 - `RuntimeViewerUsingUIKit` — iOS variant (secondary)
 
 ### Key Architectural Patterns
