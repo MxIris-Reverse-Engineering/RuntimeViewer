@@ -190,6 +190,31 @@ open class StatefulOutlineView: OutlineView {
         selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
     }
 
+    // MARK: - Row Height Estimation
+
+    /// Turns AppKit's row height estimation back off after every change of delegate. Do not remove
+    /// it.
+    ///
+    /// A source list outline with group rows has rows of different heights — AppKit adds spacing
+    /// above every group row but the first — and such a table places the rows it has not measured
+    /// yet at an estimated position. `-[NSOutlineView setDelegate:]` turns that estimation on at the
+    /// end of every change of delegate, including the resets RxCocoa's delegate proxy performs on
+    /// its own. While it is on, a reload or an expansion far down the list leaves part of the
+    /// visible rows at the old estimate, and the next scroll draws rows over them: the sidebar
+    /// showed two names on one row after filtering, or after a jump to an object far down the list.
+    ///
+    /// Estimation goes off in the same setter call that turned it on, before any row is laid out
+    /// from it. Keep it that way: switching discards the row geometry without moving the row views
+    /// already on screen, so switching a list that shows estimated rows misplaces them until the
+    /// next `reloadData()`. What it costs: every reload measures all rows, 3–6 ms for a
+    /// 14,000-row list. `StatefulOutlineViewRowGeometryTests` fails if the estimation comes back.
+    /// Background: `Documentations/ResolvedIssues/2026-09-27-sidebar-rows-drawn-over-each-other.md`.
+    open override var delegate: (any NSOutlineViewDelegate)? {
+        didSet {
+            box.estimatesRowHeights = false
+        }
+    }
+
     // MARK: - Mouse Tracking
 
     /// Overridden only so that AppKit keeps this outline on the mouse tracking loop instead of its
