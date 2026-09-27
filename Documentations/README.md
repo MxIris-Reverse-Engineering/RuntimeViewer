@@ -95,6 +95,7 @@
 
 按时间倒序。
 
+- [发版归档：包丢了 x86_64，归档又变成了通用归档](ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md)（2026-09-27）—— v3.0.0-beta.5 三次 CI 都挂在 Catalyst 插件的 `Unable to resolve module dependency` 上。当初以为是构建顺序竞态，实际上是 Xcode 27 新的 package PIF builder 把每个包的 macOS 架构写死成 `arm64 arm64e arm64e.x1`，x86_64 没了；用不用新 builder 由各机器的 Xcode 默认值决定，所以开发机能过、runner 过不了。`ArchiveScript.sh` 改为显式关掉新 builder。之后又撞上内嵌 CLI 没设 `SKIP_INSTALL`、归档变成通用归档、Developer ID 导出失败；已补上设置，脚本也会在归档后立刻检查归档类型。
 - [侧栏对象列表两行叠在一起](ResolvedIssues/2026-09-27-sidebar-rows-drawn-over-each-other.md)（2026-09-27）—— 按种类分组的 source list 行高不一致，AppKit 对没测量过的行按估算高度排布；列表跳到靠后位置后重载（每次筛选按键）或展开嵌套类型时，估算在中途被修正，已摆好的行不会挪回去，再一滚动新行就画在它们上面。`-[NSOutlineView setDelegate:]` 每次都会重新打开估算，RxCocoa 的 delegate 代理又会自己重设 delegate。`StatefulOutlineView` 在每次 delegate 变化后用 UIFoundation 的 `box.estimatesRowHeights` 关掉估算；15.5、26.6.2、27.0 行为一致。
 - [侧栏按住拖动不再逐行选中](ResolvedIssues/2026-09-25-single-selection-drag-stopped-following-the-pointer.md)（2026-09-25）—— macOS 27 的表格把鼠标拖动交给手势识别器，处理函数只在允许多选时把选中扩展到指针下的行；单选的侧栏列表选中停在原处，列表却照样自动滚动。与编译 SDK、与焦点都无关。`StatefulOutlineView` 覆写 `mouseDown(with:)`，退回 macOS 26 的跟踪循环。
 - [Relationships 面板丢掉了全部桥出的 Swift 子类](ResolvedIssues/2026-09-24-relationships-dropped-every-bridged-subclass.md)（2026-09-24）—— 用 ObjC 运行时名找 Swift 类时整棵 remangle，`_TtC…` 的 demangle 结果是完整的类型 mangling，remangle 出符号 `$s…CD`，而 Swift 侧的键是 `Type` 节点单独 mangle 的 `…C`，从未对上；原测试只查「不重复」没发现。改为只 remangle `Type` 节点，补回归测试；sidebar 的互相跳转共用这段。

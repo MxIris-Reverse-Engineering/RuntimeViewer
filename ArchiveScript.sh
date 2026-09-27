@@ -207,6 +207,19 @@ trap collect_xcdistributionlogs EXIT
 
 log "xcodebuild logs: $LOG_DIR"
 
+# Keep Xcode 27's new package PIF builder off for every xcodebuild that resolves
+# or builds the package graph. Xcode builds every package for arm64e as well
+# (the helper daemons are arm64e and link package products). The old builder
+# expresses that as `ARCHS = $(inherited) arm64e`; the new one writes the literal
+# `arm64 arm64e arm64e.x1` on macOS, and x86_64 drops out of every package while
+# the app's own targets still build it. The first universal target to import a
+# package, RuntimeViewerCatalystHelperPlugin, then fails with "Unable to resolve
+# module dependency". The builder is chosen by a per-machine Xcode default, so
+# the same commit archived on one Mac and failed on another; passing the default
+# here takes the machine out of it. Background:
+# Documentations/ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md
+XCODEBUILD_USER_DEFAULTS=(-IDEEnableNewPackagePIFBuilder=NO)
+
 # Update package pins through the workspace ONLY. Do not run
 # `swift package update` on RuntimeViewerCore / RuntimeViewerPackages
 # individually: the workspace unifies swift-syntax via the local
@@ -241,13 +254,15 @@ update_packages() {
         -workspace "$WORKSPACE" \
         -scheme "$CATALYST_SCHEME" \
         -derivedDataPath "$DERIVED_DATA" \
-        -skipPackagePluginValidation -skipMacroValidation
+        -skipPackagePluginValidation -skipMacroValidation \
+        "${XCODEBUILD_USER_DEFAULTS[@]}"
 
     XCODEBUILD_LOG_NAME="resolve-main-packages" run_piped xcodebuild -resolvePackageDependencies \
         -workspace "$WORKSPACE" \
         -scheme "$SCHEME" \
         -derivedDataPath "$DERIVED_DATA" \
-        -skipPackagePluginValidation -skipMacroValidation
+        -skipPackagePluginValidation -skipMacroValidation \
+        "${XCODEBUILD_USER_DEFAULTS[@]}"
 }
 
 # Resolve the generate_appcast binary. Prefer PATH (CI installs Sparkle there);
@@ -286,7 +301,7 @@ verify_marketing_version() {
     local expected="${VERSION_TAG#v}"
     expected="${expected%%-*}"
     local actual
-    actual=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration "$CONFIGURATION" -derivedDataPath "$DERIVED_DATA" -showBuildSettings 2>/dev/null \
+    actual=$(xcodebuild -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration "$CONFIGURATION" -derivedDataPath "$DERIVED_DATA" "${XCODEBUILD_USER_DEFAULTS[@]}" -showBuildSettings 2>/dev/null \
         | awk -F' = ' '$1 ~ /^[[:space:]]*MARKETING_VERSION$/ { print $2; exit }')
     [[ -n "$actual" ]] || fail "could not read MARKETING_VERSION from scheme '$SCHEME'; run --update-packages or verify the workspace path."
     if [[ "$actual" != "$expected" ]]; then
@@ -351,6 +366,23 @@ EXPECTED_APP_ICON="${APP_ICON_BASE_NAME}${APP_ICON_VARIANT_SUFFIX}"
 log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
 log "app_icon=$EXPECTED_APP_ICON (xcode=${XCODE_MAJOR_VERSION:-unknown})"
 
+# An archive that holds anything besides the app is a Generic Xcode Archive, and
+# -exportArchive then rejects every app distribution method with nothing more
+# than `error for key "method" expected one {} but found developer-id`. Any
+# target that installs its own product does that — a command-line tool installs
+# into usr/local/bin unless it sets SKIP_INSTALL = YES — so name the stray
+# products here instead of leaving that message to be decoded.
+verify_application_archive() {
+    local archive_path="$1"
+    $DRY_RUN && return 0
+    if /usr/libexec/PlistBuddy -c "Print :ApplicationProperties:ApplicationPath" "$archive_path/Info.plist" >/dev/null 2>&1; then
+        return 0
+    fi
+    local stray_products
+    stray_products=$(cd "$archive_path/Products" && find . -name '*.app' -prune -o -type f -print)
+    fail "$archive_path is a generic archive, not an app archive, so it cannot be exported with developer-id. Products installed outside the app (set SKIP_INSTALL = YES on the targets that produce them):"$'\n'"$stray_products"
+}
+
 log "Archiving Catalyst helper"
 XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
     -workspace "$WORKSPACE" \
@@ -360,7 +392,9 @@ XCODEBUILD_LOG_NAME="archive-catalyst-helper" run_piped xcodebuild archive \
     -archivePath "$CATALYST_HELPER_ARCHIVE" \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
+    "${XCODEBUILD_USER_DEFAULTS[@]}" \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"
+verify_application_archive "$CATALYST_HELPER_ARCHIVE"
 
 run rm -rf "$CATALYST_EXPORT_PATH/RuntimeViewerCatalystHelper.app"
 XCODEBUILD_LOG_NAME="export-catalyst-helper" run_piped xcodebuild -exportArchive \
@@ -390,6 +424,7 @@ if XCODEBUILD_LOG_NAME="build-simulator-payload" run_piped xcodebuild build \
     -destination 'generic/platform=iOS Simulator' \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
+    "${XCODEBUILD_USER_DEFAULTS[@]}" \
     "${COMMON_XCODEBUILD_SETTINGS[@]}"; then
     run rm -rf "$MOBILE_SERVER_STAGED_PATH"
     run ditto "$SIMULATOR_PAYLOAD_PATH" "$MOBILE_SERVER_STAGED_PATH"
@@ -418,7 +453,9 @@ XCODEBUILD_LOG_NAME="archive-main" run_piped xcodebuild archive \
     -archivePath "$MAIN_ARCHIVE" \
     -derivedDataPath "$DERIVED_DATA" \
     -skipPackagePluginValidation -skipMacroValidation \
+    "${XCODEBUILD_USER_DEFAULTS[@]}" \
     "${MAIN_APP_XCODEBUILD_SETTINGS[@]}"
+verify_application_archive "$MAIN_ARCHIVE"
 
 run rm -rf "$EXPORT_PATH"
 XCODEBUILD_LOG_NAME="export-main" run_piped xcodebuild -exportArchive \
@@ -478,6 +515,7 @@ if $INCLUDE_IOS_SIMULATOR; then
         -destination 'generic/platform=iOS Simulator' \
         -derivedDataPath "$DERIVED_DATA" \
         -skipPackagePluginValidation -skipMacroValidation \
+        "${XCODEBUILD_USER_DEFAULTS[@]}" \
         CODE_SIGNING_ALLOWED=NO
 
     IOS_APP="$DERIVED_DATA/Build/Products/${CONFIGURATION}-iphonesimulator/RuntimeViewer.app"

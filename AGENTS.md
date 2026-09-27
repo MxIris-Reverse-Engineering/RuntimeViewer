@@ -82,6 +82,16 @@ precompiled swift-syntax, so Debug builds pick up in-progress fixes in those
 repos without touching remote SPM pins. `RuntimeViewer-Distribution.xcworkspace`
 serves release archives.
 
+**Release archives keep Xcode 27's new package PIF builder off.** `ArchiveScript.sh` passes
+`-IDEEnableNewPackagePIFBuilder=NO` to every `xcodebuild` that resolves or builds the package
+graph. With the new builder every package builds `arm64 arm64e arm64e.x1` only — it drops x86_64
+instead of adding arm64e to the default architectures — and the universal
+`RuntimeViewerCatalystHelperPlugin` stops compiling with `Unable to resolve module dependency`.
+The builder is otherwise picked by a per-machine Xcode default, which is why one Mac archived
+cleanly and another failed on the same commit. A manual release archive outside the script needs
+the same flag. Background:
+`Documentations/ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md`.
+
 **Build Schemes**:
 - `RuntimeViewer macOS` — main app; Debug-arm64e via `RunScript.sh`, Release archives via `ArchiveScript.sh`
 - `RuntimeViewerCatalystHelper` — Mac Catalyst helper, always built before the main app
