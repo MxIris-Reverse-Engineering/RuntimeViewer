@@ -15,7 +15,6 @@ buildServer.json
 .codex
 Products
 RuntimeViewerMCP/.build
-RuntimeViewerTools/.build
 DerivedData
 .derived-data-log-*
 .omc

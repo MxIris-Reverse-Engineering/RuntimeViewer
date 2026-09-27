@@ -499,6 +499,19 @@ let package = Package(
             ],
         ),
 
+        // Tooling, not part of the app: runs UpdatePackagesScript.sh from Xcode — right-click
+        // RuntimeViewerPackages in the Project navigator and choose UpdatePackages. It needs
+        // Xcode's command-plugin sandbox switched off; see "From Xcode" in AGENTS.md.
+        .plugin(
+            name: "UpdatePackages",
+            capability: .command(
+                intent: .custom(
+                    verb: "update-packages",
+                    description: "Update the package pins of the RuntimeViewer workspaces to the newest versions their manifests allow."
+                )
+            )
+        ),
+
     ],
     swiftLanguageModes: [.v5],
 )

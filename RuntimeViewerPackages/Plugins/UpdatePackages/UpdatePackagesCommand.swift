@@ -1,9 +1,9 @@
 import Foundation
 import PackagePlugin
 
-/// Runs `UpdatePackagesScript.sh` from Xcode: right-click RuntimeViewerTools in the Project
+/// Runs `UpdatePackagesScript.sh` from Xcode: right-click RuntimeViewerPackages in the Project
 /// navigator and choose UpdatePackages. Arguments typed into the command's sheet go to the script,
-/// for example `--workspace Debug` or `--dry-run`.
+/// for example `--workspace Debug` or `--dry-run`. The script sits one level above this package.
 ///
 /// Xcode runs command plugins in a sandbox that writes nothing but the plugin's own work
 /// directory, and the script has to write the workspaces' `Package.resolved` and fetch Xcode's

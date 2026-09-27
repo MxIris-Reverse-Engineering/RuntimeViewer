@@ -66,7 +66,7 @@ puts the previous `Package.resolved` back. It ends by listing the version change
 changed lock files under version control; review and commit those — the Distribution one
 is what release archives resolve against.
 
-**From Xcode**: right-click `RuntimeViewerTools` in the Project navigator and choose
+**From Xcode**: right-click `RuntimeViewerPackages` in the Project navigator and choose
 **UpdatePackages**. That command plugin only runs `UpdatePackagesScript.sh` (arguments typed
 into its sheet, such as `--workspace Debug`, are passed on), and it needs Xcode's command-plugin
 sandbox switched off once:
@@ -78,8 +78,8 @@ command plugins: a single flag decides both the manifest sandbox and the plugin 
 **every** `Package.swift` and every command plugin in every project runs unsandboxed from then on.
 `IDEPackageSupportDisablePluginExecutionSandbox` does not help here — it covers build-tool plugins
 only (measured, and traced in `/Volumes/RE/Xcode/27.0/README.md`). With the sandbox on, the command
-changes nothing and says what to do. `RuntimeViewerTools` is tooling only — nothing depends on it —
-and is in the three workspaces so that its plugins show up there.
+changes nothing and says what to do. The plugin is a target of `RuntimeViewerPackages`
+(`Plugins/UpdatePackages`) that nothing depends on, and it finds the script one level above the package.
 
 **Workspaces**: `RuntimeViewer-Debug.xcworkspace` (used by `RunScript.sh`)
 already wires the local sibling checkouts of MachOKit / MachOObjCSection /

@@ -17,7 +17,7 @@
 | [0003](0003-generic-type-specialization.md) | 泛型类型特化 | In Progress | 用户在 Inspector 的 Specialization tab 为泛型类型选定具体类型组合，特化结果作为 sidebar 子节点呈现，泛型参数被替换且 metadata 字段填上真实数值。 |
 | [0004](0004-differentiable-box-lazy-cellvm.md) | DifferentiableBox 与 Lazy Cell ViewModel 渲染范式 | Draft | 在 `RuntimeViewerArchitectures` 引入 `DifferentiableBox<Model>`，把任意 `Hashable` 领域模型适配为 DifferenceKit 的 `Differentiable`，使表格与大纲视图的 Rx 数据源走「轻量身份元素 + cell 级惰性 ViewModel」。 |
 | [0006](0006-mcp-transport-bind-failure-teardown.md) | MCP Transport 绑定失败的资源回收与状态如实化 | Implemented | 绑定失败改为显式 `start()` 判定：失败即回收 transport（线程 56→0）、`serverState` 如实 `.stopped`、端口文件带所有权守卫不误删他人文件。残余 5.57 MiB 为上游 SwiftMCP adapter↔engine 引用环，与线程数硬编码一并列为上游跟进项。 |
-| [0025](0025-update-packages-script.md) | 一条命令更新三个 workspace 的依赖 | Implemented | Xcode 27 的 Update to Latest Package Versions 不 fetch 本地依赖镜像，经常没反应或失败，只能手动删 `Package.resolved` 重拉，三个 workspace 各一遍。新增 `UpdatePackagesScript.sh`：先 fetch 全部镜像，再逐个删掉锁文件与 `workspace-state.json`、用 `xcodebuild -resolvePackageDependencies` 在自己的 DerivedData 里重新解析，Xcode 开着也能跑；失败时放回原锁文件，成功后列出版本变化。另有工具包 `RuntimeViewerTools` 的命令插件，在 Xcode 里右键即可调用同一个脚本（需一次性关掉 Xcode 的包插件沙盒）。 |
+| [0025](0025-update-packages-script.md) | 一条命令更新三个 workspace 的依赖 | Implemented | Xcode 27 的 Update to Latest Package Versions 不 fetch 本地依赖镜像，经常没反应或失败，只能手动删 `Package.resolved` 重拉，三个 workspace 各一遍。新增 `UpdatePackagesScript.sh`：先 fetch 全部镜像，再逐个删掉锁文件与 `workspace-state.json`、用 `xcodebuild -resolvePackageDependencies` 在自己的 DerivedData 里重新解析，Xcode 开着也能跑；失败时放回原锁文件，成功后列出版本变化。另有 `RuntimeViewerPackages` 的命令插件 `UpdatePackages`，在 Xcode 里右键该包即可调用同一个脚本（需一次性关掉 Xcode 的命令插件沙盒）。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 

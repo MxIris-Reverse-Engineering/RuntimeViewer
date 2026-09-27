@@ -37,7 +37,4 @@
    <FileRef
       location = "group:RuntimeViewerPrecompiledLibraries/swift-syntax">
    </FileRef>
-   <FileRef
-      location = "group:RuntimeViewerTools">
-   </FileRef>
 </Workspace>
