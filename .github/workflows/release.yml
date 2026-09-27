@@ -76,7 +76,10 @@ jobs:
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          # No -l: a keychain that locks on sleep stays locked after a self-hosted runner wakes,
+          # and codesign then asks for this random password in a dialog nobody can answer. The
+          # keychain is deleted when the job ends; the six-hour timeout still applies.
+          security set-keychain-settings -ut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer_id.p12"
           chmod 600 "$RUNNER_TEMP/developer_id.p12"
@@ -147,7 +150,8 @@ jobs:
             CREATE_FLAGS=(--update-appcast --upload-to-github --commit-push)
           fi
 
-          ./ArchiveScript.sh \
+          # caffeinate keeps a self-hosted runner from idling into sleep mid-archive.
+          caffeinate -i ./ArchiveScript.sh \
             --notary-api-key "$NOTARY_KEY_FILE" \
             --notary-key-id "${{ secrets.NOTARY_KEY_ID }}" \
             --notary-issuer-id "${{ secrets.NOTARY_ISSUER_ID }}" \

@@ -123,6 +123,11 @@ Things that bite when dispatching by hand:
   -version` already reports the wanted version. `setup-xcode` otherwise runs
   `sudo xcode-select -s` unconditionally, and without passwordless sudo the job
   waits on a password prompt in the runner's terminal.
+- **A self-hosted runner must not sleep mid-job.** The job signs from a
+  temporary `app-signing` keychain whose password is random and discarded.
+  It no longer locks on sleep, and the archive step runs under `caffeinate -i`.
+  If a "codesign wants to use the app-signing keychain" dialog ever appears
+  anyway, no password will satisfy it: cancel it and rerun the job.
 - **Archives keep Xcode 27's new package PIF builder off**
   (`-IDEEnableNewPackagePIFBuilder=NO` in `ArchiveScript.sh`); with it on, every
   package loses x86_64. See

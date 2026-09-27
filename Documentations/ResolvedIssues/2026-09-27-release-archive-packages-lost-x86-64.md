@@ -72,10 +72,11 @@ beta.4 之前没有这个 target，所以以前的发版从没遇到过。本机
 
 新加的归档类型检查：只读 `Info.plist` 的 `ApplicationProperties:ApplicationPath`，读不到就列出 `Products/` 下所有不在 `.app` 里的文件并失败。用手工造的 App 归档与通用归档各测一次：前者放行，后者报出 `./usr/local/bin/runtime-viewer-cli`。
 
-## 顺带修掉的两件事
+## 顺带修掉的三件事
 
 - **发布锁文件落后**（bc2b20ad）：`RuntimeViewer-Distribution.xcworkspace` 的 `Package.resolved` 钉着 UIFoundation 0.34.0（清单要求 0.37.0）、MachOSwiftSection eeb20303（没有 `ObjCImplementationClasses`）、swift-capstone 5.0.0（MachOSwiftSection 的 next 要求 6.0.0），CI 又从不刷新它。按 `--update-packages` 的做法重新生成。
 - **自托管 runner 卡在 sudo**：`setup-xcode` 即使目标 Xcode 已经选中，也会执行 `sudo xcode-select -s`，在没有免密 sudo 的机器上就一直等终端里的密码。`release.yml` 改为先比对 `xcodebuild -version`，一致就跳过。
+- **自托管 runner 睡眠后签名卡死**：临时签名钥匙串建成 `-lut 21600`，其中 `-l` 表示睡眠即上锁。演练中 MacBook Pro 在 20:04:52 睡眠、20:08:43 醒来（`pmset -g log`），之后两个 `codesign`（`RuntimeViewerLocalRuntimeService.xpc`、`runtime-viewer-cli`）弹出「codesign 想使用 app-signing 钥匙串」并一直等了 40 多分钟。那个钥匙串的密码是随机生成后丢掉的，登录密码不对，只能取消。改为 `-ut 21600`，并用 `caffeinate -i` 包住归档那一步。
 
 ## 留下的约束
 
