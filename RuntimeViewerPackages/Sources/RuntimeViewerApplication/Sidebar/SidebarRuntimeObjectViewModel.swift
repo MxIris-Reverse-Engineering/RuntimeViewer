@@ -235,18 +235,12 @@ public class SidebarRuntimeObjectViewModel: ViewModel<SidebarRuntimeObjectRoute>
     }
 
     /// The row's marks promised another face that its image then could not
-    /// find — in practice a class renamed with `@objc(…)`, whose runtime name
-    /// is no Swift mangling.
+    /// find.
     public struct CounterpartNotFoundError: LocalizedError {
         public let runtimeObject: RuntimeObject
 
         public var errorDescription: String? {
             "No counterpart was found for \(runtimeObject.displayName)."
-        }
-
-        public var recoverySuggestion: String? {
-            guard runtimeObject.counterpartKind == .swiftClass else { return nil }
-            return "Its Objective-C name is not a Swift mangled name — the class was probably renamed with @objc(…) — so it cannot be matched to its Swift class."
         }
     }
 

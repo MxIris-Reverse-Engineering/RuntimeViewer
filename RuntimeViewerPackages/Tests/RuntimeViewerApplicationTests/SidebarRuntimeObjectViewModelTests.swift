@@ -109,14 +109,13 @@ struct SidebarRuntimeObjectViewModelTests {
         #expect(router.triggeredRoutes.isEmpty)
     }
 
-    /// The marks promise a face the image may not find: a class renamed with
-    /// `@objc(…)` is bridged like any other, but its runtime name is no Swift
-    /// mangling.
+    /// The marks promise a face the image may not find: here a row marked as a
+    /// bridged class that the image does not have at all.
     @Test("a counterpart the image cannot find is reported and nothing is pushed")
     func missingCounterpartIsReported() async throws {
         let engine = try await TestRuntimeEngine.shared()
         let environment = ViewModelTestEnvironment(runtimeEngine: engine)
-        let unmatchableClass = Fixtures.runtimeObject(name: "RenamedWithObjCAttribute", kind: .objc(.type(.class)), imagePath: TestImages.foundation, properties: [.isSwiftClass])
+        let unmatchableClass = Fixtures.runtimeObject(name: "NoSuchBridgedClass", kind: .objc(.type(.class)), imagePath: TestImages.foundation, properties: [.isSwiftClass])
         let counterpartRequestedRelay = PublishRelay<SidebarRuntimeObjectCellViewModel>()
         let (viewModel, _) = try makeViewModel(imagePath: TestImages.foundation, counterpartRequested: counterpartRequestedRelay.asSignal(), in: environment)
         defer { withExtendedLifetime(viewModel) {} }
@@ -129,7 +128,6 @@ struct SidebarRuntimeObjectViewModelTests {
         let reportedError = try await nextValue(from: reportedErrors)
         let notFound = try #require(reportedError as? SidebarRuntimeObjectViewModel.CounterpartNotFoundError)
         #expect(notFound.runtimeObject == unmatchableClass)
-        #expect(notFound.recoverySuggestion != nil, "a bridged class that finds no Swift face should say why")
         #expect(environment.documentState.selectedRuntimeObject == nil)
     }
 
