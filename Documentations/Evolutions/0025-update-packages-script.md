@@ -31,9 +31,10 @@ Xcode 开着也能跑；再配一个 Xcode 里右键就能执行的命令插件�
   Distribution 的锁文件是发布归档用的那份。
 - **不带本地依赖**：强制取消 `USING_LOCAL_DEPENDENCIES`。锁文件记录的是远程 pin，开着本地依赖时那些包会从
   锁文件里消失。
-- **Xcode 里的入口**：新增只含工具的本地包 `RuntimeViewerTools`（没有任何东西依赖它），加进三个 workspace；
-  它的命令插件 `UpdatePackages` 在 Project navigator 里右键这个包即可运行，只做一件事：调用
-  `UpdatePackagesScript.sh`，把弹窗里填的参数转交过去（先剔掉 Xcode 自动附加的 `--target`）。
+- **Xcode 里的入口**：`RuntimeViewerPackages` 新增一个命令插件 target `UpdatePackages`（`Plugins/UpdatePackages`，
+  没有对应的 product，也没有任何东西依赖它）。在 Project navigator 里右键 `RuntimeViewerPackages` 即可运行，
+  只做一件事：调用包目录上一级的 `UpdatePackagesScript.sh`，把弹窗里填的参数转交过去（先剔掉 Xcode 自动附加的
+  `--target`）。
   - 前提是一次性关掉 Xcode 的命令插件沙盒：
     `defaults write com.apple.dt.Xcode IDEPackageSupportDisableManifestSandbox -bool YES`，然后重启 Xcode。
     名字虽叫「清单沙盒」，Xcode 的 SwiftPM 用同一个标志决定清单求值和命令插件的沙盒，所以打开后所有项目、
@@ -60,3 +61,4 @@ Xcode 开着也能跑；再配一个 Xcode 里右键就能执行的命令插件�
 | 2026-09-27 | 另一方案「保留沙盒、由常驻 LaunchAgent 在沙盒外代跑」不做 | 更安全但多一个常驻组件，且插件能往哪里写请求还需另行确认；用户选了关开关 |
 | 2026-09-27 | 验证 | 插件：用户在 Xcode 里单独打开 `RuntimeViewerTools`、右键运行 `UpdatePackages --dry-run`，打开开关前报沙盒错误，打开后打印出预定的命令。脚本：在 main 的工作目录里真跑一次（`--derived-data` 指向 agent 目录），fetch 172 个镜像（1 个因网络偶发失败，警告后继续，重试即成功），三个 workspace 都解析成功，分别 38 / 39 / 41 个包升级，退出码 0；跑完还原了三个锁文件，锁文件的刷新不进这次提交 |
 | 2026-09-27 | Implemented，落地为 0025 | 配套文档：用法与开关写在 `AGENTS.md` 的 Build Commands，插件的报错里也写了下一步，不另写指南；无新术语 |
+| 2026-09-27 | 插件改放进现有的 `RuntimeViewerPackages`，删掉单独的 `RuntimeViewerTools` 包 | 用户：「这个不要单独写Package，写到现在就有的RuntimeViewerPackages里面去」。三个 workspace 与 `.gitignore` 里对 `RuntimeViewerTools` 的引用一并去掉；插件按「包目录的上一级是仓库根目录」找脚本，这一关系不变 |
