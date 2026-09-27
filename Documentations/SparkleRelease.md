@@ -100,6 +100,34 @@ CI watches `.github/workflows/release.yml`; it decodes the
 `--ed-key-file` to `ArchiveScript.sh`. Tag pushes always create/upload the
 GitHub Release and commit the updated `docs/appcast.xml` back to `main`.
 
+Things that bite when dispatching by hand:
+
+- **`gh workflow run` uses the workflow file from `--ref`, which defaults to
+  `main`.** Pre-releases are cut from `next`, whose `release.yml` differs (it
+  selects Xcode 27; `main`'s still selects 26.4), so pass `--ref next`.
+- **A dry run from a branch** builds, signs and notarizes without publishing:
+
+  ```bash
+  gh workflow run release.yml --ref next \
+      -f tag=v3.0.0-beta.5 -f ref=next -f create_release=false -f runner=self-hosted
+  ```
+
+  Never combine a branch `ref` with `create_release=true`. `gh release create`
+  is not given `--target`, so a tag that does not exist yet is created on the
+  default branch; and a branch checkout is not a detached HEAD, so the appcast
+  commit is pushed to that branch instead of going to `main` through a pull
+  request. Publish from a pushed tag.
+- **Tag pushes run on the `xcode-27` GitHub image.** Only a dispatch can pick
+  `runner=self-hosted`.
+- **On a self-hosted runner the Xcode switch is skipped** when `xcodebuild
+  -version` already reports the wanted version. `setup-xcode` otherwise runs
+  `sudo xcode-select -s` unconditionally, and without passwordless sudo the job
+  waits on a password prompt in the runner's terminal.
+- **Archives keep Xcode 27's new package PIF builder off**
+  (`-IDEEnableNewPackagePIFBuilder=NO` in `ArchiveScript.sh`); with it on, every
+  package loses x86_64. See
+  [`ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md`](ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md).
+
 ## EdDSA key management
 
 **Identity scope:** this key is shared across other Sparkle-signed apps

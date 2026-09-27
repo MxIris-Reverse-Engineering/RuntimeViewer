@@ -38,6 +38,10 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      # Matches the Xcode the project is developed against (27.0, build 27A266a), which is
+      # also the only one on the xcode-27 image.
+      XCODE_VERSION: '27.0'
 
     steps:
       - name: Checkout
@@ -46,12 +50,21 @@ jobs:
           ref: ${{ inputs.ref || inputs.tag || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check the selected Xcode
+        id: selected-xcode
+        run: |
+          # setup-xcode runs `sudo xcode-select -s` even when that Xcode is already selected.
+          # On a self-hosted runner without passwordless sudo the job then waits on a password
+          # prompt in the runner's terminal, so skip it when there is nothing to switch.
+          if [[ "$(xcodebuild -version | head -1)" == "Xcode $XCODE_VERSION" ]]; then
+            echo "matches=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Select Xcode
+        if: steps.selected-xcode.outputs.matches != 'true'
         uses: maxim-lobanov/setup-xcode@v1.7.0
         with:
-          # Matches the Xcode the project is developed against (27.0, build 27A266a), which is
-          # also the only one on the xcode-27 image.
-          xcode-version: '27.0'
+          xcode-version: ${{ env.XCODE_VERSION }}
 
       - name: Import code signing certificates
         env:
