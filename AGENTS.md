@@ -43,7 +43,43 @@ Recommended Xcode order:
 
 # Build RuntimeViewerServer XCFramework (all platforms)
 ./BuildRuntimeViewerServerXCFramework.sh
+
+# Update the package pins of all three workspaces (RuntimeViewer, -Debug,
+# -Distribution) to the newest versions the manifests allow. Use this instead of
+# Xcode 27's "Update to Latest Package Versions", which resolves from git mirrors
+# it never fetches. Xcode may stay open.
+./UpdatePackagesScript.sh
+./UpdatePackagesScript.sh --workspace Distribution   # one workspace (repeatable)
+./UpdatePackagesScript.sh --clean                    # resolve from empty checkouts
+./UpdatePackagesScript.sh --dry-run                  # print what would run
 ```
+
+**Updating package pins**: `UpdatePackagesScript.sh` first fetches every SwiftPM git
+mirror involved — the global cache, its own DerivedData, `RunScript.sh`'s and
+`ArchiveScript.sh`'s, and Xcode's for these workspaces. Then, per workspace, it drops
+`Package.resolved` **and** `SourcePackages/workspace-state.json` (with only the lock
+file gone, SwiftPM replays the pins recorded in the state file, so nothing updates) and
+resolves with `xcodebuild -resolvePackageDependencies` in its own DerivedData,
+`/Volumes/DerivedData/RuntimeViewer/PackageUpdate`. It forces `USING_LOCAL_DEPENDENCIES`
+off, because local checkouts drop out of a lock file. A failed or interrupted resolution
+puts the previous `Package.resolved` back. It ends by listing the version changes and the
+changed lock files under version control; review and commit those — the Distribution one
+is what release archives resolve against.
+
+**From Xcode**: right-click `RuntimeViewerTools` in the Project navigator and choose
+**UpdatePackages**. That command plugin only runs `UpdatePackagesScript.sh` (arguments typed
+into its sheet, such as `--workspace Debug`, are passed on), and it needs Xcode's command-plugin
+sandbox switched off once:
+`defaults write com.apple.dt.Xcode IDEPackageSupportDisableManifestSandbox -bool YES`,
+then restart Xcode. The sandbox lets a plugin write nothing but its own work directory, while the
+script writes the workspaces' `Package.resolved` and Xcode's own package mirrors, so there is no
+sandboxed version of this command. Despite its name, that key is the one Xcode's SwiftPM reads for
+command plugins: a single flag decides both the manifest sandbox and the plugin runners' sandbox, so
+**every** `Package.swift` and every command plugin in every project runs unsandboxed from then on.
+`IDEPackageSupportDisablePluginExecutionSandbox` does not help here — it covers build-tool plugins
+only (measured, and traced in `/Volumes/RE/Xcode/27.0/README.md`). With the sandbox on, the command
+changes nothing and says what to do. `RuntimeViewerTools` is tooling only — nothing depends on it —
+and is in the three workspaces so that its plugins show up there.
 
 **Workspaces**: `RuntimeViewer-Debug.xcworkspace` (used by `RunScript.sh`)
 already wires the local sibling checkouts of MachOKit / MachOObjCSection /
