@@ -18,6 +18,11 @@
 // with "features" stripped. The app target's RUNTIME_VIEWER_APP_ICON_NAME selects between them
 // by XCODE_VERSION_MAJOR; see Configurations/RuntimeViewerUsingAppKit/Debug.xcconfig.
 //
+// The Catalyst helper's CatalystHelperIcon.icon gets the same treatment. It sits in the helper's
+// own synchronized folder, RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper, rather than
+// here, and the helper target picks between it and CatalystHelperIconXcode26.icon through its
+// own RUNTIME_VIEWER_CATALYST_HELPER_ICON_VARIANT_<version> build setting.
+//
 // The stripping is textual rather than a JSON re-serialization, because a round trip through
 // JSONSerialization rewrites 0.07 as 0.070000000000000007: every untouched byte would churn on
 // every run. The result is parsed afterwards to prove it is still valid JSON.
@@ -50,9 +55,9 @@ func removingFeatures(from document: String) throws -> String {
     return lines.joined(separator: "\n")
 }
 
-func generate(original originalName: String, variant variantName: String) throws {
-    let originalURL = URL(fileURLWithPath: "Resources/\(originalName).icon")
-    let variantURL = URL(fileURLWithPath: "Resources/\(variantName).icon")
+func generate(original originalName: String, variant variantName: String, in directory: String = "Resources") throws {
+    let originalURL = URL(fileURLWithPath: "\(directory)/\(originalName).icon")
+    let variantURL = URL(fileURLWithPath: "\(directory)/\(variantName).icon")
 
     guard fileManager.fileExists(atPath: originalURL.path) else {
         throw GenerationFailure(description: "missing \(originalURL.path) — run this from the repository root")
@@ -80,6 +85,11 @@ func generate(original originalName: String, variant variantName: String) throws
 do {
     try generate(original: "AppIcon", variant: "AppIconXcode26")
     try generate(original: "AppIconBeta", variant: "AppIconBetaXcode26")
+    try generate(
+        original: "CatalystHelperIcon",
+        variant: "CatalystHelperIconXcode26",
+        in: "RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper"
+    )
     print(isDryRun ? "dry run — nothing written" : "done")
 } catch {
     FileHandle.standardError.write(Data("error: \(error)\n".utf8))

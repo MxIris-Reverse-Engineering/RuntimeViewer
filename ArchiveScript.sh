@@ -362,9 +362,12 @@ if [[ "$XCODE_MAJOR_VERSION" == "26" ]]; then
     APP_ICON_VARIANT_SUFFIX="Xcode26"
 fi
 EXPECTED_APP_ICON="${APP_ICON_BASE_NAME}${APP_ICON_VARIANT_SUFFIX}"
+# The Catalyst helper has one icon on every channel, and the same toolchain split: its target
+# picks CatalystHelperIconXcode26 under Xcode 26 through its own build setting.
+EXPECTED_CATALYST_HELPER_ICON="CatalystHelperIcon${APP_ICON_VARIANT_SUFFIX}"
 
 log "build_metadata commit=$GIT_COMMIT branch=$GIT_BRANCH date=$BUILD_DATE"
-log "app_icon=$EXPECTED_APP_ICON (xcode=${XCODE_MAJOR_VERSION:-unknown})"
+log "app_icon=$EXPECTED_APP_ICON catalyst_helper_icon=$EXPECTED_CATALYST_HELPER_ICON (xcode=${XCODE_MAJOR_VERSION:-unknown})"
 
 # An archive that holds anything besides the app is a Generic Xcode Archive, and
 # -exportArchive then rejects every app distribution method with nothing more
@@ -476,6 +479,13 @@ if ! $DRY_RUN; then
     [[ "$EXPORTED_APP_ICON" == "$EXPECTED_APP_ICON" ]] \
         || fail "exported app icon is '${EXPORTED_APP_ICON:-<none>}', expected '$EXPECTED_APP_ICON'. Check that Resources/${EXPECTED_APP_ICON}.icon is in the app target's Resources build phase."
     log "app_icon ok: $EXPORTED_APP_ICON"
+
+    # The embedded helper's actool fails just as quietly.
+    EMBEDDED_CATALYST_HELPER_INFO_PLIST="$APP_PATH/Contents/Applications/RuntimeViewerCatalystHelper.app/Contents/Info.plist"
+    EXPORTED_CATALYST_HELPER_ICON=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconName" "$EMBEDDED_CATALYST_HELPER_INFO_PLIST" 2>/dev/null || true)
+    [[ "$EXPORTED_CATALYST_HELPER_ICON" == "$EXPECTED_CATALYST_HELPER_ICON" ]] \
+        || fail "embedded Catalyst helper icon is '${EXPORTED_CATALYST_HELPER_ICON:-<none>}', expected '$EXPECTED_CATALYST_HELPER_ICON'. Check that RuntimeViewerUsingAppKit/RuntimeViewerCatalystHelper/${EXPECTED_CATALYST_HELPER_ICON}.icon exists — that folder is synchronized with the helper target."
+    log "catalyst_helper_icon ok: $EXPORTED_CATALYST_HELPER_ICON"
 fi
 
 # Check the shipped bundle, not the intermediate step that was supposed to fill
