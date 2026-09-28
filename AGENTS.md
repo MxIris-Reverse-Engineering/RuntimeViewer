@@ -189,7 +189,7 @@ that group: Xcode's wordmark layer uses the `multiply` blend mode, which renders
 existed only to lift the pale glass in dark appearance, was deleted rather than left at zero
 opacity.
 
-Four things to know before editing any of them:
+Five things to know before editing any of them:
 
 - **Never use `stroke` in these SVG assets.** Icon Composer's SVG pipeline through Icon Composer
   1.6 ignores `stroke` and fills the shape instead, so a `fill="none"` ring renders as a solid
@@ -208,10 +208,15 @@ Four things to know before editing any of them:
   top-level `fill` is ignored — verified by compiling one with deliberately absurd colours and
   finding the system's own grey pair in the output. Per-layer `fill-specializations` do work, and
   are how the disc, outline, magnifier and code listing adapt.
+- **A vector layer with no `dark` fill gets recoloured, not left alone.** Without a `dark` entry the
+  dark appearance tints the layer with the background's hue — the white code listing came out
+  blue. A layer meant to stay white in dark appearance needs its `dark` entry set to white.
+  `Documentations/ResolvedIssues/2026-09-28-icon-code-listing-too-thin.md`
 
 `Resources/AppIconTools/GenerateCodeListingLayer.swift` regenerates the code-listing layer, which
 is a few hundred glyph outlines and cannot be hand-edited. Its header records the metrics the
-layer was fitted to.
+layer was fitted to — the face's weight included, which the line width alone cannot pin down
+(every weight of a monospaced face is equally wide) and was once got wrong because of it.
 
 ## Branching Model
 

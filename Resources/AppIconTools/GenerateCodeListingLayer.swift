@@ -24,9 +24,16 @@
 //   * top of the first line's ink:       y = 112
 //   * baseline-to-baseline advance:      38
 //   * first line's ink width:            568
+//   * first line's ink coverage:         about 4400 fully lit pixels, on black
 //
-// SF Mono Regular at 29 pt reproduces that ink width to within a pixel (568.6); Menlo cannot
-// match the width and height simultaneously at any size.
+// The width fixes the family and the size: SF Mono at 29 pt reproduces it to within a pixel,
+// and Menlo cannot match the width and height simultaneously at any size. The width says nothing
+// about the weight, though — every weight of a monospaced face has the same advance, so Regular
+// and Heavy measure alike. The weight comes from the ink coverage instead, and SF Mono Bold is
+// the match (Regular carries about 63% of the original's ink). The layer was generated in Regular
+// from 2026-09-19 to 2026-09-28 because the width was the only thing checked, and the listing read
+// as noticeably dimmer than the bitmap it replaced.
+// See Documentations/ResolvedIssues/2026-09-28-icon-code-listing-too-thin.md
 //
 // The 824 coordinate space is deliberate: Icon Composer treats an SVG's viewBox units and a
 // bitmap's pixels alike, so a 824-unit viewBox at the layer's existing `scale` of 1.3 covers
@@ -54,7 +61,7 @@ let interfaceListing = [
     "@end",
 ]
 
-let fontName = "SFMono-Regular"
+let fontName = "SFMono-Bold"
 let pointSize: CGFloat = 29
 let baselineAdvance: CGFloat = 38
 let canvasSize = 824
