@@ -39,7 +39,7 @@ struct SwitchSourceState: Equatable {
 }
 
 final class MainViewModel: ViewModel<MainRoute> {
-    /// Bounds for the toolbar font-size controls, applied to `Settings.theme.fontSize`.
+    /// Bounds for the View menu's font-size commands, applied to `Settings.theme.fontSize`.
     private static let minimumFontSize: Double = 8
     private static let maximumFontSize: Double = 32
 
@@ -55,8 +55,9 @@ final class MainViewModel: ViewModel<MainRoute> {
         let saveClick: Signal<Void>
         let switchSource: Signal<String?>
         let generationOptionsClick: Signal<NSView>
-        let fontSizeSmallerClick: Signal<Void>
-        let fontSizeLargerClick: Signal<Void>
+        let increaseFontSize: Signal<Void>
+        let decreaseFontSize: Signal<Void>
+        let resetFontSize: Signal<Void>
         let loadFrameworksClick: Signal<Void>
 //        let installHelperClick: Signal<Void>
         let attachToProcessClick: Signal<Void>
@@ -175,7 +176,15 @@ final class MainViewModel: ViewModel<MainRoute> {
 //        }
 //        .disposed(by: rx.disposeBag)
 
-        input.fontSizeSmallerClick
+        input.increaseFontSize
+            .throttle(.milliseconds(Self.fontSizeThrottleMilliseconds), latest: true)
+            .emitOnNext {
+                @Dependency(\.settings) var settings
+                settings.theme.fontSize = min(Self.maximumFontSize, settings.theme.fontSize + 1)
+            }
+            .disposed(by: rx.disposeBag)
+
+        input.decreaseFontSize
             .throttle(.milliseconds(Self.fontSizeThrottleMilliseconds), latest: true)
             .emitOnNext {
                 @Dependency(\.settings) var settings
@@ -183,11 +192,10 @@ final class MainViewModel: ViewModel<MainRoute> {
             }
             .disposed(by: rx.disposeBag)
 
-        input.fontSizeLargerClick
-            .throttle(.milliseconds(Self.fontSizeThrottleMilliseconds), latest: true)
+        input.resetFontSize
             .emitOnNext {
                 @Dependency(\.settings) var settings
-                settings.theme.fontSize = min(Self.maximumFontSize, settings.theme.fontSize + 1)
+                settings.theme.fontSize = Settings.Theme.default.fontSize
             }
             .disposed(by: rx.disposeBag)
 

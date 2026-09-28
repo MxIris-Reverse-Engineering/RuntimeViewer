@@ -230,14 +230,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
 
     let sharingServicePickerItem = NSSharingServicePickerToolbarItem(itemIdentifier: .Main.share)
 
-    let fontSizeSmallerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeSmaller, icon: .textformatSizeSmaller).then {
-        $0.label = "Font Size Smaller"
-    }
-
-    let fontSizeLargerItem = IconButtonToolbarItem(itemIdentifier: .Main.fontSizeLarger, icon: .textformatSizeLarger).then {
-        $0.label = "Font Size Larger"
-    }
-
     let loadFrameworksItem = IconButtonToolbarItem(itemIdentifier: .Main.loadFrameworks, icon: .latch2Case).then {
         $0.label = "Load Frameworks"
     }
@@ -277,8 +269,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.switchSource,
             .Main.attach,
             .Main.loadFrameworks,
-            .Main.fontSizeSmaller,
-            .Main.fontSizeLarger,
             .Main.generationOptions,
             .Main.save,
             .Main.share,
@@ -304,8 +294,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.save,
             .Main.switchSource,
             .Main.generationOptions,
-            .Main.fontSizeSmaller,
-            .Main.fontSizeLarger,
             .Main.loadFrameworks,
             .Main.attach,
             .Main.mcpStatus,
@@ -329,10 +317,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return switchSourceItem
         case .Main.generationOptions:
             return generationOptionsItem
-        case .Main.fontSizeSmaller:
-            return fontSizeSmallerItem
-        case .Main.fontSizeLarger:
-            return fontSizeLargerItem
         case .Main.loadFrameworks:
             return loadFrameworksItem
         case .Main.installHelper:
@@ -366,8 +350,6 @@ extension NSToolbarItem.Identifier {
         static let save: NSToolbarItem.Identifier = "save"
         static let switchSource: NSToolbarItem.Identifier = "switchSource"
         static let generationOptions: NSToolbarItem.Identifier = "generationOptions"
-        static let fontSizeSmaller: NSToolbarItem.Identifier = "fontSizeSmaller"
-        static let fontSizeLarger: NSToolbarItem.Identifier = "fontSizeLarger"
         static let loadFrameworks: NSToolbarItem.Identifier = "loadFrameworks"
         static let installHelper: NSToolbarItem.Identifier = "installHelper"
         static let helperStatus: NSToolbarItem.Identifier = "helperStatus"

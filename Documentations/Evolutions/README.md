@@ -48,6 +48,7 @@
 | [draft](draft-local-runtime-xpc-service.md) | 本地运行时引擎搬进内嵌 XPC service | In Progress | 「My Mac」引擎今天在 App 进程里 `dlopen` 并索引用户选中的镜像，一个坏镜像就带走整个 App。搬进随 App 打包的普通 XPC service（无 Mach service、无 daemon）：引擎身份仍是 `.local`，新增「进程内 / XPC service」执行方式；SwiftyXPC 直连，复用共享命令表；service 崩溃后同一引擎对象自动重连（3 次退避后按需），镜像丢失、文档回到镜像列表根并发系统通知。iOS / 测试 / CLI 独立 host 继续进程内。 |
 | [draft](draft-background-indexing-yields-to-foreground.md) | 后台索引给前台加载让路 | Implemented | 5 条「始终索引」在跑时打开 AppKit，Debug 从 25 秒拖到 41 秒（Release 8.9 → 11.3 秒）：同一进程里 6 个大镜像同时在建，互相拖慢，Swift 运行时泛型元数据缓存的争用最重。「Max Concurrent Tasks」改成所有批次共用、前台加载时不放行新的后台构建；同一镜像的并发请求共用一次构建（补上 0002 要求的按路径串行化）。 |
 | [draft](draft-catalyst-helper-icon.md) | Catalyst helper 的图标：主图标加 CATALYST 角标 | Implemented | helper 的 `AppIcon.appiconset` 一直是空的，活动监视器、权限弹窗里显示系统空白图标。新增 `CatalystHelperIcon.icon`，放在 helper 的同步目录里：主图标三组图层原样照搬，加一个 BETA 同款的黑底白字「CATALYST」角标（新脚本 `GenerateCatalystBadgeLayers.swift` 生成）；Xcode 26 变体沿用 0020 的机制，`ArchiveScript.sh` 也校验 helper 的图标名。 |
+| [draft](draft-font-size-menu-commands.md) | 字号调整从工具栏挪到 View 菜单 | In Progress | 工具栏上的两个字号按钮移除，改为 View 菜单里的 Increase Font Size（⌘+）、Decrease Font Size（⌘-）与新增的 Reset Font Size（⌘0），经 responder chain 送到 key 文档窗口的 `MainWindowController`；上下限 8–32 与 120 ms 节流不变，Reset 设回默认的 13。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 

@@ -40,6 +40,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     private let saveLocationSelectedRelay = PublishRelay<URL>()
 
+    private let increaseFontSizeRelay = PublishRelay<Void>()
+
+    private let decreaseFontSizeRelay = PublishRelay<Void>()
+
+    private let resetFontSizeRelay = PublishRelay<Void>()
+
     init(documentState: DocumentState) {
         self.documentState = documentState
         super.init(windowGenerator: .init())
@@ -84,8 +90,9 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             saveClick: toolbarController.saveItem.button.rx.click.asSignal(),
             switchSource: toolbarController.switchSourceItem.popUpButton.rx.selectedItemRepresentedObject(String.self).asSignal(),
             generationOptionsClick: toolbarController.generationOptionsItem.button.rx.clickWithSelf.asSignal().map { $0 },
-            fontSizeSmallerClick: toolbarController.fontSizeSmallerItem.button.rx.click.asSignal(),
-            fontSizeLargerClick: toolbarController.fontSizeLargerItem.button.rx.click.asSignal(),
+            increaseFontSize: increaseFontSizeRelay.asSignal(),
+            decreaseFontSize: decreaseFontSizeRelay.asSignal(),
+            resetFontSize: resetFontSizeRelay.asSignal(),
             loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
             attachToProcessClick: toolbarController.attachItem.button.rx.click.asSignal(),
             mcpStatusClick: toolbarController.mcpStatusItem.button.rx.clickWithSelf.asSignal().map { $0 },
@@ -320,6 +327,20 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         guard tabCount > 1 else { return }
         let previousIndex = (documentState.activeTabIndex - 1 + tabCount) % tabCount
         documentState.selectionRouter.trigger(.switchTab(index: previousIndex))
+    }
+
+    // MARK: - Font Size Actions
+
+    @objc func increaseFontSize(_ sender: Any?) {
+        increaseFontSizeRelay.accept(())
+    }
+
+    @objc func decreaseFontSize(_ sender: Any?) {
+        decreaseFontSizeRelay.accept(())
+    }
+
+    @objc func resetFontSize(_ sender: Any?) {
+        resetFontSizeRelay.accept(())
     }
 
     // MARK: - Navigate Actions

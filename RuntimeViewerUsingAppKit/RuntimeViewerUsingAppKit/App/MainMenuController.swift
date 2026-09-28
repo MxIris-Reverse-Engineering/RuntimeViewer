@@ -15,7 +15,7 @@ final class MainMenuController {
             applicationMenuItem()
             fileMenuItem()
             editMenuItem()
-            MainMenu.view()
+            viewMenuItem()
             navigateMenuItem()
             MainMenu.window()
             MainMenu.help()
@@ -93,6 +93,49 @@ final class MainMenuController {
         MainMenu.edit { builder in
             builder.item(for: .Edit.Find.find)?.action = #selector(NSResponder.performTextFinderAction(_:))
         }
+    }
+
+    // MARK: - View
+
+    /// The standard items, then the font-size commands. These change `Settings.theme.fontSize`,
+    /// which every document shares, but they are only enabled while a document window is key.
+    private func viewMenuItem() -> NSMenuItem {
+        MainMenu.view { builder in
+            builder.insertItems(after: .View.enterFullScreen) {
+                NSMenuItem.separator()
+                increaseFontSizeItem()
+                decreaseFontSizeItem()
+                resetFontSizeItem()
+            }
+        }
+    }
+
+    /// `+` is shifted on most layouts, so this is ⇧⌘= to press — the same key as Format › Font › Bigger.
+    private func increaseFontSizeItem() -> NSMenuItem {
+        NSMenuItem(
+            "Increase Font Size",
+            action: #selector(MainWindowController.increaseFontSize(_:)),
+            keyEquivalent: "+",
+        )
+        .image(SFSymbols(systemName: .textformatSizeLarger).nsImage)
+    }
+
+    private func decreaseFontSizeItem() -> NSMenuItem {
+        NSMenuItem(
+            "Decrease Font Size",
+            action: #selector(MainWindowController.decreaseFontSize(_:)),
+            keyEquivalent: "-",
+        )
+        .image(SFSymbols(systemName: .textformatSizeSmaller).nsImage)
+    }
+
+    private func resetFontSizeItem() -> NSMenuItem {
+        NSMenuItem(
+            "Reset Font Size",
+            action: #selector(MainWindowController.resetFontSize(_:)),
+            keyEquivalent: "0",
+        )
+        .image(SFSymbols(systemName: .textformatSize).nsImage)
     }
 
     // MARK: - Navigate

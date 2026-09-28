@@ -7,8 +7,8 @@ extension Settings {
     /// Each theme is a ``Preset`` carrying a light + dark color for every
     /// editable slot, so a single theme adapts to the system appearance (the
     /// rendering layer resolves slots through `NSUIColor(light:dark:)`). The
-    /// font size is stored globally here rather than per theme so the toolbar
-    /// size controls survive theme switches.
+    /// font size is stored globally here rather than per theme so the View
+    /// menu's font-size commands survive theme switches.
     @Codable
     @MemberInit
     public struct Theme: Sendable {
