@@ -18,7 +18,7 @@
 
 ## 提案（Evolutions）
 
-见 [`Evolutions/README.md`](Evolutions/README.md)。当前 5 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式。
+见 [`Evolutions/README.md`](Evolutions/README.md)。当前 7 篇：Bonjour 可靠性、IDA 兼容导出、后台索引、泛型类型特化、DifferentiableBox 渲染范式、MCP Transport 绑定失败的资源回收、一条命令更新三个 workspace 的依赖。
 
 ## 设计与实现计划（Plans，归档）
 
