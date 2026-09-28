@@ -461,12 +461,8 @@ actor RuntimeObjCSectionFactory {
                 return existObjCSection
             }
 
-            // `MachOImage` is not `Sendable` because it wraps a pointer into
-            // the image's mapped header, which stays valid for as long as dyld
-            // keeps the image loaded — the same assumption every section makes.
-            nonisolated(unsafe) let machOImage = machO
             return try await sectionBuild(for: machO.imagePath) { factory, relayContinuation in
-                try await RuntimeObjCSection(machO: machOImage, factory: factory, progressContinuation: relayContinuation)
+                try await RuntimeObjCSection(machO: machO, factory: factory, progressContinuation: relayContinuation)
             }
             .section(forwardingProgressTo: nil)
         } catch {
