@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "519891773628dff3673143744dc72c7a9afdd36e",
-        "version" : "0.4.4"
+        "revision" : "c7b568f0bd819e96b5f4756f8f5e708d8c4eea7b",
+        "version" : "0.5.0"
       }
     },
     {
@@ -186,7 +186,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "3b6672edb9e77fc915396ca1a572f76bfb43f0c7"
+        "revision" : "1437925419647f2ebfccc19ab5d60c94bf5a7e3e"
       }
     },
     {
@@ -401,8 +401,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-capstone",
       "state" : {
-        "revision" : "60225014cd6bd2da5f75d6867fa5b70ea4c726db",
-        "version" : "6.0.0"
+        "revision" : "8ef4766f2526aac7faf80379f3cc5dbdb4d321a2",
+        "version" : "6.0.1"
       }
     },
     {
