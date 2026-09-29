@@ -91,6 +91,15 @@ public actor RuntimeEngine {
         /// `reloadData(isReloadImageNodes:)` forwarded to the process that
         /// owns the images, so a client engine never reads its own dyld state.
         case reloadData
+        /// The Find navigator's requests; see `RuntimeEngine+Search.swift`.
+        case buildInterfaceCorpus
+        case searchInterfaces
+        case searchMembers
+        case typeRelationships
+        case interfaceCorpusCoverage
+        case indexedImagePaths
+        case evictInterfaceCorpus
+        case setInterfaceCorpusResidentByteLimit
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
@@ -249,6 +258,10 @@ public actor RuntimeEngine {
     /// computation so this engine file carries only the dispatch wrapper.
     let relationshipsResolver: RuntimeRelationshipsResolver
 
+    /// The Find navigator's relationship trees (ancestors, descendants,
+    /// conformers), built over the same section factories.
+    let typeRelationshipsResolver: RuntimeTypeRelationshipsResolver
+
     private let communicator = RuntimeCommunicator()
 
     /// The connection to the sender or receiver, established by `connect()`.
@@ -265,6 +278,11 @@ public actor RuntimeEngine {
     /// actor's isolation guarantees the lazy initialization is single-threaded.
     public private(set) lazy var backgroundIndexingManager: RuntimeBackgroundIndexingManager =
         .init(engine: self)
+
+    /// Every searchable interface of this engine's images, built on demand
+    /// by the Find navigator; `lazy` for the same reason as
+    /// `backgroundIndexingManager`.
+    private(set) lazy var interfaceCorpusStore: RuntimeInterfaceCorpusStore = .init(builder: self)
 
     public init(
         source: RuntimeSource,
@@ -290,6 +308,11 @@ public actor RuntimeEngine {
         self.objcSectionFactory = .init()
         self.swiftSectionFactory = .init()
         self.relationshipsResolver = .init(objcSectionFactory: objcSectionFactory, swiftSectionFactory: swiftSectionFactory)
+        self.typeRelationshipsResolver = .init(
+            objcSectionFactory: objcSectionFactory,
+            swiftSectionFactory: swiftSectionFactory,
+            relationshipsResolver: relationshipsResolver,
+        )
         #log(.info, "Initializing RuntimeEngine with source: \(String(describing: source), privacy: .public)")
     }
 
@@ -438,7 +461,10 @@ public actor RuntimeEngine {
     private func releaseIndexedSections() {
         let swiftSectionFactory = swiftSectionFactory
         let objcSectionFactory = objcSectionFactory
+        // The corpus is text printed from those sections; it goes with them.
+        let interfaceCorpusStore = interfaceCorpusStore
         Task {
+            await interfaceCorpusStore.evictAll()
             await swiftSectionFactory.removeAllSections()
             await objcSectionFactory.removeAllSections()
         }

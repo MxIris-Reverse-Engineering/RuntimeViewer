@@ -96,6 +96,16 @@ actor RuntimeSwiftSection {
 
     private let printer: SwiftDeclarationPrinter<MachOImage>
 
+    /// The printer the corpus is built with: canonical options (every
+    /// annotation on, `.mcp`) plus the user's transformer. A second instance
+    /// rather than a reconfiguration of `printer`, because a print suspends
+    /// mid-way and the display path may reconfigure `printer` in between —
+    /// and because this one never touches `interfaceByObject`. Rebuilt when
+    /// the transformer changes; see `corpusPrinter(for:)`.
+    private var corpusPrinter: SwiftDeclarationPrinter<MachOImage>?
+
+    private var corpusPrinterTransformer: Transformer.SwiftConfiguration?
+
     /// Keyed by `RuntimeObjectKey` (identity without `children`) so the
     /// sidebar's `parent.withAppendedChild(child)` replacement after a
     /// user-driven specialization doesn't invalidate the cached parent
@@ -344,17 +354,33 @@ extension RuntimeSwiftSection {
             #log(.debug, "Using cached interface")
             return interface
         }
+        let newInterfaceString = try await printInterface(for: object, using: printer)
+        let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
+        interfaceByObject[object.key] = newInterface
+        #log(.debug, "Interface generated and cached")
+        return newInterface
+    }
 
+    /// One definition of an object's interface, in printing order.
+    enum PrintedDefinition {
+        case type(TypeDefinition)
+        case `protocol`(ProtocolDefinition)
+        case `extension`(ExtensionDefinition)
+    }
+
+    /// The definitions an object's interface is printed from, in the order
+    /// they are printed: the type or protocol itself first, then its
+    /// extensions. Shared by the display path, the corpus path and the
+    /// member listing, so the three cannot disagree about what an object is.
+    func printedDefinitions(for object: RuntimeObject) throws -> [PrintedDefinition] {
         guard let interfaceDefinitionName = interfaceDefinitionNameByObject[object.key] else {
             #log(.default, "Invalid runtime object: \(object.displayName, privacy: .public)")
             throw Error.invalidRuntimeObject
         }
-        var newInterfaceString: SemanticString = ""
         switch interfaceDefinitionName {
         case .specializedType(let unspecializedTypeName, let specializedTypeName):
             if let specializedDefinition = specializedDefinitionByObject[object.key] {
-                try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
-                break
+                return [.type(specializedDefinition)]
             }
             // The indexer keeps `allTypeDefinitions` keyed by the
             // unspecialized typeName; specialized children live on the
@@ -365,74 +391,68 @@ extension RuntimeSwiftSection {
             guard let parentDefinition = indexer.allTypeDefinitions[unspecializedTypeName],
                   let specializedDefinition = parentDefinition.specializedChildren.first(where: { $0.typeName == specializedTypeName })
             else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
+            return [.type(specializedDefinition)]
         case .derivedSpecializedType:
             guard let specializedDefinition = specializedDefinitionByObject[object.key] else {
                 throw Error.invalidRuntimeObject
             }
-            try await newInterfaceString.append(printer.printTypeDefinition(specializedDefinition))
+            return [.type(specializedDefinition)]
         case .rootType(let rootTypeName):
             guard let typeDefinition = indexer.rootTypeDefinitions[rootTypeName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(printer.printTypeDefinition(typeDefinition))
-            if let typeExtensionDefinitions = indexer.typeExtensionDefinitions[rootTypeName.extensionName] {
-                newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
-            }
-            if let conformanceExtensionDefinitions = indexer.conformanceExtensionDefinitions[rootTypeName.extensionName] {
-                newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
-            }
+            return [.type(typeDefinition)]
+                + (indexer.typeExtensionDefinitions[rootTypeName.extensionName] ?? []).map(PrintedDefinition.extension)
+                + (indexer.conformanceExtensionDefinitions[rootTypeName.extensionName] ?? []).map(PrintedDefinition.extension)
         case .childType(let childTypeName):
             guard let typeDefinition = indexer.allTypeDefinitions[childTypeName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(printer.printTypeDefinition(typeDefinition))
-            if let typeExtensionDefinitions = indexer.typeExtensionDefinitions[childTypeName.extensionName] {
-                newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(typeExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
-            }
-            if let conformanceExtensionDefinitions = indexer.conformanceExtensionDefinitions[childTypeName.extensionName] {
-                newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(conformanceExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
-            }
+            return [.type(typeDefinition)]
+                + (indexer.typeExtensionDefinitions[childTypeName.extensionName] ?? []).map(PrintedDefinition.extension)
+                + (indexer.conformanceExtensionDefinitions[childTypeName.extensionName] ?? []).map(PrintedDefinition.extension)
         case .rootProtocol(let rootProtocolName):
             guard let definition = indexer.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(printer.printProtocolDefinition(definition))
-            if !definition.defaultImplementationExtensions.isEmpty {
-                newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
-            }
-            if let protocolExtensionDefinitions = indexer.protocolExtensionDefinitions[rootProtocolName.extensionName] {
-                newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
-            }
+            return [.protocol(definition)]
+                + definition.defaultImplementationExtensions.map(PrintedDefinition.extension)
+                + (indexer.protocolExtensionDefinitions[rootProtocolName.extensionName] ?? []).map(PrintedDefinition.extension)
         case .childProtocol(let childProtocolName):
             guard let definition = indexer.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(printer.printProtocolDefinition(definition))
-            if !definition.defaultImplementationExtensions.isEmpty {
-                newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(definition.defaultImplementationExtensions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
-            }
-            if let protocolExtensionDefinitions = indexer.protocolExtensionDefinitions[childProtocolName.extensionName] {
-                newInterfaceString.append(.doubleBreakLine)
-                try await newInterfaceString.append(protocolExtensionDefinitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
-            }
+            return [.protocol(definition)]
+                + definition.defaultImplementationExtensions.map(PrintedDefinition.extension)
+                + (indexer.protocolExtensionDefinitions[childProtocolName.extensionName] ?? []).map(PrintedDefinition.extension)
         case .typeExtension(let typeExtensionName):
             guard let definitions = indexer.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(definitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            return definitions.map(PrintedDefinition.extension)
         case .protocolExtension(let protocolExtensionName):
             guard let definitions = indexer.protocolExtensionDefinitions[protocolExtensionName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(definitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            return definitions.map(PrintedDefinition.extension)
         case .typeAliasExtension(let typeAliasExtensionName):
             guard let definitions = indexer.typeAliasExtensionDefinitions[typeAliasExtensionName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(definitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            return definitions.map(PrintedDefinition.extension)
         case .conformance(let conformanceExtensionName):
             guard let definitions = indexer.conformanceExtensionDefinitions[conformanceExtensionName] else { throw Error.invalidRuntimeObject }
-            try await newInterfaceString.append(definitions.box.asyncMap { try await printer.printExtensionDefinition($0) }.join(separator: .doubleBreakLine))
+            return definitions.map(PrintedDefinition.extension)
         }
+    }
 
-        let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
-        interfaceByObject[object.key] = newInterface
-        #log(.debug, "Interface generated and cached")
-        return newInterface
+    /// Prints an object's interface with `printer`: every definition of
+    /// `printedDefinitions(for:)`, separated by a blank line. Takes the
+    /// printer as a parameter because two printers exist — the display one,
+    /// configured from the user's generation options, and the corpus one,
+    /// configured canonically — and they must print the same definitions.
+    private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
+        var result: SemanticString = ""
+        for (index, definition) in try printedDefinitions(for: object).enumerated() {
+            if index > 0 {
+                result.append(.doubleBreakLine)
+            }
+            switch definition {
+            case .type(let typeDefinition):
+                try await result.append(printer.printTypeDefinition(typeDefinition))
+            case .protocol(let protocolDefinition):
+                try await result.append(printer.printProtocolDefinition(protocolDefinition))
+            case .extension(let extensionDefinition):
+                try await result.append(printer.printExtensionDefinition(extensionDefinition))
+            }
+        }
+        return result
     }
 }
 
@@ -1670,5 +1690,94 @@ extension SwiftDeclaration.AccessorKind {
         case .readAccessor: return "readAccessor"
         case .none: return "none"
         }
+    }
+}
+
+// MARK: - Corpus
+
+extension RuntimeSwiftSection {
+    /// The object's corpus entry: its interface printed by the corpus
+    /// printer, and its members, read off the definitions that print just
+    /// indexed. Swift definitions index their members lazily, and the only
+    /// public trigger is printing — which is why the members come out of the
+    /// same pass as the text, and why they are aligned with that text here.
+    func corpusEntry(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusEntry? {
+        let printer = corpusPrinter(for: transformer.swift)
+        let interfaceString = try await printInterface(for: object, using: printer).frozen()
+        let members = RuntimeMemberDeclarationLocator.locate(try memberDeclarations(for: object), in: interfaceString)
+        return RuntimeInterfaceCorpusEntry(object: object, interface: interfaceString, members: members)
+    }
+
+    private func corpusPrinter(for transformer: Transformer.SwiftConfiguration) -> SwiftDeclarationPrinter<MachOImage> {
+        if let corpusPrinter, corpusPrinterTransformer == transformer {
+            return corpusPrinter
+        }
+        let printer = SwiftDeclarationPrinter<MachOImage>(configuration: .init(), eventHandlers: [], in: machO)
+        let options = RuntimeObjectInterface.GenerationOptions.mcp.swiftInterfaceOptions
+        let configuration = buildPrintConfiguration(
+            from: options,
+            oldConfiguration: printer.configuration,
+            transformer: transformer,
+            transformerChanged: true,
+        )
+        printer.updateConfiguration(configuration)
+        if options.synthesizeOpaqueType {
+            printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
+        }
+        corpusPrinter = printer
+        corpusPrinterTransformer = transformer
+        return printer
+    }
+
+    /// The object's members as its definitions list them, not yet located in
+    /// any text. Reads whatever the definitions have indexed so far; called
+    /// after a print, that is everything.
+    func memberDeclarations(for object: RuntimeObject) throws -> [RuntimeMemberDeclaration] {
+        var members: [RuntimeMemberDeclaration] = []
+        for definition in try printedDefinitions(for: object) {
+            switch definition {
+            case .type(let typeDefinition):
+                let fieldKind: RuntimeMemberKind = typeDefinition.typeName.kind == .enum ? .swiftEnumCase : .swiftField
+                for field in typeDefinition.fields {
+                    members.append(RuntimeMemberDeclaration(name: field.name, kind: fieldKind, isStatic: false, declarationText: field.name, lineNumber: nil))
+                }
+                members += Self.memberDeclarations(of: typeDefinition)
+            case .protocol(let protocolDefinition):
+                members += Self.memberDeclarations(of: protocolDefinition)
+            case .extension(let extensionDefinition):
+                members += Self.memberDeclarations(of: extensionDefinition)
+            }
+        }
+        return members
+    }
+
+    private static func memberDeclarations(of definition: some Definition) -> [RuntimeMemberDeclaration] {
+        var members: [RuntimeMemberDeclaration] = []
+        // A class prints its allocating initializers; a value type has none
+        // and prints its constructors. Listing both would show every class
+        // initializer twice.
+        let initializers = definition.allocators.isEmpty ? definition.constructors : definition.allocators
+        for _ in initializers {
+            members.append(RuntimeMemberDeclaration(name: "init", kind: .swiftInitializer, isStatic: true, declarationText: "init", lineNumber: nil))
+        }
+        for variable in definition.variables {
+            members.append(RuntimeMemberDeclaration(name: variable.name, kind: .swiftVariable, isStatic: false, declarationText: variable.name, lineNumber: nil))
+        }
+        for variable in definition.staticVariables {
+            members.append(RuntimeMemberDeclaration(name: variable.name, kind: .swiftVariable, isStatic: true, declarationText: variable.name, lineNumber: nil))
+        }
+        for function in definition.functions {
+            members.append(RuntimeMemberDeclaration(name: function.name, kind: .swiftFunction, isStatic: false, declarationText: function.name, lineNumber: nil))
+        }
+        for function in definition.staticFunctions {
+            members.append(RuntimeMemberDeclaration(name: function.name, kind: .swiftFunction, isStatic: true, declarationText: function.name, lineNumber: nil))
+        }
+        for _ in definition.subscripts {
+            members.append(RuntimeMemberDeclaration(name: "subscript", kind: .swiftSubscript, isStatic: false, declarationText: "subscript", lineNumber: nil))
+        }
+        for _ in definition.staticSubscripts {
+            members.append(RuntimeMemberDeclaration(name: "subscript", kind: .swiftSubscript, isStatic: true, declarationText: "subscript", lineNumber: nil))
+        }
+        return members
     }
 }
