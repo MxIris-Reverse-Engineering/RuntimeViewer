@@ -116,9 +116,11 @@ protocol SourceEditorBridging: NSObjectProtocol {
     ///   zero once it is nested a few levels down.
     func applyTopContentInset(_ topInset: CGFloat)
 
-    /// Scrolls so that `characterIndex` — a UTF-16 offset into the source last passed to
-    /// `setSource(_:languageIdentifier:)` — is visible.
-    func scrollToCharacterIndex(_ characterIndex: Int)
+    /// Selects `characterRange` — a UTF-16 range into the source last passed to
+    /// `setSource(_:languageIdentifier:semanticRanges:semanticNodeTypeNames:)` — scrolls it to
+    /// the middle of the view and flashes the editor's callout over it: what the Find navigator
+    /// does with a hit once the interface is on screen.
+    func revealCharacterRange(_ characterRange: NSRange)
 }
 
 /// Told when the user ⌘-clicks a token, and asked what to offer when they right-click one.

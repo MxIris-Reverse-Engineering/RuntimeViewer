@@ -32,14 +32,27 @@ final class SidebarRuntimeObjectCoordinator: ViewCoordinator<SidebarRuntimeObjec
             let bookmarkViewModel = SidebarRuntimeObjectBookmarkViewModel(imageNode: imageNode, documentState: documentState, router: self)
             bookmarkViewController.setupBindings(for: bookmarkViewModel)
 
+            let findViewController = FindViewController<SidebarRuntimeObjectRoute>()
+            let findViewModel = FindViewModel<SidebarRuntimeObjectRoute>(documentState: documentState, router: self)
+            findViewController.setupBindings(for: findViewModel)
+
             return .set([
                 TabViewItem(normalSymbol: .init(systemName: .folder), selectedSymbol: .init(systemName: .folderFill), viewController: listViewController),
                 TabViewItem(normalSymbol: .init(systemName: .bookmark), selectedSymbol: .init(systemName: .bookmarkFill), viewController: bookmarkViewController),
+                TabViewItem(normalSymbol: .init(systemName: .magnifyingglass), selectedSymbol: .init(systemName: .magnifyingglass), viewController: findViewController),
             ])
         case .objects:
             return .select(index: 0)
         case .bookmarks:
             return .select(index: 1)
+        case .find:
+            return .multiple(
+                .select(index: 2),
+                SidebarRuntimeObjectTransition(presentables: []) { [documentState] _, _, _, completion in
+                    documentState.findSession.focusSearchFieldRelay.accept(())
+                    completion?()
+                }
+            )
         case .revealSelectedRuntimeObject:
             // Revealing always happens in the object list, never among the
             // bookmarks, so its tab comes first. The request itself is sent

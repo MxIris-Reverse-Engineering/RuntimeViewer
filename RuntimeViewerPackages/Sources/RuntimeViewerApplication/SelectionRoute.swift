@@ -81,6 +81,11 @@ public enum SelectionRoute: Routable {
     case clear
     case newTab
     case openInNewTab(RuntimeObject)
+    /// `push`, with a place in the object's interface for the content pane
+    /// to scroll to once it is on screen (a Find navigator hit).
+    case pushHighlighting(RuntimeObject, ContentHighlightRequest)
+    /// `openInNewTab`, with the same.
+    case openInNewTabHighlighting(RuntimeObject, ContentHighlightRequest)
     case switchTab(index: Int)
     case closeTab(index: Int)
     case moveTab(from: Int, to: Int)

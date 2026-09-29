@@ -124,6 +124,16 @@ final class ContentTextViewController: BaseViewController<ContentTextViewModel>,
         }
         .disposed(by: rx.disposeBag)
 
+        // A Find navigator hit, located in the text on screen: bring it into view, select it and
+        // flash the find indicator over it — what ⌘G does for the find bar's own hits.
+        output.highlightRange.emitOnNextMainActor { [weak self] range in
+            guard let self, NSMaxRange(range) <= textView.textStorage?.length ?? 0 else { return }
+            textView.scrollRangeToVisible(range)
+            textView.setSelectedRange(range)
+            textView.showFindIndicator(for: range)
+        }
+        .disposed(by: rx.disposeBag)
+
         output.runtimeObjectNotFound.emitOnNextMainActor { [weak self] in
             guard let self else { return }
             var configuration = HUDView.Configuration.standard()

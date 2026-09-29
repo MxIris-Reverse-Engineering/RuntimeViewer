@@ -19,6 +19,10 @@ public enum SidebarRoute: Routable {
     /// list and bring it into view (Navigate ▸ Reveal in Sidebar Navigator).
     /// macOS only.
     case revealSelectedRuntimeObject
+    /// Show the Find navigator tab of whichever sidebar level is on screen
+    /// and put the keyboard focus in its search field (Edit ▸ Find ▸ Find in
+    /// Indexed Images). macOS only.
+    case showFind
 }
 
 #if os(macOS)
@@ -28,6 +32,8 @@ public enum SidebarRootRoute: Routable {
     case initial
     case directory
     case bookmarks
+    /// The Find navigator tab, with the focus moved into its search field.
+    case find
 }
 @AssociatedValue(.public)
 @CaseCheckable(.public)
@@ -35,6 +41,8 @@ public enum SidebarRuntimeObjectRoute: Routable {
     case initial
     case objects
     case bookmarks
+    /// The Find navigator tab, with the focus moved into its search field.
+    case find
     /// Switch to the object list and have it reveal the document's object on
     /// screen — see `SidebarRuntimeObjectListViewModel.revealSelectedRuntimeObject()`.
     case revealSelectedRuntimeObject

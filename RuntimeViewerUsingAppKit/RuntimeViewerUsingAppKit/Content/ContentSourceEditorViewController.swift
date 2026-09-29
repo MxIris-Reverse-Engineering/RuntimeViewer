@@ -135,6 +135,11 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
         }
         .disposed(by: rx.disposeBag)
 
+        output.highlightRange.emitOnNextMainActor { [weak self] range in
+            self?.bridge?.revealCharacterRange(range)
+        }
+        .disposed(by: rx.disposeBag)
+
         output.runtimeObjectNotFound.emitOnNextMainActor { [weak self] in
             guard let self else { return }
             var configuration = HUDView.Configuration.standard()

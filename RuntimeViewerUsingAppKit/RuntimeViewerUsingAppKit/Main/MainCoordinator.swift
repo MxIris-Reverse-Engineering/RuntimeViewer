@@ -116,6 +116,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
                 .expand(itemAt: 0),
                 .trigger(.revealSelectedRuntimeObject, on: sidebarCoordinator)
             )
+        case .find:
+            return .multiple(
+                .expand(itemAt: 0),
+                .trigger(.showFind, on: sidebarCoordinator)
+            )
         }
     }
 
@@ -161,7 +166,9 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // `documentState.$selectedRuntimeObject` directly — no
             // coordinator routing is needed for a pure UI
             // scroll-and-highlight.
-        case .push(let object):
+        case .push(let object), .pushHighlighting(let object, _):
+            // The highlight rides on `DocumentState.pendingContentHighlight`;
+            // the panes are told the same thing either way.
             contentCoordinator.contextTrigger(.next(object))
             inspectorCoordinator.contextTrigger(.next(.object(object)))
         case .pop:
@@ -200,7 +207,7 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             // is untouched (tabs do not carry an image selection).
             contentCoordinator.contextTrigger(.placeholder)
             inspectorCoordinator.contextTrigger(.placeholder)
-        case .openInNewTab(let object):
+        case .openInNewTab(let object), .openInNewTabHighlighting(let object, _):
             // New tab already showing `object`, which was also recorded on the
             // timeline; bind both panes to it.
             contentCoordinator.contextTrigger(.root(object))

@@ -306,6 +306,28 @@ extension SourceEditor.TextAttributeOverrideProvider {
   deinit
 }
 
+// Case order copied from the dump (`SourceEditor.ScrollPlacement.swiftinterface`): a resilient
+// enum's case indices come from declaration order, and the binary exports one `enum case for`
+// symbol per case. `.center` and `.optimal` are the two the bridge passes; Xcode's own
+// "select and reveal" passes `.optimal`.
+public enum ScrollPlacement {
+  case minimal
+  case optimal
+  case center
+  case centerBottom
+  case top
+  case bottom
+  case topIgnoringObstructions
+  case comparisonLegacyCenter
+  case comparisonLegacyTop
+}
+
+extension SourceEditor.ScrollPlacement : Swift.Equatable {
+}
+
+extension SourceEditor.ScrollPlacement : Swift.Hashable {
+}
+
 @_hasMissingDesignatedInitializers public class SourceEditorDataSource {
   public init(usingMutableString: Foundation.NSMutableString, language: SourceEditor.SourceEditorLanguage?, formattingOptions: SourceEditor.SourceEditorFormattingOptions)
   // `final`: direct symbols only, no dispatch thunk.
@@ -318,6 +340,10 @@ extension SourceEditor.TextAttributeOverrideProvider {
   // `final`: direct symbol only. Maps a line range to a UTF-16 character range, which is
   // how a SourceEditorPosition is turned back into an offset into the string we supplied.
   public final func characterRangeForLineRange(_ lineRange: Foundation.NSRange) -> Foundation.NSRange
+  // `final`: direct symbol only. The inverse of `characterRangeForLineRange` — the position of
+  // a UTF-16 offset into the string we supplied. `lineHint` speeds the lookup up when it is
+  // right and costs a binary search when it is wrong; a negative hint traps, so pass 0 or better.
+  public final func positionFromInternalCharOffset(_ offset: Swift.Int, lineHint: Swift.Int) -> SourceEditor.SourceEditorPosition
   // `final`: direct symbol only. Non-optional despite the dump showing `lazy var … ?` — that
   // question mark is the lazy *storage*, while the exported getter returns the value.
   public final var languageService: SourceEditor.SourceEditorLanguageService {
@@ -350,6 +376,13 @@ extension SourceEditor.TextAttributeOverrideProvider {
     get
     set
   }
+  // Dispatch thunk. Sets the selection and queues a scroll that brings it to `scrollPlacement`;
+  // `nil` placement selects without scrolling. Xcode's SourceCodeEditor.select(_:scrollToSelection:)
+  // goes through the same entry with `.optimal`.
+  public func selectTextRange(_ range: Swift.Range<SourceEditor.SourceEditorPosition>?, scrollPlacement: SourceEditor.ScrollPlacement?, alwaysScroll: Swift.Bool)
+  // Dispatch thunk. Unfolds the range and pops the callout highlight over it (a 0.1 s scale, a
+  // 0.2 s fade after 0.5 s); an empty range is widened to its line. Does not scroll.
+  public func showCallout(for range: Swift.Range<SourceEditor.SourceEditorPosition>)
   public var colorTheme: SourceEditor.SourceEditorColorTheme {
     get
     set

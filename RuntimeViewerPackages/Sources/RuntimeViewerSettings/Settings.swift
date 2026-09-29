@@ -28,6 +28,9 @@ public final class Settings {
     @Default(Indexing.default)
     public var indexing: Indexing = .init()
 
+    @Default(Search.default)
+    public var search: Search = .init()
+
     @Default(Update.default)
     public var update: Update = .init()
 
@@ -71,6 +74,7 @@ extension Settings: PersistentSettings {
         _ = transformer
         _ = mcp
         _ = indexing
+        _ = search
         _ = update
         _ = theme
         _ = developer

@@ -23,4 +23,7 @@ public enum MainRoute: Routable {
     /// Navigate ▸ Reveal in Sidebar Navigator: show the sidebar and have its
     /// object list select and scroll to the object on screen.
     case revealInSidebarNavigator
+    /// Edit ▸ Find ▸ Find in Indexed Images…: show the sidebar, switch it to
+    /// the Find navigator and focus the search field.
+    case find
 }

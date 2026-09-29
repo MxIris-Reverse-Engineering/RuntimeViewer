@@ -204,6 +204,41 @@ public final class DocumentState {
     /// `RuntimeInterfaceCache` for the invalidation contract (engine swaps
     /// and `dataChangePublisher` events flush it).
     public private(set) lazy var interfaceCache = RuntimeInterfaceCache(documentState: self)
+
+    /// The Find navigator's query and results, shared by the page in each
+    /// sidebar level. See `FindSession`.
+    public private(set) lazy var findSession = FindSession(documentState: self)
+
+    /// Keeps the engine's interface corpus in step with what this document
+    /// indexes. Like `backgroundIndexingCoordinator`, touched on the first
+    /// Document lifecycle hook so it exists for the document's whole life.
+    public private(set) lazy var findCorpusCoordinator = FindCorpusCoordinator(documentState: self)
+
+    /// Where the content pane should scroll once it shows `object`, set by
+    /// the highlighting selection routes and taken by the pane's ViewModel
+    /// through `takeContentHighlight(for:)` — a one-shot handshake, not
+    /// state the panes render.
+    @RxObserved
+    public fileprivate(set) var pendingContentHighlight: PendingContentHighlight? = nil
+
+    /// The pending highlight for `object`, cleared on the way out; `nil`
+    /// when there is none or it was meant for another object.
+    public func takeContentHighlight(for object: RuntimeObject) -> ContentHighlightRequest? {
+        guard let pendingContentHighlight, pendingContentHighlight.object == object else { return nil }
+        self.pendingContentHighlight = nil
+        return pendingContentHighlight.request
+    }
+}
+
+/// A `ContentHighlightRequest` bound to the object it belongs to.
+public struct PendingContentHighlight: Hashable, Sendable {
+    public let object: RuntimeObject
+    public let request: ContentHighlightRequest
+
+    public init(object: RuntimeObject, request: ContentHighlightRequest) {
+        self.object = object
+        self.request = request
+    }
 }
 
 private final class SelectionRouter: Router {
@@ -311,6 +346,14 @@ private final class SelectionRouter: Router {
             documentState.activeTabIndex = documentState.tabs.count - 1
             documentState.selectedRuntimeObject = nil
         case .openInNewTab(let object):
+            documentState.tabs.append(DocumentTab(object: object))
+            documentState.activeTabIndex = documentState.tabs.count - 1
+            pushOntoTimeline(object)
+        case .pushHighlighting(let object, let highlight):
+            documentState.pendingContentHighlight = PendingContentHighlight(object: object, request: highlight)
+            pushOntoTimeline(object)
+        case .openInNewTabHighlighting(let object, let highlight):
+            documentState.pendingContentHighlight = PendingContentHighlight(object: object, request: highlight)
             documentState.tabs.append(DocumentTab(object: object))
             documentState.activeTabIndex = documentState.tabs.count - 1
             pushOntoTimeline(object)

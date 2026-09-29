@@ -89,6 +89,11 @@ private let persistedProperties: [PersistedProperty] = [
         matches: { $0.indexing.maxConcurrency == 11 }
     ),
     PersistedProperty(
+        encodedKey: "search",
+        apply: { $0.search.residentByteLimitMegabytes = 64 },
+        matches: { $0.search.residentByteLimitMegabytes == 64 }
+    ),
+    PersistedProperty(
         encodedKey: "update",
         apply: { $0.update.includePrereleases.toggle() },
         matches: { $0.update.includePrereleases != Settings.Update().includePrereleases }

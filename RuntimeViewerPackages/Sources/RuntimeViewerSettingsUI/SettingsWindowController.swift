@@ -25,6 +25,9 @@ package final class SettingsWindowController: UIFoundationSettingsUI.SettingsWin
             SettingsPage("Indexing", id: "indexing", plainSymbol: "square.stack.3d.down.right") {
                 IndexingSettingsView()
             }
+            SettingsPage("Search", id: "search", plainSymbol: "magnifyingglass") {
+                SearchSettingsView()
+            }
             SettingsPage("MCP", id: "mcp", plainSymbol: "network") {
                 MCPSettingsView()
             }

@@ -19,6 +19,10 @@ final class Document: NSDocument {
     override func makeWindowControllers() {
         addWindowController(mainCoordinator.windowController)
         documentState.backgroundIndexingCoordinator.documentDidOpen()
+        // Brought to life here, like the indexing coordinator: from now on it
+        // keeps the engine's interface corpus in step with what this document
+        // indexes, and reacts to the Find settings for the document's life.
+        _ = documentState.findCorpusCoordinator
     }
 
     override func close() {

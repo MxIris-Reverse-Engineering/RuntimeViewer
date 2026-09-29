@@ -43,6 +43,14 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
             // image, which also means a page is always open here.
             guard let runtimeObjectCoordinator else { return .none() }
             return .route(on: runtimeObjectCoordinator, to: .revealSelectedRuntimeObject)
+        case .showFind:
+            // Whichever level is on screen carries a Find tab; both bind the
+            // same session, so the search survives a push or a pop.
+            if let runtimeObjectCoordinator {
+                return .route(on: runtimeObjectCoordinator, to: .find)
+            }
+            guard let rootCoordinator else { return .none() }
+            return .route(on: rootCoordinator, to: .find)
         case .selectedObject, .selectedNode:
             // iOS-only cases; on macOS the runtime-object list scrolls to
             // and highlights the root selection by observing

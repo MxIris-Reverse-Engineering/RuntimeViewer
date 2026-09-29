@@ -24,14 +24,30 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
             let bookmarkViewController = SidebarRootBookmarkViewController()
             let bookmarkViewModel = SidebarRootBookmarkViewModel(documentState: documentState, router: self)
             bookmarkViewController.setupBindings(for: bookmarkViewModel)
+
+            let findViewController = FindViewController<SidebarRootRoute>()
+            let findViewModel = FindViewModel<SidebarRootRoute>(documentState: documentState, router: self)
+            findViewController.setupBindings(for: findViewModel)
             return .set([
                 TabViewItem(normalSymbol: .init(systemName: .folder), selectedSymbol: .init(systemName: .folderFill), viewController: directoryViewController),
                 TabViewItem(normalSymbol: .init(systemName: .bookmark), selectedSymbol: .init(systemName: .bookmarkFill), viewController: bookmarkViewController),
+                TabViewItem(normalSymbol: .init(systemName: .magnifyingglass), selectedSymbol: .init(systemName: .magnifyingglass), viewController: findViewController),
             ])
         case .directory:
             return .select(index: 0)
         case .bookmarks:
             return .select(index: 1)
+        case .find:
+            // The focus request is sent when the transition performs, after
+            // the tab is on screen; see `.revealSelectedRuntimeObject` in
+            // `SidebarRuntimeObjectCoordinator` for why not during preparation.
+            return .multiple(
+                .select(index: 2),
+                SidebarRootTransition(presentables: []) { [documentState] _, _, _, completion in
+                    documentState.findSession.focusSearchFieldRelay.accept(())
+                    completion?()
+                }
+            )
         }
     }
 }

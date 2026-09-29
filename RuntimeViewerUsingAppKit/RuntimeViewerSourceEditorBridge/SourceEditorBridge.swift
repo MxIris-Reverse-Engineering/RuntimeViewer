@@ -313,9 +313,20 @@ final class SourceEditorBridge: NSObject, SourceEditorBridging {
         sourceEditorView.defaultScrollViewContentInsets.top = topInset
     }
 
-    func scrollToCharacterIndex(_ characterIndex: Int) {
-        // TODO: needs SourceEditorView's scroll-to-position API reconstructed; the display
-        // path works without it, so it is left unimplemented rather than half-guessed.
+    func revealCharacterRange(_ characterRange: NSRange) {
+        let dataSource = sourceEditorView.dataSource
+        // `positionFromInternalCharOffset` is the inverse of the `characterRangeForLineRange`
+        // arithmetic in `characterIndex(of:in:)`: both live in the data source's internal offset
+        // space, which is the UTF-16 offset of the string we supplied. A hint of 0 is safe
+        // (a negative one traps); the lookup falls back to a binary search when the hint misses.
+        let lowerBound = dataSource.positionFromInternalCharOffset(max(0, characterRange.location), lineHint: 0)
+        let upperBound = dataSource.positionFromInternalCharOffset(max(0, NSMaxRange(characterRange)), lineHint: lowerBound.line)
+        let range = lowerBound ..< max(lowerBound, upperBound)
+        // The same two calls Xcode's own editor makes for a Find result: select with a scroll
+        // placement, then pop the callout. `.center`, not Xcode's `.optimal`, because the hit
+        // is usually far from the previous scroll position and "optimal" leaves it at an edge.
+        sourceEditorView.selectTextRange(range, scrollPlacement: .center, alwaysScroll: true)
+        sourceEditorView.showCallout(for: range)
     }
 
     fileprivate func reportCommandClick(at position: SourceEditorPosition) {

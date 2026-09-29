@@ -351,6 +351,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
         viewModel?.router.trigger(.revealInSidebarNavigator)
     }
 
+    // MARK: - Find Actions
+
+    @objc func showFindNavigator(_ sender: Any?) {
+        viewModel?.router.trigger(.find)
+    }
+
     override func responds(to aSelector: Selector!) -> Bool {
         switch aSelector {
         case #selector(exportInterface(_:)):
