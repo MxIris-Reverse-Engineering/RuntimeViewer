@@ -96,8 +96,9 @@ actor RuntimeSwiftSection {
 
     private let printer: SwiftDeclarationPrinter<MachOImage>
 
-    /// The printer the corpus is built with: canonical options (every
-    /// annotation on, `.mcp`) plus the user's transformer. A second instance
+    /// The printer the corpus is built with: marking optional content (so
+    /// one print serves every combination of the Generation Options) with
+    /// the user's transformer. A second instance
     /// rather than a reconfiguration of `printer`, because a print suspends
     /// mid-way and the display path may reconfigure `printer` in between —
     /// and because this one never touches `interfaceByObject`. Rebuilt when
@@ -436,7 +437,7 @@ extension RuntimeSwiftSection {
     /// `printedDefinitions(for:)`, separated by a blank line. Takes the
     /// printer as a parameter because two printers exist — the display one,
     /// configured from the user's generation options, and the corpus one,
-    /// configured canonically — and they must print the same definitions.
+    /// marking optional content — and they must print the same definitions.
     private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
         var result: SemanticString = ""
         for (index, definition) in try printedDefinitions(for: object).enumerated() {
@@ -1697,33 +1698,40 @@ extension SwiftDeclaration.AccessorKind {
 
 extension RuntimeSwiftSection {
     /// The object's corpus entry: its interface printed by the corpus
-    /// printer, and its members, read off the definitions that print just
-    /// indexed. Swift definitions index their members lazily, and the only
-    /// public trigger is printing — which is why the members come out of the
-    /// same pass as the text, and why they are aligned with that text here.
+    /// printer — marked for every combination of the Generation Options —
+    /// separated into the text and its visibility regions, and its members,
+    /// read off the definitions that print just indexed. Swift definitions
+    /// index their members lazily, and the only public trigger is printing —
+    /// which is why the members come out of the same pass as the text, and
+    /// why they are aligned with that text here.
     func corpusEntry(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusEntry? {
         let printer = corpusPrinter(for: transformer.swift)
-        let interfaceString = try await printInterface(for: object, using: printer).frozen()
-        let members = RuntimeMemberDeclarationLocator.locate(try memberDeclarations(for: object), in: interfaceString)
-        return RuntimeInterfaceCorpusEntry(object: object, interface: interfaceString, members: members)
+        let separated = try await printInterface(for: object, using: printer).frozen().separatingVisibilityRegions()
+        let members = RuntimeMemberDeclarationLocator.locate(try memberDeclarations(for: object), in: separated.text)
+        return RuntimeInterfaceCorpusEntry(object: object, interface: separated.text, visibilityRegions: separated.regions, members: members)
     }
 
+    /// A printer that marks optional content instead of letting the options
+    /// decide it, so one print serves every combination of them. The opaque
+    /// type resolver is always registered: the constraints it supplies are
+    /// marked, and a search with `synthesizeOpaqueType` off projects them
+    /// away. The member order is the fixed by-category one — a reordering is
+    /// not something a region can express.
     private func corpusPrinter(for transformer: Transformer.SwiftConfiguration) -> SwiftDeclarationPrinter<MachOImage> {
         if let corpusPrinter, corpusPrinterTransformer == transformer {
             return corpusPrinter
         }
         let printer = SwiftDeclarationPrinter<MachOImage>(configuration: .init(), eventHandlers: [], in: machO)
-        let options = RuntimeObjectInterface.GenerationOptions.mcp.swiftInterfaceOptions
-        let configuration = buildPrintConfiguration(
-            from: options,
+        var configuration = buildPrintConfiguration(
+            from: RuntimeObjectInterface.GenerationOptions.mcp.swiftInterfaceOptions,
             oldConfiguration: printer.configuration,
             transformer: transformer,
             transformerChanged: true,
         )
+        configuration.marksOptionalContent = true
+        configuration.memberSortOrder = .byCategory
         printer.updateConfiguration(configuration)
-        if options.synthesizeOpaqueType {
-            printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
-        }
+        printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
         corpusPrinter = printer
         corpusPrinterTransformer = transformer
         return printer

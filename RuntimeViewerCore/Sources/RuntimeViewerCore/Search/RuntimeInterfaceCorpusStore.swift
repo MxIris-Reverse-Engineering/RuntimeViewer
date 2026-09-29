@@ -2,21 +2,106 @@ import Foundation
 import FoundationToolbox
 import Semantic
 
-/// One object's contribution to the corpus: its interface, printed with the
-/// canonical generation options, and the members its structures list, each
+/// One object's contribution to the corpus: its interface, printed once with
+/// everything any Generation Options could show, the regions saying which
+/// options hide which parts of it, and the members its structures list, each
 /// aligned with a line of that interface.
 struct RuntimeInterfaceCorpusEntry: Sendable {
     let object: RuntimeObject
+
+    /// Everything any Generation Options could show; a search reads it
+    /// through `visibilityRegions` under the options it was given.
     let interface: FrozenSemanticString
+
+    let visibilityRegions: VisibilityRegionTable
+
     let members: [RuntimeMemberDeclaration]
 
+    /// Where each member's declaration line lies in `interface`, as UTF-8
+    /// offsets — `nil` for a member the locator found no line for. A member
+    /// is shown under some options when something of its line survives the
+    /// projection.
+    let memberDeclarationLineRanges: [Range<Int>?]
+
+    init(object: RuntimeObject, interface: FrozenSemanticString, visibilityRegions: VisibilityRegionTable = .empty, members: [RuntimeMemberDeclaration]) {
+        self.object = object
+        self.interface = interface
+        self.visibilityRegions = visibilityRegions
+        self.members = members
+        let lineStartOffsets = Self.lineStartOffsets(of: interface.text)
+        let textByteCount = interface.text.utf8.count
+        memberDeclarationLineRanges = members.map { member in
+            guard let lineNumber = member.lineNumber, lineNumber >= 1, lineNumber <= lineStartOffsets.count else { return nil }
+            let lineStart = lineStartOffsets[lineNumber - 1]
+            let lineEnd = lineNumber < lineStartOffsets.count ? lineStartOffsets[lineNumber] - 1 : textByteCount
+            return lineStart ..< lineEnd
+        }
+    }
+
     /// Resident bytes: the text once, the span table, the interned
-    /// identifiers. The `RuntimeObject` and member list are not counted —
-    /// they are small next to the text and shared with the section anyway.
+    /// identifiers, the region table. The `RuntimeObject` and member list are
+    /// not counted — they are small next to the text and shared with the
+    /// section anyway.
     var byteCount: Int {
         interface.text.utf8.count
             + interface.spans.count * MemoryLayout<FrozenSemanticString.Span>.stride
             + interface.identifierTable.reduce(0) { $0 + $1.utf8.count }
+            + visibilityRegions.regions.count * MemoryLayout<VisibilityRegionTable.Region>.stride
+    }
+
+    /// The interface as it reads under `visibility`: `interface` itself when
+    /// nothing in it depends on the options.
+    func projection(under visibility: RuntimeInterfaceVisibility) -> VisibilityProjection? {
+        guard !visibilityRegions.isEmpty else { return nil }
+        return visibilityRegions.projection(of: interface, where: visibility.isOptionEnabled)
+    }
+
+    /// The member at `memberIndex` as the projection shows it — its line
+    /// number and declaration line in the projected text — or `nil` when the
+    /// projection hid it. A member with no known line is kept as it is.
+    func member(at memberIndex: Int, in projection: VisibilityProjection, projectedLineStartOffsets: [Int]) -> RuntimeMemberDeclaration? {
+        let member = members[memberIndex]
+        guard let lineRange = memberDeclarationLineRanges[memberIndex] else { return member }
+        let originalBytes = interface.text.utf8
+        var surviving: Int?
+        var byteIndex = originalBytes.index(originalBytes.startIndex, offsetBy: lineRange.lowerBound)
+        for byteOffset in lineRange {
+            let byte = originalBytes[byteIndex]
+            if byte != UInt8(ascii: " "), byte != UInt8(ascii: "\t"), let projectedOffset = projection.projectedUTF8Offset(ofOriginalUTF8Offset: byteOffset) {
+                surviving = projectedOffset
+                break
+            }
+            byteIndex = originalBytes.index(after: byteIndex)
+        }
+        guard let surviving else { return nil }
+        let lineIndex = Self.lineIndex(containing: surviving, lineStartOffsets: projectedLineStartOffsets)
+        let projectedText = projection.text.text.utf8
+        let lineStart = projectedLineStartOffsets[lineIndex]
+        let lineEnd = lineIndex + 1 < projectedLineStartOffsets.count ? projectedLineStartOffsets[lineIndex + 1] - 1 : projectedText.count
+        let lineText = String(decoding: projectedText.dropFirst(lineStart).prefix(lineEnd - lineStart), as: UTF8.self)
+        return member.located(at: lineIndex + 1, declarationText: lineText.trimmingCharacters(in: .whitespaces))
+    }
+
+    static func lineStartOffsets(of text: String) -> [Int] {
+        var offsets = [0]
+        for (offset, byte) in text.utf8.enumerated() where byte == UInt8(ascii: "\n") {
+            offsets.append(offset + 1)
+        }
+        return offsets
+    }
+
+    private static func lineIndex(containing offset: Int, lineStartOffsets: [Int]) -> Int {
+        var lowerBound = 0
+        var upperBound = lineStartOffsets.count
+        while upperBound - lowerBound > 1 {
+            let middle = (lowerBound + upperBound) / 2
+            if lineStartOffsets[middle] <= offset {
+                lowerBound = middle
+            } else {
+                upperBound = middle
+            }
+        }
+        return lowerBound
     }
 }
 
@@ -27,9 +112,10 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
     /// order.
     func corpusObjects(in imagePath: String) async throws -> [RuntimeObject]
 
-    /// The object's corpus entry, printed with the canonical options and
-    /// `transformer`. `nil` when the object has no interface. Throws when
-    /// printing fails; the store skips that object and carries on.
+    /// The object's corpus entry: its interface printed once, with
+    /// `transformer`, marked for every combination of the Generation
+    /// Options. `nil` when the object has no interface. Throws when printing
+    /// fails; the store skips that object and carries on.
     func corpusEntry(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusEntry?
 }
 
@@ -52,9 +138,14 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 ///   `failed` and stays so until the image is asked for again, which retries.
 ///   One object that fails to print does not fail the build — it is skipped
 ///   and counted.
-/// - **Transformer fingerprint.** The corpus follows the user's transformer
-///   settings, so an entry set records the configuration it was printed
-///   with; asking for the image with a different one evicts and rebuilds.
+/// - **One print serves every Generation Options value.** Each interface is
+///   printed with everything any options could show, the optional parts
+///   marked with the option they depend on; a search reads it through those
+///   marks under the options it carries, so changing them rebuilds nothing.
+/// - **Transformer fingerprint.** The transformer rewrites text with the
+///   user's own templates, which no mark can anticipate, so an entry set
+///   records the configuration it was printed with; asking for the image
+///   with a different one evicts and rebuilds.
 /// - **Resident budget.** When the total exceeds `residentByteLimit` the
 ///   least recently searched images are evicted whole, back to unbuilt,
 ///   never the image that just finished.
@@ -360,6 +451,7 @@ actor RuntimeInterfaceCorpusStore {
         onProgress: @Sendable ([RuntimeInterfaceSearchMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
         let pattern = try RuntimeInterfaceTextMatcher.Pattern(query)
+        let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
         var totalMatchCount = 0
         var collectedCount = 0
         var scannedObjectCount = 0
@@ -370,7 +462,10 @@ actor RuntimeInterfaceCorpusStore {
             var batch: [RuntimeInterfaceSearchMatch] = []
             for entry in corpus.entries {
                 scannedObjectCount += 1
-                totalMatchCount += RuntimeInterfaceTextMatcher.matches(in: entry.interface, object: entry.object, pattern: pattern) { match in
+                // The text the content pane shows under the query's options,
+                // so every hit is visible and its line reads as displayed.
+                let interface = visibility.flatMap { entry.projection(under: $0)?.text } ?? entry.interface
+                totalMatchCount += RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern) { match in
                     guard collectedCount < query.resultLimit else { return false }
                     batch.append(match)
                     collectedCount += 1
@@ -398,6 +493,7 @@ actor RuntimeInterfaceCorpusStore {
         indexedImagePaths: Set<String>,
         onProgress: @Sendable ([RuntimeMemberMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
+        let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
         var totalMatchCount = 0
         var collectedCount = 0
         var scannedObjectCount = 0
@@ -408,12 +504,26 @@ actor RuntimeInterfaceCorpusStore {
             var batch: [RuntimeMemberMatch] = []
             for entry in corpus.entries {
                 scannedObjectCount += 1
-                for member in entry.members {
+                // Projected only once a member of this entry matches: most
+                // entries have none, and they cost nothing.
+                var projection: (projection: VisibilityProjection, lineStartOffsets: [Int])??
+                for (memberIndex, member) in entry.members.enumerated() {
                     if let kinds = query.kinds, !kinds.contains(member.kind) { continue }
                     guard let range = RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, query: query.text, isCaseSensitive: query.isCaseSensitive) else { continue }
+                    var shownMember = member
+                    if let visibility {
+                        if projection == nil {
+                            projection = entry.projection(under: visibility).map { ($0, RuntimeInterfaceCorpusEntry.lineStartOffsets(of: $0.text.text)) }
+                        }
+                        if let entryProjection = projection ?? nil {
+                            // Hidden under the query's options: not a match.
+                            guard let projectedMember = entry.member(at: memberIndex, in: entryProjection.projection, projectedLineStartOffsets: entryProjection.lineStartOffsets) else { continue }
+                            shownMember = projectedMember
+                        }
+                    }
                     totalMatchCount += 1
                     guard collectedCount < query.resultLimit else { continue }
-                    batch.append(RuntimeMemberMatch(object: entry.object, member: member, matchRangeInName: range))
+                    batch.append(RuntimeMemberMatch(object: entry.object, member: shownMember, matchRangeInName: range))
                     collectedCount += 1
                 }
             }

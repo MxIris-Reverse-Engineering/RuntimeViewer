@@ -48,9 +48,10 @@ public enum RuntimeMemberKind: String, Codable, Hashable, Sendable, CaseIterable
 /// One member of a runtime object, as the engine's structured index knows it.
 ///
 /// `lineNumber` is the 1-based line of the member's declaration in the
-/// interface the corpus printed (canonical generation options), or `nil`
-/// when the printed text could not be aligned with the structure — the
-/// member is still searchable, a click then only reaches the type.
+/// interface as the search's Generation Options show it (in the corpus, as
+/// printed with everything shown), or `nil` when the printed text could not
+/// be aligned with the structure — the member is still searchable, a click
+/// then only reaches the type.
 public struct RuntimeMemberDeclaration: Hashable, Codable, Sendable {
     /// The member's own name: a property, ivar, field or variable name, a
     /// full Objective-C selector (`initWithFrame:`), a Swift function's base
@@ -108,11 +109,16 @@ public struct RuntimeMemberSearchQuery: Hashable, Codable, Sendable {
     /// Matches are collected up to this many; scanning goes on to count the
     /// rest, so the summary's total is the real total.
     public var resultLimit: Int
+    /// The options the members are read under — the content pane's — so a
+    /// member they strip is not found, and a found one's line reads as
+    /// displayed. `nil` searches every member any options could show.
+    public var generationOptions: RuntimeObjectInterface.GenerationOptions?
 
-    public init(text: String, kinds: Set<RuntimeMemberKind>? = nil, isCaseSensitive: Bool = false, resultLimit: Int = 1000) {
+    public init(text: String, kinds: Set<RuntimeMemberKind>? = nil, isCaseSensitive: Bool = false, resultLimit: Int = 1000, generationOptions: RuntimeObjectInterface.GenerationOptions? = nil) {
         self.text = text
         self.kinds = kinds
         self.isCaseSensitive = isCaseSensitive
         self.resultLimit = resultLimit
+        self.generationOptions = generationOptions
     }
 }

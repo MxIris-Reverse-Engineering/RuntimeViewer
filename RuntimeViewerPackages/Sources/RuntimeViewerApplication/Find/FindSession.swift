@@ -15,6 +15,10 @@ import RuntimeViewerArchitectures
 /// matches in per-image batches, which land here as results grow, so the
 /// outline fills while the engine is still scanning; relationship searches
 /// answer in one piece. A new search cancels the one in flight.
+///
+/// Text and member searches read the interfaces under the Generation Options
+/// the content pane displays with, so they find only what it shows; when
+/// those options change, the search in force runs again under the new ones.
 @MainActor
 @Loggable(.private)
 public final class FindSession {
@@ -57,8 +61,24 @@ public final class FindSession {
 
     private var memberMatchGroups = MemberMatchGroups()
 
+    @Dependency(\.appDefaults)
+    private var appDefaults
+
+    private let disposeBag = DisposeBag()
+
     public init(documentState: DocumentState) {
         self.documentState = documentState
+        appDefaults.$options
+            .distinctUntilChanged()
+            .skip(1)
+            .observe(on: MainScheduler.instance)
+            .subscribeOnNext { [weak self] _ in
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    self.rerunAfterGenerationOptionsChange()
+                }
+            }
+            .disposed(by: disposeBag)
     }
 
     deinit {
@@ -94,9 +114,10 @@ public final class FindSession {
         searchGeneration += 1
         let generation = searchGeneration
         let engine = documentState.runtimeEngine
+        let generationOptions = appDefaults.options
         searchTask = Task { [weak self] in
             do {
-                try await self?.perform(query, on: engine)
+                try await self?.perform(query, generationOptions: generationOptions, on: engine)
             } catch is CancellationError {
                 // Superseded; the newer search owns the results now.
             } catch {
@@ -116,20 +137,29 @@ public final class FindSession {
         run(query)
     }
 
+    /// A text or member search already shown answers for the options it ran
+    /// under; run it again so it answers for the ones the content pane now
+    /// displays with. Relationship searches do not depend on them.
+    private func rerunAfterGenerationOptionsChange() {
+        guard !query.isEmpty, query.mode.relationship == nil, results.summary != nil || isSearching else { return }
+        run(query)
+    }
+
     public func clear() {
         run(FindQuery(mode: query.mode, text: "", textMatchStyle: query.textMatchStyle, memberKindFilter: query.memberKindFilter, isCaseSensitive: query.isCaseSensitive))
     }
 
     // MARK: - Execution
 
-    private func perform(_ query: FindQuery, on engine: RuntimeEngine) async throws {
+    private func perform(_ query: FindQuery, generationOptions: RuntimeObjectInterface.GenerationOptions, on engine: RuntimeEngine) async throws {
         switch query.mode {
         case .text, .regularExpression:
             let engineQuery = RuntimeInterfaceSearchQuery(
                 text: query.trimmedText,
                 matchMode: query.mode == .regularExpression ? .regularExpression : query.textMatchStyle.matchMode,
                 isCaseSensitive: query.isCaseSensitive,
-                scope: .all
+                scope: .all,
+                generationOptions: generationOptions
             )
             let summary = try await engine.searchInterfaces(engineQuery) { [weak self] batch in
                 await self?.appendTextMatches(batch)
@@ -140,7 +170,8 @@ public final class FindSession {
             let engineQuery = RuntimeMemberSearchQuery(
                 text: query.trimmedText,
                 kinds: query.memberKindFilter.kinds,
-                isCaseSensitive: query.isCaseSensitive
+                isCaseSensitive: query.isCaseSensitive,
+                generationOptions: generationOptions
             )
             let summary = try await engine.searchMembers(engineQuery) { [weak self] batch in
                 await self?.appendMemberMatches(batch)

@@ -86,19 +86,26 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
     /// goes on to count the rest, so `RuntimeInterfaceSearchSummary.totalMatchCount`
     /// is the real total even when `isTruncated` is set.
     public var resultLimit: Int
+    /// The options the interfaces are read under — the content pane's — so
+    /// only what it shows is found and each line reads as it displays.
+    /// `nil` searches everything any options could show. The transformer
+    /// part is not consulted: the corpus is already printed with it.
+    public var generationOptions: RuntimeObjectInterface.GenerationOptions?
 
     public init(
         text: String,
         matchMode: RuntimeInterfaceSearchMatchMode = .containing,
         isCaseSensitive: Bool = false,
         scope: RuntimeInterfaceSearchScope = .all,
-        resultLimit: Int = 1000
+        resultLimit: Int = 1000,
+        generationOptions: RuntimeObjectInterface.GenerationOptions? = nil
     ) {
         self.text = text
         self.matchMode = matchMode
         self.isCaseSensitive = isCaseSensitive
         self.scope = scope
         self.resultLimit = resultLimit
+        self.generationOptions = generationOptions
     }
 }
 
@@ -109,7 +116,7 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
 /// in the engine process.
 public struct RuntimeInterfaceSearchMatch: Hashable, Codable, Sendable {
     public let object: RuntimeObject
-    /// 1-based line in the corpus interface (canonical generation options).
+    /// 1-based line in the interface as the query's options show it.
     public let lineNumber: Int
     /// The hit's line, possibly windowed around the hit when the line is very
     /// long — `matchRangeInLine` is relative to this text either way.

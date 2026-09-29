@@ -1,23 +1,23 @@
 import Foundation
 import ObjCDump
+import Semantic
 
 extension RuntimeObjCSection {
-    /// The object's corpus entry: its interface printed with the canonical
-    /// generation options (every strip switch off, every annotation on) and
-    /// the user's transformer, plus its members from the parsed metadata,
-    /// aligned with that text.
+    /// The object's corpus entry: its interface marked for every combination
+    /// of the Generation Options (`markedInterface(for:transformer:)`) with the
+    /// user's transformer, separated into the text and its visibility regions,
+    /// plus its members from the parsed metadata, aligned with that text.
     ///
     /// The Objective-C side keeps no interface cache, so there is nothing to
     /// bypass here: the builder is created per call and prints straight from
     /// the indexer.
     func corpusEntry(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusEntry? {
-        let interface = try await interface(
-            for: object,
-            using: RuntimeObjectInterface.GenerationOptions.mcp.objcHeaderOptions,
-            transformer: transformer.objc
-        )
-        let members = RuntimeMemberDeclarationLocator.locate(memberDeclarations(for: object), in: interface.interfaceString)
-        return RuntimeInterfaceCorpusEntry(object: object, interface: interface.interfaceString, members: members)
+        guard let markedInterface = markedInterface(for: object, transformer: transformer.objc) else {
+            throw Error.invalidRuntimeObject
+        }
+        let separated = markedInterface.frozen().separatingVisibilityRegions()
+        let members = RuntimeMemberDeclarationLocator.locate(memberDeclarations(for: object), in: separated.text)
+        return RuntimeInterfaceCorpusEntry(object: object, interface: separated.text, visibilityRegions: separated.regions, members: members)
     }
 
     /// The object's members as `ObjCClassInfo` / `ObjCProtocolInfo` /

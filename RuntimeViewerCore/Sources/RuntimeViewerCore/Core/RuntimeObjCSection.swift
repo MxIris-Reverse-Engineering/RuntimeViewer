@@ -146,19 +146,7 @@ actor RuntimeObjCSection {
         // `upstream` rather than the wrapper. Mirrors `RuntimeSwiftSection`
         // handing `indexer.upstream` to `GenericSpecializer`.
         let builder = ObjCInterfaceBuilder(indexer: objcIndexer.upstream, machO: machO)
-        let cTypeReplacements = transformer.cType.isEnabled
-            ? transformer.cType.replacements.reduce(into: [ObjCPrimitiveTypePattern: String]()) { result, pair in
-                guard let pattern = ObjCPrimitiveTypePattern(rawValue: pair.key.rawValue) else { return }
-                result[pattern] = pair.value
-            }
-            : [:]
-        let ivarOffsetCommentBuilder: (@Sendable (Int) -> String)?
-        if transformer.ivarOffset.isEnabled {
-            let module = transformer.ivarOffset
-            ivarOffsetCommentBuilder = { offset in module.transform(.init(offset: offset)) }
-        } else {
-            ivarOffsetCommentBuilder = nil
-        }
+        let (cTypeReplacements, ivarOffsetCommentBuilder) = Self.builderInputs(for: transformer)
 
         let interfaceString: SemanticString?
         switch name.kind {
@@ -207,6 +195,52 @@ actor RuntimeObjCSection {
 
         #log(.default, "Invalid runtime object: \(object.name, privacy: .public) kind: \(String(describing: object.kind), privacy: .public)")
         throw Error.invalidRuntimeObject
+    }
+
+    /// The object's interface with everything any `ObjCGenerationOptions`
+    /// could show, and what the switches decide marked with
+    /// `VisibilityRegion`s — the Find corpus's form of it (see
+    /// `corpusEntry(for:transformer:)`). Projected with some options, it reads
+    /// as `interface(for:using:transformer:)` with them. C structs and unions
+    /// have nothing to mark and print as usual. `nil` for an object this image
+    /// does not have.
+    func markedInterface(for object: RuntimeObject, transformer: Transformer.ObjCConfiguration) -> SemanticString? {
+        let name = object.withImagePath(imagePath)
+        let builder = ObjCInterfaceBuilder(indexer: objcIndexer.upstream, machO: machO)
+        let (cTypeReplacements, ivarOffsetCommentBuilder) = Self.builderInputs(for: transformer)
+        switch name.kind {
+        case .objc(.type(.class)):
+            return builder.markedClassInterface(named: name.name, cTypeReplacements: cTypeReplacements, ivarOffsetCommentBuilder: ivarOffsetCommentBuilder)
+        case .objc(.type(.protocol)):
+            return builder.markedProtocolInterface(named: name.name, cTypeReplacements: cTypeReplacements, ivarOffsetCommentBuilder: ivarOffsetCommentBuilder)
+        case .objc(.category(.class)):
+            return builder.markedCategoryInterface(uniqueName: name.name, cTypeReplacements: cTypeReplacements, ivarOffsetCommentBuilder: ivarOffsetCommentBuilder)
+        case .c(.struct):
+            return builder.structInterface(named: name.name, cTypeReplacements: cTypeReplacements, ivarOffsetCommentBuilder: ivarOffsetCommentBuilder)
+        case .c(.union):
+            return builder.unionInterface(named: name.name, cTypeReplacements: cTypeReplacements, ivarOffsetCommentBuilder: ivarOffsetCommentBuilder)
+        default:
+            return nil
+        }
+    }
+
+    /// What `ObjCInterfaceBuilder` takes from RuntimeViewer's transformer
+    /// settings: the C type spellings and the ivar offset comment.
+    private static func builderInputs(for transformer: Transformer.ObjCConfiguration) -> (cTypeReplacements: [ObjCPrimitiveTypePattern: String], ivarOffsetCommentBuilder: (@Sendable (Int) -> String)?) {
+        let cTypeReplacements = transformer.cType.isEnabled
+            ? transformer.cType.replacements.reduce(into: [ObjCPrimitiveTypePattern: String]()) { result, pair in
+                guard let pattern = ObjCPrimitiveTypePattern(rawValue: pair.key.rawValue) else { return }
+                result[pattern] = pair.value
+            }
+            : [:]
+        let ivarOffsetCommentBuilder: (@Sendable (Int) -> String)?
+        if transformer.ivarOffset.isEnabled {
+            let module = transformer.ivarOffset
+            ivarOffsetCommentBuilder = { offset in module.transform(.init(offset: offset)) }
+        } else {
+            ivarOffsetCommentBuilder = nil
+        }
+        return (cTypeReplacements, ivarOffsetCommentBuilder)
     }
 
     func memberAddresses(for object: RuntimeObject, memberName: String?) async throws -> [RuntimeMemberAddress] {

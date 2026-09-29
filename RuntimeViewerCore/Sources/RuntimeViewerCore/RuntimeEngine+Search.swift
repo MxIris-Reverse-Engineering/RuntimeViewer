@@ -5,8 +5,10 @@ import RuntimeViewerCommunication
 
 extension RuntimeEngine {
     /// Builds — or joins the build of, or returns the already built — corpus
-    /// of `imagePath`: every object's interface printed with the canonical
-    /// generation options and `transformer`, plus the members it declares.
+    /// of `imagePath`: every object's interface printed once with
+    /// `transformer` and marked for every combination of the Generation
+    /// Options — searches read it under the options they carry — plus the
+    /// members it declares.
     /// Runs in the process that owns the image; over a connection only the
     /// progress and the summary travel. Cancelling the calling task withdraws
     /// this caller's subscription to the build, not the build itself, unless

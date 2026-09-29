@@ -2,7 +2,7 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-09-29
-- **最后更新**: 2026-09-29
+- **最后更新**: 2026-09-30
 - **所属愿景**: 无（内容区的行定位部分与《自建代码视图引擎》相邻，但本提案不改视图引擎的方向）
 - **前置设计**: `feature/interface-corpus-probe` 分支上的
   `Documentations/Plans/2026-07-26-global-search-design.md`（2026-07-27 按
@@ -48,8 +48,9 @@ CLI 与 MCP 的 `.string`。`FrozenSemanticString.components` 仍在，需要 co
 
 - 新 actor `RuntimeInterfaceCorpusStore`，挂在 `RuntimeEngine` 上（lazy，与 `backgroundIndexingManager` 同模式），
   **语料永远住在拥有 section 的进程里**。远程引擎只过线请求与结果。
-- 条目：`Entry { object: RuntimeObject; interface: FrozenSemanticString; members: [RuntimeMemberDeclaration] }`，
-  按 `imagePath` 分组。成员表与语料**同一趟构建**（见 §3.2 为什么必须同一趟）。
+- 条目：`Entry { object: RuntimeObject; interface: FrozenSemanticString; visibilityRegions; members: [RuntimeMemberDeclaration] }`，
+  按 `imagePath` 分组。成员表与语料**同一趟构建**（见 §3.2 为什么必须同一趟）；每个成员记下声明在全量文本里的
+  位置，投影后据此判断它是否可见、取它在显示文本里的行。
 - `BuildState`：`pending / building(built, total) / built(summary) / failed(message)`。取消（订阅归零、驱逐、引擎停止）
   → 条目移除，回到未构建，不记 failed；构建抛错 → `failed`，不自动重试，任一触发源再次命中该镜像时重新排队；
   单个对象打印失败不整体 failed——跳过并计数，summary 报告跳过数。
@@ -60,22 +61,29 @@ CLI 与 MCP 的 `.string`。`FrozenSemanticString.components` 仍在，需要 co
 - **取消按订阅引用计数**：每个 `BuildInterfaceCorpusRequest` 只是对该镜像构建的一次订阅，最后一个订阅者退订才取消
   构建任务。多文档共享 `.local` 引擎时，文档 A 关闭不会砍掉文档 B 在等的语料。
 
-**canonical 选项 = `.mcp` 的 strip / 注释开关 + 用户当前 `settings.transformer`。** strip 全关、注释全开，用户改这些
-显示开关不触发重建；transformer 跟随用户设置（否则「所见搜不到」，二次定位整行匹配必 miss），transformer 变更是
-触发源之一（§4），store 记录构建时的 transformer 指纹，远程场景下配置随请求过线。
+**语料 = 全量打印 + 可见性区域，搜索时按当前选项投影**（2026-09-29 取代原先的「canonical 选项」，见决策日志）。
+每个对象只打印一次：打印器的**标记模式**把受 Generation Options 控制的内容全部打出来，并用 swift-semantic-string 的
+`VisibilityRegion` 标上它在什么选项下可见（ObjC 的六个 strip 与四个注释开关，Swift 的偏移 / 地址 / 布局注释、
+stripped symbolic item、opaque 类型约束、按名字推断的 `@objc override`）。冻结后分离成「文本 + 区域表」存进条目。
+搜索请求带上内容区当前的 Generation Options，引擎按它把每个条目投影成「内容区会显示的文本」再匹配，所以搜到的
+都看得见，行文本与内容区逐字节相同；切换这些选项**不重建**语料。只有 transformer 仍要重建：它改写的文字含用户
+输入，无法预先打全（触发源 4，§4），store 记录构建时的 transformer 指纹，远程场景下配置随请求过线。
+`memberSortOrder` 是重排，区域表达不了，语料固定按分类排序，只影响同一类型内结果的先后与行号（行号不显示，
+定位先按整行文本）。三处上游改动各有提案：swift-semantic-string `docs/VisibilityRegions.md`、MachOObjCSection 提案 0011 与
+MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 
-**旁路打印路径**（Swift / ObjC 各一）：用 canonical 选项打印 → `frozen()` → 入 store。**不写
+**旁路打印路径**（Swift / ObjC 各一）：用标记模式打印 → 冻结并分离区域 → 入 store。**不写
 `RuntimeSwiftSection.interfaceByObject`、不动 `lastTransformerConfiguration`**，不污染显示缓存。ObjC 侧本就无缓存，
-只需选项旁路；Swift 侧要显式绕开 `updateConfiguration` 的驱逐逻辑。逐对象响应 `Task.checkCancellation`，进度按
-built / total 上报。
+只需走 builder 的标记入口；Swift 侧用独立的语料 printer（标记模式 + 用户 transformer + 注册 opaque 类型解析器），
+显式绕开 `updateConfiguration` 的驱逐逻辑。逐对象响应 `Task.checkCancellation`，进度按 built / total 上报。
 
 ### 2. 引擎请求（全部经 `registerSharedHandlers` 注册，XPC / TCP / proxy 链自动透传）
 
 | 请求 | 类型 | 进度 | 响应 |
 |------|------|------|------|
 | `BuildInterfaceCorpusRequest { imagePath, transformerConfiguration }` | progress | `CorpusBuildProgress { built, total }` | `CorpusBuildSummary { objectCount, skippedCount, byteCount }` |
-| `SearchInterfacesRequest { query, options, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
-| `SearchMembersRequest { query, kinds, isCaseSensitive, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
+| `SearchInterfacesRequest { query, options, generationOptions, resultLimit }` | progress | `[GlobalSearchMatch]`（按镜像粒度增量推送） | `GlobalSearchSummary { totalMatchCount, scannedImageCount, isTruncated, unbuiltIndexedImagePaths }` |
+| `SearchMembersRequest { query, kinds, isCaseSensitive, generationOptions, resultLimit }` | progress | `[RuntimeMemberMatch]`（按镜像粒度） | 同上形态的 summary |
 | `TypeRelationshipsRequest { query, isCaseSensitive, relationship: ancestors / descendants / conformers }` | 普通 | — | `[RuntimeRelationshipTree]` |
 | `InterfaceCorpusCoverageRequest` | 普通 | — | `[imagePath: BuildState]`，覆盖率 UI 用 |
 
@@ -179,7 +187,7 @@ built / total 上报。
   同时把 `PendingHighlight { query, lineNumber, lineText, matchRangeInLine }` 写进 `DocumentState` 的一次性握手字段，
   内容区渲染完成后按优先级定位、滚动、闪烁高亮：
   1. 整行匹配：找与 `lineText` 完全相等的行，多行相等取行号最接近 `lineNumber` 的，行内套 `matchRangeInLine`；
-  2. query 降级：整行 miss（显示 strip 选项与 canonical 不同）时按同规则找 `query`，取行号最接近的一处；
+  2. query 降级：整行 miss（搜索之后又改了显示选项，或成员排序与语料不同）时按同规则找 `query`，取行号最接近的一处；
   3. 完全 miss：只跳到对象，find bar 预填 query，提示「命中内容受当前 Generation Options 影响未显示」。
   `ContentTextViewModel` 加一个 `highlightRequest` 输出。NSTextView 路径：`scrollRangeToVisible` +
   `showFindIndicator(for:)`。SourceEditor 路径：实现桥的 `scrollToCharacterIndex(_:)`（今天是 TODO）并加高亮——
@@ -291,6 +299,22 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 `RuntimeBackgroundIndexingManagerTests.everySubscriberReceivesEveryEvent` / `subscriberArrivingMidBatchFirstReceivesThatBatch`。
 排查经过见 [ResolvedIssues/2026-09-29-find-corpus-never-built-indexing-events-split](../ResolvedIssues/2026-09-29-find-corpus-never-built-indexing-events-split.md)。
 
+**用户实测搜到了被 strip 的内容（2026-09-29）**：语料固定按 `.mcp`（strip 全关）打印，成员表直接列出 ObjC metadata 的
+全部 ivar 与方法，所以内容区隐藏掉的合成 ivar、合成 getter / setter 照样能搜到。回归测试：
+
+- `FindGenerationOptionsTests.searchesFollowTheGenerationOptions`（App 层，先写、先确认变红）：以 `NSURLQueryItem`
+  为锚，测试专用的 `appDefaults` 打开合成 ivar 与合成方法两个 strip 开关后，文本搜 `_value`、成员搜 `value` 都不应命中
+  被 strip 的 ivar 与 getter，属性本身仍能命中，每条文本结果的行都是内容区显示的行；关掉开关后不重建语料就能搜到。
+  修复前 14 处失败——被 strip 的 ivar 被文本搜到、ivar 与 getter 被成员搜到、11 条结果的行带着内容区没显示的注释；
+  修复后通过。
+- `RuntimeInterfaceCorpusVisibilityTests`（Core 层）：libobjc 与 Foundation 的全部 ObjC / C 条目和四分之一的 Swift
+  条目，在默认、全部显示、strip 与细节全开（用户的设置）、混合四组选项下，「语料条目按选项投影」与「引擎按同一组
+  选项给内容区打印的 interface」完全相等（文本、span、identifier）。四组选项都按分类排序 Swift 成员，因为语料如此。
+- 上游各自的对照测试：swift-semantic-string `VisibilityRegionTests`、MachOObjCSection `ObjCMarkedInterfaceTests`、
+  MachOSwiftSection `VisibilityRegionProjectionTests`，见各自的设计记录与提案。
+
+`FindSession` 在 Generation Options 变化时重跑正在显示的文本 / 成员搜索，结果列表不会停在旧选项下。
+
 ### 6. 交付顺序
 
 1. PR-0：Frozen 存储边界（§0）。
@@ -329,3 +353,11 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 | 2026-09-29 | App 侧只做到编译通过与包内测试，交互式 UI 验证留给用户 | 未获授权启动 App 做交互验证；侧栏 Find 分页、⇧⌘F、两种编辑器的行定位与 callout、跨镜像跳转都没有在真实窗口里点过。 |
 | 2026-09-29 | Accepted → In Progress | 三个 PR 的代码与提案已按 PR-0 补丁 / PR-1（Core）/ PR-2（App）/ 提案 分四个提交落在 `feature/find-navigator`，未推送、未合入 `next`；编号与 Implemented 留到落地那一批。 |
 | 2026-09-29 | 后台索引事件改为广播：`RuntimeBackgroundIndexingManager.events` 每次访问是一条独立订阅，新订阅者先收到进行中批次的快照；`FindCorpusCoordinator` 先订阅再补建已索引镜像 | 用户实测：5 个镜像索引完成后搜 `view`，得到「0 results in 0 types · 5 images not yet searchable」。`events` 原本是交给每个调用者的同一条 `AsyncStream`，多个读者时每个元素只交给一个；触发源 1 让 Find 协调器成了每个文档的第二个读者，和索引协调器轮流瓜分事件，Find 一个 `taskFinished` 都没拿到。另一个方案是只让索引协调器读、再转给 Find，被否决：它修不了多窗口共用一个引擎时同样的瓜分（`main` 上就有），还会把两个按设计互相独立的协调器绑在一起。 |
+| 2026-09-29 | 推翻「canonical 选项」：语料改为标记模式打印一次全量、按可见性区域在搜索时投影；只有 transformer 触发重建 | 用户：「目前能搜索到被printer strip的内容，比如objc的ivar，合成的getter/setter」。先提出的「语料跟随显示选项、改开关就重建」被否：「我不想更改options就重新生成语料，语料要为所有可能出现的内容进行索引，但是只输出匹配当前options的内容」。继而提出的「每个选项各打一遍再 diff」也被否：「目前打印2次的方法可能会有性能问题」，且 ObjC 组合 strip 把一组成员删空时容器的标题与空行 diff 叠加还原不出来。按用户要求交给另一个会话独立设计后比较，两边都收敛到「打印器在输出时标出归属」，取对方的整体结构与本方核实的两点（`infersObjCOverridesFromSelectorNames` 是替换而非超集、区域表不进 Frozen 的存储与编码格式）。实现时把标记放在原子的 `identifier` 上而不插入标记原子，打印文本逐字节不变。用户：「可以改，上游都是我自己的库，写提案直接开工吧」。 |
+| 2026-09-29 | `synthesizeOpaqueType` 不重建 | 用户：「synthesizeOpaqueType可以不重建吧，它输出的结果是固定的，只是要改的地方是返回值」。核实：关掉时 `printOpaqueReturnType` 只写 `some`，打开时再写 ` <约束>`，是纯删减。 |
+| 2026-09-29 | `memberSortOrder` 不处理 | 它是重排，区域表达不了；结果列表不显示行号，内容区定位先按整行文本，只影响同一类型内结果的先后。 |
+| 2026-09-29 | 实现：标记写在原子的 `identifier` 上，不插入成对的标记原子；装饰的显隐由容器传递 | 标记原子会穿过所有容器、干扰「看末原子」一类判断（如 `DeclarationBlock` 决定是否补换行），而改写 `identifier` 让标记模式的文本与「全部显示」逐字节相同。投影起初靠「删掉因删除而变空的行」还原容器排版，随机测试很快找到反例（整组被删时组间空行、多行区域），改为让 swift-semantic-string 的容器把成员的条件带到自己打的换行、分隔符与前后缀上，投影只删区域。详见 swift-semantic-string `docs/VisibilityRegions.md`。 |
+| 2026-09-29 | `FindSession` 在 Generation Options 变化时重跑当前的文本 / 成员搜索 | 搜索结果是按运行时的选项投影的；不重跑的话，改了选项后列表仍是旧选项下的结果，正是这次要消除的「看到的与搜到的不一致」。关系搜索不依赖这些选项，不重跑。 |
+| 2026-09-29 | 三个上游未发版期间，RuntimeViewer 用 SwiftPM edit 模式编进它们的 `feature/visibility-regions` | `.worktrees/` 下的依赖链接被其它会话共用，不能改；edit 模式的状态只落在自己的 scratch。发版后按分支规则抬 `exact:` pin，与抬 pin 同批合入。 |
+| 2026-09-30 | 全量回归（三个上游经 edit 模式编入） | RuntimeViewerCore 349 个测试 3 处失败，与改动前那次全量回归逐条相同：`RuntimeMemberDeclarationLocatorTests` 的 ObjC 夹具 2 处（选择子片段仍带冒号，本分支原有），`RelationshipsEquivalenceSnapshotTests` 的 Swift 快照 1 处（`__C.Decimal.FormatStyle` 如今读作 `__C.NSDecimal.FormatStyle`，差异与改动前逐字相同）。RuntimeViewerPackages 全部通过。新增的 `RuntimeInterfaceCorpusVisibilityTests` 与 `FindGenerationOptionsTests` 均通过。 |
+| 2026-09-30 | 不等上游发版：三个上游的 `feature/visibility-regions` 合入各自的 `next`，本分支合入 RuntimeViewer 的 `next`；状态仍为 In Progress | 用户：「合并吧，MachOKit那边完工了」。MachOKit 的重构已完成并发布 0.53.101，MachOObjCSection 与 MachOSwiftSection 的 `next` 随之稳定，两条 feature 分支 rebase 上去无冲突，各自在本地依赖下重跑通过后合入（swift-semantic-string 的 `next` 未动，直接合入）。此后 RuntimeViewer 以 `USING_LOCAL_DEPENDENCIES=1` 构建即可，edit 模式不再需要。更正上一行：本包的远程依赖跟随各上游的 `next` 分支，不是 `exact:` pin，上游 `next` 推送后远程解析也能拿到；但 MachOObjCSection 与 MachOSwiftSection 的 `next` 要求 swift-semantic-string `from: "0.3.0"`，那个版本没有 `VisibilityRegion`，它们自己的远程构建要等 swift-semantic-string 发版并抬下限。用户仍在实测中发现问题，交互验证未完，所以状态不改。 |
