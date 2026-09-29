@@ -260,7 +260,7 @@ struct ContentTextPipelineTests {
     @Test("renderAttributedString matches a direct builder invocation and returns an immutable string")
     func renderMatchesDirectBuilderInvocation() {
         let fixtureRuntimeObject = makeRuntimeObject()
-        let interfaceString: SemanticString = "class ContentPipelineFixture {}"
+        let interfaceString = ("class ContentPipelineFixture {}" as SemanticString).frozen()
         let theme = ResolvedTheme.fallback
 
         let rendered = ContentTextViewModel.renderAttributedString(

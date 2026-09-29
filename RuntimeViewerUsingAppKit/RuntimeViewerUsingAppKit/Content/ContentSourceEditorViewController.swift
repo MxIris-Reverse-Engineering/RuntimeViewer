@@ -182,13 +182,13 @@ final class ContentSourceEditorViewController: BaseViewController<ContentTextVie
     /// Offsets are accumulated in UTF-16 because that is what the editor, `NSRange` and
     /// `NSAttributedString` all index by; counting `Character`s would drift on anything
     /// outside the basic plane.
-    private static func semanticNodeTypes(of semanticString: SemanticString) -> (ranges: [NSValue], nodeTypeNames: [String]) {
+    private static func semanticNodeTypes(of semanticString: FrozenSemanticString) -> (ranges: [NSValue], nodeTypeNames: [String]) {
         var ranges: [NSValue] = []
         var nodeTypeNames: [String] = []
         var location = 0
 
-        semanticString.enumerate { text, semanticType in
-            let length = text.utf16.count
+        semanticString.enumerateSpans { spanText, semanticType, _ in
+            let length = spanText.utf16.count
             defer { location += length }
             guard length > 0 else { return }
             ranges.append(NSValue(range: NSRange(location: location, length: length)))

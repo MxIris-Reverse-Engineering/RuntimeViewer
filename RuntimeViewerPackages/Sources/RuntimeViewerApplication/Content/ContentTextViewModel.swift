@@ -55,7 +55,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     public struct RenderedInterface {
         /// Semantic runs from the generator: what each identifier actually *is*, which no
         /// amount of scanning the rendered text can recover.
-        public let semanticString: SemanticString
+        public let semanticString: FrozenSemanticString
 
         /// The same content with the theme's colors and fonts applied, plus the `.link`
         /// attributes that carry jump targets.
@@ -149,7 +149,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
                 appDefaults.$options.distinctUntilChanged(),
                 transformerObservable.distinctUntilChanged()
             )
-            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer -> Observable<(interfaceString: SemanticString, runtimeObject: RuntimeObject)?> in
+            .flatMapLatest { [_commonLoading = self._commonLoading] runtimeObject, options, transformer -> Observable<(interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?> in
                 var mergedOptions = options
                 mergedOptions.transformer = transformer
                 return Observable.async {
@@ -228,7 +228,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// `nonisolated` for the same reason as ``renderAttributedString(for:theme:)``, which it
     /// delegates the theming pass to: this runs on the render half's background scheduler.
     nonisolated static func renderInterface(
-        for interfacePair: (interfaceString: SemanticString, runtimeObject: RuntimeObject)?,
+        for interfacePair: (interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?,
         theme: ThemeProfile
     ) -> RenderedInterface? {
         guard let interfacePair,
@@ -247,7 +247,7 @@ public final class ContentTextViewModel: ViewModel<ContentRoute> {
     /// init-time-precomputed read-only tables, and the builder allocates
     /// only immutable font/color/string values, returning an immutable copy.
     nonisolated static func renderAttributedString(
-        for interfacePair: (interfaceString: SemanticString, runtimeObject: RuntimeObject)?,
+        for interfacePair: (interfaceString: FrozenSemanticString, runtimeObject: RuntimeObject)?,
         theme: ThemeProfile
     ) -> NSAttributedString? {
         guard let interfacePair else { return nil }
