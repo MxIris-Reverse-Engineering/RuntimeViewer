@@ -14,23 +14,23 @@ class TabViewController: NSLayerBackedViewController {
     /// colour or material reproduces. The opaque backdrop a push / pop needs is inserted under the
     /// page for the length of the transition by `NavigationTransitionBackdropController` and removed
     /// afterwards. Background: `Documentations/ResolvedIssues/2026-09-18-sidebar-transition-backdrop-glass-replica.md`.
-    private let contentView: NSView = {
-        if #available(macOS 26.0, *) {
-            NSLayerBackedView()
-        } else {
-            NSVisualEffectView()
-        }
-    }()
+    private let contentView: NSView = if #available(macOS 26.0, *) {
+        NSLayerBackedView()
+    } else {
+        NSVisualEffectView()
+    }
 
     private let segmentedControl: any SegmentedControl = {
         if #available(macOS 26.0, *) {
-            NSSegmentedControl().then {
-                if #available(macOS 27.0, *) {
-                    $0.role = .tabs
-                }
+            let segmentedControl = NSSegmentedControl()
+            #if compiler(>=6.4)
+            if #available(macOS 27.0, *) {
+                segmentedControl.role = .tabs
             }
+            #endif
+            return segmentedControl
         } else {
-            AreaSegmentedControl()
+            return AreaSegmentedControl()
         }
     }()
 
