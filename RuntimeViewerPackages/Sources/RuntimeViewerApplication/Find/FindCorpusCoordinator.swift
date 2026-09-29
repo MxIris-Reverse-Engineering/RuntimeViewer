@@ -164,6 +164,12 @@ public final class FindCorpusCoordinator {
         let engine = engine
         eventPumpTask = Task { [weak self] in
             let stream = await engine.backgroundIndexingManager.events
+            // Subscribed before asking, so no image slips through in between:
+            // one that finishes from here on arrives below as an event, one
+            // that finished earlier is in the engine's indexed list.
+            if let self, self.engine === engine {
+                self.requestBuildOfIndexedImages()
+            }
             for await event in stream {
                 guard let self, self.engine === engine else { return }
                 if case .taskFinished(_, let path, let result) = event, case .completed = result {
@@ -182,7 +188,6 @@ public final class FindCorpusCoordinator {
         #if canImport(RuntimeViewerSettings)
         applyResidentByteLimit()
         #endif
-        requestBuildOfIndexedImages()
     }
 
     private func stopPumps() {

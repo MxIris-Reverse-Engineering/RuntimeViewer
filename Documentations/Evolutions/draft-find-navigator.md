@@ -158,7 +158,9 @@ built / total 上报。
 
 - **`GlobalSearchCorpusCoordinator`**（`RuntimeViewerApplication`，`@MainActor`，与
   `RuntimeBackgroundIndexingCoordinator` 平级，同样订阅 `documentState.$runtimeEngine` 换引擎重接）。触发源：
-  1. `backgroundIndexingManager.events` 的 `.taskFinished(result: .completed)` → 该镜像排队；
+  1. `backgroundIndexingManager.events` 的 `.taskFinished(result: .completed)` → 该镜像排队。`events` 每次访问都是
+     一条独立的订阅，与索引协调器互不抢事件；订阅到手后先把已索引的镜像补队，堵住订阅之前刚好索引完的那段空隙
+     （决策日志 2026-09-29「后台索引事件改为广播」）；
   2. `imageDidLoadPublisher`（用户显式点开镜像）→ 排队并置顶；
   3. Settings 开关 off → on → 对所有已索引镜像补队；
   4. `settings.transformer` 变更（约 2 s debounce）→ 全量驱逐重建。
@@ -283,6 +285,12 @@ Xcode 顶部的导航器选择条（`IDETwoLevelChooserView`，28pt）对应我�
 整 App 构建通过（Xcode 27.0，`RUNTIME_VIEWER_ALLOW_MISMATCHED_CATALYST_HELPER=YES`）。**§5「App」的三项交互验证未做**：
 NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳转，都要在真实 App 里点一遍，留给用户。
 
+**用户实测发现语料库从未构建（2026-09-29）**：上面落地的 `FindCorpusCoordinatorTests` 只有三条，都不经过后台索引的事件，
+而 §5 要求的是四个触发源。补上的回归测试：`FindCorpusCoordinatorTests.backgroundIndexedImageBecomesSearchable`（两个协调器
+同时在场，后台索引一个镜像后可被搜到，修复前 4/4 红、修复后 5/5 绿），以及 Core 的
+`RuntimeBackgroundIndexingManagerTests.everySubscriberReceivesEveryEvent` / `subscriberArrivingMidBatchFirstReceivesThatBatch`。
+排查经过见 [ResolvedIssues/2026-09-29-find-corpus-never-built-indexing-events-split](../ResolvedIssues/2026-09-29-find-corpus-never-built-indexing-events-split.md)。
+
 ### 6. 交付顺序
 
 1. PR-0：Frozen 存储边界（§0）。
@@ -320,3 +328,4 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 | 2026-09-29 | `RelationshipsEquivalenceSnapshotTests` 的两处不一致（`__C.Decimal` → `__C.NSDecimal`、NSObject 少一个 `_DefaultScopeRegistration` 桥接子类）**不是本提案的回归** | 在一个临时的干净 `next` 检出（`92bff04a`）上用同样的本地依赖跑同一套件，两条不一致一字不差地重现；是本地 MachOSwiftSection checkout（`5552b074`）相对快照基线的差异，快照的更新归上游 pin 变更那一批，本提案不动它。 |
 | 2026-09-29 | App 侧只做到编译通过与包内测试，交互式 UI 验证留给用户 | 未获授权启动 App 做交互验证；侧栏 Find 分页、⇧⌘F、两种编辑器的行定位与 callout、跨镜像跳转都没有在真实窗口里点过。 |
 | 2026-09-29 | Accepted → In Progress | 三个 PR 的代码与提案已按 PR-0 补丁 / PR-1（Core）/ PR-2（App）/ 提案 分四个提交落在 `feature/find-navigator`，未推送、未合入 `next`；编号与 Implemented 留到落地那一批。 |
+| 2026-09-29 | 后台索引事件改为广播：`RuntimeBackgroundIndexingManager.events` 每次访问是一条独立订阅，新订阅者先收到进行中批次的快照；`FindCorpusCoordinator` 先订阅再补建已索引镜像 | 用户实测：5 个镜像索引完成后搜 `view`，得到「0 results in 0 types · 5 images not yet searchable」。`events` 原本是交给每个调用者的同一条 `AsyncStream`，多个读者时每个元素只交给一个；触发源 1 让 Find 协调器成了每个文档的第二个读者，和索引协调器轮流瓜分事件，Find 一个 `taskFinished` 都没拿到。另一个方案是只让索引协调器读、再转给 Find，被否决：它修不了多窗口共用一个引擎时同样的瓜分（`main` 上就有），还会把两个按设计互相独立的协调器绑在一起。 |

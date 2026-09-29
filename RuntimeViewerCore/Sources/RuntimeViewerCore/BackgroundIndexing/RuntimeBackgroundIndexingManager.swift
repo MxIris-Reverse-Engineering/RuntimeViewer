@@ -4,6 +4,10 @@ import DequeModule
 public actor RuntimeBackgroundIndexingManager {
     struct BatchState {
         var batch: RuntimeIndexingBatch
+        /// Where the batch stands among the others by start time, so a late
+        /// subscriber of `events` hears about the active ones in the order
+        /// they started.
+        var startOrder: UInt64
         var drivingTask: Task<Void, Never>?
         var priorityBoostPaths: Set<String> = []
     }
@@ -19,10 +23,15 @@ public actor RuntimeBackgroundIndexingManager {
     /// would form a retain cycle that leaks engine + manager + section caches
     /// on every source switch.
     private unowned let engine: any RuntimeBackgroundIndexingEngineRepresenting
-    private let stream: AsyncStream<RuntimeIndexingEvent>
-    private let continuation: AsyncStream<RuntimeIndexingEvent>.Continuation
+
+    /// One continuation per subscriber of `events`, by subscription.
+    private var eventSubscribers: [UInt64: AsyncStream<RuntimeIndexingEvent>.Continuation] = [:]
+
+    private var nextEventSubscriberIdentifier: UInt64 = 0
 
     private var activeBatches: [RuntimeIndexingBatchID: BatchState] = [:]
+
+    private var nextBatchStartOrder: UInt64 = 0
 
     /// How many background loads may run at once, counted across every batch.
     ///
@@ -47,14 +56,55 @@ public actor RuntimeBackgroundIndexingManager {
 
     private var nextBackgroundLoadSlotWaiterIdentifier: UInt64 = 0
 
-    public nonisolated var events: AsyncStream<RuntimeIndexingEvent> { stream }
+    /// The indexing events from now on, for one subscriber.
+    ///
+    /// Every access subscribes anew and returns a stream of its own, and every
+    /// subscriber receives every event. The stream opens with a
+    /// `.batchStarted` for each batch already under way, carrying its items as
+    /// they stand, so a subscriber that arrives mid-batch still sees that batch
+    /// through. It finishes when the manager goes away; cancelling the task
+    /// that reads it ends the subscription.
+    ///
+    /// This used to be one stream handed to every caller. An `AsyncStream`
+    /// read by several tasks gives each element to exactly one of them, so a
+    /// second listener split the events with the first: next to the
+    /// document's indexing coordinator, the Find corpus coordinator heard no
+    /// image finish and built no corpus, while the indexing coordinator missed
+    /// every "batch finished" and kept finished batches under Active.
+    public var events: AsyncStream<RuntimeIndexingEvent> {
+        let (stream, continuation) = AsyncStream<RuntimeIndexingEvent>.makeStream()
+        let identifier = nextEventSubscriberIdentifier
+        nextEventSubscriberIdentifier &+= 1
+        continuation.onTermination = { [weak self] _ in
+            guard let self else { return }
+            Task { await self.removeEventSubscriber(identifier) }
+        }
+        for state in activeBatches.values.sorted(by: { $0.startOrder < $1.startOrder }) {
+            continuation.yield(.batchStarted(state.batch))
+        }
+        eventSubscribers[identifier] = continuation
+        return stream
+    }
 
     init(engine: any RuntimeBackgroundIndexingEngineRepresenting) {
         self.engine = engine
-        (self.stream, self.continuation) = AsyncStream<RuntimeIndexingEvent>.makeStream()
     }
 
-    deinit { continuation.finish() }
+    deinit {
+        for continuation in eventSubscribers.values {
+            continuation.finish()
+        }
+    }
+
+    private func removeEventSubscriber(_ identifier: UInt64) {
+        eventSubscribers[identifier] = nil
+    }
+
+    private func emit(_ event: RuntimeIndexingEvent) {
+        for continuation in eventSubscribers.values {
+            continuation.yield(event)
+        }
+    }
 
     public func currentBatches() -> [RuntimeIndexingBatch] {
         activeBatches.values.map(\.batch)
@@ -112,7 +162,7 @@ public actor RuntimeBackgroundIndexingManager {
                 state.batch.items[itemIndex].hasPriorityBoost = true
                 state.priorityBoostPaths.insert(imagePath)
                 activeBatches[id] = state
-                continuation.yield(.taskPrioritized(batchID: id, path: imagePath))
+                emit(.taskPrioritized(batchID: id, path: imagePath))
             }
         }
     }
@@ -172,9 +222,10 @@ public actor RuntimeBackgroundIndexingManager {
             reason: reason, items: items,
             isCancelled: false, isFinished: false
         )
-        let state = BatchState(batch: batch)
+        let state = BatchState(batch: batch, startOrder: nextBatchStartOrder)
+        nextBatchStartOrder &+= 1
         activeBatches[id] = state
-        continuation.yield(.batchStarted(batch))
+        emit(.batchStarted(batch))
 
         // `.utility` so the kernel's QoS-aware scheduler lets the main thread
         // preempt indexing work during user interaction. Without an explicit
@@ -399,21 +450,21 @@ public actor RuntimeBackgroundIndexingManager {
 
     private func runSingleIndex(batchID: RuntimeIndexingBatchID, path: String) async {
         updateItemState(batchID: batchID, path: path, state: .running)
-        continuation.yield(.taskStarted(batchID: batchID, path: path))
+        emit(.taskStarted(batchID: batchID, path: path))
         do {
             try Task.checkCancellation()
             try await engine.loadImageForBackgroundIndexing(at: path)
             updateItemState(batchID: batchID, path: path, state: .completed)
-            continuation.yield(.taskFinished(batchID: batchID, path: path,
-                                             result: .completed))
+            emit(.taskFinished(batchID: batchID, path: path,
+                               result: .completed))
         } catch is CancellationError {
             updateItemState(batchID: batchID, path: path, state: .cancelled)
         } catch {
             let state: RuntimeIndexingTaskState =
                 .failed(message: error.localizedDescription)
             updateItemState(batchID: batchID, path: path, state: state)
-            continuation.yield(.taskFinished(batchID: batchID, path: path,
-                                             result: state))
+            emit(.taskFinished(batchID: batchID, path: path,
+                               result: state))
         }
     }
 
@@ -442,9 +493,9 @@ public actor RuntimeBackgroundIndexingManager {
         }
         activeBatches[id] = state
         if effectiveCancel {
-            continuation.yield(.batchCancelled(state.batch))
+            emit(.batchCancelled(state.batch))
         } else {
-            continuation.yield(.batchFinished(state.batch))
+            emit(.batchFinished(state.batch))
         }
         activeBatches[id] = nil
     }

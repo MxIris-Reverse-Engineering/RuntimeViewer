@@ -36,7 +36,7 @@ import Testing
                        .init(isIndexed: true))   // short-circuit immediately
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
-        let events = manager.events
+        let events = await manager.events
         let consumer = Task {
             var seen: [String] = []
             for await event in events {
@@ -55,6 +55,80 @@ import Testing
                                      reason: .manual)
         let finalSeen = await consumer.value
         #expect(finalSeen == ["started", "finished"])
+    }
+
+    /// Every subscriber hears every event.
+    ///
+    /// `events` used to hand the same `AsyncStream` to every caller, and an
+    /// `AsyncStream` read by several tasks gives each element to exactly one
+    /// of them. Every document has an indexing coordinator listening, and the
+    /// Find corpus coordinator became a second listener: the four events of a
+    /// one-image batch alternated between the two, so the corpus coordinator
+    /// heard each "task started" and no "task finished" and never built a
+    /// corpus, while the indexing coordinator never heard "batch finished" and
+    /// kept every finished batch under Active.
+    @Test func everySubscriberReceivesEveryEvent() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        engine.program(path: "/A", .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        let firstRecorder = EventRecorder()
+        let secondRecorder = EventRecorder()
+        let firstRecording = firstRecorder.startRecording(await manager.events)
+        let secondRecording = secondRecorder.startRecording(await manager.events)
+        defer {
+            firstRecording.cancel()
+            secondRecording.cancel()
+        }
+
+        _ = await manager.startBatch(rootImagePath: "/A", depth: 0,
+                                     maxConcurrency: 1, reason: .manual)
+
+        let expectedEvents = [
+            "batchStarted /A [/A pending]",
+            "taskStarted /A",
+            "taskFinished /A completed",
+            "batchFinished /A [/A completed]",
+        ]
+        _ = await waitUntil {
+            firstRecorder.recordedEvents.count >= expectedEvents.count
+                && secondRecorder.recordedEvents.count >= expectedEvents.count
+        }
+        #expect(firstRecorder.recordedEvents == expectedEvents)
+        #expect(secondRecorder.recordedEvents == expectedEvents)
+    }
+
+    /// A subscriber that arrives while a batch is under way hears about that
+    /// batch first, as it stands, and then sees it through.
+    ///
+    /// Each subscriber's stream carries what happens after it subscribed, so
+    /// without this a popover that starts listening late would never learn of
+    /// a batch that had already started, and would drop that batch's
+    /// remaining events as belonging to nothing it knows.
+    @Test func subscriberArrivingMidBatchFirstReceivesThatBatch() async {
+        let engine = keep(MockBackgroundIndexingEngine())
+        engine.program(path: "/A", .init())
+        let manager = RuntimeBackgroundIndexingManager(engine: engine)
+
+        // A foreground load holds the batch back before its first load.
+        await manager.foregroundLoadDidBegin()
+        _ = await manager.startBatch(rootImagePath: "/A", depth: 0,
+                                     maxConcurrency: 1, reason: .manual)
+
+        let recorder = EventRecorder()
+        let recording = recorder.startRecording(await manager.events)
+        defer { recording.cancel() }
+
+        await manager.foregroundLoadDidEnd()
+
+        let expectedEvents = [
+            "batchStarted /A [/A pending]",
+            "taskStarted /A",
+            "taskFinished /A completed",
+            "batchFinished /A [/A completed]",
+        ]
+        _ = await waitUntil { recorder.recordedEvents.count >= expectedEvents.count }
+        #expect(recorder.recordedEvents == expectedEvents)
     }
 
     @Test func expandEmptyWhenRootAlreadyIndexed() async {
@@ -218,7 +292,7 @@ import Testing
         let wrapped = keep(InstrumentedEngine(base: engine, counter: counter))
         let manager = RuntimeBackgroundIndexingManager(engine: wrapped)
 
-        let events = manager.events
+        let events = await manager.events
         let consumer = Task {
             var finishedBatchCount = 0
             for await event in events {
@@ -249,7 +323,7 @@ import Testing
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
         await manager.foregroundLoadDidBegin()
-        let events = manager.events
+        let events = await manager.events
         let consumer = Task { () -> RuntimeIndexingBatch? in
             for await event in events {
                 if case .batchFinished(let batch) = event { return batch }
@@ -292,7 +366,7 @@ import Testing
         for dep in deps { engine.program(path: dep.installName, .init()) }
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
-        let events = manager.events
+        let events = await manager.events
         let consumer = Task { () -> RuntimeIndexingBatch in
             for await event in events {
                 if case .batchCancelled(let b) = event { return b }
@@ -339,7 +413,7 @@ import Testing
         for dep in deps { engine.program(path: dep, .init()) }
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
-        let events = manager.events
+        let events = await manager.events
         let consumer = Task { () -> [String] in
             var boosted: [String] = []
             for await event in events {
@@ -414,7 +488,7 @@ import Testing
                        .init())
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
-        let events = manager.events
+        let events = await manager.events
         let heuristicId = await manager.startBatch(
             rootImagePath: "/App", depth: 0,
             maxConcurrency: 1, reason: .appLaunch)
@@ -465,7 +539,7 @@ import Testing
                        .init(isIndexed: true))   // short-circuit immediately
         let manager = RuntimeBackgroundIndexingManager(engine: engine)
 
-        let events = manager.events
+        let events = await manager.events
         let consumer = Task { () -> [RuntimeIndexingBatchReason] in
             var reasons: [RuntimeIndexingBatchReason] = []
             for await event in events {
@@ -519,7 +593,7 @@ import Testing
                              root: String, depth: Int,
                              maxConcurrency: Int) async -> RuntimeIndexingBatch
     {
-        let events = manager.events
+        let events = await manager.events
         let consumer = Task { () -> RuntimeIndexingBatch in
             for await event in events {
                 switch event {
@@ -533,6 +607,65 @@ import Testing
                                      maxConcurrency: maxConcurrency,
                                      reason: .manual)
         return await consumer.value
+    }
+
+    /// Polls `condition` until it holds or `timeout` passes.
+    @discardableResult
+    private func waitUntil(timeout: Duration = .seconds(2),
+                           _ condition: () -> Bool) async -> Bool
+    {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return condition()
+    }
+
+    /// What one subscriber of `events` receives, one short line per event,
+    /// batch events with their items' states.
+    private final class EventRecorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var events: [String] = []
+
+        var recordedEvents: [String] {
+            lock.lock(); defer { lock.unlock() }
+            return events
+        }
+
+        func startRecording(_ stream: AsyncStream<RuntimeIndexingEvent>) -> Task<Void, Never> {
+            Task {
+                for await event in stream {
+                    record(Self.line(for: event))
+                }
+            }
+        }
+
+        private func record(_ line: String) {
+            lock.lock(); defer { lock.unlock() }
+            events.append(line)
+        }
+
+        private static func line(for event: RuntimeIndexingEvent) -> String {
+            switch event {
+            case .batchStarted(let batch):
+                "batchStarted \(batch.rootImagePath) \(itemStates(of: batch))"
+            case .taskStarted(_, let path):
+                "taskStarted \(path)"
+            case .taskFinished(_, let path, let result):
+                "taskFinished \(path) \(result)"
+            case .taskPrioritized(_, let path):
+                "taskPrioritized \(path)"
+            case .batchFinished(let batch):
+                "batchFinished \(batch.rootImagePath) \(itemStates(of: batch))"
+            case .batchCancelled(let batch):
+                "batchCancelled \(batch.rootImagePath) \(itemStates(of: batch))"
+            }
+        }
+
+        private static func itemStates(of batch: RuntimeIndexingBatch) -> String {
+            "[" + batch.items.map { "\($0.id) \($0.state)" }.joined(separator: ", ") + "]"
+        }
     }
 
     // Concurrency counter and instrumented engine — tiny helpers local to tests.

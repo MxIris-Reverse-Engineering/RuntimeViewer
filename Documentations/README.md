@@ -96,6 +96,7 @@
 
 按时间倒序。
 
+- [Find 搜不到任何结果：后台索引的事件被两个读者瓜分](ResolvedIssues/2026-09-29-find-corpus-never-built-indexing-events-split.md)（2026-09-29）—— `RuntimeBackgroundIndexingManager.events` 把同一条 `AsyncStream` 交给每个调用者，而 `AsyncStream` 的每个元素只交给一个读者。Find 的语料库协调器成了每个文档的第二个读者，和索引协调器轮流瓜分事件：它一个「任务完成」都没拿到，一次建库都没请求，搜索恒为 0 结果、已索引镜像全报「not yet searchable」；索引协调器则收不到「批次结束」，弹窗把完成的批次一直挂在 ACTIVE 下。`events` 改为每个订阅者一条流、广播给全部订阅者，新订阅者先收到进行中批次的快照；这也修好了 `main` 上多窗口共用 My Mac 引擎时互相瓜分事件的老问题。
 - [App 图标里的头文件文字比原来暗淡](ResolvedIssues/2026-09-28-icon-code-listing-too-thin.md)（2026-09-28）—— 09-19 把位图前景拆成矢量图层时，生成脚本只按首行宽度匹配旧位图，选了 SF Mono Regular；等宽字体各字重一样宽，宽度选不出字重，按墨迹量比对应该是 Bold。代码层的深色填充又是灰蓝色而不是白色。两处都已改正；另记一个坑：矢量层删掉 dark 特化不等于保持原色，深色外观会把它染成背景的蓝色。
 
 - [发版归档：包丢了 x86_64，归档又变成了通用归档](ResolvedIssues/2026-09-27-release-archive-packages-lost-x86-64.md)（2026-09-27）—— v3.0.0-beta.5 三次 CI 都挂在 Catalyst 插件的 `Unable to resolve module dependency` 上。当初以为是构建顺序竞态，实际上是 Xcode 27 新的 package PIF builder 把每个包的 macOS 架构写死成 `arm64 arm64e arm64e.x1`，x86_64 没了；用不用新 builder 由各机器的 Xcode 默认值决定，所以开发机能过、runner 过不了。`ArchiveScript.sh` 改为显式关掉新 builder。之后又撞上内嵌 CLI 没设 `SKIP_INSTALL`、归档变成通用归档、Developer ID 导出失败；已补上设置，脚本也会在归档后立刻检查归档类型。

@@ -93,7 +93,7 @@ struct ForegroundLoadDuringBackgroundIndexingTests {
         let start = ContinuousClock.now
         let timeline = IndexingTimeline(start: start)
         let manager = await client.backgroundIndexingManager
-        let events = manager.events
+        let events = await manager.events
         let recorder = Task {
             for await event in events {
                 await timeline.record(event)
