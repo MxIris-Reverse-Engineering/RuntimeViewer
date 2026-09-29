@@ -104,8 +104,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Cocoanetics/JSONFoundation.git",
       "state" : {
-        "revision" : "622fac5cc9c2af05c660bb8c6c07e7e2d0d16fc3",
-        "version" : "3.1.0"
+        "revision" : "faa74a06aed31f7baa770de108ff02470c431b63",
+        "version" : "3.2.0"
       }
     },
     {
@@ -186,7 +186,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
         "branch" : "next",
-        "revision" : "1437925419647f2ebfccc19ab5d60c94bf5a7e3e"
+        "revision" : "8de6062a8586a2cf4c0850981bdeab9fed564f1f"
       }
     },
     {
@@ -541,15 +541,6 @@
       }
     },
     {
-      "identity" : "swift-issue-reporting",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-issue-reporting",
-      "state" : {
-        "revision" : "75b000cea2ca6d7527a57e1b9cc0bdf21a9abe9f",
-        "version" : "2.1.1"
-      }
-    },
-    {
       "identity" : "swift-literal-type-inference",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/p-x9/swift-literal-type-inference.git",
@@ -716,8 +707,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Cocoanetics/SwiftMCP",
       "state" : {
-        "revision" : "f933c207a4df8f2fbb593af48494b842906047a1",
-        "version" : "1.11.0"
+        "revision" : "55956f8d9b03c2255b6fefaa235592ffcf766ed8",
+        "version" : "1.12.0"
       }
     },
     {
@@ -754,6 +745,15 @@
       "state" : {
         "revision" : "1d35f8bf10b9cf0ab49736493d2d8b6c27fc63c0",
         "version" : "3.0.0-beta.1"
+      }
+    },
+    {
+      "identity" : "xctest-dynamic-overlay",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
+      "state" : {
+        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
+        "version" : "1.13.1"
       }
     },
     {
