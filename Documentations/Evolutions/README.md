@@ -49,6 +49,7 @@
 | [draft](draft-runtime-object-icon-tooltips.md) | 运行时对象列表的图标加 tooltip | In Progress | 侧栏、Inspector 与类型选择器共用的 cell 里，三个图标位都加 tooltip：主图标写出对象种类，粉 / 蓝 / 橙 `C` 角标与 `G` / `Sp` 写出各自含义。文案与图标同在 `RuntimeObjectIcon` 决定，第二图标的优先级只写一处。tooltip 走 UIFoundationAppleInternal 的 `customTooltipStyle`（`.default` 预设上圆角改为 8），启动时安装 `CustomToolTipManager`。 |
 | [draft](draft-local-runtime-xpc-service.md) | 本地运行时引擎搬进内嵌 XPC service | In Progress | 「My Mac」引擎今天在 App 进程里 `dlopen` 并索引用户选中的镜像，一个坏镜像就带走整个 App。搬进随 App 打包的普通 XPC service（无 Mach service、无 daemon）：引擎身份仍是 `.local`，新增「进程内 / XPC service」执行方式；SwiftyXPC 直连，复用共享命令表；service 崩溃后同一引擎对象自动重连（3 次退避后按需），镜像丢失、文档回到镜像列表根并发系统通知。iOS / 测试 / CLI 独立 host 继续进程内。 |
 | [draft](draft-font-size-menu-commands.md) | 字号调整从工具栏挪到 View 菜单 | In Progress | 工具栏上的两个字号按钮移除，改为 View 菜单里的 Increase Font Size（⌘+）、Decrease Font Size（⌘-）与新增的 Reset Font Size（⌘0），经 responder chain 送到 key 文档窗口的 `MainWindowController`；上下限 8–32 与 120 ms 节流不变，Reset 设回默认的 13。 |
+| [draft](draft-find-navigator.md) | Find navigator：查找文本、类型关系与成员 | In Progress | 仿 Xcode 的 Find navigator：文本模式在已索引镜像的全部 interface 正文里匹配（引擎侧 `RuntimeInterfaceCorpusStore` 语料，按 `feature/interface-corpus-probe` 的设计稿）；关系模式给出 Ancestor / Descendant / Conforming Types 的传递闭包；成员模式直接从 `ObjCClassInfo` / `TypeDefinition` 一族取 property、method、field、function、variable、subscript。点结果跳到类型并在内容区定位到行（NSTextView 与 SourceEditor 两条路径）。UI 照用户提供的 Xcode view hierarchy。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
