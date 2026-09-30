@@ -1,8 +1,8 @@
-# Draft - 后台索引给前台加载让路
+# 0027 - 后台索引给前台加载让路
 
 - **状态**: Implemented
 - **创建日期**: 2026-09-26
-- **最后更新**: 2026-09-26
+- **最后更新**: 2026-09-30
 - **所属愿景**: 无
 
 ## 摘要
@@ -113,3 +113,4 @@ Release 同样变慢，但轻得多：它做了泛型特化，Swift 运行时元
 | 2026-09-26 | 复现场景的断言阈值定为 1.5 倍，而不是 1.25 倍 | 修复后两次实测是 1.17 倍和 1.37 倍，1.25 倍会被环境波动打穿；修复前是 1.63–1.67 倍。1.5 倍能把两者分开，还留有余量。剩下的变慢是另外 4 个构建带来的，属于上一条选择的代价，不是缺陷 |
 | 2026-09-26 | 管理器测试里一个原本就有的崩溃不在本提案内处理，另行定夺 | 完整测试时崩过一次：`runSingleIndex` 读 `unowned engine`，但引擎已经释放。在改动前的 `next` 上把管理器测试重复 100 遍同样会崩；跳过 `prioritizeIsNoOpForUnknownPath` 后，改动前、改动后各重复 100 遍都不崩。这条测试启动批次后直接返回，批次比测试里保活的引擎活得久。c96f229b 引入 `unowned` 时认为「引擎释放会同步释放管理器」，漏了正在运行的批次任务会持有管理器 |
 | 2026-09-26 | Implemented：`feature/background-indexing-yields-to-foreground` 合入 `next` | 用户：「合并过来」。一个提交，未推送。验证：<br>· 修复前失败的 3 个测试转绿，新增的 3 个通过；<br>· RuntimeViewerCoreTests 共 315 个（跳过会崩的 `prioritizeIsNoOpForUnknownPath`），只有 Relationships 两份基线不一致，两处都在未改动的 `next` 上复现，与本改动无关、未动：Swift 那份是「ObjC 类与 Swift 类互标」提案记录过的 `__C.Decimal…` → `__C.NSDecimal…`；ObjC 那份是 Foundation 多了 `AttributeScopes._DefaultScopeRegistration`，`NSObject` 子类从 315 个变成 316 个；<br>· RuntimeViewerCommunicationTests 205 个全过；<br>· RuntimeViewerPackages 编译通过，App target 没有单独编。<br>配套文档：不另写实现说明或使用指南，设计理由在代码注释和本提案里；没有新术语 |
+| 2026-09-30 | 落地编号 0027 | 已是 Implemented、实现在 `next` 上，按落地编号规则取 `origin/next` 与 `origin/main` 的全局最大值 0025 往后排；三份同批，按实现日期排序。 |

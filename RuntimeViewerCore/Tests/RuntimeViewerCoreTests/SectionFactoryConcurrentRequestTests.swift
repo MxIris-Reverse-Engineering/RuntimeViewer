@@ -9,7 +9,7 @@ import Foundation
 /// an image right after launch, while an "always index" batch is building it,
 /// is the ordinary case. Building it a second time costs the whole build again
 /// and slows every other build in the process with it (the proposal
-/// draft-background-indexing-yields-to-foreground measured it). Evolution 0002
+/// background-indexing-yields-to-foreground measured it). Evolution 0002
 /// (background indexing) already required the factories to serialize per path.
 ///
 /// Foundation builds for long enough that two `async let` requests always

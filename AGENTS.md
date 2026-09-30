@@ -184,7 +184,7 @@ three lower groups and their assets are copies of `AppIcon.icon`'s, so an edit t
 goes into `AppIcon.icon`, `AppIconBeta.icon` and `CatalystHelperIcon.icon` alike, then the variants
 are regenerated. The badge's two layers come out of
 `swift Resources/AppIconTools/GenerateCatalystBadgeLayers.swift <the .icon's Assets directory>`;
-its group settings are the BETA badge's. Background: `Documentations/Evolutions/draft-catalyst-helper-icon.md`.
+its group settings are the BETA badge's. Background: `Documentations/Evolutions/0028-catalyst-helper-icon.md`.
 
 **`actool` fails silently here.** Ask for an app icon that is not among its inputs and it exits 0
 with an *empty* partial `Info.plist`: no error, no icon, a shipped app with a blank tile. That is

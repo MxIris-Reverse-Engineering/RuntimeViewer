@@ -18,7 +18,7 @@ import Testing
 /// user-initiated task through the `objectsWithProgress(in:)` the sidebar calls.
 ///
 /// This is the reproduction behind the proposal
-/// draft-background-indexing-yields-to-foreground: before it, opening AppKit
+/// background-indexing-yields-to-foreground: before it, opening AppKit
 /// this way took 1.63× as long as opening it alone in a Debug build (41 s
 /// against 25 s) and 1.26× in Release.
 ///

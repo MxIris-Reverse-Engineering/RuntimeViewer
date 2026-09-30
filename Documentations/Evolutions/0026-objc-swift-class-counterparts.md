@@ -1,8 +1,8 @@
-# Draft - ObjC 类与 Swift 类互标角标、互相跳转
+# 0026 - ObjC 类与 Swift 类互标角标、互相跳转
 
 - **状态**: Implemented
 - **创建日期**: 2026-09-24
-- **最后更新**: 2026-09-27
+- **最后更新**: 2026-09-30
 
 ## 摘要
 
@@ -82,3 +82,4 @@ MachOSwiftSection 修复一起到来、与本功能无关的：private Swift 类
 | 2026-09-24 | 顺手修 Relationships 面板丢掉全部桥出子类的问题 | 实现时 AppKit 的 183 个桥出类一个都配不上，查出是整棵 remangle 的问题（见「配对」）。`main` 上是同一段代码，自提交 c3eb2735 引入 relationships API 起如此；原有测试「Bridged class surfaces once…」只查「不会既是 Swift 又是 ObjC」，全部丢掉照样通过。补一条回归测试「Bridged subclasses surface as their Swift classes」，修复前红、修复后绿。同类写法（把 ObjC 运行时名当 Swift 键）全仓只此一处；草稿之前写的「MachOSwiftSection 修好后 Relationships 里的 private 子类自动回来」是错的，已更正。纪要：[ResolvedIssues/2026-09-24-relationships-dropped-every-bridged-subclass.md](../ResolvedIssues/2026-09-24-relationships-dropped-every-bridged-subclass.md) |
 | 2026-09-24 | Implemented：`feature/objc-swift-class-counterparts` 合入 `next` | 用户：「都提交推送一下」。分三个提交：Relationships 修复（不依赖新版 MachOSwiftSection，可单独挑去 `main`）、会话开始前就在工作区里的 `displayName` 显示私有鉴别符（单独提交，去留独立）、本功能。验证：Core 本功能相关 20 个测试与 Application 全部 210 个测试通过，App（Debug、Xcode 27）编译通过，Debug 设置文件的 SHA 前后不变；Core 全量 513 个里，满载超时的 8 个 IPC 测试单独跑全过，Relationships 的 Swift 基线另有 4 行 `__C.Decimal…` → `__C.NSDecimal…`，来自 MachOSwiftSection 提案 0023，与本改动无关、未动。配套文档：不另写实现说明，方案与验证都在本提案，Relationships 的 bug 有 ResolvedIssues 纪要；没有新术语。Release 构建要等 MachOSwiftSection 发版、锁文件指向含 `_symbolic` 修复的版本后，private 类才配得上 |
 | 2026-09-27 | 配对改为顺着类对象里的类型描述符指针，取代上面「ObjC 运行时名 remangle 出的字符串直接当键」，等于回到本日志第二行的做法；remangle 那一段删掉，Relationships 查同一张表；在 Swift 接口里打印 `@objc(Name)` 不在本提案做 | 用户报告 AppKit 的 `NSColorModel` 两面对不上：ObjC 侧挂蓝色 `C`，跳转报 No counterpart，Swift 侧没有橙色 `C`。它是 `@objc(NSColorModel)` 改过名的 Swift 类，运行时名就是源码写的名字，不含模块与外层类型，从名字推不出 Swift 条目——即上面「改为按名字配对」一行记下的代价。编译器在类元数据的 flags 里置 `HasCustomObjCName`（`swift/lib/IRGen/GenMeta.cpp` 的 `getClassFlags`，`@objc(Name)` 与 `@_objcRuntimeName` 都置），只说明改过名，说明不了是哪个类；类对象里的描述符指针才是这层对应。用户问会不会影响 `@objc @implementation` 的判断：不会，那一对的类对象没有 Swift 位，走 `extension` 上的识别结果，不进这张表。用户：「分开来，比对只有 RV 要做，加 @objc(ClassName) 这个扔给 MachOSwiftSection-ObjCCustomName agent 做」，已交接；是否保留按名字配对那条路未表态，按推荐全部换成指针，一条路配所有桥出类。修复前 macOS 27 AppKit 有 74 个桥出类配不上；Relationships 里它们也整条丢失（`NSView` 的子类里没有 `NSScrollPocket`），ObjC 快照基线随之重录：`NSObject` 的子类 315 → 319、`NSCopying` 的遵循者 70 → 71，多出的都是 Foundation 的桥出类——三个改过名的（`_NSFileManagerBridge`、`_NSLocalizedStringResourceSwiftWrapper`、运行时名 `_NSKeyValueObservation` 的 `NSKeyValueObservation`），外加 `AttributeScopes._DefaultScopeRegistration`，它的运行时名是 mangling，按名字也没配上（原因未深究），其余各行逐字不变。弹窗里「名字不是 mangling、大概是 @objc 改名」那句说明删掉。验证（本地依赖、Xcode 27、macOS 27）：新增 `NSScrollPocket` 互跳、Relationships「A bridged subclass renamed with @objc(…) surfaces as its Swift class」，「每个桥出类都能往返」去掉只测 `_Tt` 名字的过滤——修复前这 3 条红、同批其余 16 条绿，修复后 Core 相关 7 个 suite 共 81 个测试里只剩快照 2 条红：ObjC 那条重录后绿，Swift 那条是上一行记过的 4 行 `__C.Decimal…` → `__C.NSDecimal…`，未动；Core 全量 523 个测试也只红这一条；Application 全部 233 个测试通过，Debug 设置文件 SHA 前后不变。同批文档：beta.5 changelog 删掉「改名类还不能配对」一句，ResolvedIssues 2026-09-24 纪要补「后续」一节 |
+| 2026-09-30 | 落地编号 0026 | 已是 Implemented、实现在 `next` 上，按落地编号规则取 `origin/next` 与 `origin/main` 的全局最大值 0025 往后排；三份同批，按实现日期排序。 |

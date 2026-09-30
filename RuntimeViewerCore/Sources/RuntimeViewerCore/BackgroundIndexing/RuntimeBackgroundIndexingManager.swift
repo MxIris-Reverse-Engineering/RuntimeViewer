@@ -31,7 +31,7 @@ public actor RuntimeBackgroundIndexingManager {
     /// limit counted per batch let five entries build five images at once
     /// whatever the setting said. Several builds in one process slow each
     /// other down — and slow the image the user opens alongside them, which
-    /// QoS cannot help with (proposal draft-background-indexing-yields-to-foreground).
+    /// QoS cannot help with (proposal background-indexing-yields-to-foreground).
     /// Every `startBatch` passes the current setting, so the latest call's
     /// value is the one in force.
     private var backgroundLoadLimit = 1

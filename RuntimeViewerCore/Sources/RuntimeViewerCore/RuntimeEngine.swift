@@ -1028,7 +1028,7 @@ extension RuntimeEngine {
     /// framework, enough that the image being opened takes about as long as
     /// the whole background batch — and QoS cannot help, because they contend
     /// over structures the process shares, not over CPU cores (proposal
-    /// draft-background-indexing-yields-to-foreground). Builds the background
+    /// background-indexing-yields-to-foreground). Builds the background
     /// indexer already started are left to finish.
     private func performingForegroundLoad<Result>(_ load: () async throws -> Result) async throws -> Result {
         await backgroundIndexingManager.foregroundLoadDidBegin()
