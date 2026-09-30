@@ -77,6 +77,75 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 只需走 builder 的标记入口；Swift 侧用独立的语料 printer（标记模式 + 用户 transformer + 注册 opaque 类型解析器），
 显式绕开 `updateConfiguration` 的驱逐逻辑。逐对象响应 `Task.checkCancellation`，进度按 built / total 上报。
 
+### 1.1 语料构建性能（2026-09-30 修订）
+
+用户实测（Debug 构建、M1 Max）：5 个 Always Index 镜像索引完 4 分钟后只有 1 个可搜，18 分钟后服务进程仍在建第二个。
+对该进程采样（`sample`，5 s / 3851 个样本全落在同一个 Swift 类型的打印里）：
+
+- 61% 在 `printExpandedFieldOffsets`：每个存储字段递归展开嵌套 struct / enum 布局到 16 层，每次从运行时元数据重算，没有记忆化；
+- 其中 9% 是 `InProcessContext.lookupSymbol(at:)`：每查一个匿名上下文地址线性扫整张符号表，共享缓存镜像的本地符号已剥离，必落空；
+- `corpusObjects(in:)` 把嵌套类型当独立对象再打一遍，而父类型的接口已内联嵌套类型——重复打印，搜索结果也重复；
+- 构建串行、单线程、`.utility`，只跑 2 个效率核；
+- 用户自己的显示选项是 Swift 全开，所以「语料不打昂贵选项」不可行，行号会和内容区对不上。
+
+**计量先行**：分支专属的可执行目标 `CorpusBuildTimingProbe`（`RuntimeViewerCore/Sources/CorpusBuildTimingProbe/`，不合入）：
+`corpus` 模式计真实构建，`display <preset>` 模式按预设选项经内容区路径打印全部对象，预设两两相减得到每个选项的代价；
+`--top-level-only` 量出嵌套重复的份额。每个预设各起一个进程。Release 下对 Foundation / SwiftUI / libswiftCore 各测一遍，
+优化前后的数字记入决策日志。
+
+**交付顺序**：MachOSwiftSection 的 `draft-concurrent-definition-printing` 排在最前，而且不管下面第 2 条做不做都要做——
+它修的是本分支**今天就在发生**的竞争：`RuntimeSwiftSection` 是 actor，显示路径与语料路径都 `await` 到 printer 的 nonisolated
+入口、打印期间 actor 被释放，语料在后台建几分钟时用户点开同一镜像的类型，两边同时对同一个定义惰性索引、同时写 `attributes`。
+
+**RuntimeViewerCore 侧**：
+
+1. **嵌套类型的重复**（审查后重做）。命中记的是 `(object, lineNumber)`，行号必须落在该对象内容区的文本里；父对象的文本里
+   嵌套类型以 `level + 1` 打印、且不含嵌套类型自己的 extension / conformance extension、嵌套协议的默认实现扩展与
+   `specializedChildren`（只在子对象的 `printedDefinitions` 里），所以「只建顶层条目、把嵌套类型的扩展补在父条目后面」不成立。
+   先用 probe 的 `display mcp --top-level-only` 量出嵌套对象占打印时间的份额（它走内容区路径，是语料路径的代理——语料还多了
+   标记、区域分离和定位），再二选一：
+   - **B（默认，份额 < 20%）**：条目照旧一个对象一条；父条目记下每个嵌套定义块的**行区间**，文本与成员搜索扫父条目时跳过——
+     嵌套类型的命中只从子条目出来，对象与行号都对；打印量不变，只去掉重复结果。区间从哪来：子条目本来就单独打印，把子对象
+     第一个定义的文本加一级缩进后在父文本里做子串匹配，区间精确，还顺便在真实数据上持续验证 D 的前提；匹配不到就不跳过
+     （退化为今天的重复）。区间记原文偏移，搜索跑在投影后的文本上，要经 `projectedUTF8Offset(ofOriginalUTF8Offset:)` 换算。
+   - **D（份额大时）**：父条目照旧打印；子条目**不再打印嵌套体**，而是从父条目的嵌套块派生（去掉一级缩进；span 与可见性
+     区域随之平移，且平移后逐条相等要一起断言），只额外打印子对象自己的扩展定义接在后面。前提：同一类型内联与独立打印的
+     文本除缩进外逐字节相同（`displayParentName` 两处都是 false）——注意 enum layout 的逐 case 注释是**单个多行原子**，每行各自
+     带缩进前缀，去缩进要进到原子内部逐行删；fixture 覆盖 enum layout、展开字段偏移、transformer 开着三种情况。失败回退：
+     父对象整体打印失败或该嵌套子定义被逐子 catch 掉时没有派生来源，回退到独立打印。D 让子条目依赖父条目，与第 2 条并行
+     打印的交互要定：工作单元改成「一个根对象连同它的全部后代」。嵌套块的边界 D 拿不到（`NestedDeclaration` 摊平后不留边界），
+     需要上游在嵌套子定义的原子上打标记（与可见性区域同一手法，MachOSwiftSection 的 API 变更，选 D 才另开提案）。
+   两条路都要修一个**既有缺陷**：`memberDeclarations(for:)` 不递归，但父对象文本里嵌套类型的声明排在父对象自己的字段与成员
+   之前，定位器按「第一条未认领的同名行」分配——父类型的成员会抢到嵌套类型同名成员的行。比「父子同名 `init`」常见得多：
+   Codable 类型编译器合成的嵌套 `CodingKeys` 的 case 名与父类型的存储属性一一同名，父类型每个字段都会分到 `CodingKeys` 的
+   case 行上。复现测试就用它。修法是定位父对象成员时跳过嵌套块区间（区间来源同 B）。
+   **待核实的同类重复**：根协议的默认实现扩展可能被打印两遍——printer 对 `parent == nil` 的协议在协议之后接着打印
+   `defaultImplementationExtensions`，而 `printedDefinitions(.rootProtocol)` 又把它们作为独立定义追加了一遍；`next` 的显示路径
+   同样写法。先用 Foundation 里带默认实现的根协议写一条测试核实，属实则同批修（`printedDefinitions` 不再追加）。
+2. **一个镜像内按对象并行打印**：`RuntimeInterfaceCorpusStore.run` 改为有界任务组，条目按列表顺序落位，进度按完成数在
+   actor 上累加，子任务随父任务取消，与订阅 / 取消模型不冲突。宽度：大栈执行器每个 QoS 类只有 `max(2, 核数)` 个线程，
+   后台索引也跑在同一个 `.utility` 类上，两边加起来不能超——取 `max(2, 核数 / 2)`。`RuntimeObjCSection.corpusEntry` 一路改
+   `nonisolated`（只读 `let`）。Swift 侧的**串行尾巴**：`RuntimeSwiftSection` 是 actor，打印本身能并行，但 `printedDefinitions`、
+   `memberDeclarations`、定位器、`frozen()`、`separatingVisibilityRegions`、`RuntimeInterfaceCorpusEntry.init`（逐字节扫行首）
+   都在 actor 上——`memberDeclarations` 拆成「actor 上取定义列表」+「actor 外读成员」，其余是值上的纯函数，全部挪到
+   nonisolated；只有取定义列表留在 actor 上。**QoS 待定**：设计稿选 `.utility` 是为了不抢用户的前台加载，但 `.utility` 偏向
+   效率核，任务组的并行度可能仍被卡住；先按 `.utility` 落地，用 probe 的 `corpus` 模式前后对照，提速被卡时再向用户提是否改
+   固定的 `.default`。
+3. **插队**：store 加 `prioritize(imagePath:)`（`pendingImagePaths` 移到队首，不新增订阅，不抢占正在跑的镜像——SwiftUI 这种
+   要建几分钟的镜像在跑时，用户点开的镜像仍要等它建完），经引擎请求暴露；协调器对已有订阅的镜像调它而不是 `requestBuild`
+   （后者遇到已有订阅直接返回，到不了 store）。触发源 2（用户点开的镜像）置顶——提案写了，实现没做。
+4. `FindCorpusCoordinator` 暴露每镜像的构建状态（由 `onProgress` 与任务结果驱动、16 ms 合并，启动时用 `interfaceCorpusCoverage()`
+   补快照；归属与展示见 [draft-report-navigator](draft-report-navigator.md)），Find 摘要改写成「N images being made
+   searchable · building Foundation 37%」。**语料建成时不重跑整个搜索**——`run(_:)` 一进来就清空结果，几个镜像接连建成会连清
+   好几次、选中与滚动位置全丢；改为只对新建成的镜像搜一次（搜索请求加 `imagePaths` 范围）、把命中并进现有结果，仍复用
+   `rerunAfterGenerationOptionsChange` 的 guard（空查询与关系搜索不做）。
+
+**测试与记录**：`RuntimeInterfaceCorpusStoreTests` 补并行落位顺序、插队、进度计数；`RuntimeMemberDeclarationLocatorTests` /
+`RuntimeInterfaceSearchTests` 补 `CodingKeys` 同名与根协议默认实现重复；probe 报的 `ru_maxrss` 前后记入决策日志（并行时同时在飞的
+`SemanticString` 数 = 宽度，峰值内存会升）。
+
+**不做**（用户裁定）：语料落盘缓存；按 Find 分页可见与否切换构建优先级。
+
 ### 2. 引擎请求（全部经 `registerSharedHandlers` 注册，XPC / TCP / proxy 链自动透传）
 
 | 请求 | 类型 | 进度 | 响应 |
@@ -362,3 +431,9 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 | 2026-09-30 | 全量回归（三个上游经 edit 模式编入） | RuntimeViewerCore 349 个测试 3 处失败，与改动前那次全量回归逐条相同：`RuntimeMemberDeclarationLocatorTests` 的 ObjC 夹具 2 处（选择子片段仍带冒号，本分支原有），`RelationshipsEquivalenceSnapshotTests` 的 Swift 快照 1 处（`__C.Decimal.FormatStyle` 如今读作 `__C.NSDecimal.FormatStyle`，差异与改动前逐字相同）。RuntimeViewerPackages 全部通过。新增的 `RuntimeInterfaceCorpusVisibilityTests` 与 `FindGenerationOptionsTests` 均通过。 |
 | 2026-09-30 | 不等上游发版：三个上游的 `feature/visibility-regions` 合入各自的 `next`，本分支合入 RuntimeViewer 的 `next`；状态仍为 In Progress | 用户：「合并吧，MachOKit那边完工了」。MachOKit 的重构已完成并发布 0.53.101，MachOObjCSection 与 MachOSwiftSection 的 `next` 随之稳定，两条 feature 分支 rebase 上去无冲突，各自在本地依赖下重跑通过后合入（swift-semantic-string 的 `next` 未动，直接合入）。此后 RuntimeViewer 以 `USING_LOCAL_DEPENDENCIES=1` 构建即可，edit 模式不再需要。更正上一行：本包的远程依赖跟随各上游的 `next` 分支，不是 `exact:` pin，上游 `next` 推送后远程解析也能拿到；但 MachOObjCSection 与 MachOSwiftSection 的 `next` 要求 swift-semantic-string `from: "0.3.0"`，那个版本没有 `VisibilityRegion`，它们自己的远程构建要等 swift-semantic-string 发版并抬下限。用户仍在实测中发现问题，交互验证未完，所以状态不改。 |
 | 2026-09-30 | swift-semantic-string 发布 0.4.0，MachOObjCSection / MachOSwiftSection 把它的下限抬到 0.4.0，四个仓库的 `next` 全部推送 | 用户：「可以，推送然后发版吧」。上一行说的远程构建缺口就此补上：两个上游在纯远程依赖下构建、测试通过后才推送。本仓库的远程依赖跟随各上游的 `next`，但 workspace 与包的 `Package.resolved` 仍钉着合并前的 revision，默认（不开本地依赖）构建要先用 `UpdatePackagesScript.sh` 刷新锁文件。 |
+| 2026-09-30 | 退回 `feature/find-navigator`，不进 3.0.0：`next` reset 到合并前的 `92bff04a` 并强推，分支前进到 `8319f55b`（两条修复 + 上游发版记录） | 用户：「这些改动有点大，把 Find 以及后续功能都放回原来的分支吧，next 分支 reset 回去，不打算 3.0.0 版本发布这个功能」。合并提交没有夹带任何冲突解决编辑（`git diff 94316dd8 ace19d3a` 为空），reset 不丢东西。 |
+| 2026-09-30 | 「只索引到 1 个 image、另外 4 个不能搜」不是事件瓜分的复发，是 4 个语料库在串行排队且无处可见 | 对运行中的服务进程采样：正停在 `RuntimeInterfaceCorpusStore.run` 逐对象打印；5 个批次全进了 History，说明事件已全部送达。libswiftCore 最先索引完所以最先建成。 |
+| 2026-09-30 | 性能范围：记忆化 + 判别符缓存（上游）、跳过嵌套重复 + 并行打印（Core）；不做落盘缓存与优先级切换；状态展示另开 Report navigator 提案 | 用户在提问轮选定。采样证据与嵌套重复见 §1.1。 |
+| 2026-09-30 | 动手前先用 `CorpusBuildTimingProbe` 量 Release 下每镜像、每选项的耗时 | 「没有一条能变红的命令就不许猜原因」同样适用于性能：Debug 采样只给结构，比例要在 Release 下量。 |
+| 2026-09-30 | §1.1 按独立审查修订：第 1 条重做（B / D 二选一、由 probe 数字定，并修父子同名成员的定位缺陷）；第 2 条补 Swift actor 上的串行尾巴与 QoS 待定；第 3 条补「已排队再请求也前移」；第 4 条复用重跑 guard | 审查指出把嵌套类型的扩展补在父条目后面会让命中行号落在父对象内容区之外，与本节自己的约束矛盾；`.utility` 与「用上性能核」自相矛盾；定位器对父对象文本里排在前面的嵌套声明今天就会分错行。 |
+| 2026-09-30 | §1.1 第二轮审查（RuntimeViewer-Opus）：上游并发打印提案提到最前、定位为现存竞争的修复；B 的嵌套块行区间改由子条目文本反查、D 的前提补上多行原子与区域表断言并需要上游标记；建成后不重跑整个搜索、只搜新镜像并合并；插队改为不增订阅的 `prioritize`；串行尾巴补全、任务组宽度定为 `max(2, 核数 / 2)`；定位缺陷用 `CodingKeys` 复现；记下根协议默认实现扩展疑似双打 | 审查指出 B / D / 定位修复都依赖「嵌套块行区间」而原稿没说怎么拿；`run(_:)` 会清空结果列表；协调器对已有订阅直接返回，插队到不了 store；显示与语料两条打印今天已在 actor 外并行。 |
