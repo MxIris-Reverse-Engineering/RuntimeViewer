@@ -1,6 +1,7 @@
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
+import RuntimeViewerUI
 import Testing
 @testable import RuntimeViewerApplication
 @testable import RuntimeViewerSettings
@@ -25,7 +26,7 @@ struct ReportViewModelTests {
         let viewModel: ReportViewModel<SidebarRootRoute>
         let output: ReportViewModel<SidebarRootRoute>.Output
 
-        init(documentState: DocumentState) {
+        init(documentState: DocumentState, filterString: Driver<String> = .just(""), showsOnlyInProgress: Driver<Bool> = .just(false)) {
             viewModel = ReportViewModel(documentState: documentState, router: router)
             output = viewModel.transform(ReportViewModel<SidebarRootRoute>.Input(
                 appeared: .empty(),
@@ -33,8 +34,8 @@ struct ReportViewModelTests {
                 cancelAll: cancelAllRelay.asSignal(),
                 clearHistory: clearHistoryRelay.asSignal(),
                 openSettings: .empty(),
-                filterString: .just(""),
-                showsOnlyInProgress: .just(false)
+                filterString: filterString,
+                showsOnlyInProgress: showsOnlyInProgress
             ))
         }
     }
@@ -175,6 +176,32 @@ struct ReportViewModelTests {
     }
 
     // MARK: - The filter bar
+
+    @Test("the outline shows its rows before the filter bar is touched")
+    func outlineShowsBeforeFilterBarIsTouched() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "ReportViewModelTests.untouchedFilterBar")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        // Both turned off, so the outline has its rows at once, with nothing to index or build.
+        environment.settings.indexing.isEnabled = false
+        environment.settings.search.isCorpusEnabled = false
+        // The page's own filter field, read the way the page reads it: its `rx.stringValue` reports
+        // only what is typed into it, so an untouched field says nothing at all — nor does a clock
+        // toggle nobody has clicked.
+        let filterSearchField = FilterSearchField()
+        let page = environment.make {
+            Page(
+                documentState: environment.documentState,
+                filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
+                showsOnlyInProgress: .never()
+            )
+        }
+        defer { withExtendedLifetime(page) {} }
+
+        let nodes = try await nextValue(from: page.output.nodes) { !$0.isEmpty }
+
+        #expect(nodes.map(\.identifier) == [.category(.backgroundIndexing), .category(.searchableInterfaces)])
+        await engine.stop()
+    }
 
     @Test("the filter keeps the rows whose name matches, under the kind of work they belong to")
     func filterKeepsMatchesUnderTheirKind() {

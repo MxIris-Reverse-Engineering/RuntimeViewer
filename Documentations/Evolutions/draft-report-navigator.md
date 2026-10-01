@@ -43,6 +43,8 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
   索引与语料各看自己的开关（`settings.indexing.isEnabled`、`settings.search.isCorpusEnabled`）。
 - **过滤栏**：文字过滤保留标题匹配的行及其祖先；时钟只留**进行中**的工作——在跑的批次与其未结束的镜像、排队与打印中的语料。
   Xcode 的时钟是「只看最近的」，这里的报告只活在本次会话里，「最近」没有意义，换成用户真正要找的「还在跑的」。
+  过滤文字与时钟状态由输入写进 ViewModel 自己的状态（初值：空文字、时钟关），大纲从这两个状态算出来，不直接合并输入：
+  过滤框的 `rx.stringValue` 只在用户输入时发值，没碰过的过滤框什么也不发，直接拿它合并会让大纲一直空着（见决策日志）。
 - **语料条目与取消语义**：每个镜像一行，排队写 "Waiting"，打印中写百分比与对象数；取消只撤回本文档的订阅——别的文档还订着时
   构建继续；取消不是粘性的，下一个触发源（索引完成、transformer 变化、开关切换）会重新请求。被取消的那一行进 history。
 - **语料状态的来源与归属**：`FindCorpusCoordinator` 暴露 `buildStatesByImagePath: [String: RuntimeInterfaceCorpusBuildState]`
@@ -64,9 +66,10 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
   自定义，没有持久化配置会因标识符消失出问题。
 - **测试**：`ReportViewModelTests`（真实引擎：结束的批次与建好的语料各在自己那一类下；关掉的功能只显示一行、打开后消失；
   打印进度只改行自己的 cell、树不变；从行上取消语料构建后它以 cancelled 进 history；Clear History 清空两类；
-  分页的活动标记随进行中的工作出现、Cancel All 后消失；纯函数：文字过滤与时钟过滤）。顺带测出两个已有缺陷，修复与回归测试同批：
+  分页的活动标记随进行中的工作出现、Cancel All 后消失；过滤栏没碰过时大纲照样有行；纯函数：文字过滤与时钟过滤）。顺带测出两个已有缺陷，修复与回归测试同批：
   `FindCorpusCoordinatorTests.clearedHistoryStaysCleared`、`RuntimeInterfaceCorpusStoreTests.queuedBuildOutlivesBuilder`
-  （见决策日志）。App target 没有单元测试 target，AppKit 一侧只做了编译验证，没有跑起来做界面验证。
+  （见决策日志）。App target 没有单元测试 target，AppKit 一侧只做了编译验证；用户把 App 跑起来后看到大纲是空的，修复与回归测试
+  `outlineShowsBeforeFilterBarIsTouched` 见决策日志。
 
 ## 决策日志
 
@@ -87,3 +90,4 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
 | 2026-10-01 | 三种 CellViewModel 合成一种 `ReportCellViewModel`；功能关闭时在该类下放一行而不是整页占位 | Xcode 每行的构成一样，分三种只会复制三份同样的属性；整页占位会把另一类的工作也挡住。 |
 | 2026-10-01 | 修：Clear History 之后，下一次 coverage 刷新把清掉的语料当作「别的文档建的」重新列回 history | `ReportViewModelTests` 测出：`mergeCoverage` 只看 `finishedBuilds` 里有没有这个镜像，清空后每个还在引擎里的语料都会被「学」回来；而 Reports 页每次出现、每次构建结束都会刷新。`FindCorpusCoordinator` 记住列过的镜像（Clear History 不清这份记录，语料从引擎消失时才移出），回归测试 `clearedHistoryStaysCleared` 修前红、修后绿。 |
 | 2026-10-01 | 修：语料 store 对引擎的引用从 `unowned` 改为 `weak`，找不到引擎的构建按取消结束 | 测试并行跑时进程崩在 `RuntimeInterfaceCorpusStore.run` 的 `swift_abortRetainUnowned`：引擎带着排队的构建被释放，`stop()` 安排的驱逐还没到，正在跑的构建一结束 `pump()` 就拉起下一个，读到已释放的引擎。回归测试 `queuedBuildOutlivesBuilder` 修前崩、修后绿。同一写法的 `RuntimeBackgroundIndexingManager.engine` 没改：换引擎时协调器会持有旧引擎先取消它的全部批次，App 里的路径有保护，改它要动 `main` 上的代码，另议。 |
+| 2026-10-01 | 修：过滤栏没碰过之前，Report 页的大纲一直是空的；过滤文字与时钟状态改存在 ViewModel 自己的状态里 | 用户把 App 跑起来：分页上的活动圆点亮着，大纲却空着，"No Reports" 也没出现。`ReportViewModel` 用 `Driver.combineLatest` 把节点与 `input.filterString`、`input.showsOnlyInProgress` 合在一起，要等每一路都来过值才输出；页面的过滤文字来自 `FilterSearchField.rx.stringValue`，RxCocoa 没有这个成员，落到 RxAppKit 的 key-path 控件属性上——只在控件发出 action（用户输入）时发值，订阅时不发当前值。"No Reports" 绑的是未过滤的节点，所以它照样被藏起来。ViewModel 测试给的是 `.just("")`，订阅即有值，没测出来。改法照 `FindViewModel`：输入写进带初值的 `@RxObserved` 状态，大纲从状态算。回归测试 `outlineShowsBeforeFilterBarIsTouched` 用页面自己的 `FilterSearchField` 作过滤输入、时钟输入不发值：修前 10 秒等不到任何行，修后 0.58 秒；另跑了一个只把时钟换成 `.just(false)`（页面用 `startWith(false)` 给了初值）的临时对照，修前同样等不到，确认卡住大纲的就是过滤框。横向排查：Find 页的 ViewModel 本来就把过滤文字存成状态；没有别的 ViewModel 直接合并过滤框的输入。 |

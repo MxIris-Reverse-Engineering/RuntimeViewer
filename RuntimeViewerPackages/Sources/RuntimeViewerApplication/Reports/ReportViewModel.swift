@@ -25,9 +25,10 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         public let cancelAll: Signal<Void>
         public let clearHistory: Signal<Void>
         public let openSettings: Signal<Void>
-        /// The filter bar, as typed: rows whose title contains it, with their ancestors.
+        /// The filter bar, as typed: rows whose title contains it, with their ancestors. Need not
+        /// start with a value — until it reports one the outline is unfiltered.
         public let filterString: Driver<String>
-        /// The filter bar's clock toggle: only the work in progress.
+        /// The filter bar's clock toggle: only the work in progress. Off until it reports otherwise.
         public let showsOnlyInProgress: Driver<Bool>
     }
 
@@ -52,6 +53,15 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
 
     @RxObserved
     private var isCorpusEnabled: Bool = true
+
+    /// The filter bar's text and clock toggle as last reported, kept here instead of being combined
+    /// straight from the input: the filter field's `rx.stringValue` reports only what is typed into
+    /// it, so an untouched field says nothing at all, and an outline waiting on it stays empty.
+    @RxObserved
+    private var filterString: String = ""
+
+    @RxObserved
+    private var showsOnlyInProgress: Bool = false
 
     public override init(documentState: DocumentState, router: any Router<Route>) {
         super.init(documentState: documentState, router: router)
@@ -124,7 +134,19 @@ public final class ReportViewModel<Route: Routable>: ViewModel<Route> {
         }
         .disposed(by: rx.disposeBag)
 
-        let nodes = Driver.combineLatest($allNodes.asDriver(), input.filterString, input.showsOnlyInProgress) { nodes, filterString, showsOnlyInProgress in
+        input.filterString.driveOnNext { [weak self] filterString in
+            guard let self else { return }
+            self.filterString = filterString
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.showsOnlyInProgress.driveOnNext { [weak self] showsOnlyInProgress in
+            guard let self else { return }
+            self.showsOnlyInProgress = showsOnlyInProgress
+        }
+        .disposed(by: rx.disposeBag)
+
+        let nodes = Driver.combineLatest($allNodes.asDriver(), $filterString.asDriver(), $showsOnlyInProgress.asDriver()) { nodes, filterString, showsOnlyInProgress in
             ReportOutline.filtered(nodes, by: filterString, showsOnlyInProgress: showsOnlyInProgress)
         }
 
