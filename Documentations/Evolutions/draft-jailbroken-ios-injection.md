@@ -394,70 +394,129 @@ UI 层与数据源层，业务层不受影响。这决定了本提案的抽象�
 
 ### 新命令签名
 
-```swift
-extension RuntimeEngine.CommandNames {
-    /// 这一端有没有注入能力。**每个引擎都注册**，是门禁的唯一数据来源。
-    static let injectionCapability = "injectionCapability"
-    /// 这一端所在机器的进程清单。
-    static let processList = "processList"
-    /// 把 payload 注入这一端机器上的某个 pid。
-    static let injectIntoProcess = "injectIntoProcess"
-}
+**以下是实现后的真实形态。** 初稿这一节写错了三处 API，纠正记在决策日志里：`CommandNames` 是
+`String, CaseIterable` 的 **enum**（不能用 extension 加「case」），命令协议叫
+`RuntimeEngineRequest`（带 `associatedtype Response`，没有 `RuntimeRequest` / `RuntimeResponse`
+这两个类型），而 `InjectionTargetPlatform` 是 `#if os(macOS)` 且在 macOS-only 模块里、**连 iOS
+真机的 case 都没有**（`PLATFORM_IOS` = 2 落在 `.unsupported(2)`），所以当不了跨平台的门禁类型。
 
-/// 为什么能／不能注入。`unavailable` 的每个 case 都对应一句用户能照着做的提示，
-/// 所以它不是一个布尔值 —— 「不支持」与「装个越狱版就支持」对用户是两回事。
+三条命令作为 case 直接加进 `RuntimeEngine.CommandNames`：
+
+```swift
+enum CommandNames: String, CaseIterable {
+    // ... 既有 case ...
+    case injectionCapability
+    case processList
+    case injectIntoProcess
+}
+```
+
+模型落在 `RuntimeViewerCore/Sources/RuntimeViewerCore/Injection/`：
+
+```swift
 public enum RuntimeInjectionAvailability: Codable, Hashable, Sendable {
     case available
-    /// iOS 非越狱版：能看自己，不能注入别人。
     case requiresJailbrokenVariant
-    /// macOS 侧特权 daemon 未安装。
     case helperDaemonNotInstalled
-    /// 这个平台上没有这条路（附一句如实的原因，供 UI 直接显示）。
     case unsupported(reason: String)
+
+    public var isAvailable: Bool { ... }
+
+    /// 没注册 service 的进程答什么。三个平台含义不同，所以不是一个常量。
+    public static var withoutInjectionService: RuntimeInjectionAvailability { ... }
 }
 
-public struct RuntimeInjectionCapabilityRequest: RuntimeRequest {
-    public typealias Response = RuntimeInjectionCapability
-}
-
-public struct RuntimeInjectionCapability: RuntimeResponse {
-    public let availability: RuntimeInjectionAvailability
-}
-
-/// 这一端机器上的一个进程。**由远端填好，包括能不能注入它** —— 只有远端知道自己的 uid、
-/// entitlement 与 daemon 状态，宿主不该猜。
 public struct RuntimeProcess: Codable, Hashable, Sendable {
+    public enum Injectability: Codable, Hashable, Sendable {
+        case injectable
+        case requiresRootOnTarget
+        case notInjectable(reason: String)
+        public var isInjectable: Bool { ... }
+    }
     public let processIdentifier: pid_t
     public let name: String
     public let executablePath: String?
     public let userIdentifier: uid_t
     public let injectability: Injectability
-
-    public enum Injectability: Codable, Hashable, Sendable {
-        case injectable
-        /// 实测：uid 501 的越狱版 App 拿不到 uid 0 进程的 task port。
-        case requiresRootOnTarget
-        case notInjectable(reason: String)
-    }
 }
 
-public struct RuntimeProcessListRequest: RuntimeRequest {
-    public typealias Response = RuntimeProcessListResponse
-}
-
-public struct RuntimeProcessInjectionRequest: RuntimeRequest {
-    public typealias Response = RuntimeProcessInjectionResponse
-    public let processIdentifier: pid_t
+public enum RuntimeProcessInjectionResult: Codable, Hashable, Sendable {
+    case injected
+    case taskPortUnavailable(reason: String)   // MachInjector code 3
+    case targetRefusedPayload(reason: String)  // MachInjector code 18
+    case failed(code: Int, reason: String)
+    public var isInjected: Bool { ... }
 }
 ```
 
-**`RuntimeInjectionAvailability` 刻意不是 `Bool`。** 「这台设备装的是非越狱版」与「这个平台
-根本没这条路」对用户是两件完全不同的事——前者有补救动作（装越狱版），后者没有。门禁要能把
-这个差别讲给用户，所以原因必须跟着答案一起过线。
+请求类型按既有写法，`RuntimeViewerCore/RuntimeEngine+InjectionRequests.swift`：
 
-注入的**失败**响应里同样要能区分「拿不到 task port」（缺 `task_for_pid-allow`，或目标是 root
-进程）与「目标拒绝 dlopen」——这两者的处置完全不同，而实测它们对应 MachInjector 的 `code=3`
-与 `code=18`。
+```swift
+extension RuntimeEngine {
+    struct InjectionCapabilityRequest: RuntimeEngineRequest {
+        static var commandName: String { CommandNames.injectionCapability.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeInjectionAvailability
+    }
+    struct ProcessListRequest: RuntimeEngineRequest {
+        static var commandName: String { CommandNames.processList.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> [RuntimeProcess]
+    }
+    struct InjectIntoProcessRequest: RuntimeEngineRequest {
+        let processIdentifier: pid_t
+        static var commandName: String { CommandNames.injectIntoProcess.commandName }
+        func perform(on engine: RuntimeEngine) async throws -> RuntimeProcessInjectionResult
+    }
+}
+```
+
+三条都加进 `registerSharedHandlers`，于是 `RuntimeEngineProxyServer` 自动转发。
+
+### 平台实现挂在哪：沿用 `engineListProvider` 那条既有接缝
+
+`RuntimeViewerCore` 里**不放任何平台相关的注入代码** —— 它还要为 watchOS / tvOS / visionOS 构建，
+那些平台上既没有 MachInjector 也没有 daemon。注入实现由持有它的进程注册进来：
+
+```swift
+public protocol RuntimeInjectionService: Sendable {
+    func injectionAvailability() async -> RuntimeInjectionAvailability
+    func processList() async throws -> [RuntimeProcess]
+    func inject(intoProcessWithIdentifier processIdentifier: pid_t) async -> RuntimeProcessInjectionResult
+}
+
+extension RuntimeEngine {
+    public static var injectionService: (any RuntimeInjectionService)?
+}
+```
+
+这不是新发明的模式 —— `RuntimeEngine` 已经有 `static var engineListProvider` /
+`engineListChangedHandler`（注释写的就是「Callback for serving engine list requests. Set by
+RuntimeEngineManager.」），同样是「引擎按请求代答、但自己不拥有」的能力。
+
+**`static` 而非 per-engine**：注入能力是机器的属性，同一进程服务的每个引擎答案都一样。宿主问
+*远端*引擎时拿到的是那台机器自己的值，走的是连接而不是这个变量。
+
+**`nil` 是有意义的状态，不是未初始化**：iOS 非越狱版就是刻意不注册。各平台此时答什么由
+`withoutInjectionService` 决定，而它三个分支含义不同 —— iOS 上答 `requiresJailbrokenVariant`
+（有补救动作）；macOS 上 App 总会注册 service、由那个 service 自己报
+`helperDaemonNotInstalled`，所以到这里意味着没人接线，答 `unsupported` 并如实说明，**不能谎报
+成缺 daemon**（那会把用户送去重装一个装了也没用的东西）；其余平台是真没有实现。
+
+### 调用侧：能力查询不抛，另两条抛
+
+```swift
+extension RuntimeEngine {
+    public func injectionAvailability() async -> RuntimeInjectionAvailability   // 不抛
+    public func processList() async throws -> [RuntimeProcess]
+    public func inject(intoProcessWithIdentifier processIdentifier: pid_t) async throws -> RuntimeProcessInjectionResult
+}
+```
+
+**能力查询刻意不抛。** 它决定一个控件 enable 与否，每个调用方都只会把抛出的错误变成同一件事
+（「当作不可用」），所以这件事做一次、做在这里。顺带解决一个兼容问题：**比这三条命令更早构建的
+对端没有这个 handler，dispatch 会失败** —— 而那与「对端不能注入」不可区分，含义也相同。
+
+另两条抛，因为调用到它们时门禁已经放行，这时的失败是用户需要看到的真失败，不是一种要渲染的状态。
+注入的「抛」与「返回失败结果」含义不同：抛是请求没送达，结果是注入本身有了结论。
 
 ### 枚举实现
 
@@ -731,3 +790,6 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 | 2026-10-02 | 撤销「iphoneos payload 构建失败」这条前置 —— 是我用错了构建入口 | 原记录说真机 payload 以 `swift-async-algorithms` 的并发错误构建失败，并把它列为整条链的前置。补测推翻：那是用独立 `RuntimeViewerServer.xcodeproj` 构建的结果，而**它的 macOS 目标也挂**，且挂在更前面的 `SwiftyXPC` 上 —— 说明问题是那个工程自带的 `Package.resolved` 整体陈旧（async-algorithms 钉 1.1.1，上游 1.1.7 已修掉那段代码），不是 iOS 特有。改用 `RunScript.sh:263` 实际使用的 `RuntimeViewer-Debug.xcworkspace` 后 `EXIT=0`。**教训：复现失败前先确认自己用的是官方构建路径**，否则会把别人的陈旧锁文件当成自己的阻塞。 |
 | 2026-10-02 | payload 的 arm64e 要显式指定，并留下一个未实测的待定 | 工程写的是 `ARCHS = $(ARCHS_STANDARD)`，而 `ARCHS_STANDARD` 在 iphoneos 上**不含 arm64e**，所以默认产物是 arm64。传 `ARCHS=arm64e` 同样构建通过（55 MB，`platform 2` / `minos 15.0`）。SwiftPM 侧不用额外处理 —— Debug workspace 已带 `iOSPackagesShouldBuildARM64e = true`。**倾向编 arm64e**（iOS 系统进程是 arm64e，架构对齐无歧义，代价 2 MB）；「arm64 dylib 能不能 dlopen 进 arm64e 进程」未实测，不拿它当依据，落地第 3 步时定。 |
 | 2026-10-02 | MachInjector 的 iOS 提案已落盘，成为唯一剩下的前置 | 在 `MachInjector` 仓库建 `Documentations/Evolutions/draft-ios-support.md`（Draft，待批准），实测改动提交在它的 `feature/ios-support` 分支（`81aaaba`），macOS 构建与 28 个测试全绿。该提案比 spike 多一项决定：**remap 路径在 iOS 上按 `#if TARGET_OS_OSX` 整体关掉**，理由是它内嵌的 loader 是 macOS dylib、只能在运行时失败，编译期不存在优于运行时失败，顺带去掉 11167 行 dylib 字节。上游发版前本仓库用 `USING_LOCAL_DEPENDENCIES=1` 开发。 |
+| 2026-10-02 | 详细设计里有三处 API 写错，已按真实代码重写 | 初稿的签名是凭印象写的，落地时逐条对不上：①`CommandNames` 是 `String, CaseIterable` 的 **enum**，`extension … { static let … }` 加不进「case」，只能直接加 case；②命令协议叫 `RuntimeEngineRequest`（带 `associatedtype Response`），代码里**没有** `RuntimeRequest` / `RuntimeResponse` 这两个类型；③`InjectionTargetPlatform` 是 `#if os(macOS)` 且在 macOS-only 模块 `RuntimeViewerHelperClient` 里，而且**连 iOS 真机的 case 都没有**（`PLATFORM_IOS` = 2 落在 `.unsupported(2)`，那是「没有对应 payload 切片」而不是「这是真机」）—— 所以它当不了跨平台门禁的判据，门禁属性必须落在 Core。 |
+| 2026-10-02 | 平台实现沿用 `engineListProvider` 的既有接缝，不新发明机制 | 注入实现由进程注册：`RuntimeEngine.injectionService`（`static`，因为注入能力是机器的属性，同进程每个引擎答案相同）。`RuntimeViewerCore` 里不放任何平台相关注入代码 —— 它还要为 watchOS / tvOS / visionOS 构建。`nil` 是**有意义的状态**：iOS 非越狱版刻意不注册。各平台此时的答案由 `withoutInjectionService` 给，三个分支含义不同，**macOS 上不能谎报成缺 daemon**（那会把用户送去重装一个装了也没用的东西），要如实答「没人接线」。 |
+| 2026-10-02 | 能力查询定为不抛，并顺带解决旧对端兼容 | `injectionAvailability()` 返回值而不抛：它决定控件 enable 与否，每个调用方都只会把错误变成同一件事（当作不可用），所以做一次、做在 Core。连带好处是**比这三条命令更早构建的对端没有这个 handler、dispatch 会失败**，而那与「对端不能注入」不可区分、含义也相同，于是旧对端自动降级为不可用，不需要版本协商。另两条照常抛 —— 调用到它们时门禁已放行，那时的失败是真失败。 |

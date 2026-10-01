@@ -169,5 +169,12 @@ extension RuntimeEngine {
         register(SpecializationRequestForCandidateRequest.self, on: connection, engine: engine)
         register(RuntimePreflightRequest.self, on: connection, engine: engine)
         register(SpecializeRequest.self, on: connection, engine: engine)
+        // Injection. Registered unconditionally, including by engines that
+        // cannot inject: the capability query is how a host learns that, so an
+        // engine that skipped registering would be indistinguishable from an
+        // outdated peer. See RuntimeEngine+InjectionRequests.swift.
+        register(InjectionCapabilityRequest.self, on: connection, engine: engine)
+        register(ProcessListRequest.self, on: connection, engine: engine)
+        register(InjectIntoProcessRequest.self, on: connection, engine: engine)
     }
 }

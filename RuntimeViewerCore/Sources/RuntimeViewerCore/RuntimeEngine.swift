@@ -91,6 +91,18 @@ public actor RuntimeEngine {
         /// `reloadData(isReloadImageNodes:)` forwarded to the process that
         /// owns the images, so a client engine never reads its own dyld state.
         case reloadData
+        /// Whether the machine this engine belongs to can inject a payload into
+        /// another of its processes, and when it cannot, why. **Registered by
+        /// every engine** — it is the single source of truth for the gate, and
+        /// only a machine can answer for itself.
+        case injectionCapability
+        /// The process table of the machine this engine belongs to. Never
+        /// merged with the asking host's own processes.
+        case processList
+        /// Loads the payload into a process on the machine this engine belongs
+        /// to. The injected server announces itself over Bonjour, so the
+        /// response reports only how the attempt ended.
+        case injectIntoProcess
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"
@@ -116,6 +128,19 @@ public actor RuntimeEngine {
 
     /// Callback for handling engine list change notifications. Set by RuntimeEngineManager.
     public static var engineListChangedHandler: (([RuntimeRemoteEngineDescriptor], RuntimeEngine) async -> Void)?
+
+    /// This process's own injection implementation, set by whoever has one.
+    ///
+    /// Per process rather than per engine: injection is a property of the
+    /// machine, and every engine this process serves gives the same answer for
+    /// it. A host asking a *remote* engine reaches that machine's own value
+    /// through the connection, not through this one.
+    ///
+    /// `nil` is a valid, meaningful state, not an uninitialized one — the iOS
+    /// variant without the injection entitlements leaves it unset on purpose.
+    /// See ``RuntimeInjectionAvailability/withoutInjectionService`` for what
+    /// each platform then answers.
+    public static var injectionService: (any RuntimeInjectionService)?
 
     /// Globally unique identifier for this engine instance.
     public nonisolated let engineID: String
