@@ -1,12 +1,12 @@
 # Draft - 越狱版 RV iOS：枚举设备进程并注入
 
-- **状态**: Draft
+- **状态**: Accepted
 - **作者**: JH
 - **创建日期**: 2026-10-01
 - **最后更新**: 2026-10-02
 - **所属愿景**: 无
 - **关联提案**: [0014](0014-inject-ios-simulator-process.md)（模拟器注入；本提案是它明确列为非目标的「真机」那一半）
-- **实现分支 / PR**: 待定
+- **实现分支 / PR**: `feature/jailbroken-ios-injection`
 - **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
 
 ## 摘要
@@ -195,6 +195,41 @@ uid 501 + 沙盒逃逸的 App 实测：`proc_listallpids` 返回 438 个 pid，`
 **所以 ViewModel 层本来就是抽象的** —— 它只认 `any RunningItem` 这个存在类型。要动的是
 UI 层与数据源层，业务层不受影响。这决定了本提案的抽象只做数据源一层（见替代方案考量）。
 
+### 真机 payload 能构建（2026-10-02 补测，撤销一条误报的前置）
+
+此前记录的「`RuntimeViewerMobileServer` 以 `generic/platform=iOS` 构建时，`swift-async-algorithms`
+报 `returning 'result' as a 'sending' result risks causing data races`」**是用错入口造成的**。
+
+| 入口 | 结果 |
+|---|---|
+| `RuntimeViewerServer/RuntimeViewerServer.xcodeproj`（独立工程） | ❌ 挂 —— 但 **macOS 目标也挂**，且挂在更前面的 `SwiftyXPC` 上（`stored properties cannot be marked unavailable with '@available'`） |
+| `RuntimeViewer-Debug.xcworkspace`（`RunScript.sh:263` 实际用的那个） | ✅ `EXIT=0` |
+
+两条结论：
+
+1. **这不是 iOS 特有问题**，而是那个独立 `.xcodeproj` 自带的 `Package.resolved` 整体陈旧
+   （`swift-async-algorithms` 钉在 1.1.1，上游已到 1.1.7；那段代码正是被 upstream `#399`
+   「Fix a data race error with the internal `Optional.takeSending`」与 `#419` 改掉的）。
+   `MachOSwiftSection` 声明的是 `from: "1.0.4"`，1.1.7 完全在允许范围内。
+   官方构建从不走这个入口（`RunScript.sh` 用 `-workspace RuntimeViewer-Debug.xcworkspace`），
+   所以这份陈旧锁文件一直没人撞到。**它是一个独立的小问题，与本提案无关，不在本次范围内。**
+2. **真机 payload 实测可构建，且能构建成 arm64e。**
+
+| 构建 | 产物 | `lipo -info` | `LC_BUILD_VERSION` |
+|---|---|---|---|
+| 默认（`ARCHS_STANDARD`） | 53 MB | `arm64` | `platform 2`（PLATFORM_IOS）/ `minos 15.0` / `sdk 27.0` |
+| **`ARCHS=arm64e`** | 55 MB | **`arm64e`** | 同上 |
+
+**`ARCHS_STANDARD` 在 iphoneos 上就是 `arm64`，不含 arm64e** —— 工程里写的是
+`ARCHS = $(ARCHS_STANDARD)`，所以越狱版那条构建路径必须显式传 `ARCHS=arm64e`。SwiftPM 那一侧
+不用额外处理：`RuntimeViewer-Debug.xcworkspace` 的 `WorkspaceSettings.xcsettings` 已经带
+`iOSPackagesShouldBuildARM64e = true`。
+
+**待定（落地第 3 步时确认）**：payload 要不要跟注入器一样强制 arm64e。注入器必须 arm64e 是已验证
+的硬约束（pauth 指令），但 payload 是被 `dlopen` 进目标进程的 dylib，它的架构要求取决于目标进程
+的架构而不是注入器的。iOS 系统进程是 arm64e，所以**倾向于编 arm64e**（架构对齐无歧义，且代价只有
+2 MB）；「arm64 dylib 能不能 dlopen 进 arm64e 进程」这一条**未实测**，不拿它当依据。
+
 ## 提议方案
 
 ### 一、RV iOS 新增越狱版独立 target
@@ -341,15 +376,19 @@ UI 层与数据源层，业务层不受影响。这决定了本提案的抽象�
   提示，和一个不会妨碍将来解禁的能力模型（`injectionCapability` 经 ProxyServer 转发天然可用）。
 - **不改动本机那条 attach 路径。** 目标是宿主进程时整条远端链路不介入，一次 RPC 都不发，
   行为与今天逐像素一致——这是「不破坏现有功能体验」的硬要求，不是顺带的优化。
-- **不解决 iphoneos payload 的构建问题。** 见下。
+- **不改 payload 的构建方式。** 真机 payload 已验证能构建（见「前期调研」最后一节），
+  本次只是在越狱版 target 里引用它，不新增构建脚本、不改 `RunScript.sh` 现有的模拟器那一支。
 
 ### 前置依赖（不在本提案范围）
 
-`RuntimeViewerMobileServer` 以 `generic/platform=iOS` 构建时，依赖 `swift-async-algorithms`
-报 Swift 并发错误（`returning 'result' as a 'sending' result risks causing data races`）。这是
-与本次改动无关的既有问题，但**整条链以它为前置**——没有真机 payload，被注入的进程起不来
-server。按项目 CLAUDE.md，下一步应改用 `../MxIris-Reverse-Engineering.xcworkspace` 走本地
-checkout 验证。本提案假设它已被单独修好。
+只剩一条：**`MachInjector` 的 iOS 支持要合入上游并发版**。提案已写在那个仓库
+（`Documentations/Evolutions/draft-ios-support.md`，状态 Draft），实测改动已提交在它的
+`feature/ios-support` 分支。在它发版之前，本仓库的开发可以用 `USING_LOCAL_DEPENDENCIES=1`
+走本地 checkout —— `RunScript.sh:127` 的注释正好把这个场景写成了典型例子
+（「MachInjector reached through swift-helper-service is the usual case」）。
+
+原先这里还列了第二条「修 `RuntimeViewerMobileServer` 的 iphoneos 构建」。**那一条是误报，已撤销**，
+原因见下一节。
 
 ## 详细设计
 
@@ -631,7 +670,10 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 1. **MachInjector 的 iOS 支持并入上游。** 把 spike 分支 `feature/ios-support` 的 5 处改动按
    MachInjector 自己 `CLAUDE.md` 的规矩走一份提案后并入 `main`，发版。验证标准：macOS
    `swift build` 无回归 + iOS arm64e 能编出 `libMachInjector.a`。
-2. **（前置，不在本提案）修 `RuntimeViewerMobileServer` 的 iphoneos 构建。**
+2. ~~（前置，不在本提案）修 `RuntimeViewerMobileServer` 的 iphoneos 构建。~~
+   **已撤销 —— 误报。** 2026-10-02 补测：经 `RuntimeViewer-Debug.xcworkspace` 构建
+   `generic/platform=iOS` 为 `EXIT=0`，加 `ARCHS=arm64e` 同样通过。原先的失败来自那个独立
+   `.xcodeproj` 的陈旧 `Package.resolved`，而官方构建从不走它。详见「前期调研」最后一节。
 3. **新建越狱版 target**，含 entitlements、独立 bundle identifier、图标，和一个编译期能力开关。
    验证标准：两个版本都能构建，越狱版的 `dump-entitlements` 含那三条。
 4. **实现设备侧枚举**（自带 `libproc` 原型）与**注入**（调 `MIMachInjector`，payload 暂存到
@@ -685,3 +727,7 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 | 2026-10-02 | 查证发现一处真实的行为收紧，已如实留档 | 实现这条 disable 规则前查了现状：**今天的 Attach to Process 与选中引擎完全无关**，唯一的门是 `SIPChecker.isDisabled()`，`attachItem` 没有任何 `isEnabled` 控制。所以按引擎 disable **会拿掉一个现有能力**——今天选中 iOS 引擎照样能 attach 本机进程。判定为**有意的语义收紧**：attach 从此表示「在当前引擎所在那台机器上挑进程」，而「不管在看哪台机器总是挑本机」在有了设备引擎之后会让人挑错机器。替代路径是把引擎切回 My Mac（toolbar 上的常规操作）。顺带记下 SIP 那条门用的是弹提示、与新门禁的 disable 不一致，是否统一列为待决。 |
 | 2026-10-02 | 特殊进程显示但不可选中，上游改动因此变三件 | 用户要求把 `kernel_task` / `launchd` 这类特殊进程 disable 掉、显示但不可选中。查证：上游**已有** `shouldSelect(item:)` 并已接在 `tableView(_:shouldSelectRow:)` 上，所以机制现成；缺的是①**渲染侧变灰**（返 `false` 只是选不中，行看起来仍正常）与②**特殊进程规则本身**（库里现在没有任何此类处理）。远端条目的 `injectability` 映射到同一个钩子，宿主不必为远端再发明一套禁用机制。**本机那条路一并受益**：今天它可以选中 launchd 然后注入失败。 |
 | 2026-10-02 | 上游改动变成两处 | 除 MachInjector 外，`RunningApplicationKit` 也要改（加数据源抽象 + 公开泛型 picker）。该仓库同样有自己的 `Documentations/Evolutions/`，且这是公开 API 变更，所以要在那边单独走提案。本提案的落地步骤因此多出一条，且两处上游都得先发版才能动宿主侧。 |
+| 2026-10-02 | 状态 Draft → Accepted，开始实现 | 用户批准并要求开工。实现落在 `feature/jailbroken-ios-injection`（worktree `.worktrees/RuntimeViewer-JailbrokenIOSInjection`，基线 `next` @ 968b20e7）。两处仍未决的假设（SIP 那条门是否也改成 disable + tooltip、「获取越狱版」入口的位置）不阻塞落地步骤 1–6，按提案里已写的假设实现，第 7 步前再确认。 |
+| 2026-10-02 | 撤销「iphoneos payload 构建失败」这条前置 —— 是我用错了构建入口 | 原记录说真机 payload 以 `swift-async-algorithms` 的并发错误构建失败，并把它列为整条链的前置。补测推翻：那是用独立 `RuntimeViewerServer.xcodeproj` 构建的结果，而**它的 macOS 目标也挂**，且挂在更前面的 `SwiftyXPC` 上 —— 说明问题是那个工程自带的 `Package.resolved` 整体陈旧（async-algorithms 钉 1.1.1，上游 1.1.7 已修掉那段代码），不是 iOS 特有。改用 `RunScript.sh:263` 实际使用的 `RuntimeViewer-Debug.xcworkspace` 后 `EXIT=0`。**教训：复现失败前先确认自己用的是官方构建路径**，否则会把别人的陈旧锁文件当成自己的阻塞。 |
+| 2026-10-02 | payload 的 arm64e 要显式指定，并留下一个未实测的待定 | 工程写的是 `ARCHS = $(ARCHS_STANDARD)`，而 `ARCHS_STANDARD` 在 iphoneos 上**不含 arm64e**，所以默认产物是 arm64。传 `ARCHS=arm64e` 同样构建通过（55 MB，`platform 2` / `minos 15.0`）。SwiftPM 侧不用额外处理 —— Debug workspace 已带 `iOSPackagesShouldBuildARM64e = true`。**倾向编 arm64e**（iOS 系统进程是 arm64e，架构对齐无歧义，代价 2 MB）；「arm64 dylib 能不能 dlopen 进 arm64e 进程」未实测，不拿它当依据，落地第 3 步时定。 |
+| 2026-10-02 | MachInjector 的 iOS 提案已落盘，成为唯一剩下的前置 | 在 `MachInjector` 仓库建 `Documentations/Evolutions/draft-ios-support.md`（Draft，待批准），实测改动提交在它的 `feature/ios-support` 分支（`81aaaba`），macOS 构建与 28 个测试全绿。该提案比 spike 多一项决定：**remap 路径在 iOS 上按 `#if TARGET_OS_OSX` 整体关掉**，理由是它内嵌的 loader 是 macOS dylib、只能在运行时失败，编译期不存在优于运行时失败，顺带去掉 11167 行 dylib 字节。上游发版前本仓库用 `USING_LOCAL_DEPENDENCIES=1` 开发。 |
