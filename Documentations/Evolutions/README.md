@@ -49,6 +49,7 @@
 | [draft](draft-runtime-object-icon-tooltips.md) | 运行时对象列表的图标加 tooltip | In Progress | 侧栏、Inspector 与类型选择器共用的 cell 里，三个图标位都加 tooltip：主图标写出对象种类，粉 / 蓝 / 橙 `C` 角标与 `G` / `Sp` 写出各自含义。文案与图标同在 `RuntimeObjectIcon` 决定，第二图标的优先级只写一处。tooltip 走 UIFoundationAppleInternal 的 `customTooltipStyle`（`.default` 预设上圆角改为 8），启动时安装 `CustomToolTipManager`。 |
 | [draft](draft-local-runtime-xpc-service.md) | 本地运行时引擎搬进内嵌 XPC service | In Progress | 「My Mac」引擎今天在 App 进程里 `dlopen` 并索引用户选中的镜像，一个坏镜像就带走整个 App。搬进随 App 打包的普通 XPC service（无 Mach service、无 daemon）：引擎身份仍是 `.local`，新增「进程内 / XPC service」执行方式；SwiftyXPC 直连，复用共享命令表；service 崩溃后同一引擎对象自动重连（3 次退避后按需），镜像丢失、文档回到镜像列表根并发系统通知。iOS / 测试 / CLI 独立 host 继续进程内。 |
 | [draft](draft-font-size-menu-commands.md) | 字号调整从工具栏挪到 View 菜单 | In Progress | 工具栏上的两个字号按钮移除，改为 View 菜单里的 Increase Font Size（⌘+）、Decrease Font Size（⌘-）与新增的 Reset Font Size（⌘0），经 responder chain 送到 key 文档窗口的 `MainWindowController`；上下限 8–32 与 120 ms 节流不变，Reset 设回默认的 13。 |
+| [draft](draft-batch-export-image-tree-picker.md) | 批量导出的镜像选择改成三态勾选树，搜索支持正则 | In Progress | 批量导出第一步的平铺表换成和侧边栏同源的镜像树（`NSOutlineView`），每行一个三态勾选框，勾目录即选中它下面的镜像，`Others` 下的全部镜像一勾即选。搜索新增正则模式、区分大小写开关，以及「镜像名 / 完整路径」切换；目录名不参与匹配。有搜索词时勾目录只作用于命中的镜像，即与搜索结果取交集。选择结果仍是 `selectedImagePaths`，向导后三步不动。 |
 
 > 0000 与 0001 采用早期格式，正文没有状态字段，此处如实标为「未标注」。按「旧文档原地不动」的约定不回填。
 
