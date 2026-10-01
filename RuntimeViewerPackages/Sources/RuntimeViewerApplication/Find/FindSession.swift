@@ -19,6 +19,9 @@ import RuntimeViewerArchitectures
 /// Text and member searches read the interfaces under the Generation Options
 /// the content pane displays with, so they find only what it shows; when
 /// those options change, the search in force runs again under the new ones.
+/// A corpus built after a search ran is read by that search on its own,
+/// its hits merged into the results, so the list keeps its selection and
+/// scroll position while images keep becoming searchable.
 @MainActor
 @Loggable(.private)
 public final class FindSession {
@@ -27,7 +30,8 @@ public final class FindSession {
     public struct Results: Equatable {
         public var nodes: [FindResultNode] = []
         /// `N results in M types`, or `nil` while there is nothing to say —
-        /// the summary bar is absent then, as in Xcode.
+        /// the summary bar is absent then, as in Xcode. Says nothing about
+        /// the corpora; `FindSession.summary` adds that.
         public var summary: String?
         /// Images the search did not see because their corpus is not built.
         public var unbuiltImagePaths: [String] = []
@@ -35,6 +39,10 @@ public final class FindSession {
 
         public init() {}
     }
+
+    /// The most hits or members a search collects, across every image it
+    /// reads; the count goes on past it.
+    static let resultLimit = 1000
 
     public unowned let documentState: DocumentState
 
@@ -47,19 +55,37 @@ public final class FindSession {
     @RxObserved
     public private(set) var isSearching: Bool = false
 
+    /// The summary bar: the results' own summary, then what is still being
+    /// made searchable — `2 images being made searchable · building
+    /// Foundation 37%` — or, while nothing is being built, how many indexed
+    /// images the search could not see. `nil` hides the bar.
+    @RxObserved
+    public private(set) var summary: String? = nil
+
     /// Fired when a page should take the keyboard focus into its search
     /// field — Edit ▸ Find ▸ Find in Indexed Images.
     public let focusSearchFieldRelay = PublishRelay<Void>()
 
     private var searchTask: Task<Void, Never>?
 
-    /// Bumped per `run`; a finishing search only clears `isSearching` when
+    /// Bumped per search; a finishing search only clears `isSearching` when
     /// it is still the current one.
     private var searchGeneration = 0
 
     private var textMatchGroups = TextMatchGroups()
 
     private var memberMatchGroups = MemberMatchGroups()
+
+    /// The text or member search `results` shows, kept so a corpus built
+    /// later can be read by it. `nil` for no search, a relationship search
+    /// or a failed one.
+    private var shownSearch: ShownSearch?
+
+    /// Corpora built while a search was running, read once it ends.
+    private var imagePathsBuiltDuringSearch: Set<String> = []
+
+    /// The corpus coordinator's build states, for the summary bar.
+    private var corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState] = [:]
 
     @Dependency(\.appDefaults)
     private var appDefaults
@@ -85,6 +111,25 @@ public final class FindSession {
         searchTask?.cancel()
     }
 
+    /// Hooks the session to the document's corpus coordinator, which calls
+    /// this once it exists: its build states feed the summary bar, and each
+    /// corpus it reports built is read by the search in force.
+    func follow(_ corpusCoordinator: FindCorpusCoordinator) {
+        corpusCoordinator.$buildStatesByImagePath.asDriver()
+            .driveOnNextMainActor { [weak self] states in
+                guard let self else { return }
+                self.corpusBuildStates = states
+                self.updateSummary()
+            }
+            .disposed(by: disposeBag)
+        corpusCoordinator.corpusBuilt
+            .emitOnNextMainActor { [weak self] imagePath in
+                guard let self else { return }
+                self.corpusDidBuild(at: imagePath)
+            }
+            .disposed(by: disposeBag)
+    }
+
     // MARK: - Query
 
     /// Changes the query without searching; the next `run` uses it. The
@@ -102,37 +147,23 @@ public final class FindSession {
         self.query = query
         searchTask?.cancel()
         searchTask = nil
+        shownSearch = nil
+        imagePathsBuiltDuringSearch = []
+        textMatchGroups = TextMatchGroups()
+        memberMatchGroups = MemberMatchGroups()
+        setResults(Results())
         guard !query.isEmpty else {
-            results = Results()
             isSearching = false
             return
         }
-        results = Results()
-        textMatchGroups = TextMatchGroups()
-        memberMatchGroups = MemberMatchGroups()
-        isSearching = true
-        searchGeneration += 1
-        let generation = searchGeneration
-        let engine = documentState.runtimeEngine
         let generationOptions = appDefaults.options
-        searchTask = Task { [weak self] in
-            do {
-                try await self?.perform(query, generationOptions: generationOptions, on: engine)
-            } catch is CancellationError {
-                // Superseded; the newer search owns the results now.
-            } catch {
-                #log(.error, "Find failed: \(error, privacy: .public)")
-                guard let self, self.searchGeneration == generation else { return }
-                var failed = Results()
-                failed.summary = "Search failed: \(error.localizedDescription)"
-                self.results = failed
-            }
-            guard let self, self.searchGeneration == generation else { return }
-            self.isSearching = false
+        if query.mode.relationship == nil {
+            shownSearch = ShownSearch(query: query, generationOptions: generationOptions)
         }
+        startSearch(query, imagePaths: nil, generationOptions: generationOptions)
     }
 
-    /// Runs the query in force again — after the corpus grew, say.
+    /// Runs the query in force again.
     public func rerun() {
         run(query)
     }
@@ -151,7 +182,46 @@ public final class FindSession {
 
     // MARK: - Execution
 
-    private func perform(_ query: FindQuery, generationOptions: RuntimeObjectInterface.GenerationOptions, on engine: RuntimeEngine) async throws {
+    /// What a text or member search on screen ran under and has read so
+    /// far, and its running totals: everything an image built later needs to
+    /// be searched the same way and merged in.
+    private struct ShownSearch {
+        let query: FindQuery
+        let generationOptions: RuntimeObjectInterface.GenerationOptions
+        var searchedImagePaths: Set<String> = []
+        var totalMatchCount = 0
+        var isTruncated = false
+    }
+
+    /// Runs `query` over `imagePaths` — every built image when `nil` — and
+    /// folds what it finds into the results. A search that widens one already
+    /// shown keeps the results it is merged into when it fails.
+    private func startSearch(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions) {
+        isSearching = true
+        searchGeneration += 1
+        let generation = searchGeneration
+        let engine = documentState.runtimeEngine
+        let isWidening = imagePaths != nil
+        searchTask = Task { [weak self] in
+            do {
+                try await self?.perform(query, imagePaths: imagePaths, generationOptions: generationOptions, on: engine)
+            } catch is CancellationError {
+                // Superseded; the newer search owns the results now.
+            } catch {
+                #log(.error, "Find failed: \(error, privacy: .public)")
+                guard let self, self.searchGeneration == generation, !isWidening else { return }
+                self.shownSearch = nil
+                var failed = Results()
+                failed.summary = "Search failed: \(error.localizedDescription)"
+                self.setResults(failed)
+            }
+            guard let self, self.searchGeneration == generation else { return }
+            self.isSearching = false
+            self.searchImagesBuiltDuringSearch()
+        }
+    }
+
+    private func perform(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions, on engine: RuntimeEngine) async throws {
         switch query.mode {
         case .text, .regularExpression:
             let engineQuery = RuntimeInterfaceSearchQuery(
@@ -159,25 +229,29 @@ public final class FindSession {
                 matchMode: query.mode == .regularExpression ? .regularExpression : query.textMatchStyle.matchMode,
                 isCaseSensitive: query.isCaseSensitive,
                 scope: .all,
-                generationOptions: generationOptions
+                resultLimit: max(0, Self.resultLimit - textMatchGroups.matchCount),
+                generationOptions: generationOptions,
+                imagePaths: imagePaths
             )
             let summary = try await engine.searchInterfaces(engineQuery) { [weak self] batch in
                 await self?.appendTextMatches(batch)
             }
             try Task.checkCancellation()
-            results = Self.results(from: textMatchGroups.nodes(), matchCount: summary.totalMatchCount, typeCount: textMatchGroups.typeCount, summary: summary)
+            finish(with: summary, nodes: textMatchGroups.nodes(), typeCount: textMatchGroups.typeCount)
         case .members:
             let engineQuery = RuntimeMemberSearchQuery(
                 text: query.trimmedText,
                 kinds: query.memberKindFilter.kinds,
                 isCaseSensitive: query.isCaseSensitive,
-                generationOptions: generationOptions
+                resultLimit: max(0, Self.resultLimit - memberMatchGroups.matchCount),
+                generationOptions: generationOptions,
+                imagePaths: imagePaths
             )
             let summary = try await engine.searchMembers(engineQuery) { [weak self] batch in
                 await self?.appendMemberMatches(batch)
             }
             try Task.checkCancellation()
-            results = Self.results(from: memberMatchGroups.nodes(), matchCount: summary.totalMatchCount, typeCount: memberMatchGroups.typeCount, summary: summary)
+            finish(with: summary, nodes: memberMatchGroups.nodes(), typeCount: memberMatchGroups.typeCount)
         case .ancestorTypes, .descendantTypes, .conformingTypes:
             let relationship = query.mode.relationship ?? .ancestors
             let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: query.trimmedText, relationship: relationship, isCaseSensitive: query.isCaseSensitive))
@@ -196,42 +270,118 @@ public final class FindSession {
             relationshipResults.summary = nodes.isEmpty
                 ? "No matching types"
                 : "\(relatedTypeCount) \(relatedTypeCount == 1 ? "type" : "types") for \(nodes.count) \(nodes.count == 1 ? "match" : "matches")"
-            results = relationshipResults
+            setResults(relationshipResults)
         }
     }
 
     /// One image's batch, folded into the tree while the search goes on.
     private func appendTextMatches(_ batch: [RuntimeInterfaceSearchMatch]) {
         textMatchGroups.append(batch)
-        results = Self.results(from: textMatchGroups.nodes(), matchCount: textMatchGroups.matchCount, typeCount: textMatchGroups.typeCount, summary: nil)
+        setResults(results(from: textMatchGroups.nodes(), matchCount: (shownSearch?.totalMatchCount ?? 0) + textMatchGroups.matchCountSinceLastFinish, typeCount: textMatchGroups.typeCount))
     }
 
     private func appendMemberMatches(_ batch: [RuntimeMemberMatch]) {
         memberMatchGroups.append(batch)
-        results = Self.results(from: memberMatchGroups.nodes(), matchCount: memberMatchGroups.matchCount, typeCount: memberMatchGroups.typeCount, summary: nil)
+        setResults(results(from: memberMatchGroups.nodes(), matchCount: (shownSearch?.totalMatchCount ?? 0) + memberMatchGroups.matchCountSinceLastFinish, typeCount: memberMatchGroups.typeCount))
+    }
+
+    /// A text or member search came to its end: its totals join the ones
+    /// shown, and the images it read join the ones searched.
+    private func finish(with summary: RuntimeInterfaceSearchSummary, nodes: [FindResultNode], typeCount: Int) {
+        textMatchGroups.markFinished()
+        memberMatchGroups.markFinished()
+        guard var shownSearch else { return }
+        shownSearch.searchedImagePaths.formUnion(summary.scannedImagePaths)
+        shownSearch.totalMatchCount += summary.totalMatchCount
+        shownSearch.isTruncated = shownSearch.isTruncated || summary.isTruncated
+        self.shownSearch = shownSearch
+        var finished = results(from: nodes, matchCount: shownSearch.totalMatchCount, typeCount: typeCount)
+        finished.unbuiltImagePaths = summary.unbuiltIndexedImagePaths
+        setResults(finished)
+    }
+
+    /// A corpus the coordinator reports built is read by the search on
+    /// screen, unless it already was; a search still running reads it once
+    /// it ends.
+    private func corpusDidBuild(at imagePath: String) {
+        guard shownSearch != nil else { return }
+        imagePathsBuiltDuringSearch.insert(imagePath)
+        guard !isSearching else { return }
+        searchImagesBuiltDuringSearch()
+    }
+
+    private func searchImagesBuiltDuringSearch() {
+        let imagePaths = imagePathsBuiltDuringSearch
+        imagePathsBuiltDuringSearch = []
+        guard let shownSearch else { return }
+        let unsearchedImagePaths = imagePaths.subtracting(shownSearch.searchedImagePaths)
+        guard !unsearchedImagePaths.isEmpty else { return }
+        startSearch(shownSearch.query, imagePaths: unsearchedImagePaths, generationOptions: shownSearch.generationOptions)
     }
 
     private static func count(_ nodes: [FindResultNode]) -> Int {
         nodes.reduce(0) { $0 + 1 + count($1.children) }
     }
 
-    private static func results(from nodes: [FindResultNode], matchCount: Int, typeCount: Int, summary: RuntimeInterfaceSearchSummary?) -> Results {
-        var results = Results()
-        results.nodes = nodes
+    /// `N results in M types`, with the truncation of the search on screen
+    /// and the images it could not see carried over.
+    private func results(from nodes: [FindResultNode], matchCount: Int, typeCount: Int) -> Results {
+        var updated = Results()
+        updated.nodes = nodes
+        updated.isTruncated = shownSearch?.isTruncated ?? false
+        updated.unbuiltImagePaths = results.unbuiltImagePaths
         var text = "\(matchCount) \(matchCount == 1 ? "result" : "results") in \(typeCount) \(typeCount == 1 ? "type" : "types")"
-        if let summary {
-            if summary.isTruncated {
-                text += ", showing the first \(nodes.reduce(0) { $0 + $1.children.count })"
-            }
-            results.unbuiltImagePaths = summary.unbuiltIndexedImagePaths
-            results.isTruncated = summary.isTruncated
-            if !summary.unbuiltIndexedImagePaths.isEmpty {
-                let count = summary.unbuiltIndexedImagePaths.count
-                text += " · \(count) \(count == 1 ? "image" : "images") not yet searchable"
-            }
+        if updated.isTruncated {
+            text += ", showing the first \(nodes.reduce(0) { $0 + $1.children.count })"
         }
-        results.summary = text
-        return results
+        updated.summary = text
+        return updated
+    }
+
+    // MARK: - Summary
+
+    private func setResults(_ newResults: Results) {
+        results = newResults
+        updateSummary()
+    }
+
+    private func updateSummary() {
+        // Only a text or member search reads the corpora; a relationship
+        // search or a failure has nothing to say about them.
+        let newSummary = Self.summary(of: results, corpusBuildStates: shownSearch == nil ? [:] : corpusBuildStates)
+        if newSummary != summary {
+            summary = newSummary
+        }
+    }
+
+    static func summary(of results: Results, corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState]) -> String? {
+        guard var text = results.summary else { return nil }
+        if let corpusStatus = corpusStatus(of: corpusBuildStates) {
+            text += " · " + corpusStatus
+        } else if !results.unbuiltImagePaths.isEmpty {
+            let count = results.unbuiltImagePaths.count
+            text += " · \(count) \(count == 1 ? "image" : "images") not yet searchable"
+        }
+        return text
+    }
+
+    /// `2 images being made searchable · building Foundation 37%`, or `nil`
+    /// when no image is waiting for its corpus.
+    static func corpusStatus(of corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState]) -> String? {
+        let activeCount = corpusBuildStates.values.filter(\.isActive).count
+        guard activeCount > 0 else { return nil }
+        var text = "\(activeCount) \(activeCount == 1 ? "image" : "images") being made searchable"
+        let building = corpusBuildStates
+            .compactMap { imagePath, state -> (imagePath: String, progress: RuntimeInterfaceCorpusBuildProgress)? in
+                guard case .building(let progress) = state else { return nil }
+                return (imagePath, progress)
+            }
+            .min { $0.imagePath < $1.imagePath }
+        if let building, building.progress.total > 0 {
+            let imageName = (building.imagePath as NSString).lastPathComponent
+            text += " · building \(imageName) \(building.progress.built * 100 / building.progress.total)%"
+        }
+        return text
     }
 
     // MARK: - Grouping
@@ -242,6 +392,8 @@ public final class FindSession {
         private var matchesByObject: [RuntimeObjectKey: [RuntimeInterfaceSearchMatch]] = [:]
         private var order: [RuntimeObject] = []
         private(set) var matchCount = 0
+        /// Hits collected by the search under way, for its interim count.
+        private(set) var matchCountSinceLastFinish = 0
 
         var typeCount: Int { order.count }
 
@@ -252,7 +404,12 @@ public final class FindSession {
                 }
                 matchesByObject[match.object.key, default: []].append(match)
                 matchCount += 1
+                matchCountSinceLastFinish += 1
             }
+        }
+
+        mutating func markFinished() {
+            matchCountSinceLastFinish = 0
         }
 
         func nodes() -> [FindResultNode] {
@@ -268,6 +425,7 @@ public final class FindSession {
         private var matchesByObject: [RuntimeObjectKey: [RuntimeMemberMatch]] = [:]
         private var order: [RuntimeObject] = []
         private(set) var matchCount = 0
+        private(set) var matchCountSinceLastFinish = 0
 
         var typeCount: Int { order.count }
 
@@ -278,7 +436,12 @@ public final class FindSession {
                 }
                 matchesByObject[match.object.key, default: []].append(match)
                 matchCount += 1
+                matchCountSinceLastFinish += 1
             }
+        }
+
+        mutating func markFinished() {
+            matchCountSinceLastFinish = 0
         }
 
         func nodes() -> [FindResultNode] {

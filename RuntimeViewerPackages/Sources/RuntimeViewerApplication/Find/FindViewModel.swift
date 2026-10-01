@@ -103,7 +103,7 @@ public final class FindViewModel<Route: Routable>: ViewModel<Route> {
             query: session.$query.asDriver(),
             searchFieldPlaceholder: session.$query.asDriver().map(\.mode.searchFieldPlaceholder),
             nodes: nodes,
-            summary: session.$results.asDriver().map(\.summary),
+            summary: session.$summary.asDriver(),
             isSearching: session.$isSearching.asDriver(),
             focusSearchField: session.focusSearchFieldRelay.asSignal(),
             expandAll: expandAll

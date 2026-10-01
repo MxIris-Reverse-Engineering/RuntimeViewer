@@ -107,6 +107,94 @@ struct FindCorpusCoordinatorTests {
         await engine.stop()
     }
 
+    private func isBuilding(_ state: RuntimeInterfaceCorpusBuildState?) -> Bool {
+        if case .building = state { return true }
+        return false
+    }
+
+    @Test("a request is followed from queued to built and lands in the history")
+    func requestFollowedToBuilt() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.states", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+
+        // The coordinator asks for every indexed image as it starts.
+        let states = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
+        #expect(states[TestImages.libobjc]?.isBuilt == true)
+        let finishedBuild = try #require(coordinator.finishedBuilds.first)
+        #expect(finishedBuild.imagePath == TestImages.libobjc)
+        #expect(finishedBuild.finishedAt != nil)
+        guard case .built = finishedBuild.outcome else {
+            Issue.record("expected a built outcome, got \(finishedBuild.outcome)")
+            return
+        }
+        await engine.stop()
+    }
+
+    @Test("cancelling a build withdraws this document's request and records the cancellation")
+    func cancelRecordsCancellation() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.cancel", loading: [TestImages.libobjc, TestImages.foundation])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+
+        // Foundation takes tens of seconds to print, so its progress shows.
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { self.isBuilding($0[TestImages.foundation]) }
+
+        coordinator.cancelBuild(of: TestImages.foundation)
+
+        #expect(coordinator.buildStatesByImagePath[TestImages.foundation] == nil)
+        #expect(coordinator.finishedBuilds.first?.imagePath == TestImages.foundation)
+        #expect(coordinator.finishedBuilds.first?.outcome == .cancelled)
+        // This document was the build's only subscriber, so the engine gives
+        // it up as well.
+        let coverage = try await waitForCoverage(of: engine, timeout: 30) { $0.statesByImagePath[TestImages.foundation] == nil }
+        #expect(coverage.statesByImagePath[TestImages.foundation] == nil)
+        await engine.stop()
+    }
+
+    @Test("a corpus another document built is listed after this document's own builds, without a time")
+    func corpusBuiltElsewhereIsLearned() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.learned", loading: [TestImages.libobjc])
+        let firstEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
+        firstEnvironment.settings.search.isCorpusEnabled = true
+        let firstCoordinator = firstEnvironment.make { FindCorpusCoordinator(documentState: firstEnvironment.documentState) }
+        defer { withExtendedLifetime(firstCoordinator) {} }
+        _ = try await nextValue(from: firstCoordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
+
+        let secondEnvironment = ViewModelTestEnvironment(runtimeEngine: engine)
+        secondEnvironment.settings.search.isCorpusEnabled = true
+        let secondCoordinator = secondEnvironment.make { FindCorpusCoordinator(documentState: secondEnvironment.documentState) }
+        defer { withExtendedLifetime(secondCoordinator) {} }
+
+        let history = try await nextValue(from: secondCoordinator.$finishedBuilds.asDriver(), timeout: 20) { !$0.isEmpty }
+        #expect(history.map(\.imagePath) == [TestImages.libobjc])
+        #expect(history.first?.finishedAt == nil)
+        #expect(secondCoordinator.buildStatesByImagePath[TestImages.libobjc]?.isBuilt == true)
+        await engine.stop()
+    }
+
+    @Test("a corpus evicted behind the coordinator's back stops showing as built once the coverage is refreshed")
+    func evictionNoticedOnRefresh() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.eviction", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
+
+        // What the store's resident budget does: no event, no notice.
+        try await engine.evictInterfaceCorpus(for: TestImages.libobjc)
+        coordinator.refreshCoverage()
+
+        let states = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 10) { $0[TestImages.libobjc] == nil }
+        #expect(states[TestImages.libobjc] == nil)
+        await engine.stop()
+    }
+
     @Test("the resident limit from Settings reaches the engine")
     func residentLimitReachesEngine() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.limit", loading: [TestImages.libobjc])

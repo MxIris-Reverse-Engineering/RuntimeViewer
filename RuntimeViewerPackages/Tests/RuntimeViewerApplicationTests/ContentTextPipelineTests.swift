@@ -171,19 +171,23 @@ struct ContentTextPipelineTests {
         #expect(firstFetchCompleted, "initial fetch never ran")
         #expect(viewModel.attributedString == nil)
 
-        // Re-trigger the fetch half via a generation-option change; before
-        // the split this subscription was already dead (`catchAndReturn` on
-        // the outer chain completed it on the first error).
-        let appDefaults = liveAppDefaults()
-        let originalOptions = appDefaults.options
-        defer { appDefaults.options = originalOptions }
-        appDefaults.options.swiftInterfaceOptions.printFieldOffset.toggle()
+        // The options are shared by every test in the process; see
+        // `withSharedGenerationOptionsLock`.
+        try await withSharedGenerationOptionsLock {
+            // Re-trigger the fetch half via a generation-option change; before
+            // the split this subscription was already dead (`catchAndReturn` on
+            // the outer chain completed it on the first error).
+            let appDefaults = liveAppDefaults()
+            let originalOptions = appDefaults.options
+            defer { appDefaults.options = originalOptions }
+            appDefaults.options.swiftInterfaceOptions.printFieldOffset.toggle()
 
-        let recovered = try await pollUntil(timeout: .seconds(10)) {
-            viewModel.attributedString != nil
+            let recovered = try await pollUntil(timeout: .seconds(10)) {
+                viewModel.attributedString != nil
+            }
+            #expect(recovered, "an options change after a failed fetch never recovered the pipeline")
+            #expect(fetchRecorder.fetchCount == 2)
         }
-        #expect(recovered, "an options change after a failed fetch never recovered the pipeline")
-        #expect(fetchRecorder.fetchCount == 2)
 
         withExtendedLifetime(mockRouter) {}
     }
