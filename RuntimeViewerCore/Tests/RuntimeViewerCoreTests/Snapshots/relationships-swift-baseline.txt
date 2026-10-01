@@ -1,8 +1,8 @@
 ## conformers of Foundation.FormatStyle (44)
-Swift Struct|__C.Decimal.FormatStyle|/System/Library/Frameworks/Foundation.framework/Foundation
-Swift Struct|__C.Decimal.FormatStyle.Attributed|/System/Library/Frameworks/Foundation.framework/Foundation
-Swift Struct|__C.Decimal.FormatStyle.Currency|/System/Library/Frameworks/Foundation.framework/Foundation
-Swift Struct|__C.Decimal.FormatStyle.Percent|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Struct|__C.NSDecimal.FormatStyle|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Struct|__C.NSDecimal.FormatStyle.Attributed|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Struct|__C.NSDecimal.FormatStyle.Currency|/System/Library/Frameworks/Foundation.framework/Foundation
+Swift Struct|__C.NSDecimal.FormatStyle.Percent|/System/Library/Frameworks/Foundation.framework/Foundation
 Swift Struct|Foundation.ByteCountFormatStyle|/System/Library/Frameworks/Foundation.framework/Foundation
 Swift Struct|Foundation.ByteCountFormatStyle.Attributed|/System/Library/Frameworks/Foundation.framework/Foundation
 Swift Struct|Foundation.Date.AnchoredRelativeFormatStyle|/System/Library/Frameworks/Foundation.framework/Foundation
