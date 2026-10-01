@@ -73,7 +73,7 @@ struct RuntimeInterfaceCorpusStoreTests {
     private static let imageB = "/images/B"
     private static let imageC = "/images/C"
 
-    /// The store holds its builder `unowned` — the engine owns both — so a
+    /// The store holds its builder weakly — the engine owns both — so a
     /// test keeps the builder alive for as long as it uses the store.
     struct Fixture {
         let store: RuntimeInterfaceCorpusStore
@@ -311,6 +311,28 @@ struct RuntimeInterfaceCorpusStoreTests {
         builder.failingImagePaths = []
         let summary = try await store.build(imagePath: Self.imageA, transformer: .default)
         #expect(summary.objectCount == 2)
+    }
+
+    /// The engine owns the store and can go away with work still queued — a source switch, a
+    /// closed document, a test's engine at its end — before the eviction its `stop()` schedules
+    /// arrives. The store used to hold it `unowned`, and the next queued build to start read it
+    /// after it was gone, aborting the process.
+    @Test("a build still queued when the builder goes away ends cancelled")
+    func queuedBuildOutlivesBuilder() async throws {
+        var builder: ScriptedBuilder? = ScriptedBuilder()
+        builder?.objectNamesByImagePath = [Self.imageA: ["Alpha", "Beta"], Self.imageB: ["Gamma"]]
+        builder?.delayPerObjectNanoseconds = 50_000_000
+        let store = RuntimeInterfaceCorpusStore(builder: try #require(builder), printingWidth: 1)
+        let buildA = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
+        try await waitForCoverage(of: store) { isBuilding($0.statesByImagePath[Self.imageA]) }
+        let buildB = Task { try await store.build(imagePath: Self.imageB, transformer: .default) }
+        try await waitForCoverage(of: store) { $0.statesByImagePath[Self.imageB] == .pending }
+
+        builder = nil
+
+        // A was under way and may finish or not; B must not start on a builder that is gone.
+        _ = try? await buildA.value
+        await #expect(throws: CancellationError.self) { try await buildB.value }
     }
 
     @Test("cancelling one of two subscribers leaves the build running")

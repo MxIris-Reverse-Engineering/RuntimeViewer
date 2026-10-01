@@ -225,10 +225,14 @@ actor RuntimeInterfaceCorpusStore {
         case cancelled
     }
 
-    /// `unowned` for the same reason as `RuntimeBackgroundIndexingManager.engine`:
-    /// the engine owns this store, and a strong back-reference would keep
-    /// engine, store and every corpus alive across a source switch.
-    private unowned let builder: any RuntimeInterfaceCorpusBuilding
+    /// Not a strong reference: the engine owns this store, and a strong
+    /// back-reference would keep engine, store and every corpus alive across
+    /// a source switch. Not `unowned` either: the engine can go away with
+    /// builds still queued, before the eviction its `stop()` schedules
+    /// reaches this actor, and the next build to start then read a released
+    /// object and aborted the process. A build that finds it gone ends
+    /// cancelled; a build under way holds it until it ends.
+    private weak var builder: (any RuntimeInterfaceCorpusBuilding)?
 
     private(set) var residentByteLimit: Int
 
@@ -417,11 +421,11 @@ actor RuntimeInterfaceCorpusStore {
         var skippedCount = 0
         let outcome: BuildOutcome
         do {
+            guard let builder else { throw CancellationError() }
             let objects = try await builder.corpusObjects(in: imagePath)
             let total = objects.count
             await publishProgress(imagePath: imagePath, built: 0, total: total)
             var printsByObjectIndex = [RuntimeInterfaceCorpusPrint?](repeating: nil, count: total)
-            let builder = builder
             func printOperation(forObjectAt index: Int) -> @Sendable () async throws -> (Int, ObjectPrintOutcome) {
                 let object = objects[index]
                 return {
