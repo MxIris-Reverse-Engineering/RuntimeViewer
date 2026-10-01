@@ -147,10 +147,18 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// while `machO.imagePath` is whatever dyld reported. A reference stamped
     /// with the latter fails to find its own section on the way back — which is
     /// exactly what `RuntimeRelationshipsResolver` does with these results.
-    init(machO: MachOImage, imagePath: String, eventHandlers: [SwiftIndexEvents.Handler] = []) {
+    ///
+    /// `configuration` is fixed for the indexer's lifetime. Callers pass
+    /// `RuntimeSwiftSection.indexConfiguration`; the indexer has no say in it.
+    init(
+        machO: MachOImage,
+        imagePath: String,
+        configuration: SwiftDeclarationIndexConfiguration,
+        eventHandlers: [SwiftIndexEvents.Handler] = []
+    ) {
         self.machO = machO
         self.imagePath = imagePath
-        self.upstream = .init(configuration: .init(showCImportedTypes: false), eventHandlers: eventHandlers, in: machO)
+        self.upstream = .init(configuration: configuration, eventHandlers: eventHandlers, in: machO)
     }
 
     // MARK: - Preparation
@@ -306,16 +314,6 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
         return nil
     }
     
-    // MARK: - Upstream Method Forwarding
-
-    /// Forward a configuration update to `upstream`. `@dynamicMemberLookup`
-    /// forwards property *reads* only, so the upstream methods the codebase
-    /// needs are wrapped explicitly — `RuntimeSwiftSection.updateConfiguration`
-    /// calls this when Swift generation options change.
-    func updateConfiguration(_ newConfiguration: SwiftDeclarationIndexConfiguration) async throws {
-        try await upstream.updateConfiguration(newConfiguration)
-    }
-
     // MARK: - Aggregation
 
     /// Register a per-image indexer with this aggregate. Appends it to

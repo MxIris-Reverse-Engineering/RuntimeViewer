@@ -73,6 +73,16 @@ actor RuntimeSwiftSection {
 
     private let factory: RuntimeSwiftSectionFactory
 
+    /// The index configuration of every Swift indexer RuntimeViewer creates —
+    /// each section's own and the factory's aggregate.
+    ///
+    /// Fixed for the indexer's lifetime: `allObjects()`, the object-to-definition
+    /// map and the relationship tables are all built once from what the indexer
+    /// found, so changing what it indexes afterwards strands them. Applying a
+    /// different configuration at interface time once emptied the map, and every
+    /// Swift object then failed with `invalidRuntimeObject`.
+    static let indexConfiguration = SwiftDeclarationIndexConfiguration(showCImportedTypes: true)
+
     /// Per-image Swift interface index — the Swift counterpart of
     /// `RuntimeObjCSection.objcIndexer`. Interface generation reads
     /// upstream-indexer properties (`allTypeDefinitions`, `rootTypeDefinitions`,
@@ -179,7 +189,7 @@ actor RuntimeSwiftSection {
         self.machO = machO
         #log(.debug, "Creating Swift Interface Components")
         let eventHandlers: [SwiftIndexEvents.Handler] = progressContinuation.map { [ProgressEventHandler(continuation: $0)] } ?? []
-        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: imagePath, eventHandlers: eventHandlers)
+        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: imagePath, configuration: Self.indexConfiguration, eventHandlers: eventHandlers)
         self.printer = .init(configuration: .init(), eventHandlers: [], in: machO)
         // `prepare()` runs the upstream extraction and then builds the
         // relationship reverse tables — that work now lives in
@@ -256,6 +266,21 @@ actor RuntimeSwiftSection {
             try makeRuntimeObject(for: $0, isChild: true)
         }
         let protocolChildren = try typeDefinition.protocolChildren.map { try makeRuntimeObject(for: $0, isChild: true) }
+        // Types and protocols this image declares in an extension of the type.
+        // Their parent is an extension context, so upstream files them under
+        // `typeExtensionDefinitions`, not `typeChildren`. An extension keyed by
+        // this very type name extends it from another module without
+        // constraints — in practice a C-imported type, whose descriptor lives in
+        // this image — and `allObjects()` folds such an extension into the
+        // type's entry instead of listing it, so these would otherwise appear
+        // nowhere. A constrained extension is keyed by the bound generic type,
+        // stays listed on its own and never reaches here.
+        let extensionDefinitions = typeDefinition.isSpecialized ? [] : indexer.typeExtensionDefinitions[typeDefinition.typeName.extensionName] ?? []
+        let childTypeNames = Set(typeDefinition.typeChildren.map(\.typeName))
+        let extensionTypeChildren = try extensionDefinitions.flatMap(\.types)
+            .filter { !childTypeNames.contains($0.typeName) }
+            .map { try makeRuntimeObject(for: $0, isChild: true) }
+        let extensionProtocolChildren = try extensionDefinitions.flatMap(\.protocols).map { try makeRuntimeObject(for: $0, isChild: true) }
         let specializedChildren = try typeDefinition.specializedChildren.map {
             try makeRuntimeObject(
                 for: $0,
@@ -263,7 +288,7 @@ actor RuntimeSwiftSection {
                 unspecializedTypeName: typeDefinition.typeName,
             )
         }
-        let allChildren = typeChildren + protocolChildren + specializedChildren
+        let allChildren = typeChildren + extensionTypeChildren + protocolChildren + extensionProtocolChildren + specializedChildren
 
         var properties: RuntimeObject.Properties = []
         if typeDefinition.typeContextDescriptorWrapper.contextDescriptor.layout.flags.isGeneric {
@@ -1204,10 +1229,6 @@ extension RuntimeSwiftSection {
     func updateConfiguration(using options: SwiftGenerationOptions, transformer: Transformer.SwiftConfiguration) async throws {
         #log(.debug, "Updating Swift section configuration")
 
-        let oldIndexConfiguration = indexer.configuration
-        let newIndexConfiguration = SwiftDeclarationIndexConfiguration(showCImportedTypes: false)
-        try await indexer.updateConfiguration(newIndexConfiguration)
-
         let oldPrintConfiguration = printer.configuration
 
         let transformerChanged = transformer != lastTransformerConfiguration
@@ -1225,12 +1246,6 @@ extension RuntimeSwiftSection {
             printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))
         } else {
             printer.removeAllTypeNameResolvers()
-        }
-
-        if newIndexConfiguration.showCImportedTypes != oldIndexConfiguration.showCImportedTypes {
-            #log(.debug, "Index configuration changed, re-preparing builder")
-            interfaceDefinitionNameByObject.removeAll()
-            specializedDefinitionByObject.removeAll()
         }
 
         if newPrintConfiguration != oldPrintConfiguration {
@@ -1517,7 +1532,7 @@ actor RuntimeSwiftSectionFactory {
 
     init() {
         let machO = MachOImage.current()
-        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: machO.imagePath)
+        self.indexer = RuntimeSwiftInterfaceIndexer(machO: machO, imagePath: machO.imagePath, configuration: RuntimeSwiftSection.indexConfiguration)
     }
 
     func existingSection(for imagePath: String) -> RuntimeSwiftSection? {
