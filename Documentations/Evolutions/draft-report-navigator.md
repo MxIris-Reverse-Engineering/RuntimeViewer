@@ -2,7 +2,7 @@
 
 - **状态**: Draft
 - **创建日期**: 2026-09-30
-- **最后更新**: 2026-09-30
+- **最后更新**: 2026-10-01
 - **关联提案**: [draft-find-navigator](draft-find-navigator.md)（语料构建的状态来源）、[0002-background-indexing](0002-background-indexing.md)（被替换的 toolbar 按钮与弹窗）
 
 ## 摘要
@@ -71,4 +71,5 @@ hierarchy 到手之前本提案不进 Accepted。
 | 2026-09-30 | 分页图标上加活动标记，不在 toolbar 放活动文字 | 用户在提问轮选定；toolbar 按钮今天没有任何进度绑定（提案 0002 写的进度叠层并不存在），去掉它不丢功能。 |
 | 2026-09-30 | 落在 `feature/find-navigator`，不进 3.0.0 | 用户：「这些改动有点大，把 Find 以及后续功能都放回原来的分支吧，next 分支 reset 回去，不打算 3.0.0 版本发布这个功能」。 |
 | 2026-09-30 | 第一轮审查：逐条列出弹窗行为的去留；语料 history 归 `FindCorpusCoordinator`、Clear History 清两边；活动信号只在 `DocumentState` 算一次；换图接口两张图都换；删掉 App target 的测试承诺；菜单位置交用户 | 原稿漏了 disabled 占位、空闲文案、百分比副标题与 Always Index 扁平化的去留，语料 history 无归属，两层各自合成活动信号会漂移，App target 没有单元测试 target。 |
+| 2026-10-01 | 语料状态的来源先随 Find 提案 §1.1 第 4 条落地；本提案的布局仍等 view hierarchy | `FindCorpusCoordinator` 已发布 `buildStatesByImagePath`、`finishedBuilds`（元素 `FindCorpusFinishedBuild`，built / failed / cancelled，100 条封顶）与 `hasActiveBuild`，并提供 `cancelBuild(of:)`、`clearFinishedBuilds()`、`refreshCoverage()`；进度 16 ms 合并、快照合并与驱逐后重取都按上面「语料状态的来源与归属」实现，Find 的摘要栏已经在用。Report navigator 的 ViewModel 直接绑这些，不再另起状态。盘上没有 Xcode 26 Report navigator 的导出，已请用户导出。 |
 | 2026-09-30 | 第二轮审查：删除清单补 `MainCoordinator` 转场；列表改 CellViewModel 逐行绑定；语料进度 16 ms 合并；活动标记的订阅放进 `TabViewController` 而非 coordinator，状态在重设分段后重套；写明取消语义、快照合并规则、驱逐后重取 coverage、语料开关的占位；大纲用 `StatefulOutlineView`；树的形状列为待定 | 审查指出弹窗靠逐行驱动器刷新而草案没搬、语料进度会比索引事件更密、coordinator 订阅状态改视图不合本仓库 MVVM-C、驱逐是静默的、语料开关关着时用户看不出为什么搜不到。 |

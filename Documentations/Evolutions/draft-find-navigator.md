@@ -2,7 +2,7 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-09-29
-- **最后更新**: 2026-09-30
+- **最后更新**: 2026-10-01
 - **所属愿景**: 无（内容区的行定位部分与《自建代码视图引擎》相邻，但本提案不改视图引擎的方向）
 - **前置设计**: `feature/interface-corpus-probe` 分支上的
   `Documentations/Plans/2026-07-26-global-search-design.md`（2026-07-27 按
@@ -124,7 +124,7 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
    同样写法。先用 Foundation 里带默认实现的根协议写一条测试核实，属实则同批修（`printedDefinitions` 不再追加）。
 2. **一个镜像内按对象并行打印**：`RuntimeInterfaceCorpusStore.run` 改为有界任务组，条目按列表顺序落位，进度按完成数在
    actor 上累加，子任务随父任务取消，与订阅 / 取消模型不冲突。宽度：大栈执行器每个 QoS 类只有 `max(2, 核数)` 个线程，
-   后台索引也跑在同一个 `.utility` 类上，两边加起来不能超——取 `max(2, 核数 / 2)`。`RuntimeObjCSection.corpusEntry` 一路改
+   后台索引也跑在同一个 `.utility` 类上，两边加起来不能超——取 `max(2, 核数 / 2)`。`RuntimeObjCSection.corpusPrint`（原 `corpusEntry`）一路改
    `nonisolated`（只读 `let`）。Swift 侧的**串行尾巴**：`RuntimeSwiftSection` 是 actor，打印本身能并行，但 `printedDefinitions`、
    `memberDeclarations`、定位器、`frozen()`、`separatingVisibilityRegions`、`RuntimeInterfaceCorpusEntry.init`（逐字节扫行首）
    都在 actor 上——`memberDeclarations` 拆成「actor 上取定义列表」+「actor 外读成员」，其余是值上的纯函数，全部挪到
@@ -145,6 +145,30 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 `SemanticString` 数 = 宽度，峰值内存会升）。
 
 **不做**（用户裁定）：语料落盘缓存；按 Find 分页可见与否切换构建优先级。
+
+**实施记录（2026-10-01）**：
+
+- **构建拆成两步**。逐对象打印只产出 `RuntimeInterfaceCorpusPrint`（文本、区域表、未定位的成员、对象自身定义的
+  UTF-8 长度）；整镜像打印完后由纯函数 `RuntimeInterfaceCorpusAssembly` 在 store actor 之外组装成条目：找嵌套块、
+  定位成员、建行表。原先在 section actor 上的定位器随之移出，这是第 2 条「串行尾巴」的第一步。
+- **第 1 条按 B 的区间落地**，在 probe 数字之前：区间是 B 和 D 共有的（定位修复要它，文本搜索跳过嵌套块也要它），
+  probe 只决定要不要再做 D 的「子条目从父条目派生、省掉嵌套体的打印」。区间取法：子条目的自身定义每个非空行
+  加一级缩进（空行保持为空），在父文本里找第一处**占满整行**、且未被别的子条目认领的出现。没有父类型定义的协议，
+  打印器会把默认实现接在它后面，而协议嵌在别的模块类型的扩展里时这段落在第 0 列，所以协议的自身定义截到第一个
+  顶格 `extension` 之前。父条目记 `nestedDefinitionRanges`（原文偏移），文本搜索在投影后经
+  `projectedUTF8Offset(ofOriginalUTF8Offset:)` 换算后跳过；成员定位排除这些区间内的行。Foundation 上的数字：
+  修复前 16317 个已定位 Swift 成员里 1183 个落在嵌套类型的行上，修复后 0；嵌套块全部找到。
+- **根协议默认实现的重复核实属实并已修**：见决策日志。
+- **第 3 条**：构建请求加 `isPrioritized`，第一次请求就置顶；已有订阅的镜像再被点开时发 `PrioritizeInterfaceCorpusRequest`，
+  不加订阅。
+- **第 4 条**：`FindCorpusCoordinator` 发布 `buildStatesByImagePath`、`finishedBuilds`（100 条封顶）、`corpusBuilt` 与
+  `hasActiveBuild`；进度经加锁的暂存 16 ms 合并后上主线程；启动、换引擎与每次构建结束后用 coverage 补快照（规则见
+  决策日志）；`cancelBuild(of:)` 只撤本文档的请求并记一条 cancelled。搜索请求加 `imagePaths` 范围，摘要报告
+  `scannedImagePaths`；`FindSession` 记住结果读过哪些镜像，新建成的镜像只搜它一个、并进现有结果，搜索进行中建成的
+  等搜索结束再补。摘要栏是 `N results in M types · 2 images being made searchable · building Foundation 37%`，
+  没有在建的镜像时仍报 `N images not yet searchable`；关系搜索不带这一段。
+- **未做**：probe 的运行（等用户同意）；第 2 条的并行打印（等 MachOSwiftSection 的并发打印安全落地）；两份上游提案
+  由 MachOSwiftSection 那边的会话实现。
 
 ### 2. 引擎请求（全部经 `registerSharedHandlers` 注册，XPC / TCP / proxy 链自动透传）
 
@@ -436,4 +460,13 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 | 2026-09-30 | 性能范围：记忆化 + 判别符缓存（上游）、跳过嵌套重复 + 并行打印（Core）；不做落盘缓存与优先级切换；状态展示另开 Report navigator 提案 | 用户在提问轮选定。采样证据与嵌套重复见 §1.1。 |
 | 2026-09-30 | 动手前先用 `CorpusBuildTimingProbe` 量 Release 下每镜像、每选项的耗时 | 「没有一条能变红的命令就不许猜原因」同样适用于性能：Debug 采样只给结构，比例要在 Release 下量。 |
 | 2026-09-30 | §1.1 按独立审查修订：第 1 条重做（B / D 二选一、由 probe 数字定，并修父子同名成员的定位缺陷）；第 2 条补 Swift actor 上的串行尾巴与 QoS 待定；第 3 条补「已排队再请求也前移」；第 4 条复用重跑 guard | 审查指出把嵌套类型的扩展补在父条目后面会让命中行号落在父对象内容区之外，与本节自己的约束矛盾；`.utility` 与「用上性能核」自相矛盾；定位器对父对象文本里排在前面的嵌套声明今天就会分错行。 |
+| 2026-10-01 | §1.1 开工，先 rebase 到本地 `next`（`9ca0d5a6`）；上游两份提案交给 MachOSwiftSection 那边的会话 | 用户：「开始实现提案，MachOSwiftSection的更改可以和 MachOSwiftSection-FindNavigator 这个agent说」，随后「你可以先rebase一下next分支」。唯一冲突在 `RuntimeSwiftInterfaceIndexer.swift`：`next` 的 `d300bafd`（C 导入类型的索引配置固定）删了 `updateConfiguration` 转发，本分支在同一处加了关系查询，两边都留。 |
+| 2026-10-01 | 计时 probe 重写，等用户同意再跑 | 旧 worktree 删除时未提交的 probe 一并丢失。自己写的程序先给用户看再运行（全局规则）。 |
+| 2026-10-01 | 嵌套块区间按 B 的取法先落地，不等 probe | 定位修复两条路都要这个区间，文本搜索跳过嵌套块也是 B、D 共有；probe 只决定是否再做 D 省打印的那一半。复现测试 `RuntimeInterfaceCorpusNestingTests`（Foundation）：`PersonNameComponents.FormatStyle` 的字段 `style` 落在嵌套 `CodingKeys` 的 `case style` 行上；全镜像 1183 / 16317 个 Swift 成员落在嵌套类型的行上；`var parseStrategy` 被父子各报一次。修复前 4 条全红，修复后全绿，另加「嵌套块全部找到」的覆盖测试。 |
+| 2026-10-01 | 协议的自身定义截到第一个顶格 `extension` 之前 | 覆盖测试只差 `__C.NSNotificationCenter` 的 2 个嵌套协议：没有父类型定义的协议，打印器把默认实现接在协议后面打印，嵌在别的模块类型的扩展里时这段落在第 0 列、而且在外层扩展的大括号里，加缩进后对不上。截掉后嵌套协议块能找到，第 0 列那段在父条目里仍会多报一次。打印位置本身是 MachOSwiftSection 的问题，转告上游，本提案不修。 |
+| 2026-10-01 | 根协议默认实现被打印两三遍：`printedDefinitions` 只在协议有父类型定义时追加 `defaultImplementationExtensions`，扩展表里已挂到协议上的副本（`isAttachedToProtocolDefinition`）不再打印 | 「待核实的同类重复」属实，而且是三遍：打印器对没有父类型定义的协议自己打一遍，`defaultImplementationExtensions` 一遍，MachOSwiftSection 的容器统一把同一批扩展留在扩展表里又一遍。Foundation 上 110 处扩展块重复，修复后 0（测试同上）。`next` 与 `main` 的显示路径是同样写法，内容区也显示多遍，属既有缺陷；本分支的修复在 `printedDefinitions`，显示与语料两条路都受益。 |
+| 2026-10-01 | 插队：构建请求加 `isPrioritized`，另加 `PrioritizeInterfaceCorpusRequest` | 第一次请求就带置顶，免得「构建」「插队」两个请求到达 store 的先后不定；已有订阅的镜像只发插队，不加订阅（原文第 3 条）。 |
+| 2026-10-01 | 语料状态与合并重搜按第 4 条落地；搜索摘要改报 `scannedImagePaths` | 会话要知道结果读过哪些镜像，才能只补搜没读过的，并且不和搜索进行中建成的镜像重复；`scannedImageCount` 留作计算属性。快照合并规则：本文档有请求在途的镜像保持请求报的状态，其余以 coverage 为准（覆盖掉驱逐后过期的 built）；本文档没看到结束的语料排在历史末尾、按路径排序、不记时间；已建好的语料被再次请求时不带任何进度就返回，不算本文档看到的一次构建。 |
+| 2026-10-01 | 写 Generation Options 的测试与「结果是合并而非重跑」的测试取同一把跨套件锁（`withSharedGenerationOptionsLock`，锁本体抽成 `CrossSuiteTestLock`，共享引擎锁也改用它） | 合并测试第一次跑就红了，原因不在产品：`AppDefaults.options` 是 `UserDefaults.standard` 上的 `@UserDefault`，隔离实例只隔离了文件；投影值是对这个键的 KVO，并行套件里 `FindGenerationOptionsTests` 一改选项，这边的会话就按「用户改了选项」整个重跑，Foundation 先占满 1000 条上限，libobjc 的结果没了。另一条路是给每个隔离实例开独立的 `UserDefaults` suite，代价是每个测试环境在 `~/Library/Preferences` 留一个 plist，没走。 |
+| 2026-10-01 | `RuntimeMemberDeclarationLocatorTests` 的 ObjC 夹具改成渲染器的真实输出 | 2026-09-30 全量回归里那 2 处失败就是它：定位器早已按「选择子片段不带冒号」改了，夹具还带着冒号。 |
 | 2026-09-30 | §1.1 第二轮审查（RuntimeViewer-Opus）：上游并发打印提案提到最前、定位为现存竞争的修复；B 的嵌套块行区间改由子条目文本反查、D 的前提补上多行原子与区域表断言并需要上游标记；建成后不重跑整个搜索、只搜新镜像并合并；插队改为不增订阅的 `prioritize`；串行尾巴补全、任务组宽度定为 `max(2, 核数 / 2)`；定位缺陷用 `CodingKeys` 复现；记下根协议默认实现扩展疑似双打 | 审查指出 B / D / 定位修复都依赖「嵌套块行区间」而原稿没说怎么拿；`run(_:)` 会清空结果列表；协调器对已有订阅直接返回，插队到不了 store；显示与语料两条打印今天已在 actor 外并行。 |
