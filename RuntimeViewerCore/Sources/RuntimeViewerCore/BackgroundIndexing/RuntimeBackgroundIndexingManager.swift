@@ -10,11 +10,14 @@ public actor RuntimeBackgroundIndexingManager {
         var priorityBoostPaths: Set<String> = []
     }
 
-    /// `unowned` because the engine owns this manager
-    /// (`RuntimeEngine.backgroundIndexingManager`); a strong back-reference
+    /// Not a strong reference: the engine owns this manager
+    /// (`RuntimeEngine.backgroundIndexingManager`), and a strong back-reference
     /// would form a retain cycle that leaks engine + manager + section caches
-    /// on every source switch.
-    private unowned let engine: any RuntimeBackgroundIndexingEngineRepresenting
+    /// on every source switch. Not `unowned` either: a batch under way keeps
+    /// this manager alive through its driving task, so the engine can go away
+    /// first, and the batch's next load then read a released object and
+    /// aborted the process. A batch that finds the engine gone ends cancelled.
+    private weak var engine: (any RuntimeBackgroundIndexingEngineRepresenting)?
     private let stream: AsyncStream<RuntimeIndexingEvent>
     private let continuation: AsyncStream<RuntimeIndexingEvent>.Continuation
 
@@ -165,6 +168,8 @@ public actor RuntimeBackgroundIndexingManager {
 
     func expandDependencyGraph(rootPath: String, depth: Int)
         async -> [RuntimeIndexingTaskItem] {
+        // Held for the whole walk, so the engine cannot go away halfway.
+        guard let engine else { return [] }
         var visited: Set<String> = []
         var items: [RuntimeIndexingTaskItem] = []
         // Fetch `mainExecutablePath` once at BFS entry and thread it through
@@ -268,7 +273,9 @@ public actor RuntimeBackgroundIndexingManager {
                     wasCancelled = true
                     break
                 }
-                if Task.isCancelled { wasCancelled = true; break }
+                // An engine gone away cancels what is left: nothing could
+                // load it anyway.
+                if Task.isCancelled || engine == nil { wasCancelled = true; break }
                 // Mirror the parent driving task's `.utility` priority: child
                 // tasks inherit the parent here, but spelling it out makes the
                 // QoS contract explicit and guards against future changes that
@@ -299,6 +306,7 @@ public actor RuntimeBackgroundIndexingManager {
         continuation.yield(.taskStarted(batchID: batchID, path: path))
         do {
             try Task.checkCancellation()
+            guard let engine else { throw CancellationError() }
             try await engine.loadImageForBackgroundIndexing(at: path)
             updateItemState(batchID: batchID, path: path, state: .completed)
             continuation.yield(.taskFinished(batchID: batchID, path: path,
