@@ -134,17 +134,21 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
 /// What the store needs from the engine to build an image's corpus. The
 /// engine conforms; the store never sees a section.
 protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
-    /// Every object of the image, nested children included, in listing
-    /// order.
+    /// Every object of the image, nested children included, each followed by
+    /// its own descendants — the order of `RuntimeObject.corpusFamily`.
     func corpusObjects(in imagePath: String) async throws -> [RuntimeObject]
 
-    /// The object's interface printed once, with `transformer`, marked for
-    /// every combination of the Generation Options, and its members, not yet
-    /// located. `nil` when the object has no interface. Throws when printing
-    /// fails; the store skips that object and carries on. The store makes
-    /// the image's entries out of these once every object is printed — see
+    /// The prints of `family`, one outcome per object, in order. The first
+    /// object is the one the others are nested in, at any depth, each listed
+    /// after the object it is nested in: a nested type's own definition is
+    /// taken out of its parent's print, so a family is printed as a unit —
+    /// see `RuntimeInterfaceCorpusNesting`. Every interface is printed once,
+    /// with `transformer`, marked for every combination of the Generation
+    /// Options; an object that fails to print comes back `.failed` and the
+    /// store carries on. Throws only when cancelled. The store makes the
+    /// image's entries out of the prints once every family is printed — see
     /// `RuntimeInterfaceCorpusAssembly`.
-    func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint?
+    func corpusPrints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome]
 }
 
 /// The engine-side home of every searchable interface.
@@ -158,8 +162,9 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 ///   takes minutes and must not compete with the user's own loads. Images
 ///   queue in request order, a prioritized one ahead of the rest; the same
 ///   image queued twice joins the one build. Within the image, up to
-///   `printingWidth` objects are printed at once, and the entries keep the
-///   listing order whatever order the prints finish in.
+///   `printingWidth` families — an object with the objects nested in it —
+///   are printed at once, and the entries keep the listing order whatever
+///   order the prints finish in.
 /// - **A build is a subscription.** Every `build(imagePath:…)` call is one
 ///   subscriber of that image's build; the build is cancelled only when the
 ///   last subscriber goes away. Two documents sharing the `.local` engine
@@ -189,15 +194,19 @@ actor RuntimeInterfaceCorpusStore {
     /// How many objects are printed between two progress reports.
     static let progressReportStride = 8
 
-    /// How many objects of an image are printed at once.
+    /// How many families of an image are printed at once: four at most, half
+    /// the cores on a smaller machine.
     ///
-    /// One until MachOSwiftSection can print definitions from several tasks
-    /// at once (its proposal `draft-concurrent-definition-printing`): two
-    /// prints of one image may index the same definition, and its indexing is
-    /// not safe to race yet. Then `max(2, cores / 2)` — the printer runs on a
-    /// large-stack executor with `max(2, cores)` threads per QoS class, and
-    /// background indexing shares the `.utility` class.
-    static let defaultPrintingWidth = 1
+    /// Measured on a 28-core machine (`draft-find-navigator`, decision log
+    /// 2026-10-01): four prints build SwiftUI's corpus in 6.7 s against 17 s
+    /// for one, at a third more processor time; fourteen take 12 s and six
+    /// times the processor time of four, contending in MachOSwiftSection's
+    /// symbol index. Rests on two upstream changes, MachOSwiftSection's
+    /// concurrent definition printing and swift-demangling's unretained kind
+    /// queries: without the first, two prints of one image race on the
+    /// definitions they index; without the second, they contend on one
+    /// reference count so hard that four prints are slower than one.
+    static let defaultPrintingWidth = max(1, min(4, ProcessInfo.processInfo.activeProcessorCount / 2))
 
     struct ImageCorpus: Sendable {
         let entries: [RuntimeInterfaceCorpusEntry]
@@ -403,19 +412,12 @@ actor RuntimeInterfaceCorpusStore {
         #log(.info, "Building corpus for \(imagePath, privacy: .public)")
     }
 
-    /// What printing one object came to: its print, nothing to print, or
-    /// the error that made it skip.
-    private enum ObjectPrintOutcome: Sendable {
-        case printed(RuntimeInterfaceCorpusPrint)
-        case empty
-        case failed(String)
-    }
-
     /// The build itself. Actor-isolated, but every heavy step happens in a
     /// child task off this actor, which stays free between completions; the
     /// `.utility` priority comes from the detached task that calls it.
-    /// Prints run `printingWidth` at a time and land in the slot of the
-    /// object they belong to, so the entries keep the listing order.
+    /// Families print `printingWidth` at a time and their prints land in the
+    /// slots of the objects they belong to, so the entries keep the listing
+    /// order.
     private func run(imagePath: String, transformer: Transformer.Configuration) async {
         let start = Date()
         var skippedCount = 0
@@ -426,46 +428,43 @@ actor RuntimeInterfaceCorpusStore {
             let total = objects.count
             await publishProgress(imagePath: imagePath, built: 0, total: total)
             var printsByObjectIndex = [RuntimeInterfaceCorpusPrint?](repeating: nil, count: total)
-            func printOperation(forObjectAt index: Int) -> @Sendable () async throws -> (Int, ObjectPrintOutcome) {
-                let object = objects[index]
+            let families = Self.families(in: objects)
+            func printOperation(forFamilyAt familyIndex: Int) -> @Sendable () async throws -> (Range<Int>, [RuntimeInterfaceCorpusPrintOutcome]) {
+                let familyRange = families[familyIndex]
+                let family = Array(objects[familyRange])
                 return {
                     try Task.checkCancellation()
-                    do {
-                        guard let objectPrint = try await builder.corpusPrint(for: object, transformer: transformer) else {
-                            return (index, .empty)
-                        }
-                        return (index, .printed(objectPrint))
-                    } catch is CancellationError {
-                        throw CancellationError()
-                    } catch {
-                        return (index, .failed("\(error)"))
-                    }
+                    return (familyRange, try await builder.corpusPrints(of: family, transformer: transformer))
                 }
             }
-            try await withThrowingTaskGroup(of: (Int, ObjectPrintOutcome).self) { group in
-                var nextObjectIndex = 0
-                while nextObjectIndex < min(printingWidth, total) {
-                    group.addTask(operation: printOperation(forObjectAt: nextObjectIndex))
-                    nextObjectIndex += 1
+            try await withThrowingTaskGroup(of: (Range<Int>, [RuntimeInterfaceCorpusPrintOutcome]).self) { group in
+                var nextFamilyIndex = 0
+                while nextFamilyIndex < min(printingWidth, families.count) {
+                    group.addTask(operation: printOperation(forFamilyAt: nextFamilyIndex))
+                    nextFamilyIndex += 1
                 }
                 var built = 0
-                while let (objectIndex, printOutcome) = try await group.next() {
-                    switch printOutcome {
-                    case .printed(let objectPrint):
-                        printsByObjectIndex[objectIndex] = objectPrint
-                    case .empty:
-                        skippedCount += 1
-                    case .failed(let message):
-                        skippedCount += 1
-                        #log(.debug, "Skipping \(objects[objectIndex].displayName, privacy: .public) in the corpus of \(imagePath, privacy: .public): \(message, privacy: .public)")
+                while let (familyRange, printOutcomes) = try await group.next() {
+                    for (offset, objectIndex) in familyRange.enumerated() {
+                        let printOutcome = offset < printOutcomes.count ? printOutcomes[offset] : .failed("its family's print had no outcome for it")
+                        switch printOutcome {
+                        case .printed(let objectPrint):
+                            printsByObjectIndex[objectIndex] = objectPrint
+                        case .empty:
+                            skippedCount += 1
+                        case .failed(let message):
+                            skippedCount += 1
+                            #log(.debug, "Skipping \(objects[objectIndex].displayName, privacy: .public) in the corpus of \(imagePath, privacy: .public): \(message, privacy: .public)")
+                        }
                     }
-                    built += 1
-                    if built % Self.progressReportStride == 0 || built == total {
+                    let previouslyBuilt = built
+                    built += familyRange.count
+                    if built / Self.progressReportStride > previouslyBuilt / Self.progressReportStride || built == total {
                         await publishProgress(imagePath: imagePath, built: built, total: total)
                     }
-                    if nextObjectIndex < total {
-                        group.addTask(operation: printOperation(forObjectAt: nextObjectIndex))
-                        nextObjectIndex += 1
+                    if nextFamilyIndex < families.count {
+                        group.addTask(operation: printOperation(forFamilyAt: nextFamilyIndex))
+                        nextFamilyIndex += 1
                     }
                 }
             }
@@ -483,6 +482,27 @@ actor RuntimeInterfaceCorpusStore {
             #log(.error, "Corpus build of \(imagePath, privacy: .public) failed: \(error, privacy: .public)")
         }
         finishBuild(imagePath: imagePath, outcome: outcome)
+    }
+
+    /// The objects in print units, each a range of the listing: an object
+    /// with the objects nested in it where the listing shows them that way —
+    /// the object followed by its descendants, as `RuntimeObject.corpusFamily`
+    /// orders them — and every other object on its own.
+    static func families(in objects: [RuntimeObject]) -> [Range<Int>] {
+        var families: [Range<Int>] = []
+        var index = 0
+        while index < objects.count {
+            let family = objects[index].corpusFamily
+            let end = index + family.count
+            if family.count > 1, end <= objects.count, zip(objects[index ..< end], family).allSatisfy({ $0.key == $1.key }) {
+                families.append(index ..< end)
+                index = end
+            } else {
+                families.append(index ..< index + 1)
+                index += 1
+            }
+        }
+        return families
     }
 
     /// The image's entries out of its prints. `nonisolated` so the pass —

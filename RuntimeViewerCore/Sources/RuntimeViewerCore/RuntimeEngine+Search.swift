@@ -153,27 +153,41 @@ extension RuntimeEngine {
 
 extension RuntimeEngine: RuntimeInterfaceCorpusBuilding {
     func corpusObjects(in imagePath: String) async throws -> [RuntimeObject] {
-        var result: [RuntimeObject] = []
-        func append(_ object: RuntimeObject) {
-            result.append(object)
-            for child in object.children {
-                append(child)
-            }
-        }
-        for object in try await _objects(in: imagePath) {
-            append(object)
-        }
-        return result
+        try await _objects(in: imagePath).flatMap(\.corpusFamily)
     }
 
-    func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
-        switch object.kind {
+    /// A Swift family goes to its section whole, which takes the nested
+    /// types' definitions out of their parent's print. Nothing nests in
+    /// Objective-C, so each object of such a family is printed on its own.
+    func corpusPrints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
+        guard let root = family.first else { return [] }
+        switch root.kind {
         case .swift:
-            guard let section = await swiftSectionFactory.existingSection(for: object.imagePath) else { return nil }
-            return try await section.corpusPrint(for: object, transformer: transformer)
+            guard let section = await swiftSectionFactory.existingSection(for: root.imagePath) else {
+                return family.map { _ in .empty }
+            }
+            return try await section.corpusPrints(of: family, transformer: transformer)
         case .objc, .c:
-            guard let section = await objcSectionFactory.existingSection(for: object.imagePath) else { return nil }
-            return try await section.corpusPrint(for: object, transformer: transformer)
+            guard let section = await objcSectionFactory.existingSection(for: root.imagePath) else {
+                return family.map { _ in .empty }
+            }
+            var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []
+            outcomes.reserveCapacity(family.count)
+            for object in family {
+                try Task.checkCancellation()
+                do {
+                    if let objectPrint = try await section.corpusPrint(for: object, transformer: transformer) {
+                        outcomes.append(.printed(objectPrint))
+                    } else {
+                        outcomes.append(.empty)
+                    }
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    outcomes.append(.failed("\(error)"))
+                }
+            }
+            return outcomes
         }
     }
 }

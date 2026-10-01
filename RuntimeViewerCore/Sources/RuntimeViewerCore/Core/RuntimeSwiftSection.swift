@@ -355,7 +355,7 @@ extension RuntimeSwiftSection {
             #log(.debug, "Using cached interface")
             return interface
         }
-        let newInterfaceString = try await printInterface(for: object, using: printer).interface
+        let newInterfaceString = try await printInterface(for: object, using: printer)
         let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
         interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
@@ -367,11 +367,6 @@ extension RuntimeSwiftSection {
         case type(TypeDefinition)
         case `protocol`(ProtocolDefinition)
         case `extension`(ExtensionDefinition)
-
-        var isProtocol: Bool {
-            if case .protocol = self { return true }
-            return false
-        }
     }
 
     /// The definitions an object's interface is printed from, in the order
@@ -439,11 +434,12 @@ extension RuntimeSwiftSection {
     }
 
     /// The protocol's default implementations, unless the printer prints them
-    /// itself — which it does after a protocol with no parent type definition,
-    /// whether the sidebar lists it at the top level or, declared in an
-    /// extension of a type from another module, as that type's child.
+    /// itself — which it does after a protocol declared at the top level only.
+    /// A protocol nested in a type, or declared in an extension of a type from
+    /// another module, is printed without them, the same way its parent
+    /// prints it inline.
     private func defaultImplementationExtensionsLeftToPrint(of definition: ProtocolDefinition) -> [PrintedDefinition] {
-        guard definition.parent != nil else { return [] }
+        guard definition.parent != nil || definition.extensionContext != nil else { return [] }
         return definition.defaultImplementationExtensions.map(PrintedDefinition.extension)
     }
 
@@ -463,54 +459,35 @@ extension RuntimeSwiftSection {
     /// `printedDefinitions(for:)`, separated by a blank line. Takes the
     /// printer as a parameter because two printers exist — the display one,
     /// configured from the user's generation options, and the corpus one,
-    /// marking optional content — and they must print the same definitions.
-    ///
-    /// Also returns the UTF-8 length of the first definition, the object's
-    /// own: the corpus finds a nested type's block in its parent by it.
-    private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> (interface: SemanticString, ownDefinitionUTF8Length: Int) {
+    /// marking optional content and nested definitions — and they must print
+    /// the same definitions.
+    private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
         try await Self.printInterface(of: printedDefinitions(for: object), using: printer)
     }
 
     /// `printInterface(for:using:)` once the definitions are known. Static,
     /// so it runs off the actor: the printer is `Sendable` and the section's
     /// own state is not needed past the definition list.
-    private static func printInterface(of definitions: [PrintedDefinition], using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> (interface: SemanticString, ownDefinitionUTF8Length: Int) {
+    private static func printInterface(of definitions: [PrintedDefinition], using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
         var result: SemanticString = ""
-        var ownDefinitionUTF8Length = 0
         for (index, definition) in definitions.enumerated() {
             if index > 0 {
                 result.append(.doubleBreakLine)
             }
-            let printedDefinition: SemanticString
-            switch definition {
-            case .type(let typeDefinition):
-                printedDefinition = try await printer.printTypeDefinition(typeDefinition)
-            case .protocol(let protocolDefinition):
-                printedDefinition = try await printer.printProtocolDefinition(protocolDefinition)
-            case .extension(let extensionDefinition):
-                printedDefinition = try await printer.printExtensionDefinition(extensionDefinition)
-            }
-            if index == 0 {
-                ownDefinitionUTF8Length = Self.ownDefinitionUTF8Length(of: printedDefinition, isProtocol: definition.isProtocol)
-            }
-            result.append(printedDefinition)
+            result.append(try await printDefinition(definition, using: printer))
         }
-        return (result, ownDefinitionUTF8Length)
+        return result
     }
 
-    /// The UTF-8 length of a printed definition, less the default
-    /// implementations the printer trails a protocol with when it has no
-    /// parent type definition. Those start at the start of a line even when
-    /// the protocol is printed nested — inside an extension of a type from
-    /// another module — so they are not part of the block its parent prints
-    /// one level deeper.
-    private static func ownDefinitionUTF8Length(of printedDefinition: SemanticString, isProtocol: Bool) -> Int {
-        guard isProtocol else {
-            return printedDefinition.components.reduce(0) { $0 + $1.string.utf8.count }
+    private static func printDefinition(_ definition: PrintedDefinition, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
+        switch definition {
+        case .type(let typeDefinition):
+            try await printer.printTypeDefinition(typeDefinition)
+        case .protocol(let protocolDefinition):
+            try await printer.printProtocolDefinition(protocolDefinition)
+        case .extension(let extensionDefinition):
+            try await printer.printExtensionDefinition(extensionDefinition)
         }
-        let text = printedDefinition.string
-        guard let trailingExtension = text.range(of: "\nextension ") else { return text.utf8.count }
-        return text.utf8.distance(from: text.startIndex, to: trailingExtension.lowerBound)
     }
 }
 
@@ -1754,37 +1731,89 @@ extension SwiftDeclaration.AccessorKind {
 // MARK: - Corpus
 
 extension RuntimeSwiftSection {
-    /// The object's corpus print: its interface printed by the corpus
-    /// printer — marked for every combination of the Generation Options —
-    /// separated into the text and its visibility regions, and its members,
-    /// read off the definitions that print just indexed. Swift definitions
-    /// index their members lazily, and the only public trigger is printing —
-    /// which is why the members come out of the same pass as the text.
+    /// The corpus prints of `family` — an object, then the objects nested in
+    /// it, each after the object it is nested in — one outcome per object.
     ///
-    /// Only the definition list and the printer come from the section; the
-    /// printing, the freezing, the region split and the member listing run
-    /// off the actor, so the content pane is never kept waiting behind a
-    /// corpus build and prints of one image can overlap.
-    nonisolated func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
-        let inputs = try await corpusPrintingInputs(for: object, transformer: transformer.swift)
-        let printed = try await Self.printInterface(of: inputs.definitions, using: inputs.printer)
-        let separated = printed.interface.frozen().separatingVisibilityRegions()
-        return RuntimeInterfaceCorpusPrint(
-            object: object,
-            interface: separated.text,
-            visibilityRegions: separated.regions,
-            members: Self.memberDeclarations(of: inputs.definitions),
-            ownDefinitionUTF8Length: printed.ownDefinitionUTF8Length
-        )
+    /// The first object is printed with the corpus printer, marked for every
+    /// combination of the Generation Options and around every nested
+    /// definition. Each object nested in it then takes its own definition out
+    /// of that print instead of printing it again (`draft-find-navigator`
+    /// §1.1, option D: nested types are about four tenths of what an image
+    /// prints), and prints only what follows its definition — its extensions,
+    /// a protocol's default implementations. One whose definition cannot be
+    /// taken out is printed on its own: it failed to print inside its parent,
+    /// or a hand-written transformer did not indent by the level it was given.
+    /// Either way an interface comes out exactly as the content pane prints it.
+    ///
+    /// The members are read off the definitions those prints indexed: Swift
+    /// definitions index their members lazily, and the only public trigger is
+    /// printing, which a nested definition gets inside its parent's print.
+    ///
+    /// Only the definition lists and the printer come from the section; the
+    /// printing, the freezing, the separations and the member listing run off
+    /// the actor, so the content pane is never kept waiting behind a corpus
+    /// build and families of one image print side by side.
+    nonisolated func corpusPrints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
+        guard let root = family.first else { return [] }
+        let inputs = await corpusPrintingInputs(for: family, transformer: transformer.swift)
+        var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []
+        outcomes.reserveCapacity(family.count)
+        var rootPrint: (marked: FrozenSemanticString, regionsByObject: [RuntimeObjectKey: DefinitionRegionTable.Region])?
+        for (index, object) in family.enumerated() {
+            try Task.checkCancellation()
+            let definitions: [PrintedDefinition]
+            switch inputs.definitions[index] {
+            case .success(let printedDefinitions):
+                definitions = printedDefinitions
+            case .failure(let error):
+                outcomes.append(.failed("\(error)"))
+                continue
+            }
+            do {
+                let marked: FrozenSemanticString
+                if index > 0,
+                   let rootPrint,
+                   let region = rootPrint.regionsByObject[object.key],
+                   let ownDefinition = RuntimeInterfaceCorpusNesting.ownDefinition(in: rootPrint.marked, region: region) {
+                    var interface = SemanticString(components: ownDefinition.components)
+                    for definition in definitions.dropFirst() {
+                        interface.append(.doubleBreakLine)
+                        interface.append(try await Self.printDefinition(definition, using: inputs.printer))
+                    }
+                    marked = interface.frozen()
+                } else {
+                    marked = try await Self.printInterface(of: definitions, using: inputs.printer).frozen()
+                }
+                let separated = RuntimeInterfaceCorpusNesting.separate(marked, childNames: Set(object.children.map(\.name)))
+                if index == 0 {
+                    rootPrint = (marked, RuntimeInterfaceCorpusNesting.descendantRegions(of: root, in: separated.definitionRegions))
+                }
+                outcomes.append(.printed(RuntimeInterfaceCorpusPrint(
+                    object: object,
+                    interface: separated.interface,
+                    visibilityRegions: separated.visibilityRegions,
+                    members: Self.memberDeclarations(of: definitions),
+                    nestedDefinitionRanges: separated.nestedDefinitionRanges
+                )))
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                outcomes.append(.failed("\(error)"))
+            }
+        }
+        return outcomes
     }
 
-    /// What a corpus print takes from the section's state.
-    private func corpusPrintingInputs(for object: RuntimeObject, transformer: Transformer.SwiftConfiguration) throws -> (definitions: [PrintedDefinition], printer: SwiftDeclarationPrinter<MachOImage>) {
-        (try printedDefinitions(for: object), corpusPrinter(for: transformer))
+    /// What a family's corpus prints take from the section's state: each
+    /// object's definitions, or why it has none, and the printer.
+    private func corpusPrintingInputs(for family: [RuntimeObject], transformer: Transformer.SwiftConfiguration) -> (definitions: [Result<[PrintedDefinition], any Swift.Error>], printer: SwiftDeclarationPrinter<MachOImage>) {
+        (family.map { object in Result { try printedDefinitions(for: object) } }, corpusPrinter(for: transformer))
     }
 
     /// A printer that marks optional content instead of letting the options
-    /// decide it, so one print serves every combination of them. The opaque
+    /// decide it, so one print serves every combination of them, and marks
+    /// the nested definitions it prints inline, so an object nested in
+    /// another takes its own definition out of its parent's print. The opaque
     /// type resolver is always registered: the constraints it supplies are
     /// marked, and a search with `synthesizeOpaqueType` off projects them
     /// away. The member order is the fixed by-category one — a reordering is
@@ -1801,6 +1830,7 @@ extension RuntimeSwiftSection {
             transformerChanged: true,
         )
         configuration.marksOptionalContent = true
+        configuration.marksNestedDefinitions = true
         configuration.memberSortOrder = .byCategory
         printer.updateConfiguration(configuration)
         printer.addTypeNameResolver(SwiftInterfaceBuilderOpaqueTypeProvider(machO: machO))

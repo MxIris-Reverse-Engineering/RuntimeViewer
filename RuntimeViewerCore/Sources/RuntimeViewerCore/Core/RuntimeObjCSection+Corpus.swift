@@ -7,7 +7,7 @@ extension RuntimeObjCSection {
     /// of the Generation Options (`markedInterface(for:transformer:)`) with the
     /// user's transformer, separated into the text and its visibility regions,
     /// plus its members from the parsed metadata. An Objective-C interface
-    /// nests nothing, so all of it is the object's own definition.
+    /// nests nothing, so no part of it belongs to another entry.
     ///
     /// The Objective-C side keeps no interface cache, so there is nothing to
     /// bypass here: the builder is created per call and prints straight from
@@ -25,7 +25,7 @@ extension RuntimeObjCSection {
             interface: separated.text,
             visibilityRegions: separated.regions,
             members: memberDeclarations(for: object),
-            ownDefinitionUTF8Length: separated.text.text.utf8.count
+            nestedDefinitionRanges: []
         )
     }
 

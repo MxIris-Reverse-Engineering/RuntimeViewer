@@ -30,7 +30,21 @@ struct RuntimeInterfaceCorpusStoreTests {
             }
         }
 
-        func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
+        func corpusPrints(of family: [RuntimeObject], transformer: Transformer.Configuration) async throws -> [RuntimeInterfaceCorpusPrintOutcome] {
+            var outcomes: [RuntimeInterfaceCorpusPrintOutcome] = []
+            for object in family {
+                do {
+                    outcomes.append(.printed(try await corpusPrint(for: object)))
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    outcomes.append(.failed("\(error)"))
+                }
+            }
+            return outcomes
+        }
+
+        private func corpusPrint(for object: RuntimeObject) async throws -> RuntimeInterfaceCorpusPrint {
             lock.withLock {
                 concurrentPrintCount += 1
                 maximumConcurrentPrintCount = max(maximumConcurrentPrintCount, concurrentPrintCount)
@@ -59,7 +73,7 @@ struct RuntimeInterfaceCorpusStoreTests {
                 interface: interface,
                 visibilityRegions: .empty,
                 members: [RuntimeMemberDeclaration(name: "member" + object.name, kind: .swiftVariable, isStatic: false, declarationText: "", lineNumber: nil)],
-                ownDefinitionUTF8Length: interface.text.utf8.count
+                nestedDefinitionRanges: []
             )
         }
     }
@@ -88,6 +102,19 @@ struct RuntimeInterfaceCorpusStoreTests {
     }
 
     private static let manyObjectNames = (1 ... 12).map { "Object\($0)" }
+
+    @Test("an object and the objects nested in it print as one family where the listing keeps them together")
+    func familiesFollowTheListing() {
+        let grandchild = RuntimeObject(name: "Grandchild", displayName: "Parent.Child.Grandchild", kind: .swift(.type(.struct)), imagePath: Self.imageA, children: [])
+        let child = RuntimeObject(name: "Child", displayName: "Parent.Child", kind: .swift(.type(.struct)), imagePath: Self.imageA, children: [grandchild])
+        let parent = RuntimeObject(name: "Parent", displayName: "Parent", kind: .swift(.type(.struct)), imagePath: Self.imageA, children: [child])
+        let other = RuntimeObject(name: "Other", displayName: "Other", kind: .swift(.type(.struct)), imagePath: Self.imageA, children: [])
+
+        #expect(RuntimeInterfaceCorpusStore.families(in: [parent, child, grandchild, other]) == [0 ..< 3, 3 ..< 4])
+        // A listing that splits a family prints the objects it cannot keep
+        // with their parent one by one.
+        #expect(RuntimeInterfaceCorpusStore.families(in: [parent, other, child, grandchild]) == [0 ..< 1, 1 ..< 2, 2 ..< 4])
+    }
 
     @Test("objects printed side by side land in the listing order, whatever order they finish in")
     func parallelPrintsKeepListingOrder() async throws {

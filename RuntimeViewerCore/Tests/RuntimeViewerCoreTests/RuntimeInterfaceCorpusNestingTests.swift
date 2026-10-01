@@ -97,6 +97,64 @@ struct RuntimeInterfaceCorpusNestingTests {
         #expect(repeated.isEmpty, "\(repeated.count) extensions printed again, e.g.\n\(repeated.prefix(10).joined(separator: "\n"))")
     }
 
+    /// The corpus takes a nested type's own definition out of its parent's
+    /// print rather than printing it again; what comes out must be what
+    /// printing the type on its own gives, or a search would show other text
+    /// than the content pane — `draft-find-navigator` §1.1, option D.
+    @Test("every nested type's corpus interface is exactly its interface printed on its own")
+    func nestedInterfaceEqualsItsOwnPrint() async throws {
+        let engine = try await Self.foundationEngine.value
+        let entries = try await Self.foundationEntries()
+        let nestedKeys = Set(entries.flatMap { $0.object.children.map(\.key) })
+        let nestedEntries = entries.filter { nestedKeys.contains($0.object.key) }
+        let firstNestedEntry = try #require(nestedEntries.first)
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstNestedEntry.object.imagePath))
+        var different: [String] = []
+        for entry in nestedEntries {
+            let outcomes = try await section.corpusPrints(of: [entry.object], transformer: .default)
+            guard case .printed(let ownPrint) = outcomes.first else {
+                different.append("\(entry.object.displayName): does not print on its own")
+                continue
+            }
+            if ownPrint.interface != entry.interface {
+                different.append("\(entry.object.displayName): text")
+            } else if ownPrint.visibilityRegions != entry.visibilityRegions {
+                different.append("\(entry.object.displayName): visibility regions")
+            } else if ownPrint.nestedDefinitionRanges != entry.nestedDefinitionRanges {
+                different.append("\(entry.object.displayName): nested blocks")
+            }
+        }
+        #expect(nestedEntries.count > 100)
+        #expect(different.isEmpty, "\(different.count) of \(nestedEntries.count) nested types differ, e.g.\n\(different.prefix(10).joined(separator: "\n"))")
+    }
+
+    /// A protocol declared in an extension of a type from another module —
+    /// `extension NSNotificationCenter { protocol AsyncMessage }` — is printed
+    /// without its default implementations, the way its parent prints it
+    /// inline, so its own interface has to bring them along.
+    @Test("a protocol declared in another module's extension shows its default implementations")
+    func extensionProtocolShowsDefaultImplementations() async throws {
+        let engine = try await Self.foundationEngine.value
+        let entries = try await Self.foundationEntries()
+        let firstSwiftEntry = try #require(entries.first { $0.object.kind.isSwift })
+        let section = try #require(await engine.swiftSectionFactory.existingSection(for: firstSwiftEntry.object.imagePath))
+        var checkedCount = 0
+        var missing: [String] = []
+        for entry in entries where entry.object.kind.isSwift {
+            guard case .protocol(let definition) = try? await section.printedDefinitions(for: entry.object).first,
+                  definition.extensionContext != nil,
+                  !definition.defaultImplementationExtensions.isEmpty
+            else { continue }
+            checkedCount += 1
+            let extensionCount = Self.extensionBlocks(of: entry.interface.text).count
+            if extensionCount < definition.defaultImplementationExtensions.count {
+                missing.append("\(entry.object.displayName): \(extensionCount) of \(definition.defaultImplementationExtensions.count) default implementation extensions")
+            }
+        }
+        #expect(checkedCount > 0, "Foundation declares no protocol with default implementations in an extension any more")
+        #expect(missing.isEmpty, "\(missing.joined(separator: "\n"))")
+    }
+
     /// The options a search reads the corpus under: none — everything — or
     /// the defaults, which hide comments inside the nested blocks and so
     /// move them in the projected text.

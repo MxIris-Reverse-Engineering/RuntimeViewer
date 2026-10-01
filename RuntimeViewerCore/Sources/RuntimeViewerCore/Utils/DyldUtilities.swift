@@ -2,6 +2,7 @@ package import Foundation
 import FoundationToolbox
 import MachO.dyld
 package import MachOKit
+import SwiftDeclarationRendering
 
 public struct DyldOpenError: Error {
     public let message: String?
@@ -228,6 +229,10 @@ package enum DyldUtilities {
                 #log(.error, "Failed to load image: \(errStr ?? "unknown error", privacy: .public)")
                 throw DyldOpenError(message: errStr)
             }
+            // The Swift printer memoizes the nested field-offset expansion by
+            // metatype, and a level built before this image loaded keeps
+            // saying that a type defined in it does not resolve.
+            RuntimeFieldLayoutMemo.removeAll()
             #log(.info, "Image loaded successfully")
         }
     }
