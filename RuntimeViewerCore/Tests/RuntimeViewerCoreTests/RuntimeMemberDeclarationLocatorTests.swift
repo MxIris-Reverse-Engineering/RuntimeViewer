@@ -36,10 +36,11 @@ struct RuntimeMemberDeclarationLocatorTests {
             Standard(" ")
             MemberDeclaration("count")
             Standard(";\n- (void)")
-            FunctionDeclaration("setValue:")
-            Standard("(id)value ")
-            FunctionDeclaration("forKey:")
-            Standard("(NSString *)key;\n+ (instancetype)")
+            // The renderer prints each selector piece without its colon.
+            FunctionDeclaration("setValue")
+            Standard(":(id)value ")
+            FunctionDeclaration("forKey")
+            Standard(":(NSString *)key;\n+ (instancetype)")
             FunctionDeclaration("shared")
             Standard(";\n")
             Keyword("@end")
@@ -114,6 +115,53 @@ struct RuntimeMemberDeclarationLocatorTests {
         #expect(located.map(\.lineNumber) == [4, 5, nil, 2, 6, 3])
         #expect(located[4].declarationText == "subscript(index: Int) -> Int")
         #expect(located[5].declarationText == "init(count: Int)")
+    }
+
+    @Test("no member is located inside an excluded block, such as a nested type printed above the object's own members")
+    func excludedBlocks() throws {
+        /// ```
+        /// struct Style {
+        ///     enum CodingKeys {
+        ///         case style
+        ///         case locale
+        ///     }
+        ///     var style: Int
+        ///     var locale: Locale
+        /// }
+        /// ```
+        let interface: FrozenSemanticString = SemanticString {
+            Keyword("struct")
+            Standard(" ")
+            TypeName(kind: .struct, "Style")
+            Standard(" {\n    ")
+            Keyword("enum")
+            Standard(" ")
+            TypeName(kind: .enum, "CodingKeys")
+            Standard(" {\n        ")
+            Keyword("case")
+            Standard(" ")
+            MemberDeclaration("style")
+            Standard("\n        ")
+            Keyword("case")
+            Standard(" ")
+            MemberDeclaration("locale")
+            Standard("\n    }\n    ")
+            Keyword("var")
+            Standard(" ")
+            Variable("style")
+            Standard(": Int\n    ")
+            Keyword("var")
+            Standard(" ")
+            Variable("locale")
+            Standard(": Locale\n}")
+        }.frozen()
+        let text = interface.text
+        let block = try #require(text.range(of: "    enum CodingKeys {\n        case style\n        case locale\n    }"))
+        let excludedRange = text.utf8.distance(from: text.startIndex, to: block.lowerBound) ..< text.utf8.distance(from: text.startIndex, to: block.upperBound)
+
+        let located = RuntimeMemberDeclarationLocator.locate([member("style", .swiftField), member("locale", .swiftField)], in: interface, excludingUTF8Ranges: [excludedRange])
+
+        #expect(located.map(\.lineNumber) == [6, 7])
     }
 
     @Test("a span carrying line breaks advances the line count without claiming a name")

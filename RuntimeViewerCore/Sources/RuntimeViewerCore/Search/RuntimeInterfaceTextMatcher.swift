@@ -155,11 +155,14 @@ enum RuntimeInterfaceTextMatcher {
     /// query's scope to `collect`, in offset order, until `collect` returns
     /// `false`. Hits are still counted after that, so the return value is the
     /// true number of in-scope hits whether or not they were all collected.
+    /// A hit that starts inside one of `excludedUTF8Ranges` — ascending,
+    /// non-overlapping — is neither reported nor counted.
     @discardableResult
     static func matches(
         in interface: FrozenSemanticString,
         object: RuntimeObject,
         pattern: Pattern,
+        excludingUTF8Ranges excludedUTF8Ranges: [Range<Int>] = [],
         collect: (RuntimeInterfaceSearchMatch) -> Bool
     ) -> Int {
         let hits = hits(in: interface.text, pattern: pattern)
@@ -168,7 +171,14 @@ enum RuntimeInterfaceTextMatcher {
         let layout = Layout(interface)
         var count = 0
         var isCollecting = true
+        var excludedRangeIndex = 0
         for hit in hits {
+            while excludedRangeIndex < excludedUTF8Ranges.count, excludedUTF8Ranges[excludedRangeIndex].upperBound <= hit.utf8Offset {
+                excludedRangeIndex += 1
+            }
+            if excludedRangeIndex < excludedUTF8Ranges.count, excludedUTF8Ranges[excludedRangeIndex].contains(hit.utf8Offset) {
+                continue
+            }
             let kind = layout.semanticKind(atUTF8Offset: hit.utf8Offset)
             guard pattern.query.scope.includes(kind) else { continue }
             count += 1

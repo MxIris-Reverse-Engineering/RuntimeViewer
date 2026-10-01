@@ -15,9 +15,17 @@ import Semantic
 /// Overloads share a name and are claimed in printed order, which matches the
 /// order the definitions list them. A member with no line stays unlocated;
 /// it is still searchable and still reaches its type.
+///
+/// The lines of the object's nested types are not the object's: a type
+/// prints its nested types above its own members, and their declarations
+/// share names with its own often enough — the cases of a `Codable` type's
+/// synthesized `CodingKeys` are named after its fields. The caller passes
+/// those blocks in, and no member is located inside them.
 enum RuntimeMemberDeclarationLocator {
     /// One printed line's declaration evidence.
     private struct Line {
+        /// UTF-8 offset of the line's first byte in the interface.
+        let utf8StartOffset: Int
         var text = ""
         /// Names from `.member(.declaration)` and `.variable` spans.
         var names: [String] = []
@@ -28,10 +36,12 @@ enum RuntimeMemberDeclarationLocator {
         var keywords: [String] = []
     }
 
-    static func locate(_ members: [RuntimeMemberDeclaration], in interface: FrozenSemanticString) -> [RuntimeMemberDeclaration] {
+    /// `excludedUTF8Ranges` — ascending, non-overlapping — are the blocks of
+    /// `interface` no member may be located in.
+    static func locate(_ members: [RuntimeMemberDeclaration], in interface: FrozenSemanticString, excludingUTF8Ranges excludedUTF8Ranges: [Range<Int>] = []) -> [RuntimeMemberDeclaration] {
         guard !members.isEmpty else { return members }
         let lines = lines(of: interface)
-        var lineNumbersByKey = lineNumbersByKey(from: lines)
+        var lineNumbersByKey = lineNumbersByKey(from: lines, excludingUTF8Ranges: excludedUTF8Ranges)
 
         return members.map { member in
             for key in keys(for: member) {
@@ -48,7 +58,8 @@ enum RuntimeMemberDeclarationLocator {
     // MARK: - Line evidence
 
     private static func lines(of interface: FrozenSemanticString) -> [Line] {
-        var lines: [Line] = [Line()]
+        var lines: [Line] = [Line(utf8StartOffset: 0)]
+        var utf8Offset = 0
         interface.enumerateSpans { spanText, type, _ in
             // A span can carry line breaks — a multi-line comment, the
             // printer's paragraph separators — so it is split and its pieces
@@ -58,8 +69,11 @@ enum RuntimeMemberDeclarationLocator {
             let pieces = spanText.split(separator: "\n", omittingEmptySubsequences: false)
             for (pieceIndex, piece) in pieces.enumerated() {
                 if pieceIndex > 0 {
-                    lines.append(Line())
+                    // Past the line break the split removed.
+                    utf8Offset += 1
+                    lines.append(Line(utf8StartOffset: utf8Offset))
                 }
+                utf8Offset += piece.utf8.count
                 guard !piece.isEmpty else { continue }
                 lines[lines.count - 1].text += piece
                 guard pieces.count == 1 else { continue }
@@ -79,9 +93,16 @@ enum RuntimeMemberDeclarationLocator {
         return lines
     }
 
-    private static func lineNumbersByKey(from lines: [Line]) -> [String: [Int]] {
+    private static func lineNumbersByKey(from lines: [Line], excludingUTF8Ranges excludedUTF8Ranges: [Range<Int>]) -> [String: [Int]] {
         var result: [String: [Int]] = [:]
+        var excludedRangeIndex = 0
         for (index, line) in lines.enumerated() {
+            while excludedRangeIndex < excludedUTF8Ranges.count, excludedUTF8Ranges[excludedRangeIndex].upperBound <= line.utf8StartOffset {
+                excludedRangeIndex += 1
+            }
+            if excludedRangeIndex < excludedUTF8Ranges.count, excludedUTF8Ranges[excludedRangeIndex].contains(line.utf8StartOffset) {
+                continue
+            }
             let lineNumber = index + 1
             for name in line.names {
                 result[nameKey(name), default: []].append(lineNumber)

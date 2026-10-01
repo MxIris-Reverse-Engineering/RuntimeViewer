@@ -91,6 +91,10 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
     /// `nil` searches everything any options could show. The transformer
     /// part is not consulted: the corpus is already printed with it.
     public var generationOptions: RuntimeObjectInterface.GenerationOptions?
+    /// The images to search, of those with a corpus; `nil` searches all of
+    /// them. A search already shown widens itself this way to an image whose
+    /// corpus was built after it ran.
+    public var imagePaths: Set<String>?
 
     public init(
         text: String,
@@ -98,7 +102,8 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
         isCaseSensitive: Bool = false,
         scope: RuntimeInterfaceSearchScope = .all,
         resultLimit: Int = 1000,
-        generationOptions: RuntimeObjectInterface.GenerationOptions? = nil
+        generationOptions: RuntimeObjectInterface.GenerationOptions? = nil,
+        imagePaths: Set<String>? = nil
     ) {
         self.text = text
         self.matchMode = matchMode
@@ -106,6 +111,7 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
         self.scope = scope
         self.resultLimit = resultLimit
         self.generationOptions = generationOptions
+        self.imagePaths = imagePaths
     }
 }
 
@@ -138,7 +144,8 @@ public struct RuntimeInterfaceSearchMatch: Hashable, Codable, Sendable {
 public struct RuntimeInterfaceSearchSummary: Hashable, Codable, Sendable {
     /// Real total, counted past `resultLimit`.
     public let totalMatchCount: Int
-    public let scannedImageCount: Int
+    /// The images whose corpus the search read, in the order it read them.
+    public let scannedImagePaths: [String]
     public let scannedObjectCount: Int
     /// `true` when more hits exist than were collected.
     public let isTruncated: Bool
@@ -146,9 +153,13 @@ public struct RuntimeInterfaceSearchSummary: Hashable, Codable, Sendable {
     /// the UI can say what the search did not see.
     public let unbuiltIndexedImagePaths: [String]
 
-    public init(totalMatchCount: Int, scannedImageCount: Int, scannedObjectCount: Int, isTruncated: Bool, unbuiltIndexedImagePaths: [String]) {
+    public var scannedImageCount: Int {
+        scannedImagePaths.count
+    }
+
+    public init(totalMatchCount: Int, scannedImagePaths: [String], scannedObjectCount: Int, isTruncated: Bool, unbuiltIndexedImagePaths: [String]) {
         self.totalMatchCount = totalMatchCount
-        self.scannedImageCount = scannedImageCount
+        self.scannedImagePaths = scannedImagePaths
         self.scannedObjectCount = scannedObjectCount
         self.isTruncated = isTruncated
         self.unbuiltIndexedImagePaths = unbuiltIndexedImagePaths
@@ -202,6 +213,14 @@ public enum RuntimeInterfaceCorpusBuildState: Hashable, Codable, Sendable {
     public var isBuilt: Bool {
         if case .built = self { return true }
         return false
+    }
+
+    /// Waiting for its turn or being printed.
+    public var isActive: Bool {
+        switch self {
+        case .pending, .building: true
+        case .built, .failed: false
+        }
     }
 }
 

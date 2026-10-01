@@ -355,7 +355,7 @@ extension RuntimeSwiftSection {
             #log(.debug, "Using cached interface")
             return interface
         }
-        let newInterfaceString = try await printInterface(for: object, using: printer)
+        let newInterfaceString = try await printInterface(for: object, using: printer).interface
         let newInterface = RuntimeObjectInterface(object: object, interfaceString: newInterfaceString)
         interfaceByObject[object.key] = newInterface
         #log(.debug, "Interface generated and cached")
@@ -367,6 +367,11 @@ extension RuntimeSwiftSection {
         case type(TypeDefinition)
         case `protocol`(ProtocolDefinition)
         case `extension`(ExtensionDefinition)
+
+        var isProtocol: Bool {
+            if case .protocol = self { return true }
+            return false
+        }
     }
 
     /// The definitions an object's interface is printed from, in the order
@@ -411,13 +416,13 @@ extension RuntimeSwiftSection {
         case .rootProtocol(let rootProtocolName):
             guard let definition = indexer.rootProtocolDefinitions[rootProtocolName] else { throw Error.invalidRuntimeObject }
             return [.protocol(definition)]
-                + definition.defaultImplementationExtensions.map(PrintedDefinition.extension)
-                + (indexer.protocolExtensionDefinitions[rootProtocolName.extensionName] ?? []).map(PrintedDefinition.extension)
+                + defaultImplementationExtensionsLeftToPrint(of: definition)
+                + unattachedProtocolExtensions(of: rootProtocolName)
         case .childProtocol(let childProtocolName):
             guard let definition = indexer.allProtocolDefinitions[childProtocolName] else { throw Error.invalidRuntimeObject }
             return [.protocol(definition)]
-                + definition.defaultImplementationExtensions.map(PrintedDefinition.extension)
-                + (indexer.protocolExtensionDefinitions[childProtocolName.extensionName] ?? []).map(PrintedDefinition.extension)
+                + defaultImplementationExtensionsLeftToPrint(of: definition)
+                + unattachedProtocolExtensions(of: childProtocolName)
         case .typeExtension(let typeExtensionName):
             guard let definitions = indexer.typeExtensionDefinitions[typeExtensionName] else { throw Error.invalidRuntimeObject }
             return definitions.map(PrintedDefinition.extension)
@@ -433,27 +438,72 @@ extension RuntimeSwiftSection {
         }
     }
 
+    /// The protocol's default implementations, unless the printer prints them
+    /// itself — which it does after a protocol with no parent type definition,
+    /// whether the sidebar lists it at the top level or, declared in an
+    /// extension of a type from another module, as that type's child.
+    private func defaultImplementationExtensionsLeftToPrint(of definition: ProtocolDefinition) -> [PrintedDefinition] {
+        guard definition.parent != nil else { return [] }
+        return definition.defaultImplementationExtensions.map(PrintedDefinition.extension)
+    }
+
+    /// The extensions of a protocol this image declares, less the ones the
+    /// indexer attached to it as its default implementations. Those stay in
+    /// the indexer's extension table as well, but are printed with the
+    /// protocol — see `defaultImplementationExtensionsLeftToPrint(of:)`.
+    /// Printing the table's copies too showed every default implementation
+    /// two or three times.
+    private func unattachedProtocolExtensions(of protocolName: SwiftDeclaration.ProtocolName) -> [PrintedDefinition] {
+        (indexer.protocolExtensionDefinitions[protocolName.extensionName] ?? [])
+            .filter { !$0.isAttachedToProtocolDefinition }
+            .map(PrintedDefinition.extension)
+    }
+
     /// Prints an object's interface with `printer`: every definition of
     /// `printedDefinitions(for:)`, separated by a blank line. Takes the
     /// printer as a parameter because two printers exist — the display one,
     /// configured from the user's generation options, and the corpus one,
     /// marking optional content — and they must print the same definitions.
-    private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> SemanticString {
+    ///
+    /// Also returns the UTF-8 length of the first definition, the object's
+    /// own: the corpus finds a nested type's block in its parent by it.
+    private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> (interface: SemanticString, ownDefinitionUTF8Length: Int) {
         var result: SemanticString = ""
+        var ownDefinitionUTF8Length = 0
         for (index, definition) in try printedDefinitions(for: object).enumerated() {
             if index > 0 {
                 result.append(.doubleBreakLine)
             }
+            let printedDefinition: SemanticString
             switch definition {
             case .type(let typeDefinition):
-                try await result.append(printer.printTypeDefinition(typeDefinition))
+                printedDefinition = try await printer.printTypeDefinition(typeDefinition)
             case .protocol(let protocolDefinition):
-                try await result.append(printer.printProtocolDefinition(protocolDefinition))
+                printedDefinition = try await printer.printProtocolDefinition(protocolDefinition)
             case .extension(let extensionDefinition):
-                try await result.append(printer.printExtensionDefinition(extensionDefinition))
+                printedDefinition = try await printer.printExtensionDefinition(extensionDefinition)
             }
+            if index == 0 {
+                ownDefinitionUTF8Length = Self.ownDefinitionUTF8Length(of: printedDefinition, isProtocol: definition.isProtocol)
+            }
+            result.append(printedDefinition)
         }
-        return result
+        return (result, ownDefinitionUTF8Length)
+    }
+
+    /// The UTF-8 length of a printed definition, less the default
+    /// implementations the printer trails a protocol with when it has no
+    /// parent type definition. Those start at the start of a line even when
+    /// the protocol is printed nested — inside an extension of a type from
+    /// another module — so they are not part of the block its parent prints
+    /// one level deeper.
+    private static func ownDefinitionUTF8Length(of printedDefinition: SemanticString, isProtocol: Bool) -> Int {
+        guard isProtocol else {
+            return printedDefinition.components.reduce(0) { $0 + $1.string.utf8.count }
+        }
+        let text = printedDefinition.string
+        guard let trailingExtension = text.range(of: "\nextension ") else { return text.utf8.count }
+        return text.utf8.distance(from: text.startIndex, to: trailingExtension.lowerBound)
     }
 }
 
@@ -1697,18 +1747,23 @@ extension SwiftDeclaration.AccessorKind {
 // MARK: - Corpus
 
 extension RuntimeSwiftSection {
-    /// The object's corpus entry: its interface printed by the corpus
+    /// The object's corpus print: its interface printed by the corpus
     /// printer — marked for every combination of the Generation Options —
     /// separated into the text and its visibility regions, and its members,
     /// read off the definitions that print just indexed. Swift definitions
     /// index their members lazily, and the only public trigger is printing —
-    /// which is why the members come out of the same pass as the text, and
-    /// why they are aligned with that text here.
-    func corpusEntry(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusEntry? {
+    /// which is why the members come out of the same pass as the text.
+    func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
         let printer = corpusPrinter(for: transformer.swift)
-        let separated = try await printInterface(for: object, using: printer).frozen().separatingVisibilityRegions()
-        let members = RuntimeMemberDeclarationLocator.locate(try memberDeclarations(for: object), in: separated.text)
-        return RuntimeInterfaceCorpusEntry(object: object, interface: separated.text, visibilityRegions: separated.regions, members: members)
+        let printed = try await printInterface(for: object, using: printer)
+        let separated = printed.interface.frozen().separatingVisibilityRegions()
+        return RuntimeInterfaceCorpusPrint(
+            object: object,
+            interface: separated.text,
+            visibilityRegions: separated.regions,
+            members: try memberDeclarations(for: object),
+            ownDefinitionUTF8Length: printed.ownDefinitionUTF8Length
+        )
     }
 
     /// A printer that marks optional content instead of letting the options

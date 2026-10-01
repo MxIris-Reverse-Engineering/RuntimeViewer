@@ -23,11 +23,24 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
     /// projection.
     let memberDeclarationLineRanges: [Range<Int>?]
 
-    init(object: RuntimeObject, interface: FrozenSemanticString, visibilityRegions: VisibilityRegionTable = .empty, members: [RuntimeMemberDeclaration]) {
+    /// The blocks `interface` prints for the object's nested types, as UTF-8
+    /// offsets in ascending order. Each nested type is an entry of its own,
+    /// so a text search skips these and reports their lines there — see
+    /// `RuntimeInterfaceCorpusAssembly`.
+    let nestedDefinitionRanges: [Range<Int>]
+
+    init(
+        object: RuntimeObject,
+        interface: FrozenSemanticString,
+        visibilityRegions: VisibilityRegionTable = .empty,
+        members: [RuntimeMemberDeclaration],
+        nestedDefinitionRanges: [Range<Int>] = []
+    ) {
         self.object = object
         self.interface = interface
         self.visibilityRegions = visibilityRegions
         self.members = members
+        self.nestedDefinitionRanges = nestedDefinitionRanges
         let lineStartOffsets = Self.lineStartOffsets(of: interface.text)
         let textByteCount = interface.text.utf8.count
         memberDeclarationLineRanges = members.map { member in
@@ -54,6 +67,19 @@ struct RuntimeInterfaceCorpusEntry: Sendable {
     func projection(under visibility: RuntimeInterfaceVisibility) -> VisibilityProjection? {
         guard !visibilityRegions.isEmpty else { return nil }
         return visibilityRegions.projection(of: interface, where: visibility.isOptionEnabled)
+    }
+
+    /// `nestedDefinitionRanges` in `projection`'s text: each block from its
+    /// first to its last byte the projection kept. The projection keeps the
+    /// order of what it keeps, so nothing outside a block lands inside it; a
+    /// block it removed whole maps to nothing.
+    func nestedDefinitionRanges(in projection: VisibilityProjection) -> [Range<Int>] {
+        nestedDefinitionRanges.compactMap { range in
+            guard let firstKept = range.lazy.compactMap({ projection.projectedUTF8Offset(ofOriginalUTF8Offset: $0) }).first,
+                  let lastKept = range.reversed().lazy.compactMap({ projection.projectedUTF8Offset(ofOriginalUTF8Offset: $0) }).first
+            else { return nil }
+            return firstKept ..< lastKept + 1
+        }
     }
 
     /// The member at `memberIndex` as the projection shows it — its line
@@ -112,11 +138,13 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
     /// order.
     func corpusObjects(in imagePath: String) async throws -> [RuntimeObject]
 
-    /// The object's corpus entry: its interface printed once, with
-    /// `transformer`, marked for every combination of the Generation
-    /// Options. `nil` when the object has no interface. Throws when printing
-    /// fails; the store skips that object and carries on.
-    func corpusEntry(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusEntry?
+    /// The object's interface printed once, with `transformer`, marked for
+    /// every combination of the Generation Options, and its members, not yet
+    /// located. `nil` when the object has no interface. Throws when printing
+    /// fails; the store skips that object and carries on. The store makes
+    /// the image's entries out of these once every object is printed — see
+    /// `RuntimeInterfaceCorpusAssembly`.
+    func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint?
 }
 
 /// The engine-side home of every searchable interface.
@@ -250,9 +278,12 @@ actor RuntimeInterfaceCorpusStore {
     /// the corpus already built with the same transformer. Returns when the
     /// build finishes; cancelling the calling task withdraws this
     /// subscription, and the build itself only when no subscriber is left.
+    /// `isPrioritized` queues the image ahead of every other waiting one, as
+    /// `prioritize(imagePath:)` does.
     func build(
         imagePath: String,
         transformer: Transformer.Configuration,
+        isPrioritized: Bool = false,
         onProgress: @escaping BuildProgressHandler = { _ in }
     ) async throws -> RuntimeInterfaceCorpusBuildSummary {
         if let corpus = corpora[imagePath] {
@@ -281,11 +312,25 @@ actor RuntimeInterfaceCorpusStore {
                     builds[imagePath] = Build(transformer: transformer, subscribers: [subscriber])
                     pendingImagePaths.append(imagePath)
                 }
+                if isPrioritized {
+                    prioritize(imagePath: imagePath)
+                }
                 pump()
             }
         } onCancel: {
             Task { await self.unsubscribe(imagePath: imagePath, identifier: identifier) }
         }
+    }
+
+    /// Moves a queued image to the front of the queue, so it is the next one
+    /// built. Adds no subscription, and does not interrupt the image being
+    /// built: a large image under way still finishes first. An image that is
+    /// not waiting is left alone.
+    func prioritize(imagePath: String) {
+        guard let index = pendingImagePaths.firstIndex(of: imagePath), index > 0 else { return }
+        pendingImagePaths.remove(at: index)
+        pendingImagePaths.insert(imagePath, at: 0)
+        #log(.debug, "Moved the corpus build of \(imagePath, privacy: .public) to the front of the queue")
     }
 
     private func unsubscribe(imagePath: String, identifier: UInt64) {
@@ -339,19 +384,19 @@ actor RuntimeInterfaceCorpusStore {
     /// priority comes from the detached task that calls it.
     private func run(imagePath: String, transformer: Transformer.Configuration) async {
         let start = Date()
-        var entries: [RuntimeInterfaceCorpusEntry] = []
+        var prints: [RuntimeInterfaceCorpusPrint] = []
         var skippedCount = 0
         let outcome: BuildOutcome
         do {
             let objects = try await builder.corpusObjects(in: imagePath)
             let total = objects.count
-            entries.reserveCapacity(total)
+            prints.reserveCapacity(total)
             await publishProgress(imagePath: imagePath, built: 0, total: total)
             for (index, object) in objects.enumerated() {
                 try Task.checkCancellation()
                 do {
-                    if let entry = try await builder.corpusEntry(for: object, transformer: transformer) {
-                        entries.append(entry)
+                    if let objectPrint = try await builder.corpusPrint(for: object, transformer: transformer) {
+                        prints.append(objectPrint)
                     } else {
                         skippedCount += 1
                     }
@@ -366,6 +411,8 @@ actor RuntimeInterfaceCorpusStore {
                     await publishProgress(imagePath: imagePath, built: built, total: total)
                 }
             }
+            try Task.checkCancellation()
+            let entries = await assemble(prints)
             let byteCount = entries.reduce(0) { $0 + $1.byteCount }
             let summary = RuntimeInterfaceCorpusBuildSummary(objectCount: entries.count, skippedCount: skippedCount, byteCount: byteCount)
             outcome = .built(ImageCorpus(entries: entries, summary: summary, transformer: transformer, lastSearchedAt: Date()))
@@ -378,6 +425,13 @@ actor RuntimeInterfaceCorpusStore {
             #log(.error, "Corpus build of \(imagePath, privacy: .public) failed: \(error, privacy: .public)")
         }
         finishBuild(imagePath: imagePath, outcome: outcome)
+    }
+
+    /// The image's entries out of its prints. `nonisolated` so the pass —
+    /// a walk over every interface of the image — runs off this actor, which
+    /// stays free to answer searches and coverage meanwhile.
+    private nonisolated func assemble(_ prints: [RuntimeInterfaceCorpusPrint]) async -> [RuntimeInterfaceCorpusEntry] {
+        RuntimeInterfaceCorpusAssembly.entries(from: prints)
     }
 
     private func publishProgress(imagePath: String, built: Int, total: Int) async {
@@ -455,17 +509,29 @@ actor RuntimeInterfaceCorpusStore {
         var totalMatchCount = 0
         var collectedCount = 0
         var scannedObjectCount = 0
+        var scannedImagePaths: [String] = []
         let now = Date()
-        for imagePath in corpora.keys.sorted() {
+        for imagePath in searchedImagePaths(within: query.imagePaths) {
             try Task.checkCancellation()
             guard let corpus = corpora[imagePath] else { continue }
+            scannedImagePaths.append(imagePath)
             var batch: [RuntimeInterfaceSearchMatch] = []
             for entry in corpus.entries {
                 scannedObjectCount += 1
                 // The text the content pane shows under the query's options,
                 // so every hit is visible and its line reads as displayed.
-                let interface = visibility.flatMap { entry.projection(under: $0)?.text } ?? entry.interface
-                totalMatchCount += RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern) { match in
+                // Its nested types' blocks are skipped: they are entries of
+                // their own, which report those hits.
+                let interface: FrozenSemanticString
+                let nestedDefinitionRanges: [Range<Int>]
+                if let projection = visibility.flatMap({ entry.projection(under: $0) }) {
+                    interface = projection.text
+                    nestedDefinitionRanges = entry.nestedDefinitionRanges.isEmpty ? [] : entry.nestedDefinitionRanges(in: projection)
+                } else {
+                    interface = entry.interface
+                    nestedDefinitionRanges = entry.nestedDefinitionRanges
+                }
+                totalMatchCount += RuntimeInterfaceTextMatcher.matches(in: interface, object: entry.object, pattern: pattern, excludingUTF8Ranges: nestedDefinitionRanges) { match in
                     guard collectedCount < query.resultLimit else { return false }
                     batch.append(match)
                     collectedCount += 1
@@ -479,11 +545,19 @@ actor RuntimeInterfaceCorpusStore {
         }
         return RuntimeInterfaceSearchSummary(
             totalMatchCount: totalMatchCount,
-            scannedImageCount: corpora.count,
+            scannedImagePaths: scannedImagePaths,
             scannedObjectCount: scannedObjectCount,
             isTruncated: totalMatchCount > collectedCount,
             unbuiltIndexedImagePaths: indexedImagePaths.subtracting(corpora.keys).sorted()
         )
+    }
+
+    /// The built images a search reads, in path order: all of them, or
+    /// those of `scope` when the query names some.
+    private func searchedImagePaths(within scope: Set<String>?) -> [String] {
+        let imagePaths = corpora.keys.sorted()
+        guard let scope else { return imagePaths }
+        return imagePaths.filter(scope.contains)
     }
 
     /// The member counterpart of `searchInterfaces`: substring match on
@@ -497,10 +571,12 @@ actor RuntimeInterfaceCorpusStore {
         var totalMatchCount = 0
         var collectedCount = 0
         var scannedObjectCount = 0
+        var scannedImagePaths: [String] = []
         let now = Date()
-        for imagePath in corpora.keys.sorted() {
+        for imagePath in searchedImagePaths(within: query.imagePaths) {
             try Task.checkCancellation()
             guard let corpus = corpora[imagePath] else { continue }
+            scannedImagePaths.append(imagePath)
             var batch: [RuntimeMemberMatch] = []
             for entry in corpus.entries {
                 scannedObjectCount += 1
@@ -534,7 +610,7 @@ actor RuntimeInterfaceCorpusStore {
         }
         return RuntimeInterfaceSearchSummary(
             totalMatchCount: totalMatchCount,
-            scannedImageCount: corpora.count,
+            scannedImagePaths: scannedImagePaths,
             scannedObjectCount: scannedObjectCount,
             isTruncated: totalMatchCount > collectedCount,
             unbuiltIndexedImagePaths: indexedImagePaths.subtracting(corpora.keys).sorted()

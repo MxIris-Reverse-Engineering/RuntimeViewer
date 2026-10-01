@@ -113,12 +113,23 @@ public struct RuntimeMemberSearchQuery: Hashable, Codable, Sendable {
     /// member they strip is not found, and a found one's line reads as
     /// displayed. `nil` searches every member any options could show.
     public var generationOptions: RuntimeObjectInterface.GenerationOptions?
+    /// The images to search, of those with a corpus; `nil` searches all of
+    /// them. See `RuntimeInterfaceSearchQuery.imagePaths`.
+    public var imagePaths: Set<String>?
 
-    public init(text: String, kinds: Set<RuntimeMemberKind>? = nil, isCaseSensitive: Bool = false, resultLimit: Int = 1000, generationOptions: RuntimeObjectInterface.GenerationOptions? = nil) {
+    public init(
+        text: String,
+        kinds: Set<RuntimeMemberKind>? = nil,
+        isCaseSensitive: Bool = false,
+        resultLimit: Int = 1000,
+        generationOptions: RuntimeObjectInterface.GenerationOptions? = nil,
+        imagePaths: Set<String>? = nil
+    ) {
         self.text = text
         self.kinds = kinds
         self.isCaseSensitive = isCaseSensitive
         self.resultLimit = resultLimit
         self.generationOptions = generationOptions
+        self.imagePaths = imagePaths
     }
 }

@@ -93,6 +93,7 @@ public actor RuntimeEngine {
         case reloadData
         /// The Find navigator's requests; see `RuntimeEngine+Search.swift`.
         case buildInterfaceCorpus
+        case prioritizeInterfaceCorpus
         case searchInterfaces
         case searchMembers
         case typeRelationships

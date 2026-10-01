@@ -200,7 +200,7 @@ actor RuntimeObjCSection {
     /// The object's interface with everything any `ObjCGenerationOptions`
     /// could show, and what the switches decide marked with
     /// `VisibilityRegion`s — the Find corpus's form of it (see
-    /// `corpusEntry(for:transformer:)`). Projected with some options, it reads
+    /// `corpusPrint(for:transformer:)`). Projected with some options, it reads
     /// as `interface(for:using:transformer:)` with them. C structs and unions
     /// have nothing to mark and print as usual. `nil` for an object this image
     /// does not have.

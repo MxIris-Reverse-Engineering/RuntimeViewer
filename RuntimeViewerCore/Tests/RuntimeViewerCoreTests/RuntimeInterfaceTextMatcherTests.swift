@@ -46,6 +46,22 @@ struct RuntimeInterfaceTextMatcherTests {
         return (collected, count)
     }
 
+    @Test("a hit starting inside an excluded range is neither reported nor counted")
+    func excludedRanges() throws {
+        let pattern = try RuntimeInterfaceTextMatcher.Pattern(RuntimeInterfaceSearchQuery(text: "fooBar"))
+        let text = Self.interface.text
+        // The comment line, `    // fooBar comment`.
+        let commentLine = try #require(text.range(of: "    // fooBar comment"))
+        let excludedRange = text.utf8.distance(from: text.startIndex, to: commentLine.lowerBound) ..< text.utf8.distance(from: text.startIndex, to: commentLine.upperBound)
+        var collected: [RuntimeInterfaceSearchMatch] = []
+        let count = RuntimeInterfaceTextMatcher.matches(in: Self.interface, object: Self.object, pattern: pattern, excludingUTF8Ranges: [excludedRange]) { match in
+            collected.append(match)
+            return true
+        }
+        #expect(count == 1)
+        #expect(collected.map(\.lineNumber) == [2])
+    }
+
     @Test("containing finds every occurrence with its line, range and kind")
     func containing() throws {
         let result = try matches(RuntimeInterfaceSearchQuery(text: "fooBar"))

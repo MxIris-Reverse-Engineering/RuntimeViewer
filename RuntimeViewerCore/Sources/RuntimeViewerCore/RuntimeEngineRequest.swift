@@ -170,6 +170,7 @@ extension RuntimeEngine {
         register(RuntimePreflightRequest.self, on: connection, engine: engine)
         register(SpecializeRequest.self, on: connection, engine: engine)
         registerProgress(BuildInterfaceCorpusRequest.self, on: connection, engine: engine)
+        register(PrioritizeInterfaceCorpusRequest.self, on: connection, engine: engine)
         registerProgress(SearchInterfacesRequest.self, on: connection, engine: engine)
         registerProgress(SearchMembersRequest.self, on: connection, engine: engine)
         register(TypeRelationshipsRequest.self, on: connection, engine: engine)

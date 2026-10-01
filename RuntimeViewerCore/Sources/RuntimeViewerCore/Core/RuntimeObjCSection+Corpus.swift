@@ -3,21 +3,27 @@ import ObjCDump
 import Semantic
 
 extension RuntimeObjCSection {
-    /// The object's corpus entry: its interface marked for every combination
+    /// The object's corpus print: its interface marked for every combination
     /// of the Generation Options (`markedInterface(for:transformer:)`) with the
     /// user's transformer, separated into the text and its visibility regions,
-    /// plus its members from the parsed metadata, aligned with that text.
+    /// plus its members from the parsed metadata. An Objective-C interface
+    /// nests nothing, so all of it is the object's own definition.
     ///
     /// The Objective-C side keeps no interface cache, so there is nothing to
     /// bypass here: the builder is created per call and prints straight from
     /// the indexer.
-    func corpusEntry(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusEntry? {
+    func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
         guard let markedInterface = markedInterface(for: object, transformer: transformer.objc) else {
             throw Error.invalidRuntimeObject
         }
         let separated = markedInterface.frozen().separatingVisibilityRegions()
-        let members = RuntimeMemberDeclarationLocator.locate(memberDeclarations(for: object), in: separated.text)
-        return RuntimeInterfaceCorpusEntry(object: object, interface: separated.text, visibilityRegions: separated.regions, members: members)
+        return RuntimeInterfaceCorpusPrint(
+            object: object,
+            interface: separated.text,
+            visibilityRegions: separated.regions,
+            members: memberDeclarations(for: object),
+            ownDefinitionUTF8Length: separated.text.text.utf8.count
+        )
     }
 
     /// The object's members as `ObjCClassInfo` / `ObjCProtocolInfo` /

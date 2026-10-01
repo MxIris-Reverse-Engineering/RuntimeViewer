@@ -26,7 +26,7 @@ struct RuntimeInterfaceCorpusStoreTests {
             }
         }
 
-        func corpusEntry(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusEntry? {
+        func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
             if delayPerObjectNanoseconds > 0 {
                 try await Task.sleep(nanoseconds: delayPerObjectNanoseconds)
             }
@@ -44,11 +44,13 @@ struct RuntimeInterfaceCorpusStoreTests {
                 Variable("member" + object.name)
                 Standard(": Int\n}")
             }.frozen()
-            let members = RuntimeMemberDeclarationLocator.locate(
-                [RuntimeMemberDeclaration(name: "member" + object.name, kind: .swiftVariable, isStatic: false, declarationText: "", lineNumber: nil)],
-                in: interface
+            return RuntimeInterfaceCorpusPrint(
+                object: object,
+                interface: interface,
+                visibilityRegions: .empty,
+                members: [RuntimeMemberDeclaration(name: "member" + object.name, kind: .swiftVariable, isStatic: false, declarationText: "", lineNumber: nil)],
+                ownDefinitionUTF8Length: interface.text.utf8.count
             )
-            return RuntimeInterfaceCorpusEntry(object: object, interface: interface, members: members)
         }
     }
 
@@ -59,6 +61,7 @@ struct RuntimeInterfaceCorpusStoreTests {
 
     private static let imageA = "/images/A"
     private static let imageB = "/images/B"
+    private static let imageC = "/images/C"
 
     /// The store holds its builder `unowned` — the engine owns both — so a
     /// test keeps the builder alive for as long as it uses the store.
@@ -72,6 +75,92 @@ struct RuntimeInterfaceCorpusStoreTests {
         builder.objectNamesByImagePath = [Self.imageA: ["Alpha", "Beta"], Self.imageB: ["Gamma"]]
         configure(builder)
         return Fixture(store: RuntimeInterfaceCorpusStore(builder: builder), builder: builder)
+    }
+
+    /// Polls the store's coverage until `predicate` holds, for tests that
+    /// need the queue in a particular shape before they act on it.
+    private func waitForCoverage(
+        of store: RuntimeInterfaceCorpusStore,
+        timeout: TimeInterval = 10,
+        where predicate: (RuntimeInterfaceCorpusCoverage) -> Bool
+    ) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if predicate(await store.coverage(indexedImagePaths: [])) { return }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        Issue.record("the store never reached the expected coverage")
+    }
+
+    private func isBuilding(_ state: RuntimeInterfaceCorpusBuildState?) -> Bool {
+        if case .building = state { return true }
+        return false
+    }
+
+    /// Image A building, then B and C queued behind it, in that order.
+    private func queueBehindRunningImage(_ fixture: Fixture, prioritizingC isPrioritized: Bool) async throws -> [Task<RuntimeInterfaceCorpusBuildSummary, any Swift.Error>] {
+        let store = fixture.store
+        let buildA = Task { try await store.build(imagePath: Self.imageA, transformer: .default) }
+        try await waitForCoverage(of: store) { isBuilding($0.statesByImagePath[Self.imageA]) }
+        let buildB = Task { try await store.build(imagePath: Self.imageB, transformer: .default) }
+        try await waitForCoverage(of: store) { $0.statesByImagePath[Self.imageB] == .pending }
+        let buildC = Task { try await store.build(imagePath: Self.imageC, transformer: .default, isPrioritized: isPrioritized) }
+        try await waitForCoverage(of: store) { $0.statesByImagePath[Self.imageC] == .pending }
+        return [buildA, buildB, buildC]
+    }
+
+    @Test("a prioritized image is built right after the image under way")
+    func prioritizedImageBuiltNext() async throws {
+        let fixture = makeStore {
+            $0.objectNamesByImagePath[Self.imageC] = ["Delta"]
+            $0.delayPerObjectNanoseconds = 100_000_000
+        }
+        defer { withExtendedLifetime(fixture) {} }
+        let builds = try await queueBehindRunningImage(fixture, prioritizingC: false)
+
+        await fixture.store.prioritize(imagePath: Self.imageC)
+
+        for build in builds {
+            _ = try await build.value
+        }
+        #expect(fixture.builder.printedObjectNames == ["Alpha", "Beta", "Delta", "Gamma"])
+    }
+
+    @Test("a build asked for with priority goes ahead of the images already waiting")
+    func prioritizedRequestJumpsTheQueue() async throws {
+        let fixture = makeStore {
+            $0.objectNamesByImagePath[Self.imageC] = ["Delta"]
+            $0.delayPerObjectNanoseconds = 100_000_000
+        }
+        defer { withExtendedLifetime(fixture) {} }
+        let builds = try await queueBehindRunningImage(fixture, prioritizingC: true)
+
+        for build in builds {
+            _ = try await build.value
+        }
+        #expect(fixture.builder.printedObjectNames == ["Alpha", "Beta", "Delta", "Gamma"])
+    }
+
+    @Test("a search limited to some images reads only those")
+    func scopedSearch() async throws {
+        let fixture = makeStore()
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageA, transformer: .default)
+        _ = try await store.build(imagePath: Self.imageB, transformer: .default)
+
+        var matches: [RuntimeInterfaceSearchMatch] = []
+        let summary = try await store.searchInterfaces(RuntimeInterfaceSearchQuery(text: "member", imagePaths: [Self.imageB]), indexedImagePaths: []) { batch in
+            matches += batch
+        }
+        #expect(matches.map(\.object.name) == ["Gamma"])
+        #expect(summary.scannedImagePaths == [Self.imageB])
+
+        var memberMatches: [RuntimeMemberMatch] = []
+        _ = try await store.searchMembers(RuntimeMemberSearchQuery(text: "member", imagePaths: [Self.imageA]), indexedImagePaths: []) { batch in
+            memberMatches += batch
+        }
+        #expect(memberMatches.map(\.object.name) == ["Alpha", "Beta"])
     }
 
     @Test("a built image is searchable by text and by member name")
