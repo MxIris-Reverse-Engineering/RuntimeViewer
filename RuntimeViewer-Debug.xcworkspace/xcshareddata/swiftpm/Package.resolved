@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AppKitSupportProgram/AppKitPlus-Release",
       "state" : {
-        "revision" : "c7b568f0bd819e96b5f4756f8f5e708d8c4eea7b",
-        "version" : "0.5.0"
+        "revision" : "1a8c205402a6aa5ef18e35fc05217c45785f641f",
+        "version" : "0.6.0"
       }
     },
     {
@@ -159,7 +159,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKit",
       "state" : {
         "branch" : "next",
-        "revision" : "829055ec2951f8a2bd1eee0406f62e8f31a4446b"
+        "revision" : "2b3e8cc943fcbbaa55851f74cc443f1d657772e5"
       }
     },
     {
@@ -167,8 +167,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "bc19b91ad16d09d77fc07e8de02cca1b930746c2",
-        "version" : "0.1.2"
+        "revision" : "177fc1820d12bdd4059e2fd9bb505317545b139f",
+        "version" : "1.0.0"
       }
     },
     {
@@ -177,7 +177,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOObjCSection",
       "state" : {
         "branch" : "next",
-        "revision" : "ec5f0d31a9cb6d0d9339c5d54caebc017ac2efbf"
+        "revision" : "ced3fea05a531d4d62fa1c5e3c75e214fae38f8a"
       }
     },
     {
@@ -185,8 +185,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOSwiftSection",
       "state" : {
-        "branch" : "next",
-        "revision" : "8de6062a8586a2cf4c0850981bdeab9fed564f1f"
+        "branch" : "feature/runtime-viewer/find-navigator",
+        "revision" : "86f653418ef8a8d989fd6b8e778322cb22dc271a"
       }
     },
     {
@@ -374,8 +374,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-async-algorithms",
       "state" : {
-        "revision" : "789dcf1f3d3f00251482f40a432ab7144c181987",
-        "version" : "1.1.6"
+        "revision" : "13713a4ffdee8abd929f92568ee9462a46ae26e0",
+        "version" : "1.1.7"
       }
     },
     {
@@ -473,8 +473,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-demangling",
       "state" : {
-        "revision" : "0b5a939e107d18284bb986873e54880370b05b3a",
-        "version" : "0.7.1"
+        "branch" : "next",
+        "revision" : "e17ae7fd06df9b1442929c0a59f6c28a154f94fa"
       }
     },
     {
@@ -538,6 +538,15 @@
       "state" : {
         "revision" : "322d9ffeeba85c9f7c4984b39422ec7cc3c56597",
         "version" : "1.1.1"
+      }
+    },
+    {
+      "identity" : "swift-issue-reporting",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-issue-reporting",
+      "state" : {
+        "revision" : "75b000cea2ca6d7527a57e1b9cc0bdf21a9abe9f",
+        "version" : "2.1.1"
       }
     },
     {
@@ -663,7 +672,7 @@
       "location" : "https://github.com/MxIris-Reverse-Engineering/swift-semantic-string",
       "state" : {
         "branch" : "next",
-        "revision" : "ff626b0f9d2d163b08270644ceaf08605ee0e6ff"
+        "revision" : "ef4bd30930ee4db1d285f6a23337100a5a1142c0"
       }
     },
     {
@@ -707,8 +716,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Cocoanetics/SwiftMCP",
       "state" : {
-        "revision" : "55956f8d9b03c2255b6fefaa235592ffcf766ed8",
-        "version" : "1.12.0"
+        "revision" : "3f7e8db79cf8647eb11b7b420909e0f74f16ab68",
+        "version" : "1.13.0"
       }
     },
     {
@@ -725,8 +734,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "2bc19f0a27ee9d53d75e09c90a0a7e6b99268e84",
-        "version" : "0.37.0"
+        "revision" : "5a94b783e76bb5ccaab24bc1be3faf1c983bd833",
+        "version" : "0.38.0"
       }
     },
     {
@@ -745,15 +754,6 @@
       "state" : {
         "revision" : "1d35f8bf10b9cf0ab49736493d2d8b6c27fc63c0",
         "version" : "3.0.0-beta.1"
-      }
-    },
-    {
-      "identity" : "xctest-dynamic-overlay",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
-      "state" : {
-        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
-        "version" : "1.13.1"
       }
     },
     {
