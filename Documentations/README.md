@@ -17,6 +17,7 @@
 
 - [`CommunicationAndEngineArchitecture.md`](CommunicationAndEngineArchitecture.md) —— `RuntimeViewerCommunication` 的连接实现，以及 `RuntimeEngineManager` / `ProxyServer` 的整体架构。
 - [`EngineMirroringWalkthrough.md`](EngineMirroringWalkthrough.md) —— 跨主机 RuntimeEngine 共享系统的只读走读：四类 engine 集合如何拼合、Bonjour 如何建立管理通道、runtime 数据如何流经 proxy 层。读 `RuntimeEngineManager.swift`（`RuntimeViewerEngineManagement`）等源码前建议先看。
+- [`SwiftObjectTreeWalkthrough.md`](SwiftObjectTreeWalkthrough.md) —— 侧栏里一个镜像的 Swift 条目是怎么来的：编译器何时把嵌套类型的父级记成扩展上下文、MachOSwiftSection 索引器把类型放进哪几张表、`RuntimeSwiftSection.allObjects()` 哪些扩展单独列出哪些并入类型节点、每个节点的 interface 与子节点从哪来，以及 C 导入类型的索引配置为何不能运行时切换。按 libswiftObservation / libswiftCoreAudio / AppKit / SwiftUI 逐个举实测例子。
 - [`SparkleRelease.md`](SparkleRelease.md) —— 发布流程、EdDSA 密钥管理与应急处理手册。
 
 ## 愿景（Visions）
@@ -30,7 +31,7 @@
 
 ## 术语表
 
-- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、镜像引擎。
+- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、镜像引擎、合成扩展、并入。
 
 ## 提案（Evolutions）
 
