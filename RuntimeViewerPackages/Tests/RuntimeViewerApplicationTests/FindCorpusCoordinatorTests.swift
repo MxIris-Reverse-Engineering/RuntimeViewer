@@ -177,6 +177,27 @@ struct FindCorpusCoordinatorTests {
         await engine.stop()
     }
 
+    /// Clear History used to last until the next coverage refresh — after the next build, or the
+    /// next time the Report navigator appeared — which took every corpus still in the engine for
+    /// one another document had built and listed it again.
+    @Test("a cleared history stays cleared when the coverage is refreshed")
+    func clearedHistoryStaysCleared() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.clearedHistory", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let coordinator = environment.make { FindCorpusCoordinator(documentState: environment.documentState) }
+        defer { withExtendedLifetime(coordinator) {} }
+        _ = try await nextValue(from: coordinator.$finishedBuilds.asDriver(), timeout: 60) { !$0.isEmpty }
+
+        coordinator.clearFinishedBuilds()
+        coordinator.refreshCoverage()
+
+        let histories = try await values(from: coordinator.$finishedBuilds.asDriver(), during: 1)
+        let staysCleared = histories.allSatisfy(\.isEmpty)
+        #expect(staysCleared, "a cleared corpus came back as one another document built")
+        await engine.stop()
+    }
+
     @Test("a corpus evicted behind the coordinator's back stops showing as built once the coverage is refreshed")
     func evictionNoticedOnRefresh() async throws {
         let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindCorpusCoordinatorTests.eviction", loading: [TestImages.libobjc])

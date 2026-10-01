@@ -108,6 +108,13 @@ public final class FindCorpusCoordinator {
     @RxObserved
     public private(set) var finishedBuilds: [FindCorpusFinishedBuild] = []
 
+    /// Every image that has had a place in `finishedBuilds`, kept through
+    /// `clearFinishedBuilds()`: a coverage snapshot lists only corpora this
+    /// document has never listed, or a cleared entry would come back with the
+    /// next refresh. An image leaves once its corpus is gone from the engine,
+    /// so a corpus rebuilt after an eviction is listed again.
+    private var imagePathsListedInHistory: Set<String> = []
+
     /// An image's path, each time a request of this document ends with the
     /// image's corpus built.
     public var corpusBuilt: Signal<String> {
@@ -222,7 +229,8 @@ public final class FindCorpusCoordinator {
         recordFinishedBuild(FindCorpusFinishedBuild(imagePath: imagePath, outcome: .cancelled, finishedAt: Date()))
     }
 
-    /// Empties `finishedBuilds`.
+    /// Empties `finishedBuilds`. The corpora listed so far stay off it: a
+    /// later coverage snapshot does not bring them back.
     public func clearFinishedBuilds() {
         finishedBuilds = []
     }
@@ -313,6 +321,7 @@ public final class FindCorpusCoordinator {
     }
 
     private func recordFinishedBuild(_ finishedBuild: FindCorpusFinishedBuild) {
+        imagePathsListedInHistory.insert(finishedBuild.imagePath)
         var builds = finishedBuilds
         builds.insert(finishedBuild, at: 0)
         if builds.count > Self.maximumFinishedBuildCount {
@@ -337,9 +346,14 @@ public final class FindCorpusCoordinator {
             buildStatesByImagePath = states
         }
 
+        imagePathsListedInHistory.formIntersection(coverage.statesByImagePath.keys)
         let recordedImagePaths = Set(finishedBuilds.map(\.imagePath))
         let learnedBuilds = coverage.statesByImagePath
-            .filter { buildRequests[$0.key] == nil && !recordedImagePaths.contains($0.key) }
+            .filter { imagePath, _ in
+                buildRequests[imagePath] == nil
+                    && !recordedImagePaths.contains(imagePath)
+                    && !imagePathsListedInHistory.contains(imagePath)
+            }
             .sorted { $0.key < $1.key }
             .compactMap { imagePath, state -> FindCorpusFinishedBuild? in
                 switch state {
@@ -352,6 +366,7 @@ public final class FindCorpusCoordinator {
                 }
             }
         guard !learnedBuilds.isEmpty, finishedBuilds.count < Self.maximumFinishedBuildCount else { return }
+        imagePathsListedInHistory.formUnion(learnedBuilds.map(\.imagePath))
         finishedBuilds = Array((finishedBuilds + learnedBuilds).prefix(Self.maximumFinishedBuildCount))
     }
 
