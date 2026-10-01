@@ -51,6 +51,14 @@ final class SidebarCoordinator: ViewCoordinator<SidebarRoute, SidebarTransition>
             }
             guard let rootCoordinator else { return .none() }
             return .route(on: rootCoordinator, to: .find)
+        case .showReports:
+            // Both levels carry a Report navigator tab, bound to the same
+            // coordinators, so either shows the same reports.
+            if let runtimeObjectCoordinator {
+                return .route(on: runtimeObjectCoordinator, to: .reports)
+            }
+            guard let rootCoordinator else { return .none() }
+            return .route(on: rootCoordinator, to: .reports)
         case .selectedObject, .selectedNode:
             // iOS-only cases; on macOS the runtime-object list scrolls to
             // and highlights the root selection by observing

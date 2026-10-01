@@ -96,7 +96,6 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
             loadFrameworksClick: toolbarController.loadFrameworksItem.button.rx.click.asSignal(),
             attachToProcessClick: toolbarController.attachItem.button.rx.click.asSignal(),
             mcpStatusClick: toolbarController.mcpStatusItem.button.rx.clickWithSelf.asSignal().map { $0 },
-            backgroundIndexingClick: toolbarController.backgroundIndexingItem.button.rx.clickWithSelf.asSignal().map { $0 },
             frameworksSelected: frameworksSelectedRelay.asSignal(),
             saveLocationSelected: saveLocationSelectedRelay.asSignal(),
             tabSelected: tabBarAccessoryController.tabSelectedRelay.asSignal(),
@@ -355,6 +354,12 @@ final class MainWindowController: XiblessWindowController<MainWindow> {
 
     @objc func showFindNavigator(_ sender: Any?) {
         viewModel?.router.trigger(.find)
+    }
+
+    // MARK: - Report Actions
+
+    @objc func showReportNavigator(_ sender: Any?) {
+        viewModel?.router.trigger(.reports)
     }
 
     override func responds(to aSelector: Selector!) -> Bool {

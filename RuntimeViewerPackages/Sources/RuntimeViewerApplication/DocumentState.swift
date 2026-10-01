@@ -214,6 +214,19 @@ public final class DocumentState {
     /// Document lifecycle hook so it exists for the document's whole life.
     public private(set) lazy var findCorpusCoordinator = FindCorpusCoordinator(documentState: self)
 
+    /// Whether the Report navigator has work in progress: an indexing batch, or a corpus queued or
+    /// being printed. Worked out once here, so both sidebar levels mark their Report navigator tab
+    /// from the same answer.
+    public var reportActivity: Driver<Bool> {
+        Driver.combineLatest(
+            backgroundIndexingCoordinator.aggregateStateObservable.map(\.hasActiveBatch).asDriver(onErrorJustReturn: false),
+            findCorpusCoordinator.hasActiveBuild
+        ) { hasActiveBatch, hasActiveBuild in
+            hasActiveBatch || hasActiveBuild
+        }
+        .distinctUntilChanged()
+    }
+
     /// Where the content pane should scroll once it shows `object`, set by
     /// the highlighting selection routes and taken by the pane's ViewModel
     /// through `takeContentHighlight(for:)` — a one-shot handshake, not

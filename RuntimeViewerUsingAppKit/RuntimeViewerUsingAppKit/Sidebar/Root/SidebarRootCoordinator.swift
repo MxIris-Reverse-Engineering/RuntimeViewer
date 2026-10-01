@@ -28,10 +28,16 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
             let findViewController = FindViewController<SidebarRootRoute>()
             let findViewModel = FindViewModel<SidebarRootRoute>(documentState: documentState, router: self)
             findViewController.setupBindings(for: findViewModel)
+
+            let reportViewController = ReportViewController<SidebarRootRoute>()
+            let reportViewModel = ReportViewModel<SidebarRootRoute>(documentState: documentState, router: self)
+            reportViewController.setupBindings(for: reportViewModel)
             return .set([
                 TabViewItem(normalSymbol: .init(systemName: .folder), selectedSymbol: .init(systemName: .folderFill), viewController: directoryViewController),
                 TabViewItem(normalSymbol: .init(systemName: .bookmark), selectedSymbol: .init(systemName: .bookmarkFill), viewController: bookmarkViewController),
                 TabViewItem(normalSymbol: .init(systemName: .magnifyingglass), selectedSymbol: .init(systemName: .magnifyingglass), viewController: findViewController),
+                // Marked while work is in progress.
+                TabViewItem(normalSymbol: .reportNavigator, selectedSymbol: .reportNavigator, viewController: reportViewController, activity: documentState.reportActivity),
             ])
         case .directory:
             return .select(index: 0)
@@ -48,6 +54,8 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
                     completion?()
                 }
             )
+        case .reports:
+            return .select(index: 3)
         }
     }
 }

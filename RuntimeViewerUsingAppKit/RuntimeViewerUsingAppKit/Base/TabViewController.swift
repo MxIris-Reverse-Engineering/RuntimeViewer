@@ -2,11 +2,15 @@ import AppKit
 import AppKitPlus
 import RuntimeViewerUI
 import RuntimeViewerApplication
+import RuntimeViewerArchitectures
 
 struct TabViewItem {
     let normalSymbol: SFSymbols
     let selectedSymbol: SFSymbols
     let viewController: NSViewController
+    /// While this is `true` the tab's symbol carries a dot — the Report navigator's tab while
+    /// work is running. `nil` for a tab that never shows one.
+    var activity: Driver<Bool>? = nil
 }
 
 class TabViewController: NSLayerBackedViewController {
@@ -149,9 +153,16 @@ class TabViewController: NSLayerBackedViewController {
     /// tabs that genuinely appear or disappear cost anything.
     func setTabViewItems(_ tabViewItems: [TabViewItem], selectedIndex: Int) {
         segmentedControl.segmentCount = tabViewItems.count
+        self.tabViewItems = tabViewItems
+        activeTabIndices = []
+        activityDisposeBag = DisposeBag()
         for (index, tabViewItem) in tabViewItems.enumerated() {
-            segmentedControl.setImage(tabViewItem.normalSymbol.nsuiImgae, forSegment: index)
-            segmentedControl.setAlternateImage(tabViewItem.selectedSymbol.nsuiImgae, forSegment: index)
+            applySymbols(of: tabViewItem, at: index)
+            tabViewItem.activity?.driveOnNext { [weak self] isActive in
+                guard let self else { return }
+                setActivity(isActive, forTabAt: index)
+            }
+            .disposed(by: activityDisposeBag)
         }
 
         let targetViewControllers = tabViewItems.map(\.viewController)
@@ -185,6 +196,59 @@ class TabViewController: NSLayerBackedViewController {
 
     private func indexOfTabViewItem(for viewController: NSViewController) -> Int? {
         tabView.tabViewItems.firstIndex { $0.viewController === viewController }
+    }
+
+    // MARK: - Activity
+
+    /// The items last set, for re-applying a tab's symbols when its activity changes.
+    private var tabViewItems: [TabViewItem] = []
+
+    private var activeTabIndices: Set<Int> = []
+
+    /// The subscriptions to the items' activity, replaced with the items.
+    private var activityDisposeBag = DisposeBag()
+
+    private func setActivity(_ isActive: Bool, forTabAt index: Int) {
+        guard tabViewItems.indices.contains(index) else { return }
+        if isActive {
+            guard activeTabIndices.insert(index).inserted else { return }
+        } else {
+            guard activeTabIndices.remove(index) != nil else { return }
+        }
+        applySymbols(of: tabViewItems[index], at: index)
+    }
+
+    /// The segment's two images, both given the dot while the tab is active: before macOS 26 the
+    /// selected segment shows the alternate image, from macOS 26 only the plain one.
+    private func applySymbols(of tabViewItem: TabViewItem, at index: Int) {
+        let isActive = activeTabIndices.contains(index)
+        let normalImage = tabViewItem.normalSymbol.nsuiImgae
+        let selectedImage = tabViewItem.selectedSymbol.nsuiImgae
+        segmentedControl.setImage(isActive ? normalImage.withActivityDot() : normalImage, forSegment: index)
+        segmentedControl.setAlternateImage(isActive ? selectedImage.withActivityDot() : selectedImage, forSegment: index)
+    }
+}
+
+extension NSImage {
+    /// The image with a dot in its top trailing corner, cut out of the symbol with a gap around
+    /// it. Still a template: a segmented control tints the symbol and the dot alike, so the dot
+    /// marks the tab by its shape, not its colour.
+    fileprivate func withActivityDot() -> NSImage {
+        let dotDiameter = (min(size.width, size.height) * 0.38).rounded()
+        let gap: CGFloat = 1.5
+        let badged = NSImage(size: size, flipped: false) { [self] bounds in
+            draw(in: bounds)
+            let dotRect = NSRect(x: bounds.maxX - dotDiameter, y: bounds.maxY - dotDiameter, width: dotDiameter, height: dotDiameter)
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: dotRect.insetBy(dx: -gap, dy: -gap)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: dotRect).fill()
+            return true
+        }
+        badged.isTemplate = true
+        badged.accessibilityDescription = accessibilityDescription
+        return badged
     }
 }
 

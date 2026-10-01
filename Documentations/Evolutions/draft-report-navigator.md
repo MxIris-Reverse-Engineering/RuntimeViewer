@@ -1,6 +1,6 @@
 # Draft - Report navigator：后台索引与语料构建的状态搬进侧栏
 
-- **状态**: Draft
+- **状态**: In Progress
 - **创建日期**: 2026-09-30
 - **最后更新**: 2026-10-01
 - **关联提案**: [draft-find-navigator](draft-find-navigator.md)（语料构建的状态来源）、[0002-background-indexing](0002-background-indexing.md)（被替换的 toolbar 按钮与弹窗）
@@ -14,53 +14,59 @@ searchable」，而 4 个语料库其实正在排队构建，App 里没有任何
 
 ## 方案
 
-**布局照用户导出的 Xcode 26 Report navigator view hierarchy 实现**（待用户提供；Find 分页照 Find navigator
-的 hierarchy 做过一次，方法相同）。只搬侧栏那一列，不搬 Xcode 选中条目后在编辑区打开的日志页；内容区不加新页面类型。
-hierarchy 到手之前本提案不进 Accepted。
+**布局照用户导出的 Xcode 26 Report navigator view hierarchy 实现**（`Xcode-ReportNavigator.viewhierarchy`，2026-10-01
+提供）。只搬侧栏那一列，不搬 Xcode 选中条目后在编辑区打开的日志页；内容区不加新页面类型，选中一行什么也不打开。
 
-- **挂载**：两层侧栏各加第四个 `TabViewItem`，共用同一份状态，与 Find 分页的模式一致（`SidebarRootRoute` /
-  `SidebarRuntimeObjectRoute` 各加 `.reports` = `.select(index: 3)`，`SidebarRoute.showReports`，`MainRoute.reports`
-  从主菜单到达）。**菜单位置待用户定**：Find 的菜单项在 Edit ▸ Find 里，Reports 不是查找动作；候选是 Navigate 菜单
-  （Reveal in Sidebar Navigator 所在）或 View 菜单。
-- **列表**：照 AGENTS.md 的表格约定重做，不把弹窗的「枚举节点 + 反查驱动器」原样搬过去——弹窗之所以有
-  `batch(for:)` / `item(for:)` 两个逐行驱动器，是 RxAppKit 的 `elementUpdated` 只做 `reloadItem`、不重走 `viewFor`，行内容
-  不会更新；语料行的「building(built, total) + 进度条」会撞上同一个问题。改为每行一个 CellViewModel
-  （`ReportBatchCellViewModel` / `ReportItemCellViewModel` / `ReportCorpusBuildCellViewModel`，进度与状态是 `@RxObserved`，
-  cell 在 `bind(to:)` 里绑定），`ReportViewModel<Route>` 与分组、排序逻辑住在 `RuntimeViewerApplication`。
-  大纲用 `StatefulOutlineView`：这是带分组行的 source list，正是 2026-09-27 那份已解决问题描述的行高估算风险形状
-  （弹窗当时的「不改」结论是在 320 pt 高、非 source list 下测的）。
-- **树的形状待定**（随 hierarchy 定）：语料构建是与索引并列的顶层类，还是挂在 ACTIVE / HISTORY 之下。弹窗现有行为逐条去留：
-  Always Index 组跳过批次层直接挂镜像——保留；「Background indexing is disabled」占位 + Open Settings——保留，只盖索引那一类；
-  语料那一类同样有自己的开关（`settings.search.isCorpusEnabled`），关着时给「Searchable corpus is disabled」+ Open Settings；
-  「No active indexing tasks」空闲文案——改为整页空闲文案（两类都空）；聚合百分比副标题——去掉，进度在条目上；
-  动作 Cancel batch / Cancel All / Clear History / Open Settings——保留，Close 随弹窗消失。
-- **语料条目**：每个镜像一行，状态 pending / building(built, total) / built / failed / cancelled，构建中带进度条，可取消。
-  **取消语义**：只撤回本文档的订阅——别的文档还订着时构建继续；取消不是粘性的，下一个触发源（索引完成、transformer 变化、
-  开关切换）会重新请求。行显示 cancelled 进 history，再次请求时回到 pending，写进 UI 文案与测试。
+- **挂载**：两层侧栏各加第四个 `TabViewItem`（`receipt` 符号，Xcode 自己的 Report navigator 图标），共用同一份状态，与
+  Find 分页的模式一致：`SidebarRootRoute` / `SidebarRuntimeObjectRoute` 各加 `.reports` = `.select(index: 3)`，
+  `SidebarRoute.showReports` 转给屏幕上那一层，`MainRoute.reports` 先展开侧栏再转发。主菜单入口是
+  **View ▸ Show Report Navigator（⌘9）**，放在 Show Sidebar 之后——Xcode 的位置与快捷键。
+- **页面**（`ReportViewController<Route>`，App target `Reports/`）：一列 `StatefulOutlineView`（source list，行高 24、缩进 14，
+  macOS 26 起用 `SidebarTableRowView`），底部 44 pt 的栏：左边一个动作按钮（菜单：Cancel All / Clear History / Open Settings…，
+  无事可做的项置灰），右边 `FilterSearchField`（占位 "Filter"），过滤框里一个时钟开关。什么都没有时整页显示 "No Reports"。
+  行的右键菜单：能撤回的工作给 Cancel，「Turned off in Settings」行给 Open Settings…；双击该行也打开设置。
+- **树的形状**：两类工作各是一个第一层行——**Background Indexing** 与 **Searchable Interfaces**，与弹窗的 ACTIVE / HISTORY 分组
+  不同，进行中与已结束的放在同一类下面、最新的在上。索引：先是在跑的批次（按开始先后倒序），再是 history；批次下挂它的镜像，
+  Always Index 只有一个镜像的批次不再挂子行（弹窗的扁平化保留）。语料：先是排队与打印中的镜像（打印中的在前，其余按名字），
+  再是 `finishedBuilds`。某一类没有任何内容时整类不出现。
+- **行**（`ReportCellView`）照 Xcode 的 `DVTTableCellViewOneLine`：16 pt 图标；标题在 x = 19；标题之后紧跟次要色的说明文字；
+  最右 16 pt 的状态位——在跑时是小号 spinner（Xcode 的 `IDELogNavigatorStatusView`），失败时是红色 `xmark.octagon.fill`，
+  tooltip 是失败原因。**进度不用进度条**，写在说明文字里（"37% · 950 of 2559"、"3 of 12"）——Xcode 的行没有进度条。
+  结束的行说明里是结束时间（"Today, 10:23"），取消 / 失败的写 "Cancelled · …" / "Failed · …"；行的 tooltip 是镜像路径，
+  建好的语料再加对象数与大小。
+- **列表的数据**：每行一个 `ReportCellViewModel`（`RuntimeViewerApplication/Reports/`），按 `ReportNodeIdentifier` 缓存、跨重建
+  复用，图标、标题、说明、状态都是 `@RxObserved`，cell 在 `bind(to:)` 里绑定——进度直接落到屏幕上的行，不需要大纲重载。
+  树本身是值类型 `ReportNode`，相等性比较整棵子树（大纲适配器只在树变了时 `reloadData`），哈希只取标识（大纲每次查找都要哈希
+  一个 item，而一类下面可以有上百个批次）。原计划的三种 CellViewModel 合成了一种：Xcode 每一行的构成都一样。
+  大纲用 `StatefulOutlineView`：带分组行的 source list，正是 2026-09-27 那份已解决问题描述的行高估算风险形状。
+- **功能关闭时**：在该类下面放一行 "Turned off in Settings"（右键 / 双击打开设置），而不是整页占位——另一类的工作照常可见。
+  索引与语料各看自己的开关（`settings.indexing.isEnabled`、`settings.search.isCorpusEnabled`）。
+- **过滤栏**：文字过滤保留标题匹配的行及其祖先；时钟只留**进行中**的工作——在跑的批次与其未结束的镜像、排队与打印中的语料。
+  Xcode 的时钟是「只看最近的」，这里的报告只活在本次会话里，「最近」没有意义，换成用户真正要找的「还在跑的」。
+- **语料条目与取消语义**：每个镜像一行，排队写 "Waiting"，打印中写百分比与对象数；取消只撤回本文档的订阅——别的文档还订着时
+  构建继续；取消不是粘性的，下一个触发源（索引完成、transformer 变化、开关切换）会重新请求。被取消的那一行进 history。
 - **语料状态的来源与归属**：`FindCorpusCoordinator` 暴露 `buildStatesByImagePath: [String: RuntimeInterfaceCorpusBuildState]`
   与 `finishedBuilds`（built / failed / cancelled 的历史，newest first，与索引 history 同样封顶），都是 `@RxObserved`，由它发出的
-  每个构建请求的 `onProgress` 与任务结果驱动。**进度节流**：store 每 8 个对象报一次，并行打印后 ObjC 这种小对象会报得更密，
-  每条都过 XPC、上主线程改字典、连带刷新大纲与分页图标——协调器按索引协调器同样的 16 ms 合并后再发。
-  启动与换引擎时先用 `interfaceCorpusCoverage()` 补一次快照，把别的文档已经开始的构建也算进来（本文档对全部已索引镜像
-  都有订阅，之后的进度会自己到）；**合并规则**：快照不覆盖本文档请求已经写入的状态；快照里没有完成时间，别的文档先建好的
-  镜像放进 `finishedBuilds` 时排在本文档条目之后、不按时间排。**驱逐后状态过期**：store 的预算驱逐与 `evict` 都不发事件，
-  `built` 会一直挂着——Reports 页出现时与每次构建结束后重取一次 coverage；让 store 发驱逐事件是后续项。
-  Clear History 由 `ReportViewModel` 同时清索引协调器的 history 与 `finishedBuilds`。
-- **活动信号只算一处**：`DocumentState` 提供只读的 `reportActivity: Driver<Bool>`（索引协调器的 `aggregateState.hasActiveBatch`
-  ∨ 任一语料构建 pending / building）。
-- **活动标记的绑定位置**：不在 coordinator 里订阅 Rx 改视图（本仓库只有 `MainCoordinator` 为路由扇出订阅过 Rx，UI 绑定都在
-  VC 的 `setupBindings`），改为 `TabViewController` 暴露「按下标绑定活动状态」的入口，订阅挂在它自己的 `disposeBag` 上，
-  coordinator 在 `.set` 时把 `documentState.reportActivity` 交进去。标记状态存在 `TabViewController` 里，`setTabViewItems`
-  每次重设全部分段图之后重新套上；换图同时换 `setImage(_:forSegment:)` 与 `setAlternateImage`。分段控件的图是模板图，
-  带颜色的标记会被着色成单色——标记形状按 hierarchy 与用户确认为准，在这个限制内选。「该不该带标记」的判断是
-  `RuntimeViewerApplication` 里的纯函数，测试落在那里——App target 没有单元测试 target。
+  每个构建请求的 `onProgress` 与任务结果驱动，进度按 16 ms 合并后再发。启动与换引擎时先用 `interfaceCorpusCoverage()` 补一次快照，
+  把别的文档已经开始的构建也算进来；**合并规则**：快照不覆盖本文档请求已经写入的状态；快照里没有完成时间，别的文档先建好的镜像
+  放进 `finishedBuilds` 时排在本文档条目之后、不按时间排，**每个镜像只学一次**——Clear History 清掉的不会被下一次快照带回来，
+  镜像的语料从引擎里消失后才可能再被学到。**驱逐后状态过期**：store 的预算驱逐与 `evict` 都不发事件，Reports 页出现时与每次构建
+  结束后重取一次 coverage；让 store 发驱逐事件是后续项。Clear History 同时清索引协调器的 history 与 `finishedBuilds`。
+- **活动信号只算一处**：`DocumentState.reportActivity: Driver<Bool>`（索引协调器的 `aggregateState.hasActiveBatch` ∨
+  `FindCorpusCoordinator.hasActiveBuild`，后者即任一语料 pending / building）。
+- **活动标记的绑定位置**：`TabViewItem` 带一个可选的 `activity: Driver<Bool>`，`TabViewController` 在 `setTabViewItems` 时订阅、
+  挂在自己的 dispose bag 上，状态存在 controller 里，每次重设分段图后重新套上；普通图与选中图（`setImage` /
+  `setAlternateImage`）一起换。分段控件的图是模板图，带颜色的标记会被染成单色，所以标记是从图标右上角**挖出**的一个圆点，
+  模板着色后照样看得出来。
 - **删除**：`BackgroundIndexingToolbarItem`（含其同名标识符常量）、`MainRoute.backgroundIndexing(sender:)`、
   `MainCoordinator` 的 `.backgroundIndexing` 转场、`MainToolbarController` 里的五处（属性、默认与允许标识符列表、
-  `itemForItemIdentifier`、常量）、`MainWindowController` / `MainViewModel` 的点击信号、弹窗 VC / VM。测试目录没有引用；
-  toolbar 不允许用户自定义，没有持久化配置会因标识符消失出问题。
-- **测试**：`ReportViewModelTests`（节点由索引协调器的 batches / history 与语料状态合成；分组与排序；动作转发；Clear History
-  清两边；取消后的行状态）、`FindCorpusCoordinatorTests` 加「构建进度与结果反映在 `buildStatesByImagePath` / `finishedBuilds`」、
-  「进度合并」、「快照不覆盖已写入的状态」，活动标记判断的纯函数。
+  `itemForItemIdentifier`、常量）、`MainWindowController` / `MainViewModel` 的点击信号、弹窗 VC / VM / 节点。toolbar 不允许用户
+  自定义，没有持久化配置会因标识符消失出问题。
+- **测试**：`ReportViewModelTests`（真实引擎：结束的批次与建好的语料各在自己那一类下；关掉的功能只显示一行、打开后消失；
+  打印进度只改行自己的 cell、树不变；从行上取消语料构建后它以 cancelled 进 history；Clear History 清空两类；
+  分页的活动标记随进行中的工作出现、Cancel All 后消失；纯函数：文字过滤与时钟过滤）。顺带测出两个已有缺陷，修复与回归测试同批：
+  `FindCorpusCoordinatorTests.clearedHistoryStaysCleared`、`RuntimeInterfaceCorpusStoreTests.queuedBuildOutlivesBuilder`
+  （见决策日志）。App target 没有单元测试 target，AppKit 一侧只做了编译验证，没有跑起来做界面验证。
 
 ## 决策日志
 
@@ -73,3 +79,11 @@ hierarchy 到手之前本提案不进 Accepted。
 | 2026-09-30 | 第一轮审查：逐条列出弹窗行为的去留；语料 history 归 `FindCorpusCoordinator`、Clear History 清两边；活动信号只在 `DocumentState` 算一次；换图接口两张图都换；删掉 App target 的测试承诺；菜单位置交用户 | 原稿漏了 disabled 占位、空闲文案、百分比副标题与 Always Index 扁平化的去留，语料 history 无归属，两层各自合成活动信号会漂移，App target 没有单元测试 target。 |
 | 2026-10-01 | 语料状态的来源先随 Find 提案 §1.1 第 4 条落地；本提案的布局仍等 view hierarchy | `FindCorpusCoordinator` 已发布 `buildStatesByImagePath`、`finishedBuilds`（元素 `FindCorpusFinishedBuild`，built / failed / cancelled，100 条封顶）与 `hasActiveBuild`，并提供 `cancelBuild(of:)`、`clearFinishedBuilds()`、`refreshCoverage()`；进度 16 ms 合并、快照合并与驱逐后重取都按上面「语料状态的来源与归属」实现，Find 的摘要栏已经在用。Report navigator 的 ViewModel 直接绑这些，不再另起状态。盘上没有 Xcode 26 Report navigator 的导出，已请用户导出。 |
 | 2026-09-30 | 第二轮审查：删除清单补 `MainCoordinator` 转场；列表改 CellViewModel 逐行绑定；语料进度 16 ms 合并；活动标记的订阅放进 `TabViewController` 而非 coordinator，状态在重设分段后重套；写明取消语义、快照合并规则、驱逐后重取 coverage、语料开关的占位；大纲用 `StatefulOutlineView`；树的形状列为待定 | 审查指出弹窗靠逐行驱动器刷新而草案没搬、语料进度会比索引事件更密、coordinator 订阅状态改视图不合本仓库 MVVM-C、驱逐是静默的、语料开关关着时用户看不出为什么搜不到。 |
+| 2026-10-01 | 状态 Draft → In Progress；布局照用户提供的 Xcode 26 Report navigator hierarchy | 用户：「开始实现提案」，并给出 `/Users/JH/Downloads/Xcode-ReportNavigator.viewhierarchy`。 |
+| 2026-10-01 | 树的形状：Background Indexing 与 Searchable Interfaces 两个第一层行，进行中与已结束的同在一类下、最新在上 | Xcode 的 Report navigator 按「对象」分第一层（scheme / package），每层下面最新的在上，不分 active / history；语料与索引是两件独立的事，各自一类。 |
+| 2026-10-01 | 进度写进说明文字，不用进度条；结束时间写成 "Today, 10:23" | Xcode 的行（`DVTTableCellViewOneLine`）只有图标、标题、次要文字与右侧状态位，没有进度条；照搬它的行就没有放进度条的位置。 |
+| 2026-10-01 | 过滤栏的时钟表示「只看进行中的」（排队的也算），不是 Xcode 的「只看最近的」 | 报告只活在本次会话里，「最近」区分不出什么；用户打开这一页多半是想知道还有什么在跑。 |
+| 2026-10-01 | 菜单入口：View ▸ Show Report Navigator（⌘9） | 提案留给用户的选择；用户没有另外指定，取 Xcode 自己的位置与快捷键（View ▸ Navigators ▸ Show Report Navigator，⌘9），⌘9 在本应用里没有被占用。 |
+| 2026-10-01 | 三种 CellViewModel 合成一种 `ReportCellViewModel`；功能关闭时在该类下放一行而不是整页占位 | Xcode 每行的构成一样，分三种只会复制三份同样的属性；整页占位会把另一类的工作也挡住。 |
+| 2026-10-01 | 修：Clear History 之后，下一次 coverage 刷新把清掉的语料当作「别的文档建的」重新列回 history | `ReportViewModelTests` 测出：`mergeCoverage` 只看 `finishedBuilds` 里有没有这个镜像，清空后每个还在引擎里的语料都会被「学」回来；而 Reports 页每次出现、每次构建结束都会刷新。`FindCorpusCoordinator` 记住列过的镜像（Clear History 不清这份记录，语料从引擎消失时才移出），回归测试 `clearedHistoryStaysCleared` 修前红、修后绿。 |
+| 2026-10-01 | 修：语料 store 对引擎的引用从 `unowned` 改为 `weak`，找不到引擎的构建按取消结束 | 测试并行跑时进程崩在 `RuntimeInterfaceCorpusStore.run` 的 `swift_abortRetainUnowned`：引擎带着排队的构建被释放，`stop()` 安排的驱逐还没到，正在跑的构建一结束 `pump()` 就拉起下一个，读到已释放的引擎。回归测试 `queuedBuildOutlivesBuilder` 修前崩、修后绿。同一写法的 `RuntimeBackgroundIndexingManager.engine` 没改：换引擎时协调器会持有旧引擎先取消它的全部批次，App 里的路径有保护，改它要动 `main` 上的代码，另议。 |

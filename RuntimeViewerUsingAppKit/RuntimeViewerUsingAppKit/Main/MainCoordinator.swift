@@ -76,14 +76,6 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             let viewModel = MCPStatusPopoverViewModel(documentState: documentState, router: self)
             viewController.setupBindings(for: viewModel)
             return .popover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
-        case .backgroundIndexing(let sender):
-            let viewController = BackgroundIndexingPopoverViewController()
-            let viewModel = BackgroundIndexingPopoverViewModel(
-                documentState: documentState,
-                router: self
-            )
-            viewController.setupBindings(for: viewModel)
-            return .popover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
         case .attachToProcess:
             let viewController = AttachToProcessViewController()
             let viewModel = AttachToProcessViewModel(documentState: documentState, router: self)
@@ -120,6 +112,11 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             return .multiple(
                 .expand(itemAt: 0),
                 .trigger(.showFind, on: sidebarCoordinator)
+            )
+        case .reports:
+            return .multiple(
+                .expand(itemAt: 0),
+                .trigger(.showReports, on: sidebarCoordinator)
             )
         }
     }

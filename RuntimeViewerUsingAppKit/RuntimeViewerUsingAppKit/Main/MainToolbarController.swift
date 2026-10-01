@@ -242,10 +242,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
         $0.label = "MCP Status"
     }
 
-    let backgroundIndexingItem = BackgroundIndexingToolbarItem().then {
-        $0.label = "Background Indexing"
-    }
-
     init(delegate: Delegate) {
         self.delegate = delegate
         self.toolbar = NSToolbar()
@@ -273,7 +269,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.save,
             .Main.share,
             .Main.mcpStatus,
-            .Main.backgroundIndexing,
             .inspectorTrackingSeparator,
             .flexibleSpace,
             .toggleInspector,
@@ -297,7 +292,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             .Main.loadFrameworks,
             .Main.attach,
             .Main.mcpStatus,
-            .Main.backgroundIndexing,
         ]
     }
 
@@ -325,8 +319,6 @@ final class MainToolbarController: NSObject, NSToolbarDelegate {
             return attachItem
         case .Main.mcpStatus:
             return mcpStatusItem
-        case .Main.backgroundIndexing:
-            return backgroundIndexingItem
         default:
             return nil
         }
@@ -355,6 +347,5 @@ extension NSToolbarItem.Identifier {
         static let helperStatus: NSToolbarItem.Identifier = "helperStatus"
         static let attach: NSToolbarItem.Identifier = "attach"
         static let mcpStatus: NSToolbarItem.Identifier = "mcpStatus"
-        static let backgroundIndexing: NSToolbarItem.Identifier = "backgroundIndexing"
     }
 }
