@@ -167,7 +167,13 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
   `scannedImagePaths`；`FindSession` 记住结果读过哪些镜像，新建成的镜像只搜它一个、并进现有结果，搜索进行中建成的
   等搜索结束再补。摘要栏是 `N results in M types · 2 images being made searchable · building Foundation 37%`，
   没有在建的镜像时仍报 `N images not yet searchable`；关系搜索不带这一段。
-- **未做**：probe 的运行（等用户同意）；第 2 条的并行打印（等 MachOSwiftSection 的并发打印安全落地）；两份上游提案
+- **第 2 条的结构先落地，宽度暂为 1**：`RuntimeInterfaceCorpusStore.run` 改成有界任务组，宽度是 store 的参数
+  （`defaultPrintingWidth`），打印结果按对象下标落位，进度按完成数累计。ObjC 侧 `corpusPrint` / `markedInterface` /
+  `memberDeclarations` 改 `nonisolated`；Swift 侧只有「取定义列表与语料打印器」留在 actor 上，打印、冻结、区域分离与
+  成员读取（`memberDeclarations(of:)` 改为对定义列表的静态函数）都在 actor 之外——显示路径不再排在语料打印后面。
+  上游的并发打印安全落地之前，同一镜像的两个打印可能同时索引同一个定义，所以生产宽度保持 1，届时改为
+  `max(2, 核数 / 2)` 并用 probe 前后对照。
+- **未做**：probe 的运行（等用户同意）；并行宽度的放开（等 MachOSwiftSection 的并发打印安全落地）；两份上游提案
   由 MachOSwiftSection 那边的会话实现。
 
 ### 2. 引擎请求（全部经 `registerSharedHandlers` 注册，XPC / TCP / proxy 链自动透传）
@@ -467,6 +473,7 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 | 2026-10-01 | 根协议默认实现被打印两三遍：`printedDefinitions` 只在协议有父类型定义时追加 `defaultImplementationExtensions`，扩展表里已挂到协议上的副本（`isAttachedToProtocolDefinition`）不再打印 | 「待核实的同类重复」属实，而且是三遍：打印器对没有父类型定义的协议自己打一遍，`defaultImplementationExtensions` 一遍，MachOSwiftSection 的容器统一把同一批扩展留在扩展表里又一遍。Foundation 上 110 处扩展块重复，修复后 0（测试同上）。`next` 与 `main` 的显示路径是同样写法，内容区也显示多遍，属既有缺陷；本分支的修复在 `printedDefinitions`，显示与语料两条路都受益。 |
 | 2026-10-01 | 插队：构建请求加 `isPrioritized`，另加 `PrioritizeInterfaceCorpusRequest` | 第一次请求就带置顶，免得「构建」「插队」两个请求到达 store 的先后不定；已有订阅的镜像只发插队，不加订阅（原文第 3 条）。 |
 | 2026-10-01 | 语料状态与合并重搜按第 4 条落地；搜索摘要改报 `scannedImagePaths` | 会话要知道结果读过哪些镜像，才能只补搜没读过的，并且不和搜索进行中建成的镜像重复；`scannedImageCount` 留作计算属性。快照合并规则：本文档有请求在途的镜像保持请求报的状态，其余以 coverage 为准（覆盖掉驱逐后过期的 built）；本文档没看到结束的语料排在历史末尾、按路径排序、不记时间；已建好的语料被再次请求时不带任何进度就返回，不算本文档看到的一次构建。 |
+| 2026-10-01 | 第 2 条先做结构：任务组 + 打印尾巴移出 actor，宽度暂为 1 | 结构本身不依赖上游，而且已经有收益：语料打印不再占着 section actor，用户在建语料时点开同一镜像的类型不用排队。放开宽度会让同一镜像的两个打印同时索引同一个定义，正是上游并发打印提案要修的竞争，所以等它落地。测试：任务组的落位顺序、宽度上限、进度计数（`RuntimeInterfaceCorpusStoreTests`，宽度经 store 的初始化参数注入）。 |
 | 2026-10-01 | 写 Generation Options 的测试与「结果是合并而非重跑」的测试取同一把跨套件锁（`withSharedGenerationOptionsLock`，锁本体抽成 `CrossSuiteTestLock`，共享引擎锁也改用它） | 合并测试第一次跑就红了，原因不在产品：`AppDefaults.options` 是 `UserDefaults.standard` 上的 `@UserDefault`，隔离实例只隔离了文件；投影值是对这个键的 KVO，并行套件里 `FindGenerationOptionsTests` 一改选项，这边的会话就按「用户改了选项」整个重跑，Foundation 先占满 1000 条上限，libobjc 的结果没了。另一条路是给每个隔离实例开独立的 `UserDefaults` suite，代价是每个测试环境在 `~/Library/Preferences` 留一个 plist，没走。 |
 | 2026-10-01 | `RuntimeMemberDeclarationLocatorTests` 的 ObjC 夹具改成渲染器的真实输出 | 2026-09-30 全量回归里那 2 处失败就是它：定位器早已按「选择子片段不带冒号」改了，夹具还带着冒号。 |
 | 2026-09-30 | §1.1 第二轮审查（RuntimeViewer-Opus）：上游并发打印提案提到最前、定位为现存竞争的修复；B 的嵌套块行区间改由子条目文本反查、D 的前提补上多行原子与区域表断言并需要上游标记；建成后不重跑整个搜索、只搜新镜像并合并；插队改为不增订阅的 `prioritize`；串行尾巴补全、任务组宽度定为 `max(2, 核数 / 2)`；定位缺陷用 `CodingKeys` 复现；记下根协议默认实现扩展疑似双打 | 审查指出 B / D / 定位修复都依赖「嵌套块行区间」而原稿没说怎么拿；`run(_:)` 会清空结果列表；协调器对已有订阅直接返回，插队到不了 store；显示与语料两条打印今天已在 actor 外并行。 |

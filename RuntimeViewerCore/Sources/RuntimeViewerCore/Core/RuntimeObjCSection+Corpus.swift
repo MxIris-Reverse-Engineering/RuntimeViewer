@@ -11,8 +11,11 @@ extension RuntimeObjCSection {
     ///
     /// The Objective-C side keeps no interface cache, so there is nothing to
     /// bypass here: the builder is created per call and prints straight from
-    /// the indexer.
-    func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
+    /// the indexer. `nonisolated` because everything it reads is a `let` the
+    /// section never changes, so a corpus build never holds the section while
+    /// the content pane asks it for an interface, and prints of one image can
+    /// overlap.
+    nonisolated func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
         guard let markedInterface = markedInterface(for: object, transformer: transformer.objc) else {
             throw Error.invalidRuntimeObject
         }
@@ -29,7 +32,7 @@ extension RuntimeObjCSection {
     /// The object's members as `ObjCClassInfo` / `ObjCProtocolInfo` /
     /// `ObjCCategoryInfo` list them, not yet located in any text. C structs
     /// and unions have no members in this sense.
-    func memberDeclarations(for object: RuntimeObject) -> [RuntimeMemberDeclaration] {
+    nonisolated func memberDeclarations(for object: RuntimeObject) -> [RuntimeMemberDeclaration] {
         let name = object.withImagePath(imagePath)
         switch name.kind {
         case .objc(.type(.class)):

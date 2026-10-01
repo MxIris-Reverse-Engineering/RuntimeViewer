@@ -14,7 +14,11 @@ struct RuntimeInterfaceCorpusStoreTests {
         var failingImagePaths: Set<String> = []
         var failingObjectNames: Set<String> = []
         var delayPerObjectNanoseconds: UInt64 = 0
+        /// Overrides `delayPerObjectNanoseconds` for the objects it names.
+        var delayNanosecondsByObjectName: [String: UInt64] = [:]
         private(set) var printedObjectNames: [String] = []
+        private(set) var maximumConcurrentPrintCount = 0
+        private var concurrentPrintCount = 0
         private let lock = NSLock()
 
         func corpusObjects(in imagePath: String) async throws -> [RuntimeObject] {
@@ -27,8 +31,14 @@ struct RuntimeInterfaceCorpusStoreTests {
         }
 
         func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
-            if delayPerObjectNanoseconds > 0 {
-                try await Task.sleep(nanoseconds: delayPerObjectNanoseconds)
+            lock.withLock {
+                concurrentPrintCount += 1
+                maximumConcurrentPrintCount = max(maximumConcurrentPrintCount, concurrentPrintCount)
+            }
+            defer { lock.withLock { concurrentPrintCount -= 1 } }
+            let delayNanoseconds = delayNanosecondsByObjectName[object.name] ?? delayPerObjectNanoseconds
+            if delayNanoseconds > 0 {
+                try await Task.sleep(nanoseconds: delayNanoseconds)
             }
             if failingObjectNames.contains(object.name) {
                 throw ScriptedError.objectFailed(object.name)
@@ -70,11 +80,77 @@ struct RuntimeInterfaceCorpusStoreTests {
         let builder: ScriptedBuilder
     }
 
-    private func makeStore(_ configure: (ScriptedBuilder) -> Void = { _ in }) -> Fixture {
+    private func makeStore(printingWidth: Int = 1, _ configure: (ScriptedBuilder) -> Void = { _ in }) -> Fixture {
         let builder = ScriptedBuilder()
         builder.objectNamesByImagePath = [Self.imageA: ["Alpha", "Beta"], Self.imageB: ["Gamma"]]
         configure(builder)
-        return Fixture(store: RuntimeInterfaceCorpusStore(builder: builder), builder: builder)
+        return Fixture(store: RuntimeInterfaceCorpusStore(builder: builder, printingWidth: printingWidth), builder: builder)
+    }
+
+    private static let manyObjectNames = (1 ... 12).map { "Object\($0)" }
+
+    @Test("objects printed side by side land in the listing order, whatever order they finish in")
+    func parallelPrintsKeepListingOrder() async throws {
+        let fixture = makeStore(printingWidth: 4) { builder in
+            builder.objectNamesByImagePath[Self.imageC] = Self.manyObjectNames
+            // Each object takes less time than the one before it, so they
+            // finish in roughly the reverse of the order they started.
+            for (index, name) in Self.manyObjectNames.enumerated() {
+                builder.delayNanosecondsByObjectName[name] = UInt64(Self.manyObjectNames.count - index) * 10_000_000
+            }
+        }
+        defer { withExtendedLifetime(fixture) {} }
+
+        let summary = try await fixture.store.build(imagePath: Self.imageC, transformer: .default)
+
+        #expect(summary.objectCount == Self.manyObjectNames.count)
+        #expect(await fixture.store.corpus(for: Self.imageC)?.entries.map(\.object.name) == Self.manyObjectNames)
+    }
+
+    @Test("no more objects are printed at once than the printing width")
+    func printingWidthBoundsConcurrency() async throws {
+        let fixture = makeStore(printingWidth: 3) { builder in
+            builder.objectNamesByImagePath[Self.imageC] = Self.manyObjectNames
+            builder.delayPerObjectNanoseconds = 20_000_000
+        }
+        defer { withExtendedLifetime(fixture) {} }
+
+        _ = try await fixture.store.build(imagePath: Self.imageC, transformer: .default)
+
+        #expect(fixture.builder.maximumConcurrentPrintCount == 3)
+    }
+
+    @Test("progress counts finished prints up to the image's total")
+    func progressCountsFinishedPrints() async throws {
+        let fixture = makeStore(printingWidth: 4) { builder in
+            builder.objectNamesByImagePath[Self.imageC] = Self.manyObjectNames
+            builder.delayPerObjectNanoseconds = 5_000_000
+        }
+        defer { withExtendedLifetime(fixture) {} }
+        let reports = ProgressReports()
+
+        _ = try await fixture.store.build(imagePath: Self.imageC, transformer: .default) { progress in
+            reports.append(progress)
+        }
+
+        let built = reports.all.map(\.built)
+        #expect(built.first == 0)
+        #expect(built.last == Self.manyObjectNames.count)
+        #expect(built == built.sorted())
+        #expect(reports.all.allSatisfy { $0.total == Self.manyObjectNames.count })
+    }
+
+    final class ProgressReports: @unchecked Sendable {
+        private let lock = NSLock()
+        private var reports: [RuntimeInterfaceCorpusBuildProgress] = []
+
+        var all: [RuntimeInterfaceCorpusBuildProgress] {
+            lock.withLock { reports }
+        }
+
+        func append(_ report: RuntimeInterfaceCorpusBuildProgress) {
+            lock.withLock { reports.append(report) }
+        }
     }
 
     /// Polls the store's coverage until `predicate` holds, for tests that

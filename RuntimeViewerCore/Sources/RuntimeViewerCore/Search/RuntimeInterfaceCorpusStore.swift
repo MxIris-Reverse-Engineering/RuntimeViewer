@@ -156,7 +156,10 @@ protocol RuntimeInterfaceCorpusBuilding: AnyObject, Sendable {
 ///
 /// - **One build at a time, `.utility` priority.** Printing a large image
 ///   takes minutes and must not compete with the user's own loads. Images
-///   queue in request order; the same image queued twice joins the one build.
+///   queue in request order, a prioritized one ahead of the rest; the same
+///   image queued twice joins the one build. Within the image, up to
+///   `printingWidth` objects are printed at once, and the entries keep the
+///   listing order whatever order the prints finish in.
 /// - **A build is a subscription.** Every `build(imagePath:…)` call is one
 ///   subscriber of that image's build; the build is cancelled only when the
 ///   last subscriber goes away. Two documents sharing the `.local` engine
@@ -185,6 +188,16 @@ actor RuntimeInterfaceCorpusStore {
 
     /// How many objects are printed between two progress reports.
     static let progressReportStride = 8
+
+    /// How many objects of an image are printed at once.
+    ///
+    /// One until MachOSwiftSection can print definitions from several tasks
+    /// at once (its proposal `draft-concurrent-definition-printing`): two
+    /// prints of one image may index the same definition, and its indexing is
+    /// not safe to race yet. Then `max(2, cores / 2)` — the printer runs on a
+    /// large-stack executor with `max(2, cores)` threads per QoS class, and
+    /// background indexing shares the `.utility` class.
+    static let defaultPrintingWidth = 1
 
     struct ImageCorpus: Sendable {
         let entries: [RuntimeInterfaceCorpusEntry]
@@ -219,6 +232,8 @@ actor RuntimeInterfaceCorpusStore {
 
     private(set) var residentByteLimit: Int
 
+    private let printingWidth: Int
+
     private var corpora: [String: ImageCorpus] = [:]
 
     private var builds: [String: Build] = [:]
@@ -232,9 +247,14 @@ actor RuntimeInterfaceCorpusStore {
 
     private var nextSubscriberIdentifier: UInt64 = 0
 
-    init(builder: any RuntimeInterfaceCorpusBuilding, residentByteLimit: Int = RuntimeInterfaceCorpusStore.defaultResidentByteLimit) {
+    init(
+        builder: any RuntimeInterfaceCorpusBuilding,
+        residentByteLimit: Int = RuntimeInterfaceCorpusStore.defaultResidentByteLimit,
+        printingWidth: Int = RuntimeInterfaceCorpusStore.defaultPrintingWidth
+    ) {
         self.builder = builder
         self.residentByteLimit = residentByteLimit
+        self.printingWidth = max(1, printingWidth)
     }
 
     // MARK: - Reading
@@ -379,40 +399,74 @@ actor RuntimeInterfaceCorpusStore {
         #log(.info, "Building corpus for \(imagePath, privacy: .public)")
     }
 
-    /// The build itself. Actor-isolated, but every heavy step awaits a
-    /// section actor, so this actor is free between objects; the `.utility`
-    /// priority comes from the detached task that calls it.
+    /// What printing one object came to: its print, nothing to print, or
+    /// the error that made it skip.
+    private enum ObjectPrintOutcome: Sendable {
+        case printed(RuntimeInterfaceCorpusPrint)
+        case empty
+        case failed(String)
+    }
+
+    /// The build itself. Actor-isolated, but every heavy step happens in a
+    /// child task off this actor, which stays free between completions; the
+    /// `.utility` priority comes from the detached task that calls it.
+    /// Prints run `printingWidth` at a time and land in the slot of the
+    /// object they belong to, so the entries keep the listing order.
     private func run(imagePath: String, transformer: Transformer.Configuration) async {
         let start = Date()
-        var prints: [RuntimeInterfaceCorpusPrint] = []
         var skippedCount = 0
         let outcome: BuildOutcome
         do {
             let objects = try await builder.corpusObjects(in: imagePath)
             let total = objects.count
-            prints.reserveCapacity(total)
             await publishProgress(imagePath: imagePath, built: 0, total: total)
-            for (index, object) in objects.enumerated() {
-                try Task.checkCancellation()
-                do {
-                    if let objectPrint = try await builder.corpusPrint(for: object, transformer: transformer) {
-                        prints.append(objectPrint)
-                    } else {
-                        skippedCount += 1
+            var printsByObjectIndex = [RuntimeInterfaceCorpusPrint?](repeating: nil, count: total)
+            let builder = builder
+            func printOperation(forObjectAt index: Int) -> @Sendable () async throws -> (Int, ObjectPrintOutcome) {
+                let object = objects[index]
+                return {
+                    try Task.checkCancellation()
+                    do {
+                        guard let objectPrint = try await builder.corpusPrint(for: object, transformer: transformer) else {
+                            return (index, .empty)
+                        }
+                        return (index, .printed(objectPrint))
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        return (index, .failed("\(error)"))
                     }
-                } catch is CancellationError {
-                    throw CancellationError()
-                } catch {
-                    skippedCount += 1
-                    #log(.debug, "Skipping \(object.displayName, privacy: .public) in the corpus of \(imagePath, privacy: .public): \(error, privacy: .public)")
                 }
-                let built = index + 1
-                if built % Self.progressReportStride == 0 || built == total {
-                    await publishProgress(imagePath: imagePath, built: built, total: total)
+            }
+            try await withThrowingTaskGroup(of: (Int, ObjectPrintOutcome).self) { group in
+                var nextObjectIndex = 0
+                while nextObjectIndex < min(printingWidth, total) {
+                    group.addTask(operation: printOperation(forObjectAt: nextObjectIndex))
+                    nextObjectIndex += 1
+                }
+                var built = 0
+                while let (objectIndex, printOutcome) = try await group.next() {
+                    switch printOutcome {
+                    case .printed(let objectPrint):
+                        printsByObjectIndex[objectIndex] = objectPrint
+                    case .empty:
+                        skippedCount += 1
+                    case .failed(let message):
+                        skippedCount += 1
+                        #log(.debug, "Skipping \(objects[objectIndex].displayName, privacy: .public) in the corpus of \(imagePath, privacy: .public): \(message, privacy: .public)")
+                    }
+                    built += 1
+                    if built % Self.progressReportStride == 0 || built == total {
+                        await publishProgress(imagePath: imagePath, built: built, total: total)
+                    }
+                    if nextObjectIndex < total {
+                        group.addTask(operation: printOperation(forObjectAt: nextObjectIndex))
+                        nextObjectIndex += 1
+                    }
                 }
             }
             try Task.checkCancellation()
-            let entries = await assemble(prints)
+            let entries = await assemble(printsByObjectIndex.compactMap { $0 })
             let byteCount = entries.reduce(0) { $0 + $1.byteCount }
             let summary = RuntimeInterfaceCorpusBuildSummary(objectCount: entries.count, skippedCount: skippedCount, byteCount: byteCount)
             outcome = .built(ImageCorpus(entries: entries, summary: summary, transformer: transformer, lastSearchedAt: Date()))

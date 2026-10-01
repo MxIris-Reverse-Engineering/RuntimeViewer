@@ -468,9 +468,16 @@ extension RuntimeSwiftSection {
     /// Also returns the UTF-8 length of the first definition, the object's
     /// own: the corpus finds a nested type's block in its parent by it.
     private func printInterface(for object: RuntimeObject, using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> (interface: SemanticString, ownDefinitionUTF8Length: Int) {
+        try await Self.printInterface(of: printedDefinitions(for: object), using: printer)
+    }
+
+    /// `printInterface(for:using:)` once the definitions are known. Static,
+    /// so it runs off the actor: the printer is `Sendable` and the section's
+    /// own state is not needed past the definition list.
+    private static func printInterface(of definitions: [PrintedDefinition], using printer: SwiftDeclarationPrinter<MachOImage>) async throws -> (interface: SemanticString, ownDefinitionUTF8Length: Int) {
         var result: SemanticString = ""
         var ownDefinitionUTF8Length = 0
-        for (index, definition) in try printedDefinitions(for: object).enumerated() {
+        for (index, definition) in definitions.enumerated() {
             if index > 0 {
                 result.append(.doubleBreakLine)
             }
@@ -1753,17 +1760,27 @@ extension RuntimeSwiftSection {
     /// read off the definitions that print just indexed. Swift definitions
     /// index their members lazily, and the only public trigger is printing —
     /// which is why the members come out of the same pass as the text.
-    func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
-        let printer = corpusPrinter(for: transformer.swift)
-        let printed = try await printInterface(for: object, using: printer)
+    ///
+    /// Only the definition list and the printer come from the section; the
+    /// printing, the freezing, the region split and the member listing run
+    /// off the actor, so the content pane is never kept waiting behind a
+    /// corpus build and prints of one image can overlap.
+    nonisolated func corpusPrint(for object: RuntimeObject, transformer: Transformer.Configuration) async throws -> RuntimeInterfaceCorpusPrint? {
+        let inputs = try await corpusPrintingInputs(for: object, transformer: transformer.swift)
+        let printed = try await Self.printInterface(of: inputs.definitions, using: inputs.printer)
         let separated = printed.interface.frozen().separatingVisibilityRegions()
         return RuntimeInterfaceCorpusPrint(
             object: object,
             interface: separated.text,
             visibilityRegions: separated.regions,
-            members: try memberDeclarations(for: object),
+            members: Self.memberDeclarations(of: inputs.definitions),
             ownDefinitionUTF8Length: printed.ownDefinitionUTF8Length
         )
+    }
+
+    /// What a corpus print takes from the section's state.
+    private func corpusPrintingInputs(for object: RuntimeObject, transformer: Transformer.SwiftConfiguration) throws -> (definitions: [PrintedDefinition], printer: SwiftDeclarationPrinter<MachOImage>) {
+        (try printedDefinitions(for: object), corpusPrinter(for: transformer))
     }
 
     /// A printer that marks optional content instead of letting the options
@@ -1792,12 +1809,12 @@ extension RuntimeSwiftSection {
         return printer
     }
 
-    /// The object's members as its definitions list them, not yet located in
-    /// any text. Reads whatever the definitions have indexed so far; called
-    /// after a print, that is everything.
-    func memberDeclarations(for object: RuntimeObject) throws -> [RuntimeMemberDeclaration] {
+    /// The members `definitions` list, not yet located in any text. Reads
+    /// whatever the definitions have indexed so far; after they are printed,
+    /// that is everything.
+    static func memberDeclarations(of definitions: [PrintedDefinition]) -> [RuntimeMemberDeclaration] {
         var members: [RuntimeMemberDeclaration] = []
-        for definition in try printedDefinitions(for: object) {
+        for definition in definitions {
             switch definition {
             case .type(let typeDefinition):
                 let fieldKind: RuntimeMemberKind = typeDefinition.typeName.kind == .enum ? .swiftEnumCase : .swiftField

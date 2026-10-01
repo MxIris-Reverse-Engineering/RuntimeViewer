@@ -204,7 +204,7 @@ actor RuntimeObjCSection {
     /// as `interface(for:using:transformer:)` with them. C structs and unions
     /// have nothing to mark and print as usual. `nil` for an object this image
     /// does not have.
-    func markedInterface(for object: RuntimeObject, transformer: Transformer.ObjCConfiguration) -> SemanticString? {
+    nonisolated func markedInterface(for object: RuntimeObject, transformer: Transformer.ObjCConfiguration) -> SemanticString? {
         let name = object.withImagePath(imagePath)
         let builder = ObjCInterfaceBuilder(indexer: objcIndexer.upstream, machO: machO)
         let (cTypeReplacements, ivarOffsetCommentBuilder) = Self.builderInputs(for: transformer)
