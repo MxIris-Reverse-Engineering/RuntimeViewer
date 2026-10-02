@@ -316,7 +316,10 @@ case injectedTCP(name: String, host: String, port: UInt16, identifier: Identifie
    地址解析从 `inet_addr` 换成 `inet_pton`：前者把失败报成 `0xFFFFFFFF`，于是写错的地址会变成一次
    对广播地址的连接而不是一个错误。重连不需要新代码 —— 现成的客户端循环本来就一直重试构造时那个地址。
 4. ✅ **宿主侧监听与认领**（`623b3b8f`）。等待改成**两种到达方式赛跑**而非二选一，详见决策日志。
-5. ⏳ **真机验证**：`searchpartyd` ✅ 已通过 —— 它正是之前被内核拒 `network-bind` 的四个之一，
+5. ⏳ **真机验证**：`searchpartyd`、`mediaplaybackd`、`dasd`、`chronod`、`sharingd` ✅ 五个全部通过，
+   其中前三个正是之前被内核拒 `network-bind`、这条路之前完全不可能的。`backboardd` ❌ 不支持，
+   见上「真机验证中测到的」。**仍未做**：断开重连的实际表现（Mac 上退出重开 RV，看引擎自己回不回来），
+   以及「越狱版 App 被挂起后，已注入的 daemon 载荷连接是否存活」。详情：`searchpartyd` ✅ 已通过 —— 它正是之前被内核拒 `network-bind` 的四个之一，
    现在能注入、能浏览接口，且落在设备分组里。Mac 这边 `lsof` 看得到那条连接：
    `169.254.8.252:55166 -> 169.254.107.198:49428 (ESTABLISHED)`，目标进程驻留内存 42.3 → 61.4 MB。
    剩 `mediaplaybackd`、`backboardd`、`dasd` 待测；断开重连的实际表现与退避策略也还没定。
@@ -356,6 +359,54 @@ vphone guest 那条链路上没有 DHCP（guest 的 `configd` 一直 `DHCP en1: 
 **超出预算的失败会被当成成功**（它自己的头文件写明了这一点）。对一个 81 MB 的载荷，
 宿主因此分不清「还没连上来」和「根本没加载」，这正是上面那段排查花掉二十多分钟的原因。
 `MIMachInjectorAsync` 有带超时的完成回调，能给出真正的裁决 —— 换过去是候选，未做。
+
+### 越狱版 App 离开前台一秒内就被挂起
+
+guest 日志实测（`com.JH.RuntimeViewer.Jailbroken`，pid 412）：
+
+```
+14:10:40 runningboardd  Set jetsam priority to 90
+14:10:41 runningboardd  Calculated state: running-suspended (role: None)
+14:10:41 runningboardd  Set jetsam priority to 0
+14:10:41 SpringBoard    running-suspended-NotVisible
+```
+
+**一秒。** 之后 jetsam 优先级 0，是最先被回收的那一档 —— 实测中它确实被回收过多次。
+
+两个直接后果：
+
+- **注入期间 App 必须是设备屏幕上的那个 App。** 注入在 App 进程里执行，被挂起就没人处理 RPC。
+  注意判据是**设备屏幕**，不是 macOS 的窗口焦点 —— guest 不知道 macOS 的焦点在哪，所以在 Mac 上
+  点 Attach 本身不会让它挂起，只有在 guest 里切走才会。
+- **设备引擎（`RuntimeViewer JB` 那条）必然随之断开**，因为那条连接是 App 持有的。这是 iOS 的常态，
+  不是缺陷；已注入的 daemon 载荷活在 daemon 里，不受影响（**待验证**，见落地步骤第 5 步）。
+
+这也让异步注入器 20 秒的裁决窗口比预想的更脆：切走即挂起，裁决就永远不会到。
+同步路径 210 毫秒往往能在挂起前跑完。目前接受这个代价 —— 换来的是不再把失败报成成功 ——
+但若实际用起来经常撞到，这个数字要重新考虑。
+
+### 注入 App 结构上受限，不只是「挂起」这一条
+
+iOS 上只有一个 App 能在前台。要注入 App X，越狱版必须在跑（注入由它执行），而 X 这时必然在后台。
+实测注入「设置」失败即此。能稳定注入的是 **daemon**，以及恰好持有后台执行权的 App。
+这不是本提案能解决的，它在开篇就被列为非目标。
+
+### `backboardd` 不支持，以及为什么现在修不了
+
+同一会话里五个目标成功、唯独它失败，所以不是环境问题。它的特征：
+
+- 异步注入器给出**真裁决且是成功** —— `result_code == 0 && handle != 0`，由目标进程自己写回
+- 目标驻留内存**几乎不动**（对比 `sharingd` +22.7 MB、`chronod` +16.6 MB）
+- 载荷**零日志**（而对照组证明成功注入时 `Attach successfully` 等四行都看得见）
+- 没有崩溃、没有 sandbox 拒绝、没有 AMFI 拒绝
+
+唯一能同时解释「handle 非空 + 内存不涨 + 构造器没跑」的是：**`dlopen` 了一个已经加载过的镜像**。
+但这意味着某一次首注是成功加载的，而那一次又没连回来 —— 这一点三次尝试都没抓到日志，**未查明**。
+
+即便查明，本提案里也修不了：失败点在 `dlopen` / MachInjector 那一层，而 macOS 上同类问题
+（strict-seatbelt daemon 拒 `file-map-executable`）的解法是 `mach_vm_remap`，
+**它在 iOS 上今天不可用** —— MachInjector 内嵌的 loader 是用不带 `-target` / `-isysroot`
+的脚本编的，产物是 macOS dylib。移植它是 MachInjector 自己仓库的提案。
 
 ### 载荷只有一次运行机会，所以不能放弃
 
