@@ -14,6 +14,8 @@ struct RuntimeBookmarkScopeIdentityRawValueTests {
             .remote(identifier: "com.RuntimeViewer.RuntimeSource.MacCatalyst", role: .client),
             .remote(identifier: "com.RuntimeViewer.RuntimeSource.MacCatalyst", role: .server),
             .localSocket(identifier: "1234", role: .client),
+            .injectedTCP(identifier: "06A9F1C2-1C1B-4A9E-9C2E-7E6A2F0D3B41", role: .client),
+            .injectedTCP(identifier: "06A9F1C2-1C1B-4A9E-9C2E-7E6A2F0D3B41", role: .server),
             .directTCP(port: 8080, host: "192.168.1.10", role: .client),
             .directTCP(port: 0, host: nil, role: .server),
             .bonjour(deviceID: "11111111-2222-3333-4444-555555555555", processName: "SpringBoard", role: .client),
@@ -44,6 +46,29 @@ struct RuntimeBookmarkScopeIdentityRawValueTests {
                 .directTCP(port: 8080, host: "fe80::1", role: .client)
                 .rawValue == "v1:directTCP:client:8080:fe80::1"
         )
+        // The claim token swallows the tail, like the other identifier-shaped kinds.
+        #expect(
+            RuntimeBookmarkScope.Identity
+                .injectedTCP(identifier: "TOKEN", role: .server)
+                .rawValue == "v1:injectedTCP:server:TOKEN"
+        )
+    }
+
+    /// Three kinds encode an identifier and nothing else, so their raw values differ only
+    /// in the kind segment. Decoding one as another would file bookmarks under a scope no
+    /// running engine produces.
+    @Test("The three identifier-shaped kinds do not decode as one another")
+    func identifierShapedKindsStayApart() {
+        let identities: [RuntimeBookmarkScope.Identity] = [
+            .remote(identifier: "SHARED", role: .client),
+            .localSocket(identifier: "SHARED", role: .client),
+            .injectedTCP(identifier: "SHARED", role: .client),
+        ]
+        let rawValues = identities.map(\.rawValue)
+        #expect(Set(rawValues).count == identities.count)
+        for identity in identities {
+            #expect(RuntimeBookmarkScope.Identity(rawValue: identity.rawValue) == identity)
+        }
     }
 
     @Test(
@@ -150,6 +175,13 @@ struct RuntimeBookmarkScopeRecoveryTests {
             RuntimeBookmarkScope.recovered(
                 from: .directTCP(name: "Peer", host: "fe80::1", port: 8080, role: .client)
             ) == .identified(.directTCP(port: 8080, host: "fe80::1", role: .client))
+        )
+        // The claim token alone. The host and port are where to reach the payload *this
+        // time*, which is routing rather than identity.
+        #expect(
+            RuntimeBookmarkScope.recovered(
+                from: .injectedTCP(name: "sharingd", host: "192.168.64.1", port: 51234, identifier: "TOKEN", role: .client)
+            ) == .identified(.injectedTCP(identifier: "TOKEN", role: .client))
         )
     }
 

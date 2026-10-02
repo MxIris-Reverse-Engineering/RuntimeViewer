@@ -126,6 +126,11 @@ extension RuntimeEngine {
     /// - `bonjour` and `directTCP` cross a network interface. Even when that
     ///   interface is loopback, the peer decides what its process table is, so
     ///   the host must ask rather than assume.
+    /// - `injectedTCP` is a payload already running inside a process on a
+    ///   device. It looks like `localSocket` — same transport, same role
+    ///   inversion — and answers the opposite way, which is the whole reason
+    ///   this switch has no `default`: the address is what differs, and the
+    ///   processes at that address are the device's.
     /// `nonisolated`, like the `source` it reads: the attach flow has to pick a branch
     /// before it can show anything, and making the UI `await` the engine to learn which
     /// path it is on would reintroduce exactly the latency this property exists to avoid.
@@ -133,7 +138,7 @@ extension RuntimeEngine {
         switch source {
         case .local, .remote, .localSocket:
             return true
-        case .bonjour, .directTCP:
+        case .bonjour, .directTCP, .injectedTCP:
             return false
         }
     }

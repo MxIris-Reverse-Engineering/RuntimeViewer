@@ -168,6 +168,31 @@ public final class RuntimeCommunicator {
                 return runtimeConnection
             }
 
+        case .injectedTCP(_, let host, let port, let identifier, let role):
+            // The same inversion `localSocket` performs, over a route that
+            // leaves the machine. The business client binds because the business
+            // server is an injected payload whose target sandbox denies
+            // `network-bind` — measured on four of seven iOS daemons. See
+            // `RuntimeSource.injectedTCP`.
+            if role.isClient {
+                #log(.debug, "Creating injected TCP server connection (business client) on \(host, privacy: .public):\(port, privacy: .public)")
+                let runtimeConnection = RuntimeLocalSocketServerConnection(bindAddress: host, port: port)
+                try await runtimeConnection.start()
+                try await modifier?(runtimeConnection)
+                #log(.info, "Injected TCP server connection established")
+                return runtimeConnection
+            } else {
+                #log(.debug, "Creating injected TCP client connection (business server) to \(host, privacy: .public):\(port, privacy: .public)")
+                let runtimeConnection = try await RuntimeLocalSocketClientConnection(
+                    host: host,
+                    port: port,
+                    identifier: identifier.rawValue,
+                )
+                try await modifier?(runtimeConnection)
+                #log(.info, "Injected TCP client connection established")
+                return runtimeConnection
+            }
+
         case .directTCP(_, let host, let port, let role):
             #if canImport(Network)
             if role.isClient {

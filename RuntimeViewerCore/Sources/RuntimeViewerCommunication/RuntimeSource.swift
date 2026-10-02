@@ -113,6 +113,40 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
     ///   - role: Whether this endpoint is client or server.
     case directTCP(name: String, host: String?, port: UInt16, role: Role)
 
+    /// A payload injected into a process on another machine, connecting *out* to
+    /// the host that injected it.
+    ///
+    /// This is `localSocket` with the address unpinned, and it exists for one
+    /// measured reason: on a real iOS device the payload inherits the target
+    /// process's sandbox, and the kernel denies `network-bind` to most iOS
+    /// daemons — four of seven targets measured on one device. So the payload
+    /// cannot listen, and the inversion `localSocket` already performs is the
+    /// only shape that works; all that was missing is that `localSocket` dials
+    /// `127.0.0.1`, which does not reach the host from a device.
+    ///
+    /// | Role | Business role | Socket role | Runs in |
+    /// |------|---------------|-------------|---------|
+    /// | `.client` | Client (queries) | **Server** (bind/listen) | The host, Runtime Viewer |
+    /// | `.server` | Server (handles) | **Client** (connect) | The injected payload |
+    ///
+    /// Not ``directTCP``, whose roles are *not* inverted: its server binds, and
+    /// binding is precisely what the target's sandbox refuses.
+    ///
+    /// - Parameters:
+    ///   - name: Display name for the connection.
+    ///   - host: The host's address, as reached from the device. Carried by both
+    ///     sides, and not optional: the business client binds exactly this
+    ///     address rather than every interface, so an address the device could
+    ///     not have reached fails loudly at the host instead of silently at the
+    ///     payload.
+    ///   - port: The port the host listens on. Chosen by the host and handed to
+    ///     the payload, not derived from the identifier the way `localSocket`'s
+    ///     is — the two sides here cannot agree on a hash, because the host must
+    ///     be listening before the payload exists.
+    ///   - identifier: The claim token the host issued for this injection.
+    ///   - role: Whether this endpoint is business client or business server.
+    case injectedTCP(name: String, host: String, port: UInt16, identifier: Identifier, role: Role)
+
     public var description: String {
         switch self {
         case .local: return "My Mac"
@@ -120,6 +154,7 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
         case .bonjour(let name, _, _): return name
         case .localSocket(let name, _, _): return name
         case .directTCP(let name, _, _, _): return name
+        case .injectedTCP(let name, _, _, _, _): return name
         }
     }
 
@@ -136,7 +171,8 @@ public enum RuntimeSource: Sendable, CustomStringConvertible, Codable {
         case .remote(_, _, let role),
              .bonjour(_, _, let role),
              .localSocket(_, _, let role),
-             .directTCP(_, _, _, let role):
+             .directTCP(_, _, _, let role),
+             .injectedTCP(_, _, _, _, let role):
             return role
         }
     }
@@ -165,6 +201,8 @@ extension RuntimeSource: Equatable {
             return leftIdentifier == rightIdentifier && leftRole == rightRole
         case (.directTCP(_, let leftHost, let leftPort, let leftRole), .directTCP(_, let rightHost, let rightPort, let rightRole)):
             return leftHost == rightHost && leftPort == rightPort && leftRole == rightRole
+        case (.injectedTCP(_, let leftHost, let leftPort, let leftIdentifier, let leftRole), .injectedTCP(_, let rightHost, let rightPort, let rightIdentifier, let rightRole)):
+            return leftHost == rightHost && leftPort == rightPort && leftIdentifier == rightIdentifier && leftRole == rightRole
         default:
             return false
         }
@@ -193,6 +231,12 @@ extension RuntimeSource: Hashable {
             hasher.combine(host)
             hasher.combine(port)
             hasher.combine(role)
+        case .injectedTCP(_, let host, let port, let identifier, let role):
+            hasher.combine(5)
+            hasher.combine(host)
+            hasher.combine(port)
+            hasher.combine(identifier)
+            hasher.combine(role)
         }
     }
 }
@@ -214,6 +258,11 @@ extension RuntimeSource {
             return role.isClient ? id.rawValue : "localSocketServer.\(id.rawValue)"
         case .directTCP(let name, let host, let port, let role):
             return role.isClient ? "tcp.\(name).\(host ?? "").\(port)" : "tcpServer.\(name).\(port)"
+        case .injectedTCP(_, _, _, let id, let role):
+            // Prefixed on both sides, unlike `localSocket`, whose business
+            // client returns the bare identifier because a caller parses a pid
+            // back out of it. Nothing parses this one — it is a claim token.
+            return role.isClient ? "injectedTCP.\(id.rawValue)" : "injectedTCPServer.\(id.rawValue)"
         }
     }
 }

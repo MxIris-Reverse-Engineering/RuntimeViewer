@@ -60,4 +60,23 @@ struct InjectionTargetLocationTests {
         let source = RuntimeSource.directTCP(name: "Mirrored", host: host, port: 50000, role: .client)
         #expect(!engine(for: source).injectionTargetsRunOnThisMachine)
     }
+
+    /// The case this suite's `default`-less switch was waiting for, and the one that
+    /// answers the opposite way from the case it most resembles: `injectedTCP` *is*
+    /// `localSocket`'s transport and role inversion, with the address unpinned, and the
+    /// processes at that address belong to a device.
+    @Test(
+        "An injected device process's targets are not on this machine",
+        arguments: [RuntimeSource.Role.client, .server],
+    )
+    func injectedTCPIsAnotherMachine(role: RuntimeSource.Role) {
+        let source = RuntimeSource.injectedTCP(
+            name: "sharingd",
+            host: "192.168.64.1",
+            port: 51234,
+            identifier: Self.identifier,
+            role: role,
+        )
+        #expect(!engine(for: source).injectionTargetsRunOnThisMachine)
+    }
 }
