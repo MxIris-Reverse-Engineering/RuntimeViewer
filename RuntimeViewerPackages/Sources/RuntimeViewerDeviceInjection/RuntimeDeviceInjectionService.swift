@@ -63,6 +63,15 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
     /// Claiming unavailability we have not established would be worse: it
     /// disables the feature on a device where it may well work.
     public func injectionAvailability() async -> RuntimeInjectionAvailability {
+        // A variant with the right entitlements and no payload can list and
+        // not inject, which is its own failure and not the one below. Said
+        // plainly rather than folded into the entitlement message, which would
+        // send someone to reinstall over a build-phase problem.
+        guard fileManager.fileExists(atPath: payloadURL.path) else {
+            return .unsupported(
+                reason: "This build is missing the runtime server payload it would inject, so it has nothing to load into another process.",
+            )
+        }
         do {
             _ = try RuntimeDeviceProcessEnumerator.processIdentifiers()
             return .available

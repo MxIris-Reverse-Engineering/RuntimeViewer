@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The three entitlements the jailbroken variant needs, and nothing else.
+
+  Measured as a matrix of seven variants on iOS 26.6.2; two of the results are
+  counter-intuitive and are the reason this file is exactly this short:
+
+    - The sandbox escape is the gate for BOTH capabilities. A containerized
+      process gets EPERM from proc_listallpids no matter which task-port
+      entitlements it carries — adding all three below to a containerized app
+      changed nothing at all.
+    - Injection then needs EXACTLY task_for_pid-allow. Apple's own
+      com.apple.system-task-ports does not work, and neither does
+      platform-application. The kernel's task_for_pid check reads the old one.
+
+  So: no-sandbox + no-container make listing possible, task_for_pid-allow makes
+  injecting possible on top of that, and nothing else earns a place here.
+
+  Xcode cannot sign these — no provisioning profile grants them — so a build
+  installed by Xcode cannot inject. The variant is signed ad-hoc with these
+  entitlements and installed by something that honours them; vphoned preserves
+  each binary's existing entitlements when it installs, and a jailbreak
+  installer grants them outright.
+
+  ENABLE_APP_SANDBOX is NO for this target on purpose: it would generate
+  com.apple.security.app-sandbox, which directly contradicts no-sandbox.
+-->
+<plist version="1.0">
+<dict>
+	<key>com.apple.private.security.no-container</key>
+	<true/>
+	<key>com.apple.private.security.no-sandbox</key>
+	<true/>
+	<key>task_for_pid-allow</key>
+	<true/>
+</dict>
+</plist>

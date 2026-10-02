@@ -16,6 +16,10 @@
 		E985A9D62D9AF52E005A573C /* RuntimeViewerCore in Frameworks */ = {isa = PBXBuildFile; productRef = E985A9D52D9AF52E005A573C /* RuntimeViewerCore */; };
 		E9A9CCD82F5D82A700A10DD3 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9A9CCD72F5D82A700A10DD3 /* RuntimeViewerUtilities */; };
 		E9A9CCDA2F5D82AE00A10DD3 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9A9CCD92F5D82AE00A10DD3 /* RuntimeViewerUtilities */; };
+		E9AB8517306F733800D32891 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8514306F733800D32891 /* RuntimeViewerUtilities */; };
+		E9AB8518306F733800D32891 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8513306F733800D32891 /* RuntimeViewerApplication */; };
+		E9AB8541306F733800D32891 /* RuntimeViewerDeviceInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */; };
+		E9AB851A306F733800D32891 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E94450700084A7B /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -41,9 +45,23 @@
 		E927C22F2E94450700084A7B /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = ../Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		E9432FC22C0D612000362862 /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = RuntimeViewerServer.xcodeproj; path = ../RuntimeViewerServer/RuntimeViewerServer.xcodeproj; sourceTree = "<group>"; };
+		E9AB851E306F733800D32891 /* RuntimeViewerJailbroken.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewerJailbroken.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E9AB8534306F733800D32891 /* RuntimeViewerUsingUIKit-Jailbroken-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "RuntimeViewerUsingUIKit-Jailbroken-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		E9AB8535306F733900D32891 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			platformFiltersByRelativePath = {
+				LaunchScreen.storyboard = (
+					ios,
+				);
+			};
+			target = E9AB8512306F733800D32891 /* RuntimeViewerUsingUIKit-JB */;
+		};
 		E9DAF5612FEE747F00DD20CB /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -75,7 +93,7 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		E9DAF5342FEE747E00DD20CB /* RuntimeViewerUsingUIKit */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E9DAF5612FEE747F00DD20CB /* PBXFileSystemSynchronizedBuildFileExceptionSet */, E9DAF5622FEE747F00DD20CB /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = RuntimeViewerUsingUIKit; sourceTree = "<group>"; };
+		E9DAF5342FEE747E00DD20CB /* RuntimeViewerUsingUIKit */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E9DAF5612FEE747F00DD20CB /* PBXFileSystemSynchronizedBuildFileExceptionSet */, E9AB8535306F733900D32891 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, E9DAF5622FEE747F00DD20CB /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = RuntimeViewerUsingUIKit; sourceTree = "<group>"; };
 		E9DAF5672FEE748200DD20CB /* RuntimeViewerUsingVision */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E9DAF5692FEE748300DD20CB /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = RuntimeViewerUsingVision; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
@@ -101,6 +119,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E9AB8516306F733800D32891 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9AB8517306F733800D32891 /* RuntimeViewerUtilities in Frameworks */,
+				E9AB8518306F733800D32891 /* RuntimeViewerApplication in Frameworks */,
+				E9AB8541306F733800D32891 /* RuntimeViewerDeviceInjection in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -114,6 +142,7 @@
 				E9DAF5672FEE748200DD20CB /* RuntimeViewerUsingVision */,
 				E9432FC32C0D612000362862 /* Products */,
 				E9432FF62C0D638200362862 /* Frameworks */,
+				E9AB8534306F733800D32891 /* RuntimeViewerUsingUIKit-Jailbroken-Info.plist */,
 			);
 			sourceTree = "<group>";
 		};
@@ -122,6 +151,7 @@
 			children = (
 				E9432FC22C0D612000362862 /* RuntimeViewer.app */,
 				E9038F982C31A81F0051B6AC /* RuntimeViewer.app */,
+				E9AB851E306F733800D32891 /* RuntimeViewerJailbroken.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -196,6 +226,31 @@
 			productReference = E9432FC22C0D612000362862 /* RuntimeViewer.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E9AB8512306F733800D32891 /* RuntimeViewerUsingUIKit-JB */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E9AB851B306F733800D32891 /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingUIKit-JB" */;
+			buildPhases = (
+				E9AB8515306F733800D32891 /* Sources */,
+				E9AB8516306F733800D32891 /* Frameworks */,
+				E9AB8519306F733800D32891 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				E9DAF5342FEE747E00DD20CB /* RuntimeViewerUsingUIKit */,
+			);
+			name = "RuntimeViewerUsingUIKit-JB";
+			packageProductDependencies = (
+				E9AB8513306F733800D32891 /* RuntimeViewerApplication */,
+				E9AB8514306F733800D32891 /* RuntimeViewerUtilities */,
+				E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */,
+			);
+			productName = "RuntimeViewerUsingUIKit-JB";
+			productReference = E9AB851E306F733800D32891 /* RuntimeViewerJailbroken.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -236,6 +291,7 @@
 			projectRoot = "";
 			targets = (
 				E9432FC12C0D612000362862 /* RuntimeViewerUsingUIKit */,
+				E9AB8512306F733800D32891 /* RuntimeViewerUsingUIKit-JB */,
 				E9038F972C31A81F0051B6AC /* RuntimeViewerUsingVision */,
 			);
 		};
@@ -275,6 +331,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E9AB8519306F733800D32891 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E9AB851A306F733800D32891 /* AppIcon.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -286,6 +350,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		E9432FBE2C0D612000362862 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E9AB8515306F733800D32891 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -504,7 +575,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer uses the local network to discover and connect to runtime inspection services on nearby devices.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Runtime Viewer uses the local network to discover other Runtime Viewer instances on the same Wi-Fi for runtime engine mirroring. The feature is optional and the app works fully on a single device.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -546,7 +617,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer uses the local network to discover and connect to runtime inspection services on nearby devices.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Runtime Viewer uses the local network to discover other Runtime Viewer instances on the same Wi-Fi for runtime engine mirroring. The feature is optional and the app works fully on a single device.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -564,6 +635,98 @@
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+				XROS_DEPLOYMENT_TARGET = 1.0;
+			};
+			name = Release;
+		};
+		E9AB851C306F733800D32891 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64e;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit-Jailbroken.entitlements;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "RuntimeViewerUsingUIKit-Jailbroken-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "RuntimeViewer JB";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Runtime Viewer uses the local network to discover other Runtime Viewer instances on the same Wi-Fi for runtime engine mirroring. The feature is optional and the app works fully on a single device.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.0.0;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_DEBUG_JAILBROKEN_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = RuntimeViewerJailbroken;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) RUNTIME_VIEWER_JAILBROKEN";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,3";
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+				XROS_DEPLOYMENT_TARGET = 1.0;
+			};
+			name = Debug;
+		};
+		E9AB851D306F733800D32891 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64e;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit-Jailbroken.entitlements;
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "RuntimeViewerUsingUIKit-Jailbroken-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "RuntimeViewer JB";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Runtime Viewer uses the local network to discover other Runtime Viewer instances on the same Wi-Fi for runtime engine mirroring. The feature is optional and the app works fully on a single device.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 2.0.0;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(RUNTIME_VIEWER_APP_RELEASE_JAILBROKEN_BUNDLE_IDENTIFIER)";
+				PRODUCT_NAME = RuntimeViewerJailbroken;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) RUNTIME_VIEWER_JAILBROKEN";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,3";
@@ -602,6 +765,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		E9AB851B306F733800D32891 /* Build configuration list for PBXNativeTarget "RuntimeViewerUsingUIKit-JB" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E9AB851C306F733800D32891 /* Debug */,
+				E9AB851D306F733800D32891 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -630,6 +802,18 @@
 			productName = RuntimeViewerUtilities;
 		};
 		E9A9CCD92F5D82AE00A10DD3 /* RuntimeViewerUtilities */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerUtilities;
+		};
+		E9AB8513306F733800D32891 /* RuntimeViewerApplication */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerApplication;
+		};
+		E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RuntimeViewerDeviceInjection;
+		};
+		E9AB8514306F733800D32891 /* RuntimeViewerUtilities */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RuntimeViewerUtilities;
 		};
