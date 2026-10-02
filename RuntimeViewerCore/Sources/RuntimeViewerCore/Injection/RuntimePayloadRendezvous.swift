@@ -1,4 +1,6 @@
-import Foundation
+// `public import` because `URL` crosses the public API below, and this module
+// builds with `InternalImportsByDefault`.
+public import Foundation
 
 /// Everything the injector hands the payload: where to report in, and what to
 /// report as.
@@ -41,6 +43,13 @@ public struct RuntimePayloadRendezvous: Codable, Sendable, Hashable {
     ///
     /// The host issues it, so recognizing it needs no knowledge of the device,
     /// the target process or anything else the payload would have had to derive.
+    ///
+    /// **It disambiguates; it does not authenticate.** It is staged in a
+    /// world-readable directory, because the payload binary beside it has to be
+    /// world-readable for the target to map it. Treating the token as a secret
+    /// would be a claim the layout cannot support — and would buy nothing, since
+    /// anyone who could read it could equally load the payload sitting next to
+    /// it.
     public let claimToken: String
 
     public init(hostAddress: String, hostPort: UInt16, claimToken: String) {
@@ -67,5 +76,55 @@ public struct RuntimePayloadRendezvous: Codable, Sendable, Hashable {
     /// go silent where it used to at least work on the targets that can bind.
     public var isUsable: Bool {
         !hostAddress.isEmpty && hostPort != 0 && !claimToken.isEmpty
+    }
+}
+
+// MARK: - Finding it on disk
+
+extension RuntimePayloadRendezvous {
+    /// The name the injector writes it under, in the directory it stages the
+    /// payload into.
+    public static let fileName = "rendezvous.json"
+
+    /// Reads the rendezvous staged beside a loaded image.
+    ///
+    /// `imageHandle` is how the payload says "beside *me*" — pass `#dsohandle`
+    /// from inside the payload itself. The handle is a parameter rather than
+    /// read here because `#dsohandle` expands at its use site: taken in this
+    /// file it would name `RuntimeViewerCore`, which in the staged layout sits
+    /// one directory further down, under `Frameworks/`.
+    ///
+    /// Deriving the location from the image rather than from a fixed path is
+    /// what lets the injector choose the staging directory — it already can,
+    /// and the payload has no other way to learn which one was used.
+    public static func stagedBesideImage(_ imageHandle: UnsafeRawPointer) -> RuntimePayloadRendezvous? {
+        guard let imagePath = pathOfImage(at: imageHandle) else { return nil }
+        return stagedInDirectory(
+            at: URL(fileURLWithPath: imagePath).deletingLastPathComponent()
+        )
+    }
+
+    /// Reads the rendezvous out of a staging directory.
+    ///
+    /// Answers `nil` for every way this can come up empty — no file, unreadable,
+    /// malformed, or describing nowhere to connect to — because the payload does
+    /// the same thing in all of them: fall back to advertising itself. A thrown
+    /// error would have to be turned back into that at the call site, inside a
+    /// process where nothing can be reported to anyone.
+    public static func stagedInDirectory(at directoryURL: URL) -> RuntimePayloadRendezvous? {
+        let fileURL = directoryURL.appendingPathComponent(fileName)
+        guard let contents = try? Data(contentsOf: fileURL),
+              let rendezvous = try? JSONDecoder().decode(RuntimePayloadRendezvous.self, from: contents),
+              rendezvous.isUsable
+        else { return nil }
+        return rendezvous
+    }
+
+    private static func pathOfImage(at imageHandle: UnsafeRawPointer) -> String? {
+        var imageInformation = Dl_info()
+        guard dladdr(imageHandle, &imageInformation) != 0,
+              let fileName = imageInformation.dli_fname
+        else { return nil }
+        return String(cString: fileName)
     }
 }

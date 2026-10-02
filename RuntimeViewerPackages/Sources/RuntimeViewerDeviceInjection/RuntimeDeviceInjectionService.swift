@@ -106,7 +106,7 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
 
         let stagedURL: URL
         do {
-            stagedURL = try staging.stage()
+            stagedURL = try staging.stage(rendezvous: rendezvous)
         } catch {
             return .failed(code: 0, reason: "Could not stage the payload: \(error.localizedDescription)")
         }

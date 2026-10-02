@@ -1,4 +1,5 @@
 public import Foundation
+public import RuntimeViewerCore
 
 /// Lays out a copy of the injection payload somewhere a target process can load
 /// it from.
@@ -66,8 +67,15 @@ public struct RuntimePayloadStaging {
     /// not**, the SDK stub there having become an alias for `libswiftCore`.
     /// macOS 27 still ships it, which is why the host's own injection path
     /// never had to deal with this.
+    ///
+    /// - Parameter rendezvous: Written beside the payload for it to read on
+    ///   startup, or, when `nil`, **removed** from beside the payload. Removing
+    ///   is the part that matters: a leftover file from an earlier injection
+    ///   would send a payload that was meant to advertise itself off to an
+    ///   address the host is no longer listening on, and nothing about that
+    ///   failure would point at a stale file.
     @discardableResult
-    public func stage() throws -> URL {
+    public func stage(rendezvous: RuntimePayloadRendezvous?) throws -> URL {
         let stagedPayloadURL = stagingDirectoryURL.appendingPathComponent(payloadURL.lastPathComponent)
         let stagedDependencyDirectoryURL = stagingDirectoryURL.appendingPathComponent(
             Self.dependencyDirectoryName,
@@ -88,7 +96,31 @@ public struct RuntimePayloadStaging {
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stagedPayloadURL.path)
 
         try stageDependencies(into: stagedDependencyDirectoryURL)
+        try stage(rendezvous: rendezvous, beside: stagedPayloadURL)
         return stagedPayloadURL
+    }
+
+    /// Writes — or clears — the rendezvous in the staged payload's own
+    /// directory, which is where ``RuntimePayloadRendezvous/stagedBesideImage(_:)``
+    /// looks for it.
+    private func stage(rendezvous: RuntimePayloadRendezvous?, beside stagedPayloadURL: URL) throws {
+        let rendezvousURL = stagedPayloadURL
+            .deletingLastPathComponent()
+            .appendingPathComponent(RuntimePayloadRendezvous.fileName)
+
+        try removeItemIfPresent(at: rendezvousURL)
+        guard let rendezvous else { return }
+
+        // Sorted keys so two identical rendezvous produce identical bytes, which
+        // is what makes the file worth diffing while chasing an injection by
+        // hand on the device.
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        try encoder.encode(rendezvous).write(to: rendezvousURL, options: .atomic)
+        // Readable by the target, which runs as whatever uid the target does.
+        // The payload beside it is already 0o755 for the same reason — see
+        // `RuntimePayloadRendezvous.claimToken` on why that costs nothing here.
+        try fileManager.setAttributes([.posixPermissions: 0o644], ofItemAtPath: rendezvousURL.path)
     }
 
     /// Copies the hosting app's embedded libraries beside the staged payload.

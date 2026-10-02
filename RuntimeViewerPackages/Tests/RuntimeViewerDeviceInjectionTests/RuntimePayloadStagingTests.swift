@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import RuntimeViewerCore
 @testable import RuntimeViewerDeviceInjection
 
 /// The staged layout is the one part of device injection whose mistakes surface
@@ -91,7 +92,7 @@ struct RuntimePayloadStagingTests {
     @Test("Puts the payload beside a Frameworks directory holding its dependencies")
     func producesTheLayoutTheRunPathExpects() throws {
         try withPayloadFixture { fixture in
-            let stagedURL = try fixture.makeStaging().stage()
+            let stagedURL = try fixture.makeStaging().stage(rendezvous: nil)
 
             #expect(stagedURL == fixture.stagingDirectoryURL.appendingPathComponent("RuntimeViewerServer"))
             #expect(FileManager.default.fileExists(atPath: stagedURL.path))
@@ -119,7 +120,7 @@ struct RuntimePayloadStagingTests {
     @Test("Leaves the payload's own bundle out of the dependencies")
     func doesNotCopyThePayloadBundleTwice() throws {
         try withPayloadFixture { fixture in
-            try fixture.makeStaging().stage()
+            try fixture.makeStaging().stage(rendezvous: nil)
             #expect(!(try fixture.stagedDependencyNames().contains("RuntimeViewerServer.framework")))
         }
     }
@@ -130,7 +131,7 @@ struct RuntimePayloadStagingTests {
         try withPayloadFixture(
             dependencyNames: [Self.looseDependencyName, Self.bundledDependencyName, addedLaterName],
         ) { fixture in
-            try fixture.makeStaging().stage()
+            try fixture.makeStaging().stage(rendezvous: nil)
             #expect(try fixture.stagedDependencyNames() == [Self.looseDependencyName, Self.bundledDependencyName, addedLaterName])
         }
     }
@@ -138,7 +139,7 @@ struct RuntimePayloadStagingTests {
     @Test("Copies a dependency that is a bundle, not only a loose dylib")
     func copiesBundledDependenciesWholesale() throws {
         try withPayloadFixture { fixture in
-            try fixture.makeStaging().stage()
+            try fixture.makeStaging().stage(rendezvous: nil)
             let innerBinaryURL = fixture.stagedDependencyDirectoryURL
                 .appendingPathComponent(Self.bundledDependencyName)
                 .appendingPathComponent("ObjCRuntimeToolbox")
@@ -152,7 +153,7 @@ struct RuntimePayloadStagingTests {
     @Test("Leaves the staged payload readable and executable by everyone")
     func stagedPayloadIsWorldReadable() throws {
         try withPayloadFixture { fixture in
-            let stagedURL = try fixture.makeStaging().stage()
+            let stagedURL = try fixture.makeStaging().stage(rendezvous: nil)
             #expect(try posixPermissions(ofItemAt: stagedURL) == 0o755)
         }
     }
@@ -160,7 +161,7 @@ struct RuntimePayloadStagingTests {
     @Test("Leaves the staging directories traversable by everyone")
     func stagingDirectoriesAreWorldTraversable() throws {
         try withPayloadFixture { fixture in
-            try fixture.makeStaging().stage()
+            try fixture.makeStaging().stage(rendezvous: nil)
             #expect(try posixPermissions(ofItemAt: fixture.stagingDirectoryURL) == 0o755)
             #expect(try posixPermissions(ofItemAt: fixture.stagedDependencyDirectoryURL) == 0o755)
         }
@@ -174,8 +175,8 @@ struct RuntimePayloadStagingTests {
     func restagingReplacesThePreviousCopy() throws {
         try withPayloadFixture { fixture in
             let staging = fixture.makeStaging()
-            try staging.stage()
-            let stagedURL = try staging.stage()
+            try staging.stage(rendezvous: nil)
+            let stagedURL = try staging.stage(rendezvous: nil)
             #expect(try Data(contentsOf: stagedURL) == Data("payload".utf8))
         }
     }
@@ -187,11 +188,11 @@ struct RuntimePayloadStagingTests {
     func restagingLeavesUnrelatedFilesAlone() throws {
         try withPayloadFixture { fixture in
             let staging = fixture.makeStaging()
-            try staging.stage()
+            try staging.stage(rendezvous: nil)
 
             let unrelatedURL = fixture.stagingDirectoryURL.appendingPathComponent("someone-elses-file")
             try Data("keep me".utf8).write(to: unrelatedURL)
-            try staging.stage()
+            try staging.stage(rendezvous: nil)
 
             #expect(try Data(contentsOf: unrelatedURL) == Data("keep me".utf8))
         }
@@ -203,15 +204,128 @@ struct RuntimePayloadStagingTests {
     func restagingRemovesVanishedDependencies() throws {
         try withPayloadFixture { fixture in
             let staging = fixture.makeStaging()
-            try staging.stage()
+            try staging.stage(rendezvous: nil)
 
             try FileManager.default.removeItem(
                 at: fixture.dependencyDirectoryURL.appendingPathComponent(Self.looseDependencyName),
             )
-            try staging.stage()
+            try staging.stage(rendezvous: nil)
 
             #expect(!(try fixture.stagedDependencyNames().contains(Self.looseDependencyName)))
         }
+    }
+
+    // MARK: - The rendezvous
+
+    private static let rendezvous = RuntimePayloadRendezvous(
+        hostAddress: "192.168.64.1",
+        hostPort: 51234,
+        claimToken: "06A9F1C2-1C1B-4A9E-9C2E-7E6A2F0D3B41",
+    )
+
+    /// It has to land where the payload looks, which is its own directory —
+    /// asserted through the reader rather than by spelling the path again, so the
+    /// two halves cannot drift apart while both tests keep passing.
+    @Test("Writes the rendezvous where the payload reads it")
+    func stagesTheRendezvousBesideThePayload() throws {
+        try withPayloadFixture { fixture in
+            let stagedURL = try fixture.makeStaging().stage(rendezvous: Self.rendezvous)
+            let readBack = RuntimePayloadRendezvous.stagedInDirectory(
+                at: stagedURL.deletingLastPathComponent(),
+            )
+            #expect(readBack == Self.rendezvous)
+        }
+    }
+
+    /// The target reads it as whatever uid it runs as.
+    @Test("Leaves the rendezvous readable by everyone")
+    func stagedRendezvousIsWorldReadable() throws {
+        try withPayloadFixture { fixture in
+            let stagedURL = try fixture.makeStaging().stage(rendezvous: Self.rendezvous)
+            let rendezvousURL = stagedURL
+                .deletingLastPathComponent()
+                .appendingPathComponent(RuntimePayloadRendezvous.fileName)
+            #expect(try posixPermissions(ofItemAt: rendezvousURL) == 0o644)
+        }
+    }
+
+    /// Overwritten, not appended to — it describes *this* injection. Appending
+    /// would leave trailing bytes after the JSON object, and `JSONDecoder`
+    /// rejects those, so the payload would read no rendezvous at all.
+    @Test("Replaces the previous injection's rendezvous")
+    func restagingReplacesTheRendezvous() throws {
+        try withPayloadFixture { fixture in
+            let staging = fixture.makeStaging()
+            try staging.stage(rendezvous: Self.rendezvous)
+
+            let second = RuntimePayloadRendezvous(hostAddress: "10.0.0.9", hostPort: 59000, claimToken: "second")
+            let stagedURL = try staging.stage(rendezvous: second)
+
+            #expect(RuntimePayloadRendezvous.stagedInDirectory(at: stagedURL.deletingLastPathComponent()) == second)
+        }
+    }
+
+    /// The case with no symptom of its own. An injection that passes no
+    /// rendezvous means "advertise yourself"; if the previous injection's file
+    /// were left in place, this payload would instead dial a host that is no
+    /// longer listening, and go quiet.
+    @Test("Clears a leftover rendezvous when this injection passes none")
+    func restagingWithoutARendezvousRemovesTheLeftoverOne() throws {
+        try withPayloadFixture { fixture in
+            let staging = fixture.makeStaging()
+            try staging.stage(rendezvous: Self.rendezvous)
+            let stagedURL = try staging.stage(rendezvous: nil)
+
+            let directoryURL = stagedURL.deletingLastPathComponent()
+            #expect(RuntimePayloadRendezvous.stagedInDirectory(at: directoryURL) == nil)
+            #expect(!FileManager.default.fileExists(
+                atPath: directoryURL.appendingPathComponent(RuntimePayloadRendezvous.fileName).path,
+            ))
+        }
+    }
+
+    /// Every way the read can come up empty answers `nil`, because the payload
+    /// does the same thing in all of them. A malformed file throwing instead
+    /// would have to be caught inside someone else's process, where there is
+    /// nobody to report it to.
+    @Test("Reads nothing rather than failing when the file is absent, corrupt or incomplete")
+    func readingAnUnusableRendezvousAnswersNil() throws {
+        try withPayloadFixture { fixture in
+            let stagedURL = try fixture.makeStaging().stage(rendezvous: nil)
+            let directoryURL = stagedURL.deletingLastPathComponent()
+            let rendezvousURL = directoryURL.appendingPathComponent(RuntimePayloadRendezvous.fileName)
+
+            // Absent.
+            #expect(RuntimePayloadRendezvous.stagedInDirectory(at: directoryURL) == nil)
+
+            // Not JSON at all.
+            try Data("half a file".utf8).write(to: rendezvousURL)
+            #expect(RuntimePayloadRendezvous.stagedInDirectory(at: directoryURL) == nil)
+
+            // JSON, but missing a field the payload needs.
+            try Data(#"{"hostAddress":"10.0.0.9"}"#.utf8).write(to: rendezvousURL)
+            #expect(RuntimePayloadRendezvous.stagedInDirectory(at: directoryURL) == nil)
+
+            // Complete and well-formed, but naming nowhere to connect to.
+            try JSONEncoder()
+                .encode(RuntimePayloadRendezvous(hostAddress: "", hostPort: 0, claimToken: ""))
+                .write(to: rendezvousURL)
+            #expect(RuntimePayloadRendezvous.stagedInDirectory(at: directoryURL) == nil)
+        }
+    }
+
+    /// What the payload does when the injector predates the rendezvous: there is
+    /// no file beside it, and it has to answer "none" and go on to advertise
+    /// itself. The call runs here exactly as it does in the payload — the handle
+    /// is this image's, whichever image that is — and nothing is staged beside a
+    /// test bundle, so this is that case.
+    ///
+    /// The directory-reading half is covered above, against a directory the test
+    /// controls; this covers the step from a handle to a directory, which can
+    /// only be exercised in whatever image the call is compiled into.
+    @Test("Answers none, rather than trapping, when nothing is staged beside the image")
+    func readsRelativeToTheCallingImage() {
+        #expect(RuntimePayloadRendezvous.stagedBesideImage(#dsohandle) == nil)
     }
 
     // MARK: - Failure
@@ -225,7 +339,7 @@ struct RuntimePayloadStagingTests {
                 stagingDirectoryURL: fixture.stagingDirectoryURL,
             )
             #expect(throws: (any Error).self) {
-                try staging.stage()
+                try staging.stage(rendezvous: nil)
             }
         }
     }
