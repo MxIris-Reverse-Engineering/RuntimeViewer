@@ -10,6 +10,11 @@ public import Foundation
 public struct RuntimeProcess: Codable, Hashable, Sendable {
     /// Whether the machine that listed this process can inject into it.
     public enum Injectability: Codable, Hashable, Sendable {
+        /// Nothing the lister could check rules this target out. **Not a
+        /// promise** — it is also what an unknown ``userIdentifier`` produces,
+        /// because pre-screening is an optimization that keeps doomed targets
+        /// out of the picker, not a correctness gate. The injection attempt
+        /// returns the real answer either way.
         case injectable
 
         /// The target runs as root and the injector does not.
@@ -45,14 +50,27 @@ public struct RuntimeProcess: Codable, Hashable, Sendable {
     /// still be a valid target.
     public let executablePath: String?
 
-    public let userIdentifier: uid_t
+    /// The owning uid, when the lister could read it.
+    ///
+    /// Optional for the same reason ``executablePath`` is: "could not tell" is a
+    /// real state. On iOS it comes from `sysctl(KERN_PROC_PID)` — `libproc`'s
+    /// `proc_pidinfo` route needs `struct proc_bsdinfo`, and `<sys/proc_info.h>`
+    /// is absent from the iOS SDK, while `<sys/sysctl.h>` ships with
+    /// `struct kinfo_proc` — and whether that call is permitted to every
+    /// unsandboxed process on every jailbroken device is **not** measured.
+    ///
+    /// A `nil` here must not be read as "not injectable". It means the lister
+    /// could not pre-screen this target, so the injection attempt is the
+    /// authority — see ``Injectability/injectable``.
+    public let userIdentifier: uid_t?
+
     public let injectability: Injectability
 
     public init(
         processIdentifier: pid_t,
         name: String,
         executablePath: String?,
-        userIdentifier: uid_t,
+        userIdentifier: uid_t?,
         injectability: Injectability,
     ) {
         self.processIdentifier = processIdentifier

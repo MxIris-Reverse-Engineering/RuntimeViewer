@@ -71,26 +71,41 @@ struct InjectionCommandWireFormatTests {
         #expect(decoded == result)
     }
 
-    /// `executablePath` is deliberately optional — "could not read it" is a real
-    /// state for a live process — so both forms have to survive the wire.
-    @Test("RuntimeProcess survives a round trip with and without an executable path")
+    /// `executablePath` and `userIdentifier` are both deliberately optional —
+    /// "could not read it" is a real state for a live process — so every
+    /// combination has to survive the wire. A `nil` that decoded as a zero
+    /// would be the worst possible failure here: uid 0 is precisely the value
+    /// that means "root target, needs root to inject".
+    @Test("RuntimeProcess survives a round trip with either optional absent")
     func processRoundTrip() throws {
-        let withPath = RuntimeProcess(
+        let complete = RuntimeProcess(
             processIdentifier: 4321,
             name: "backboardd",
             executablePath: "/usr/libexec/backboardd",
             userIdentifier: 501,
             injectability: .injectable,
         )
-        let withoutPath = RuntimeProcess(
+        let rootOwned = RuntimeProcess(
             processIdentifier: 1,
             name: "launchd",
             executablePath: nil,
             userIdentifier: 0,
             injectability: .requiresRootOnTarget,
         )
-        #expect(try roundTrip(withPath) == withPath)
-        #expect(try roundTrip(withoutPath) == withoutPath)
+        let unknownOwner = RuntimeProcess(
+            processIdentifier: 77,
+            name: "opaque",
+            executablePath: nil,
+            userIdentifier: nil,
+            injectability: .injectable,
+        )
+        #expect(try roundTrip(complete) == complete)
+        #expect(try roundTrip(rootOwned) == rootOwned)
+        #expect(try roundTrip(unknownOwner) == unknownOwner)
+
+        // The distinction that matters, asserted rather than assumed.
+        #expect(try roundTrip(unknownOwner).userIdentifier == nil)
+        #expect(try roundTrip(rootOwned).userIdentifier == 0)
     }
 
     @Test("A process list survives a round trip as the response type it is")

@@ -126,6 +126,10 @@ let package = Package(
             targets: ["RuntimeViewerHelperClient"],
         ),
         .library(
+            name: "RuntimeViewerDeviceInjection",
+            targets: ["RuntimeViewerDeviceInjection"],
+        ),
+        .library(
             name: "RuntimeViewerEngineManagement",
             targets: ["RuntimeViewerEngineManagement"],
         ),
@@ -251,6 +255,21 @@ let package = Package(
             ),
         ),
         
+        // Reached directly rather than through swift-helper-service, whose
+        // products this package gates to AppKit platforms: on iOS there is no
+        // helper daemon to go through, so the app links the injector itself.
+        // 0.6.0 is the first release with iOS support.
+        .package(
+            local: .package(
+                path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("MachInjector"),
+                isRelative: true,
+            ),
+            remote: .package(
+                url: "https://github.com/MxIris-Reverse-Engineering/MachInjector",
+                from: "0.6.0",
+            ),
+        ),
+
         .package(
             local: .package(
                 path: MxIrisStudioWorkspace.personalLibraryMacOSDirectory.libraryPath("RunningApplicationKit"),
@@ -460,6 +479,31 @@ let package = Package(
                 .product(name: "InjectedEndpointRegistryServiceInterface", package: "swift-helper-service", condition: .when(platforms: appkitPlatforms)),
             ],
         ),
+
+        // The iOS counterpart of RuntimeViewerHelperClient. On macOS injection
+        // is delegated to a privileged helper daemon because an app cannot take
+        // another process's task port; on iOS an app that escaped its sandbox
+        // can, so this does the work in process and there is no daemon layer at
+        // all.
+        //
+        // Builds everywhere rather than iOS-only, so the enumerator's buffer
+        // sizing and injectability rules are covered by tests on a Mac. The
+        // part that needs MachInjector is `#if os(iOS)` inside.
+        .target(
+            name: "RuntimeViewerDeviceInjection",
+            dependencies: [
+                "RuntimeViewerProcessEnumerationSupport",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
+                .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: [.iOS])),
+            ],
+        ),
+
+        // `libproc` declarations the iOS SDK withholds. See the header: iOS
+        // ships no <libproc.h> and no <sys/proc_info.h>, while every routine is
+        // exported from the public libSystem.B.tbd.
+        .target(
+            name: "RuntimeViewerProcessEnumerationSupport",
+        ),
         .target(
             name: "RuntimeViewerCatalystExtensions",
             dependencies: [
@@ -494,6 +538,14 @@ let package = Package(
             dependencies: [
                 "RuntimeViewerSettings",
                 .product(name: "UIFoundationSettings", package: "UIFoundation", condition: .when(platforms: appkitPlatforms)),
+            ],
+        ),
+
+        .testTarget(
+            name: "RuntimeViewerDeviceInjectionTests",
+            dependencies: [
+                "RuntimeViewerDeviceInjection",
+                .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
             ],
         ),
 
