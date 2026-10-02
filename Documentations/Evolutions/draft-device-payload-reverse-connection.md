@@ -1,6 +1,6 @@
 # Draft - 真机注入载荷改为反向连接
 
-- **状态**: Draft
+- **状态**: Accepted
 - **作者**: JH
 - **创建日期**: 2026-10-02
 - **最后更新**: 2026-10-02
@@ -84,6 +84,8 @@ PROBE raw-connect host:     ALLOWED(refused), errno 61 (Connection refused)
 ```
 
 Network.framework 同样放行 —— 日志里 `[C1 … lo0]` 与 `[C2 … en0]` 两条流都走到 `flow:failed_connect, error Connection refused`。（探针本身漏了一个状态：`NWConnection` 把「被拒」报成 `.waiting` 而非 `.failed`，所以这两行没打出来。**是测量的缺陷，不是平台的**。）
+
+探针代码本身留在 `discarded/sandbox-reachability-probe`（`82b93e59`），不会被合并 —— 留档的理由是上面那三行结论的出处，主线只保留结论。
 
 **现成的传输层已经实现了需要的角色反转。** `RuntimeLocalSocketConnection.swift` 的文档原文：
 
@@ -303,3 +305,4 @@ case injectedTCP(name: String, host: String, port: UInt16, identifier: Identifie
 | 2026-10-02 | 新增 source case，而不是改 `.localSocket` 的形状 | 新增 case 让编译器指出每一处需要决定的 switch；改既有 case 的形状会波及所有调用点却不强制任何判断。 |
 | 2026-10-02 | 断线后持续重连原地址 | 宿主重启后连接自己回来，不必重新注入整批目标。代价是载荷会在目标进程里保有一个重试循环，退避上限留到第 5 步按实测定。 |
 | 2026-10-02 | 挂起的目标不在范围内 | 它卡在 MachInjector 的 210 毫秒远程线程等待，与连接方向无关，单独处理。 |
+| 2026-10-02 | Draft → Accepted | 用户批准（「开工」），开始按落地步骤实现。 |
