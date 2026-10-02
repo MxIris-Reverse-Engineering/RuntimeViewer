@@ -172,15 +172,36 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         guard case .hostPort(let host, _) = localEndpoint else {
             return .unknown(reason: "that connection's local endpoint is not an address and port but \(localEndpoint)")
         }
-        guard case .ipv4(let address) = host else {
-            // The case worth spelling out: the payload's transport dials IPv4,
-            // so an IPv6 answer would be a rendezvous it cannot use.
-            return .unknown(reason: "that connection runs over \(host), and an injected payload dials IPv4")
+
+        switch host {
+        case .ipv4(let address):
+            // `IPv4Address.debugDescription` is the dotted quad. Its
+            // `CustomDebugStringConvertible` conformance is the documented way
+            // to render one; there is no other accessor.
+            return .reachableAt(address.debugDescription)
+
+        case .ipv6(let address):
+            // The ordinary case, not an edge one. Measured against a device on
+            // a virtual network interface: Bonjour settles on IPv6 link-local,
+            // while the injected payload's socket is `AF_INET`.
+            //
+            // The address itself is unusable twice over — the payload dials
+            // IPv4, and a link-local address is scoped to *this* machine's
+            // interface index, which means nothing in the device's own
+            // numbering. What survives is the interface, and that is the part
+            // worth keeping: it was observed on the live path rather than
+            // picked out of this machine's interface list.
+            guard let interface = address.interface else {
+                return .unknown(reason: "that connection runs over \(host), which names no interface to find an IPv4 address on")
+            }
+            guard let ipv4Address = RuntimeInterfaceAddresses.ipv4Address(ofInterfaceNamed: interface.name) else {
+                return .unknown(reason: "that connection runs over \(interface.name), and that interface has no IPv4 address for an injected payload to dial")
+            }
+            return .reachableAt(ipv4Address)
+
+        default:
+            return .unknown(reason: "that connection's local endpoint is \(host), which is neither an IPv4 nor an IPv6 address")
         }
-        // `IPv4Address.debugDescription` is the dotted quad. Its
-        // `CustomDebugStringConvertible` conformance is the documented way to
-        // render one; there is no other accessor.
-        return .reachableAt(address.debugDescription)
     }
 
     private func handleStateChange(_ nwState: NWConnection.State) {
