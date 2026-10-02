@@ -289,8 +289,9 @@ public actor RuntimeEngine {
     /// One caller: injecting into a process on this engine's machine has to tell
     /// the payload where to report, and this connection is what knows. See
     /// ``RuntimePayloadRendezvous``.
-    public var localAddressSeenByPeer: String? {
+    public var localAddressSeenByPeer: RuntimeLocalAddressReachability {
         connection?.localAddressSeenByPeer
+            ?? .unknown(reason: "this engine has no connection")
     }
 
     /// `connect(credential:)` was given a credential for the `.local`

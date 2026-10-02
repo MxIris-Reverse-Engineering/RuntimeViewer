@@ -228,17 +228,42 @@ struct InjectionCommandWireFormatTests {
         }
     }
 
-    /// The refusal is read by a user, so it has to say what could not be worked
-    /// out rather than name a property.
-    @Test("The refusal names the engine and explains what is missing")
+    /// The refusal is read by a user, so it has to name the engine *and* carry
+    /// the transport's own reason. "Could not work out an address" on its own is
+    /// unactionable; the reason is what says whether to retry or to change
+    /// something.
+    @Test("The refusal names the engine and quotes the transport's reason")
     func rendezvousRefusalIsReadable() throws {
         let message = try #require(
             RuntimePayloadRendezvous.Unavailable
-                .peerCannotReachThisProcess(engineName: "Someone's iPhone")
+                .peerCannotReachThisProcess(
+                    engineName: "Someone's iPhone",
+                    reason: "that connection runs over fe80::1, and an injected payload dials IPv4",
+                )
                 .errorDescription
         )
         #expect(message.contains("Someone's iPhone"))
+        #expect(message.contains("fe80::1"))
         #expect(message.lowercased().contains("address"))
+    }
+
+    /// Each way of having no address has to produce its own sentence, or the
+    /// error is back to being the single unactionable line it replaced.
+    @Test("Every reason reaches the message intact")
+    func everyReasonReachesTheMessage() throws {
+        let reasons = [
+            "that connection reports no network path yet",
+            "that connection runs over fe80::1, and an injected payload dials IPv4",
+            "this engine has no connection",
+        ]
+        for reason in reasons {
+            let message = try #require(
+                RuntimePayloadRendezvous.Unavailable
+                    .peerCannotReachThisProcess(engineName: "iPhone", reason: reason)
+                    .errorDescription
+            )
+            #expect(message.contains(reason))
+        }
     }
 
     // MARK: - Convenience predicates

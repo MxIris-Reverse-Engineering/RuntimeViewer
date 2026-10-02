@@ -162,15 +162,25 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
     /// Answering with an IPv6 address would produce a rendezvous the payload
     /// cannot dial, which is worse than answering nothing: the caller handles
     /// `nil` by saying so, and would handle an unusable address by timing out.
-    var localAddressSeenByPeer: String? {
-        guard let localEndpoint = connection.currentPath?.localEndpoint,
-              case .hostPort(let host, _) = localEndpoint,
-              case .ipv4(let address) = host
-        else { return nil }
+    var localAddressSeenByPeer: RuntimeLocalAddressReachability {
+        guard let path = connection.currentPath else {
+            return .unknown(reason: "that connection reports no network path yet, which usually means it has only just come up or has already dropped")
+        }
+        guard let localEndpoint = path.localEndpoint else {
+            return .unknown(reason: "that connection's network path names no local endpoint")
+        }
+        guard case .hostPort(let host, _) = localEndpoint else {
+            return .unknown(reason: "that connection's local endpoint is not an address and port but \(localEndpoint)")
+        }
+        guard case .ipv4(let address) = host else {
+            // The case worth spelling out: the payload's transport dials IPv4,
+            // so an IPv6 answer would be a rendezvous it cannot use.
+            return .unknown(reason: "that connection runs over \(host), and an injected payload dials IPv4")
+        }
         // `IPv4Address.debugDescription` is the dotted quad. Its
         // `CustomDebugStringConvertible` conformance is the documented way to
         // render one; there is no other accessor.
-        return address.debugDescription
+        return .reachableAt(address.debugDescription)
     }
 
     private func handleStateChange(_ nwState: NWConnection.State) {
@@ -337,8 +347,9 @@ final class RuntimeNetworkClientConnection: RuntimeForwardingConnection, @unchec
 
     /// Forwarded from the transport: this is the one connection in the project
     /// that can answer, being the only one that crosses a route to a device.
-    var localAddressSeenByPeer: String? {
+    var localAddressSeenByPeer: RuntimeLocalAddressReachability {
         _underlyingConnection?.localAddressSeenByPeer
+            ?? .unknown(reason: "that connection has no transport under it")
     }
 
     /// Creates a client connection to the specified network endpoint.

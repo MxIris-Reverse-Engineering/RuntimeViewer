@@ -96,8 +96,14 @@ extension RuntimePayloadRendezvous {
     public static func reachingThisProcess(
         from engine: RuntimeEngine
     ) async throws -> RuntimePayloadRendezvous {
-        guard let hostAddress = await engine.localAddressSeenByPeer else {
-            throw Unavailable.peerCannotReachThisProcess(engineName: engine.source.description)
+        let reachability = await engine.localAddressSeenByPeer
+        guard case .reachableAt(let hostAddress) = reachability else {
+            guard case .unknown(let reason) = reachability else {
+                // Unreachable: the enum has two cases and the first was ruled
+                // out above. Stated rather than force-unwrapped away.
+                throw Unavailable.peerCannotReachThisProcess(engineName: engine.source.description, reason: "no address was reported")
+            }
+            throw Unavailable.peerCannotReachThisProcess(engineName: engine.source.description, reason: reason)
         }
         return RuntimePayloadRendezvous(
             hostAddress: hostAddress,
@@ -107,19 +113,20 @@ extension RuntimePayloadRendezvous {
     }
 
     public enum Unavailable: Error, LocalizedError, CustomStringConvertible {
-        case peerCannotReachThisProcess(engineName: String)
+        /// `reason` completes the sentence "the address could not be worked out
+        /// because …", and comes from the connection itself rather than from
+        /// this type — only the transport knows which of several things it was.
+        case peerCannotReachThisProcess(engineName: String, reason: String)
 
         public var description: String {
             switch self {
-            case .peerCannotReachThisProcess(let engineName):
+            case .peerCannotReachThisProcess(let engineName, let reason):
                 return """
-                    Could not work out an address \(engineName) could reach this Mac on.
+                    Could not work out an address \(engineName) could reach this Mac on, because \(reason).
 
                     An injected payload on a device has to connect back here, because the \
-                    process it is injected into is not allowed to listen. The address comes \
-                    from the live connection to the device, and that connection could not \
-                    report one — it may have just dropped, or it may be running over a \
-                    transport with no route to name.
+                    process it is injected into is not allowed to listen, and the address it \
+                    dials comes from the live connection to that device.
                     """
             }
         }

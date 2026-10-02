@@ -68,6 +68,29 @@ public struct RuntimeConnectionInfo: Sendable {
     }
 }
 
+// MARK: - RuntimeLocalAddressReachability
+
+/// How this process can be reached by a connection's peer.
+///
+/// Two cases rather than an optional, because the negative one is read by a
+/// user: an injection into a process on a device cannot proceed without an
+/// address, and the difference between "that connection just dropped" and "that
+/// connection is IPv6 and this transport dials IPv4" is the difference between
+/// retrying and changing something.
+public enum RuntimeLocalAddressReachability: Sendable, Hashable {
+    /// The peer can dial this IPv4 address.
+    case reachableAt(String)
+
+    /// There is nothing for the peer to dial, and this is why — in words meant
+    /// to be read as part of a sentence that already says what failed.
+    case unknown(reason: String)
+
+    public var address: String? {
+        guard case .reachableAt(let address) = self else { return nil }
+        return address
+    }
+}
+
 // MARK: - RuntimeConnection
 
 public protocol RuntimeConnection: Sendable {
@@ -86,11 +109,7 @@ public protocol RuntimeConnection: Sendable {
     var state: RuntimeConnectionState { get }
 
     /// This process's own IPv4 address on the route this connection takes, as
-    /// the peer would have to dial it.
-    ///
-    /// `nil` for every transport that cannot answer, which is most of them —
-    /// XPC and loopback sockets have no route to name, and a connection that is
-    /// not up yet has none yet either.
+    /// the peer would have to dial it — or, when there is none, why.
     ///
     /// It exists for one caller: a payload about to be injected into a process
     /// on a device has to be told where to report, and the only thing that
@@ -99,8 +118,12 @@ public protocol RuntimeConnection: Sendable {
     /// of them the device is on — a Mac with Wi-Fi, Ethernet, a VPN and a
     /// virtual-machine bridge offers several plausible wrong answers.
     ///
-    /// Default `nil`, so a transport opts in by knowing.
-    var localAddressSeenByPeer: String? { get }
+    /// The failure carries words rather than being a bare `nil` because it
+    /// reaches a user: "could not work out an address" is unactionable, while
+    /// "the connection runs over IPv6 and this transport dials IPv4" names the
+    /// thing to change. Most transports have no route to name at all and say so
+    /// through the default below.
+    var localAddressSeenByPeer: RuntimeLocalAddressReachability { get }
 
     /// Stops the connection and releases resources.
     ///
@@ -193,7 +216,9 @@ public protocol RuntimeConnection: Sendable {
 extension RuntimeConnection {
     public var connectionInfo: RuntimeConnectionInfo? { nil }
 
-    public var localAddressSeenByPeer: String? { nil }
+    public var localAddressSeenByPeer: RuntimeLocalAddressReachability {
+        .unknown(reason: "this connection runs over a transport with no network route to name")
+    }
 
     /// Default implementation: ignore the timeout and forward to the no-timeout overload.
     /// Transports that natively support per-request deadlines (e.g. those built on
