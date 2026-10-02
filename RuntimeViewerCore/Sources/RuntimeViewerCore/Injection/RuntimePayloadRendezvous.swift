@@ -1,6 +1,7 @@
 // `public import` because `URL` crosses the public API below, and this module
 // builds with `InternalImportsByDefault`.
 public import Foundation
+import RuntimeViewerCommunication
 
 /// Everything the injector hands the payload: where to report in, and what to
 /// report as.
@@ -76,6 +77,54 @@ public struct RuntimePayloadRendezvous: Codable, Sendable, Hashable {
     /// go silent where it used to at least work on the targets that can bind.
     public var isUsable: Bool {
         !hostAddress.isEmpty && hostPort != 0 && !claimToken.isEmpty
+    }
+}
+
+// MARK: - Building one
+
+extension RuntimePayloadRendezvous {
+    /// Builds the rendezvous for an injection requested through `engine`.
+    ///
+    /// Everything comes from somewhere that knows rather than from a guess: the
+    /// address off the live connection to the machine being injected, the port
+    /// from the kernel, the token freshly minted.
+    ///
+    /// - Throws: ``Unavailable/peerCannotReachThisProcess`` when the engine's
+    ///   transport cannot name an address. That is not a failure to work around
+    ///   — it means nothing knows how the payload would get back here, and
+    ///   injecting anyway would produce a target that silently never appears.
+    public static func reachingThisProcess(
+        from engine: RuntimeEngine
+    ) async throws -> RuntimePayloadRendezvous {
+        guard let hostAddress = await engine.localAddressSeenByPeer else {
+            throw Unavailable.peerCannotReachThisProcess(engineName: engine.source.description)
+        }
+        return RuntimePayloadRendezvous(
+            hostAddress: hostAddress,
+            hostPort: try RuntimeUnusedPort.find(),
+            claimToken: makeClaimToken(),
+        )
+    }
+
+    public enum Unavailable: Error, LocalizedError, CustomStringConvertible {
+        case peerCannotReachThisProcess(engineName: String)
+
+        public var description: String {
+            switch self {
+            case .peerCannotReachThisProcess(let engineName):
+                return """
+                    Could not work out an address \(engineName) could reach this Mac on.
+
+                    An injected payload on a device has to connect back here, because the \
+                    process it is injected into is not allowed to listen. The address comes \
+                    from the live connection to the device, and that connection could not \
+                    report one — it may have just dropped, or it may be running over a \
+                    transport with no route to name.
+                    """
+            }
+        }
+
+        public var errorDescription: String? { description }
     }
 }
 

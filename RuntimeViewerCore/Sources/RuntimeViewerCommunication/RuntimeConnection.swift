@@ -85,6 +85,23 @@ public protocol RuntimeConnection: Sendable {
     /// The current connection state.
     var state: RuntimeConnectionState { get }
 
+    /// This process's own IPv4 address on the route this connection takes, as
+    /// the peer would have to dial it.
+    ///
+    /// `nil` for every transport that cannot answer, which is most of them —
+    /// XPC and loopback sockets have no route to name, and a connection that is
+    /// not up yet has none yet either.
+    ///
+    /// It exists for one caller: a payload about to be injected into a process
+    /// on a device has to be told where to report, and the only thing that
+    /// reliably knows is the connection to that device. Reading it from the
+    /// live path beats enumerating this machine's interfaces and guessing which
+    /// of them the device is on — a Mac with Wi-Fi, Ethernet, a VPN and a
+    /// virtual-machine bridge offers several plausible wrong answers.
+    ///
+    /// Default `nil`, so a transport opts in by knowing.
+    var localAddressSeenByPeer: String? { get }
+
     /// Stops the connection and releases resources.
     ///
     /// After calling this method, the connection will emit `.disconnected` state
@@ -175,6 +192,8 @@ public protocol RuntimeConnection: Sendable {
 
 extension RuntimeConnection {
     public var connectionInfo: RuntimeConnectionInfo? { nil }
+
+    public var localAddressSeenByPeer: String? { nil }
 
     /// Default implementation: ignore the timeout and forward to the no-timeout overload.
     /// Transports that natively support per-request deadlines (e.g. those built on

@@ -153,6 +153,26 @@ final class RuntimeNetworkConnection: RuntimeUnderlyingConnection, @unchecked Se
         }
     }
 
+    /// This process's IPv4 address on the path this connection actually took.
+    ///
+    /// Read off the live path rather than derived from the machine's interface
+    /// list, which is the point — see `RuntimeConnection.localAddressSeenByPeer`.
+    ///
+    /// IPv4 only, because the socket transport the answer feeds is `AF_INET`.
+    /// Answering with an IPv6 address would produce a rendezvous the payload
+    /// cannot dial, which is worse than answering nothing: the caller handles
+    /// `nil` by saying so, and would handle an unusable address by timing out.
+    var localAddressSeenByPeer: String? {
+        guard let localEndpoint = connection.currentPath?.localEndpoint,
+              case .hostPort(let host, _) = localEndpoint,
+              case .ipv4(let address) = host
+        else { return nil }
+        // `IPv4Address.debugDescription` is the dotted quad. Its
+        // `CustomDebugStringConvertible` conformance is the documented way to
+        // render one; there is no other accessor.
+        return address.debugDescription
+    }
+
     private func handleStateChange(_ nwState: NWConnection.State) {
         switch nwState {
         case .setup:
@@ -313,6 +333,12 @@ final class RuntimeNetworkClientConnection: RuntimeForwardingConnection, @unchec
 
     var state: RuntimeConnectionState {
         stateSubject.value
+    }
+
+    /// Forwarded from the transport: this is the one connection in the project
+    /// that can answer, being the only one that crosses a route to a device.
+    var localAddressSeenByPeer: String? {
+        _underlyingConnection?.localAddressSeenByPeer
     }
 
     /// Creates a client connection to the specified network endpoint.

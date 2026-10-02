@@ -298,6 +298,13 @@ public enum SourceKind: String, Codable, Sendable, Hashable, CaseIterable {
     case bonjour
     /// An engine another RuntimeViewer forwards to this one.
     case mirrored
+    /// A process on a device this Mac asked the device to inject, reached by
+    /// the payload connecting back here.
+    ///
+    /// Not `attachedSocket`, although it is the same transport: that one says
+    /// "a process on this Mac", and printing it for a process on a phone would
+    /// be a plainly wrong answer about where the target is.
+    case injectedDevice
 }
 
 /// One runtime source the host can serve.

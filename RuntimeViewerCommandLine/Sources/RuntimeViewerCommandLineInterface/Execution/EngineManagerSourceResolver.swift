@@ -307,7 +307,7 @@ public final class EngineManagerSourceResolver: SourceResolving {
         }
         let kind = SourceKind(source: engine.source)
         switch kind {
-        case .attachedXPC, .attachedSocket, .bonjour:
+        case .attachedXPC, .attachedSocket, .bonjour, .injectedDevice:
             break
         case .local, .macCatalyst, .mirrored:
             throw CommandFailure(

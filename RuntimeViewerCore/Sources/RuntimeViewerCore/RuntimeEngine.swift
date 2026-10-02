@@ -279,6 +279,20 @@ public actor RuntimeEngine {
     /// The connection to the sender or receiver, established by `connect()`.
     private var connection: (any RuntimeConnection)?
 
+    /// This process's own address on the route to this engine's peer, as the
+    /// peer would have to dial it — `nil` for the transports that cannot say,
+    /// which is all of them but a live network connection.
+    ///
+    /// Read, not stored: the path can move under a connection, and a value
+    /// captured at connect time would outlive the interface it names.
+    ///
+    /// One caller: injecting into a process on this engine's machine has to tell
+    /// the payload where to report, and this connection is what knows. See
+    /// ``RuntimePayloadRendezvous``.
+    public var localAddressSeenByPeer: String? {
+        connection?.localAddressSeenByPeer
+    }
+
     /// `connect(credential:)` was given a credential for the `.local`
     /// source: this engine's work happens in another process, and
     /// `connection` leads there.

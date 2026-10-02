@@ -213,6 +213,34 @@ struct InjectionCommandWireFormatTests {
         #expect(tokens.allSatisfy { !$0.isEmpty })
     }
 
+    /// An engine with no network connection under it cannot say how a peer would
+    /// reach this process, and the answer has to be a refusal rather than a
+    /// plausible-looking address. Injecting against a guessed address produces a
+    /// payload dialling nowhere and a user watching a target that never
+    /// appears — a far worse failure than being told up front.
+    @Test("A rendezvous is refused for an engine that cannot say how to reach us")
+    func rendezvousNeedsAReachableAddress() async {
+        // `.local` never has a connection, which is the cheapest engine that
+        // genuinely cannot answer; nothing is started here.
+        let engine = RuntimeEngine(source: .local)
+        await #expect(throws: RuntimePayloadRendezvous.Unavailable.self) {
+            _ = try await RuntimePayloadRendezvous.reachingThisProcess(from: engine)
+        }
+    }
+
+    /// The refusal is read by a user, so it has to say what could not be worked
+    /// out rather than name a property.
+    @Test("The refusal names the engine and explains what is missing")
+    func rendezvousRefusalIsReadable() throws {
+        let message = try #require(
+            RuntimePayloadRendezvous.Unavailable
+                .peerCannotReachThisProcess(engineName: "Someone's iPhone")
+                .errorDescription
+        )
+        #expect(message.contains("Someone's iPhone"))
+        #expect(message.lowercased().contains("address"))
+    }
+
     // MARK: - Convenience predicates
 
     /// These drive a toolbar item's enabled state and a row's selectability, so

@@ -700,12 +700,133 @@ public final class RuntimeEngineManager {
         }
     }
 
+    // MARK: - Injected Device Engines
+
+    /// This end of the channel a payload on a device dials.
+    ///
+    /// Business client, socket server: the payload runs inside a process whose
+    /// sandbox denies `network-bind`, so this side is the one that listens. See
+    /// `RuntimeSource.injectedTCP`.
+    static func injectedDeviceSource(name: String, rendezvous: RuntimePayloadRendezvous) -> RuntimeSource {
+        .injectedTCP(
+            name: name,
+            host: rendezvous.hostAddress,
+            port: rendezvous.hostPort,
+            identifier: .init(rawValue: rendezvous.claimToken),
+            role: .client,
+        )
+    }
+
+    /// Starts listening for a payload that has not been injected yet.
+    ///
+    /// Before, not after: the payload is handed the address and port in its
+    /// rendezvous, and it dials them as it starts up. A listener brought up
+    /// afterwards would race the payload's first attempt — survivably, since it
+    /// retries, but every retry is half a second of a user watching nothing
+    /// happen.
+    @discardableResult
+    public func launchInjectedDeviceEngine(
+        name: String,
+        rendezvous: RuntimePayloadRendezvous,
+    ) async throws -> RuntimeEngine {
+        let runtimeSource = Self.injectedDeviceSource(name: name, rendezvous: rendezvous)
+        #log(
+            .info,
+            "Listening for an injected device payload for \(name, privacy: .public) on \(rendezvous.hostAddress, privacy: .public):\(rendezvous.hostPort, privacy: .public)"
+        )
+        let runtimeEngine = RuntimeEngine(source: runtimeSource)
+        try await runtimeEngine.connect()
+        attachedRuntimeEngines.append(runtimeEngine)
+        observeRuntimeEngineState(runtimeEngine)
+        rebuildSections()
+        return runtimeEngine
+    }
+
+    public func terminateInjectedDeviceEngine(name: String, rendezvous: RuntimePayloadRendezvous) {
+        terminateRuntimeEngine(for: Self.injectedDeviceSource(name: name, rendezvous: rendezvous))
+    }
+
+    /// Waits for a just-injected device payload to report in — **whichever way
+    /// it does**.
+    ///
+    /// Two ways, raced rather than chosen, because which one a payload takes is
+    /// decided inside the payload at compile time and the host cannot read it
+    /// off anything:
+    ///
+    /// - it dials the rendezvous, which is what a current device payload does;
+    /// - it advertises itself over Bonjour, which is what a simulator payload
+    ///   does and what a device app built before the rendezvous existed does.
+    ///
+    /// Racing is also the whole mixed-version story. The host always sends a
+    /// rendezvous and always listens, so a peer that ignores it is not a failure
+    /// case needing its own branch — it simply wins the other half of the race.
+    /// Trying to tell a simulator from a device here instead would mean deciding
+    /// it from the advertised model identifier, which is a guess.
+    ///
+    /// The losing half is torn down, including the listener nobody dialled.
+    @discardableResult
+    public func awaitInjectedDeviceEngine(
+        name: String,
+        rendezvous: RuntimePayloadRendezvous,
+        deviceID: String,
+        processIdentifier: pid_t,
+        timeout: TimeInterval = 30,
+    ) async throws -> RuntimeEngine {
+        let listeningSource = Self.injectedDeviceSource(name: name, rendezvous: rendezvous)
+        guard let listeningEngine = attachedRuntimeEngines.first(where: { $0.source == listeningSource }) else {
+            throw AttachedEngineHandshakeError.engineNotFound(name: name)
+        }
+
+        #log(
+            .info,
+            "Waiting for \(name, privacy: .public) (pid \(processIdentifier, privacy: .public)) to report in, by rendezvous or by advertisement (timeout: \(timeout, privacy: .public)s)"
+        )
+
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if let advertisedEngine = injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) {
+                #log(.info, "\(name, privacy: .public) advertised itself instead of dialling; dropping the listener")
+                terminateRuntimeEngine(for: listeningSource)
+                return advertisedEngine
+            }
+            // The probe is the authority, not the engine's state: `connect()`
+            // brought up only the listener and already reported `.connected`,
+            // which says nothing about whether anyone dialled it. The socket
+            // transport throws immediately while no peer has been accepted, so
+            // this costs nothing per round until one has.
+            if (try? await listeningEngine.requestEngineList(timeout: 2)) != nil {
+                #log(.info, "\(name, privacy: .public) dialled in and answered")
+                return listeningEngine
+            }
+            // `try`, not `try?`: swallowing cancellation would turn this into a
+            // main-actor spin for the rest of the timeout.
+            try await Task.sleep(nanoseconds: Self.injectedBonjourEnginePollInterval)
+        } while Date() < deadline
+
+        // One last look at both, for the same reason the Bonjour wait takes one:
+        // an arrival during the final sleep must not be reported as a timeout.
+        if let advertisedEngine = injectedBonjourEngine(deviceID: deviceID, processIdentifier: processIdentifier) {
+            terminateRuntimeEngine(for: listeningSource)
+            return advertisedEngine
+        }
+        if (try? await listeningEngine.requestEngineList(timeout: 2)) != nil {
+            return listeningEngine
+        }
+
+        #log(.error, "\(name, privacy: .public) never reported in within \(timeout, privacy: .public)s")
+        throw AttachedEngineHandshakeError.injectedDeviceEngineNeverReportedIn(
+            name: name,
+            processIdentifier: processIdentifier
+        )
+    }
+
     // MARK: - Attached Engine Handshake Confirmation
 
     public enum AttachedEngineHandshakeError: LocalizedError {
         case engineNotFound(name: String)
         case handshakeTimedOut(name: String)
         case bonjourEngineNeverAdvertised(name: String, processIdentifier: pid_t)
+        case injectedDeviceEngineNeverReportedIn(name: String, processIdentifier: pid_t)
         case simulatorDeviceUnidentifiable(name: String, processIdentifier: pid_t)
 
         public var errorDescription: String? {
@@ -719,6 +840,19 @@ public final class RuntimeEngineManager {
                     A simulator payload does not connect back the way a Mac one does — it advertises itself over Bonjour and this app's browser picks it up. The injection RPC returned successfully, so either the payload never finished starting up, or its advertisement never reached this machine.
 
                     Check the simulator's own log for the payload's startup lines; `xcrun simctl spawn <udid> log show` shows them, the host's `log show` does not.
+                    """
+            case .injectedDeviceEngineNeverReportedIn(let name, let processIdentifier):
+                // Deliberately not the simulator message above. That one sends
+                // the reader to `simctl`, which does not exist for a device,
+                // and blames an advertisement the device payload does not make.
+                return """
+                    Timed out waiting for \(name) (pid \(processIdentifier)) to report back after injection.
+
+                    The injection itself succeeded, so the payload was loaded into the process. It should then have connected out to this Mac on the address and port it was handed, and it never did.
+
+                    Two causes account for most of these. The target may have been suspended — an iOS app in the background is not scheduled, so the payload inside it never gets to run. Or this Mac may not be reachable from the device: check that the device is on the same network, that macOS's firewall is not blocking incoming connections, and — if the device is a virtual machine — that its network mode allows inbound connections rather than being outbound-only.
+
+                    The device's own log has the payload's startup lines, including the address it tried.
                     """
             case .simulatorDeviceUnidentifiable(let name, let processIdentifier):
                 return """

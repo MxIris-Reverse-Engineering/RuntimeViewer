@@ -126,17 +126,22 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     /// Asks the device to inject its own payload, then waits for the result to show up as
     /// an engine.
     ///
-    /// Nothing is staged or launched on this side: the device carries the payload and
-    /// advertises the injected process over Bonjour, which the browser already running
-    /// here picks up. That is the same arrangement the iOS Simulator path uses — which is
-    /// why `awaitInjectedBonjourEngine` is reused rather than reinvented.
+    /// The payload is not staged or launched here — the device carries it. What this side
+    /// does is get ready to be reached: it opens a listener and tells the device where it
+    /// is, because on a real device the payload runs inside a process whose sandbox denies
+    /// `network-bind` and so cannot be listened *for*.
+    ///
+    /// It then waits for either arrangement. A simulator payload, and a device app built
+    /// before the rendezvous existed, still advertise themselves instead; the wait races
+    /// both and drops the half nobody used. See
+    /// `Documentations/Evolutions/draft-device-payload-reverse-connection.md`.
     @discardableResult
     private func attachToRemoteProcess(
         _ target: RuntimeProcessAttacher.Target,
         using runtimeEngine: RuntimeEngine,
     ) async throws -> RuntimeEngine {
-        // The advertisement is matched on `{deviceID}-{pid}`, so the device identifier has
-        // to be known before injecting. It is read off the engine's bookmark scope, the one
+        // Still needed, and only for the advertising half of the race: an advertisement is
+        // matched on `{deviceID}-{pid}`. It is read off the engine's bookmark scope, the one
         // place that carries it as an honest optional — `hostInfo.hostID` falls back to an
         // instance identifier or a display name when the peer publishes no device key, and
         // matching on either of those would pair this request with the wrong process.
@@ -144,21 +149,34 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
             throw AttachFailure.deviceHasNoIdentifier(engineName: runtimeEngine.source.description)
         }
 
-        // No rendezvous yet, so the payload keeps advertising itself — today's
-        // behaviour, and the only one that works for the simulator. The device
-        // half of this is what the host-side listener replaces.
-        let result = try await runtimeEngine.inject(
-            intoProcessWithIdentifier: target.processIdentifier,
-            rendezvous: nil,
-        )
-        guard result.isInjected else {
-            throw AttachFailure.injectionRefused(result)
-        }
+        // Built from the connection to this device, so the address is one that device
+        // demonstrably reaches this Mac on rather than a guess among its interfaces.
+        let rendezvous = try await RuntimePayloadRendezvous.reachingThisProcess(from: runtimeEngine)
+        // Listening first: the payload dials as it starts up, and a listener brought up
+        // afterwards would cost the user a retry interval of watching nothing happen.
+        try await runtimeEngineManager.launchInjectedDeviceEngine(name: target.name, rendezvous: rendezvous)
 
-        return try await runtimeEngineManager.awaitInjectedBonjourEngine(
-            name: target.name,
-            deviceID: deviceIdentifier,
-            processIdentifier: target.processIdentifier,
-        )
+        do {
+            let result = try await runtimeEngine.inject(
+                intoProcessWithIdentifier: target.processIdentifier,
+                rendezvous: rendezvous,
+            )
+            guard result.isInjected else {
+                throw AttachFailure.injectionRefused(result)
+            }
+
+            return try await runtimeEngineManager.awaitInjectedDeviceEngine(
+                name: target.name,
+                rendezvous: rendezvous,
+                deviceID: deviceIdentifier,
+                processIdentifier: target.processIdentifier,
+            )
+        } catch {
+            // Every failure from here on leaves a listener nobody will ever dial. Left in
+            // place it would hold its port and show up in the engine list as a process that
+            // is not there.
+            runtimeEngineManager.terminateInjectedDeviceEngine(name: target.name, rendezvous: rendezvous)
+            throw error
+        }
     }
 }
