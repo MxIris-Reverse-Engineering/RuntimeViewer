@@ -149,6 +149,11 @@ uid 501 + 沙盒逃逸的 App 实测：`proc_listallpids` 返回 438 个 pid，`
 且带沙盒逃逸的 App 能往那里写。**不要放 App 自己的 bundle 或容器里**：目标进程未必读得到
 另一个 App 的容器。
 
+**这 4 次验证的范围要说清楚**：注的是一个自带的测试 dylib，它没有任何 `@rpath` 依赖，所以这组
+数据只证明了「路径可写、目标可 dlopen」，**没有**证明真正的 payload 能加载——后者多一条
+`@rpath/libswiftCompatibilitySpan.dylib`，是落地时才发现并单独处理的（见决策日志）。真 payload
+的端到端加载属第 8 步。
+
 ### vphone 侧（已验证，与本提案的耦合面）
 
 - **私有 Virtualization entitlement 只在 `vphone-vm` 上**（`com.apple.private.virtualization`、
@@ -278,7 +283,8 @@ UI 层与数据源层，业务层不受影响。这决定了本提案的抽象�
 2. 连上之后，Attach to Process 先发 `injectionCapability` 判断对端能否注入；能则发 `processList`
    取**该设备**的进程清单（绝不列本机进程），显示选择器。
 3. 用户挑选目标 → 发 `injectIntoProcess(pid)`。
-4. 越狱版把内嵌 payload 暂存到 `/private/var/tmp/` 并注入。
+4. 越狱版把内嵌 payload **连同它的 `@rpath` 依赖**暂存到 `/private/var/tmp/RuntimeViewerPayload/`
+   并注入（布局见「payload 内嵌与暂存」）。
 5. 宿主用 `awaitInjectedBonjourEngine` 等被注入进程广播，出现后作为同一设备 Section 下的
    新条目展示。
 
@@ -531,10 +537,29 @@ int proc_pidpath(int pid, void *buffer, uint32_t buffersize);
 
 `proc_listallpids(NULL, 0)` 返回的是容量提示而非精确数量，要按它分配后再取实际返回值。
 
-### payload 暂存
+### payload 内嵌与暂存
 
-越狱版内嵌 `RuntimeViewerServer.framework`（iphoneos 切片），首次注入时拷到
-`/private/var/tmp/`（已验证目标可 dlopen、App 可写入），注入该绝对路径。
+越狱版用**常规的 target dependency + Embed Frameworks** 内嵌 `RuntimeViewerServer.framework`
+（iphoneos 切片，`arm64 arm64e`），落在 bundle 的 `Frameworks/` 下。macOS 侧那套「脚本构建 →
+固定路径暂存 → copy phase」是被 Xcode 拒收跨平台内嵌内容逼出来的，越狱版自己是 iOS，不受这条限制。
+
+注入前把 payload 暂存到目标进程读得到的地方 —— **不是单个 Mach-O，而是一个目录**：
+
+```
+/private/var/tmp/RuntimeViewerPayload/
+    RuntimeViewerServer              ← 注入这个绝对路径
+    Frameworks/
+        libswiftCompatibilitySpan.dylib   ← 不拷它,目标 dlopen 必失败
+        …                                  ← App bundle 里其余内嵌库
+```
+
+这个布局不是随意定的：payload 自己的 run-path 里有 `@loader_path/Frameworks`，而 loader 就是
+暂存出来的那个副本，所以依赖放在同名子目录里即可被解析，**不需要改写二进制**。为什么必须拷依赖
+见决策日志里 `libswiftCompatibilitySpan.dylib` 那条 —— 简短版：它是 Swift 的向后部署垫片，
+iOS 26.5 的系统里有、iOS 27 里没有，赌系统自带会得到一个随设备版本漂移的 bug。
+
+逻辑落在 `RuntimePayloadStaging`，**刻意不加 iOS 编译门**，以便在 macOS 上用真实文件系统测
+（布局错了的表现是在别的进程里 `dlopen` 失败，是整个功能最难观测的位置）。
 
 ### 选择器的数据源抽象（上游 `RunningApplicationKit`）
 
@@ -735,6 +760,11 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
    `.xcodeproj` 的陈旧 `Package.resolved`，而官方构建从不走它。详见「前期调研」最后一节。
 3. **新建越狱版 target**，含 entitlements、独立 bundle identifier、图标，和一个编译期能力开关。
    验证标准：两个版本都能构建，越狱版的 `dump-entitlements` 含那三条。
+   **并把 payload 内嵌进去**：越狱版与 payload 同属 iOS，所以这里**可以**用常规的
+   target dependency + Embed Frameworks，不必走 macOS 那套「脚本构建 → 固定路径暂存 →
+   copy phase」（那是被 Xcode 拒收跨平台内嵌内容逼出来的）。payload 落在 `Frameworks/`，
+   `ARCHS[sdk=iphoneos*] = arm64 arm64e`。验证标准：产物里 `Frameworks/RuntimeViewerServer.framework`
+   存在、两个切片都在、能力门禁不再报「缺 payload」。
 4. **实现设备侧枚举**（自带 `libproc` 原型）与**注入**（调 `MIMachInjector`，payload 暂存到
    `/private/var/tmp/`），注册三条 RPC 命令。带单测：`libproc` 原型的声明与 macOS 头一致、
    错误码映射正确。
@@ -800,3 +830,12 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 | 2026-10-02 | 下游集成挖出 MachInjector 0.6.0 的一个 bug,已发 0.6.1 | 提案和 MachInjector 的 README 都写「iOS 必须 arm64e」,**那对运行成立、对构建不成立**:Xcode 的 `iOSPackagesShouldBuildARM64e` 是往包的架构里**追加** arm64e 而非替换 arm64,所以即使 App target 钉 `ARCHS = arm64e`,包仍两份一起编,arm64 那份在 `loader_arm64.s` 上报 `instruction requires: pauth`,整个构建挂。修法是在两个 `.s` 的 `#ifdef __arm64__` 内加 `.arch_extension pauth`;实测 10 个切片全部汇编通过,**arm64e 的 `__DATA` 字节逐字节不变**。macOS 永远看不到这个 —— 它的 arm64 基线是 armv8.3,iOS 的要覆盖 A7–A11。 |
 | 2026-10-02 | `ARCHS` 必须写在 target 上,不能写在 xcodebuild 命令行 | 第一次试图用命令行 `ARCHS=arm64e`,结果宿主宏可执行文件(`MemberwiseInitMacros` / `PerceptionMacros`)也被强制成 arm64e 而找不到,构建失败。命令行设置会到达**每一个** target —— 项目的 `RunScript.sh:218-224` 早就写明了这点并特意改用 `EXCLUDED_ARCHS`,是我没照做。 |
 | 2026-10-02 | 一次假绿:手工改 pbxproj 把四个设置写到了 `buildSettings` 字典外面 | 追加位置落在闭合的 `};` 之后,Xcode 当成 `XCBuildConfiguration` 的游离键,构建看不见。`BUILD SUCCEEDED` 照样出现,但产物是 arm64、**`RUNTIME_VIEWER_JAILBROKEN` 从未被定义**(registrar 编译成空的)。两个巧合把失效伪装成了成功:`CODE_SIGNING_ALLOWED` 我在命令行也传了,`ONLY_ACTIVE_ARCH = NO` 恰好是该 destination 的默认值。是去查产物架构才掉出来的。**教训:改完构建设置先 `-showBuildSettings` 查解析值,再构建;绿灯不证明设置生效。** |
+| 2026-10-02 | payload 内嵌走常规 target dependency,**不照搬 macOS 那套暂存脚本** | macOS 侧之所以要「脚本构建 → 固定路径暂存 → copy phase」,是因为 Xcode 拒绝把 iOS-family 内嵌内容挂成 macOS App target 的依赖(项目 `CLAUDE.md` 已记)。越狱版自己就是 iOS,这条限制不存在,于是改用最普通的 `PBXTargetDependency` + Embed Frameworks。差别不只是少写一个脚本:**陈旧 payload 这个失败模式整类消失**——macOS 那边 copy phase 无法分辨暂存路径上的产物是不是本次构建的,所以 `RunScript.sh` 要在 payload 构建失败时**主动清空**暂存目录;依赖关系让构建系统自己保证时序。跨工程引用是现成的:UIKit 工程早已把 `RuntimeViewerServer.xcodeproj` 作为子工程引入,两个 `PBXReferenceProxy` 都在,本次只补了一个 `proxyType = 1` 的 proxy。 |
+| 2026-10-02 | payload 定为 **fat(arm64 + arm64e)**,推翻上面「倾向编 arm64e」那条待定 | 当时待定的问题是「arm64 dylib 能不能 dlopen 进 arm64e 进程」。真正该问的是反过来那一半:**iOS 上系统进程是 arm64e,而所有第三方 App 是 arm64**(App Store 不分发 arm64e)。只带 arm64e 就注不进任何第三方 App,只带 arm64 就注不进 `backboardd` 这类系统进程——两种都砍掉一半目标。所以 payload 必须两个切片都有,代价是 Debug 下体积翻倍(55 MB → 约 110 MB)。注入器自己仍是 arm64e-only(App target 按 Xcode 的安全设置参考「Apps stay arm64e-only」),**但「arm64e 进程里的注入器能否注入 arm64 目标」尚未实测**,留到第 8 步;那是 MachInjector 的 shellcode 问题,与 payload 架构是两件事。 |
+| 2026-10-02 | 架构写在 `ARCHS[sdk=iphoneos*]` 上,刻意不碰 Distribution 配置 | payload target(`RuntimeViewerMobileServer`)是**共享**的:macOS App 的模拟器 payload 和对外发布的 XCFramework 都用它。条件写成 `[sdk=iphoneos*]` 后模拟器与 Catalyst 原样不动(实测仍为 `arm64 x86_64`),而 Distribution 配置**一行不改**——XCFramework 由 `BuildRuntimeViewerServerXCFramework.sh` 以 Distribution 构建,对外发布的 iOS 切片因此保持 arm64,不会因为本提案变成 fat。Debug 还额外需要 `ONLY_ACTIVE_ARCH[sdk=iphoneos*] = NO`:工程级 Debug 是 `YES`,接着真机构建时只会编设备自身那一个架构,arm64 切片会**静默**消失。 |
+| 2026-10-02 | 实测:`ENABLE_POINTER_AUTHENTICATION` 不控制 PAC 代码生成 | 先按 Xcode 自带的安全构建设置参考(「`ENABLE_POINTER_AUTHENTICATION = YES` Builds for arm64e pointer signing」)给 payload 也加了这条,随后发现**越狱版 App target 自己这条是 `NO`**,而它上一轮已经编出过 arm64e 产物。去数产物里的 PAC 指令:主二进制 31 条、debug dylib 345432 条(`pacibsp` / `retab` / `braa` 一类),`cpusubtype 2 / caps 0x80` 与系统 arm64e 二进制一致。结论:PAC 代码生成跟的是 `arm64e-apple-ios` 三元组,那个设置管的是别的事。**所以把它撤掉了**——留一条实测证明为空操作的设置,下一个读到的人会当它是关键。顺带确认上一轮验证的 arm64e 产物是有效的,不是「挂着 arm64e 名字的非 PAC 二进制」。 |
+| 2026-10-02 | payload 放 `Frameworks/` 而不是跟 macOS 一样放 `Resources/` | iOS App bundle 是平的,`Bundle.main.resourceURL` 就是 bundle 根,所以 macOS 侧 `url(forResource:withExtension:)` 那套到 `Frameworks/` 里的东西是看不见的。两个选择里取了 iOS 的惯例位置,registrar 改用 `Bundle.main.privateFrameworksURL`。注意**宿主侧仍然是 `Resources/`**(`RuntimeInjectClient` 只会去那里找),两边不统一是有意的,各自随各自平台的惯例。 |
+| 2026-10-02 | 记下一个留给第 7 步的隐患:payload 的 `SKIP_INSTALL = NO` | 项目 `CLAUDE.md` 已记过同类坑:带产物的 target 若 `SKIP_INSTALL = NO`,归档时会把自己装进 archive,archive 就不再是 app archive、导出直接失败。payload target 为了发 XCFramework 必须 `SKIP_INSTALL = NO`,而它现在是越狱版的依赖。**普通构建不受影响**(该设置只在 install / archive 动作生效),但第 7 步真要用 `xcodebuild archive` 打 IPA 时会撞上,届时要么用 `-exportArchive` 之外的打包方式,要么在归档命令里覆盖它。先留档,不提前改共享 target。 |
+| 2026-10-02 | `otool -L` 查出 payload 有一条非系统依赖,暂存逻辑整体重做 | 内嵌成功后去查产物的加载命令,发现 payload 依赖 `@rpath/libswiftCompatibilitySpan.dylib` —— Swift 的 `Span` 向后部署垫片,因为 payload 的部署目标(15.0)早于把 `Span` 并进 `libswiftCore` 的那个版本,Xcode 于是链接工具链副本并把它内嵌进 App bundle。**原来的 `stagePayload()` 只拷那一个 Mach-O**,目标进程 `dlopen` 时会在自己的 `@executable_path/Frameworks` 里找这个 dylib,找不到。这条差点漏掉的原因很值得记:它的第一条 run-path 是 `/usr/lib/swift`,而**iOS 26.5 的 `/usr/lib/swift` 里确实有这个 dylib、iOS 27 里没有了**(SDK 里对应的 `.tbd` 已改成指向 `libswiftCore` 的别名)—— 所以在 26.5 上测会通过,在 27 上失败,是个按设备版本漂移的 bug。macOS 侧从来没撞上:macOS 27 仍自带它。**修法不改二进制**:payload 本来就带 `@loader_path/Frameworks` 这条 run-path,所以把依赖拷到暂存目录下一个叫 `Frameworks` 的子目录里即可自洽。 |
+| 2026-10-02 | 暂存逻辑抽成 `RuntimePayloadStaging`,跨平台以便可测 | 沿用本模块里枚举器的既有先例(刻意不加 iOS 门以便在 macOS 上测)。理由在这里更强:布局错了的表现是**在别人的进程里** `dlopen` 失败,栈上没有我们的帧,是整个功能最难看出错的地方。配 11 个测试,钉住的是会被将来的人改坏的那几条不变量:payload 在暂存根、依赖在 `Frameworks/` 子目录、依赖目录名必须等于 run-path 里那个词、payload 自己的 `.framework` 不重复拷(否则白拷一百多 MB)、权限 0o755、重复暂存可行且不动暂存目录里别人的文件、上游删掉的依赖不会在暂存副本里残留。 |
+| 2026-10-02 | 依赖选择取「全拷,排除 payload 自己」而非解析 load command | 更精确的做法是读 payload 的 `LC_LOAD_DYLIB` 只拷实际需要的(App 已经依赖 MachOKit,做得到)。没选它:多拷的那几百 KB 什么都不值,而「将来上游新增一条依赖、只在别人进程里以 `dlopen` 失败的形式暴露」这个代价很高。精确性在这里不是收益方向,冗余才是。 |

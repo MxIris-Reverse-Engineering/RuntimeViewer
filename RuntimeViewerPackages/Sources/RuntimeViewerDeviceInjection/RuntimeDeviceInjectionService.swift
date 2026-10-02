@@ -28,26 +28,23 @@ import MachInjector
 /// Measured: Apple's own `com.apple.system-task-ports` and
 /// `platform-application` do **not** substitute for the last one.
 public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
-    /// The dylib to load into the target.
-    private let payloadURL: URL
-
-    /// Where the payload is copied before injection.
-    ///
-    /// The target has to be able to map the file, and it is a different process
-    /// with a different view of the filesystem than the app bundle's. A
-    /// world-readable path outside any container is the only thing both sides
-    /// agree on.
-    private let stagingDirectoryURL: URL
+    /// Where the payload is copied before injection, and what goes with it.
+    private let staging: RuntimePayloadStaging
 
     private let fileManager: FileManager
 
     public init(
         payloadURL: URL,
-        stagingDirectoryURL: URL = URL(fileURLWithPath: "/private/var/tmp", isDirectory: true),
+        dependencyDirectoryURL: URL,
+        stagingDirectoryURL: URL = URL(fileURLWithPath: "/private/var/tmp/RuntimeViewerPayload", isDirectory: true),
         fileManager: FileManager = .default,
     ) {
-        self.payloadURL = payloadURL
-        self.stagingDirectoryURL = stagingDirectoryURL
+        self.staging = RuntimePayloadStaging(
+            payloadURL: payloadURL,
+            dependencyDirectoryURL: dependencyDirectoryURL,
+            stagingDirectoryURL: stagingDirectoryURL,
+            fileManager: fileManager,
+        )
         self.fileManager = fileManager
     }
 
@@ -67,7 +64,7 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
         // not inject, which is its own failure and not the one below. Said
         // plainly rather than folded into the entitlement message, which would
         // send someone to reinstall over a build-phase problem.
-        guard fileManager.fileExists(atPath: payloadURL.path) else {
+        guard fileManager.fileExists(atPath: staging.payloadURL.path) else {
             return .unsupported(
                 reason: "This build is missing the runtime server payload it would inject, so it has nothing to load into another process.",
             )
@@ -106,7 +103,7 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
 
         let stagedURL: URL
         do {
-            stagedURL = try stagePayload()
+            stagedURL = try staging.stage()
         } catch {
             return .failed(code: 0, reason: "Could not stage the payload: \(error.localizedDescription)")
         }
@@ -117,21 +114,6 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
         } catch let error as NSError {
             return result(for: error)
         }
-    }
-
-    // MARK: - Payload staging
-
-    private func stagePayload() throws -> URL {
-        let destinationURL = stagingDirectoryURL.appendingPathComponent(payloadURL.lastPathComponent)
-        if fileManager.fileExists(atPath: destinationURL.path) {
-            try fileManager.removeItem(at: destinationURL)
-        }
-        try fileManager.copyItem(at: payloadURL, to: destinationURL)
-        // The target maps the file, so it needs read and execute. The app's own
-        // umask would otherwise leave it readable only by this uid, and the
-        // target is frequently a different one.
-        try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destinationURL.path)
-        return destinationURL
     }
 
     private func isAlive(processIdentifier: pid_t) -> Bool {

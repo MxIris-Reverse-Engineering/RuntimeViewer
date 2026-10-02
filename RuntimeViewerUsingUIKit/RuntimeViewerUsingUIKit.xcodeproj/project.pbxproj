@@ -19,10 +19,18 @@
 		E9AB8517306F733800D32891 /* RuntimeViewerUtilities in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8514306F733800D32891 /* RuntimeViewerUtilities */; };
 		E9AB8518306F733800D32891 /* RuntimeViewerApplication in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8513306F733800D32891 /* RuntimeViewerApplication */; };
 		E9AB8541306F733800D32891 /* RuntimeViewerDeviceInjection in Frameworks */ = {isa = PBXBuildFile; productRef = E9AB8540306F733800D32891 /* RuntimeViewerDeviceInjection */; };
+		E9AB8550306F733800D32891 /* RuntimeViewerServer.framework in Embed RuntimeViewerMobileServer Framework */ = {isa = PBXBuildFile; fileRef = E97BF5C62F82C386006943C2 /* RuntimeViewerServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		E9AB851A306F733800D32891 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = E927C22F2E94450700084A7B /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		E9AB8551306F733800D32891 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = E994E2892F323A51009DD28A;
+			remoteInfo = RuntimeViewerMobileServer;
+		};
 		E97BF5C32F82C386006943C2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = E97BF5B52F82C362006943C2 /* RuntimeViewerServer.xcodeproj */;
@@ -38,6 +46,20 @@
 			remoteInfo = RuntimeViewerMobileServer;
 		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E9AB8553306F733800D32891 /* Embed RuntimeViewerMobileServer Framework */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				E9AB8550306F733800D32891 /* RuntimeViewerServer.framework in Embed RuntimeViewerMobileServer Framework */,
+			);
+			name = "Embed RuntimeViewerMobileServer Framework";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		E9038F982C31A81F0051B6AC /* RuntimeViewer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RuntimeViewer.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -233,10 +255,12 @@
 				E9AB8515306F733800D32891 /* Sources */,
 				E9AB8516306F733800D32891 /* Frameworks */,
 				E9AB8519306F733800D32891 /* Resources */,
+				E9AB8553306F733800D32891 /* Embed RuntimeViewerMobileServer Framework */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				E9AB8552306F733800D32891 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				E9DAF5342FEE747E00DD20CB /* RuntimeViewerUsingUIKit */,
@@ -364,6 +388,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E9AB8552306F733800D32891 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = RuntimeViewerMobileServer;
+			targetProxy = E9AB8551306F733800D32891 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		E9038FA92C31A8200051B6AC /* Debug */ = {

@@ -51,6 +51,34 @@ injection has to be tested through `RunScript.sh`**, not through the GUI.
 A build phase that produced both automatically was tried and withdrawn; see
 evolution 0015 for what it cost and why the helper half never actually worked.
 
+**None of the above applies to the jailbroken iOS variant, which embeds the same
+payload the ordinary way.** `RuntimeViewerUsingUIKit-JB` is itself an iOS app, so
+Xcode has no objection: it carries a plain `PBXTargetDependency` on
+`RuntimeViewerMobileServer` plus an `Embed RuntimeViewerMobileServer Framework`
+copy phase, and building the scheme builds the payload. Nothing is staged, and
+the stale-payload hazard above does not exist there. Three things that are
+specific to it:
+
+- The payload lands in `Frameworks/`, not `Contents/Resources/` — an iOS bundle
+  is flat, so `url(forResource:withExtension:)` would not find it. The variant's
+  `InjectionServiceRegistrar` goes through `Bundle.main.privateFrameworksURL`.
+- `ARCHS[sdk=iphoneos*] = arm64 arm64e` on the payload target, because iOS
+  system processes are arm64e while every third-party app is arm64; one slice
+  reaches half the targets. The condition keeps the simulator and Catalyst
+  slices as they were, and the `Distribution` configuration — the one
+  `BuildRuntimeViewerServerXCFramework.sh` uses — is deliberately left alone, so
+  the published XCFramework is unaffected. Debug also needs
+  `ONLY_ACTIVE_ARCH[sdk=iphoneos*] = NO`, or a build onto a connected device
+  silently drops the arm64 slice.
+- **What gets injected is a staged directory, not a lone Mach-O.** The payload
+  links `@rpath/libswiftCompatibilitySpan.dylib`, a back-deployment shim Xcode
+  embeds beside it; `/usr/lib/swift` is its first run-path entry, and iOS 26.5
+  happens to ship that shim while iOS 27 no longer does. So
+  `RuntimePayloadStaging` copies the app's embedded libraries into a `Frameworks`
+  directory beside the staged payload, which is what the payload's own
+  `@loader_path/Frameworks` entry resolves. macOS never had to deal with this —
+  macOS 27 still ships the shim in `/usr/lib/swift`.
+
 ```bash
 # Debug build + launch (configuration "Debug-arm64e", workspace
 # RuntimeViewer-Debug.xcworkspace, scheme "RuntimeViewer macOS"; builds

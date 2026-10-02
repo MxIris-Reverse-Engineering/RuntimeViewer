@@ -24,18 +24,27 @@ enum InjectionServiceRegistrar {
     /// host may query as soon as it is reachable.
     static func registerIfAvailable() {
         #if RUNTIME_VIEWER_JAILBROKEN
-        guard let payloadURL = payloadURL() else {
+        guard let frameworksURL = Bundle.main.privateFrameworksURL,
+              let payloadURL = payloadURL(inFrameworksAt: frameworksURL)
+        else {
             // Registered anyway: the service reports a missing payload as its
             // own distinct reason, and that is more useful to a user than this
             // build pretending to be the ordinary variant.
             #log(.error, "Jailbroken variant found no embedded payload; injection will report it as unavailable")
             RuntimeEngine.injectionService = RuntimeDeviceInjectionService(
                 payloadURL: URL(fileURLWithPath: "/nonexistent/RuntimeViewerServer"),
+                dependencyDirectoryURL: URL(fileURLWithPath: "/nonexistent", isDirectory: true),
             )
             return
         }
         #log(.info, "Registering device injection service with payload at \(payloadURL.path, privacy: .public)")
-        RuntimeEngine.injectionService = RuntimeDeviceInjectionService(payloadURL: payloadURL)
+        // The same directory serves as the dependency source: the payload
+        // loads `@rpath/libswiftCompatibilitySpan.dylib`, which Xcode embeds
+        // right beside it, and the staged copy has to carry it along.
+        RuntimeEngine.injectionService = RuntimeDeviceInjectionService(
+            payloadURL: payloadURL,
+            dependencyDirectoryURL: frameworksURL,
+        )
         #endif
     }
 
@@ -43,14 +52,20 @@ enum InjectionServiceRegistrar {
     /// The embedded `RuntimeViewerServer` binary — the dylib that turns an
     /// injected process into an engine of its own.
     ///
-    /// Looked up inside the framework rather than taken as a bare resource:
-    /// what gets injected is the Mach-O, not the `.framework` wrapper around
-    /// it, and `dlopen` of the directory would fail.
-    private static func payloadURL() -> URL? {
-        guard let frameworkURL = Bundle.main.url(forResource: "RuntimeViewerServer", withExtension: "framework") else {
-            return nil
-        }
-        let binaryURL = frameworkURL.appendingPathComponent("RuntimeViewerServer")
+    /// Reached through `privateFrameworksURL`, not
+    /// `url(forResource:withExtension:)`: the `Embed RuntimeViewerMobileServer
+    /// Framework` phase puts the payload in the bundle's `Frameworks`
+    /// directory, and the resource lookup searches the resource directory —
+    /// the bundle root on iOS — so it would never see it. The macOS app does
+    /// use the resource lookup, because there the payload is staged into
+    /// `Contents/Resources/` instead.
+    ///
+    /// The Mach-O inside the wrapper is what gets injected, not the
+    /// `.framework` directory: `dlopen` of a directory fails.
+    private static func payloadURL(inFrameworksAt frameworksURL: URL) -> URL? {
+        let binaryURL = frameworksURL
+            .appendingPathComponent("RuntimeViewerServer.framework", isDirectory: true)
+            .appendingPathComponent("RuntimeViewerServer")
         return FileManager.default.fileExists(atPath: binaryURL.path) ? binaryURL : nil
     }
     #endif
