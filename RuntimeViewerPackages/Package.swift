@@ -279,15 +279,12 @@ let package = Package(
                 path: "../../RunningApplicationKit",
                 isRelative: true,
             ),
-            // TEMPORARY: pinned to the branch carrying the supplied-item-source API the
-            // device process picker needs (`RunningItemSource`, `Configuration.tabs`,
-            // `processItemSource`). Revert to a version requirement once that branch is
-            // merged and released — a branch pin is not reproducible and must not reach a
-            // release archive. Upstream proposal:
-            // RunningApplicationKit `Documentations/Evolutions/draft-injected-item-source.md`.
+            // 0.7.0 is the first release with the supplied-item-source API the device
+            // process picker needs: `RunningItemSource` / `AnyRunningItemSource`,
+            // `Configuration.tabs`, `processItemSource:` and `RestrictedProcess`.
             remote: .package(
                 url: "https://github.com/Mx-Iris/RunningApplicationKit",
-                branch: "feature/injected-item-source",
+                from: "0.7.0",
             ),
         ),
 

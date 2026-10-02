@@ -75,7 +75,7 @@
     {
       "identity" : "frameworktoolbox",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Mx-Iris/FrameworkToolbox.git",
+      "location" : "https://github.com/Mx-Iris/FrameworkToolbox",
       "state" : {
         "revision" : "9fa37fa0f6eb6c3eb22fa92aca55045b6508c6dc",
         "version" : "0.12.0"
@@ -167,8 +167,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachOKitExtensions",
       "state" : {
-        "revision" : "bc19b91ad16d09d77fc07e8de02cca1b930746c2",
-        "version" : "0.1.2"
+        "revision" : "df4992e45238f5037b45a96a2384c72292ee3a3d",
+        "version" : "0.1.3"
       }
     },
     {
@@ -221,8 +221,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
       "state" : {
-        "branch" : "feature/injected-item-source",
-        "revision" : "f93a438ff63b77fc1e6ab4630dca33167dbeea75"
+        "revision" : "9ffb48aa92d9a6ebdd77bb696039112bd76034aa",
+        "version" : "0.7.0"
       }
     },
     {

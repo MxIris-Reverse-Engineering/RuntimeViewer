@@ -141,8 +141,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/MxIris-Reverse-Engineering/MachInjector",
       "state" : {
-        "revision" : "f39e8a085cf257a55462aa08a8e917d814e2701b",
-        "version" : "0.5.1"
+        "revision" : "1aab1373d14f7566d1ccd31e6bbe56410a81af83",
+        "version" : "0.6.1"
       }
     },
     {
@@ -213,8 +213,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/RunningApplicationKit",
       "state" : {
-        "revision" : "a229465b463d90485c775f0b1c91260e30f0c813",
-        "version" : "0.6.0"
+        "revision" : "9ffb48aa92d9a6ebdd77bb696039112bd76034aa",
+        "version" : "0.7.0"
       }
     },
     {
@@ -582,8 +582,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/Mx-Iris/UIFoundation",
       "state" : {
-        "revision" : "665ccaac727fd41a5c5b0eb57da367d617d0e897",
-        "version" : "0.32.0"
+        "revision" : "2bc19f0a27ee9d53d75e09c90a0a7e6b99268e84",
+        "version" : "0.37.0"
       }
     },
     {
