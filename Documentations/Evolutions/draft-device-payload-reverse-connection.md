@@ -1,12 +1,12 @@
 # Draft - 真机注入载荷改为反向连接
 
-- **状态**: Accepted
+- **状态**: In Progress
 - **作者**: JH
 - **创建日期**: 2026-10-02
 - **最后更新**: 2026-10-02
 - **所属愿景**: 无
 - **关联提案**: [draft-jailbroken-ios-injection.md](draft-jailbroken-ios-injection.md)（本提案修正它对传输层的假设）
-- **实现分支 / PR**: 待定
+- **实现分支 / PR**: `feature/jailbroken-ios-injection`（未推送）
 - **配套文档**: 待定 —— 落地时登记实现说明的链接
 
 ## 摘要
@@ -142,6 +142,29 @@ public struct RuntimePayloadRendezvous: Codable, Sendable, Hashable {
     public let claimToken: String
 
     public init(hostAddress: String, hostPort: UInt16, claimToken: String)
+
+    /// 一次注入一个。实现时补的：picker 允许同时发起两次注入，共用令牌会让宿主把先到的
+    /// 那个交给错误的请求。
+    public static func makeClaimToken() -> String
+
+    /// 三项齐备才算能用。载荷在放弃广播之前查它 —— 半填的 rendezvous 比没有更糟：
+    /// 载荷既不广播也连不上，彻底没有症状。
+    public var isUsable: Bool
+}
+```
+
+落地时另外补了两个工厂，都是实现中才看出必要的：
+
+```swift
+extension RuntimePayloadRendezvous {
+    /// 从「到这台设备的那条连接」上取地址，而不是枚举本机网卡去猜。
+    /// 一台 Mac 同时有 Wi-Fi、以太网、VPN 和虚拟机网桥时，猜有好几个看起来都对的错答案。
+    public static func reachingThisProcess(from engine: RuntimeEngine) async throws -> RuntimePayloadRendezvous
+}
+
+extension RuntimeConnection {
+    /// 对端要怎么连到本进程 —— 只有活着的网络连接答得上来，其余传输一律 nil。
+    var localAddressSeenByPeer: String? { get }
 }
 ```
 
@@ -283,12 +306,19 @@ case injectedTCP(name: String, host: String, port: UInt16, identifier: Identifie
 
 ## 落地步骤
 
-1. **`RuntimePayloadRendezvous` 与请求字段**：新增类型、给 `InjectIntoProcessRequest` 加可选字段、`RuntimeEngine.inject` 加参数。带编解码测试，覆盖「字段缺失 = 旧对端」这一路。
-2. **暂存写入**：`RuntimePayloadStaging.stage(rendezvous:)` 与载荷侧的 `besidePayload()`。带测试：写入后可读回、权限正确、重复注入覆盖而非追加、文件缺失返回 nil。
-3. **`.injectedTCP` 与传输层**：新增 source case，把 `RuntimeLocalSocketConnection` 的回环地址参数化。编译器会指出每一处需要决定的 switch。带测试：两端在本机上收发一轮。
-4. **宿主侧监听与认领**：每次注入临时监听、按令牌认领、替换真机路径上的等待逻辑。模拟器路径保持走 `awaitInjectedBonjourEngine`。
-5. **真机验证**：在之前失败的四个目标（`searchpartyd`、`mediaplaybackd`、`backboardd`、`dasd`）上注入并浏览接口；观察断开重连的实际表现，据此定下第 7 节的退避策略。
-6. **错误文案**：修掉模拟器文案复用，以及挂起目标的无信息提示。
+1. ✅ **`RuntimePayloadRendezvous` 与请求字段**（`90b726c1`）。另加：公开方法上的 `rendezvous`
+   **刻意不给默认值** —— 漏传的调用方会落到「多数真机目标上静默什么都不发生」那条路，所以让编译器问。
+2. ✅ **暂存写入**（`1b1198f1`）。读取接口最终是 `stagedBesideImage(#dsohandle)` 而非提案原先写的
+   `besidePayload()`：`#dsohandle` 在使用处展开，写在 Core 里会指到 Core 自己，而暂存布局把它放在
+   `Frameworks/` 下又深一层。另：rendezvous 为 nil 时**删除**残留文件，这是唯一没有自身症状的那种错 ——
+   旧文件会让一个本该广播的载荷去连一个已经不在监听的宿主。
+3. ✅ **`.injectedTCP` 与传输层**（`5b765780`）。编译器点出两处需要决定的地方，两处都记进了决策日志。
+   地址解析从 `inet_addr` 换成 `inet_pton`：前者把失败报成 `0xFFFFFFFF`，于是写错的地址会变成一次
+   对广播地址的连接而不是一个错误。重连不需要新代码 —— 现成的客户端循环本来就一直重试构造时那个地址。
+4. ✅ **宿主侧监听与认领**（`623b3b8f`）。等待改成**两种到达方式赛跑**而非二选一，详见决策日志。
+5. ⏳ **真机验证**：在之前失败的四个目标（`searchpartyd`、`mediaplaybackd`、`backboardd`、`dasd`）上注入并浏览接口；
+   观察断开重连的实际表现，据此定下第 7 节的退避策略。**需要装一次越狱版，由用户执行。**
+6. ✅ **错误文案**（`623b3b8f` 与 `81a874de`）。两条都修了，各带一条钉住文案内容的测试。
 7. **收尾判断**（结果写进决策日志，不允许沉默跳过）：
    - 配套文档：几乎确定要写**实现说明** —— 「载荷继承目标沙盒」「身份不能在别人进程里推导」「为什么是裸 socket 而非 Network.framework」这三条都是从代码看不出来的决策。使用指南需要补网络可达性那一条。
    - 新术语：`rendezvous`（注入方交给载荷的报到信息）大概率要进术语表，落地时判定。
@@ -306,3 +336,10 @@ case injectedTCP(name: String, host: String, port: UInt16, identifier: Identifie
 | 2026-10-02 | 断线后持续重连原地址 | 宿主重启后连接自己回来，不必重新注入整批目标。代价是载荷会在目标进程里保有一个重试循环，退避上限留到第 5 步按实测定。 |
 | 2026-10-02 | 挂起的目标不在范围内 | 它卡在 MachInjector 的 210 毫秒远程线程等待，与连接方向无关，单独处理。 |
 | 2026-10-02 | Draft → Accepted | 用户批准（「开工」），开始按落地步骤实现。 |
+| 2026-10-02 | 宿主地址取自「到该设备的那条连接」，不枚举本机网卡 | `NWConnection.currentPath.localEndpoint` 就是那台设备实际到达本机的地址。枚举网卡要在 Wi-Fi / 以太网 / VPN / 虚拟机网桥之间挑一个，每个都「看起来可能对」。取不到地址时整条 attach 直接拒绝并说明，而不是拿一个猜测去注入 —— 后者的结果是载荷连向虚空、用户盯着一个永远不出现的目标。 |
+| 2026-10-02 | 端口向内核要（`RuntimeUnusedPort`），不沿用 `localSocket` 的哈希 | 宿主必须在载荷存在**之前**就在监听，所以它只能自己挑一个再告诉对方，没法跟对方约定一个哈希。代价是「要到」与「真正 bind」之间有一个窗口，接受它：输了竞争会在自己的 `bind` 上响亮地失败。 |
+| 2026-10-02 | 等待改为「两种到达方式赛跑」，而不是先判断对端是模拟器还是真机 | 走哪条路由载荷在编译期决定，宿主读不出来。赛跑同时就是混版兼容的全部答案：忽略 rendezvous 的旧对端不是一个需要单独分支的失败情形，它只是赢了另一半。替代做法是从广播的 model identifier 去猜是不是模拟器 —— 那是猜。 |
+| 2026-10-02 | 宿主 bind 它公布出去的那个地址，而不是所有网卡 | 设备根本到不了的地址会在宿主这边立刻失败、且错误里带着地址，而不是留下一个连向虚空的载荷。用 RFC 5737 保证不可路由的 `192.0.2.1` 做了测试。 |
+| 2026-10-02 | `injectedTCP` 的书签身份就是认领令牌，因而逐次注入而异 | 与 `localSocket` 今天的局限相同（它的标识符里带 pid），不是新引入的退步。要让它跨注入稳定是 `draft-runtime-bookmark-scope` 的题目，不是这条路径的。 |
+| 2026-10-02 | 命令行的 `SourceKind` 新增 `injectedDevice` | 复用 `attachedSocket` 虽然传输相同，但那个 kind 的含义是「本机上的一个进程」，拿它描述一台手机上的进程是在关于目标位置这件事上给出明确的错答案。它的 selector 用引擎标识符而非 `pid:` —— pid 是设备的，`pid:` 会解析成本机持有那个 pid 的随便哪个进程。 |
+| 2026-10-02 | 挂起目标的超时改文案，不调预算 | MachInjector 自己的头文件对该错误码就写着「挂起的目标产生同样的症状」。预算不是问题所在：挂起的进程没有被调度的线程，等多久都不会有回报。 |
