@@ -38,6 +38,70 @@ struct SwitchSourceState: Equatable {
     }
 }
 
+/// Whether Attach to Process can do anything for the engine currently selected, and when
+/// it cannot, what to say about it.
+///
+/// A disabled control carrying its reason in a tooltip, rather than an enabled control
+/// that reports the obstacle after being clicked: an action that cannot be performed is an
+/// action whose control is off, and the user should not have to try it to find out. The
+/// explanation is written to be read verbatim.
+struct AttachAvailability: Equatable {
+    let isEnabled: Bool
+    let explanation: String
+
+    static let probing = AttachAvailability(
+        isEnabled: false,
+        explanation: "Checking whether this device can attach to its own processes…",
+    )
+
+    /// Attaching needs SIP off, but only when the target is a process on *this* Mac. A
+    /// device on the other end of the connection does its own injecting and could not care
+    /// less about this machine's SIP state, which is why this is not a gate on the button
+    /// as a whole.
+    static let systemIntegrityProtectionEnabled = AttachAvailability(
+        isEnabled: false,
+        explanation: "Attaching to a process on this Mac needs System Integrity Protection disabled.",
+    )
+
+    /// An engine reached through another Mac. The hop exists and the commands would very
+    /// likely be forwarded, but that has not been measured, so the entry says so instead
+    /// of offering an action that may fail in a way nobody has seen yet.
+    static let mirroredEngine = AttachAvailability(
+        isEnabled: false,
+        explanation: "Attaching to a process on an engine shared by another Mac is not supported yet.",
+    )
+
+    static let attachable = AttachAvailability(
+        isEnabled: true,
+        explanation: "Attach to a running process and inspect its runtime",
+    )
+
+    init(isEnabled: Bool, explanation: String) {
+        self.isEnabled = isEnabled
+        self.explanation = explanation
+    }
+
+    /// Maps what the far end said about itself.
+    init(remoteAvailability: RuntimeInjectionAvailability) {
+        switch remoteAvailability {
+        case .available:
+            self = .attachable
+        case .requiresJailbrokenVariant:
+            self.init(
+                isEnabled: false,
+                explanation: "This device is running the App Store build of Runtime Viewer, which cannot attach to other processes. The jailbroken build can.",
+            )
+        case .helperDaemonNotInstalled:
+            self.init(
+                isEnabled: false,
+                explanation: "Attaching on that Mac needs its Runtime Viewer helper installed.",
+            )
+        case .unsupported(let reason):
+            self.init(isEnabled: false, explanation: reason)
+        }
+    }
+}
+
 final class MainViewModel: ViewModel<MainRoute> {
     /// Bounds for the View menu's font-size commands, applied to `Settings.theme.fontSize`.
     private static let minimumFontSize: Double = 8
@@ -88,6 +152,7 @@ final class MainViewModel: ViewModel<MainRoute> {
         let navigationHistory: Driver<NavigationHistorySnapshot>
         let runtimeEngineSections: Driver<[RuntimeEngineSection]>
         let switchSourceState: Driver<SwitchSourceState>
+        let attachAvailability: Driver<AttachAvailability>
         let requestFrameworkSelection: Signal<Void>
         let requestSaveLocation: Signal<(name: String, type: UTType)>
         let requestRestartConfirmation: Signal<Void>
@@ -115,6 +180,16 @@ final class MainViewModel: ViewModel<MainRoute> {
     /// Resolved once: `NSWorkspace.icon(for:)` is expensive, and the source menu
     /// re-resolves an icon for every engine each time the engine list changes.
     private static let genericExecutableIcon = NSWorkspace.shared.icon(for: .unixExecutable)
+
+    /// Whether this engine reached us through another Mac rather than being one this
+    /// process connected to itself.
+    ///
+    /// Asked of the manager, not of the engine: how an engine arrived is a fact the
+    /// manager keeps, and `RuntimeSource` cannot express it — a mirrored engine's
+    /// `directTCP` source looks the same as a direct one's.
+    private func isMirrored(_ runtimeEngine: RuntimeEngine) -> Bool {
+        runtimeEngineManager.mirroredEngines.values.contains { $0 === runtimeEngine }
+    }
 
     func resolveEngineIcon(for engine: RuntimeEngine) -> NSImage? {
         switch engine.source {
@@ -199,13 +274,14 @@ final class MainViewModel: ViewModel<MainRoute> {
             }
             .disposed(by: rx.disposeBag)
 
+        // No gate here any more: `attachAvailability` below drives the toolbar item's
+        // enabled state, so a click can only arrive when the action is actually possible.
+        // It used to run the SIP check and raise an alert on failure, which told the user
+        // only after they had tried — and, once device engines existed, would have raised
+        // it for a target that does not care about this Mac's SIP state at all.
         input.attachToProcessClick.emitOnNextMainActor { [weak self] in
             guard let self else { return }
-            if SIPChecker.isDisabled() {
-                router.trigger(.attachToProcess)
-            } else {
-                errorRelay.accept(MessageError.message("SIP is enabled. Please disable SIP to attach to process."))
-            }
+            router.trigger(.attachToProcess)
         }
         .disposed(by: rx.disposeBag)
 
@@ -310,6 +386,32 @@ final class MainViewModel: ViewModel<MainRoute> {
 
                 return [SharingData(provider: item, title: runtimeObjectType.displayName, iconType: runtimeObjectType.kind)]
             }
+
+        // Attach to Process now means "pick a process on the machine the selected engine
+        // belongs to", so what it can do changes with that engine. The host branch stays
+        // synchronous: it is the common case, it already has a working answer, and a
+        // control that flickers from enabled to disabled while a probe runs is worse than
+        // one that was never enabled.
+        let attachAvailability: Driver<AttachAvailability> = documentState.$runtimeEngine.asDriver()
+            .flatMapLatest { [weak self] runtimeEngine -> Driver<AttachAvailability> in
+                guard let self else { return .empty() }
+                if runtimeEngine.injectionTargetsRunOnThisMachine {
+                    return .just(SIPChecker.isDisabled() ? .attachable : .systemIntegrityProtectionEnabled)
+                }
+                if isMirrored(runtimeEngine) {
+                    // Deliberately not probed: the forwarding path has never been
+                    // exercised, and asking would offer an action on the strength of a
+                    // guess about it.
+                    return .just(.mirroredEngine)
+                }
+                return Observable.async { await runtimeEngine.injectionAvailability() }
+                    .map(AttachAvailability.init(remoteAvailability:))
+                    .asDriver(onErrorJustReturn: .init(remoteAvailability: .unsupported(
+                        reason: "Could not ask this device whether it can attach to its own processes.",
+                    )))
+                    .startWith(.probing)
+            }
+            .distinctUntilChanged()
 
         let switchSourceState = Driver.combineLatest(
             runtimeEngineManager.rx.runtimeEngineSections,
@@ -427,6 +529,7 @@ final class MainViewModel: ViewModel<MainRoute> {
             },
             runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
             switchSourceState: switchSourceState,
+            attachAvailability: attachAvailability,
             requestFrameworkSelection: requestFrameworkSelection,
             requestSaveLocation: requestSaveLocation,
             requestRestartConfirmation: requestRestartConfirmationRelay.asSignal(),

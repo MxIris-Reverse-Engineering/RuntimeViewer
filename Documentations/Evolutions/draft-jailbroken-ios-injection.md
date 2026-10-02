@@ -768,7 +768,12 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 4. **实现设备侧枚举**（自带 `libproc` 原型）与**注入**（调 `MIMachInjector`，payload 暂存到
    `/private/var/tmp/`），注册三条 RPC 命令。带单测：`libproc` 原型的声明与 macOS 头一致、
    错误码映射正确。
-5. **`RunningApplicationKit` 的上游改动。** 三件事：①加 `RunningItemSource`、把泛型 picker 改
+5. **`RunningApplicationKit` 的上游改动。** ✅ **已实现**(分支 `feature/injected-item-source`,
+   提案见该仓库 `Documentations/Evolutions/draft-injected-item-source.md`;83 个测试全绿,原有
+   69 个未改)。**落地形态与下面写的不同** —— 公开面小得多,见决策日志 2026-10-02 那条:没有
+   公开泛型 picker,而是给门面 `RunningPickerTabViewController` 加 `Configuration.tabs` 与
+   `processItemSource`。**待发版**:宿主侧要等它合入 `main` 并发版后抬 pin 才能编译。
+   原计划的三件事：①加 `RunningItemSource`、把泛型 picker 改
    public 并接受外部注入的 items，现有两种来源各自成为其实现；②`shouldSelect(item:)` 已存在且已
    接在 `shouldSelectRow` 上，补上**渲染侧的变灰**（现在返 `false` 只是选不中，行看起来仍正常）；
    ③加**特殊进程规则**，`kernel_task`（pid 0）/ `launchd`（pid 1）显示但不可选中——库里现在没有
@@ -839,3 +844,9 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 | 2026-10-02 | `otool -L` 查出 payload 有一条非系统依赖,暂存逻辑整体重做 | 内嵌成功后去查产物的加载命令,发现 payload 依赖 `@rpath/libswiftCompatibilitySpan.dylib` —— Swift 的 `Span` 向后部署垫片,因为 payload 的部署目标(15.0)早于把 `Span` 并进 `libswiftCore` 的那个版本,Xcode 于是链接工具链副本并把它内嵌进 App bundle。**原来的 `stagePayload()` 只拷那一个 Mach-O**,目标进程 `dlopen` 时会在自己的 `@executable_path/Frameworks` 里找这个 dylib,找不到。这条差点漏掉的原因很值得记:它的第一条 run-path 是 `/usr/lib/swift`,而**iOS 26.5 的 `/usr/lib/swift` 里确实有这个 dylib、iOS 27 里没有了**(SDK 里对应的 `.tbd` 已改成指向 `libswiftCore` 的别名)—— 所以在 26.5 上测会通过,在 27 上失败,是个按设备版本漂移的 bug。macOS 侧从来没撞上:macOS 27 仍自带它。**修法不改二进制**:payload 本来就带 `@loader_path/Frameworks` 这条 run-path,所以把依赖拷到暂存目录下一个叫 `Frameworks` 的子目录里即可自洽。 |
 | 2026-10-02 | 暂存逻辑抽成 `RuntimePayloadStaging`,跨平台以便可测 | 沿用本模块里枚举器的既有先例(刻意不加 iOS 门以便在 macOS 上测)。理由在这里更强:布局错了的表现是**在别人的进程里** `dlopen` 失败,栈上没有我们的帧,是整个功能最难看出错的地方。配 11 个测试,钉住的是会被将来的人改坏的那几条不变量:payload 在暂存根、依赖在 `Frameworks/` 子目录、依赖目录名必须等于 run-path 里那个词、payload 自己的 `.framework` 不重复拷(否则白拷一百多 MB)、权限 0o755、重复暂存可行且不动暂存目录里别人的文件、上游删掉的依赖不会在暂存副本里残留。 |
 | 2026-10-02 | 依赖选择取「全拷,排除 payload 自己」而非解析 load command | 更精确的做法是读 payload 的 `LC_LOAD_DYLIB` 只拷实际需要的(App 已经依赖 MachOKit,做得到)。没选它:多拷的那几百 KB 什么都不值,而「将来上游新增一条依赖、只在别人进程里以 `dlopen` 失败的形式暴露」这个代价很高。精确性在这里不是收益方向,冗余才是。 |
+| 2026-10-02 | 上游 `RunningApplicationKit` 已实现,但公开面比本提案设想的小一个数量级 | 本提案原话是「把泛型 picker 公开」。落地时发现这句的代价被低估了:**Swift 要求公开类里的每个 `override` 也必须公开**,于是公开泛型 picker 会连带把四十来个 subclass hook、`BaseConfiguration`、`PickerField` 全部推上公开 API —— 更糟的是让 `didConfirm(item:)` / `loadItems()` 变成**外部可调用**,等于绕过 picker 直接触发代理回调。改成走那个库已有的门面模式:`RunningPickerTabViewController` 新增 `Configuration.tabs`(单个 tab 时不再套 `NSTabViewController`,直接托管那一个列表)和 `processItemSource` 一个初始化参数,三个 picker 全部保持 internal。上游提案:`RunningApplicationKit` 仓库的 `draft-injected-item-source.md`,分支 `feature/injected-item-source`,83 个测试全绿(原有 69 个一字未改,正是本步的验收标准)。 |
+| 2026-10-02 | 不把本机两种数据源改造成 `RunningItemSource` 的实现 | 本提案原话是「现有的两种来源各自成为它的实现」。不照做:进程选择器的刷新是**增量**的(diff 新增/消失的 pid,避免每 2 秒重建四百个对象),而 `loadItems() async throws -> [Item]` 是全量快照语义。套上去等于把一条调过的性能路径换掉,换来的只有形式统一 —— 而本步的验收标准恰恰是「现有两个 tab 行为不变」,改造它是唯一可能破坏该标准的动作。 |
+| 2026-10-02 | 不另造 `RuntimeRemoteRunningItem`,改为公开 `RunningProcess.init` | 本提案草拟过一个宿主侧的 `RunningItem` 实现。实现时发现没必要:`RunningProcess` 是纯数据结构、字段齐全(含 `platform`),公开它的 memberwise init 就够了。少一个平行类型,而且列、角标、排序、右键菜单全部直接复用。 |
+| 2026-10-02 | 门禁的分流判据落成 `RuntimeEngine.injectionTargetsRunOnThisMachine`,`nonisolated` | 读 `source` 而不做探测:这是「连接通向哪里」的属性,发任何东西之前就已知。`local` / `remote`(XPC 只能到自己 bundle 里的服务)/ `localSocket`(本机已注入的进程,含模拟器)为本机;`bonjour` / `directTCP` 跨网络接口 —— **即使走 loopback 也算远端**,因为进程表归对端所有。`nonisolated` 是必要的:UI 要在显示任何东西之前选分支,让它 `await` 引擎就把这个属性存在的意义(省掉那次往返)又抵消了。switch 不带 `default`,新增 source case 会编译失败,配 8 个测试写明新 case 该落在哪一边。 |
+| 2026-10-02 | SIP 那条待决项定了:统一成 disable + tooltip,**且只在「目标是本机进程」那一支生效** | 之前列为待决。按用户定的原则(「动作不可用就是控件不可用」)统一是显然的,但查实现时发现一个更实质的问题:**原来的 SIP 检查无条件拦在点击处**,所以选中一台 iOS 设备引擎时也会弹「请关闭 SIP」—— 而那台设备自己做注入,与本机 SIP 状态毫无关系。所以 SIP 不是按钮整体的门,而是本机那一支的门。 |
+| 2026-10-02 | 镜像引擎按提案所述短路成占位,不发探测 | `isMirrored` 问的是引擎管理器而不是引擎本身:引擎「怎么来的」是管理器掌握的事实,`RuntimeSource` 表达不了 —— 镜像引擎的 `directTCP` source 和直连的长得一样。 |

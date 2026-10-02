@@ -88,6 +88,43 @@ extension RuntimeEngine {
     }
 }
 
+// MARK: - Where this engine's targets live
+
+extension RuntimeEngine {
+    /// Whether the processes this engine could attach to run on the machine
+    /// Runtime Viewer itself is running on.
+    ///
+    /// This is the fork in the attach flow, and the reason it exists is that the
+    /// host already has a working, instant answer for its own machine. Routing
+    /// that case through ``injectionAvailability()`` and ``processList()`` for
+    /// the sake of one code path would add a round trip, a spinner and a new
+    /// failure mode to a picker that currently opens filled — and the round trip
+    /// would be this process asking itself.
+    ///
+    /// Reading it off the source rather than probing is deliberate: it is a
+    /// property of *where the connection goes*, known before anything is sent.
+    ///
+    /// - `local` is this process.
+    /// - `remote` is XPC, which only reaches a service inside this app's own
+    ///   bundle — today the Mac Catalyst helper.
+    /// - `localSocket` is a process on this machine that Runtime Viewer has
+    ///   already injected, the iOS Simulator included.
+    /// - `bonjour` and `directTCP` cross a network interface. Even when that
+    ///   interface is loopback, the peer decides what its process table is, so
+    ///   the host must ask rather than assume.
+    /// `nonisolated`, like the `source` it reads: the attach flow has to pick a branch
+    /// before it can show anything, and making the UI `await` the engine to learn which
+    /// path it is on would reintroduce exactly the latency this property exists to avoid.
+    public nonisolated var injectionTargetsRunOnThisMachine: Bool {
+        switch source {
+        case .local, .remote, .localSocket:
+            return true
+        case .bonjour, .directTCP:
+            return false
+        }
+    }
+}
+
 // MARK: - Callers
 
 extension RuntimeEngine {
