@@ -22,26 +22,11 @@ final class BatchExportingCoordinator: SceneCoordinator<ExportingRoute, Exportin
     private func loadAvailableImages() {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let nodes = documentState.runtimeEngine.imageNodes
-            exportingState.availableImages = Self.flattenImageNodes(nodes)
-        }
-    }
-
-    private static func flattenImageNodes(_ nodes: [RuntimeImageNode]) -> [BatchExportingImage] {
-        var result: [BatchExportingImage] = []
-        for root in nodes {
-            collect(root, group: root.name, into: &result)
-        }
-        return result
-    }
-
-    private static func collect(_ node: RuntimeImageNode, group: String, into result: inout [BatchExportingImage]) {
-        if node.isLeaf {
-            result.append(.init(path: node.path, name: node.name, group: group))
-        } else {
-            for child in node.children {
-                collect(child, group: group, into: &result)
+            let imageTree = BatchExportingImageTree(imageRootNodes: documentState.runtimeEngine.imageNodes)
+            exportingState.availableImages = imageTree.imageNodes.compactMap { imageNode in
+                imageNode.imagePath.map { BatchExportingImage(path: $0, name: imageNode.name) }
             }
+            exportingState.imageTree = imageTree
         }
     }
 
