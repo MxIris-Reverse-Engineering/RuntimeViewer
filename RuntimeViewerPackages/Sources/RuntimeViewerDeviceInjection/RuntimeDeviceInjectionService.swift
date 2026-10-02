@@ -129,12 +129,13 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
 
     // MARK: - Error mapping
 
-    /// Maps MachInjector's published codes onto the two outcomes a caller acts
-    /// on differently, passing anything else through verbatim.
+    /// Maps MachInjector's published codes onto the outcomes a caller acts on
+    /// differently, passing anything else through verbatim.
     ///
-    /// Only these two are singled out because only these two have distinct
-    /// remedies: no task port means the entitlements or the target's uid, while
-    /// a refused image means code signing and will not change on a retry.
+    /// Only these are singled out, because only these have distinct remedies:
+    /// no task port means the entitlements or the target's uid, a refused image
+    /// means code signing and will not change on a retry, and a timeout means
+    /// the target was almost certainly not running.
     private func result(for error: NSError) -> RuntimeProcessInjectionResult {
         guard error.domain == MachInjector.errorDomain else {
             return .failed(code: error.code, reason: error.localizedDescription)
@@ -150,6 +151,10 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
             return .taskPortUnavailable(reason: remoteMessage ?? error.localizedDescription)
         case MachInjector.Error.targetRefusedToLoadDylib.rawValue:
             return .targetRefusedPayload(reason: remoteMessage ?? error.localizedDescription)
+        case MachInjector.Error.timedOut.rawValue:
+            // The code stays `MachInjector`'s; only the wording is ours, and it
+            // lives outside this file's platform gate so a test can pin it.
+            return .failed(code: error.code, reason: RuntimeDeviceInjectionDiagnosis.timedOutReason)
         default:
             return .failed(code: error.code, reason: remoteMessage ?? error.localizedDescription)
         }
