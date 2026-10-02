@@ -19,6 +19,10 @@ struct RuntimeDeviceInjectionDiagnosisTests {
         // It must not read as the bare restatement it replaced.
         #expect(reason != "injection timed out")
         #expect(reason.count > 100)
+        // And it must not claim the payload loaded. A timeout means the target
+        // reported nothing, so whether it loaded is precisely what is unknown —
+        // measured on `backboardd`, where it had not.
+        #expect(reason.lowercased().contains("unknown"))
     }
 
     /// A daemon is never suspended, so the suspension explanation would be a

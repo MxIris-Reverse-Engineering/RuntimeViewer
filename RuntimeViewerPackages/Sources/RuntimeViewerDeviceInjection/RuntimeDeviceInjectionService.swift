@@ -112,12 +112,38 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
         }
 
         do {
-            try MachInjector.inject(pid: processIdentifier, dylibPath: stagedURL.path)
+            let injection = try await MachInjectorAsync.inject(
+                pid: processIdentifier,
+                dylibPath: stagedURL.path,
+                timeout: Self.verdictTimeout,
+            )
+            guard injection.success else {
+                return result(for: injection.error as NSError?, remoteMessage: injection.remoteErrorMessage)
+            }
             return .injected
         } catch let error as NSError {
-            return result(for: error)
+            return result(for: error, remoteMessage: error.userInfo[MachInjector.remoteErrorMessageKey] as? String)
         }
     }
+
+    /// How long to wait for the target to report what its `dlopen` did.
+    ///
+    /// The asynchronous injector waits on a mach port in the target rather than
+    /// polling a fixed budget, so this is a real deadline rather than a race:
+    /// the verdict arrives when it arrives, and only a target that never
+    /// produces one costs the whole wait.
+    ///
+    /// Generous on purpose. The payload is an 81 MB image and `dlopen` of it is
+    /// not instant, and the failure this exists to catch — measured on
+    /// `backboardd` — is a load that reports *nothing*. The synchronous path
+    /// polled for a verdict and reported success when none arrived in time,
+    /// which is how an injection that never loaded anything was reported to the
+    /// host as having worked.
+    ///
+    /// The cost is paid only by targets that never report: a suspended app now
+    /// takes this long to say so, where it used to say it in 210 ms and say it
+    /// about the wrong thing.
+    private static let verdictTimeout: TimeInterval = 20
 
     private func isAlive(processIdentifier: pid_t) -> Bool {
         // Signal 0 performs the permission and existence checks and delivers
@@ -136,15 +162,22 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
     /// no task port means the entitlements or the target's uid, a refused image
     /// means code signing and will not change on a retry, and a timeout means
     /// the target was almost certainly not running.
-    private func result(for error: NSError) -> RuntimeProcessInjectionResult {
-        guard error.domain == MachInjector.errorDomain else {
+    private func result(for error: NSError?, remoteMessage: String?) -> RuntimeProcessInjectionResult {
+        guard let error else {
+            // A result that is neither a success nor an error. Reported rather
+            // than mapped to anything, because inventing a cause here is what
+            // the synchronous path did and why `backboardd` looked like it
+            // worked.
+            return .failed(
+                code: 0,
+                reason: remoteMessage ?? "The injector reported neither success nor a reason.",
+            )
+        }
+        // Both dlopen paths publish the same codes with the same meanings —
+        // their own headers say so — so one mapping serves both domains.
+        guard error.domain == MachInjector.errorDomain || error.domain == MachInjectorAsync.errorDomain else {
             return .failed(code: error.code, reason: error.localizedDescription)
         }
-
-        // The target's own `dlerror` text, when the injector captured it. It is
-        // the only thing that distinguishes a library-validation refusal from a
-        // sandbox one, so it is worth surfacing rather than summarizing.
-        let remoteMessage = error.userInfo[MachInjector.remoteErrorMessageKey] as? String
 
         switch error.code {
         case MachInjector.Error.taskPortUnavailable.rawValue:

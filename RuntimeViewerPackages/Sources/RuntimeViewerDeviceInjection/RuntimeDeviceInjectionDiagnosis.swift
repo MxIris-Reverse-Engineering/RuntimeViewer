@@ -10,14 +10,14 @@ import Foundation
 public enum RuntimeDeviceInjectionDiagnosis {
     /// What MachInjector's own words — "injection timed out" — leave out.
     ///
-    /// The injector creates a mach thread in the target and waits a fixed budget
-    /// for it to report that it spawned a pthread. A suspended process has no
-    /// thread scheduled, so that report never comes however long the budget is:
-    /// measured on iOS apps sitting in jetsam band 0 with near-zero CPU, which
-    /// is the ordinary state of a backgrounded app. Rewording it rather than
-    /// widening the budget is deliberate — the budget is not the problem.
+    /// The injector creates a mach thread in the target and waits for it to
+    /// report what its `dlopen` did. A suspended process has no thread
+    /// scheduled, so that report never comes however long the wait is: measured
+    /// on iOS apps sitting in jetsam band 0 with near-zero CPU, which is the
+    /// ordinary state of a backgrounded app. Widening the wait does not help,
+    /// which is why the wording was fixed instead.
     public static let timedOutReason = """
-        The payload was loaded into the process, but the thread that loads it never reported back.
+        The thread that loads the payload never reported what happened, so whether the payload loaded at all is unknown.
 
         On a device this almost always means the target was not running. iOS suspends an app that is not in the foreground, and a suspended process has no thread scheduled to run the injected code in — the wait cannot succeed however long it is. Bring the target to the foreground on the device and try again.
 
