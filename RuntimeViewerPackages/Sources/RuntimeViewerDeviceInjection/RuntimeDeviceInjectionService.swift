@@ -87,7 +87,10 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
         try RuntimeDeviceProcessEnumerator.processList(injectorUserIdentifier: getuid())
     }
 
-    public func inject(intoProcessWithIdentifier processIdentifier: pid_t) async -> RuntimeProcessInjectionResult {
+    public func inject(
+        intoProcessWithIdentifier processIdentifier: pid_t,
+        rendezvous: RuntimePayloadRendezvous?,
+    ) async -> RuntimeProcessInjectionResult {
         // Confirm the target is alive first. Without this a target that exited
         // between being listed and being picked fails with the same code as a
         // permission problem, and that ambiguity has already cost one wrong

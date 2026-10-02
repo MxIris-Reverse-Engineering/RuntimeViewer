@@ -33,5 +33,14 @@ public protocol RuntimeInjectionService: Sendable {
     /// failure it was, and that distinction does not survive being flattened
     /// into an error. Implementations should verify the target is alive before
     /// concluding anything about permissions.
-    func inject(intoProcessWithIdentifier processIdentifier: pid_t) async -> RuntimeProcessInjectionResult
+    ///
+    /// - Parameter rendezvous: Where the payload should report in, to be handed
+    ///   to it along with the payload itself. An implementation whose payload
+    ///   can advertise itself may ignore it; one injecting into a process on a
+    ///   real iOS device cannot, because the target's sandbox denies the
+    ///   listener. See ``RuntimePayloadRendezvous``.
+    func inject(
+        intoProcessWithIdentifier processIdentifier: pid_t,
+        rendezvous: RuntimePayloadRendezvous?,
+    ) async -> RuntimeProcessInjectionResult
 }

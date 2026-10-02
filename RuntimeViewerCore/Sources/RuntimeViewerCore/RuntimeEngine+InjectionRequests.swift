@@ -68,11 +68,22 @@ extension RuntimeEngine {
     /// Loads the payload into a process on the machine this engine belongs to.
     ///
     /// The response reports how it ended; it does not carry the injected
-    /// engine's identity. The injected server announces itself over Bonjour and
-    /// the host picks it up there, so an injection stays the same shape to the
-    /// host however it was performed.
+    /// engine's identity. The host learns that from the connection the payload
+    /// makes — by claim token when it was given a rendezvous, and off the
+    /// Bonjour advertisement when it was not — so an injection stays the same
+    /// shape to the host however it was performed.
     struct InjectIntoProcessRequest: RuntimeEngineRequest {
         let processIdentifier: pid_t
+
+        /// Where the payload should report in, and as what.
+        ///
+        /// Optional, and the absence is a real case rather than a default: it is
+        /// what the simulator path sends, where the payload advertising itself
+        /// works and is already verified. It is also the compatibility point in
+        /// both directions — an injector built before this sends no such key and
+        /// a peer built before this ignores one it does not know, so either
+        /// mixture falls back to advertising instead of failing.
+        let rendezvous: RuntimePayloadRendezvous?
 
         static var commandName: String { CommandNames.injectIntoProcess.commandName }
 
@@ -83,7 +94,10 @@ extension RuntimeEngine {
                     reason: "No injection service is registered in the process that owns this engine.",
                 )
             }
-            return await injectionService.inject(intoProcessWithIdentifier: processIdentifier)
+            return await injectionService.inject(
+                intoProcessWithIdentifier: processIdentifier,
+                rendezvous: rendezvous,
+            )
         }
     }
 }
@@ -161,7 +175,22 @@ extension RuntimeEngine {
     /// request not arriving, the result is the injection itself ending one way
     /// or another. Both reach the user, but only the second has a remedy worth
     /// naming.
-    public func inject(intoProcessWithIdentifier processIdentifier: pid_t) async throws -> RuntimeProcessInjectionResult {
-        try await dispatch(InjectIntoProcessRequest(processIdentifier: processIdentifier))
+    ///
+    /// - Parameter rendezvous: Where the payload should connect back to, and the
+    ///   token it should present. `nil` leaves the payload advertising itself
+    ///   over Bonjour — see ``RuntimePayloadRendezvous`` for why a device cannot
+    ///   rely on that. Deliberately **not** defaulted: a caller that forgets it
+    ///   would get the path that silently does nothing on most device targets,
+    ///   so the compiler asks instead.
+    public func inject(
+        intoProcessWithIdentifier processIdentifier: pid_t,
+        rendezvous: RuntimePayloadRendezvous?,
+    ) async throws -> RuntimeProcessInjectionResult {
+        try await dispatch(
+            InjectIntoProcessRequest(
+                processIdentifier: processIdentifier,
+                rendezvous: rendezvous,
+            )
+        )
     }
 }

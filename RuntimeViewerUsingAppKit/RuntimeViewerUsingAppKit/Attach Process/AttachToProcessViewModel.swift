@@ -144,7 +144,13 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
             throw AttachFailure.deviceHasNoIdentifier(engineName: runtimeEngine.source.description)
         }
 
-        let result = try await runtimeEngine.inject(intoProcessWithIdentifier: target.processIdentifier)
+        // No rendezvous yet, so the payload keeps advertising itself — today's
+        // behaviour, and the only one that works for the simulator. The device
+        // half of this is what the host-side listener replaces.
+        let result = try await runtimeEngine.inject(
+            intoProcessWithIdentifier: target.processIdentifier,
+            rendezvous: nil,
+        )
         guard result.isInjected else {
             throw AttachFailure.injectionRefused(result)
         }

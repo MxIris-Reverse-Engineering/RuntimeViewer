@@ -120,11 +120,97 @@ struct InjectionCommandWireFormatTests {
     /// Not routed through `roundTrip(_:)`: the request type is not `Equatable`,
     /// and giving it a conformance only tests could use would be the test
     /// shaping the API.
-    @Test("InjectIntoProcessRequest carries its pid across the wire")
+    @Test("InjectIntoProcessRequest carries its pid and rendezvous across the wire")
     func injectRequestRoundTrip() throws {
-        let encoded = try JSONEncoder().encode(RuntimeEngine.InjectIntoProcessRequest(processIdentifier: 31337))
+        let rendezvous = RuntimePayloadRendezvous(
+            hostAddress: "192.168.64.1",
+            hostPort: 51234,
+            claimToken: "06A9F1C2-1C1B-4A9E-9C2E-7E6A2F0D3B41",
+        )
+        let encoded = try JSONEncoder().encode(
+            RuntimeEngine.InjectIntoProcessRequest(processIdentifier: 31337, rendezvous: rendezvous)
+        )
         let decoded = try JSONDecoder().decode(RuntimeEngine.InjectIntoProcessRequest.self, from: encoded)
         #expect(decoded.processIdentifier == 31337)
+        #expect(decoded.rendezvous == rendezvous)
+    }
+
+    // MARK: - The rendezvous
+
+    @Test("RuntimePayloadRendezvous survives a round trip")
+    func rendezvousRoundTrip() throws {
+        let rendezvous = RuntimePayloadRendezvous(
+            hostAddress: "192.168.64.1",
+            hostPort: 51234,
+            claimToken: RuntimePayloadRendezvous.makeClaimToken(),
+        )
+        #expect(try roundTrip(rendezvous) == rendezvous)
+    }
+
+    /// The encoded keys are a contract between two *different builds*: the host
+    /// writes this file and a payload compiled separately — on a device, from a
+    /// separately installed app — reads it. Renaming a property would rename the
+    /// key with it and the payload would decode nothing, so the names are pinned
+    /// here rather than left to whatever the synthesized coder happens to emit.
+    @Test("The rendezvous encodes under the documented keys")
+    func rendezvousEncodedKeys() throws {
+        let encoded = try JSONEncoder().encode(
+            RuntimePayloadRendezvous(hostAddress: "10.0.0.2", hostPort: 9, claimToken: "token")
+        )
+        let fields = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(Set(fields.keys) == ["hostAddress", "hostPort", "claimToken"])
+        #expect(fields["hostAddress"] as? String == "10.0.0.2")
+        #expect(fields["hostPort"] as? Int == 9)
+        #expect(fields["claimToken"] as? String == "token")
+    }
+
+    /// The compatibility path, and the one worth a test of its own: an injector
+    /// built before the rendezvous existed sends a request with no such key.
+    /// That has to decode as "no rendezvous" — the payload then advertises
+    /// itself, which is what it does today — rather than failing the decode and
+    /// turning an older peer into a broken one.
+    @Test("A request without the rendezvous key decodes as having none")
+    func injectRequestFromAnOlderPeer() throws {
+        let legacyEncoding = Data(#"{"processIdentifier":4321}"#.utf8)
+        let decoded = try JSONDecoder().decode(RuntimeEngine.InjectIntoProcessRequest.self, from: legacyEncoding)
+        #expect(decoded.processIdentifier == 4321)
+        #expect(decoded.rendezvous == nil)
+    }
+
+    /// The other direction of the same compatibility story. A peer built before
+    /// this change decodes by key, so an absent key costs nothing — but a key
+    /// present and null would reach the simulator's own payload too, and the
+    /// contract is cleaner if "no rendezvous" is literally no key.
+    @Test("A nil rendezvous is omitted from the encoding, not encoded as null")
+    func nilRendezvousIsOmitted() throws {
+        let encoded = try JSONEncoder().encode(
+            RuntimeEngine.InjectIntoProcessRequest(processIdentifier: 4321, rendezvous: nil)
+        )
+        let fields = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(fields["rendezvous"] == nil)
+        #expect(Set(fields.keys) == ["processIdentifier"])
+    }
+
+    /// `isUsable` is what the payload checks before abandoning the advertising
+    /// path. Reading a half-filled rendezvous as usable is the one failure with
+    /// no symptom: the payload would neither advertise nor connect, and the only
+    /// evidence would be a target that goes quiet.
+    @Test("A rendezvous missing any of its three parts is not usable")
+    func rendezvousUsability() {
+        let complete = RuntimePayloadRendezvous(hostAddress: "10.0.0.2", hostPort: 51234, claimToken: "token")
+        #expect(complete.isUsable)
+        #expect(!RuntimePayloadRendezvous(hostAddress: "", hostPort: 51234, claimToken: "token").isUsable)
+        #expect(!RuntimePayloadRendezvous(hostAddress: "10.0.0.2", hostPort: 0, claimToken: "token").isUsable)
+        #expect(!RuntimePayloadRendezvous(hostAddress: "10.0.0.2", hostPort: 51234, claimToken: "").isUsable)
+    }
+
+    /// One token per injection, so two injections in flight at once cannot have
+    /// the first arrival claimed by the wrong request.
+    @Test("Each claim token is new")
+    func claimTokensAreDistinct() {
+        let tokens = (0 ..< 64).map { _ in RuntimePayloadRendezvous.makeClaimToken() }
+        #expect(Set(tokens).count == tokens.count)
+        #expect(tokens.allSatisfy { !$0.isEmpty })
     }
 
     // MARK: - Convenience predicates
