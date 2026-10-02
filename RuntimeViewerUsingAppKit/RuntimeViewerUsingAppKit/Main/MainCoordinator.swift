@@ -85,8 +85,21 @@ final class MainCoordinator: SceneCoordinator<MainRoute, MainTransition>, LateRe
             viewController.setupBindings(for: viewModel)
             return .popover(viewController, relativeTo: sender.bounds, of: sender, preferredEdge: .maxY, behavior: .transient)
         case .attachToProcess:
-            let viewController = AttachToProcessViewController()
-            let viewModel = AttachToProcessViewModel(documentState: documentState, router: self)
+            // Which machine's processes the sheet offers follows the selected engine. The
+            // host case is the one that already worked and keeps enumerating locally; a
+            // device lists its own processes, and must not be shown this Mac's.
+            let runtimeEngine = documentState.runtimeEngine
+            let target: AttachToProcessViewController.Target = runtimeEngine.injectionTargetsRunOnThisMachine
+                ? .hostProcesses
+                : .remoteProcesses(RemoteProcessItemSource(runtimeEngine: runtimeEngine))
+            let viewController = AttachToProcessViewController(target: target)
+            // The same engine reaches both halves, so the list the user sees and the
+            // machine the injection goes to cannot drift apart.
+            let viewModel = AttachToProcessViewModel(
+                attachmentEngine: runtimeEngine,
+                documentState: documentState,
+                router: self
+            )
             viewController.setupBindings(for: viewModel)
             viewController.preferredContentSize = .init(width: 800, height: 600)
             return .presentOnRoot(viewController, mode: .asSheet)

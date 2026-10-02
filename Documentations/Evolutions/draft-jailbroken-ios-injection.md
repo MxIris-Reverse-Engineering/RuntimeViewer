@@ -781,7 +781,7 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
    `Documentations/Evolutions/`（已有 0001、0002），这是公开 API 变更，**要在那边单独走一份
    提案**后合入并发版。验证标准：RuntimeViewer 侧两个 tab 除「特殊进程变灰」外行为不变（它的
    `PickerStructureTests` / `ListRowLayoutTests` 继续全绿），并给特殊进程规则补单测。
-6. **宿主侧 attach 路径**：先按「目标是不是宿主进程」分流——是则原样走今天的本机分支、**一次
+6. **宿主侧 attach 路径** ✅ **已实现**(门禁 + 选择器整体切换 + 远端 attach)。先按「目标是不是宿主进程」分流——是则原样走今天的本机分支、**一次
    RPC 都不发**；不是才 `attachToRemoteProcess` + `injectionCapability` + `processList`（远端清单
    只来自远端，不混入本机进程）。镜像引擎短路成占位，不实现。按项目规矩给新 ViewModel 补
    `RuntimeViewerApplicationTests` 契约测试。
@@ -850,3 +850,10 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 | 2026-10-02 | 门禁的分流判据落成 `RuntimeEngine.injectionTargetsRunOnThisMachine`,`nonisolated` | 读 `source` 而不做探测:这是「连接通向哪里」的属性,发任何东西之前就已知。`local` / `remote`(XPC 只能到自己 bundle 里的服务)/ `localSocket`(本机已注入的进程,含模拟器)为本机;`bonjour` / `directTCP` 跨网络接口 —— **即使走 loopback 也算远端**,因为进程表归对端所有。`nonisolated` 是必要的:UI 要在显示任何东西之前选分支,让它 `await` 引擎就把这个属性存在的意义(省掉那次往返)又抵消了。switch 不带 `default`,新增 source case 会编译失败,配 8 个测试写明新 case 该落在哪一边。 |
 | 2026-10-02 | SIP 那条待决项定了:统一成 disable + tooltip,**且只在「目标是本机进程」那一支生效** | 之前列为待决。按用户定的原则(「动作不可用就是控件不可用」)统一是显然的,但查实现时发现一个更实质的问题:**原来的 SIP 检查无条件拦在点击处**,所以选中一台 iOS 设备引擎时也会弹「请关闭 SIP」—— 而那台设备自己做注入,与本机 SIP 状态毫无关系。所以 SIP 不是按钮整体的门,而是本机那一支的门。 |
 | 2026-10-02 | 镜像引擎按提案所述短路成占位,不发探测 | `isMirrored` 问的是引擎管理器而不是引擎本身:引擎「怎么来的」是管理器掌握的事实,`RuntimeSource` 表达不了 —— 镜像引擎的 `directTCP` source 和直连的长得一样。 |
+| 2026-10-02 | RunningApplicationKit 依赖临时钉到分支,**必须换回去** | 用户定的:先把依赖换成 `feature/injected-item-source` 分支跑通,合并后再换回版本号。分支 pin 不可复现,**绝不能进发布归档** —— `Package.swift` 里那条依赖上留了注明这件事的注释。连带:上游分支已推到 `origin`(SwiftPM 只能从远端解析分支)。 |
+| 2026-10-02 | 真机注入后怎么被认领:查清了,复用模拟器那条路 | 上一轮报告里列为待查项。宿主用 `{deviceID}-{pid}` 匹配注入后冒出来的 Bonjour 端点,所以注入**之前**就得知道设备 ID。唯一诚实的来源是 `engine.bookmarkScope` 的 `.identified(.bonjour(deviceID:…))` —— 它把设备 ID 当成可选值携带。**不能用 `hostInfo.hostID`**:对端不发布该键时它会回落到 instance ID 甚至显示名,拿那个去匹配会把本次请求配到另一个进程上。设备 ID 缺失时宁可报错也不猜。注入后等待直接复用 `awaitInjectedBonjourEngine`:真机 payload 和模拟器 payload 走的是同一段代码(`RuntimeViewerServer.swift` 里非 macOS 那一支),广播方式完全一致,所以不需要新机制。 |
+| 2026-10-02 | 远端条目的可注入性存在宿主侧,未知 pid 答「不可注入」 | picker 的行类型(`RunningProcess`)描述一个进程,不描述对它的判断,所以判断由 `RemoteProcessItemSource` 在取清单时记下、再经 `shouldSelect` 答回去(同时变灰)。未知 pid 答 `false`:既覆盖清单到达前那一小段,也是安全方向 —— 给出一个对端没有背书的目标,结果是注入失败而不是一个灰行。 |
+| 2026-10-02 | 远端行有三个字段刻意留空,`platform` 整个不配置 | 跨连接取不到图标;对端不报告内核实际运行的架构;沙盒状态也不报告 —— `isSandboxed: false` 渲染出来是**没有**沙盒角标,而那个角标只在为真时出现,所以这正是「未报告」的诚实呈现。`platform` 字段连配置都不加:一台设备上每个进程平台相同,那一列区分不了任何东西(它存在的意义是在 Mac 上区分模拟器进程与宿主进程)。 |
+| 2026-10-02 | 两处映射没有单测,如实记下 | `AttachToProcessViewModel` / `MainViewModel` / `RemoteProcessItemSource` 都住在 App target,而**这个 target 没有测试 bundle**(工程里唯一的测试 target 是 `RuntimeViewerSourceEditorBridgeTests`)。这是既有结构,不在本提案范围内改。因此落地步骤 6 原写的「补 `RuntimeViewerApplicationTests` 契约测试」在这里不适用 —— 真正可测的部分已经测了:门禁的分流判据在 `RuntimeViewerCoreTests`(8 例),选择器的两条可选性规则与数据源在上游仓库(14 例)。剩下的映射只能靠第 8 步端到端覆盖。 |
+| 2026-10-02 | sheet 把引擎**持住**,不在确认时重读 | 读自己写的代码时发现的一个窄口子:选择器用「打开 sheet 那一刻的引擎」列清单,而 ViewModel 原本在用户确认时才去读 `documentState.runtimeEngine`。两者可以不一致 —— 对端断开后被替换会在 sheet 打开期间换掉文档的引擎 —— 而用户挑的那个 pid **只在它被列出来的那台机器上有意义**。重读等于拿另一台机器进程表里的标识符去注入当前选中的引擎,正是本设计一再要避免的那类错误。改成由协调器把同一个引擎传给两半。 |
+| 2026-10-02 | 顺带在真实构建里验证了模拟器切片未受影响 | 为了拿一个干净的绿灯,把模拟器 payload 建出来暂存到 copy phase 期望的位置。产物是 `x86_64 arm64` —— 这比之前只用 `-showBuildSettings` 查解析值更硬地证明了 `ARCHS[sdk=iphoneos*]` 那条改动没有碰到模拟器与 Catalyst 切片。 |
