@@ -861,7 +861,7 @@ struct RuntimeLocalSocketInjectedAddressingTests {
             host: Self.loopback,
             port: port,
             identifier: "claim-token",
-            timeout: 5,
+            firstAttemptWindow: 5,
         )
         defer { payload.stop() }
         payload.setMessageHandler(requestType: EchoRequest.self) { request in
@@ -905,13 +905,54 @@ struct RuntimeLocalSocketInjectedAddressingTests {
                 host: "not-an-address",
                 port: Self.unusedPort(),
                 identifier: "claim-token",
-                timeout: 5,
+                firstAttemptWindow: 5,
             )
             Issue.record("Expected a malformed address to be rejected")
         } catch RuntimeLocalSocketError.invalidHostAddress(let host) {
             #expect(host == "not-an-address")
         }
         #expect(Date().timeIntervalSince(startTime) < 1)
+    }
+
+    /// The defect this exists to prevent, and the reason it matters more here
+    /// than anywhere else: an injected payload gets exactly one chance to run.
+    /// Its `__attribute__((constructor))` runs once, and a second `dlopen` of an
+    /// image already in the process returns the existing handle without running
+    /// anything — so a payload that gives up leaves that target permanently
+    /// unusable, while every later injection still reports success.
+    ///
+    /// Measured on a device: a target that had failed once then accepted
+    /// injection after injection, each reporting success, with nothing running
+    /// and nothing connecting, until the process itself was restarted.
+    @Test("A payload that finds nobody listening waits instead of giving up")
+    func payloadKeepsTryingWhenNobodyIsListeningYet() async throws {
+        let port = Self.unusedPort()
+
+        // No listener at all yet. The old behaviour threw here.
+        let payload = try await RuntimeLocalSocketClientConnection(
+            host: Self.loopback,
+            port: port,
+            identifier: "claim-token",
+            firstAttemptWindow: 1,
+        )
+        defer { payload.stop() }
+        payload.setMessageHandler(requestType: EchoRequest.self) { request in
+            EchoResponse(message: "payload received: \(request.message)")
+        }
+        #expect(!payload.state.isConnected, "Nothing is listening, so it cannot be connected")
+
+        // The host turns up late, which on a device is the ordinary case for
+        // anything that restarted.
+        let host = RuntimeLocalSocketServerConnection(bindAddress: Self.loopback, port: port)
+        try await host.start()
+        defer { host.stop() }
+
+        var response: EchoResponse?
+        for _ in 0 ..< 40 where response == nil {
+            try await Task.sleep(nanoseconds: 500_000_000)
+            response = try? await host.sendMessage(request: EchoRequest(message: "late"))
+        }
+        #expect(response?.message == "payload received: late")
     }
 
     /// What makes the host restarting survivable without injecting everything again. The
@@ -927,7 +968,7 @@ struct RuntimeLocalSocketInjectedAddressingTests {
             host: Self.loopback,
             port: port,
             identifier: "claim-token",
-            timeout: 5,
+            firstAttemptWindow: 5,
         )
         defer { payload.stop() }
         payload.setMessageHandler(requestType: EchoRequest.self) { request in

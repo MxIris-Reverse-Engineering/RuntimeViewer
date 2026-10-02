@@ -670,23 +670,36 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
     /// them over. The identifier it also hands over is the claim token, which
     /// this side only has to present.
     ///
-    /// Retries for `timeout` like the identifier initializer does, for the same
-    /// reason — the two ends come up independently, and here one of them is a
-    /// process on another machine.
+    /// **Never gives up.** If the first window of attempts fails it keeps trying
+    /// in the background rather than throwing, and this returns a connection
+    /// that is not connected yet.
+    ///
+    /// That is not caution, it is the only correct behaviour here: an injected
+    /// payload gets exactly one chance to run. It is started by its
+    /// `__attribute__((constructor))`, which dyld runs once, and a second
+    /// `dlopen` of an image already in the process returns the existing handle
+    /// without running anything. So a payload that gives up leaves the target
+    /// permanently unusable — measured on a device, where a target that had
+    /// failed once then accepted injection after injection, each reporting
+    /// success, while nothing ran and nothing connected.
+    ///
+    /// The first window exists only so that the common case — the host is
+    /// already listening, which it is, because it listens before injecting —
+    /// reports `.connected` to the caller instead of `.connecting`.
     ///
     /// - Parameters:
     ///   - host: The host's address, as reached from this machine.
     ///   - port: The port the host is listening on.
     ///   - identifier: The claim token to present; carried for diagnostics, and
     ///     not used to compute anything.
-    ///   - timeout: How long to keep retrying the first connection.
-    init(host: String, port: UInt16, identifier: String, timeout: TimeInterval = 10) async throws {
+    ///   - firstAttemptWindow: How long to keep trying before handing over to
+    ///     the background retry loop.
+    init(host: String, port: UInt16, identifier: String, firstAttemptWindow: TimeInterval = 10) async throws {
         self.identifier = identifier
         self.host = host
         self.port = port
 
         let startTime = Date()
-        var lastError: any Error
 
         repeat {
             do {
@@ -697,16 +710,18 @@ final class RuntimeLocalSocketClientConnection: RuntimeForwardingConnection, @un
                 try connection.start()
                 stateSubject.send(.connected)
                 return
+            } catch RuntimeLocalSocketError.invalidHostAddress(let host) {
+                // The one failure retrying cannot fix: a string that is not an
+                // address will not become one. Thrown, so the payload falls back
+                // to advertising itself instead of dialling nothing forever.
+                throw RuntimeLocalSocketError.invalidHostAddress(host)
             } catch {
-                lastError = error
-                // A malformed address will never become a reachable one, so it
-                // is reported at once rather than retried for ten seconds.
-                if case RuntimeLocalSocketError.invalidHostAddress = error { throw error }
                 try await Task.sleep(nanoseconds: 100_000_000) // 100ms
             }
-        } while Date().timeIntervalSince(startTime) < timeout
+        } while Date().timeIntervalSince(startTime) < firstAttemptWindow
 
-        throw lastError
+        #log(.info, "No answer on \(host, privacy: .public):\(port, privacy: .public) yet; retrying in the background rather than giving up")
+        startReconnecting()
     }
 
     // MARK: - Message Handler Replay
