@@ -53,6 +53,63 @@ struct InjectedDeviceEngineTests {
         #expect(first != second)
     }
 
+    // MARK: - Whose process it is
+
+    private static let deviceHostInfo = RuntimeHostInfo(
+        hostID: "20DAFF33-83CA-4C2F-AD0E-809B05501803",
+        hostName: "jhs-iphone",
+    )
+
+    private func engine(name: String = "searchpartyd", rendezvous: RuntimePayloadRendezvous? = nil) -> RuntimeEngine {
+        RuntimeEngineManager.makeInjectedDeviceEngine(
+            name: name,
+            rendezvous: rendezvous ?? self.rendezvous,
+            deviceHostInfo: Self.deviceHostInfo,
+            deviceIdentifier: Self.deviceHostInfo.hostID,
+        )
+    }
+
+    /// The engine list is grouped by host identity, and this engine is built on
+    /// this Mac for a process that is not on it. Measured: without the device's
+    /// identity it inherited this machine's and `searchpartyd` was listed under
+    /// "JH's Mac Studio Ultra", beside the Mac's own processes.
+    @Test("An injected device process belongs to the device, not to this Mac")
+    func engineCarriesTheDevicesIdentity() {
+        let engine = engine()
+        #expect(engine.hostInfo.hostID == Self.deviceHostInfo.hostID)
+        #expect(engine.hostInfo.hostName == "jhs-iphone")
+        // The default `RuntimeEngine` host identity is this machine's, which is
+        // exactly what this engine used to inherit.
+        #expect(engine.hostInfo.hostID != RuntimeNetworkBonjour.localInstanceID)
+    }
+
+    /// Bookmarks are filed by scope, and the claim token changes on every
+    /// injection. Scoping by it would quietly lose a process's bookmarks each
+    /// time it was re-injected — so the scope is the process on the device,
+    /// which is also exactly what the same process gets when its payload
+    /// advertises itself instead.
+    @Test("Its bookmark scope survives a re-injection")
+    func bookmarkScopeIsStableAcrossInjections() {
+        let first = engine()
+        let second = engine(rendezvous: RuntimePayloadRendezvous(
+            hostAddress: "169.254.153.160",
+            hostPort: 59000,
+            claimToken: RuntimePayloadRendezvous.makeClaimToken(),
+        ))
+        #expect(first.bookmarkScope == second.bookmarkScope)
+        #expect(first.bookmarkScope == .identified(.bonjour(
+            deviceID: Self.deviceHostInfo.hostID,
+            processName: "searchpartyd",
+            role: .client,
+        )))
+    }
+
+    /// Two processes on one device are two entries, not one.
+    @Test("Two processes on the same device keep separate scopes")
+    func twoProcessesOnOneDeviceStayApart() {
+        #expect(engine(name: "searchpartyd").bookmarkScope != engine(name: "dasd").bookmarkScope)
+    }
+
     // MARK: - What the user is told
 
     /// The message this case exists for. Before the device path had one of its

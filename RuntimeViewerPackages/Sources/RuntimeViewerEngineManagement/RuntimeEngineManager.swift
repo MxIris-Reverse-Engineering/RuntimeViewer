@@ -724,22 +724,65 @@ public final class RuntimeEngineManager {
     /// afterwards would race the payload's first attempt — survivably, since it
     /// retries, but every retry is half a second of a user watching nothing
     /// happen.
+    ///
+    /// - Parameters:
+    ///   - deviceHostInfo: The identity of the device being injected, taken from
+    ///     the engine the injection was requested through. Passed in rather than
+    ///     defaulted, because the default is *this machine's* identity and the
+    ///     engine list is grouped by it — an injected device process would
+    ///     otherwise be listed under the Mac, beside its own local processes.
+    ///   - deviceIdentifier: That device's identifier, for the bookmark scope.
+    ///     Gives a process the same stable identity whichever way its payload
+    ///     reported in, so bookmarks survive a re-injection.
     @discardableResult
     public func launchInjectedDeviceEngine(
         name: String,
         rendezvous: RuntimePayloadRendezvous,
+        deviceHostInfo: RuntimeHostInfo,
+        deviceIdentifier: String,
     ) async throws -> RuntimeEngine {
         let runtimeSource = Self.injectedDeviceSource(name: name, rendezvous: rendezvous)
         #log(
             .info,
             "Listening for an injected device payload for \(name, privacy: .public) on \(rendezvous.hostAddress, privacy: .public):\(rendezvous.hostPort, privacy: .public)"
         )
-        let runtimeEngine = RuntimeEngine(source: runtimeSource)
+        let runtimeEngine = Self.makeInjectedDeviceEngine(
+            name: name,
+            rendezvous: rendezvous,
+            deviceHostInfo: deviceHostInfo,
+            deviceIdentifier: deviceIdentifier,
+        )
         try await runtimeEngine.connect()
         attachedRuntimeEngines.append(runtimeEngine)
         observeRuntimeEngineState(runtimeEngine)
         rebuildSections()
         return runtimeEngine
+    }
+
+    /// The engine ``launchInjectedDeviceEngine(name:rendezvous:deviceHostInfo:deviceIdentifier:)``
+    /// brings up, built but not connected.
+    ///
+    /// Separate so what it is built *with* can be held still by a test: both of
+    /// the identities below were wrong at first in ways nothing would have
+    /// caught — the engine list groups by host, and bookmarks are filed by scope,
+    /// and neither is visible until a device is attached.
+    static func makeInjectedDeviceEngine(
+        name: String,
+        rendezvous: RuntimePayloadRendezvous,
+        deviceHostInfo: RuntimeHostInfo,
+        deviceIdentifier: String,
+    ) -> RuntimeEngine {
+        RuntimeEngine(
+            source: injectedDeviceSource(name: name, rendezvous: rendezvous),
+            hostInfo: deviceHostInfo,
+            // Deliberately the same shape a payload that advertised itself gets:
+            // this *is* that process on that device, and which transport carried
+            // it back is not part of its identity. The claim token is not part of
+            // it either, for the opposite reason — it describes one injection
+            // rather than the process, so filing bookmarks under it would lose
+            // them on every re-injection.
+            bookmarkScope: .bonjour(deviceID: deviceIdentifier, processName: name, role: .client)
+        )
     }
 
     public func terminateInjectedDeviceEngine(name: String, rendezvous: RuntimePayloadRendezvous) {

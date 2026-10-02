@@ -154,7 +154,16 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         let rendezvous = try await RuntimePayloadRendezvous.reachingThisProcess(from: runtimeEngine)
         // Listening first: the payload dials as it starts up, and a listener brought up
         // afterwards would cost the user a retry interval of watching nothing happen.
-        try await runtimeEngineManager.launchInjectedDeviceEngine(name: target.name, rendezvous: rendezvous)
+        //
+        // The device's identity goes with it. Without that the engine inherits this
+        // machine's, and the engine list — which groups by host — files a process that
+        // lives on a phone under the Mac, next to the Mac's own.
+        try await runtimeEngineManager.launchInjectedDeviceEngine(
+            name: target.name,
+            rendezvous: rendezvous,
+            deviceHostInfo: runtimeEngine.hostInfo,
+            deviceIdentifier: deviceIdentifier,
+        )
 
         do {
             let result = try await runtimeEngine.inject(
