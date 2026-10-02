@@ -18,6 +18,7 @@
 - [`CommunicationAndEngineArchitecture.md`](CommunicationAndEngineArchitecture.md) —— `RuntimeViewerCommunication` 的连接实现，以及 `RuntimeEngineManager` / `ProxyServer` 的整体架构。
 - [`EngineMirroringWalkthrough.md`](EngineMirroringWalkthrough.md) —— 跨主机 RuntimeEngine 共享系统的只读走读：四类 engine 集合如何拼合、Bonjour 如何建立管理通道、runtime 数据如何流经 proxy 层。读 `RuntimeEngineManager.swift`（`RuntimeViewerEngineManagement`）等源码前建议先看。
 - [`SwiftObjectTreeWalkthrough.md`](SwiftObjectTreeWalkthrough.md) —— 侧栏里一个镜像的 Swift 条目是怎么来的：编译器何时把嵌套类型的父级记成扩展上下文、MachOSwiftSection 索引器把类型放进哪几张表、`RuntimeSwiftSection.allObjects()` 哪些扩展单独列出哪些并入类型节点、每个节点的 interface 与子节点从哪来，以及 C 导入类型的索引配置为何不能运行时切换。按 libswiftObservation / libswiftCoreAudio / AppKit / SwiftUI 逐个举实测例子。
+- [`DevicePayloadReverseConnection.md`](DevicePayloadReverseConnection.md) —— 真机注入的载荷为什么反着连，以及读 `RuntimeViewerServer.main()` / `RuntimeSource.injectedTCP` / `RuntimePayloadRendezvous` 之前该知道的三条实测事实：载荷继承的是**目标**的沙盒（多数 iOS daemon 被拒 `network-bind`）、身份不能在别人的进程里推导、宿主地址只有到那台设备的那条活连接知道。附「注了但没连上」的排查顺序与已知不支持的目标。
 - [`SparkleRelease.md`](SparkleRelease.md) —— 发布流程、EdDSA 密钥管理与应急处理手册。
 
 ## 愿景（Visions）
@@ -29,9 +30,11 @@
 
 - [`CommandLineInterface.md`](Guides/CommandLineInterface.md) —— `runtime-viewer-cli` 的命令一览、类型 / 镜像 / 来源的解析规则、必须遵守的契约（相对路径在客户端解析、Debug / Release 成对、host 空闲退出、退出码）、CLI host 的文件布局、App 优先与接管、attach 的前提与手动验证清单。
 
+- [`JailbrokenDeviceInjection.md`](Guides/JailbrokenDeviceInjection.md) —— 注入越狱 iOS 设备上的进程：三条 entitlement 前提、网络方向是「设备连 Mac」（防火墙与虚拟机网络模式的要求）、越狱版必须在设备屏幕上、能注什么不能注什么，以及每条错误文案该怎么读。
+
 ## 术语表
 
-- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、镜像引擎、合成扩展、并入。
+- [`Glossary.md`](Glossary.md) —— 项目自造的名字与易混淆的近义词对：CLI host、source selector、host takeover（App 优先）、helper daemon、Catalyst helper、rendezvous、认领令牌、反向连接、镜像引擎、合成扩展、并入。
 
 ## 提案（Evolutions）
 

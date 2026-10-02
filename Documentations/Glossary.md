@@ -11,6 +11,9 @@ Swift / Apple 框架词汇不收。跨项目通用的术语见全局术语表。
 | **helper daemon** | 经 `SMAppService` 安装的特权 daemon（`com.JH.RuntimeViewerService`），负责注入与列进程；与 CLI host 无关 | `AGENTS.md`「Helper Service」 |
 | **Catalyst helper** | 嵌在 App 包 `Contents/Applications/` 里的 Mac Catalyst 应用，提供 Catalyst 运行时引擎；与 CLI host 无关 | `AGENTS.md`「Embedded iOS-family products」 |
 | **本地运行时 service（local-runtime service）** | 随 App 打包在 `Contents/XPCServices/` 里的普通 XPC service `RuntimeViewerLocalRuntimeService.xpc`，「My Mac」引擎真正 `dlopen` 与索引镜像的进程。不经 Mach service，不经 helper daemon，launchd 在 App 自己的 bundle 里按需拉起；崩了只丢已加载的镜像，App 不受影响 | [draft-local-runtime-xpc-service](Evolutions/draft-local-runtime-xpc-service.md) |
+| **rendezvous（报到信息）** | 注入方交给载荷的一切：宿主的可达地址、端口，以及这次注入的认领令牌。以 `rendezvous.json` 写在暂存目录里载荷旁边，载荷启动时读。存在的理由是消除「载荷在别人的进程里推导自己是谁、该连到哪」这一整类问题 —— 两者在目标进程里都答不可靠。为 nil 表示「自己广播」，那是模拟器走的路 | [`DevicePayloadReverseConnection.md`](DevicePayloadReverseConnection.md)、[draft-device-payload-reverse-connection](Evolutions/draft-device-payload-reverse-connection.md) |
+| **认领令牌（claim token）** | rendezvous 里的一次性标识，载荷连上时原样呈上，宿主只认自己发出去的那一个。**它只做区分，不做认证** —— 和载荷同在一个世界可读的目录里，谁能读到它也就能加载旁边那个载荷。一次注入一个，所以两次并发注入不会把先到的交给错误的请求 | 同上 |
+| **反向连接（reverse connection）** | 真机上载荷不监听、改为主动连回宿主的那条路径。叫「反向」是相对 Bonjour 而言：那条是设备广播、宿主连进去 | 同上 |
 | **镜像引擎（mirrored engine）** | 经 Bonjour 对端转发过来的第三方引擎，在对端的引擎列表里出现、由本机的 proxy 层代理 | [`EngineMirroringWalkthrough.md`](EngineMirroringWalkthrough.md) |
 | **合成扩展（synthetic extension）** | MachOSwiftSection 索引器为「父级不是本镜像里的类型」的嵌套类型生成的 `ExtensionDefinition`：父级是扩展上下文、是别的镜像的类型、或只能经符号找到时，把类型包进 `.types`，按被扩展类型的键存进 `typeExtensionDefinitions`。源码里并没有这样一个扩展块，它只是给无处安放的嵌套类型找个落脚处 | [`SwiftObjectTreeWalkthrough.md`](SwiftObjectTreeWalkthrough.md) |
 | **并入（folded extension）** | `RuntimeSwiftSection.allObjects()` 对「键对应的类型 / 协议就在本镜像里」的扩展与协议遵循的处理：不在侧栏单独列一条，内容拼进那个类型 / 协议节点的 interface，扩展里声明的类型挂成它的子节点。与「单独列出的扩展节点」相对 | [`SwiftObjectTreeWalkthrough.md`](SwiftObjectTreeWalkthrough.md) |
