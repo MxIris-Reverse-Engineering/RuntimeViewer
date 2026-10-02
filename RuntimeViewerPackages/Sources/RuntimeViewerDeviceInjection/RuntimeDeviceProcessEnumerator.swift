@@ -48,10 +48,22 @@ public enum RuntimeDeviceProcessEnumerator {
 
     /// The raw pid list.
     ///
-    /// `proc_listallpids(nil, 0)` answers a **capacity hint**, not a count: it
-    /// is an upper bound the kernel is willing to promise, and the real number
-    /// only comes from the second call's return value. Treating the hint as the
-    /// count reads uninitialized tail entries as pids.
+    /// **Both calls answer a count of pids, not a byte count.**
+    /// `proc_listallpids` divides the kernel's byte count by `sizeof(int)`
+    /// before returning, so the number that comes back is already the number of
+    /// entries — while the buffer size going *in* is still bytes, which is what
+    /// `withUnsafeMutableBytes` supplies.
+    ///
+    /// Dividing the answer by the entry size as well kept a quarter of the
+    /// processes, and the kernel writes pids newest-first, so the quarter kept
+    /// was the high end: on a device 408 processes arrived as 102, none below
+    /// pid 300. Every daemon disappeared — which is precisely the set of targets
+    /// that can be injected, since apps are suspended in the background.
+    ///
+    /// The first call's answer is still only a hint: it is sampled before the
+    /// buffer is filled, so the process table can grow or shrink in between, and
+    /// the second call's answer is the one that says how much of the buffer
+    /// holds pids.
     static func processIdentifiers() throws -> [pid_t] {
         let capacityHint = proc_listallpids(nil, 0)
         guard capacityHint > 0 else {
@@ -60,18 +72,17 @@ public enum RuntimeDeviceProcessEnumerator {
         }
 
         var identifiers = [pid_t](repeating: 0, count: Int(capacityHint))
-        let bytesWritten = identifiers.withUnsafeMutableBytes { buffer in
+        let writtenCount = identifiers.withUnsafeMutableBytes { buffer in
             proc_listallpids(buffer.baseAddress, Int32(buffer.count))
         }
-        guard bytesWritten > 0 else {
-            if bytesWritten < 0 { throw EnumerationError.processListRefused(errorNumber: errno) }
+        guard writtenCount > 0 else {
+            if writtenCount < 0 { throw EnumerationError.processListRefused(errorNumber: errno) }
             throw EnumerationError.processListEmpty
         }
 
-        // Integer division on purpose: the kernel has been observed to return a
-        // byte count that is not a whole multiple of the entry size, and a
-        // partial trailing entry is not a pid.
-        let count = min(Int(bytesWritten) / MemoryLayout<pid_t>.size, identifiers.count)
+        // Clamped, not trusted: a process table that grew between the two calls
+        // would otherwise index past the buffer.
+        let count = min(Int(writtenCount), identifiers.count)
         return Array(identifiers[0 ..< count])
     }
 

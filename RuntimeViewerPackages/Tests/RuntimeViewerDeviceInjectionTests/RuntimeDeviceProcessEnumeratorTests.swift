@@ -19,15 +19,48 @@ struct RuntimeDeviceProcessEnumeratorTests {
         #expect(identifiers.contains(getpid()))
     }
 
-    /// `proc_listallpids(nil, 0)` answers a capacity hint, not a count — an
-    /// upper bound the kernel is willing to promise. Sizing the result from the
-    /// hint instead of from the second call's return value reads the
-    /// uninitialized tail of the buffer as pids, which show up as zeros.
+    /// The first call's answer is sampled before the buffer is filled, so the
+    /// process table can shrink in between and leave the tail of the buffer
+    /// untouched. Sizing the result from that first answer instead of from the
+    /// second call's reads those untouched entries as pids, which show up as a
+    /// run of zeros.
+    ///
+    /// A *single* zero is not that: the kernel reports itself as pid 0, and it
+    /// is in every complete answer. This test asserted "no zeros at all" until
+    /// the truncation bug was fixed, and passed only because the truncation
+    /// happened to cut pid 0 off along with every other low pid — the assertion
+    /// was measuring the defect rather than the invariant. `processList()` is
+    /// what drops the kernel, and `processListIsWellFormed` covers that.
     @Test("Does not report the uninitialized tail of its buffer as pids")
     func trailingEntriesAreNotReported() throws {
         let identifiers = try RuntimeDeviceProcessEnumerator.processIdentifiers()
-        #expect(!identifiers.contains(0))
-        #expect(identifiers.allSatisfy { $0 > 0 })
+        #expect(identifiers.filter { $0 == 0 }.count <= 1)
+        #expect(identifiers.allSatisfy { $0 >= 0 })
+        // Padding would repeat whatever the buffer held; real pids are unique.
+        #expect(Set(identifiers).count == identifiers.count)
+    }
+
+    /// The whole list, not a prefix of it.
+    ///
+    /// `proc_listallpids` divides by `sizeof(int)` before it returns, so its
+    /// answer is a count of pids. Dividing by the entry size a second time kept
+    /// a quarter of them — and because the kernel writes pids newest-first, the
+    /// quarter kept was the high end: every system daemon, and launchd itself,
+    /// fell off. Measured on a device, 408 processes arrived as 102, the lowest
+    /// of them in the three hundreds.
+    ///
+    /// launchd is the assertion because it is the one process guaranteed to
+    /// exist, and being pid 1 it is the first thing a truncation loses. Nothing
+    /// here depends on how many processes the machine happens to be running.
+    @Test("Reaches all the way down to launchd, not just the newest processes")
+    func listIsNotTruncatedToTheNewestProcesses() throws {
+        let identifiers = try RuntimeDeviceProcessEnumerator.processIdentifiers()
+        #expect(identifiers.contains(1))
+        // The count is its own witness: a quarter-sized list would also fail
+        // here, and this says so in the output instead of leaving a bare
+        // "launchd missing".
+        let kernelReportedCount = Int(proc_listallpids(nil, 0))
+        #expect(identifiers.count > kernelReportedCount / 2)
     }
 
     @Test("Every listed process keeps its identity through the model")
