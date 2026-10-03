@@ -3,9 +3,11 @@ import RuntimeViewerUI
 import RuntimeViewerApplication
 import SnapKit
 
-/// A row of the Find navigator's outline: Xcode's `IDEFindNavigatorTableCellView` — a 16-point
-/// icon at the leading edge, the title 19 points in, both 3 points down; a hit's line wraps
-/// onto a second line, which makes the row 38 points instead of 22.
+/// A row of the Find navigator's outline: Xcode's `IDEFindNavigatorTableCellView` — the icon
+/// (`FindResultCellStyle.iconSize`, 16 points in Xcode) at the leading edge, the title 3 points
+/// after it, both 3 points down; a hit's line wraps onto a second line, which makes the row 38
+/// points instead of 22. An icon taller than the title makes the row taller rather than spill
+/// into the next one.
 final class FindResultCellView: TableCellView {
     private let iconImageView = ImageView()
 
@@ -22,11 +24,12 @@ final class FindResultCellView: TableCellView {
         iconImageView.snp.makeConstraints { make in
             make.leading.equalToSuperview()
             make.top.equalToSuperview().offset(3)
-            make.size.equalTo(16)
+            make.bottom.lessThanOrEqualToSuperview().inset(3)
+            make.size.equalTo(FindResultCellStyle.iconSize)
         }
 
         titleLabel.snp.makeConstraints { make in
-            make.leading.equalToSuperview().offset(19)
+            make.leading.equalTo(iconImageView.snp.trailing).offset(3)
             make.trailing.equalToSuperview().inset(4)
             make.top.equalToSuperview().offset(3)
             make.bottom.equalToSuperview().inset(3)
@@ -34,7 +37,7 @@ final class FindResultCellView: TableCellView {
 
         iconImageView.do {
             $0.imageScaling = .scaleProportionallyDown
-            $0.contentTintColor = .secondaryLabelColor
+            $0.contentTintColor = FindResultCellStyle.iconTintColor
         }
 
         titleLabel.do {
@@ -51,7 +54,7 @@ final class FindResultCellView: TableCellView {
     func configure(with appearance: FindResultCellAppearance) {
         iconImageView.image = appearance.icon
         iconImageView.alphaValue = appearance.iconAlpha
-        iconImageView.contentTintColor = appearance.isSecondary ? .tertiaryLabelColor : .secondaryLabelColor
+        iconImageView.contentTintColor = appearance.isSecondary ? FindResultCellStyle.unresolvedIconTintColor : FindResultCellStyle.iconTintColor
         titleLabel.attributedStringValue = appearance.title
         titleLabel.maximumNumberOfLines = appearance.allowsWrapping ? 2 : 1
         titleLabel.lineBreakMode = appearance.allowsWrapping ? .byWordWrapping : .byTruncatingTail

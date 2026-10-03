@@ -8,10 +8,10 @@ import RuntimeViewerCore
 import RuntimeViewerUI
 import RuntimeViewerArchitectures
 
-/// What a Find result row is painted from: an icon, its opacity (the match
-/// rows' lines glyph sits at 45 %, as Xcode's), the attributed title, and
-/// whether the title may wrap onto a second line (a hit's line does, a type
-/// name does not).
+/// What a Find result row is painted from: an icon, its opacity, the
+/// attributed title, and whether the title may wrap onto a second line (a
+/// hit's line does, a type name does not). The fonts, colours and icons come
+/// from `FindResultCellStyle`.
 public struct FindResultCellAppearance: Equatable {
     public var icon: NSUIImage?
     public var iconAlpha: CGFloat = 1
@@ -108,33 +108,31 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
 
     // MARK: - Appearance
 
-    private static let iconSize: CGFloat = 16
-
     private static func makeAppearance(for content: Content) -> FindResultCellAppearance {
         var appearance = FindResultCellAppearance()
         #if canImport(AppKit) && !targetEnvironment(macCatalyst)
         switch content {
         case .object(let object, _):
-            appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: iconSize)
+            appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
             appearance.title = titleWithSubtitle(object.displayName, subtitle: object.imageName)
         case .textMatch(let match):
-            appearance.icon = matchIcon
-            appearance.iconAlpha = 0.45
+            appearance.icon = FindResultCellStyle.matchIcon
+            appearance.iconAlpha = FindResultCellStyle.matchIconAlpha
             appearance.title = emphasized(match.lineText, range: match.matchRangeInLine.nsRange)
             appearance.allowsWrapping = true
         case .member(let match):
-            appearance.icon = matchIcon
-            appearance.iconAlpha = 0.45
+            appearance.icon = FindResultCellStyle.matchIcon
+            appearance.iconAlpha = FindResultCellStyle.matchIconAlpha
             appearance.title = emphasized(match.member.declarationText, range: Self.nameRange(of: match))
             appearance.allowsWrapping = true
         case .relationship(let name, let object):
             if let object {
-                appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: iconSize)
+                appearance.icon = RuntimeObjectIcon.icon(for: object.kind, size: FindResultCellStyle.iconSize)
                 appearance.title = titleWithSubtitle(object.displayName, subtitle: object.imageName)
             } else {
-                appearance.icon = unresolvedIcon
-                appearance.iconAlpha = 0.45
-                appearance.title = plainTitle(name, color: .secondaryLabelColor)
+                appearance.icon = FindResultCellStyle.unresolvedIcon
+                appearance.iconAlpha = FindResultCellStyle.unresolvedIconAlpha
+                appearance.title = plainTitle(name, color: FindResultCellStyle.unresolvedTitleColor)
                 appearance.isSecondary = true
             }
         }
@@ -143,33 +141,25 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
     }
 
     #if canImport(AppKit) && !targetEnvironment(macCatalyst)
-    private static let titleFont = NSFont.systemFont(ofSize: 13)
-    private static let emphasisFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
-    private static let subtitleFont = NSFont.systemFont(ofSize: 11)
-
-    /// Xcode's match rows carry three horizontal lines in a rounded square.
-    private static let matchIcon: NSImage? = SFSymbols(systemName: .textAlignleft, pointSize: 13, weight: .regular).nsImage
-    private static let unresolvedIcon: NSImage? = SFSymbols(systemName: .questionmarkSquare, pointSize: 13, weight: .regular).nsImage
-
     private static func plainTitle(_ text: String, color: NSColor) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: titleFont, .foregroundColor: color])
+        NSAttributedString(string: text, attributes: [.font: FindResultCellStyle.titleFont, .foregroundColor: color])
     }
 
-    /// `Name  image` — the type's name, then its image in the secondary
-    /// colour, the way a file row shows its group.
+    /// `Name  image` — the type's name, then the image it is in, the way a
+    /// file row shows its group.
     private static func titleWithSubtitle(_ title: String, subtitle: String) -> NSAttributedString {
-        let result = NSMutableAttributedString(string: title, attributes: [.font: titleFont, .foregroundColor: NSColor.labelColor])
+        let result = NSMutableAttributedString(string: title, attributes: [.font: FindResultCellStyle.titleFont, .foregroundColor: FindResultCellStyle.titleColor])
         if !subtitle.isEmpty {
-            result.append(NSAttributedString(string: "  " + subtitle, attributes: [.font: subtitleFont, .foregroundColor: NSColor.secondaryLabelColor]))
+            result.append(NSAttributedString(string: FindResultCellStyle.subtitleSeparator + subtitle, attributes: [.font: FindResultCellStyle.subtitleFont, .foregroundColor: FindResultCellStyle.subtitleColor]))
         }
         return result
     }
 
-    /// The line with the hit in semibold, the rest regular.
+    /// The line with the hit set apart in the emphasis font and colour.
     private static func emphasized(_ text: String, range: NSRange?) -> NSAttributedString {
-        let result = NSMutableAttributedString(string: text, attributes: [.font: titleFont, .foregroundColor: NSColor.labelColor])
+        let result = NSMutableAttributedString(string: text, attributes: [.font: FindResultCellStyle.hitLineFont, .foregroundColor: FindResultCellStyle.hitLineColor])
         if let range, range.location >= 0, NSMaxRange(range) <= result.length {
-            result.addAttribute(.font, value: emphasisFont, range: range)
+            result.addAttributes([.font: FindResultCellStyle.emphasisFont, .foregroundColor: FindResultCellStyle.emphasisColor], range: range)
         }
         return result
     }
