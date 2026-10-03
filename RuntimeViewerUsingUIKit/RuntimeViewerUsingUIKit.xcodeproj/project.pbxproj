@@ -504,7 +504,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer uses the local network to discover and connect to runtime inspection services on nearby devices.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Runtime Viewer uses the local network to discover other Runtime Viewer instances on the same Wi-Fi for runtime engine mirroring. The feature is optional and the app works fully on a single device.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -546,7 +546,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = RuntimeViewer;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RuntimeViewer uses the local network to discover and connect to runtime inspection services on nearby devices.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Runtime Viewer uses the local network to discover other Runtime Viewer instances on the same Wi-Fi for runtime engine mirroring. The feature is optional and the app works fully on a single device.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
