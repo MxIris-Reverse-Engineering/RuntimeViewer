@@ -16,7 +16,7 @@
 ## 摘要
 
 给越狱版 RV iOS 增加一条 RunningBoard entitlement，并用一条 `RBSLegacyAttribute`
-（`reason = 4` / `flags = 1`）assertion 显式阻止进程被挂起。同一个机制解决两件事：
+（`reason = 10004` / `flags = 1`）assertion 显式阻止进程被挂起。同一个机制解决两件事：
 
 1. **保活** —— RV 自己切到后台不再被挂起，所以从 Mac 端点 Attach 之前不必先去设备上把 RV 切回前台；
 2. **注入 App** —— 给目标 App 下一条同样的 assertion，让「启动过、现在挂在后台」的 App 就地恢复运行，
@@ -181,12 +181,51 @@ bundle id 的白名单，`com.apple.runningboard.primitiveattribute` 的允许�
   高于守护进程的 30，所以**不再需要单独的 `RBSJetsamPriorityGrant`** —— 加了反而会让这条
   assertion 重新变成 primitive attribute，正好撞回被封的那道闸
 
-净效果：**`primitiveattribute` 从 entitlement 清单里删掉**，entitlement 从五条回到四条，而
-`process-state` 从「诊断用的锦上添花」升级为**注入 App 的必要条件**。
+净效果：**`primitiveattribute` 从 entitlement 清单里删掉**，而 `process-state` 从「诊断用的锦上添花」
+升级为必要条件。（这一段在下一节又被修正了一次——换成 reason 10004 后，`process-state` 退回诊断角色，
+必要的那条变成 `unlimitedassertions`。）
 
-**仍未验证**：reason 4 是「有限时长任务」（runningboardd 里有 `_isLegacyReasonFinishableTask:`），
-所以它**可能会到期**。到期就要续期。这一条只能在真机上量 —— 持有后盯目标进程的 CPU 增量，
-看它保持非零多久。
+### 第二次真机证伪：reason 4 有 30 秒预算，换 10004
+
+上面选的 `reason = 4` 也是错的，而且错得很干净 —— 它就是 `beginBackgroundTask` 背后那条，
+带着那个 API 的时间预算。**实测（每 2 秒采样一次）**：
+
+```
+16 个采样 @ band 100   前台
+15 个采样 @ band 40    后台，assertion 生效   ← 15 × 2 秒 = 30 秒
+之后进程从采样里消失                           ← 被系统终止
+```
+
+`powerd` 对注入目标那条 assertion 记的是 `Released SystemIsActive "…(FinishTask)" age:00:00:30`
+—— 同一个 30 秒。用户侧的现象是「切后台能留下来，但没多久就被杀」，以及「常驻的 App（Spotlight、
+MobileMail）注入没问题，设置不行」：常驻进程不被挂起，载荷在 30 秒窗口内跑完了连接；设置赶不上。
+
+**改用 `reason = 10004`（`FinishTaskUnbounded`）。** reason 的数值表来自反编译
+`NSStringFromRBSLegacyReason`（RunningBoardServices `0x18E9F5E44`），不是从数组下标推的：
+
+```
+0 None  1 MediaPlayback  2 Location  3 ExternalAccessory  4 FinishTask  5 Bluetooth
+7 BackgroundUI  8 InterAppAudioStreaming  9 ViewService  10 NewsstandDownload
+12 VoIP  13 Extension  16 WatchConnectivity  …
+10000 Resume  10002 TransientWakeup  10004 FinishTaskUnbounded  10005 Continuous
+10006 BackgroundContentFetching  10007 NotificationAction  10008 PIP
+50000/50003/50004 FinishTaskAfter…  60000 Domain  60001 Custom
+```
+
+逐条验过 10004：
+
+- `_isLegacyReasonFinishableTask:` 对它返回 **false**（finishable 集合是
+  `{16, 10006, 10007, 50000, 50003, 50004}`）—— **不会到期**
+- originator 校验落在 `LABEL_32`：要 `com.apple.backboard.client` **或 entitlement domain 32**，
+  而 domain 32 是 `com.apple.multitasking.*` 那组，**一条都不在受限表里**
+- 它**不要求 originator == target**，自己和别的进程两种情况一条 entitlement 全覆盖
+- 目标侧校验对它只拒「系统目标」
+- `preventsSuspension` 和 band 40 都只由 `flags & 1` 决定，与 reason 无关，所以不受影响
+
+代价是 entitlement 回到五条：加 `com.apple.multitasking.unlimitedassertions`。
+reason 4 自己对自己时不需要任何 entitlement，10004 总是需要一条。
+
+**已真机验证通过**：RV 切后台不再被杀；设置（普通 App，离开前台即冻）注入成功并作为引擎出现。
 
 ### 旧门面已经没了
 
@@ -223,13 +262,15 @@ assertion 类都没有（`BackBoardServices/ObjCHeaders/BackBoardServices.h`，�
 
 ## 提议方案
 
-### 一、一条新 entitlement
+### 一、两条新 entitlement
 
-`RuntimeViewerUsingUIKit-Jailbroken.entitlements` 从三条变四条：
+`RuntimeViewerUsingUIKit-Jailbroken.entitlements` 从三条变五条：
 
-- `com.apple.runningboard.process-state` —— 两个用途：查目标进程是否真的离开了挂起态，
-  以及**让 assertion 能以别的进程为目标**（它在 domain 63 里，而 legacy attribute 的 originator
-  校验要的就是这个）。没有它，越狱版只能保活自己，注入 App 仍然不可能
+- `com.apple.multitasking.unlimitedassertions` —— **下 assertion 的闸**。
+  `reason = 10004` 的 originator 校验要 `com.apple.backboard.client` 或 domain 32 中任意一条，
+  这是其中之一；它同时覆盖「目标是自己」和「目标是别的进程」
+- `com.apple.runningboard.process-state` —— 查目标进程是否真的离开了挂起态，让「取到了 assertion
+  但目标仍挂起」能提前失败，而不是白等满 20 秒裁决预算
 
 初稿还要加 `com.apple.runningboard.primitiveattribute`，**那条已删** —— 它是受限 entitlement，
 签了也会被 runningboardd 剥掉，见「真机证伪与改道」。
@@ -552,4 +593,7 @@ RV 退出。补这个口子要先设计 Detach 的 UI，是另一件事。
 | 2026-10-03 | entitlement 回到四条：删 `primitiveattribute`，`process-state` 升为必要条件 | 删的那条签了也会被剥掉。留的那条原本只是诊断用，改道后它成了「assertion 能以别的进程为目标」的充分条件（legacy 的 originator 校验要 domain 63 里任意一条，`process-state` 在 domain 1） |
 | 2026-10-03 | 不加 `RBSJetsamPriorityGrant` | legacy attribute 自带 band 40（高于守护进程的 30）。再加一条 grant 会让 assertion 重新变成 primitive attribute，正好撞回刚绕开的那道闸 |
 | 2026-10-03 | 考虑过但未采用：把本 App 的 bundle id 加进白名单 | runningboardd 还读同目录的 `runningboardAdditionalEntitlementsConfiguration.plist` 与 `com.apple.runningboard` suite 的 `AdditionalEntitlementsConfigurations`，合并逻辑是**纯追加**（`0x266ca07c4`），确实可行。否的理由是它需要设备侧一次性配置 + 重启 runningboardd，App 自己不能给自己授权，削弱父提案最看重的分发性质。留作 legacy 路线失败时的退路 |
+| 2026-10-03 | **第二次真机证伪**：`reason 4`（`FinishTask`）带 30 秒预算，换 `reason 10004`（`FinishTaskUnbounded`），并加 `com.apple.multitasking.unlimitedassertions` | 每 2 秒采样实测：后台 band 40 保持 15 个采样 = 30 秒后进程被终止；`powerd` 对目标 assertion 记 `age:00:00:30`。reason 4 就是 `beginBackgroundTask` 背后那条。10004 不在 `_isLegacyReasonFinishableTask:` 的集合里，不会到期；代价是它总要一条 domain 32 的 entitlement（reason 4 自己对自己时不要） |
+| 2026-10-03 | reason 数值表取自反编译 `NSStringFromRBSLegacyReason`，不从字符串数组下标推 | 字符串在 cache 里是连续排布的，但实际编号有空洞（6、11、14、15、17、22 缺失），按下标推会得到错的数字 |
+| 2026-10-03 | 用户的两句观察直接定位了根因 | 「不是立刻被杀」把它从「assertion 无效」收敛到「assertion 有时限」；「常驻的 App 没问题」解释了为什么 Spotlight / MobileMail 能成而设置不行——载荷能否在 30 秒窗口内跑完连接 |
 | 2026-10-03 | 新增术语 `受限 entitlement` | 这次弯路的可复用教训：判断一条私有 entitlement 可不可用，必须跟到消费方构造权限集合那一步 |

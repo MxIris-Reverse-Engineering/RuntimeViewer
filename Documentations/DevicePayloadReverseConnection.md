@@ -144,11 +144,19 @@ entitlement**：`runningboardd` 会把它从任何 bundle id 不在
 而那份名单是十几个 Apple 身份，第三方进不去。签进二进制完全无效，**真机上实测无效**（App 切后台后
 12 秒 CPU 增量 0.0000 秒，jetsam band 仍是 0）。
 
-实际用的是 `RBSLegacyAttribute`（旧 `BKSProcessAssertion` 的桥）配 `reason = 4` / `flags = 1`。
-它同样能 `preventsSuspension`，但校验路径完全不同、不碰那份名单：自己对自己时不查任何 entitlement，
-以别的进程为目标时只要 originator 持有 domain 63 里任意一条（`process-state` 即可，它不受限）。
+实际用的是 `RBSLegacyAttribute`（旧 `BKSProcessAssertion` 的桥）配
+**`reason = 10004`（`FinishTaskUnbounded`）/ `flags = 1`**。它同样能 `preventsSuspension`，
+但校验路径完全不同、不碰那份名单：originator 只要持有 domain 32 里任意一条
+（`com.apple.multitasking.unlimitedassertions` 即可，这组一条都不受限），
+且**不要求 originator == target**，所以保活自己和保活注入目标用同一条权限。
 它还自带 jetsam band 40，所以**不要**再加 `RBSJetsamPriorityGrant` —— 加了就又变回 primitive attribute，
 正好撞回那道闸。
+
+**reason 必须是 10004，不能是 4。** `reason = 4` 是 `FinishTask`，也就是 `beginBackgroundTask`
+背后那条，**带 30 秒预算**：实测后台 band 40 只保持 30 秒，之后 App 被系统终止；注入目标那条
+assertion 也在 `age:00:00:30` 被回收，载荷随即被冻住。它诱人的地方在于「自己对自己时一条
+entitlement 都不要」，而那正是它唯一的好处。10004 是同族的无限时长版本，代价是总要一条
+domain 32 的 entitlement。
 
 三条推论值得单独记住：
 
@@ -161,6 +169,9 @@ entitlement**：`runningboardd` 会把它从任何 bundle id 不在
   带一份按 bundle id 的白名单，守护进程在读取阶段就把不在名单里的剥掉。判断一条私有 entitlement
   可不可用，要跟到消费方**构造**权限集合的那一步，只看检查点会得出相反的结论 —— 本节这条弯路
   就是这么来的。
+- **「能用」不等于「能一直用」。** 这条路上踩的第二个坑：选了一条确实能生效、但**自带时限**的
+  reason。它的症状不是失败而是「先成功、过一会儿失败」，比彻底不工作难判得多 —— 分辨它的办法是
+  **按固定间隔采样目标进程的 band 和 CPU**，时限会直接显示成一个整齐的秒数。
 
 细节与逐条地址见提案
 [阻止进程被挂起](Evolutions/draft-device-process-assertions.md)。

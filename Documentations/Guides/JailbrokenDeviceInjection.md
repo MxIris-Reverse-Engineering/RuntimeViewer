@@ -7,18 +7,18 @@
 
 ## 前提
 
-1. **设备上装着越狱版 RV iOS**，且安装方式授予了这四条 entitlement：
+1. **设备上装着越狱版 RV iOS**，且安装方式授予了这五条 entitlement：
 
    | entitlement | 没有它会怎样 |
    |---|---|
    | `com.apple.private.security.no-sandbox` | 连进程都列不出来 |
    | `com.apple.private.security.no-container` | 同上 |
    | `task_for_pid-allow` | 能列、但注不进去 |
-   | `com.apple.runningboard.process-state` | daemon 照常；**App 注不进去**（没法把目标从挂起里唤醒） |
+   | `com.apple.multitasking.unlimitedassertions` | daemon 照常；**App 注不进去**，且越狱版切出前台就不再应答 |
+   | `com.apple.runningboard.process-state` | 功能都在，只是目标仍被挂起时报得没那么准 |
 
-   走 Xcode 正常 Run 装进去的版本**一条都没有**。前三条缺任意一条，功能整体不可用；第四条缺了是
-   降级，不是报废 —— 仍然能注 daemon，而且越狱版自己的保活也不受影响（它对自己下 assertion
-   不需要任何 entitlement）。
+   走 Xcode 正常 Run 装进去的版本**一条都没有**。前三条缺任意一条，功能整体不可用；
+   后两条缺了是降级，不是报废 —— 仍然能注 daemon，因为系统本来就不挂起 daemon。
 
 2. **设备和 Mac 在同一个二层链路上**，且**设备能主动连到 Mac**。
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  The four entitlements the jailbroken variant needs, and nothing else.
+  The five entitlements the jailbroken variant needs, and nothing else.
 
   Measured as a matrix of seven variants on iOS 26.6.2; two of the results are
   counter-intuitive and are the reason this file is exactly this short:
@@ -17,25 +17,33 @@
   So: no-sandbox + no-container make listing possible, task_for_pid-allow makes
   injecting possible on top of that.
 
-  The runningboard entitlement then decides whether a process may *run*, which
-  is a separate axis from whether we may inject into it. iOS suspends an app
-  within about a second of it leaving the foreground, and a suspended process
-  has no thread scheduled to run injected code in — so without it, injecting
-  into an app always times out and this variant stops answering as soon as it
-  is not on screen. Daemons are unaffected either way; the system does not
-  suspend them, which is why injection worked for them first.
+  The last two decide whether a process may *run*, which is a separate axis
+  from whether we may inject into it. iOS suspends an app within about a second
+  of it leaving the foreground, and a suspended process has no thread scheduled
+  to run injected code in — so without them, injecting into an app always times
+  out and this variant stops answering as soon as it is not on screen. Daemons
+  are unaffected either way; the system does not suspend them, which is why
+  injection worked for them first.
 
-  process-state does two jobs, and the second is the load-bearing one:
+    - unlimitedassertions is what lets the suspension assertion be acquired at
+      all. The assertion uses RBSLegacyAttribute with reason 10004,
+      FinishTaskUnbounded, and that reason's originator check wants
+      com.apple.backboard.client or any entitlement in domain 32 — the
+      com.apple.multitasking.* group, of which this is one. It covers both
+      targeting this process and targeting another.
 
-    - It lets us ask whether a *different* process is actually running, so a
-      target that is still suspended fails immediately instead of waiting out
-      the injector's 20-second verdict budget and reporting a bare timeout.
-      (Asking about this process needs no entitlement.)
-    - It is what lets the suspension assertion target another process at all.
-      The legacy attribute's originator check wants a platform binary or any
-      entitlement in domain 63, and this is in that domain. Without it, this
-      variant could keep only itself awake — which would leave injecting into
-      an app exactly as impossible as it was before.
+      Why not reason 4, FinishTask, which needs nothing when a process targets
+      itself: it is the reason behind beginBackgroundTask and carries that
+      budget. Measured on the device — the app held jetsam band 40 for exactly
+      thirty seconds and was then killed, and an injection target's assertion
+      was released by powerd at age:00:00:30 with the payload still part-way
+      through connecting. 10004 is the unbounded member of the same family and
+      is excluded from runningboardd's finishable-task set.
+
+    - process-state lets us ask whether a *different* process is actually
+      running, so a target that is still suspended fails immediately instead of
+      waiting out the injector's 20-second verdict budget and reporting a bare
+      timeout. Asking about this process needs no entitlement.
 
   What is NOT here, and why it cannot be:
   com.apple.runningboard.primitiveattribute would be the obvious way to do all
@@ -66,6 +74,8 @@
 <plist version="1.0">
 <dict>
 	<key>com.apple.private.security.no-container</key>
+	<true/>
+	<key>com.apple.multitasking.unlimitedassertions</key>
 	<true/>
 	<key>com.apple.private.security.no-sandbox</key>
 	<true/>

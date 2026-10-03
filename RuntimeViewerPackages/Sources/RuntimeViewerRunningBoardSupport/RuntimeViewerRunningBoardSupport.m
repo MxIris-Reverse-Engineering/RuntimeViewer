@@ -31,13 +31,28 @@ NSString *const RuntimeViewerRunningBoardErrorDomain = @"RuntimeViewerRunningBoa
 - (id)attributeWithReason:(unsigned long long)reason flags:(unsigned long long)flags;
 @end
 
-/// `BKSProcessAssertionReasonFinishTask`, in the numbering RunningBoard still
-/// uses for the legacy bridge.
+/// `FinishTaskUnbounded`, in the numbering RunningBoard uses for the legacy
+/// bridge — authoritative, read out of `NSStringFromRBSLegacyReason`.
 ///
-/// The one reason whose originator check costs nothing for a self-targeting
-/// assertion, and which for another process asks only for any entitlement in
-/// domain 63 rather than for a restricted one.
-static const unsigned long long RuntimeViewerRunningBoardLegacyReasonFinishTask = 4;
+/// **Reason 4, `FinishTask`, was tried first and is wrong.** It is the reason
+/// behind `beginBackgroundTask`, so it carries that API's budget: measured on
+/// the device, the app held jetsam band 40 for exactly thirty seconds and was
+/// then killed. The target of an injection fared the same way — its assertion
+/// was logged by `powerd` as `(FinishTask)` and released at `age:00:00:30`,
+/// after which the target suspended with the payload frozen part-way through
+/// connecting.
+///
+/// This one is the unbounded member of the same family. `runningboardd`'s
+/// `-[RBSLegacyAttribute _isLegacyReasonFinishableTask:]` answers NO for it —
+/// the finishable set is {16, 10006, 10007, 50000, 50003, 50004} — so nothing
+/// expires it.
+///
+/// The cost is one entitlement. Unlike reason 4, this reason's originator check
+/// always wants `com.apple.backboard.client` or any entitlement in domain 32,
+/// even when a process targets itself. Domain 32 is the
+/// `com.apple.multitasking.*` group, and **none of those is in the restricted
+/// list** — which is the whole reason this is reachable at all.
+static const unsigned long long RuntimeViewerRunningBoardLegacyReasonFinishTaskUnbounded = 10004;
 
 /// `BKSProcessAssertionFlagPreventSuspend`.
 ///
@@ -223,7 +238,7 @@ RuntimeViewerRunningBoardMakeSuspensionPreventingAssertion(
     // primitive attribute again, and primitive attributes are exactly what the
     // restricted entitlement blocks.
     id legacyAttribute = [legacyAttributeFactory
-        attributeWithReason:RuntimeViewerRunningBoardLegacyReasonFinishTask
+        attributeWithReason:RuntimeViewerRunningBoardLegacyReasonFinishTaskUnbounded
                       flags:RuntimeViewerRunningBoardLegacyFlagPreventSuspend];
     if (legacyAttribute == nil) {
         if (error != NULL) {

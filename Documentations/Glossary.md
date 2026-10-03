@@ -15,7 +15,7 @@ Swift / Apple 框架词汇不收。跨项目通用的术语见全局术语表。
 | **认领令牌（claim token）** | rendezvous 里的一次性标识，载荷连上时原样呈上，宿主只认自己发出去的那一个。**它只做区分，不做认证** —— 和载荷同在一个世界可读的目录里，谁能读到它也就能加载旁边那个载荷。一次注入一个，所以两次并发注入不会把先到的交给错误的请求 | 同上 |
 | **反向连接（reverse connection）** | 真机上载荷不监听、改为主动连回宿主的那条路径。叫「反向」是相对 Bonjour 而言：那条是设备广播、宿主连进去 | 同上 |
 | **挂起（suspended）** | iOS 进程被停到没有任何线程被调度的状态，App 离开前台后一秒内就会进入。**不是「慢」，是「完全不执行」** —— 注进去的代码不会跑，等它回报的一方等多久都等不到。系统里的判据就是 `RBProcessState.preventSuspend` 这一个布尔值 | [`DevicePayloadReverseConnection.md`](DevicePayloadReverseConnection.md) 第八节、[draft-device-process-assertions](Evolutions/draft-device-process-assertions.md) |
-| **assertion（RunningBoard assertion）** | 向 iOS 的进程生命周期管家 `runningboardd` 声明「这个进程要保持某种状态」的一张凭据。本项目只用一种：带 `RBSLegacyAttribute`（`reason 4` / `flags 1`）的那种，效果是目标不被挂起。**凭据的寿命就是承诺的寿命** —— 持有它的对象一消失，RunningBoard 就收回。目标可以是别的进程，这正是「注入 App 不需要先保活自己」的原因 | 同上 |
+| **assertion（RunningBoard assertion）** | 向 iOS 的进程生命周期管家 `runningboardd` 声明「这个进程要保持某种状态」的一张凭据。本项目只用一种：带 `RBSLegacyAttribute`（`reason 10004` = `FinishTaskUnbounded` / `flags 1`）的那种，效果是目标不被挂起。**凭据的寿命就是承诺的寿命** —— 持有它的对象一消失，RunningBoard 就收回。目标可以是别的进程，这正是「注入 App 不需要先保活自己」的原因 | 同上 |
 | **受限 entitlement（restricted entitlement）** | iOS 上一类 entitlement：消费它的守护进程另带一份按 bundle id 的白名单，不在名单里的进程在**读取阶段**就被剥掉这一条，签名里有也没用。`com.apple.runningboard.primitiveattribute` 就是其中之一，名单在 `/System/Library/RunningBoard/runningboardEntitlementsConfiguration.plist`。判断一条私有 entitlement 可不可用，必须跟到消费方构造权限集合那一步，只看检查点会得出相反结论 | 同上 |
 | **保活（keeping awake）** | 本项目里专指「持有 assertion 让某个进程不被挂起」，有两处用法：越狱版对自己（所以切出前台仍能应答），以及对注入目标（所以注得进去、也连得住）。**不是**后台任务、静音音频那类「假保活」 | 同上 |
 | **镜像引擎（mirrored engine）** | 经 Bonjour 对端转发过来的第三方引擎，在对端的引擎列表里出现、由本机的 proxy 层代理 | [`EngineMirroringWalkthrough.md`](EngineMirroringWalkthrough.md) |

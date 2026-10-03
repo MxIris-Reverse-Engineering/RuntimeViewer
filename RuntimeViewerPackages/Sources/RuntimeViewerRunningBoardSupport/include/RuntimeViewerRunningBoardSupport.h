@@ -97,8 +97,8 @@ typedef NS_ERROR_ENUM(RuntimeViewerRunningBoardErrorDomain, RuntimeViewerRunning
 /// Builds an **unacquired** assertion that, once acquired, stops RunningBoard
 /// suspending the given process.
 ///
-/// One attribute goes on it: `RBSLegacyAttribute` with reason 4 and flags 1 —
-/// the old `BKSProcessAssertionReasonFinishTask` and
+/// One attribute goes on it: `RBSLegacyAttribute` with reason 10004 and
+/// flags 1 — `FinishTaskUnbounded` and the old
 /// `BKSProcessAssertionFlagPreventSuspend`. That pair was chosen because of
 /// what each one buys, all measured:
 ///
@@ -107,14 +107,14 @@ typedef NS_ERROR_ENUM(RuntimeViewerRunningBoardErrorDomain, RuntimeViewerRunning
 ///   to 40, above the 30 daemons sit at and far above the 0 a backgrounded app
 ///   gets — so no separate jetsam attribute is needed, and adding one would
 ///   reintroduce the entitlement problem this avoids.
-/// - **reason 4** is the one reason whose originator check passes with no
-///   entitlement at all when a process targets itself. For *another* process it
-///   wants the originator to be a platform binary or to hold any entitlement in
-///   domain 63 — which `com.apple.runningboard.process-state` satisfies, and
-///   that one is not restricted.
+/// - **reason 10004** does not expire. Its sibling reason 4, `FinishTask`, is
+///   what `beginBackgroundTask` uses and carries that budget — measured, the
+///   app held band 40 for exactly thirty seconds and was then killed. This one
+///   is excluded from `_isLegacyReasonFinishableTask:`, so nothing expires it.
 ///
-/// Nothing else in the legacy path applies here: the target check for reason 4
-/// refuses only the system target.
+/// Nothing else in the legacy path applies: the target check for this reason
+/// refuses only the system target, and the originator check wants one
+/// entitlement in domain 32 — see the header's entitlement note.
 ///
 /// Returns `nil` and fills `error` with a
 /// `RuntimeViewerRunningBoardErrorDomain` error when the framework or the
