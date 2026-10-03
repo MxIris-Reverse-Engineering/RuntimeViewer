@@ -596,4 +596,6 @@ RV 退出。补这个口子要先设计 Detach 的 UI，是另一件事。
 | 2026-10-03 | **第二次真机证伪**：`reason 4`（`FinishTask`）带 30 秒预算，换 `reason 10004`（`FinishTaskUnbounded`），并加 `com.apple.multitasking.unlimitedassertions` | 每 2 秒采样实测：后台 band 40 保持 15 个采样 = 30 秒后进程被终止；`powerd` 对目标 assertion 记 `age:00:00:30`。reason 4 就是 `beginBackgroundTask` 背后那条。10004 不在 `_isLegacyReasonFinishableTask:` 的集合里，不会到期；代价是它总要一条 domain 32 的 entitlement（reason 4 自己对自己时不要） |
 | 2026-10-03 | reason 数值表取自反编译 `NSStringFromRBSLegacyReason`，不从字符串数组下标推 | 字符串在 cache 里是连续排布的，但实际编号有空洞（6、11、14、15、17、22 缺失），按下标推会得到错的数字 |
 | 2026-10-03 | 用户的两句观察直接定位了根因 | 「不是立刻被杀」把它从「assertion 无效」收敛到「assertion 有时限」；「常驻的 App 没问题」解释了为什么 Spotlight / MobileMail 能成而设置不行——载荷能否在 30 秒窗口内跑完连接 |
+| 2026-10-03 | 顺带修掉一个本提案**之前**就存在的 bug：`RuntimeLocalSocketConnection` 没有 keepalive | 用户在验证本提案时发现：被注入的进程消失后 Mac 仍把它显示为连着。实测把 guest 关机后 Mac 还握着一条到不存在机器的 `ESTABLISHED`。根因是裸 socket 这条路为绕开 NECP 而不用 Network.framework，连带丢掉了后者自带的 keepalive —— 横向排查确认它是三条连接里唯一没有的。修法做在 socket 层（`SO_KEEPALIVE` + 10/5/3，约 25 秒判死）而非协议心跳，这样已部署的旧载荷不用重建也能应答。红绿都验过 |
+| 2026-10-03 | 不顺手收紧另外两条连接的 keepalive 参数 | 它们只设了 `keepaliveIdle = 2`，间隔与次数用系统默认（75 秒 × 8），判死要约 10 分钟 —— 比修复前的「永不」好得多，但仍然慢。收紧它会影响 Bonjour 与镜像引擎的整体行为，超出一个 bug 修复的范围，单独记下 |
 | 2026-10-03 | 新增术语 `受限 entitlement` | 这次弯路的可复用教训：判断一条私有 entitlement 可不可用，必须跟到消费方构造权限集合那一步 |

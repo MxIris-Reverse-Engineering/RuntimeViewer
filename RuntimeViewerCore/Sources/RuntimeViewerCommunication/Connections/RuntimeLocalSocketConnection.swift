@@ -168,12 +168,59 @@ final class RuntimeLocalSocketConnection: RuntimeUnderlyingConnection, @unchecke
             throw RuntimeLocalSocketError.connectFailed(errno: connectErrno, host: host, port: port)
         }
 
+        Self.configureSocketOptions(socketFD)
+
+        #log(.info, "Connected to \(host, privacy: .public):\(port, privacy: .public)")
+    }
+
+    /// Applies the options every connected socket here wants, whichever end
+    /// opened it.
+    ///
+    /// **Keepalive is the load-bearing one, and it is not an optimisation.**
+    /// A peer that closes its socket sends a FIN and `recv` returns 0, which is
+    /// how a disconnect is normally noticed. A peer that *vanishes* sends
+    /// nothing at all — a powered-off virtual machine, a link that goes away, a
+    /// process killed in a way whose last packets never arrive. Without
+    /// keepalive the kernel holds that half-open connection indefinitely:
+    /// `recv` blocks forever, no state change is ever published, and the engine
+    /// stays in the list looking connected. Measured exactly that way — with
+    /// the guest powered off, this Mac still held
+    /// `169.254.46.29:60121->169.254.21.214:49351 (ESTABLISHED)` to a machine
+    /// that no longer existed, and its injected engine was still listed.
+    ///
+    /// The system default idle is two hours, which is indistinguishable from
+    /// never for this purpose. The values below declare a peer dead in roughly
+    /// twenty-five seconds, which suits a link-local connection to a device on
+    /// the same desk.
+    ///
+    /// Done at the socket layer rather than as a protocol heartbeat on purpose:
+    /// the probes are the kernel's on both ends, so a payload built before this
+    /// existed answers them without knowing anything about it. A heartbeat
+    /// would have needed both sides rebuilt.
+    static func configureSocketOptions(_ socketFD: Int32) {
         // Disable Nagle algorithm for lower latency
         var noDelay: Int32 = 1
         setsockopt(socketFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
 
-        #log(.info, "Connected to \(host, privacy: .public):\(port, privacy: .public)")
+        var keepAlive: Int32 = 1
+        setsockopt(socketFD, SOL_SOCKET, SO_KEEPALIVE, &keepAlive, socklen_t(MemoryLayout<Int32>.size))
+        // Seconds of idle before the first probe. Darwin spells this
+        // `TCP_KEEPALIVE`; the name `TCP_KEEPIDLE` is the Linux one and does
+        // not exist here.
+        var idleSeconds = Self.keepAliveIdleSeconds
+        setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPALIVE, &idleSeconds, socklen_t(MemoryLayout<Int32>.size))
+        var intervalSeconds = Self.keepAliveIntervalSeconds
+        setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPINTVL, &intervalSeconds, socklen_t(MemoryLayout<Int32>.size))
+        var probeCount = Self.keepAliveProbeCount
+        setsockopt(socketFD, IPPROTO_TCP, TCP_KEEPCNT, &probeCount, socklen_t(MemoryLayout<Int32>.size))
     }
+
+    /// Idle seconds before the first keepalive probe.
+    static let keepAliveIdleSeconds: Int32 = 10
+    /// Seconds between probes once they start.
+    static let keepAliveIntervalSeconds: Int32 = 5
+    /// Unanswered probes before the connection is declared dead.
+    static let keepAliveProbeCount: Int32 = 3
 
     // MARK: - Lifecycle
 
@@ -1176,9 +1223,9 @@ final class RuntimeLocalSocketServerConnection: RuntimeForwardingConnection, @un
 
         #log(.info, "Accepted local socket client connection (fd=\(clientFD, privacy: .public)) on port \(self.port, privacy: .public)")
 
-        // Disable Nagle algorithm for lower latency
-        var noDelay: Int32 = 1
-        setsockopt(clientFD, IPPROTO_TCP, TCP_NODELAY, &noDelay, socklen_t(MemoryLayout<Int32>.size))
+        // The accepting end needs these as much as the dialling end does — more,
+        // in fact: on a device injection this is the end that outlives the peer.
+        RuntimeLocalSocketConnection.configureSocketOptions(clientFD)
 
         let socketConnection = RuntimeLocalSocketConnection(socketFD: clientFD)
         self._underlyingConnection = socketConnection

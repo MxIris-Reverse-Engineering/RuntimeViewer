@@ -72,6 +72,20 @@ sandbox profile，进程列表里看不出来。
 **网络上的服务端**，注入的代码是业务上的服务端但**网络上的客户端**」），只是把地址写死成回环。
 `.injectedTCP` 就是把那个地址参数化，别无其他。
 
+> **这个选择有一笔当时没算到的账：keepalive。** Network.framework 的那两条连接
+> （`RuntimeDirectTCPConnection`、`RuntimeNetworkConnection`）都设了 `enableKeepalive = true`，
+> 而裸 socket 这条路**把它一起绕掉了**，成了唯一一条没有活性检测的连接。
+>
+> 后果不是「慢」而是「永远不知道」：对端**干净退出**会发 FIN，`recv` 返回 0，断开能被发现；
+> 对端**凭空消失**（虚拟机关机、链路没了、进程被杀且最后的包没送达）则什么都不发，内核会无限期
+> 持有那条半开连接，`recv` 永远阻塞。实测把 guest 关机之后，Mac 这边仍然握着
+> `169.254.46.29:60121->169.254.21.214:49351 (ESTABLISHED)`，对端那台机器已经不存在，
+> 而它的注入引擎还列在界面上 —— 旁边的 Bonjour 引擎倒是正确地消失了。
+>
+> 现在两端的 socket 都显式设 `SO_KEEPALIVE` + 10 秒空闲 / 5 秒间隔 / 3 次探测，约 25 秒判死。
+> **故意做在 socket 层而不是协议心跳**：探测由两端内核收发，所以在这之前编出来的载荷不需要知道
+> 这件事也能应答；心跳则要求两端同时重建。
+
 **不是 `.directTCP`。** 它的角色**没有**反转 —— `RuntimeSource.swift` 注释写明「host 为 nil 表示服务端」，
 而 `RuntimeDirectTCPConnection` 里 server 角色建 `NWListener`。业务服务端在它这里就是网络服务端，
 仍然要 `bind`，而那正是目标沙盒禁止的动作。
