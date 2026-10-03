@@ -270,14 +270,14 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
             typeNameTable[childKey] = typeName
 
             guard case .class(let classDescriptor) = typeDefinition.typeContextDescriptorWrapper else { continue }
-            guard let superclassMangled = try? classDescriptor.superclassTypeMangledName(in: machO)
+            guard let superclassMangled = try? classDescriptor.superclassTypeMangledName(in: machO.context)
             else { continue }
             // Round-trip through demangle + remangle so the superclass key
             // sits in the same canonical string space as the child key
             // (`mangleAsString(typeName.node)`), which is also how the
             // relationships pipeline derives the lookup key from a target
             // Swift class.
-            guard let superclassNode = try? SymbolicDemangler.demangleType(for: superclassMangled, in: machO),
+            guard let superclassNode = try? SymbolicDemangler.demangleType(for: superclassMangled, in: machO.context),
                   let superclassKey = try? await mangleAsString(superclassNode)
             else { continue }
             subclassTable[superclassKey, default: []].append(childKey)
@@ -301,7 +301,7 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
     /// Objective-C protocol is named by its runtime name and flagged. Entries
     /// that cannot be resolved are dropped rather than guessed at.
     private func refinedProtocols(ofProtocolDescribedBy descriptor: ProtocolDescriptor) async -> [RuntimeSwiftRefinedProtocol] {
-        guard let protocolModel = try? MachOSwiftSection.`Protocol`(descriptor: descriptor, in: machO) else { return [] }
+        guard let protocolModel = try? MachOSwiftSection.`Protocol`(descriptor: descriptor, in: machO.context) else { return [] }
         var result: [RuntimeSwiftRefinedProtocol] = []
         for requirement in protocolModel.requirementInSignatures {
             guard requirement.paramManagledName.rawString == "x",
@@ -309,19 +309,19 @@ final class RuntimeSwiftInterfaceIndexer: @unchecked Sendable {
             else { continue }
             switch symbolOrElement {
             case .symbol(let symbol):
-                guard let node = try? SymbolicDemangler.demangleType(for: symbol, in: machO) else { continue }
+                guard let node = try? SymbolicDemangler.demangleType(for: symbol, in: machO.context) else { continue }
                 let qualifiedName = await node.print(using: .interfaceTypeBuilderOnly)
                 guard !qualifiedName.isEmpty else { continue }
                 result.append(RuntimeSwiftRefinedProtocol(qualifiedName: qualifiedName, isObjC: false))
             case .element(let descriptorWithObjCInterop):
                 switch descriptorWithObjCInterop {
                 case .swift(let refinedDescriptor):
-                    guard let node = try? SymbolicDemangler.demangleContext(for: .protocol(refinedDescriptor), in: machO) else { continue }
+                    guard let node = try? SymbolicDemangler.demangleContext(for: .protocol(refinedDescriptor), in: machO.context) else { continue }
                     let qualifiedName = await node.print(using: .interfaceTypeBuilderOnly)
                     guard !qualifiedName.isEmpty else { continue }
                     result.append(RuntimeSwiftRefinedProtocol(qualifiedName: qualifiedName, isObjC: false))
                 case .objc(let objcProtocol):
-                    guard let name = try? objcProtocol.name(in: machO), !name.isEmpty else { continue }
+                    guard let name = try? objcProtocol.name(in: machO.context), !name.isEmpty else { continue }
                     result.append(RuntimeSwiftRefinedProtocol(qualifiedName: name, isObjC: true))
                 }
             }

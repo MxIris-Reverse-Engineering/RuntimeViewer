@@ -52,7 +52,7 @@ actor RuntimeTypeRelationshipsResolver {
         var trees: [RuntimeRelationshipTree] = []
         trees.reserveCapacity(candidates.count)
         for candidate in candidates {
-            var visited: Set<String> = [visitedKey(for: candidate)]
+            let visited: Set<String> = [visitedKey(for: candidate)]
             let nodes: [RuntimeRelationshipNode]
             switch query.relationship {
             case .ancestors:

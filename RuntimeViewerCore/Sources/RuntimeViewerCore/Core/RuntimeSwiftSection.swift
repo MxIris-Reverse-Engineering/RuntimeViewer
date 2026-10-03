@@ -790,7 +790,7 @@ extension RuntimeSwiftSection {
     private func makeObjCClassPairs() -> ObjCClassPairs {
         var objcClassNameByDescriptorOffset: [Int: String] = [:]
         for objcClass in machO.objc.classes64 ?? [] where objcClass.isSwiftStable {
-            guard let classDescriptor = try? ClassMetadataObjCInterop.resolve(from: objcClass.offset, in: machO).descriptor(in: machO),
+            guard let classDescriptor = try? ClassMetadataObjCInterop.resolve(at: objcClass.offset, in: machO.context).descriptor(in: machO.context),
                   let className = Self.runtimeName(of: objcClass, in: machO)
             else { continue }
             objcClassNameByDescriptorOffset[classDescriptor.offset] = className
