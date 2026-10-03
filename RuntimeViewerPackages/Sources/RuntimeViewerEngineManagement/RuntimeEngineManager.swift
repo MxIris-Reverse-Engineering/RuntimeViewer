@@ -653,6 +653,12 @@ public final class RuntimeEngineManager {
         if case .localSocket(_, let socketIdentifier, .client) = source, let pid = Int32(socketIdentifier.rawValue) {
             removeInjectedSocketEndpointRecord(pid: pid)
         }
+        if case .injectedTCP = source {
+            // The device has been holding the target awake since the injection;
+            // nothing needs it now. Covers both the user detaching and every
+            // failure path out of an attach, which all come through here.
+            stopKeepingDeviceTargetAwake(forInjectedSource: source)
+        }
         let removedEngines = runtimeEngines.filter { $0.source == source }
         if let macCatalystRuntimeEngine, removedEngines.contains(where: { $0 === macCatalystRuntimeEngine }) {
             self.macCatalystRuntimeEngine = nil
@@ -740,8 +746,20 @@ public final class RuntimeEngineManager {
         rendezvous: RuntimePayloadRendezvous,
         deviceHostInfo: RuntimeHostInfo,
         deviceIdentifier: String,
+        deviceEngine: RuntimeEngine,
+        processIdentifier: pid_t,
     ) async throws -> RuntimeEngine {
         let runtimeSource = Self.injectedDeviceSource(name: name, rendezvous: rendezvous)
+        // Recorded before the injection, not after it succeeds: every path out
+        // of an attach goes through `terminateRuntimeEngine(for:)`, including
+        // the failures, and that is the one place the release can be hung off.
+        // Releasing a target the device never kept awake is a no-op there, so
+        // recording early costs nothing and recording late would miss the
+        // failures.
+        awakeTargetsByInjectedSource[runtimeSource] = AwakeDeviceTarget(
+            deviceEngine: deviceEngine,
+            processIdentifier: processIdentifier,
+        )
         #log(
             .info,
             "Listening for an injected device payload for \(name, privacy: .public) on \(rendezvous.hostAddress, privacy: .public):\(rendezvous.hostPort, privacy: .public)"
@@ -787,6 +805,33 @@ public final class RuntimeEngineManager {
 
     public func terminateInjectedDeviceEngine(name: String, rendezvous: RuntimePayloadRendezvous) {
         terminateRuntimeEngine(for: Self.injectedDeviceSource(name: name, rendezvous: rendezvous))
+    }
+
+    /// Which device process each injected engine corresponds to, and through
+    /// which engine to reach that device.
+    ///
+    /// Exists only so a teardown can give back what the injection had to take:
+    /// the device holds a RunningBoard assertion on the target for the whole
+    /// life of the engine, and `.injectedTCP` carries the rendezvous rather
+    /// than the pid, so the pairing has to be remembered here.
+    private struct AwakeDeviceTarget {
+        /// Weak: the device's own engine may be torn down first — the user can
+        /// detach the jailbroken variant while an injected engine is still up —
+        /// and in that case there is nobody left to tell, which is fine.
+        weak var deviceEngine: RuntimeEngine?
+        let processIdentifier: pid_t
+    }
+
+    private var awakeTargetsByInjectedSource: [RuntimeSource: AwakeDeviceTarget] = [:]
+
+    /// Tells the device it can let an injected target be suspended again.
+    private func stopKeepingDeviceTargetAwake(forInjectedSource source: RuntimeSource) {
+        guard let target = awakeTargetsByInjectedSource.removeValue(forKey: source) else { return }
+        guard let deviceEngine = target.deviceEngine else { return }
+        let processIdentifier = target.processIdentifier
+        Task {
+            await deviceEngine.stopKeepingProcessAwake(withIdentifier: processIdentifier)
+        }
     }
 
     /// Waits for a just-injected device payload to report in — **whichever way

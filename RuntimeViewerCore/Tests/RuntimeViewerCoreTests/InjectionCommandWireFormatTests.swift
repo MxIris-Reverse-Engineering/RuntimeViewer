@@ -35,6 +35,7 @@ struct InjectionCommandWireFormatTests {
         #expect(RuntimeEngine.InjectionCapabilityRequest.commandName == RuntimeEngine.CommandNames.injectionCapability.commandName)
         #expect(RuntimeEngine.ProcessListRequest.commandName == RuntimeEngine.CommandNames.processList.commandName)
         #expect(RuntimeEngine.InjectIntoProcessRequest.commandName == RuntimeEngine.CommandNames.injectIntoProcess.commandName)
+        #expect(RuntimeEngine.StopKeepingProcessAwakeRequest.commandName == RuntimeEngine.CommandNames.stopKeepingProcessAwake.commandName)
     }
 
     // MARK: - Round trips
@@ -133,6 +134,22 @@ struct InjectionCommandWireFormatTests {
         let decoded = try JSONDecoder().decode(RuntimeEngine.InjectIntoProcessRequest.self, from: encoded)
         #expect(decoded.processIdentifier == 31337)
         #expect(decoded.rendezvous == rendezvous)
+    }
+
+    /// The pid is the whole payload here, and it is also the whole identity: on
+    /// the device side it is what the suspension controller counts references
+    /// against, so a request that lost it would release nothing while reporting
+    /// that it had.
+    @Test("StopKeepingProcessAwakeRequest carries its pid across the wire")
+    func stopKeepingProcessAwakeRequestRoundTrip() throws {
+        let encoded = try JSONEncoder().encode(
+            RuntimeEngine.StopKeepingProcessAwakeRequest(processIdentifier: 31337)
+        )
+        let decoded = try JSONDecoder().decode(
+            RuntimeEngine.StopKeepingProcessAwakeRequest.self,
+            from: encoded,
+        )
+        #expect(decoded.processIdentifier == 31337)
     }
 
     // MARK: - The rendezvous

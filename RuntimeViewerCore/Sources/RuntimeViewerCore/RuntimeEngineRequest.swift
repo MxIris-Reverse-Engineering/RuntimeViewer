@@ -176,5 +176,6 @@ extension RuntimeEngine {
         register(InjectionCapabilityRequest.self, on: connection, engine: engine)
         register(ProcessListRequest.self, on: connection, engine: engine)
         register(InjectIntoProcessRequest.self, on: connection, engine: engine)
+        register(StopKeepingProcessAwakeRequest.self, on: connection, engine: engine)
     }
 }

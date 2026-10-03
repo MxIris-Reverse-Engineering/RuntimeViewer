@@ -43,4 +43,24 @@ public protocol RuntimeInjectionService: Sendable {
         intoProcessWithIdentifier processIdentifier: pid_t,
         rendezvous: RuntimePayloadRendezvous?,
     ) async -> RuntimeProcessInjectionResult
+
+    /// Releases whatever this machine was doing to keep an injected process
+    /// able to run, because nothing needs it any more.
+    ///
+    /// Defaulted to nothing, which is the honest answer for every
+    /// implementation but one. On macOS an injected process is an ordinary
+    /// process that the system never suspends; on a real iOS device it is
+    /// suspended within about a second of leaving the foreground, so the
+    /// device implementation holds a RunningBoard assertion from the injection
+    /// until this call.
+    ///
+    /// Must be safe to call for a process that was never kept awake, and more
+    /// than once: the host sends it when it tears down an injected engine, and
+    /// that happens on paths where the injection never succeeded in the first
+    /// place.
+    func stopKeepingProcessAwake(withIdentifier processIdentifier: pid_t) async
+}
+
+extension RuntimeInjectionService {
+    public func stopKeepingProcessAwake(withIdentifier processIdentifier: pid_t) async {}
 }

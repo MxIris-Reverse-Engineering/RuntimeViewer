@@ -17,20 +17,26 @@ private enum InjectionCommandLog {
     static func capabilityQueryFailed(_ error: any Error) {
         #log(.default, "Injection capability query failed, treating as unavailable: \(error.localizedDescription, privacy: .public)")
     }
+
+    static func stopKeepingAwakeFailed(_ processIdentifier: pid_t, _ error: any Error) {
+        #log(.default, "Could not tell the peer to stop keeping process \(processIdentifier, privacy: .public) awake; it may hold its assertion until that process exits: \(error.localizedDescription, privacy: .public)")
+    }
 }
 
 // MARK: - Injection
 
-/// The three commands that let a host act on the machine an engine belongs to
-/// rather than on its own.
+/// The commands that let a host act on the machine an engine belongs to rather
+/// than on its own.
 ///
-/// They are one feature in three parts, and the split is deliberate:
+/// They are one feature in parts, and the split is deliberate:
 /// ``RuntimeEngine/InjectionCapabilityRequest`` is cheap and answers a gate,
-/// ``RuntimeEngine/ProcessListRequest`` is the expensive enumeration, and
-/// ``RuntimeEngine/InjectIntoProcessRequest`` is the act. A host asks the first
-/// before offering the other two, so an unavailable peer is never enumerated.
+/// ``RuntimeEngine/ProcessListRequest`` is the expensive enumeration,
+/// ``RuntimeEngine/InjectIntoProcessRequest`` is the act, and
+/// ``RuntimeEngine/StopKeepingProcessAwakeRequest`` is how the host gives back
+/// whatever the act had to hold. A host asks the first before offering the
+/// others, so an unavailable peer is never enumerated.
 ///
-/// All three go through `registerSharedHandlers`, so `RuntimeEngineProxyServer`
+/// All of them go through `registerSharedHandlers`, so `RuntimeEngineProxyServer`
 /// forwards them for free. A mirrored engine therefore reports the capability of
 /// the machine at the *far* end of the chain, which is the only answer that is
 /// ever useful — no per-hop special casing is needed to get that.
@@ -98,6 +104,27 @@ extension RuntimeEngine {
                 intoProcessWithIdentifier: processIdentifier,
                 rendezvous: rendezvous,
             )
+        }
+    }
+
+    /// Tells the machine this engine belongs to that an injected process no
+    /// longer needs to be kept able to run.
+    ///
+    /// Returns nothing, and cannot report a failure, because there is nothing a
+    /// caller could do about one: it is sent while tearing an engine down, and
+    /// the machine releasing a little early or not at all is not a state the
+    /// user can act on. What it *is* is the counterpart to the device holding a
+    /// RunningBoard assertion across the whole life of an injected engine —
+    /// without it, an injected app would stay awake until it exited.
+    struct StopKeepingProcessAwakeRequest: RuntimeEngineRequest {
+        let processIdentifier: pid_t
+
+        static var commandName: String { CommandNames.stopKeepingProcessAwake.commandName }
+
+        func perform(on engine: RuntimeEngine) async throws -> Bool {
+            guard let injectionService = RuntimeEngine.injectionService else { return false }
+            await injectionService.stopKeepingProcessAwake(withIdentifier: processIdentifier)
+            return true
         }
     }
 }
@@ -197,5 +224,21 @@ extension RuntimeEngine {
                 rendezvous: rendezvous,
             )
         )
+    }
+
+    /// Lets the machine this engine belongs to stop keeping an injected process
+    /// able to run.
+    ///
+    /// **Does not throw**, for the same reason ``injectionAvailability()`` does
+    /// not: it is sent on teardown paths that have nowhere to report to, and a
+    /// peer built before this command exists has no handler and fails the
+    /// dispatch — which is the same outcome as a peer that was never keeping
+    /// anything awake. Either way there is nothing to tell the user.
+    public func stopKeepingProcessAwake(withIdentifier processIdentifier: pid_t) async {
+        do {
+            _ = try await dispatch(StopKeepingProcessAwakeRequest(processIdentifier: processIdentifier))
+        } catch {
+            InjectionCommandLog.stopKeepingAwakeFailed(processIdentifier, error)
+        }
     }
 }

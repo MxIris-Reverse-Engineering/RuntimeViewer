@@ -158,11 +158,18 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
         // The device's identity goes with it. Without that the engine inherits this
         // machine's, and the engine list — which groups by host — files a process that
         // lives on a phone under the Mac, next to the Mac's own.
+        // The device engine and the pid go with it so the teardown can tell the
+        // device to let that process be suspended again: on a device the
+        // injection has to hold a RunningBoard assertion on the target for as
+        // long as the engine lasts, and `.injectedTCP` carries the rendezvous
+        // rather than the pid.
         try await runtimeEngineManager.launchInjectedDeviceEngine(
             name: target.name,
             rendezvous: rendezvous,
             deviceHostInfo: runtimeEngine.hostInfo,
             deviceIdentifier: deviceIdentifier,
+            deviceEngine: runtimeEngine,
+            processIdentifier: target.processIdentifier,
         )
 
         do {

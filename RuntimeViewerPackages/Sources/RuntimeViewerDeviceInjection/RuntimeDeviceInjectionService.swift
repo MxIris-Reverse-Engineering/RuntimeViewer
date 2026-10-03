@@ -33,12 +33,22 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
 
     private let fileManager: FileManager
 
+    /// Keeps the targets awake for as long as the host still needs them.
+    ///
+    /// Owned here rather than passed in because the lifetime it manages is
+    /// exactly this service's: a target is kept awake from the injection until
+    /// the host tears the resulting engine down. See
+    /// ``RuntimeDeviceSuspensionController``.
+    private let suspensionController: RuntimeDeviceSuspensionController
+
     public init(
         payloadURL: URL,
         dependencyDirectoryURL: URL,
         stagingDirectoryURL: URL = URL(fileURLWithPath: "/private/var/tmp/RuntimeViewerPayload", isDirectory: true),
         fileManager: FileManager = .default,
+        suspensionController: RuntimeDeviceSuspensionController = RuntimeDeviceSuspensionController(),
     ) {
+        self.suspensionController = suspensionController
         self.staging = RuntimePayloadStaging(
             payloadURL: payloadURL,
             dependencyDirectoryURL: dependencyDirectoryURL,
@@ -111,6 +121,27 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
             return .failed(code: 0, reason: "Could not stage the payload: \(error.localizedDescription)")
         }
 
+        // Keeping the target awake comes before injecting, because a suspended
+        // target has no thread to run the injected code in: the injector would
+        // create its mach thread, wait out the whole verdict budget and report
+        // a timeout. Measured on every app target, which is why injecting an
+        // app was impossible before this.
+        do {
+            try suspensionController.retainAwake(
+                processWithIdentifier: processIdentifier,
+                explanation: "Runtime Viewer is inspecting this process",
+            )
+        } catch {
+            return .failed(code: 0, reason: Self.reason(forSuspensionFailure: error))
+        }
+
+        // Only worth checking once the assertion is held: before that every
+        // backgrounded app reads as suspended, which says nothing.
+        if case .suspended = RuntimeDeviceRunningState.ofProcess(withIdentifier: processIdentifier) {
+            suspensionController.releaseAwake(processWithIdentifier: processIdentifier)
+            return .failed(code: 0, reason: Self.stillSuspendedReason)
+        }
+
         do {
             let injection = try await MachInjectorAsync.inject(
                 pid: processIdentifier,
@@ -118,13 +149,73 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
                 timeout: Self.verdictTimeout,
             )
             guard injection.success else {
+                // Rolled back: nothing came of the injection, so nothing needs
+                // this target awake. Leaving it held would keep an app running
+                // in the background with no engine to show for it.
+                suspensionController.releaseAwake(processWithIdentifier: processIdentifier)
                 return result(for: injection.error as NSError?, remoteMessage: injection.remoteErrorMessage)
             }
+            // Deliberately *not* released on success: the reference is handed
+            // over to the engine's lifetime and given back by
+            // `stopKeepingProcessAwake(withIdentifier:)`.
             return .injected
         } catch let error as NSError {
+            suspensionController.releaseAwake(processWithIdentifier: processIdentifier)
             return result(for: error, remoteMessage: error.userInfo[MachInjector.remoteErrorMessageKey] as? String)
         }
     }
+
+    public func stopKeepingProcessAwake(withIdentifier processIdentifier: pid_t) async {
+        suspensionController.releaseAwake(processWithIdentifier: processIdentifier)
+    }
+
+    /// What a failed assertion means, in the words the two causes deserve.
+    ///
+    /// The distinction is the whole point: this build's measurements come from
+    /// iOS 26.3.1, so "the interface moved" is a real possibility, and
+    /// reporting it as a missing entitlement would send the user to reinstall
+    /// over something a reinstall cannot fix.
+    private static func reason(forSuspensionFailure error: any Error) -> String {
+        guard let failure = error as? RuntimeDeviceSuspensionAssertion.AcquisitionFailure else {
+            return "Could not keep the target running long enough to inject into it: \(error.localizedDescription)"
+        }
+        switch failure {
+        case .refused(let reason):
+            return """
+                This build is not allowed to stop the target being suspended, and a suspended process \
+                cannot run the injected code.
+
+                Injecting into an app needs the com.apple.runningboard.primitiveattribute entitlement, \
+                which this install does not grant. Daemons are unaffected — the system does not suspend \
+                them — so this only blocks app targets.
+
+                RunningBoard said: \(reason)
+                """
+        case .runningBoardUnavailable(let reason):
+            return """
+                Could not reach the system service that decides whether a process may run, so there is no \
+                way to stop the target being suspended.
+
+                This is not a permissions problem and reinstalling will not fix it: the interface this was \
+                built against is not the one on this device.
+
+                Details: \(reason)
+                """
+        }
+    }
+
+    /// Held the assertion and the target is *still* suspended.
+    ///
+    /// Worth failing early on rather than injecting anyway: the injection would
+    /// wait out its whole verdict budget and then report a timeout, which says
+    /// nothing about why.
+    private static let stillSuspendedReason = """
+        The target is still suspended after being told to stay running, so the injected code would have \
+        no thread to run in.
+
+        This is unexpected: holding a CPU-access assertion is what stops a process being suspended. Either \
+        something else is holding the target suspended, or the assertion was not honoured.
+        """
 
     /// How long to wait for the target to report what its `dlopen` did.
     ///

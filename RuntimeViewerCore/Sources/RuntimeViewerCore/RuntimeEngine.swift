@@ -103,6 +103,10 @@ public actor RuntimeEngine {
         /// to. The injected server announces itself over Bonjour, so the
         /// response reports only how the attempt ended.
         case injectIntoProcess
+        /// Tells the machine this engine belongs to that an injected process no
+        /// longer needs to be kept able to run. Only a real iOS device does
+        /// anything with it — see `RuntimeInjectionService`.
+        case stopKeepingProcessAwake
 
         var commandName: String {
             "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine.\(rawValue)"

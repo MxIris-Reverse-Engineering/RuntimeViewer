@@ -9,7 +9,9 @@
   [draft-jailbroken-ios-injection](draft-jailbroken-ios-injection.md)（父提案：越狱版枚举并注入设备进程；它的非目标里「注入其它 App」这一条由本提案接走）、
   [draft-device-payload-reverse-connection](draft-device-payload-reverse-connection.md)（载荷反向连接；本提案不改动那条通道）
 - **实现分支 / PR**: `feature/jailbroken-ios-injection`
-- **配套文档**: 待定 —— 落地时登记实现说明 / 使用指南的链接
+- **配套文档**:
+  [`DevicePayloadReverseConnection.md`](../DevicePayloadReverseConnection.md) 第八节（实现说明，本提案推翻了它原先的一条结论）、
+  [`Guides/JailbrokenDeviceInjection.md`](../Guides/JailbrokenDeviceInjection.md)（使用指南，entitlement 表与能注什么都改了）
 
 ## 摘要
 
@@ -148,8 +150,18 @@ assertion 类都没有（`BackBoardServices/ObjCHeaders/BackBoardServices.h`，�
   —— 可注入性预筛。**不需要改**：它对 App 本来就返回 `.injectable`，让尝试本身当权威
   （注释原文「anything unknown resolves to `.injectable` so the attempt is what reports it」）。
   本提案是让那个尝试真的能成功，不是改判定。
-- `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift:788`
-  —— `terminateInjectedDeviceEngine(name:rendezvous:)`，宿主侧已有的 Detach 动作，是释放 assertion 的触发点。
+- `RuntimeViewerPackages/Sources/RuntimeViewerEngineManagement/RuntimeEngineManager.swift:640`
+  —— `terminateRuntimeEngine(for:)`。**这是释放 assertion 的唯一挂点**，因为所有拆引擎的路径都汇到它：
+  `terminateInjectedDeviceEngine(name:rendezvous:)`（attach 失败回滚）走它，CLI 的
+  `runtime-viewer-cli detach` 经 `SourceCatalog.swift:173` 也走它。它本来就有按 source 种类分的清理分支
+  （`.bonjour` 重连记账、`.localSocket` 的 `removeInjectedSocketEndpointRecord(pid:)`），加一条
+  `.injectedTCP` 的正好同构。
+- **AppKit 侧没有 Detach 入口**，`RuntimeProcessAttacher.detach(_:)` 也只有 Mac 与模拟器两条分支、
+  没有设备分支。Detach 今天是 CLI 独有的动作 —— 这不是本提案造成的，也不在本提案范围内。
+- **设备侧没有「释放」这条命令**，注入相关的命令只有三条（`InjectionCapabilityRequest` /
+  `ProcessListRequest` / `InjectIntoProcessRequest`，见
+  `RuntimeViewerCore/Sources/RuntimeViewerCore/RuntimeEngine+InjectionRequests.swift`）。
+  所以要加第四条，见「提议方案」。
 - `RuntimeViewerUsingUIKit/RuntimeViewerUsingUIKit-Jailbroken.entitlements`
   —— 手写的三条 entitlement，ad-hoc 签名。该文件的注释已写明安装方式会原样保留 entitlement，
   所以**加条目的成本就是加几行 plist**。
@@ -185,7 +197,15 @@ assertion 类都没有（`BackBoardServices/ObjCHeaders/BackBoardServices.h`，�
 `inject(intoProcessWithIdentifier:rendezvous:)` 变成：确认活着 → 暂存载荷 →
 **取 assertion → 确认目标离开挂起态** → 注入 → 失败则释放 assertion、成功则移交给控制器持有。
 
-### 五、RV 自己：启动即常开
+### 五、新增第四条注入命令
+
+`StopKeepingProcessAwakeRequest`，因为设备侧原本没有「释放」这条路可走（见「前期调研」最后一条 ——
+提案初稿把这点写错了）。它和既有三条同在 `registerSharedHandlers`，所以经 ProxyServer 转发自动可用。
+
+`RuntimeInjectionService` 上对应新增一个**带默认空实现**的方法，所以 macOS 那套 helper daemon 实现和
+模拟器实现一个字都不用改 —— 对它们来说「让进程保持能运行」本来就不需要做任何事。
+
+### 六、RV 自己：启动即常开
 
 越狱版启动时对自己取一条同样的 assertion，永不释放。取失败只记日志并降级（和现在「缺三条 entitlement
 就注入不了」一致），不弹窗。
@@ -424,22 +444,34 @@ guard injection.success else {
 
 ## 落地步骤
 
-1. **`RuntimeViewerRunningBoardSupport` target + 私有接口声明 + ObjC 工厂。**
-   验收：`swift build` 过，且在 macOS 上工厂返回 `runningBoardUnavailable`（类不存在，正是预期）。
-2. **`RuntimeDeviceSuspensionAssertion`（能力层）。** 验收：编译过；macOS 上取 assertion 抛
-   `runningBoardUnavailable`。
-3. **`RuntimeDeviceSuspensionController`（策略层）+ 测试。** 验收：Mac 上跑过引用计数的全部时序 ——
-   首次取、重复取只取一次、释放到零才失效、获取失败不留下半个引用。
-4. **两条 entitlement 落进 `-Jailbroken.entitlements`**，每条带实测理由的注释。
-5. **注入流程接上 assertion**，含失败回滚；超时文案改成区分两种失败。
-   验收：构建签名出 IPA。
-6. **真机验证（需要你装）**：26.6.2 上确认接口存在、权限通过；注入一个挂在后台的 App；
-   确认 RV 切出前台后仍能应答 Attach。
-7. **文档同批次**：实现说明改「已知不支持」那节并新增一节讲挂起与 assertion；
-   使用指南改 entitlement 表（三条→五条）、改「越狱版必须在设备屏幕上」、改能注什么的表格；
-   术语表加条目。
+1. ✅ **`RuntimeViewerRunningBoardSupport` target + 私有接口声明 + ObjC 工厂。**
+2. ✅ **`RuntimeDeviceSuspensionAssertion`（能力层）。**
+3. ✅ **`RuntimeDeviceSuspensionController`（策略层）+ 测试。** 7 个用例覆盖首次取、重复取只取一次、
+   释放到零才失效、获取失败不留下半个引用、未知 pid 释放是空操作、多 pid 互不影响。
+   另加 2 个用例实证 **RunningBoard 的运行时查找在 macOS 上真的能走通**（macOS 带着同一批 `RBS…` 类），
+   这是版本风险唯一的自动化防线。
+4. ✅ **第四条命令 `StopKeepingProcessAwakeRequest`** + `RuntimeInjectionService` 上带默认空实现的新方法
+   + 线格式测试。
+5. ✅ **两条 entitlement 落进 `-Jailbroken.entitlements`**，带实测理由与反编译依据的注释。
+6. ✅ **注入流程接上 assertion**（含失败回滚与「取到了但仍挂起」的提前失败）；
+   宿主侧在 `terminateRuntimeEngine(for:)` 加 `.injectedTCP` 分支释放；
+   越狱版启动即对自己取一条；超时文案改写并换掉已失效的建议。
+7. ✅ **文档同批次**：实现说明新增第八节并改写「已知不支持」；使用指南改 entitlement 表（三条→五条）、
+   改「越狱版必须在设备屏幕上」整节、改能注什么的表格与错误文案；术语表加
+   `挂起`、`assertion`、`保活` 三条。
+8. ⬜ **真机验证（需要用户装 IPA）**：26.6.2 上确认接口存在、两条 entitlement 通过；
+   注入一个挂在后台的 App；确认越狱版切出前台后仍能应答 Attach。
 
-**收尾时必须判断两件事**：配套文档（预计两份都要改，不新增）与新术语（预计要加 `assertion`、`保活`）。
+**收尾判断（两条都已执行）**：配套文档 —— 两份都改了、不新增，已登记进头部；
+新术语 —— 加了 `挂起`、`assertion`、`保活` 三条。
+
+### 本提案范围外的已知缺口
+
+**AppKit 侧没有 Detach 入口。** 本提案的释放挂在 `terminateRuntimeEngine(for:)` 上，所以 CLI 的
+`runtime-viewer-cli detach` 和 attach 失败回滚都覆盖到了；但 App 里用户没有「Detach 这个注入的引擎」
+这个动作可点，`RuntimeProcessAttacher.detach(_:)` 也只有 Mac 与模拟器两条分支。**这是本提案之前就有的
+状态**，不是本次引入的。实际后果：在 App 里注入一个 App 之后，那个目标会一直保持运行到它自己退出或
+RV 退出。补这个口子要先设计 Detach 的 UI，是另一件事。
 
 ## 决策日志
 
@@ -453,3 +485,10 @@ guard injection.success else {
 | 2026-10-03 | 两种获取失败刻意分开（接口不在 / 权限被拒） | 版本差异风险的直接产物：糊成一种会在 26.6.2 接口有变时把用户指向「重装带权限的版本」，那是个完全错的指引 |
 | 2026-10-03 | 推翻实现说明里「注入其它 App 是结构性的」后半句 | 前台不是进程能运行的唯一途径。该段文字在第 7 步同批次改写 |
 | 2026-10-03 | 不改进程列表的可注入性预筛 | 它对 App 本来就返回 `.injectable`、让尝试当权威。本提案是让那个尝试成功，不是改判定 |
+| 2026-10-03 | **更正初稿的一处事实错误**：设备侧原本没有「释放」通道，故新增第四条命令 `StopKeepingProcessAwakeRequest` | 初稿「前期调研」写的是「经既有的注入命令通道通知设备侧」。实际只有三条注入命令，没有一条能表达释放。新方法在 `RuntimeInjectionService` 上带默认空实现，所以 macOS 与模拟器实现一个字不用改 —— 对它们来说这件事本来就不需要做 |
+| 2026-10-03 | 释放挂在 `terminateRuntimeEngine(for:)` 而不是某个 Detach 方法上 | 所有拆引擎的路径都汇到它（CLI detach、attach 失败回滚），而它本来就有按 source 种类分的清理分支。挂在这里是一处代码覆盖全部路径 |
+| 2026-10-03 | 记录「引擎 ↔ (设备引擎, pid)」的配对放在 `RuntimeEngineManager`，且在**注入之前**就记 | `.injectedTCP` 带的是 rendezvous 不是 pid，配对只能记下来。记早不记晚是因为失败路径也要释放，而设备侧对未持有的 pid 释放是空操作（有测试钉住），所以记早没有代价 |
+| 2026-10-03 | 取到 assertion 后额外确认目标真的离开挂起态，否则提前失败 | 否则会白等满 20 秒的裁决预算再报一个什么都没说的超时。问不出来（缺 `process-state`）不算失败——那只说明问不出来 |
+| 2026-10-03 | 两个 RunningBoard 运行时查找的测试**不容忍类不存在** | macOS 带着同一批 `RBS…` 类，这是版本风险唯一的自动化防线。一个对缺失耸耸肩的测试什么都保护不了 |
+| 2026-10-03 | 超时文案删掉「把目标切到前台再试」，并加测试钉住它不回来 | 那正是现在代码替用户做掉的事。陈旧的指引比含糊的指引更糟：它让用户去做一件已经做过的事 |
+| 2026-10-03 | 记录范围外缺口：App 里没有 Detach 入口 | 本提案之前就是这样，`RuntimeProcessAttacher.detach(_:)` 连设备分支都没有。后果是 App 里注入的目标会保持运行到自身退出。补它要先设计 UI |

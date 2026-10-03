@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  The three entitlements the jailbroken variant needs, and nothing else.
+  The five entitlements the jailbroken variant needs, and nothing else.
 
   Measured as a matrix of seven variants on iOS 26.6.2; two of the results are
   counter-intuitive and are the reason this file is exactly this short:
@@ -15,7 +15,37 @@
       platform-application. The kernel's task_for_pid check reads the old one.
 
   So: no-sandbox + no-container make listing possible, task_for_pid-allow makes
-  injecting possible on top of that, and nothing else earns a place here.
+  injecting possible on top of that.
+
+  The two runningboard entitlements then decide whether a process may *run*,
+  which is a separate axis from whether we may inject into it. iOS suspends an
+  app within about a second of it leaving the foreground, and a suspended
+  process has no thread scheduled to run injected code in — so without these,
+  injecting into an app always times out and this variant stops answering as
+  soon as it is not on screen. Daemons are unaffected either way; the system
+  does not suspend them, which is why injection worked for them first.
+
+    - primitiveattribute is the whole gate on acquiring an RBSAssertion built
+      from raw grants. Verified by decompilation rather than by trial:
+      +[RBSAttribute allowedForPrimitiveAttributeForProcessTarget:withError:]
+      checks exactly this one key (and refuses the system target outright), and
+      RBSCPUAccessGrant then sets RBProcessState.preventSuspend
+      unconditionally. Targeting by pid needs nothing further —
+      com.apple.runningboard.targetidentities is only for naming a target by
+      bundle identifier, which this does not do.
+    - process-state is what lets us ask whether a *different* process is
+      actually running, so a target that is still suspended fails immediately
+      and says so instead of waiting out the injector's 20-second verdict
+      budget and reporting a bare timeout. Asking about this process needs no
+      entitlement.
+
+  Measurements and addresses:
+  Documentations/Evolutions/draft-device-process-assertions.md.
+
+  Nothing else earns a place here. In particular
+  com.apple.runningboard.launchprocess is deliberately absent: it would allow
+  launching an app that has never run, which is a separate proposal and a
+  wider grant than this needs.
 
   Xcode cannot sign these — no provisioning profile grants them — so a build
   installed by Xcode cannot inject. The variant is signed ad-hoc with these
@@ -31,6 +61,10 @@
 	<key>com.apple.private.security.no-container</key>
 	<true/>
 	<key>com.apple.private.security.no-sandbox</key>
+	<true/>
+	<key>com.apple.runningboard.primitiveattribute</key>
+	<true/>
+	<key>com.apple.runningboard.process-state</key>
 	<true/>
 	<key>task_for_pid-allow</key>
 	<true/>

@@ -1,10 +1,11 @@
 # 真机注入载荷为什么反着连
 
 读 `RuntimeViewerServer.main()`、`RuntimeSource.injectedTCP`、`RuntimePayloadRendezvous`
-或 `RuntimeLocalSocketConnection` 之前先看这篇。它们的形状是被三件从代码里看不出来的事实逼出来的，
+或 `RuntimeLocalSocketConnection` 之前先看这篇。它们的形状是被下面这些从代码里看不出来的事实逼出来的，
 每一条都在真机上量过，而每一条的「显然做法」都是错的。
 
-对应提案：[真机注入载荷改为反向连接](Evolutions/draft-device-payload-reverse-connection.md)。
+对应提案：[真机注入载荷改为反向连接](Evolutions/draft-device-payload-reverse-connection.md)、
+[阻止进程被挂起](Evolutions/draft-device-process-assertions.md)（第八节）。
 
 ---
 
@@ -126,11 +127,36 @@ handle。实测特征正是如此 —— 目标驻留内存纹丝不动、零日
    **注意**：日志要在注入**那一刻**抓（live-only），且刚开机时日志量大到会撞上 `max_lines`
    上限并留下时间缝 —— 等系统安静下来再测，或用短窗口连续抓。
 
+## 八、挂起不是物理定律，是 RunningBoard 的一个布尔值
+
+这一节推翻了本文此前的一条结论。原文把「注入其它 App」写成「**这是结构性的，不是偶发**」，理由是
+iOS 只给一个 App 前台、越狱版在跑就意味着目标不在跑。前半句对，后半句错 —— **前台不是进程能运行的
+唯一途径**。
+
+系统里决定「运行 vs 挂起」的是 `RBProcessState.preventSuspend` 一个布尔值，而 `RBSCPUAccessGrant`
+这条 attribute 无条件把它置上。所以注入流程现在先对目标取一条 RunningBoard assertion，再确认它真的
+离开了挂起态，然后才注入；assertion 由注入方（越狱版）持有到宿主拆引擎为止。
+
+两条推论值得单独记住：
+
+- **载荷不能自己给自己下 assertion。** entitlement 按二进制签名算，载荷跑在目标进程里拿到的是
+  **目标的** entitlement，而目标没有 `primitiveattribute`。这就是为什么 assertion 必须由注入方持有，
+  也是为什么要为此新增一条「释放」命令 —— 否则没人能在拆引擎时还回去。
+- **assertion 不能跟引擎绑。** 引擎断线重连是常态（越狱版切出前台就断，切回来自己恢复）。assertion
+  跟着引擎没了，目标立刻被挂起，于是重连永远连不上 —— 按 pid 引用计数、Detach 才释放，就是为了这个。
+
+细节与逐条地址见提案
+[阻止进程被挂起](Evolutions/draft-device-process-assertions.md)。
+
+---
+
 ## 已知不支持
 
 - **`backboardd`** —— 注入返回目标自己写回的真裁决且是成功，而载荷不运行、内存不动、零日志。
-  根因未查明。macOS 上同类问题（strict-seatbelt daemon 拒 `file-map-executable`）的解法是
-  `mach_vm_remap`，**它在 iOS 上不可用** —— MachInjector 内嵌的 loader 是 macOS dylib。
-- **注入其它 App** —— iOS 只给一个 App 前台，越狱版在跑就意味着目标 App 不在跑，挂起的进程没有被调度的
-  线程。这是结构性的，不是偶发。
+  根因未查明，**且与挂起无关** —— 它是 daemon，从来不会被挂起。macOS 上同类问题（strict-seatbelt
+  daemon 拒 `file-map-executable`）的解法是 `mach_vm_remap`，**它在 iOS 上不可用** ——
+  MachInjector 内嵌的 loader 是 macOS dylib。
+- **冷启动没跑过的 App** —— 上面那条只覆盖「启动过、现在挂在后台」的 App。从没启动过的要经
+  `RBSLaunchRequest` 在后台拉起来，需要另一条 entitlement
+  （`com.apple.runningboard.launchprocess`），且进程列表得换成「装着的 App」列表。单独提案。
 - **uid 0 的目标** —— `mobile + no-sandbox` 拿不到 root 进程的 task port（逐级实测）。

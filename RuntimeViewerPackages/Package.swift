@@ -496,6 +496,7 @@ let package = Package(
             name: "RuntimeViewerDeviceInjection",
             dependencies: [
                 "RuntimeViewerProcessEnumerationSupport",
+                "RuntimeViewerRunningBoardSupport",
                 .product(name: "RuntimeViewerCore", package: "RuntimeViewerCore"),
                 .product(name: "MachInjector", package: "MachInjector", condition: .when(platforms: [.iOS])),
             ],
@@ -506,6 +507,15 @@ let package = Package(
         // exported from the public libSystem.B.tbd.
         .target(
             name: "RuntimeViewerProcessEnumerationSupport",
+        ),
+
+        // The RunningBoardServices surface that stops a process being
+        // suspended. Unlike the target above there is nothing to link: the iOS
+        // SDK ships no stub for this framework at all, so the header declares
+        // protocols and the implementation goes through the Objective-C
+        // runtime. See its header for why naming a class would break the link.
+        .target(
+            name: "RuntimeViewerRunningBoardSupport",
         ),
         .target(
             name: "RuntimeViewerCatalystExtensions",
