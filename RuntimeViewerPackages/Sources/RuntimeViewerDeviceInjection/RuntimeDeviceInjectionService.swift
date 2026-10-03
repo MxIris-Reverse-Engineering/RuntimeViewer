@@ -185,9 +185,9 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
                 This build is not allowed to stop the target being suspended, and a suspended process \
                 cannot run the injected code.
 
-                Injecting into an app needs the com.apple.runningboard.primitiveattribute entitlement, \
-                which this install does not grant. Daemons are unaffected — the system does not suspend \
-                them — so this only blocks app targets.
+                Keeping another process awake needs the com.apple.runningboard.process-state \
+                entitlement, which this install does not grant. Daemons are unaffected — the system \
+                does not suspend them — so this only blocks app targets.
 
                 RunningBoard said: \(reason)
                 """

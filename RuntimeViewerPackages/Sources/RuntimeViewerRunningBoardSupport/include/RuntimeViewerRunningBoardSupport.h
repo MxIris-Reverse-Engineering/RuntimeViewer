@@ -21,10 +21,22 @@
 //
 //  Why this framework at all, and why these specific classes:
 //  `Documentations/Evolutions/draft-device-process-assertions.md` carries the
-//  measurements, each cited with its address in the 26.3.1 shared cache. The
-//  short version is that RunningBoard decides "running versus suspended" from
-//  one flag, `RBProcessState.preventSuspend`, and `RBSCPUAccessGrant` is the
-//  attribute that sets it unconditionally.
+//  measurements, each cited with its address in the 26.3.1 shared cache.
+//
+//  The short version is that RunningBoard decides "running versus suspended"
+//  from one flag, `RBProcessState.preventSuspend`, and two kinds of attribute
+//  can set it. The obvious one, `RBSCPUAccessGrant`, is **unusable**: it is a
+//  primitive attribute, and primitive attributes need
+//  `com.apple.runningboard.primitiveattribute`, which is a *restricted*
+//  entitlement — `runningboardd` strips it from any process whose bundle
+//  identifier is not in the allow-list at
+//  `/System/Library/RunningBoard/runningboardEntitlementsConfiguration.plist`
+//  (measured on the device: about fifteen Apple identities, and no way for a
+//  third party to be among them). Signing it into the binary achieves nothing.
+//
+//  So this uses the other one: `RBSLegacyAttribute`, the bridge for the old
+//  `BKSProcessAssertion` API, which is validated by a different path that never
+//  consults that list.
 //
 
 #ifndef RuntimeViewerRunningBoardSupport_h
@@ -85,10 +97,24 @@ typedef NS_ERROR_ENUM(RuntimeViewerRunningBoardErrorDomain, RuntimeViewerRunning
 /// Builds an **unacquired** assertion that, once acquired, stops RunningBoard
 /// suspending the given process.
 ///
-/// Two attributes go on it: a CPU-access grant, which is the one that clears
-/// `preventSuspend`, and a foreground jetsam priority, so that a process kept
-/// awake in the background is not then chosen as the cheapest thing to kill
-/// under memory pressure.
+/// One attribute goes on it: `RBSLegacyAttribute` with reason 4 and flags 1 —
+/// the old `BKSProcessAssertionReasonFinishTask` and
+/// `BKSProcessAssertionFlagPreventSuspend`. That pair was chosen because of
+/// what each one buys, all measured:
+///
+/// - **flags 1** makes `-[RBSLegacyAttribute _role]` return 2, and
+///   `preventsSuspension` is `_role > 1`. It also sets the explicit jetsam band
+///   to 40, above the 30 daemons sit at and far above the 0 a backgrounded app
+///   gets — so no separate jetsam attribute is needed, and adding one would
+///   reintroduce the entitlement problem this avoids.
+/// - **reason 4** is the one reason whose originator check passes with no
+///   entitlement at all when a process targets itself. For *another* process it
+///   wants the originator to be a platform binary or to hold any entitlement in
+///   domain 63 — which `com.apple.runningboard.process-state` satisfies, and
+///   that one is not restricted.
+///
+/// Nothing else in the legacy path applies here: the target check for reason 4
+/// refuses only the system target.
 ///
 /// Returns `nil` and fills `error` with a
 /// `RuntimeViewerRunningBoardErrorDomain` error when the framework or the

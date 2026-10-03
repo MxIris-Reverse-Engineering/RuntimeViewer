@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  The five entitlements the jailbroken variant needs, and nothing else.
+  The four entitlements the jailbroken variant needs, and nothing else.
 
   Measured as a matrix of seven variants on iOS 26.6.2; two of the results are
   counter-intuitive and are the reason this file is exactly this short:
 
     - The sandbox escape is the gate for BOTH capabilities. A containerized
       process gets EPERM from proc_listallpids no matter which task-port
-      entitlements it carries — adding all three below to a containerized app
-      changed nothing at all.
+      entitlements it carries — adding every one of these to a containerized
+      app changed nothing at all.
     - Injection then needs EXACTLY task_for_pid-allow. Apple's own
       com.apple.system-task-ports does not work, and neither does
       platform-application. The kernel's task_for_pid check reads the old one.
@@ -17,35 +17,42 @@
   So: no-sandbox + no-container make listing possible, task_for_pid-allow makes
   injecting possible on top of that.
 
-  The two runningboard entitlements then decide whether a process may *run*,
-  which is a separate axis from whether we may inject into it. iOS suspends an
-  app within about a second of it leaving the foreground, and a suspended
-  process has no thread scheduled to run injected code in — so without these,
-  injecting into an app always times out and this variant stops answering as
-  soon as it is not on screen. Daemons are unaffected either way; the system
-  does not suspend them, which is why injection worked for them first.
+  The runningboard entitlement then decides whether a process may *run*, which
+  is a separate axis from whether we may inject into it. iOS suspends an app
+  within about a second of it leaving the foreground, and a suspended process
+  has no thread scheduled to run injected code in — so without it, injecting
+  into an app always times out and this variant stops answering as soon as it
+  is not on screen. Daemons are unaffected either way; the system does not
+  suspend them, which is why injection worked for them first.
 
-    - primitiveattribute is the whole gate on acquiring an RBSAssertion built
-      from raw grants. Verified by decompilation rather than by trial:
-      +[RBSAttribute allowedForPrimitiveAttributeForProcessTarget:withError:]
-      checks exactly this one key (and refuses the system target outright), and
-      RBSCPUAccessGrant then sets RBProcessState.preventSuspend
-      unconditionally. Targeting by pid needs nothing further —
-      com.apple.runningboard.targetidentities is only for naming a target by
-      bundle identifier, which this does not do.
-    - process-state is what lets us ask whether a *different* process is
-      actually running, so a target that is still suspended fails immediately
-      and says so instead of waiting out the injector's 20-second verdict
-      budget and reporting a bare timeout. Asking about this process needs no
-      entitlement.
+  process-state does two jobs, and the second is the load-bearing one:
+
+    - It lets us ask whether a *different* process is actually running, so a
+      target that is still suspended fails immediately instead of waiting out
+      the injector's 20-second verdict budget and reporting a bare timeout.
+      (Asking about this process needs no entitlement.)
+    - It is what lets the suspension assertion target another process at all.
+      The legacy attribute's originator check wants a platform binary or any
+      entitlement in domain 63, and this is in that domain. Without it, this
+      variant could keep only itself awake — which would leave injecting into
+      an app exactly as impossible as it was before.
+
+  What is NOT here, and why it cannot be:
+  com.apple.runningboard.primitiveattribute would be the obvious way to do all
+  this, and it does not work. It is a *restricted* entitlement: runningboardd
+  strips it from any process whose bundle identifier is not in the allow-list
+  at /System/Library/RunningBoard/runningboardEntitlementsConfiguration.plist
+  — read off the device, about fifteen Apple identities, with no way for a
+  third party to join them. Signing it in achieves nothing and was measured
+  doing nothing. The assertion uses RBSLegacyAttribute instead, which is
+  validated by a path that never consults that list.
+
+  com.apple.runningboard.launchprocess is absent for an ordinary scope reason:
+  it would allow launching an app that has never run, which is a separate
+  proposal and a wider grant than this needs.
 
   Measurements and addresses:
   Documentations/Evolutions/draft-device-process-assertions.md.
-
-  Nothing else earns a place here. In particular
-  com.apple.runningboard.launchprocess is deliberately absent: it would allow
-  launching an app that has never run, which is a separate proposal and a
-  wider grant than this needs.
 
   Xcode cannot sign these — no provisioning profile grants them — so a build
   installed by Xcode cannot inject. The variant is signed ad-hoc with these
@@ -61,8 +68,6 @@
 	<key>com.apple.private.security.no-container</key>
 	<true/>
 	<key>com.apple.private.security.no-sandbox</key>
-	<true/>
-	<key>com.apple.runningboard.primitiveattribute</key>
 	<true/>
 	<key>com.apple.runningboard.process-state</key>
 	<true/>

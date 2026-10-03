@@ -133,17 +133,34 @@ handle。实测特征正是如此 —— 目标驻留内存纹丝不动、零日
 iOS 只给一个 App 前台、越狱版在跑就意味着目标不在跑。前半句对，后半句错 —— **前台不是进程能运行的
 唯一途径**。
 
-系统里决定「运行 vs 挂起」的是 `RBProcessState.preventSuspend` 一个布尔值，而 `RBSCPUAccessGrant`
-这条 attribute 无条件把它置上。所以注入流程现在先对目标取一条 RunningBoard assertion，再确认它真的
-离开了挂起态，然后才注入；assertion 由注入方（越狱版）持有到宿主拆引擎为止。
+系统里决定「运行 vs 挂起」的是 `RBProcessState.preventSuspend` 一个布尔值。所以注入流程现在先对目标
+取一条 RunningBoard assertion，再确认它真的离开了挂起态，然后才注入；assertion 由注入方（越狱版）
+持有到宿主拆引擎为止。
 
-两条推论值得单独记住：
+**用哪条 attribute 是这件事里最容易做错的决定。** 显然的选择 `RBSCPUAccessGrant` 走不通 ——
+它是 primitive attribute，需要 `com.apple.runningboard.primitiveattribute`，而那是一条**受限
+entitlement**：`runningboardd` 会把它从任何 bundle id 不在
+`/System/Library/RunningBoard/runningboardEntitlementsConfiguration.plist` 白名单里的进程上剥掉，
+而那份名单是十几个 Apple 身份，第三方进不去。签进二进制完全无效，**真机上实测无效**（App 切后台后
+12 秒 CPU 增量 0.0000 秒，jetsam band 仍是 0）。
+
+实际用的是 `RBSLegacyAttribute`（旧 `BKSProcessAssertion` 的桥）配 `reason = 4` / `flags = 1`。
+它同样能 `preventsSuspension`，但校验路径完全不同、不碰那份名单：自己对自己时不查任何 entitlement，
+以别的进程为目标时只要 originator 持有 domain 63 里任意一条（`process-state` 即可，它不受限）。
+它还自带 jetsam band 40，所以**不要**再加 `RBSJetsamPriorityGrant` —— 加了就又变回 primitive attribute，
+正好撞回那道闸。
+
+三条推论值得单独记住：
 
 - **载荷不能自己给自己下 assertion。** entitlement 按二进制签名算，载荷跑在目标进程里拿到的是
   **目标的** entitlement，而目标没有 `primitiveattribute`。这就是为什么 assertion 必须由注入方持有，
   也是为什么要为此新增一条「释放」命令 —— 否则没人能在拆引擎时还回去。
 - **assertion 不能跟引擎绑。** 引擎断线重连是常态（越狱版切出前台就断，切回来自己恢复）。assertion
   跟着引擎没了，目标立刻被挂起，于是重连永远连不上 —— 按 pid 引用计数、Detach 才释放，就是为了这个。
+- **「entitlement 签进去了」不等于「进程持有它」。** iOS 上有受限 entitlement 这一层：某些 key
+  带一份按 bundle id 的白名单，守护进程在读取阶段就把不在名单里的剥掉。判断一条私有 entitlement
+  可不可用，要跟到消费方**构造**权限集合的那一步，只看检查点会得出相反的结论 —— 本节这条弯路
+  就是这么来的。
 
 细节与逐条地址见提案
 [阻止进程被挂起](Evolutions/draft-device-process-assertions.md)。

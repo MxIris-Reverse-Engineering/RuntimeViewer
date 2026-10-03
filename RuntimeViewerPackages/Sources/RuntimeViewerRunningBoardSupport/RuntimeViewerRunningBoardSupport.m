@@ -25,15 +25,25 @@ NSString *const RuntimeViewerRunningBoardErrorDomain = @"RuntimeViewerRunningBoa
 - (id)currentProcess;
 @end
 
-/// `+[RBSCPUAccessGrant grant]` — the attribute that sets `preventSuspend`.
-@protocol RuntimeViewerRunningBoardCentralProcessingUnitAccessGrantClass <NSObject>
-- (id)grant;
+/// `+[RBSLegacyAttribute attributeWithReason:flags:]` — the attribute that sets
+/// `preventSuspend` without going near the restricted-entitlement list.
+@protocol RuntimeViewerRunningBoardLegacyAttributeClass <NSObject>
+- (id)attributeWithReason:(unsigned long long)reason flags:(unsigned long long)flags;
 @end
 
-/// `+[RBSJetsamPriorityGrant grantWithForegroundPriority]`.
-@protocol RuntimeViewerRunningBoardJetsamPriorityGrantClass <NSObject>
-- (id)grantWithForegroundPriority;
-@end
+/// `BKSProcessAssertionReasonFinishTask`, in the numbering RunningBoard still
+/// uses for the legacy bridge.
+///
+/// The one reason whose originator check costs nothing for a self-targeting
+/// assertion, and which for another process asks only for any entitlement in
+/// domain 63 rather than for a restricted one.
+static const unsigned long long RuntimeViewerRunningBoardLegacyReasonFinishTask = 4;
+
+/// `BKSProcessAssertionFlagPreventSuspend`.
+///
+/// Makes `_role` 2, and `preventsSuspension` is `_role > 1`. It also pulls the
+/// explicit jetsam band up to 40, which is why nothing else has to.
+static const unsigned long long RuntimeViewerRunningBoardLegacyFlagPreventSuspend = 1;
 
 /// `-[RBSAssertion initWithExplanation:target:attributes:]`.
 ///
@@ -156,14 +166,10 @@ RuntimeViewerRunningBoardMakeSuspensionPreventingAssertion(
     NSError *_Nullable *_Nullable error
 ) {
     Class targetClass = RuntimeViewerRunningBoardClass(@"RBSTarget", error);
-    Class centralProcessingUnitAccessGrantClass =
-        targetClass == Nil ? Nil : RuntimeViewerRunningBoardClass(@"RBSCPUAccessGrant", error);
-    Class jetsamPriorityGrantClass =
-        centralProcessingUnitAccessGrantClass == Nil
-            ? Nil
-            : RuntimeViewerRunningBoardClass(@"RBSJetsamPriorityGrant", error);
+    Class legacyAttributeClass =
+        targetClass == Nil ? Nil : RuntimeViewerRunningBoardClass(@"RBSLegacyAttribute", error);
     Class assertionClass =
-        jetsamPriorityGrantClass == Nil ? Nil : RuntimeViewerRunningBoardClass(@"RBSAssertion", error);
+        legacyAttributeClass == Nil ? Nil : RuntimeViewerRunningBoardClass(@"RBSAssertion", error);
     if (assertionClass == Nil) {
         return nil;
     }
@@ -176,9 +182,7 @@ RuntimeViewerRunningBoardMakeSuspensionPreventingAssertion(
         : @selector(targetWithPid:);
     if (!RuntimeViewerRunningBoardClassResponds(targetClass, targetSelector, error)
         || !RuntimeViewerRunningBoardClassResponds(
-               centralProcessingUnitAccessGrantClass, @selector(grant), error)
-        || !RuntimeViewerRunningBoardClassResponds(
-               jetsamPriorityGrantClass, @selector(grantWithForegroundPriority), error)) {
+               legacyAttributeClass, @selector(attributeWithReason:flags:), error)) {
         return nil;
     }
     if (![assertionClass instancesRespondToSelector:
@@ -209,20 +213,29 @@ RuntimeViewerRunningBoardMakeSuspensionPreventingAssertion(
         return nil;
     }
 
-    id<RuntimeViewerRunningBoardCentralProcessingUnitAccessGrantClass>
-        centralProcessingUnitAccessGrantFactory =
-            (id<RuntimeViewerRunningBoardCentralProcessingUnitAccessGrantClass>)
-                centralProcessingUnitAccessGrantClass;
-    id<RuntimeViewerRunningBoardJetsamPriorityGrantClass> jetsamPriorityGrantFactory =
-        (id<RuntimeViewerRunningBoardJetsamPriorityGrantClass>)jetsamPriorityGrantClass;
+    id<RuntimeViewerRunningBoardLegacyAttributeClass> legacyAttributeFactory =
+        (id<RuntimeViewerRunningBoardLegacyAttributeClass>)legacyAttributeClass;
 
-    // The CPU-access grant is the one that matters: it sets `preventSuspend`
-    // unconditionally. The jetsam grant is insurance — a process held awake in
-    // the background would otherwise sit in the band the kernel kills first.
-    NSArray *attributes = @[
-        [centralProcessingUnitAccessGrantFactory grant],
-        [jetsamPriorityGrantFactory grantWithForegroundPriority],
-    ];
+    // One attribute, and deliberately only one. It carries both halves of what
+    // is wanted — `preventSuspend`, and a jetsam band of 40 so a process held
+    // awake in the background is not then the cheapest thing to kill. Adding a
+    // separate `RBSJetsamPriorityGrant` for the second half would make this a
+    // primitive attribute again, and primitive attributes are exactly what the
+    // restricted entitlement blocks.
+    id legacyAttribute = [legacyAttributeFactory
+        attributeWithReason:RuntimeViewerRunningBoardLegacyReasonFinishTask
+                      flags:RuntimeViewerRunningBoardLegacyFlagPreventSuspend];
+    if (legacyAttribute == nil) {
+        if (error != NULL) {
+            *error = RuntimeViewerRunningBoardError(
+                RuntimeViewerRunningBoardErrorCodeInterfaceChanged,
+                @"RBSLegacyAttribute produced no attribute, so its interface is not the one this "
+                @"was built against."
+            );
+        }
+        return nil;
+    }
+    NSArray *attributes = @[legacyAttribute];
 
     id<RuntimeViewerRunningBoardAssertionConstruction> assertion =
         (id<RuntimeViewerRunningBoardAssertionConstruction>)[assertionClass alloc];

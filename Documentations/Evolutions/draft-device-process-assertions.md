@@ -15,8 +15,8 @@
 
 ## 摘要
 
-给越狱版 RV iOS 增加两条 RunningBoard entitlement，并用一条 `RBSCPUAccessGrant` assertion
-显式阻止进程被挂起。同一个机制解决两件事：
+给越狱版 RV iOS 增加一条 RunningBoard entitlement，并用一条 `RBSLegacyAttribute`
+（`reason = 4` / `flags = 1`）assertion 显式阻止进程被挂起。同一个机制解决两件事：
 
 1. **保活** —— RV 自己切到后台不再被挂起，所以从 Mac 端点 Attach 之前不必先去设备上把 RV 切回前台；
 2. **注入 App** —— 给目标 App 下一条同样的 assertion，让「启动过、现在挂在后台」的 App 就地恢复运行，
@@ -77,7 +77,10 @@ if (self.role > processState.role) { processState.role = self.role; }
 
 注意 `RBSSuspendableCPUGrant` **不在**那四个里面 —— 名字相近，语义相反，别拿错。
 
-### 闸只有一条 entitlement
+### ⚠️ 本节以下关于 `RBSCPUAccessGrant` 的结论在真机上被证伪
+
+**初稿认为闸只有一条 entitlement。错了，而且这条路根本走不通。** 完整更正见后面的
+「真机证伪与改道」一节；保留原文是因为它解释了方案最初为什么长成那样。
 
 `RBSCPUAccessGrant` 的校验直接转给 primitive attribute 那条通用闸：
 
@@ -135,6 +138,56 @@ iPhoneOS 27.0 SDK 既没有 `RunningBoardServices.framework`，也没有任何 `
 Objective-C 运行时取类。这直接决定了「详细设计」里为什么要新增一个 ObjC 声明 target、
 以及为什么 Swift 侧一个字母都不能静态引用 `RBSAssertion`。
 
+### 真机证伪与改道（2026-10-03，第一次装机之后）
+
+第一版装到 26.6.2 上，**越狱版切到后台照样断连**。实测：
+
+| 指标 | RV JB | `sharingd` / `backboardd` |
+|---|---|---|
+| 12 秒 CPU 增量 | **0.0000 秒** | 有增量 |
+| jetsam band | **0** | 30 |
+
+也就是 assertion 根本没拿到。根因不在检查点，在**构造** `originatorEntitlements` 的那一步：
+
+```c
+// -[RBEntitlementManager _entitlementsForProcess:]   @ 0x266ce6424
+//   取 SecTask → 按 _availableEntitlements 逐条提取 → 然后：
+//   -[RBEntitlementManager _removeRestrictedEntitlements:forProcess:]   @ 0x266ce66cc
+//
+// 对每一条 entitlement，查 _restrictedEntitlements[该条] 得到一份"允许的身份"集合；
+// 集合存在且不含本进程身份 → 剥掉，并打 fault：
+//   "RunningBoard: Process %{public}@ does not have permission to have entitlement %{public}@"
+```
+
+`_restrictedEntitlements` 来自 `/System/Library/RunningBoard/runningboardEntitlementsConfiguration.plist`
+（`restrictedEntitlementsFromPlist()` @ `0x266ca0ce4`）。**从设备上读了这个文件**：它是一张按
+bundle id 的白名单，`com.apple.runningboard.primitiveattribute` 的允许身份是
+`com.apple.SpringBoard`、`com.apple.backboardd`、`com.apple.dt.XcodePreviews`、CarPlay 两个、
+以及若干 internal 的 `*Board` 工具 —— 共十余个 Apple 身份。**第三方没有任何办法进入这份名单。**
+把这条 entitlement 签进二进制毫无作用，实测也确实毫无作用。
+
+**改道：`RBSLegacyAttribute`。** 它是旧 `BKSProcessAssertion` 的桥，同样能 `preventsSuspension`，
+但走的是完全不同的校验路径（`_isOriginatorValidForContext:` / `_isTargetValidForContext:`），
+不碰那份白名单。选 `reason = 4`（`FinishTask`）、`flags = 1`（`PreventSuspend`）：
+
+- `preventsSuspension` 是 `_role > 1`，而 `flags & 1` 时 `_role == 2`（`0x266CE2BD0` / `0x266c8bd34`）
+- **自己对自己：originator 校验一条 entitlement 都不查**（`0x266ce2bf0`，reason 4 且 originator == target
+  时直接通过）
+- **目标是别的进程**：要求 originator 是 platform binary 或持有 entitlement **domain 63** 中任意一条；
+  `rb_hasEntitlementDomain:` 是「任一位命中即真」，而 `com.apple.runningboard.process-state`
+  正在 domain 1 里，**且它不在受限表中**
+- 目标侧校验对 reason 4 只拒「系统目标」（`0x266ce3088`）
+- jetsam band 由它自己给：reason 4 + flags 1 → **band 40**（`_explicitJetsamBand:` @ `0x266ce2a24`），
+  高于守护进程的 30，所以**不再需要单独的 `RBSJetsamPriorityGrant`** —— 加了反而会让这条
+  assertion 重新变成 primitive attribute，正好撞回被封的那道闸
+
+净效果：**`primitiveattribute` 从 entitlement 清单里删掉**，entitlement 从五条回到四条，而
+`process-state` 从「诊断用的锦上添花」升级为**注入 App 的必要条件**。
+
+**仍未验证**：reason 4 是「有限时长任务」（runningboardd 里有 `_isLegacyReasonFinishableTask:`），
+所以它**可能会到期**。到期就要续期。这一条只能在真机上量 —— 持有后盯目标进程的 CPU 增量，
+看它保持非零多久。
+
 ### 旧门面已经没了
 
 `BKSProcessAssertion` 在 iOS 26 的 `BackBoardServices` 里**不存在** —— 整个框架里一个 process
@@ -170,13 +223,16 @@ assertion 类都没有（`BackBoardServices/ObjCHeaders/BackBoardServices.h`，�
 
 ## 提议方案
 
-### 一、两条新 entitlement
+### 一、一条新 entitlement
 
-`RuntimeViewerUsingUIKit-Jailbroken.entitlements` 从三条变五条，各自写明理由（该文件的既有风格就是
-每条都带实测依据的注释）：
+`RuntimeViewerUsingUIKit-Jailbroken.entitlements` 从三条变四条：
 
-- `com.apple.runningboard.primitiveattribute` —— 下 assertion 的唯一闸
-- `com.apple.runningboard.process-state` —— 查目标进程是否真的离开了挂起态
+- `com.apple.runningboard.process-state` —— 两个用途：查目标进程是否真的离开了挂起态，
+  以及**让 assertion 能以别的进程为目标**（它在 domain 63 里，而 legacy attribute 的 originator
+  校验要的就是这个）。没有它，越狱版只能保活自己，注入 App 仍然不可能
+
+初稿还要加 `com.apple.runningboard.primitiveattribute`，**那条已删** —— 它是受限 entitlement，
+签了也会被 runningboardd 剥掉，见「真机证伪与改道」。
 
 ### 二、`RuntimeViewerRunningBoardSupport`：声明私有接口的新 target
 
@@ -492,3 +548,8 @@ RV 退出。补这个口子要先设计 Detach 的 UI，是另一件事。
 | 2026-10-03 | 两个 RunningBoard 运行时查找的测试**不容忍类不存在** | macOS 带着同一批 `RBS…` 类，这是版本风险唯一的自动化防线。一个对缺失耸耸肩的测试什么都保护不了 |
 | 2026-10-03 | 超时文案删掉「把目标切到前台再试」，并加测试钉住它不回来 | 那正是现在代码替用户做掉的事。陈旧的指引比含糊的指引更糟：它让用户去做一件已经做过的事 |
 | 2026-10-03 | 记录范围外缺口：App 里没有 Detach 入口 | 本提案之前就是这样，`RuntimeProcessAttacher.detach(_:)` 连设备分支都没有。后果是 App 里注入的目标会保持运行到自身退出。补它要先设计 UI |
+| 2026-10-03 | **真机证伪**：`RBSCPUAccessGrant` + `primitiveattribute` 这条路不可行，改用 `RBSLegacyAttribute`（`reason 4` / `flags 1`） | 第一版装机后越狱版切后台照样断连，实测 12 秒 CPU 增量 0.0000、jetsam band 仍为 0。根因是 `primitiveattribute` 是**受限 entitlement**：`runningboardd` 在 `_removeRestrictedEntitlements:forProcess:` 按 `/System/Library/RunningBoard/runningboardEntitlementsConfiguration.plist` 的 bundle id 白名单剥掉它，而那张表（已从设备读出）只有十余个 Apple 身份。初稿只跟到了检查点，没跟到 `originatorEntitlements` 的**构造**过程，第二道闸在那儿 |
+| 2026-10-03 | entitlement 回到四条：删 `primitiveattribute`，`process-state` 升为必要条件 | 删的那条签了也会被剥掉。留的那条原本只是诊断用，改道后它成了「assertion 能以别的进程为目标」的充分条件（legacy 的 originator 校验要 domain 63 里任意一条，`process-state` 在 domain 1） |
+| 2026-10-03 | 不加 `RBSJetsamPriorityGrant` | legacy attribute 自带 band 40（高于守护进程的 30）。再加一条 grant 会让 assertion 重新变成 primitive attribute，正好撞回刚绕开的那道闸 |
+| 2026-10-03 | 考虑过但未采用：把本 App 的 bundle id 加进白名单 | runningboardd 还读同目录的 `runningboardAdditionalEntitlementsConfiguration.plist` 与 `com.apple.runningboard` suite 的 `AdditionalEntitlementsConfigurations`，合并逻辑是**纯追加**（`0x266ca07c4`），确实可行。否的理由是它需要设备侧一次性配置 + 重启 runningboardd，App 自己不能给自己授权，削弱父提案最看重的分发性质。留作 legacy 路线失败时的退路 |
+| 2026-10-03 | 新增术语 `受限 entitlement` | 这次弯路的可复用教训：判断一条私有 entitlement 可不可用，必须跟到消费方构造权限集合那一步 |

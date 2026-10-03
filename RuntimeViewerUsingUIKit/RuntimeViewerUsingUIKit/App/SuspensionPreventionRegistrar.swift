@@ -54,9 +54,14 @@ enum SuspensionPreventionRegistrar {
             // attaching, which is what the guide used to require of them.
             switch error {
             case .refused(let reason):
+                // Unexpected for this one: a process asserting on *itself* with
+                // the legacy attribute passes RunningBoard's originator check
+                // with no entitlement at all. A refusal here means something
+                // about that path has changed, not that an entitlement is
+                // missing — so the message does not name one.
                 #log(
                     .error,
-                    "Not allowed to prevent suspension, so this variant will stop answering when it leaves the foreground; it needs com.apple.runningboard.primitiveattribute. RunningBoard said: \(reason, privacy: .public)"
+                    "RunningBoard refused to prevent suspension, so this variant will stop answering when it leaves the foreground. RunningBoard said: \(reason, privacy: .public)"
                 )
             case .runningBoardUnavailable(let reason):
                 #log(

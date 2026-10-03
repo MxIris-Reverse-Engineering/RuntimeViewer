@@ -7,18 +7,18 @@
 
 ## 前提
 
-1. **设备上装着越狱版 RV iOS**，且安装方式授予了这五条 entitlement：
+1. **设备上装着越狱版 RV iOS**，且安装方式授予了这四条 entitlement：
 
    | entitlement | 没有它会怎样 |
    |---|---|
    | `com.apple.private.security.no-sandbox` | 连进程都列不出来 |
    | `com.apple.private.security.no-container` | 同上 |
    | `task_for_pid-allow` | 能列、但注不进去 |
-   | `com.apple.runningboard.primitiveattribute` | daemon 照常；**App 注不进去**，且越狱版切出前台就不再应答 |
-   | `com.apple.runningboard.process-state` | 功能都在，只是目标仍被挂起时报得没那么准 |
+   | `com.apple.runningboard.process-state` | daemon 照常；**App 注不进去**（没法把目标从挂起里唤醒） |
 
-   走 Xcode 正常 Run 装进去的版本**一条都没有**。前三条缺任意一条，功能整体不可用；后两条缺了是
-   降级，不是报废 —— 装了旧版本的越狱版仍然能注 daemon。
+   走 Xcode 正常 Run 装进去的版本**一条都没有**。前三条缺任意一条，功能整体不可用；第四条缺了是
+   降级，不是报废 —— 仍然能注 daemon，而且越狱版自己的保活也不受影响（它对自己下 assertion
+   不需要任何 entitlement）。
 
 2. **设备和 Mac 在同一个二层链路上**，且**设备能主动连到 Mac**。
 
@@ -41,8 +41,8 @@ assertion 来免掉这件事，所以**从 Mac 点 Attach 之前不必先去设�
 
 没有开关，也不耗什么 —— 它是个调试工具，不是要长住在手机上的 App。
 
-**失败是降级，不是报废。** 拿不到 assertion（例如装的是没有 `primitiveattribute` 的旧版本）时，
-行为退回到以前：越狱版切出前台就不再应答，得先在设备上把它切回来。这只会写进日志，不会弹窗。
+**失败是降级，不是报废。** 拿不到 assertion 时行为退回到以前：越狱版切出前台就不再应答，
+得先在设备上把它切回来。这只会写进日志，不会弹窗。
 
 **已经注入好的目标本来就不受影响**：载荷活在目标进程里，不随越狱版一起挂起。
 
@@ -74,7 +74,7 @@ assertion 来免掉这件事，所以**从 Mac 点 Attach 之前不必先去设�
 载荷装进去了，但没连回来。先查这几条：设备和 Mac 是否同网、macOS 防火墙、虚拟机网络模式是否允许入向。
 
 **「This build is not allowed to stop the target being suspended…」**
-缺 `com.apple.runningboard.primitiveattribute`。装一个授予它的版本。daemon 不受影响 —— 系统不挂起它们。
+缺 `com.apple.runningboard.process-state`。装一个授予它的版本。daemon 不受影响 —— 系统不挂起它们。
 
 **「Could not reach the system service that decides whether a process may run…」**
 **这条不是权限问题，重装没用。** 它说的是这台设备上的接口不是本构建量过的那个。本功能的全部判据读自
