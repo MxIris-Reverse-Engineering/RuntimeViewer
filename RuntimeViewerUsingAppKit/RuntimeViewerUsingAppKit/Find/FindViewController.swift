@@ -8,22 +8,15 @@ import SnapKit
 
 /// The Find navigator page, laid out to the measurements of Xcode 26's — proposal
 /// `draft-find-navigator` §4.1. Four blocks, top to bottom: the query parameters (three
-/// 24-point rows: the mode path and the case toggle, the search field, the scope), the summary
-/// bar (22 points, only while there are results), the results outline, and the 44-point filter
-/// bar at the bottom.
+/// 24-point rows: the mode path and the case toggle, the search field, the scope — and in
+/// Members mode the member kinds), the summary bar (22 points, only while there are results), the
+/// results outline, and the 44-point filter bar at the bottom.
 ///
 /// Generic over the sidebar level's route because the page is a tab of both levels; both bind
-/// the document's one `FindSession` through their own `FindViewModel`.
-final class FindViewController<Route: Routable>: BaseEffectViewController<FindViewModel<Route>> {
+/// the document's one `FindSession` through their own `FindViewModel`, and the scope chooser is
+/// presented by whichever level the page is on.
+final class FindViewController<Route: FindNavigatorRoutable>: BaseEffectViewController<FindViewModel<Route>> {
     // MARK: - Relays
-
-    /// The mode path control is not an `NSControl` RxAppKit wraps, and each of its components
-    /// opens its own menu, so its clicks are aggregated here.
-    private let modeSelectedRelay = PublishRelay<FindMode>()
-
-    private let textMatchStyleSelectedRelay = PublishRelay<FindTextMatchStyle>()
-
-    private let memberKindFilterSelectedRelay = PublishRelay<FindMemberKindFilter>()
 
     private let openInNewTabRelay = PublishRelay<FindResultNode>()
 
@@ -31,7 +24,7 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
 
     private let queryParametersView = NSView()
 
-    private let modePathControl = NSPathControl()
+    private let modePathControl = PopUpPathControl()
 
     private let caseSensitiveButton = NSButton()
 
@@ -39,7 +32,9 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
 
     private let searchProgressIndicator = NSProgressIndicator()
 
-    private let scopePopUpButton = NSPopUpButton()
+    private let scopeButton = FindScopeButton()
+
+    private let memberKindPopUpButton = NSPopUpButton()
 
     // MARK: - Summary Bar
 
@@ -63,8 +58,6 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
 
     private let filterSearchField = FilterSearchField()
 
-    private var currentQuery = FindQuery()
-
     override var containerViewUsingSafeArea: Bool { true }
 
     /// The outline takes keyboard focus when the sidebar shows this page, like the other
@@ -84,7 +77,8 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
                 caseSensitiveButton
                 searchField
                 searchProgressIndicator
-                scopePopUpButton
+                scopeButton
+                memberKindPopUpButton
             }
             summaryView.hierarchy {
                 summaryLabel
@@ -101,7 +95,8 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
             make.height.equalTo(72)
         }
 
-        // Row 1 (y 0–24): the mode path at (3, 3), the case toggle 21×16 at the trailing edge.
+        // Row 1 (y 0–24): the mode path at (3, 3), W − 39 wide, the case toggle 21×16 at the
+        // trailing edge.
         modePathControl.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(3)
             make.leading.equalToSuperview().offset(3)
@@ -119,7 +114,7 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
         // Row 2 (y 24–48): the search field at (7, 1) inside its row, 22 points tall.
         searchField.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(25)
-            make.leading.trailing.equalToSuperview().inset(7)
+            make.leading.trailing.equalToSuperview().inset(8)
             make.height.equalTo(22)
         }
 
@@ -129,10 +124,16 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
             make.size.equalTo(14)
         }
 
-        // Row 3 (y 48–72): the scope pop-up at (2, 5) inside its row, 15 points tall.
-        scopePopUpButton.snp.makeConstraints { make in
+        scopeButton.snp.makeConstraints { make in
             make.top.equalToSuperview().offset(53)
-            make.leading.equalToSuperview().offset(2)
+            make.leading.equalToSuperview().offset(8)
+            make.height.equalTo(15)
+            make.trailing.lessThanOrEqualTo(memberKindPopUpButton.snp.leading).offset(-8)
+        }
+
+        memberKindPopUpButton.snp.makeConstraints { make in
+            make.centerY.equalTo(scopeButton)
+            make.trailing.equalToSuperview().inset(8)
             make.height.equalTo(15)
         }
 
@@ -179,14 +180,7 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
         }
 
         modePathControl.do {
-            $0.pathStyle = .standard
             $0.controlSize = .small
-            $0.font = .systemFont(ofSize: 11)
-            $0.isEditable = false
-            $0.backgroundColor = .clear
-            $0.focusRingType = .none
-            $0.target = self
-            $0.action = #selector(modePathControlClicked(_:))
             $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
 
@@ -198,7 +192,6 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
             $0.isBordered = false
             $0.font = .systemFont(ofSize: 11)
             $0.alignment = .center
-            $0.contentTintColor = .secondaryLabelColor
         }
 
         searchField.do {
@@ -218,21 +211,36 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
             $0.isIndeterminate = true
         }
 
-        scopePopUpButton.do {
+        scopeButton.do {
             $0.controlSize = .small
             $0.font = .systemFont(ofSize: 11)
             $0.bezelStyle = .regularSquare
             $0.isBordered = false
             $0.pullsDown = false
-            $0.addItem(withTitle: "In Indexed Images")
+            $0.addItem(withTitle: FindScope.allIndexedImages.title)
+            // A long scope title gives way to the member kinds.
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+
+        memberKindPopUpButton.do {
+            $0.controlSize = .small
+            $0.font = .systemFont(ofSize: 11)
+            $0.bezelStyle = .regularSquare
+            $0.isBordered = false
+            $0.pullsDown = false
+            $0.addItems(withTitles: FindMemberKindFilter.allCases.map(\.title))
+            $0.menu?.font = .systemFont(ofSize: 11)
+            $0.toolTip = "Member Kind"
+            $0.isHidden = true
         }
 
         summaryLabel.do {
             $0.font = .systemFont(ofSize: 11)
-            $0.textColor = .secondaryLabelColor
-            $0.alignment = .left
+            $0.textColor = .parameterTextColor
+            $0.alignment = .center
             $0.maximumNumberOfLines = 1
             $0.lineBreakMode = .byTruncatingTail
+            $0.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
 
         for separatorView in [summarySeparatorView, resultsTopSeparatorView, filterSeparatorView] {
@@ -250,7 +258,6 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
 
         outlineView.do {
             $0.style = .sourceList
-            $0.selectionHighlightStyle = .sourceList
             $0.indentationPerLevel = 14
             $0.indentationMarkerFollowsCell = true
             $0.intercellSpacing = NSSize(width: 3, height: 0)
@@ -278,7 +285,6 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
             $0.sendsWholeSearchString = false
         }
 
-        updateModePathItems(for: currentQuery)
         setSummary(nil)
     }
 
@@ -289,11 +295,25 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
 
         let resultClicked: Signal<FindResultNode> = outlineView.rx.modelSelected().asSignal()
 
+        // Only what the user picks: the pop-up's own selection when it is bound would overwrite
+        // a kind chosen on the other sidebar level's page.
+        let memberKindFilterSelected: Signal<FindMemberKindFilter> = memberKindPopUpButton.rx
+            .click(with: \.indexOfSelectedItem)
+            .asSignal()
+            .compactMap { index in
+                FindMemberKindFilter.allCases.indices.contains(index) ? FindMemberKindFilter.allCases[index] : nil
+            }
+
+        let modePathChoiceSelected: Signal<FindModePathChoice> = modePathControl.rx
+            .click(with: \.lastSelection)
+            .asSignal()
+            .compactMap { $0?.value as? FindModePathChoice }
+
         let input = FindViewModel<Route>.Input(
-            modeSelected: modeSelectedRelay.asSignal(),
-            textMatchStyleSelected: textMatchStyleSelectedRelay.asSignal(),
-            memberKindFilterSelected: memberKindFilterSelectedRelay.asSignal(),
+            modePathChoiceSelected: modePathChoiceSelected,
+            memberKindFilterSelected: memberKindFilterSelected,
             caseSensitiveToggled: caseSensitiveButton.rx.state.asSignal().map { $0 == .on },
+            scopeButtonClicked: scopeButton.rx.click.asSignal().map { [scopeButton] in scopeButton },
             searchCommitted: searchField.rx.controlEvent.asSignal().map { [searchField] in searchField.stringValue },
             filterString: filterSearchField.rx.stringValue.asDriver(onErrorJustReturn: ""),
             resultClicked: resultClicked,
@@ -301,10 +321,14 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
         )
         let output = viewModel.transform(input)
 
+        output.modePath.driveOnNext { [weak self] modePath in
+            guard let self else { return }
+            modePathControl.components = modePath.map(\.pathControlComponent)
+        }
+        .disposed(by: rx.disposeBag)
+
         output.query.driveOnNext { [weak self] query in
             guard let self else { return }
-            currentQuery = query
-            updateModePathItems(for: query)
             if searchField.placeholderString != query.mode.searchFieldPlaceholder {
                 searchField.placeholderString = query.mode.searchFieldPlaceholder
             }
@@ -312,12 +336,27 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
             if caseSensitiveButton.state != caseState {
                 caseSensitiveButton.state = caseState
             }
-            caseSensitiveButton.contentTintColor = query.isCaseSensitive ? .controlAccentColor : .secondaryLabelColor
+            // `-[IDEFindNavigatorQueryParametersController refreshUserInterface:]`: on, the title
+            // turns bold and takes the accent colour; off, it is regular and untinted.
+            caseSensitiveButton.font = query.isCaseSensitive ? .boldSystemFont(ofSize: 11) : .systemFont(ofSize: 11)
+            caseSensitiveButton.contentTintColor = query.isCaseSensitive ? .controlAccentColor : nil
             if searchField.stringValue != query.text, searchField.currentEditor() == nil {
                 searchField.stringValue = query.text
             }
+            memberKindPopUpButton.isHidden = !query.mode.hasMemberKinds
+            if let kindIndex = FindMemberKindFilter.allCases.firstIndex(of: query.memberKindFilter), memberKindPopUpButton.indexOfSelectedItem != kindIndex {
+                memberKindPopUpButton.selectItem(at: kindIndex)
+            }
         }
         .disposed(by: rx.disposeBag)
+
+        output.scopeTitle.driveOnNext { [weak self] title in
+            guard let self else { return }
+            scopeButton.setScopeTitle(title)
+        }
+        .disposed(by: rx.disposeBag)
+
+        output.scopeToolTip.drive(scopeButton.rx.toolTip).disposed(by: rx.disposeBag)
 
         output.nodes.drive(outlineView.rx.nodes(options: []))({ (outlineView: NSOutlineView, _: NSTableColumn?, node: FindResultNode) -> NSView? in
             let cellView = outlineView.box.makeView(ofClass: FindResultCellView.self)
@@ -370,84 +409,55 @@ final class FindViewController<Route: Routable>: BaseEffectViewController<FindVi
         summaryHeightConstraint?.update(offset: summary == nil ? 0 : 22)
     }
 
-    // MARK: - Mode Path
-
-    /// `Find ▸ <mode> ▸ <option>`: the third component only in the modes that have one.
-    private func updateModePathItems(for query: FindQuery) {
-        var titles = ["Find", query.mode.title]
-        if query.mode.hasTextMatchStyles {
-            titles.append(query.textMatchStyle.title)
-        } else if query.mode.hasMemberKinds {
-            titles.append(query.memberKindFilter.title)
-        }
-        guard modePathControl.pathItems.map(\.title) != titles else { return }
-        modePathControl.pathItems = titles.map { title in
-            NSPathControlItem().then { $0.title = title }
-        }
-    }
-
-    @objc private func modePathControlClicked(_ sender: NSPathControl) {
-        guard let clickedItem = sender.clickedPathItem,
-              let index = sender.pathItems.firstIndex(where: { $0 === clickedItem })
-        else { return }
-        let menu: NSMenu
-        switch index {
-        case 1:
-            menu = NSMenu().then { menu in
-                for mode in FindMode.allCases {
-                    menu.addItem(withTitle: mode.title, action: #selector(modeMenuItemAction(_:)), keyEquivalent: "").then {
-                        $0.target = self
-                        $0.representedObject = mode
-                        $0.state = mode == currentQuery.mode ? .on : .off
-                    }
-                }
-            }
-        case 2 where currentQuery.mode.hasTextMatchStyles:
-            menu = NSMenu().then { menu in
-                for style in FindTextMatchStyle.allCases {
-                    menu.addItem(withTitle: style.title, action: #selector(textMatchStyleMenuItemAction(_:)), keyEquivalent: "").then {
-                        $0.target = self
-                        $0.representedObject = style
-                        $0.state = style == currentQuery.textMatchStyle ? .on : .off
-                    }
-                }
-            }
-        case 2 where currentQuery.mode.hasMemberKinds:
-            menu = NSMenu().then { menu in
-                for filter in FindMemberKindFilter.allCases {
-                    menu.addItem(withTitle: filter.title, action: #selector(memberKindFilterMenuItemAction(_:)), keyEquivalent: "").then {
-                        $0.target = self
-                        $0.representedObject = filter
-                        $0.state = filter == currentQuery.memberKindFilter ? .on : .off
-                    }
-                }
-            }
-        default:
-            return
-        }
-        menu.font = .systemFont(ofSize: 11)
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 2), in: sender)
-    }
-
-    @objc private func modeMenuItemAction(_ sender: NSMenuItem) {
-        guard let mode = sender.representedObject as? FindMode else { return }
-        modeSelectedRelay.accept(mode)
-    }
-
-    @objc private func textMatchStyleMenuItemAction(_ sender: NSMenuItem) {
-        guard let style = sender.representedObject as? FindTextMatchStyle else { return }
-        textMatchStyleSelectedRelay.accept(style)
-    }
-
-    @objc private func memberKindFilterMenuItemAction(_ sender: NSMenuItem) {
-        guard let filter = sender.representedObject as? FindMemberKindFilter else { return }
-        memberKindFilterSelectedRelay.accept(filter)
-    }
-
     // MARK: - Context Menu
 
     @objc private func openInNewTabMenuItemAction(_ sender: NSMenuItem) {
         guard outlineView.hasValidClickedRow, let node = outlineView.itemAtClickedRow as? FindResultNode else { return }
         openInNewTabRelay.accept(node)
+    }
+}
+
+// MARK: - Scope Button
+
+/// The scope row's button. It is drawn as Xcode's borderless pop-up, to the measurements of
+/// §4.1, but what it opens is the scope chooser, a popover, so a click sends its action instead of
+/// opening a menu — the menu holds only the title.
+///
+/// Declared outside the generic view controller: a view nested in a generic class is generic
+/// itself.
+private final class FindScopeButton: NSPopUpButton {
+    /// Shows `title`, the one item of the menu.
+    func setScopeTitle(_ title: String) {
+        guard titleOfSelectedItem != title else { return }
+        removeAllItems()
+        addItem(withTitle: title)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        sendAction(action, to: target)
+    }
+
+    /// Keyboard and accessibility presses open the chooser as a click does.
+    override func performClick(_ sender: Any?) {
+        guard isEnabled else { return }
+        sendAction(action, to: target)
+    }
+}
+
+// MARK: - Mode Path
+
+extension FindModePathComponent {
+    /// The component as the mode path control draws it: an accented choice takes the accent
+    /// colour, and each menu item carries the choice it makes.
+    fileprivate var pathControlComponent: PopUpPathControl.Component {
+        PopUpPathControl.Component(
+            title: title,
+            titleColor: isAccented ? .controlAccentColor : nil,
+            value: choice.map(AnyHashable.init),
+            menuItems: menuChoices.map { menuChoice in
+                PopUpPathControl.MenuItem(title: menuChoice.title, value: menuChoice, isPrecededBySeparator: menuChoice.isPrecededBySeparator)
+            }
+        )
     }
 }

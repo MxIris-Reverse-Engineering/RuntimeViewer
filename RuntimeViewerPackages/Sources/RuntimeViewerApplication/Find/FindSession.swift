@@ -22,6 +22,12 @@ import RuntimeViewerArchitectures
 /// A corpus built after a search ran is read by that search on its own,
 /// its hits merged into the results, so the list keeps its selection and
 /// scroll position while images keep becoming searchable.
+///
+/// The query's scope limits every kind of search to some images: the
+/// sidebar's, as it is when the search runs, or the ones picked in the scope
+/// chooser. A corpus built later outside the scope is not read, the summary
+/// bar speaks of the corpora in scope only, and the images in scope still
+/// waiting for theirs go to the front of the queue.
 @MainActor
 @Loggable(.private)
 public final class FindSession {
@@ -87,6 +93,11 @@ public final class FindSession {
     /// The corpus coordinator's build states, for the summary bar.
     private var corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState] = [:]
 
+    /// The coordinator `follow(_:)` hooked the session to; it moves the
+    /// images in scope to the front of its queue. `nil` until it exists, and
+    /// the session never brings it into being itself.
+    private weak var corpusCoordinator: FindCorpusCoordinator?
+
     @Dependency(\.appDefaults)
     private var appDefaults
 
@@ -115,6 +126,7 @@ public final class FindSession {
     /// this once it exists: its build states feed the summary bar, and each
     /// corpus it reports built is read by the search in force.
     func follow(_ corpusCoordinator: FindCorpusCoordinator) {
+        self.corpusCoordinator = corpusCoordinator
         corpusCoordinator.$buildStatesByImagePath.asDriver()
             .driveOnNextMainActor { [weak self] states in
                 guard let self else { return }
@@ -133,12 +145,18 @@ public final class FindSession {
     // MARK: - Query
 
     /// Changes the query without searching; the next `run` uses it. The
-    /// mode path and the case toggle call this.
+    /// mode path, the case toggle, the member kinds and the scope chooser
+    /// call this. A scope that changes moves its images still waiting for
+    /// their corpus to the front of the queue, so they are ready sooner.
     public func update(_ change: (inout FindQuery) -> Void) {
         var updated = query
         change(&updated)
         guard updated != query else { return }
+        let isScopeChanged = updated.scope != query.scope
         query = updated
+        if isScopeChanged {
+            prioritizeCorpora(of: imagePaths(of: updated.scope))
+        }
     }
 
     /// Runs `query` (Return in the search field). An empty query clears the
@@ -156,11 +174,20 @@ public final class FindSession {
             isSearching = false
             return
         }
+        let scopeImagePaths = imagePaths(of: query.scope)
+        if scopeImagePaths?.isEmpty == true {
+            isSearching = false
+            var nothingToSearch = Results()
+            nothingToSearch.summary = "No current image"
+            setResults(nothingToSearch)
+            return
+        }
+        prioritizeCorpora(of: scopeImagePaths)
         let generationOptions = appDefaults.options
         if query.mode.relationship == nil {
-            shownSearch = ShownSearch(query: query, generationOptions: generationOptions)
+            shownSearch = ShownSearch(query: query, generationOptions: generationOptions, scopeImagePaths: scopeImagePaths)
         }
-        startSearch(query, imagePaths: nil, generationOptions: generationOptions)
+        startSearch(query, imagePaths: scopeImagePaths, generationOptions: generationOptions, isWidening: false)
     }
 
     /// Runs the query in force again.
@@ -177,7 +204,36 @@ public final class FindSession {
     }
 
     public func clear() {
-        run(FindQuery(mode: query.mode, text: "", textMatchStyle: query.textMatchStyle, memberKindFilter: query.memberKindFilter, isCaseSensitive: query.isCaseSensitive))
+        var cleared = query
+        cleared.text = ""
+        run(cleared)
+    }
+
+    // MARK: - Scope
+
+    /// The images `scope` stands for now: `nil` for every indexed image, and
+    /// an empty set when it is the sidebar's image while the sidebar lists
+    /// none.
+    private func imagePaths(of scope: FindScope) -> Set<String>? {
+        switch scope {
+        case .allIndexedImages:
+            nil
+        case .currentImage:
+            documentState.currentImageNode.map { [$0.path] } ?? []
+        case .images(let imagePaths):
+            imagePaths
+        }
+    }
+
+    /// Moves the images in scope still waiting for their corpus to the front
+    /// of the coordinator's queue — one waiting already only moves, one that
+    /// failed is asked for again. A scope of every indexed image has no
+    /// favourites.
+    private func prioritizeCorpora(of scopeImagePaths: Set<String>?) {
+        guard let scopeImagePaths, let corpusCoordinator else { return }
+        for imagePath in scopeImagePaths.sorted() where corpusBuildStates[imagePath]?.isBuilt != true {
+            corpusCoordinator.requestBuild(of: imagePath, isPrioritized: true)
+        }
     }
 
     // MARK: - Execution
@@ -188,6 +244,9 @@ public final class FindSession {
     private struct ShownSearch {
         let query: FindQuery
         let generationOptions: RuntimeObjectInterface.GenerationOptions
+        /// The images the scope stood for when the search ran; `nil` for
+        /// every indexed image. A corpus built later is read only inside it.
+        let scopeImagePaths: Set<String>?
         var searchedImagePaths: Set<String> = []
         var totalMatchCount = 0
         var isTruncated = false
@@ -196,15 +255,14 @@ public final class FindSession {
     /// Runs `query` over `imagePaths` — every built image when `nil` — and
     /// folds what it finds into the results. A search that widens one already
     /// shown keeps the results it is merged into when it fails.
-    private func startSearch(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions) {
+    private func startSearch(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions, isWidening: Bool) {
         isSearching = true
         searchGeneration += 1
         let generation = searchGeneration
         let engine = documentState.runtimeEngine
-        let isWidening = imagePaths != nil
         searchTask = Task { [weak self] in
             do {
-                try await self?.perform(query, imagePaths: imagePaths, generationOptions: generationOptions, on: engine)
+                try await self?.perform(query, imagePaths: imagePaths, generationOptions: generationOptions, isWidening: isWidening, on: engine)
             } catch is CancellationError {
                 // Superseded; the newer search owns the results now.
             } catch {
@@ -221,7 +279,7 @@ public final class FindSession {
         }
     }
 
-    private func perform(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions, on engine: RuntimeEngine) async throws {
+    private func perform(_ query: FindQuery, imagePaths: Set<String>?, generationOptions: RuntimeObjectInterface.GenerationOptions, isWidening: Bool, on engine: RuntimeEngine) async throws {
         switch query.mode {
         case .text, .regularExpression:
             let engineQuery = RuntimeInterfaceSearchQuery(
@@ -237,10 +295,11 @@ public final class FindSession {
                 await self?.appendTextMatches(batch)
             }
             try Task.checkCancellation()
-            finish(with: summary, nodes: textMatchGroups.nodes(), typeCount: textMatchGroups.typeCount)
+            finish(with: summary, nodes: textMatchGroups.nodes(), typeCount: textMatchGroups.typeCount, isWidening: isWidening)
         case .members:
             let engineQuery = RuntimeMemberSearchQuery(
                 text: query.trimmedText,
+                matchMode: query.memberMatchStyle.matchMode,
                 kinds: query.memberKindFilter.kinds,
                 isCaseSensitive: query.isCaseSensitive,
                 resultLimit: max(0, Self.resultLimit - memberMatchGroups.matchCount),
@@ -251,10 +310,10 @@ public final class FindSession {
                 await self?.appendMemberMatches(batch)
             }
             try Task.checkCancellation()
-            finish(with: summary, nodes: memberMatchGroups.nodes(), typeCount: memberMatchGroups.typeCount)
+            finish(with: summary, nodes: memberMatchGroups.nodes(), typeCount: memberMatchGroups.typeCount, isWidening: isWidening)
         case .ancestorTypes, .descendantTypes, .conformingTypes:
             let relationship = query.mode.relationship ?? .ancestors
-            let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: query.trimmedText, relationship: relationship, isCaseSensitive: query.isCaseSensitive))
+            let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: query.trimmedText, relationship: relationship, isCaseSensitive: query.isCaseSensitive, imagePaths: imagePaths))
             try Task.checkCancellation()
             var nodes: [FindResultNode] = []
             var relatedTypeCount = 0
@@ -286,8 +345,11 @@ public final class FindSession {
     }
 
     /// A text or member search came to its end: its totals join the ones
-    /// shown, and the images it read join the ones searched.
-    private func finish(with summary: RuntimeInterfaceSearchSummary, nodes: [FindResultNode], typeCount: Int) {
+    /// shown, and the images it read join the ones searched. A widening
+    /// search's own summary covers only the images it was sent to read, so
+    /// the images still unsearchable are the ones before it, less those it
+    /// read.
+    private func finish(with summary: RuntimeInterfaceSearchSummary, nodes: [FindResultNode], typeCount: Int, isWidening: Bool) {
         textMatchGroups.markFinished()
         memberMatchGroups.markFinished()
         guard var shownSearch else { return }
@@ -296,7 +358,12 @@ public final class FindSession {
         shownSearch.isTruncated = shownSearch.isTruncated || summary.isTruncated
         self.shownSearch = shownSearch
         var finished = results(from: nodes, matchCount: shownSearch.totalMatchCount, typeCount: typeCount)
-        finished.unbuiltImagePaths = summary.unbuiltIndexedImagePaths
+        if isWidening {
+            let scannedImagePaths = Set(summary.scannedImagePaths)
+            finished.unbuiltImagePaths = results.unbuiltImagePaths.filter { !scannedImagePaths.contains($0) }
+        } else {
+            finished.unbuiltImagePaths = summary.unbuiltIndexedImagePaths
+        }
         setResults(finished)
     }
 
@@ -314,9 +381,12 @@ public final class FindSession {
         let imagePaths = imagePathsBuiltDuringSearch
         imagePathsBuiltDuringSearch = []
         guard let shownSearch else { return }
-        let unsearchedImagePaths = imagePaths.subtracting(shownSearch.searchedImagePaths)
+        var unsearchedImagePaths = imagePaths.subtracting(shownSearch.searchedImagePaths)
+        if let scopeImagePaths = shownSearch.scopeImagePaths {
+            unsearchedImagePaths.formIntersection(scopeImagePaths)
+        }
         guard !unsearchedImagePaths.isEmpty else { return }
-        startSearch(shownSearch.query, imagePaths: unsearchedImagePaths, generationOptions: shownSearch.generationOptions)
+        startSearch(shownSearch.query, imagePaths: unsearchedImagePaths, generationOptions: shownSearch.generationOptions, isWidening: true)
     }
 
     private static func count(_ nodes: [FindResultNode]) -> Int {
@@ -346,17 +416,18 @@ public final class FindSession {
     }
 
     private func updateSummary() {
-        // Only a text or member search reads the corpora; a relationship
-        // search or a failure has nothing to say about them.
-        let newSummary = Self.summary(of: results, corpusBuildStates: shownSearch == nil ? [:] : corpusBuildStates)
+        // Only a text or member search reads the corpora, and only those of
+        // its scope; a relationship search or a failure has nothing to say
+        // about them.
+        let newSummary = Self.summary(of: results, corpusBuildStates: shownSearch == nil ? [:] : corpusBuildStates, within: shownSearch?.scopeImagePaths)
         if newSummary != summary {
             summary = newSummary
         }
     }
 
-    static func summary(of results: Results, corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState]) -> String? {
+    static func summary(of results: Results, corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState], within scopeImagePaths: Set<String>? = nil) -> String? {
         guard var text = results.summary else { return nil }
-        if let corpusStatus = corpusStatus(of: corpusBuildStates) {
+        if let corpusStatus = corpusStatus(of: corpusBuildStates, within: scopeImagePaths) {
             text += " · " + corpusStatus
         } else if !results.unbuiltImagePaths.isEmpty {
             let count = results.unbuiltImagePaths.count
@@ -365,13 +436,18 @@ public final class FindSession {
         return text
     }
 
-    /// `2 images being made searchable · building Foundation 37%`, or `nil`
-    /// when no image is waiting for its corpus.
-    static func corpusStatus(of corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState]) -> String? {
-        let activeCount = corpusBuildStates.values.filter(\.isActive).count
+    /// `2 images being made searchable · building Foundation 37%`, counting
+    /// the images of `scopeImagePaths` alone when it names some, or `nil`
+    /// when no such image is waiting for its corpus.
+    static func corpusStatus(of corpusBuildStates: [String: RuntimeInterfaceCorpusBuildState], within scopeImagePaths: Set<String>? = nil) -> String? {
+        var statesInScope = corpusBuildStates
+        if let scopeImagePaths {
+            statesInScope = statesInScope.filter { scopeImagePaths.contains($0.key) }
+        }
+        let activeCount = statesInScope.values.filter(\.isActive).count
         guard activeCount > 0 else { return nil }
         var text = "\(activeCount) \(activeCount == 1 ? "image" : "images") being made searchable"
-        let building = corpusBuildStates
+        let building = statesInScope
             .compactMap { imagePath, state -> (imagePath: String, progress: RuntimeInterfaceCorpusBuildProgress)? in
                 guard case .building(let progress) = state else { return nil }
                 return (imagePath, progress)

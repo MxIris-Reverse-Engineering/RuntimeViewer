@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import RuntimeViewerArchitectures
 import RuntimeViewerCore
@@ -16,10 +17,10 @@ import Testing
 @MainActor
 struct FindViewModelTests {
     private let router = MockRouter<SidebarRootRoute>()
-    private let modeSelectedRelay = PublishRelay<FindMode>()
-    private let textMatchStyleSelectedRelay = PublishRelay<FindTextMatchStyle>()
+    private let modePathChoiceSelectedRelay = PublishRelay<FindModePathChoice>()
     private let memberKindFilterSelectedRelay = PublishRelay<FindMemberKindFilter>()
     private let caseSensitiveToggledRelay = PublishRelay<Bool>()
+    private let scopeButtonClickedRelay = PublishRelay<NSView>()
     private let searchCommittedRelay = PublishRelay<String>()
     private let filterStringRelay = BehaviorRelay<String>(value: "")
     private let resultClickedRelay = PublishRelay<FindResultNode>()
@@ -39,15 +40,15 @@ struct FindViewModelTests {
         let (viewModel, output) = makeViewModel(in: environment)
         defer { withExtendedLifetime(viewModel) {} }
 
-        modeSelectedRelay.accept(.members)
+        modePathChoiceSelectedRelay.accept(.mode(.members))
         #expect(try await nextValue(from: output.query) { $0.mode == .members }.mode == .members)
         #expect(try await nextValue(from: output.searchFieldPlaceholder) { $0 == "Member Name" } == "Member Name")
 
         memberKindFilterSelectedRelay.accept(.kind(.swiftFunction))
         #expect(try await nextValue(from: output.query) { $0.memberKindFilter == .kind(.swiftFunction) }.memberKindFilter == .kind(.swiftFunction))
 
-        modeSelectedRelay.accept(.text)
-        textMatchStyleSelectedRelay.accept(.matchingWord)
+        modePathChoiceSelectedRelay.accept(.mode(.text))
+        modePathChoiceSelectedRelay.accept(.textMatchStyle(.matchingWord))
         caseSensitiveToggledRelay.accept(true)
         let query = try await nextValue(from: output.query) { $0.textMatchStyle == .matchingWord && $0.isCaseSensitive }
         #expect(query.mode == .text)
@@ -69,6 +70,58 @@ struct FindViewModelTests {
         #expect(try await nextValue(from: output.nodes).isEmpty)
         #expect(try await nextValue(from: output.summary) == nil)
         #expect(try await nextValue(from: output.isSearching) == false)
+    }
+
+    // MARK: - Mode path
+
+    @Test("the mode path is Find, the mode and its match style, the defaults unaccented")
+    func modePathForDefaultQuery() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        let path = try await nextValue(from: output.modePath)
+
+        #expect(path.map(\.title) == ["Find", "Text", "Containing"])
+        #expect(path.map(\.isAccented) == [false, false, false])
+        #expect(path[0].menuChoices.isEmpty)
+        #expect(path[1].choice == .mode(.text))
+        #expect(path[1].menuChoices.map(\.title) == ["Text", "Regular Expression", "Ancestor Types", "Descendant Types", "Conforming Types", "Members"])
+        #expect(path[2].choice == .textMatchStyle(.containing))
+        #expect(path[2].menuChoices.map(\.title) == ["Containing", "Matching Word", "Starting With", "Ending With"])
+    }
+
+    @Test("a mode without match styles ends the path, and a choice other than the default is accented")
+    func modePathAccentsChoicesOtherThanTheDefault() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        modePathChoiceSelectedRelay.accept(.mode(.regularExpression))
+        let regularExpressionPath = try await nextValue(from: output.modePath) { $0.count == 2 }
+        #expect(regularExpressionPath.map(\.title) == ["Find", "Regular Expression"])
+        #expect(regularExpressionPath.map(\.isAccented) == [false, true])
+
+        modePathChoiceSelectedRelay.accept(.mode(.text))
+        modePathChoiceSelectedRelay.accept(.textMatchStyle(.startingWith))
+        let textPath = try await nextValue(from: output.modePath) { $0.last?.choice == .textMatchStyle(.startingWith) }
+        #expect(textPath.map(\.title) == ["Find", "Text", "Starting With"])
+        #expect(textPath.map(\.isAccented) == [false, false, true])
+    }
+
+    @Test("Members mode offers the member match styles, the regular expression set apart")
+    func modePathForMembers() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        modePathChoiceSelectedRelay.accept(.mode(.members))
+        let path = try await nextValue(from: output.modePath) { $0.count == 3 && $0[1].choice == .mode(.members) }
+
+        #expect(path.map(\.title) == ["Find", "Members", "Containing"])
+        #expect(path.map(\.isAccented) == [false, true, false])
+        #expect(path[2].menuChoices.map(\.title) == ["Containing", "Matching Word", "Starting With", "Ending With", "Regular Expression"])
+        #expect(path[2].menuChoices.map(\.isPrecededBySeparator) == [false, false, false, false, true])
     }
 
     // MARK: - Text search
@@ -183,7 +236,7 @@ struct FindViewModelTests {
         let (viewModel, output) = makeViewModel(in: environment)
         defer { withExtendedLifetime(viewModel) {} }
 
-        modeSelectedRelay.accept(.members)
+        modePathChoiceSelectedRelay.accept(.mode(.members))
         memberKindFilterSelectedRelay.accept(.kind(.objcMethod))
         caseSensitiveToggledRelay.accept(true)
         searchCommittedRelay.accept("initWithFormat:")
@@ -212,7 +265,7 @@ struct FindViewModelTests {
         let (viewModel, output) = makeViewModel(in: environment)
         defer { withExtendedLifetime(viewModel) {} }
 
-        modeSelectedRelay.accept(.ancestorTypes)
+        modePathChoiceSelectedRelay.accept(.mode(.ancestorTypes))
         caseSensitiveToggledRelay.accept(true)
         searchCommittedRelay.accept("NSMutableString")
         let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
@@ -268,17 +321,176 @@ struct FindViewModelTests {
         try await focused
     }
 
+    // MARK: - Member match styles
+
+    @Test("the member match style is an edit of its own, kept apart from the text match style")
+    func memberMatchStyleEdit() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        modePathChoiceSelectedRelay.accept(.mode(.members))
+        modePathChoiceSelectedRelay.accept(.memberMatchStyle(.regularExpression))
+        let query = try await nextValue(from: output.query) { $0.memberMatchStyle == .regularExpression }
+
+        #expect(query.textMatchStyle == .containing)
+        #expect(environment.documentState.findSession.isSearching == false)
+    }
+
+    @Test("a member search matches names with the chosen match style")
+    func memberSearchMatchStyle() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        let (viewModel, _) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let session = environment.documentState.findSession
+
+        modePathChoiceSelectedRelay.accept(.mode(.members))
+        memberKindFilterSelectedRelay.accept(.kind(.objcProperty))
+        modePathChoiceSelectedRelay.accept(.memberMatchStyle(.matchingWord))
+        searchCommittedRelay.accept("length")
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+
+        // Whole words only: `length`, never `expectedContentLength`.
+        let names = Self.memberNames(in: session.results.nodes)
+        #expect(names.contains("length"))
+        #expect(names.allSatisfy { $0.caseInsensitiveCompare("length") == .orderedSame }, "\(Set(names).sorted())")
+    }
+
+    // MARK: - Scope
+
+    @Test("the scope button asks the sidebar level for the scope chooser, anchored at the button")
+    func scopeButtonOpensChooser() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, _) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let scopeButton = NSView()
+
+        scopeButtonClickedRelay.accept(scopeButton)
+        try await settleMainQueue()
+
+        #expect(router.triggeredRoutes.contains { route in
+            if case .findScopeChooser(let sender) = route { return sender === scopeButton }
+            return false
+        })
+    }
+
+    @Test("the scope button names the scope, and its tool tip the images in it")
+    func scopeButtonNamesTheScope() async throws {
+        let environment = ViewModelTestEnvironment()
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let session = environment.documentState.findSession
+
+        #expect(try await nextValue(from: output.scopeTitle) == "In Indexed Images")
+        #expect(try await nextValue(from: output.scopeToolTip) == nil)
+
+        session.update { $0.scope = .images([TestImages.foundation]) }
+        #expect(try await nextValue(from: output.scopeTitle) { $0 != "In Indexed Images" } == "In Foundation")
+
+        session.update { $0.scope = .images([TestImages.libobjc, TestImages.foundation]) }
+        #expect(try await nextValue(from: output.scopeTitle) { $0 == "In 2 Images" } == "In 2 Images")
+        #expect(try await nextValue(from: output.scopeToolTip) { $0?.contains("\n") == true } == "Foundation\nlibobjc.A.dylib")
+
+        session.update { $0.scope = .currentImage }
+        #expect(try await nextValue(from: output.scopeTitle) { $0 == "In Current Image" } == "In Current Image")
+        #expect(try await nextValue(from: output.scopeToolTip) { $0?.contains("\n") == false } == "No image is open in the sidebar")
+    }
+
+    @Test("a search limited to picked images finds only their types")
+    func searchInPickedImages() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        _ = try await environment.documentState.runtimeEngine.buildInterfaceCorpus(for: TestImages.libobjc, transformer: .default)
+        let (viewModel, _) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let session = environment.documentState.findSession
+
+        session.update { $0.scope = .images([TestImages.libobjc]) }
+        caseSensitiveToggledRelay.accept(true)
+        searchCommittedRelay.accept("NSObject")
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+
+        #expect(Set(session.results.nodes.compactMap(Self.imagePath(of:))) == [TestImages.libobjc])
+    }
+
+    @Test("the current image scope searches the image the sidebar lists, and says so when it lists none")
+    func currentImageScope() async throws {
+        let environment = try await Self.makeEnvironmentWithCorpus()
+        _ = try await environment.documentState.runtimeEngine.buildInterfaceCorpus(for: TestImages.libobjc, transformer: .default)
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+        let documentState = environment.documentState
+        let session = documentState.findSession
+
+        session.update { $0.scope = .currentImage }
+        caseSensitiveToggledRelay.accept(true)
+        searchCommittedRelay.accept("NSObject")
+        #expect(try await nextValue(from: output.summary) { $0 != nil } == "No current image")
+
+        // The tree has to outlive the search: a node reaches its path through
+        // its parent, which it holds weakly.
+        let imageTree = Fixtures.imageTree(rootName: "Images", imagePaths: [TestImages.libobjc])
+        documentState.selectionRouter.trigger(.switchImage(try #require(imageTree.leaf(forImagePath: TestImages.libobjc))))
+        searchCommittedRelay.accept("NSObject")
+        _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+
+        #expect(Set(session.results.nodes.compactMap(Self.imagePath(of:))) == [TestImages.libobjc])
+        withExtendedLifetime(imageTree) {}
+    }
+
+    @Test("a relationship search limited to picked images lists their types and the paths to them")
+    func relationshipSearchInPickedImages() async throws {
+        let engine = try await TestRuntimeEngine.shared()
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        let (viewModel, output) = makeViewModel(in: environment)
+        defer { withExtendedLifetime(viewModel) {} }
+
+        environment.documentState.findSession.update { $0.scope = .images([TestImages.foundation]) }
+        modePathChoiceSelectedRelay.accept(.mode(.descendantTypes))
+        caseSensitiveToggledRelay.accept(true)
+        searchCommittedRelay.accept("NSObject")
+        let nodes = try await nextValue(from: output.nodes, timeout: 60) { !$0.isEmpty }
+
+        // NSObject itself is libobjc's; what is listed under it is Foundation's.
+        let tree = try #require(nodes.first { node in
+            if case .object(let object, _) = node.content { return object.name == "NSObject" && object.kind == .objc(.type(.class)) }
+            return false
+        })
+        func everyNode(of nodes: [FindResultNode]) -> [FindResultNode] {
+            nodes.flatMap { [$0] + everyNode(of: $0.children) }
+        }
+        let relatedObjects = everyNode(of: tree.children).compactMap { node -> RuntimeObject? in
+            if case .relationship(_, let object) = node.content { return object }
+            return nil
+        }
+        #expect(relatedObjects.contains { $0.name == "NSString" })
+        #expect(!relatedObjects.contains { $0.name == "Protocol" && $0.imagePath == TestImages.libobjc })
+    }
+
     // MARK: - Helpers
+
+    private static func imagePath(of node: FindResultNode) -> String? {
+        if case .object(let object, _) = node.content {
+            return object.imagePath
+        }
+        return nil
+    }
+
+    private static func memberNames(in nodes: [FindResultNode]) -> [String] {
+        nodes.flatMap(\.children).compactMap { node in
+            if case .member(let match) = node.content { return match.member.name }
+            return nil
+        }
+    }
 
     private func makeViewModel(in environment: ViewModelTestEnvironment) -> (FindViewModel<SidebarRootRoute>, FindViewModel<SidebarRootRoute>.Output) {
         let viewModel = environment.make {
             FindViewModel<SidebarRootRoute>(documentState: environment.documentState, router: router)
         }
         let output = viewModel.transform(.init(
-            modeSelected: modeSelectedRelay.asSignal(),
-            textMatchStyleSelected: textMatchStyleSelectedRelay.asSignal(),
+            modePathChoiceSelected: modePathChoiceSelectedRelay.asSignal(),
             memberKindFilterSelected: memberKindFilterSelectedRelay.asSignal(),
             caseSensitiveToggled: caseSensitiveToggledRelay.asSignal(),
+            scopeButtonClicked: scopeButtonClickedRelay.asSignal(),
             searchCommitted: searchCommittedRelay.asSignal(),
             filterString: filterStringRelay.asDriver(),
             resultClicked: resultClickedRelay.asSignal(),

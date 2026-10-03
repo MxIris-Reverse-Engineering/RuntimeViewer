@@ -17,7 +17,8 @@ public enum RuntimeTypeRelationship: String, Codable, Hashable, Sendable, CaseIt
 }
 
 /// A relationship query: the name to look up, which relationship to walk,
-/// and how many matching types to build trees for.
+/// how many matching types to build trees for, and which images the related
+/// types may come from.
 public struct RuntimeTypeRelationshipsQuery: Hashable, Codable, Sendable {
     public var text: String
     public var relationship: RuntimeTypeRelationship
@@ -25,12 +26,20 @@ public struct RuntimeTypeRelationshipsQuery: Hashable, Codable, Sendable {
     /// Types whose name matches `text` exactly come first, then those that
     /// contain it; at most this many get a tree.
     public var candidateLimit: Int
+    /// The images whose types the trees list; `nil` lists every indexed
+    /// image's. The type named by `text` is looked up in every indexed image
+    /// either way — the subclasses in Foundation of libobjc's `NSObject` are
+    /// a fair question. A node from another image stays only when it leads
+    /// to one of these images' types, and a tree left with no nodes is
+    /// dropped.
+    public var imagePaths: Set<String>?
 
-    public init(text: String, relationship: RuntimeTypeRelationship, isCaseSensitive: Bool = false, candidateLimit: Int = 50) {
+    public init(text: String, relationship: RuntimeTypeRelationship, isCaseSensitive: Bool = false, candidateLimit: Int = 50, imagePaths: Set<String>? = nil) {
         self.text = text
         self.relationship = relationship
         self.isCaseSensitive = isCaseSensitive
         self.candidateLimit = candidateLimit
+        self.imagePaths = imagePaths
     }
 }
 

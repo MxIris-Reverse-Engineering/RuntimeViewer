@@ -3,17 +3,21 @@ import FoundationToolbox
 import RuntimeViewerCore
 import RuntimeViewerArchitectures
 import MemberwiseInit
+import UIFoundation
 
 /// One Find navigator page. Generic over the sidebar level's route because
 /// the page is a tab of both sidebar levels; the state lives in the
-/// document's `FindSession`, which both pages bind to.
-public final class FindViewModel<Route: Routable>: ViewModel<Route> {
+/// document's `FindSession`, which both pages bind to, and the scope chooser
+/// is presented by whichever level the page is on.
+public final class FindViewModel<Route: FindNavigatorRoutable>: ViewModel<Route> {
     @MemberwiseInit(.public)
     public struct Input {
-        public let modeSelected: Signal<FindMode>
-        public let textMatchStyleSelected: Signal<FindTextMatchStyle>
+        /// A choice made in one of the mode path's menus.
+        public let modePathChoiceSelected: Signal<FindModePathChoice>
         public let memberKindFilterSelected: Signal<FindMemberKindFilter>
         public let caseSensitiveToggled: Signal<Bool>
+        /// The scope button, which the scope chooser is anchored at.
+        public let scopeButtonClicked: Signal<NSUIView>
         /// Return in the search field: the text to search for.
         public let searchCommitted: Signal<String>
         /// The bottom filter bar, as typed.
@@ -24,6 +28,13 @@ public final class FindViewModel<Route: Routable>: ViewModel<Route> {
 
     public struct Output {
         public let query: Driver<FindQuery>
+        /// `Find ▸ Text ▸ Containing`: the components the mode path shows for the query.
+        public let modePath: Driver<[FindModePathComponent]>
+        /// `In Indexed Images`, `In Current Image`, `In Foundation`, `In 3 Images`.
+        public let scopeTitle: Driver<String>
+        /// The images a scope names, or what the sidebar lists for the current
+        /// image; `nil` for every indexed image.
+        public let scopeToolTip: Driver<String?>
         public let searchFieldPlaceholder: Driver<String>
         public let nodes: Driver<[FindResultNode]>
         /// `nil` hides the summary bar.
@@ -46,13 +57,8 @@ public final class FindViewModel<Route: Routable>: ViewModel<Route> {
     }
 
     public func transform(_ input: Input) -> Output {
-        input.modeSelected.emitOnNext { [session] mode in
-            session.update { $0.mode = mode }
-        }
-        .disposed(by: rx.disposeBag)
-
-        input.textMatchStyleSelected.emitOnNext { [session] style in
-            session.update { $0.textMatchStyle = style }
+        input.modePathChoiceSelected.emitOnNext { [session] choice in
+            session.update { choice.apply(to: &$0) }
         }
         .disposed(by: rx.disposeBag)
 
@@ -63,6 +69,12 @@ public final class FindViewModel<Route: Routable>: ViewModel<Route> {
 
         input.caseSensitiveToggled.emitOnNext { [session] isCaseSensitive in
             session.update { $0.isCaseSensitive = isCaseSensitive }
+        }
+        .disposed(by: rx.disposeBag)
+
+        input.scopeButtonClicked.emitOnNext { [weak self] sender in
+            guard let self else { return }
+            router.trigger(.findScopeChooser(sender: sender))
         }
         .disposed(by: rx.disposeBag)
 
@@ -99,8 +111,16 @@ public final class FindViewModel<Route: Routable>: ViewModel<Route> {
             .map { _ in () }
             .asSignal(onErrorSignalWith: .empty())
 
+        let scope = session.$query.asDriver().map(\.scope).distinctUntilChanged()
+        let scopeToolTip = Driver.combineLatest(scope, documentState.$currentImageNode.asDriver()) { scope, currentImageNode in
+            Self.toolTip(for: scope, currentImagePath: currentImageNode?.path)
+        }
+
         return Output(
             query: session.$query.asDriver(),
+            modePath: session.$query.asDriver().map(FindModePathComponent.path(for:)).distinctUntilChanged(),
+            scopeTitle: scope.map(\.title),
+            scopeToolTip: scopeToolTip,
             searchFieldPlaceholder: session.$query.asDriver().map(\.mode.searchFieldPlaceholder),
             nodes: nodes,
             summary: session.$summary.asDriver(),
@@ -108,6 +128,25 @@ public final class FindViewModel<Route: Routable>: ViewModel<Route> {
             focusSearchField: session.focusSearchFieldRelay.asSignal(),
             expandAll: expandAll
         )
+    }
+
+    // MARK: - Scope
+
+    /// The scope button's tool tip: the names of the images a scope picks,
+    /// one per line, or the image the sidebar lists; nothing for every
+    /// indexed image, which the title already says.
+    static func toolTip(for scope: FindScope, currentImagePath: String?) -> String? {
+        switch scope {
+        case .allIndexedImages:
+            return nil
+        case .currentImage:
+            return currentImagePath.map(FindScope.imageName(of:)) ?? "No image is open in the sidebar"
+        case .images(let imagePaths):
+            return imagePaths
+                .map(FindScope.imageName(of:))
+                .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+                .joined(separator: "\n")
+        }
     }
 
     // MARK: - Navigation

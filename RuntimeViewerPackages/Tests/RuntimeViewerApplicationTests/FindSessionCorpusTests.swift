@@ -53,6 +53,63 @@ struct FindSessionCorpusTests {
         await engine.stop()
     }
 
+    @Test("a corpus built after the search, outside its scope, is not read")
+    func corpusOutsideScopeIsNotRead() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindSessionCorpusTests.outsideScope", loading: [TestImages.libobjc])
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let documentState = environment.documentState
+        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        defer { withExtendedLifetime(coordinator) {} }
+        _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 60) { $0[TestImages.libobjc]?.isBuilt == true }
+
+        try await withSharedGenerationOptionsLock {
+            let session = documentState.findSession
+            session.run(FindQuery(mode: .text, text: "NSObject", scope: .images([TestImages.libobjc])))
+            _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 20) { !$0 }
+
+            // Opening Foundation brings its corpus in after the search. The
+            // session hears of it one main-actor turn after the coordinator
+            // reports it, so that turn has to pass before a search it would
+            // start can be waited for.
+            try await engine.loadImage(at: TestImages.foundation)
+            _ = try await nextValue(from: coordinator.$buildStatesByImagePath.asDriver(), timeout: 180) { $0[TestImages.foundation]?.isBuilt == true }
+            try await settleMainQueue()
+            _ = try await nextValue(from: session.$isSearching.asDriver(), timeout: 60) { !$0 }
+
+            #expect(session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.libobjc })
+            #expect(!session.results.nodes.contains { Self.imagePath(of: $0) == TestImages.foundation })
+        }
+
+        await engine.stop()
+    }
+
+    @Test("picking images asks the corpus coordinator for those not yet searchable")
+    func pickingImagesAsksForTheirCorpora() async throws {
+        let engine = try await TestRuntimeEngine.makeConnected(engineID: "FindSessionCorpusTests.pickedCorpora")
+        let environment = ViewModelTestEnvironment(runtimeEngine: engine)
+        environment.settings.search.isCorpusEnabled = true
+        let documentState = environment.documentState
+        let coordinator = environment.make { documentState.findCorpusCoordinator }
+        defer { withExtendedLifetime(coordinator) {} }
+        #expect(coordinator.buildStatesByImagePath[TestImages.libobjc] == nil)
+
+        documentState.findSession.update { $0.scope = .images([TestImages.libobjc]) }
+
+        #expect(coordinator.buildStatesByImagePath[TestImages.libobjc] != nil)
+        await engine.stop()
+    }
+
+    @Test("the summary bar speaks only of the corpora in the search's scope")
+    func corpusStatusWithinScope() {
+        let states: [String: RuntimeInterfaceCorpusBuildState] = [
+            "/usr/lib/libobjc.A.dylib": .pending,
+            "/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation": .building(RuntimeInterfaceCorpusBuildProgress(built: 37, total: 100)),
+        ]
+        #expect(FindSession.corpusStatus(of: states, within: ["/usr/lib/libobjc.A.dylib"]) == "1 image being made searchable")
+        #expect(FindSession.corpusStatus(of: states, within: ["/usr/lib/swift/libswiftCore.dylib"]) == nil)
+    }
+
     @Test("the summary bar says how many images are being made searchable and which is printing")
     func corpusStatusText() {
         let states: [String: RuntimeInterfaceCorpusBuildState] = [

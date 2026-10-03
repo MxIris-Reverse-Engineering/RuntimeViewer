@@ -54,6 +54,11 @@ final class SidebarRootCoordinator: ViewCoordinator<SidebarRootRoute, SidebarRoo
                     completion?()
                 }
             )
+        case .findScopeChooser(let sender):
+            let viewController = FindScopeChooserViewController<SidebarRootRoute>()
+            let viewModel = FindScopeChooserViewModel<SidebarRootRoute>(documentState: documentState, router: self)
+            viewController.setupBindings(for: viewModel)
+            return .presentOnRoot(viewController, mode: .asPopover(relativeToRect: sender.bounds, ofView: sender, preferredEdge: sender.bottomEdge, behavior: .transient))
         case .reports:
             return .select(index: 3)
         }

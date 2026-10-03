@@ -1,12 +1,13 @@
 import Foundation
 import Semantic
 
-/// Text matching over one frozen interface.
+/// Text matching over one frozen interface, and over member names.
 ///
 /// Pure functions over `FrozenSemanticString`: no actor, no state, so the
 /// matching rules — the four match styles, case folding, word boundaries,
 /// the scope → semantic-kind mapping, line numbering and the windowed line
-/// text — can be tested on hand-built strings without an engine.
+/// text — can be tested on hand-built strings without an engine. Member
+/// searches run the same rules over names.
 ///
 /// Offsets are UTF-8 bytes throughout the scan, because that is how the
 /// frozen text is stored and how its spans are measured; only the range
@@ -23,30 +24,42 @@ enum RuntimeInterfaceTextMatcher {
         case invalidRegularExpression(String)
     }
 
-    /// The query compiled once per search, not once per interface.
+    /// The query compiled once per search, not once per interface. Text and
+    /// member searches compile theirs the same way, so a match style means
+    /// the same thing in an interface and in a member's name.
     struct Pattern: Sendable {
-        let query: RuntimeInterfaceSearchQuery
+        let matchMode: RuntimeInterfaceSearchMatchMode
+        let isCaseSensitive: Bool
+        /// Which parts of an interface a hit may land in. A member's name has
+        /// no parts, so member searches leave it at `.all`.
+        let scope: RuntimeInterfaceSearchScope
         /// Query bytes, ASCII case-folded when the search is insensitive.
         let needle: [UInt8]
         /// `NSRegularExpression` rather than Swift `Regex`: the engine's
         /// deployment target predates the latter.
         let regex: NSRegularExpression?
 
-        init(_ query: RuntimeInterfaceSearchQuery) throws {
-            self.query = query
-            guard !query.text.isEmpty else { throw PatternError.emptyQuery }
-            if query.matchMode == .regularExpression {
+        init(text: String, matchMode: RuntimeInterfaceSearchMatchMode, isCaseSensitive: Bool, scope: RuntimeInterfaceSearchScope = .all) throws {
+            self.matchMode = matchMode
+            self.isCaseSensitive = isCaseSensitive
+            self.scope = scope
+            guard !text.isEmpty else { throw PatternError.emptyQuery }
+            if matchMode == .regularExpression {
                 do {
-                    self.regex = try NSRegularExpression(pattern: query.text, options: query.isCaseSensitive ? [] : [.caseInsensitive])
+                    self.regex = try NSRegularExpression(pattern: text, options: isCaseSensitive ? [] : [.caseInsensitive])
                 } catch {
                     throw PatternError.invalidRegularExpression("\(error)")
                 }
                 self.needle = []
             } else {
                 self.regex = nil
-                let bytes = Array(query.text.utf8)
-                self.needle = query.isCaseSensitive ? bytes : bytes.map(Self.asciiLowercased)
+                let bytes = Array(text.utf8)
+                self.needle = isCaseSensitive ? bytes : bytes.map(Self.asciiLowercased)
             }
+        }
+
+        init(_ query: RuntimeInterfaceSearchQuery) throws {
+            try self.init(text: query.text, matchMode: query.matchMode, isCaseSensitive: query.isCaseSensitive, scope: query.scope)
         }
 
         static func asciiLowercased(_ byte: UInt8) -> UInt8 {
@@ -89,8 +102,8 @@ enum RuntimeInterfaceTextMatcher {
     private static func literalHits(in text: String, pattern: Pattern) -> [Hit] {
         let needle = pattern.needle
         guard !needle.isEmpty else { return [] }
-        let isCaseSensitive = pattern.query.isCaseSensitive
-        let matchMode = pattern.query.matchMode
+        let isCaseSensitive = pattern.isCaseSensitive
+        let matchMode = pattern.matchMode
         var text = text
         return text.withUTF8 { haystack -> [Hit] in
             var result: [Hit] = []
@@ -180,7 +193,7 @@ enum RuntimeInterfaceTextMatcher {
                 continue
             }
             let kind = layout.semanticKind(atUTF8Offset: hit.utf8Offset)
-            guard pattern.query.scope.includes(kind) else { continue }
+            guard pattern.scope.includes(kind) else { continue }
             count += 1
             guard isCollecting else { continue }
             let match = makeMatch(for: hit, kind: kind, in: layout, object: object)
@@ -325,15 +338,22 @@ enum RuntimeInterfaceTextMatcher {
 
     // MARK: - Member names
 
-    /// Where `query` occurs in `name` as a plain substring, as a UTF-16 range,
-    /// or `nil`. Member search is always a substring search: member names are
-    /// short and the match styles of the text mode would only get in the way.
-    static func memberNameMatchRange(in name: String, query: String, isCaseSensitive: Bool) -> RuntimeTextRange? {
-        guard !query.isEmpty else { return nil }
-        let options: String.CompareOptions = isCaseSensitive ? [] : [.caseInsensitive]
-        guard let range = name.range(of: query, options: options) else { return nil }
-        let location = name.utf16.distance(from: name.startIndex, to: range.lowerBound)
-        let length = name.utf16.distance(from: range.lowerBound, to: range.upperBound)
-        return RuntimeTextRange(location: location, length: length)
+    /// Where `pattern` first matches `name`, as a UTF-16 range, or `nil`.
+    ///
+    /// The rules are the text search's, unchanged: the same match styles, the
+    /// same ASCII case folding, the same identifier boundaries. A member's
+    /// name is matched as if it were a line of text, so each piece of a
+    /// multi-part selector is a word of its own — `didSelect` starts
+    /// `tableView:didSelectRowAtIndexPath:` — while `delegate` is no whole
+    /// word of `setDelegate:` or `_delegate`.
+    static func memberNameMatchRange(in name: String, pattern: Pattern) -> RuntimeTextRange? {
+        guard let hit = hits(in: name, pattern: pattern).first else { return nil }
+        let utf8 = name.utf8
+        let startIndex = utf8.index(name.startIndex, offsetBy: hit.utf8Offset)
+        let endIndex = utf8.index(startIndex, offsetBy: hit.utf8Length)
+        return RuntimeTextRange(
+            location: name.utf16.distance(from: name.startIndex, to: startIndex),
+            length: name.utf16.distance(from: startIndex, to: endIndex)
+        )
     }
 }

@@ -99,10 +99,14 @@ public struct RuntimeMemberMatch: Hashable, Codable, Sendable {
     }
 }
 
-/// The member mode's query: a name fragment, an optional kind filter, case
-/// sensitivity and the global result cap.
+/// The member mode's query: what to look for in member names and how, an
+/// optional kind filter, case sensitivity and the global result cap.
 public struct RuntimeMemberSearchQuery: Hashable, Codable, Sendable {
     public var text: String
+    /// How `text` is matched against a member's name — the text search's
+    /// match styles under the text search's rules, so each piece of a
+    /// multi-part selector is a word of its own.
+    public var matchMode: RuntimeInterfaceSearchMatchMode
     /// `nil` means every kind.
     public var kinds: Set<RuntimeMemberKind>?
     public var isCaseSensitive: Bool
@@ -119,6 +123,7 @@ public struct RuntimeMemberSearchQuery: Hashable, Codable, Sendable {
 
     public init(
         text: String,
+        matchMode: RuntimeInterfaceSearchMatchMode = .containing,
         kinds: Set<RuntimeMemberKind>? = nil,
         isCaseSensitive: Bool = false,
         resultLimit: Int = 1000,
@@ -126,6 +131,7 @@ public struct RuntimeMemberSearchQuery: Hashable, Codable, Sendable {
         imagePaths: Set<String>? = nil
     ) {
         self.text = text
+        self.matchMode = matchMode
         self.kinds = kinds
         self.isCaseSensitive = isCaseSensitive
         self.resultLimit = resultLimit

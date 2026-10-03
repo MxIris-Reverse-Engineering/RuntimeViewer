@@ -92,8 +92,9 @@ public struct RuntimeInterfaceSearchQuery: Hashable, Codable, Sendable {
     /// part is not consulted: the corpus is already printed with it.
     public var generationOptions: RuntimeObjectInterface.GenerationOptions?
     /// The images to search, of those with a corpus; `nil` searches all of
-    /// them. A search already shown widens itself this way to an image whose
-    /// corpus was built after it ran.
+    /// them. The Find navigator's scope arrives here, and a search already
+    /// shown widens itself this way to an image whose corpus was built after
+    /// it ran.
     public var imagePaths: Set<String>?
 
     public init(
@@ -150,7 +151,8 @@ public struct RuntimeInterfaceSearchSummary: Hashable, Codable, Sendable {
     /// `true` when more hits exist than were collected.
     public let isTruncated: Bool
     /// Indexed images with no corpus yet (pending, building or failed), so
-    /// the UI can say what the search did not see.
+    /// the UI can say what the search did not see. Only the images the query
+    /// covers count: every indexed image, or those of its `imagePaths`.
     public let unbuiltIndexedImagePaths: [String]
 
     public var scannedImageCount: Int {

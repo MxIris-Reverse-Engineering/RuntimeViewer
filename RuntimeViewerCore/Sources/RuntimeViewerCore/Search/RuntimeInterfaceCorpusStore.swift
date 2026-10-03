@@ -626,7 +626,7 @@ actor RuntimeInterfaceCorpusStore {
             scannedImagePaths: scannedImagePaths,
             scannedObjectCount: scannedObjectCount,
             isTruncated: totalMatchCount > collectedCount,
-            unbuiltIndexedImagePaths: indexedImagePaths.subtracting(corpora.keys).sorted()
+            unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: query.imagePaths)
         )
     }
 
@@ -638,13 +638,22 @@ actor RuntimeInterfaceCorpusStore {
         return imagePaths.filter(scope.contains)
     }
 
-    /// The member counterpart of `searchInterfaces`: substring match on
-    /// member names, optional kind filter, same collection and counting rules.
+    /// The indexed images a search could not read for want of a corpus, of
+    /// those it was asked to cover: all of them, or those of `scope`.
+    private func unbuiltImagePaths(among indexedImagePaths: Set<String>, within scope: Set<String>?) -> [String] {
+        let coveredImagePaths = scope.map(indexedImagePaths.intersection) ?? indexedImagePaths
+        return coveredImagePaths.subtracting(corpora.keys).sorted()
+    }
+
+    /// The member counterpart of `searchInterfaces`: member names matched
+    /// with the text search's match styles, optional kind filter, same
+    /// collection and counting rules. An empty query matches no member.
     func searchMembers(
         _ query: RuntimeMemberSearchQuery,
         indexedImagePaths: Set<String>,
         onProgress: @Sendable ([RuntimeMemberMatch]) async -> Void
     ) async throws -> RuntimeInterfaceSearchSummary {
+        let pattern = query.text.isEmpty ? nil : try RuntimeInterfaceTextMatcher.Pattern(text: query.text, matchMode: query.matchMode, isCaseSensitive: query.isCaseSensitive)
         let visibility = query.generationOptions.map(RuntimeInterfaceVisibility.init)
         var totalMatchCount = 0
         var collectedCount = 0
@@ -658,12 +667,13 @@ actor RuntimeInterfaceCorpusStore {
             var batch: [RuntimeMemberMatch] = []
             for entry in corpus.entries {
                 scannedObjectCount += 1
+                guard let pattern else { continue }
                 // Projected only once a member of this entry matches: most
                 // entries have none, and they cost nothing.
                 var projection: (projection: VisibilityProjection, lineStartOffsets: [Int])??
                 for (memberIndex, member) in entry.members.enumerated() {
                     if let kinds = query.kinds, !kinds.contains(member.kind) { continue }
-                    guard let range = RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, query: query.text, isCaseSensitive: query.isCaseSensitive) else { continue }
+                    guard let range = RuntimeInterfaceTextMatcher.memberNameMatchRange(in: member.name, pattern: pattern) else { continue }
                     var shownMember = member
                     if let visibility {
                         if projection == nil {
@@ -691,7 +701,7 @@ actor RuntimeInterfaceCorpusStore {
             scannedImagePaths: scannedImagePaths,
             scannedObjectCount: scannedObjectCount,
             isTruncated: totalMatchCount > collectedCount,
-            unbuiltIndexedImagePaths: indexedImagePaths.subtracting(corpora.keys).sorted()
+            unbuiltIndexedImagePaths: unbuiltImagePaths(among: indexedImagePaths, within: query.imagePaths)
         )
     }
 }

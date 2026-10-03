@@ -54,8 +54,9 @@ extension RuntimeEngine {
     }
 
     /// Ancestor, descendant or conformer trees for every indexed type whose
-    /// name matches the query. Needs no corpus: the relationship tables are
-    /// built when an image is indexed.
+    /// name matches the query, holding only the types of the query's images
+    /// when it names some. Needs no corpus: the relationship tables are built
+    /// when an image is indexed.
     public func typeRelationships(_ query: RuntimeTypeRelationshipsQuery) async throws -> [RuntimeRelationshipTree] {
         try await dispatch(TypeRelationshipsRequest(query: query))
     }
@@ -121,7 +122,9 @@ extension RuntimeEngine {
     }
 
     func _typeRelationships(_ query: RuntimeTypeRelationshipsQuery) async -> [RuntimeRelationshipTree] {
-        await typeRelationshipsResolver.trees(for: query)
+        var query = query
+        query.imagePaths = query.imagePaths.map { Set($0.map(DyldUtilities.patchImagePathForDyld)) }
+        return await typeRelationshipsResolver.trees(for: query)
     }
 
     func _interfaceCorpusCoverage() async -> RuntimeInterfaceCorpusCoverage {

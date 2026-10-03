@@ -164,13 +164,59 @@ public final class FindResultNode: NSObject, @unchecked Sendable {
         return result
     }
 
+    /// Where the query matched the member's name, inside its declaration. A
+    /// name the declaration spells whole is found as is; a multi-part
+    /// selector is spelled piece by piece with its parameters in between, so
+    /// the piece the match starts in is found instead, keyword and colon.
     private static func nameRange(of match: RuntimeMemberMatch) -> NSRange? {
-        let declarationText = match.member.declarationText
-        guard let found = declarationText.range(of: match.member.name) else { return nil }
-        let location = declarationText.utf16.distance(from: declarationText.startIndex, to: found.lowerBound)
-        let length = declarationText.utf16.distance(from: found.lowerBound, to: found.upperBound)
-        return NSRange(location: location + match.matchRangeInName.location, length: match.matchRangeInName.length)
-            .clamped(toLengthOf: NSRange(location: location, length: length))
+        let declarationText = match.member.declarationText as NSString
+        let name = match.member.name as NSString
+        let matchRange = match.matchRangeInName.nsRange
+        let wholeNameRange = declarationText.range(of: name as String)
+        if wholeNameRange.location != NSNotFound {
+            return NSRange(location: wholeNameRange.location + matchRange.location, length: matchRange.length)
+                .clamped(toLengthOf: wholeNameRange)
+        }
+        guard let pieceRange = selectorPieceRange(in: name, containing: matchRange.location),
+              let pieceRangeInDeclaration = keywordRange(of: name.substring(with: pieceRange), in: declarationText)
+        else { return nil }
+        return NSRange(location: pieceRangeInDeclaration.location + matchRange.location - pieceRange.location, length: matchRange.length)
+            .clamped(toLengthOf: pieceRangeInDeclaration)
+    }
+
+    /// The piece of a selector, up to and including its colon, that the
+    /// UTF-16 `offset` falls in.
+    private static func selectorPieceRange(in name: NSString, containing offset: Int) -> NSRange? {
+        var pieceStart = 0
+        while pieceStart < name.length {
+            let colonRange = name.range(of: ":", range: NSRange(location: pieceStart, length: name.length - pieceStart))
+            let pieceEnd = colonRange.location == NSNotFound ? name.length : NSMaxRange(colonRange)
+            if offset < pieceEnd {
+                return NSRange(location: pieceStart, length: pieceEnd - pieceStart)
+            }
+            pieceStart = pieceEnd
+        }
+        return nil
+    }
+
+    /// The first place `keyword` starts a word in `declarationText`, so a
+    /// keyword is never found at the end of a longer one.
+    private static func keywordRange(of keyword: String, in declarationText: NSString) -> NSRange? {
+        var searchStart = 0
+        while searchStart < declarationText.length {
+            let found = declarationText.range(of: keyword, range: NSRange(location: searchStart, length: declarationText.length - searchStart))
+            guard found.location != NSNotFound else { return nil }
+            if found.location == 0 || !isIdentifierCharacter(declarationText.character(at: found.location - 1)) {
+                return found
+            }
+            searchStart = found.location + 1
+        }
+        return nil
+    }
+
+    private static func isIdentifierCharacter(_ character: unichar) -> Bool {
+        guard let scalar = Unicode.Scalar(character) else { return true }
+        return scalar == "_" || scalar == "$" || CharacterSet.alphanumerics.contains(scalar)
     }
     #endif
 }

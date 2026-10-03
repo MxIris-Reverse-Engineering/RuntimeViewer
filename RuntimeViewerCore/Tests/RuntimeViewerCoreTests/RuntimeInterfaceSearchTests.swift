@@ -123,6 +123,25 @@ struct RuntimeInterfaceSearchTests {
         #expect(!mutable.children.isEmpty)
     }
 
+    @Test("a relationship search limited to some images lists their types and the paths to them")
+    func relationshipsLimitedToImages() async throws {
+        let engine = try await Self.makeEngine("relationships-limited-to-images")
+        let trees = try await engine.typeRelationships(RuntimeTypeRelationshipsQuery(text: "NSObject", relationship: .descendants, isCaseSensitive: true, imagePaths: [Anchors.foundationPath]))
+
+        // The type asked about is found outside the images: NSObject is libobjc's.
+        let tree = try #require(trees.first { $0.root.name == "NSObject" && $0.root.kind == .objc(.type(.class)) })
+        #expect(tree.root.imagePath == Anchors.libobjcPath)
+        func everyNode(of nodes: [RuntimeRelationshipNode]) -> [RuntimeRelationshipNode] {
+            nodes.flatMap { [$0] + everyNode(of: $0.children) }
+        }
+        func leadsIntoFoundation(_ node: RuntimeRelationshipNode) -> Bool {
+            node.object?.imagePath == Anchors.foundationPath || node.children.contains(where: leadsIntoFoundation)
+        }
+        let nodes = everyNode(of: tree.nodes)
+        #expect(nodes.contains { $0.name == "NSString" })
+        #expect(nodes.allSatisfy(leadsIntoFoundation), "\(nodes.filter { !leadsIntoFoundation($0) }.prefix(5).map(\.name)) lead nowhere into Foundation")
+    }
+
     @Test("conformers of an Objective-C protocol, and the protocols refining it")
     func objcProtocolRelationships() async throws {
         let engine = try await Self.makeEngine("objc-protocol")

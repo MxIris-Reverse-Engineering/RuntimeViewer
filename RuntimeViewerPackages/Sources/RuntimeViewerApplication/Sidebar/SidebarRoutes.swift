@@ -37,6 +37,8 @@ public enum SidebarRootRoute: Routable {
     case bookmarks
     /// The Find navigator tab, with the focus moved into its search field.
     case find
+    /// The Find navigator's scope chooser, as a popover anchored at `sender`.
+    case findScopeChooser(sender: NSView)
     /// The Report navigator tab.
     case reports
 }
@@ -48,6 +50,8 @@ public enum SidebarRuntimeObjectRoute: Routable {
     case bookmarks
     /// The Find navigator tab, with the focus moved into its search field.
     case find
+    /// The Find navigator's scope chooser, as a popover anchored at `sender`.
+    case findScopeChooser(sender: NSView)
     /// The Report navigator tab.
     case reports
     /// Switch to the object list and have it reveal the document's object on
@@ -66,6 +70,11 @@ public enum SidebarRuntimeObjectRoute: Routable {
         availableProperties: RuntimeObject.Properties
     )
 }
+
+// Both levels have the Find navigator among their tabs; the enum cases are
+// the requirement's witnesses.
+extension SidebarRootRoute: FindNavigatorRoutable {}
+extension SidebarRuntimeObjectRoute: FindNavigatorRoutable {}
 #else
 public typealias SidebarRootRoute = SidebarRoute
 public typealias SidebarRuntimeObjectRoute = SidebarRoute

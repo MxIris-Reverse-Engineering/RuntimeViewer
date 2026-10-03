@@ -147,10 +147,38 @@ struct RuntimeInterfaceTextMatcherTests {
         #expect(short.range == RuntimeTextRange(location: 6, length: 4))
     }
 
-    @Test("member names match as substrings with a UTF-16 range")
-    func memberNameRange() {
-        #expect(RuntimeInterfaceTextMatcher.memberNameMatchRange(in: "initWithFrame:", query: "withframe", isCaseSensitive: false) == RuntimeTextRange(location: 4, length: 9))
-        #expect(RuntimeInterfaceTextMatcher.memberNameMatchRange(in: "initWithFrame:", query: "withframe", isCaseSensitive: true) == nil)
-        #expect(RuntimeInterfaceTextMatcher.memberNameMatchRange(in: "name", query: "", isCaseSensitive: false) == nil)
+    /// One member name, one query, and where the query should land in the
+    /// name — `nil` for nowhere.
+    struct MemberNameCase: Sendable, CustomTestStringConvertible {
+        let name: String
+        let query: String
+        let matchMode: RuntimeInterfaceSearchMatchMode
+        var isCaseSensitive = false
+        let expectedRange: RuntimeTextRange?
+
+        var testDescription: String {
+            "\(matchMode) \"\(query)\" in \(name)"
+        }
+    }
+
+    @Test("member names follow the text match styles, each selector piece a word of its own", arguments: [
+        MemberNameCase(name: "initWithFrame:", query: "withframe", matchMode: .containing, expectedRange: RuntimeTextRange(location: 4, length: 9)),
+        MemberNameCase(name: "initWithFrame:", query: "withframe", matchMode: .containing, isCaseSensitive: true, expectedRange: nil),
+        MemberNameCase(name: "tableView:didSelectRowAtIndexPath:", query: "did", matchMode: .startingWith, expectedRange: RuntimeTextRange(location: 10, length: 3)),
+        MemberNameCase(name: "tableView:didSelectRowAtIndexPath:", query: "Select", matchMode: .startingWith, expectedRange: nil),
+        MemberNameCase(name: "tableView:didSelectRowAtIndexPath:", query: "didSelectRowAtIndexPath", matchMode: .matchingWord, isCaseSensitive: true, expectedRange: RuntimeTextRange(location: 10, length: 23)),
+        MemberNameCase(name: "initWithFrame:", query: "Frame", matchMode: .endingWith, isCaseSensitive: true, expectedRange: RuntimeTextRange(location: 8, length: 5)),
+        MemberNameCase(name: "initWithFrame:", query: "With", matchMode: .endingWith, isCaseSensitive: true, expectedRange: nil),
+        MemberNameCase(name: "delegate", query: "delegate", matchMode: .matchingWord, expectedRange: RuntimeTextRange(location: 0, length: 8)),
+        MemberNameCase(name: "setDelegate:", query: "delegate", matchMode: .matchingWord, expectedRange: nil),
+        MemberNameCase(name: "_delegate", query: "delegate", matchMode: .matchingWord, expectedRange: nil),
+        MemberNameCase(name: "viewDidLoad", query: "load$", matchMode: .regularExpression, expectedRange: RuntimeTextRange(location: 7, length: 4)),
+        MemberNameCase(name: "viewDidLoad", query: "^load", matchMode: .regularExpression, expectedRange: nil),
+        // `ö` and `ß` are two UTF-8 bytes but one UTF-16 unit each.
+        MemberNameCase(name: "größeÄndern", query: "Ändern", matchMode: .containing, isCaseSensitive: true, expectedRange: RuntimeTextRange(location: 5, length: 6)),
+    ])
+    func memberNameMatchStyles(_ testCase: MemberNameCase) throws {
+        let pattern = try RuntimeInterfaceTextMatcher.Pattern(text: testCase.query, matchMode: testCase.matchMode, isCaseSensitive: testCase.isCaseSensitive)
+        #expect(RuntimeInterfaceTextMatcher.memberNameMatchRange(in: testCase.name, pattern: pattern) == testCase.expectedRange)
     }
 }

@@ -266,6 +266,46 @@ struct RuntimeInterfaceCorpusStoreTests {
         #expect(memberMatches.map(\.object.name) == ["Alpha", "Beta"])
     }
 
+    @Test("a search limited to some images counts only those among the images not yet searchable")
+    func scopedSearchReportsItsOwnUnbuiltImages() async throws {
+        let fixture = makeStore()
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageA, transformer: .default)
+        let indexedImagePaths: Set<String> = [Self.imageA, Self.imageB, Self.imageC]
+
+        let textSummary = try await store.searchInterfaces(RuntimeInterfaceSearchQuery(text: "member", imagePaths: [Self.imageA, Self.imageB]), indexedImagePaths: indexedImagePaths) { _ in }
+        let memberSummary = try await store.searchMembers(RuntimeMemberSearchQuery(text: "member", imagePaths: [Self.imageA, Self.imageB]), indexedImagePaths: indexedImagePaths) { _ in }
+
+        #expect(textSummary.unbuiltIndexedImagePaths == [Self.imageB])
+        #expect(memberSummary.unbuiltIndexedImagePaths == [Self.imageB])
+    }
+
+    /// The scripted members are `memberAlpha`, `memberBeta` and `memberGamma`.
+    @Test("a member search matches names with the text search's match styles", arguments: [
+        (RuntimeMemberSearchQuery(text: "beta", matchMode: .matchingWord), [String]()),
+        (RuntimeMemberSearchQuery(text: "memberbeta", matchMode: .matchingWord), ["memberBeta"]),
+        (RuntimeMemberSearchQuery(text: "alpha", matchMode: .startingWith), []),
+        (RuntimeMemberSearchQuery(text: "member", matchMode: .startingWith), ["memberAlpha", "memberBeta", "memberGamma"]),
+        (RuntimeMemberSearchQuery(text: "Gamma", matchMode: .endingWith, isCaseSensitive: true), ["memberGamma"]),
+        (RuntimeMemberSearchQuery(text: "member", matchMode: .endingWith), []),
+        (RuntimeMemberSearchQuery(text: "^member(Alpha|Gamma)$", matchMode: .regularExpression, isCaseSensitive: true), ["memberAlpha", "memberGamma"]),
+    ])
+    func memberMatchStyles(query: RuntimeMemberSearchQuery, expectedNames: [String]) async throws {
+        let fixture = makeStore()
+        defer { withExtendedLifetime(fixture) {} }
+        let store = fixture.store
+        _ = try await store.build(imagePath: Self.imageA, transformer: .default)
+        _ = try await store.build(imagePath: Self.imageB, transformer: .default)
+
+        var names: [String] = []
+        _ = try await store.searchMembers(query, indexedImagePaths: []) { batch in
+            names += batch.map(\.member.name)
+        }
+
+        #expect(names == expectedNames)
+    }
+
     @Test("a built image is searchable by text and by member name")
     func buildAndSearch() async throws {
         let fixture = makeStore()

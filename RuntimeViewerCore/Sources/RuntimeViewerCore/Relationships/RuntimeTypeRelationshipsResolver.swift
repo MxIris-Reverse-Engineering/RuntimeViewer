@@ -25,6 +25,10 @@ import SwiftDeclaration
 /// `NSObject` class — appears under both, the way Xcode lists it, while a
 /// cycle along one path (only a corrupt image has one) is still cut, and a
 /// depth cap backs that up.
+///
+/// A query limited to some images walks the same trees and then keeps only
+/// those images' types and the nodes leading to them; the type asked about
+/// is looked up everywhere regardless.
 @Loggable(.private)
 actor RuntimeTypeRelationshipsResolver {
     static let maximumDepth = 64
@@ -62,14 +66,35 @@ actor RuntimeTypeRelationshipsResolver {
             case .conformers:
                 nodes = await conformerNodes(of: candidate)
             }
-            trees.append(RuntimeRelationshipTree(root: candidate, nodes: nodes))
+            if let imagePaths = query.imagePaths {
+                let keptNodes = Self.nodes(nodes, leadingInto: imagePaths)
+                guard !keptNodes.isEmpty else { continue }
+                trees.append(RuntimeRelationshipTree(root: candidate, nodes: keptNodes))
+            } else {
+                trees.append(RuntimeRelationshipTree(root: candidate, nodes: nodes))
+            }
         }
         return trees
     }
 
+    /// The nodes for types of `imagePaths`, and those leading to one: a node
+    /// for another image's type, or for a type no indexed image defines,
+    /// stays only for what it leads to.
+    static func nodes(_ nodes: [RuntimeRelationshipNode], leadingInto imagePaths: Set<String>) -> [RuntimeRelationshipNode] {
+        nodes.compactMap { node in
+            let children = Self.nodes(node.children, leadingInto: imagePaths)
+            let isInImages = node.object.map { imagePaths.contains($0.imagePath) } ?? false
+            guard isInImages || !children.isEmpty else { return nil }
+            return RuntimeRelationshipNode(name: node.name, object: node.object, children: children)
+        }
+    }
+
     /// The types whose name matches the query, exact matches first, then by
     /// name. A Swift type matches on its qualified display name and on its
-    /// last component, so `View` finds `SwiftUI.View`.
+    /// last component, so `View` finds `SwiftUI.View`. A query limited to
+    /// some images puts their types first among the exact matches and among
+    /// the rest, so the candidate limit is spent on them before the types
+    /// whose trees may have nothing left in those images.
     private func candidateTypes(matching query: RuntimeTypeRelationshipsQuery) async -> [RuntimeObject] {
         let text = query.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return [] }
@@ -109,7 +134,16 @@ actor RuntimeTypeRelationshipsResolver {
         let sortedPartialMatches = partialMatches.sorted { left, right in
             left.displayName.localizedCaseInsensitiveCompare(right.displayName) == .orderedAscending
         }
-        return Array((Array(exactMatches) + sortedPartialMatches).prefix(max(0, query.candidateLimit)))
+        let candidates: [RuntimeObject]
+        if let imagePaths = query.imagePaths {
+            func inImagesFirst(_ objects: [RuntimeObject]) -> [RuntimeObject] {
+                objects.filter { imagePaths.contains($0.imagePath) } + objects.filter { !imagePaths.contains($0.imagePath) }
+            }
+            candidates = inImagesFirst(Array(exactMatches)) + inImagesFirst(sortedPartialMatches)
+        } else {
+            candidates = Array(exactMatches) + sortedPartialMatches
+        }
+        return Array(candidates.prefix(max(0, query.candidateLimit)))
     }
 
     /// Types with a place in a hierarchy: classes and protocols on both

@@ -2,7 +2,7 @@
 
 - **状态**: In Progress
 - **创建日期**: 2026-09-29
-- **最后更新**: 2026-10-01
+- **最后更新**: 2026-10-03
 - **所属愿景**: 无（内容区的行定位部分与《自建代码视图引擎》相邻，但本提案不改视图引擎的方向）
 - **前置设计**: `feature/interface-corpus-probe` 分支上的
   `Documentations/Plans/2026-07-26-global-search-design.md`（2026-07-27 按
@@ -18,8 +18,10 @@
 2. **关系**——输入一个类型名，列出它的 Ancestor Types / Descendant Types / Conforming Types，语义与 Xcode 一致
    （传递闭包，结果成树）。
 3. **成员**——按名字查找 ObjC property / method / ivar，Swift field / function / variable / subscript /
-   initializer，可按种类过滤；数据直接来自 section 里的结构（`ObjCClassInfo` 一族、`TypeDefinition` 一族），
-   不从文本反推。
+   initializer，匹配方式与文本相同（另加正则），可按种类过滤；数据直接来自 section 里的结构（`ObjCClassInfo` 一族、
+   `TypeDefinition` 一族），不从文本反推。
+
+三种模式的范围默认是全部已索引镜像，可以限定到侧栏当前的镜像或勾选的几个镜像（§7）。
 
 点击结果跳到对应类型，内容区滚到命中行并高亮（NSTextView 与 SourceEditor 两条路径都做）。面板的具体 UI 照
 Xcode Find navigator 的 view hierarchy 实现，由用户提供，本提案不设计 UI。
@@ -232,7 +234,8 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 - **行号来自同一趟打印的 span 序列**：打印完成后顺序遍历 Frozen 的 `.member(.declaration)` /
   `.function(.declaration)` / `.variable` span，与结构成员按名字顺序对齐（ObjC 多段 selector 取第一段对齐）。对不上
   的成员 `lineNumber` 为空，仍可搜、点击只跳到类型。
-- 查询：名字子串匹配（大小写可选），`kinds` 过滤；`RuntimeMemberMatch { object, member, matchRangeInName }`。
+- 查询：名字按匹配方式匹配（Containing / Matching Word / Starting With / Ending With / 正则，规则与文本模式相同，
+  见 §7；2026-10-03 之前只有子串），大小写可选，`kinds` 过滤；`RuntimeMemberMatch { object, member, matchRangeInName }`。
   `resultLimit` / truncated 语义与文本相同。
 
 #### 3.3 关系（Ancestor / Descendant / Conforming Types）
@@ -324,14 +327,15 @@ MachOSwiftSection 提案 0056（都叫 `visibility-regions`）。
 | 结果列表 | 填满 | `DVTScrollView`（无边框、不画背景、上下各 1pt 分隔线）+ `IDEFindNavigatorOutlineView` | `ScrollView` + `StatefulOutlineView`，`rx.nodes` |
 | 底部 Filter 栏 | 44 | `IDENavigatorSearchFilterControlBar` | 沿用侧栏 filter 栏的容器，只放一个搜索框 |
 
-**第一行（y 0–24）**：模式路径控件 `NSPathControl`，容器 frame `(3, 3, W−39, 17)`，`controlSize = .small`、字号 11，三个
-组件 Find ▸ Text ▸ Containing。我们的三个组件：`Find`（单项，无菜单）▸ 模式 `Text / Regular Expression / Ancestor Types /
+**第一行（y 0–24）**：模式路径控件，容器 frame `(3, 3, W−39, 17)`，`controlSize = .small`、字号 11，三个组件
+Find ▸ Text ▸ Containing。Xcode 用的不是 `NSPathControl`，而是 DVTKit 的 `DVTPathControl`，我们复刻为 `RuntimeViewerUI`
+的 `PopUpPathControl`，规格见 §4.2。我们的三个组件：`Find`（无菜单）▸ 模式 `Text / Regular Expression / Ancestor Types /
 Descendant Types / Conforming Types / Members` ▸ 第三组件按模式：Text 是 `Containing / Matching Word / Starting With /
-Ending With`，Members 是种类 `Any Member / ObjC Property / ObjC Method / ObjC Ivar / Swift Field / Swift Function /
-Swift Variable / Swift Subscript / Swift Initializer`，其余模式没有第三组件。右侧「Aa」大小写切换：`NSButton`
+Ending With`，Members 是同样四种匹配方式加 `Regular Expression`（2026-10-03 之前是成员种类，种类挪到了第三行，见 §7），
+其余模式没有第三组件。右侧「Aa」大小写切换：`NSButton`
 frame `(W−29, 3, 21, 16)`，title `Aa`、toolTip `Case Sensitive`、`.pushOnPushOff`、`bezelStyle = .smallSquare`、
-**`isBordered = false`**、字号 11、居中；on 时 `contentTintColor = .controlAccentColor`，off 时 `.secondaryLabelColor`
-（导出里看不到 on 态的绘制，这是假设）。
+**`isBordered = false`**、字号 11、居中；on 时字体加粗、`contentTintColor = .controlAccentColor`，off 时常规字体、不着色
+（`-[IDEFindNavigatorQueryParametersController refreshUserInterface:]`，IDEKit `0x198474`）。
 
 **第二行（y 24–48）**：`NSSearchField` frame `(7, 1, W−14, 22)`，`controlSize = .small`、字号 11、
 `sendsWholeSearchString = true`（**按 Return 才搜，不是逐字符**，与 Xcode 一致；设计稿里的 300 ms debounce 作废），
@@ -340,8 +344,8 @@ placeholder 随模式变：`Text` / `Regular Expression` / `Type Name`（三种�
 
 **第三行（y 48–72）**：范围容器 `(2, 0, W−4, 24)`，里面一个 **无边框** `NSPopUpButton` frame `(0, 5, 98, 15)`，
 `controlSize = .small`、字号 11、`bezelStyle = .regularSquare`、`isBordered = false`、`arrowPosition = .arrowAtBottom`、
-`pullsDown = false`，title `In Workspace`。我们只有一项 `In Indexed Images`（范围固定，见「不做」），保留这一行是给
-将来的范围档留位置。
+`pullsDown = false`，title `In Workspace`。我们的范围按钮外观照此，点开的是范围选择器而不是菜单；Members 模式在这一行
+右侧另有成员种类的弹出按钮。两者见 §7。
 
 **结果摘要条（y 72–94）**：`Label` frame `(10, 4, W−20, 14)`，系统字体 11 regular，颜色用 `secondaryLabelColor`
 （Xcode 是 DVTUserInterfaceKit 的 `parameterTextColor`，灰度 0.57），截尾；文案 `N results in M files` → 我们
@@ -371,6 +375,68 @@ placeholder 随模式变：`Text` / `Regular Expression` / `Type Name`（三种�
 按文本做包含过滤，不重新发请求。
 
 Xcode 顶部的导航器选择条（`IDETwoLevelChooserView`，28pt）对应我们侧栏已有的分页条，不另做。
+
+#### 4.2 模式路径控件：复刻 DVTPathControl（2026-10-03）
+
+Xcode 的模式路径不是 `NSPathControl`：DVTKit 带着一份私有的 `NSPathControl` 拷贝（`_DVTNSPathControl` /
+`_DVTNSPathCell` / `_DVTNSPathComponentCell`），在其上派生 `DVTPathControl` / `DVTPathCell` / `DVTPathComponentCell`，全部自绘。
+Find 导航器在 `-[IDEFindNavigatorQueryParametersController viewDidLoad]`（IDEKit `0x199130`）里用代码创建它，放进 nib 里的
+`_modeRowPathControlContainer`（`{{3, 3}, {208, 17}}`，所在行宽 247），`controlSize = .small`，
+`cell.selectsComponentsOneAtATime = YES`（菜单项不带子菜单），其余全是默认值：平直高亮（非胶囊）、`hoverHighlightInsets` 为零、
+菜单式呈现（非 popover）、`padsFirstItem = YES`；`drawsActive` 取 `dvt_effectiveIsActive`，导航区没人设 `dvt_activeState`，
+所以恒为 YES（DVTUserInterfaceKit `0xE4610`）。
+
+**证据来源**：Xcode 27.0（27A266a）。DVTKit Mach-O UUID `79126E33-3A82-3276-AF4B-CF215007F7B3`，头文件导出在
+`/Volumes/RE/Xcode/27.0/DVTKit/`（剥离 override 的版本）与 `/Volumes/RE/Xcode/27.0/SwiftSectionFull-20261002/DVTKit/`（完整版），
+IDA 库 `/Volumes/RE/Xcode/27.0/DVTKit.i64`；IDEKit UUID `FA11B07C-9B26-328B-8B0A-C1C4055354C6`，IDA 库
+`/Volumes/RE/Xcode/27.0/IDEKit.i64`（本次新建，来源记在同目录 README）。下表地址除注明外都是 DVTKit 内的偏移，伪代码都对照过汇编。
+
+| 规则 | 出处 | 取值 |
+|------|------|------|
+| 组件宽度 | `-[DVTPathComponentCell cellSizeForBounds:]` `0x337B0`、`-[_DVTNSPathComponentCell _fullWidth]` `0x28E94` | 左边距 + 标题宽 + 右侧箭头槽，按设备像素向外对齐 |
+| 左边距 | `_leftDividerWidth` `0x336DC` | 首个组件 7，其余 2（胶囊高亮时 6） |
+| 箭头槽 | `_rightDividerWidth` `0x3372C` | 14，最后一个组件也有（胶囊：末项 6、其余 15） |
+| 最小宽度 | `_minWidth` `0x3376C`、`+_iconSizeForControlSize:` `0x33E30` | 左边距 + 16（即使没有图标）+ 14 |
+| 放不下时 | `-[_DVTNSPathCell _updateSizesForInteriorFrame:]` `0x24440` | 中间组件（首个与末两个之外）从最宽的往下拉平，再缩首个到最小，再缩倒数第二个；末个不缩 |
+| 越界 | `-[_DVTNSPathCell rectOfPathComponentCell:withFrame:inView:]` `0x2693C` | 跨过右边缘的那个被裁切，之后的不显示 |
+| 绘制顺序 | `-[DVTPathComponentCell drawWithFrame:inView:]` `0x345E4` | 箭头 → 悬停底 → 标题；末个组件只在悬停时画箭头 |
+| 悬停底 | `_drawHoveredInFrame:` `0x348E4`、`_highlightHeight` `0x34764` | 覆盖整个组件（含箭头槽），圆角 4，高度不超过 21（small / mini；其余 28），比控件矮时垂直居中 |
+| 悬停底颜色 | `-[DVTTheme hoveredScopeControlColor]` DVTUserInterfaceKit `0x67214` → `0x67308` | 深色 5% 白，浅色 5% 黑 |
+| 箭头图像 | `_currentDividerImageForControlView:` `0x33930`、`+initialize` `0x32DAC`、`_hoverChevronSymbolConfigWithActiveAndEnabled:demiSized:` `0x338F4` | 平时 `chevron.compact.right`，11pt（`smallSystemFontSize`）；悬停时换成 DVTKit 私有的 `chevrons.popup`，8pt；窗口激活且控件可用时 medium，否则 bold |
+| 箭头位置 | `_drawDividerForFrame:inControlView:` `0x33AEC` | 在箭头槽里居中；图像左边不超过「组件左缘 + 左边距 + 16」时不画 |
+| 箭头颜色 | 同上 | 深色：激活 `labelColor`，否则 `secondaryLabelColor`；浅色：未激活 `tertiaryLabelColor`，激活时悬停 `labelColor`、不悬停 `secondaryLabelColor` |
+| 标题颜色 | `-[DVTPathComponentCell textColor]` `0x335F0`、`-[NSWindow dvt_useActiveAppearance]` DVTCocoaAdditionsKit `0x1660C` | 委托给的颜色优先；否则窗口激活（key / main / 全屏 / panel）`labelColor`，未激活时深色 `secondaryLabelColor`、浅色 `tertiaryLabelColor`；不随控件 enabled 变化 |
+| 强调色 | IDEKit `0x19C9FC` 与三个组件类的 `usesAlternateColor` | Replace、Text 以外的类别、Containing 以外的锚定方式画成 `controlAccentColor` |
+| 标题 | `drawInteriorWithFrame:inView:` `0x34D18` | 空间不足 3pt 不画；可伸进箭头槽 2pt；纵向 `floor((midY − 高/2) × 缩放) / 缩放`；超出可用宽度 0.9pt 以上则渐隐 |
+| 渐隐 | `_drawGradientMaskForTitleRect:` `0x349FC` | 末尾 10pt 从不透明到透明，`destinationIn` 合成，不用省略号 |
+| 展开动画 | `-[_DVTNSPathCell _createHoverChangeAnimation]` `0x25F3C`、`animation:didReachProgressMark:` `0x26128` | 被压缩的组件悬停时 0.2 秒内展开到全宽，其余回到压缩宽度；按动画原始进度线性插值 |
+| 悬停跟踪 | `-[_DVTNSPathControl updateTrackingAreas]` `0x29860` | 每个组件一块 tracking area，`activeAlways` + `enabledDuringMouseDrag`；路径一变就按指针位置重定悬停组件 |
+| 点击 | `-[DVTPathCell trackMouse:inRect:ofView:untilMouseUp:]` `0x30C88` → `_handleClickInComponentCell:…` `0x30A8C` | 按下即弹菜单；右键同样（`-[DVTPathControl rightMouseDown:]` `0x36654`）；不抢焦点 |
+| 菜单 | `popUpMenuForComponentCell:inRect:ofView:withMenuItems:` `0x2FA90` | 列出该组件的同级项，字号同控件，`autoenablesItems = NO`；当前项用 `popUpMenuPositioningItem:` 放在 `(组件左缘 − 14 + 2〔无图标〕 + 5〔首个组件〕, 组件中线 − 11)`，标题正好压在组件标题上 |
+| 菜单项 | `_menuItemWithItem:additionalItems:currentGroupIdentifier:indentationLevel:` `0x2E35C`、`_popUpMenuItemsForPathCellItems:` `0x2EC1C` | 不设 state（没有勾）；组别变化处插分隔线 |
+| 键盘 | `-[DVTPathControl acceptsFirstResponder]` `0x3642C`、`becomeFirstResponder` `0x364E8`、`keyDown:` `0x3634C`、`moveLeft:` … `0x3641C`–`0x36428`、`focusRingMaskBounds` `0x36110` | 只在 Tab / Shift-Tab 移动 key view 时接受焦点（需要全键盘访问）；Tab 进来聚焦首个、Shift-Tab 聚焦末个；←→ 换组件，空格 / 回车 / ↑↓ 弹菜单；焦点环只框当前组件 |
+| 辅助功能 | `-[_DVTNSPathCell accessibilityRoleAttribute]` `0x27F14`、`DVTPathComponentCellAccessibilityObject` `0x32684` / `0x32BFC` | 控件是 AXList，每个组件是 AXPopUpButton，值为标题，Press / ShowMenu 弹菜单 |
+
+`DVTPathControl` 另装的点按 / 长按手势识别器（`0x60FDC`）只认直接触摸（Sidecar），鼠标不走它们，不复刻。
+
+**我们的实现**：`RuntimeViewerUI/AppKit/PopUpPathControl.swift`，`Control`（UIFoundation 的 `NSControl` 子类）上整段自绘，规则逐条照上表并
+在注释里标出 DVTKit 方法名。模型是 `PopUpPathControl.Component`（标题、可选标题颜色、当前值、菜单项）与 `PopUpPathControl.MenuItem`；
+选中菜单项后控件记下 `lastSelection` 并发 action，自己不改路径，由拥有者重设 `components`。与 Xcode 的差别，都是有意的：
+
+- 没有菜单的组件（我们的 `Find`）不悬停、不弹菜单、键盘焦点跳过它，辅助功能里是静态文本。Xcode 的 `Find` 切换 Find / Replace，我们没有 Replace。
+- 悬停时的上下箭头用 SF Symbols 的 `chevron.up.chevron.down`（同为 8pt）：`chevrons.popup` 是 DVTKit 的私有资源。
+- 悬停跟踪用一块覆盖整个控件的 tracking area 加 `mouseMoved` 按指针位置判定，代替每组件一块：结果相同，不依赖相邻两块 area 的
+  进出事件谁先到。菜单关闭后也按指针位置重定一次悬停组件（Xcode 要等下一次鼠标移动）。
+- `dvt_useActiveAppearance` 里那个私有的 `hasKeyAppearance` 不查；图标、胶囊高亮、popover 呈现、拖拽、文件代理菜单、RTL、
+  常规 / 大号尺寸的专属规则（`usesPseudoLargeControlSize`、大号图标尺寸）都不做——Find 导航器用不到。
+
+Find 页面这边：路径的组成（标题、当前项、哪一项该强调、各组件菜单里列什么）由 `FindModePathComponent.path(for:)`
+（`RuntimeViewerApplication/Find/FindModePath.swift`）从查询算出，作为 `FindViewModel.Output.modePath` 输出；三处菜单的选择合成一个
+`Input.modePathChoiceSelected`（`FindModePathChoice`），视图控制器用 RxAppKit 的 `rx.click(with: \.lastSelection)` 接控件，
+原先的三个 relay 与手写的 `@objc` 菜单代码删掉。控件放在 `(3, 3)`，右缘离「Aa」7pt，与 Xcode 的 `W − 39` 宽一致。
+
+**测试**：`PopUpPathControlTests`（`RuntimeViewerApplicationTests`）从公开接口验证——组件位置读辅助功能元素的 frame，悬停读控件画出来的像素，
+菜单经 `menuPresenter`（internal，测试替换它，因为菜单的跟踪循环在测试里跑不起来）；`FindViewModelTests` 加三条 `modePath` 用例。
 
 ### 5. 验证
 
@@ -424,11 +490,92 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 3. PR-2（App）：coordinator + Settings + `FindViewModel` + 面板（照 hierarchy）+ 跳转与定位 + SourceEditor 桥。
 4. 提案落地时编号，与 PR-2 同批次置为 Implemented。
 
+### 7. 搜索范围与成员匹配方式（2026-10-03）
+
+用户实测的两处不便：范围写死为全部已索引镜像，没法只搜某个框架；成员模式只有子串匹配。提问轮定了三件事，另有五条
+未问而定的假设（都见决策日志）。
+
+**范围模型**。`FindQuery.scope: FindScope`：`allIndexedImages`（默认）、`currentImage`（侧栏正在列出的镜像，即
+`DocumentState.currentImageNode`，搜索时才取值）、`images(Set<String>)`（勾选的一个或多个镜像）。`FindSession.run` 把它
+解析成请求的 `imagePaths`：全部为 `nil`；`currentImage` 而侧栏停在镜像列表那一层时不发请求，摘要栏写 `No current image`。
+换引擎时范围保留，引擎没有的已选镜像在选择器里标成 `not indexed`（原写「回到全部」，实施时改，见决策日志）。
+
+**范围选择器**。第三行左侧的范围按钮，标题随范围变：`In Indexed Images` / `In Current Image` / `In Foundation` /
+`In 3 Images`（多个时 tooltip 列出镜像名）。点开的是 popover 而不是菜单，思路同 Xcode 的
+`IDEFindNavigatorScopeChooserController`（IDEKit 里那个可组合多个范围的大纲列表）：顶部过滤框；`All Indexed Images` 与
+`Current Image (AppKit)` 两个单选行，没有当前镜像时第二行置灰；分隔线下是镜像列表，每行一个勾选框（标题是镜像名，
+tooltip 是完整路径），右侧是语料状态（`waiting` / `building 37%` / `failed`，已建好的不写）。勾选即改范围，取消最后一个回到
+全部；改动当场写进 `FindSession`，点面板外即关。列表 = 引擎的 `indexedImagePathList()`（打开时取一次）∪ 语料协调器知道的
+镜像 ∪ 已选的镜像，按镜像名排序；状态跟着 `FindCorpusCoordinator.buildStatesByImagePath` 实时变。行数是百级，cell
+ViewModel 照常 eager 建。布局按提问轮的示意实现；用户提供 Xcode 范围选择器的 view hierarchy 后再按它量化。
+
+MVVM-C 的落点：`FindScopeChooserViewModel<Route>` 与镜像行的 `FindScopeImageCellViewModel` 在
+`RuntimeViewerApplication/Find/`，`FindScopeChooserViewController<Route>` 在 App。两层侧栏的路由各加
+`findScopeChooser(sender:)`，coordinator 以 popover 呈现，写法同侧栏 Filter Scope 的 `.scope`；`FindViewModel` 的 `Route`
+约束为新协议 `FindNavigatorRoutable`，它的静态要求由两个路由枚举的 case 直接满足（SE-0280）。
+
+**范围在三类搜索里的含义统一为「结果只来自这些镜像」**：
+
+- 文本 / 成员：`imagePaths` 原样交给引擎——这个参数早就有，原先只用于语料晚建成后的补搜。引擎摘要的
+  `unbuiltIndexedImagePaths` 改为只算范围内的镜像；晚建成的语料只有在范围内才补搜；摘要栏的
+  「N images being made searchable · building X%」也只算范围内的。补搜那一趟的引擎摘要只覆盖补搜的镜像，所以补搜后
+  「还不能搜」的列表改为原列表减去这趟读过的镜像，不再取引擎的值。
+- 关系：`RuntimeTypeRelationshipsQuery` 加 `imagePaths`。输入的类型仍在全部已索引镜像里找——否则范围 AppKit 搜
+  `NSObject` 的子类会落空，`NSObject` 在 libobjc。树建好后剪枝：不在范围内、下面也没有范围内类型的节点去掉；不在范围内
+  但通往范围内类型的中间层保留；剪空的树整棵去掉。
+- 范围里语料还没建好的镜像经 `FindCorpusCoordinator.requestBuild(of:isPrioritized: true)` 插队，已在队里的只前移；选定
+  范围时与搜索时各做一次。会话经 `follow(_:)` 拿到的协调器做这件事，不自己去创建协调器。
+
+**成员匹配方式**。`RuntimeMemberSearchQuery` 加 `matchMode: RuntimeInterfaceSearchMatchMode`（默认 `.containing`），与文本
+搜索同一个枚举。`RuntimeInterfaceTextMatcher.Pattern` 不再绑定 `RuntimeInterfaceSearchQuery`，改为
+`init(text:matchMode:isCaseSensitive:)`；成员名与正文用同一个匹配器，取第一处命中，专用的
+`memberNameMatchRange(in:query:isCaseSensitive:)` 删除。规则与文本模式完全相同：词内字符只有 `[A-Za-z0-9_$]` 与非 ASCII
+字节，不按驼峰拆。所以 ObjC 选择子按 `:` 分段、每段一个词：`Starting With did` 命中
+`tableView:didSelectRowAtIndexPath:`，`Matching Word delegate` 不命中 `setDelegate:` 与 `_delegate`。空查询仍然不命中任何
+成员；正则写错时整次搜索失败、报在摘要栏，与文本模式相同。
+
+**面板**。Members 模式下路径第三段改为匹配方式：`Containing / Matching Word / Starting With / Ending With`，分隔线后
+`Regular Expression`（文本模式的正则仍是第二段里单独的模式，照 Xcode）。成员种类挪到第三行右侧的无边框弹出按钮
+（`Any Member ⌄`），只在 Members 模式出现。`FindQuery` 加 `memberMatchStyle`（新枚举 `FindMemberMatchStyle`，比
+`FindTextMatchStyle` 多一个 `regularExpression`），与 `textMatchStyle` 分开存，在两个模式间切换不会把正则带进文本模式。
+改范围、匹配方式、种类都只改查询，按 Return 才搜，与改模式一致。
+
+**成员行加粗**。结果行在声明文本里找整个成员名，再套上命中范围；多段选择子在声明里被参数类型隔开，找不到就不加粗。
+新匹配方式下命中常落在后面几段，改为找命中所在的那一段（连同冒号）。
+
+**测试**（先写，确认改动前是红的）：
+
+- Core：matcher 对成员名的四种方式、正则、多段选择子、大小写，以及命中前有非 ASCII 字符时的 UTF-16 范围；store 的成员
+  匹配方式与只算范围内的 `unbuiltIndexedImagePaths`；剪枝的纯函数测试，以及 Foundation 上的引擎测试——范围 Foundation
+  搜 `NSObject` 的子类，根仍是 libobjc 的 `NSObject`，其余已解析节点要么在 Foundation、要么下面有 Foundation 的类型，
+  libobjc 自己的类不出现。
+- Application：`FindViewModelTests` 补匹配方式与种类的编辑、按范围搜索不越界、`currentImage` 为空时的摘要；
+  `FindSessionCorpusTests` 补「范围外的语料建成后不并入」；新的 `FindScopeChooserViewModelTests` 覆盖列表、过滤、勾选
+  语义、两个单选行与语料状态文字；摘要栏的范围过滤测纯函数。
+- App：整 App 构建通过。popover 与第三行的交互验证照旧留给用户。
+
+**不做**：Xcode 的自定义命名范围（规则编辑器）；范围跨文档、跨启动保存；改范围后自动重搜。
+
+**实施记录（2026-10-03）**：
+
+- 按上文落地，三处与方案不同（理由见决策日志）：换引擎时范围**不**回到全部，选择器把引擎没有的已选镜像标成
+  `not indexed`；关系搜索有范围时，候选类型里范围内的排在前面，候选上限先花在它们身上；范围按钮是
+  `NSPopUpButton` 的子类 `FindScopeButton`，外观仍是 §4.1 量出的无边框弹出按钮，`mouseDown(with:)` 与
+  `performClick(_:)` 改为发出动作（打开选择器），菜单里只放标题一项。
+- 成员种类的弹出按钮用 RxAppKit 的 `rx.click(with: \.indexOfSelectedItem)` 取值，只在用户选择时发出：两层侧栏各有一个
+  Find 分页、共用一个查询，一个绑定时就发出自身当前值的输入，会用这一页的默认值盖掉另一页选好的种类。
+- 测试：Core 新增 `RuntimeTypeRelationshipsImageScopeTests`，`RuntimeInterfaceTextMatcherTests` 的成员名用例改为
+  13 个参数化用例，`RuntimeInterfaceCorpusStoreTests` 加范围内的「还不能搜」与成员匹配方式（7 个用例），
+  `RuntimeInterfaceSearchTests` 加 Foundation 上的关系范围测试；改动前 store 两条与关系一条确认是红的。Application
+  新增 `FindScopeChooserViewModelTests`（6）、`FindResultMemberEmphasisTests`（2，后段命中那条改动前是红的），
+  `FindViewModelTests` 加 7 条、`FindSessionCorpusTests` 加 3 条。后写的两条会话测试用变异检查确认能变红：去掉补搜时的
+  范围交集、去掉改范围时的插队，各自失败；补搜那条第一次没有失败——会话经 `emitOnNextMainActor` 晚一个主线程回合才
+  知道语料建好，测试在补搜开始前就检查了结果，加一次 `settleMainQueue()` 后才能抓到。
+
 ### 不做
 
 - 语料落盘（注释里的地址是 per-run 的，落盘要先剔除地址列或按 slide 归一化）。
 - CLI / MCP 命令（请求层已 CLI / MCP-ready，命令本身归《无头 RuntimeViewer》下一篇）。
-- 「当前镜像」范围档：设计稿的范围就是全部已索引镜像，覆盖率 UI 负责说明还没建的部分。
 - Conforming Types 经 refining 协议的传递 conformer；跨进程搜索的 batching / caching；iOS 版。
 
 ## 决策日志
@@ -487,3 +634,15 @@ NSTextView 与 SourceEditor 两种编辑器下各跳一次、跨镜像结果跳�
 | 2026-10-01 | §1.1 第 1 条改为方案 D 落地（叠加分支 `feature/find-navigator-nested-definition-regions`，依赖未合入的上游：MachOSwiftSection `86f65341`、swift-semantic-string `ef4bd30`、swift-demangling `e17ae7f`，用 SwiftPM edit 模式构建；上游合入 next 后再并回本分支） | 用户：「现在做，放在叠加分支上」。做法：语料的工作单元从单个对象改为「一个对象连同它的全部后代」（`RuntimeInterfaceCorpusBuilding.corpusPrints(of:transformer:)`，store 按列表里连续的家族切分）；父对象用开了 `marksNestedDefinitions` 的语料打印器打印一次，每个后代按名字（即 mangled name）、嵌套深度和外层区域找到自己的区域，切出、去掉 `depth + 1` 级缩进后作为自己的定义，再接上它自己另外打印的扩展（冻结串还原成 `SemanticString` 拼接后统一冻结，边界的 span 合并与直接打印一致）；找不到区域或去缩进失败就单独打印。嵌套块范围直接取区域表里深度 0、且名字属于侧栏所列子对象的区域，方案 B 的「缩进后子串匹配」与按 `"\nextension "` 截断协议的写法一并删除。上游 `a93960d3` 之后，写在别的模块类型 extension 里的协议不再自带默认实现，RV 在 `extensionContext != nil` 时自己接上（Foundation 的 `AsyncMessage`、`MainActorMessage`）。另：打印宽度改为 `max(1, min(4, 核数 / 2))`，`DyldUtilities.loadImage` 成功后调用 `RuntimeFieldLayoutMemo.removeAll()`。验证：Foundation 852 个嵌套类型的语料逐个与单独打印比较（文本、可见性区域、嵌套块）全部相同；把去缩进层数故意少算一级时 852 个全不同，把 extension 协议的条件去掉时那两个协议的默认实现消失——两条测试都先见红。Core 全量 580 个测试中 578 个通过：批次取消测试单独连跑三次全过（满载时序）；关系快照（`RelationshipsEquivalenceSnapshotTests` 的 Swift 半边）的四个 `Decimal.FormatStyle.*` 变成 `NSDecimal.FormatStyle.*`，在 `feature/find-navigator` + 本地 next 上、把 swift-demangling 换回修复前的 `35d550a` 时都同样出现，与本分支和两个上游 feature 分支都无关；基线记于 2026-08-15（`b99cfb7a`）。来源是 MachOSwiftSection 提案 0023（`1c8d8588`，2026-09-09）：C 导入类型按运行时规则改用 ABI 名（`Decimal` → `__C.NSDecimal`，`NSRange` → `__C._NSRange`），让描述符推出的名字节点与符号 demangle 出的一致；是有意的变化，RV 的基线该更新（MachOSwiftSection 会话确认，并更正了我先前归因的 `f786458f`——那个提交只改 interface 打印器，`displayName` 不经过它）。 |
 | 2026-10-01 | 叠加分支并回 `feature/find-navigator`，RV 的远程依赖改指：MachOSwiftSection → `feature/runtime-viewer/find-navigator`，swift-demangling → `next`，swift-semantic-string 仍为 `next`（定义区域已快进合入其 next 并推送，`ef4bd30`） | 用户：「RuntimeViewer -> feature/find-navigator 最新；MachOSwiftSection -> feature/runtime-viewer/find-navigator；swift-demangling -> next；swift-semantic-string -> next」。swift-demangling 由 Core 在顶层直接声明 `branch: "next"`，覆盖 MachOSwiftSection 要的 0.7 发布版；Core 本来就直接 `import Demangling`，这也补正了一个隐式依赖。三个 workspace 的锁文件用 `UpdatePackagesScript.sh` 刷新，顺带把 AppKitPlus-Release（0.6.0）、UIFoundation（0.38.0）、MachOKitExtensions（1.0.0）、SwiftMCP（1.13.0）升到清单允许的最新版。代价：共享的 `.worktrees/MachOSwiftSection` 仍指向 MachOSwiftSection 的 next，本分支只能用远程依赖构建（`RunScript.sh` 的默认），`--local-deps` 编不过；那个分支合入 MachOSwiftSection 的 next 后，清单改回 `next`。 |
 | 2026-10-03 | 结果行的字体、颜色、图标全部收进 `FindResultCellStyle`；命中行的未命中部分改用 `secondaryLabelColor`，字号与类型行标题分开（`hitLineFont`，13）；命中片段保持 semibold，并显式设 `labelColor` | 用户微调结果行样式：「未匹配单独抽出来，用secondaryLabelColor」「字体和颜色还有图标全部抽成常量吧，这样方便我改」。命中片段原本只设字体、颜色沿用整行底色，底色改灰后它会跟着变灰，所以单独设回 `labelColor`。图标尺寸原先在构建外观处和 cell 的约束里各写一次，标题左边距 19 也是按 16 的图标算死的，现在约束直接引用常量、标题跟在图标后面，改尺寸只动一处。 |
+| 2026-10-03 | 推翻 2026-09-29 的「范围固定为全部已索引镜像」：查询加范围（全部 / 侧栏当前的镜像 / 勾选的镜像）；成员查询加匹配方式。方案写进 §7，待用户确认后动工 | 用户实测：「目前的查找体验还是不好……没办法选择特定框架，写死了所有已索引的image，另外Member查找时，不能走普通文本的查找，contains, matchWord, startWith等等」。当初不做范围档的理由是覆盖率 UI 能说明某个镜像为什么搜不到，但它解决不了「只想看某个框架里的结果」。成员只做子串的理由（成员名短、匹配方式碍事）也不成立：多段 ObjC 选择子与大量同前缀的成员名正需要按词、按开头筛。 |
+| 2026-10-03 | 提问轮三条，用户都选了推荐项：范围用 Xcode 式选择器（popover、过滤框、可多选、标出语料状态），不用弹出菜单；Members 模式路径第三段放匹配方式，成员种类挪到第三行的弹出按钮；关系模式只保留范围内的结果，输入的类型本身不受范围限制、通往范围内类型的中间层保留 | 镜像上百个时（启发式索引深度可调到 5）菜单只能靠键入首字母找，也不能多选；路径加第四段在侧栏窄时会被截断；关系模式若只限定「去哪找输入的类型」，范围 AppKit 搜 `NSObject` 的子类会落空。剪枝让范围在三类搜索里是同一个意思：结果只来自这些镜像。 |
+| 2026-10-03 | 未问而定、随提问一并列给用户且未被反对的五条：成员名的分词规则与文本模式相同（只认 `[A-Za-z0-9_$]`，不按驼峰拆）；成员模式也有正则（匹配方式菜单最后一项）；改范围与匹配方式不自动重搜；「当前镜像」指侧栏正在列的镜像，在镜像列表那一层时不可选；可选的镜像是全部已索引镜像，不只语料已建好的 | 分词与文本模式一致，同一个查询在两个模式里含义相同；不自动重搜与现有的改模式行为一致；只列语料建好的镜像会让还在建的那些无法提前选中，而选中正好能让它插队。 |
+| 2026-10-03 | §7 开工 | 用户：「开工」。 |
+| 2026-10-03 | 换引擎时不重置范围（偏离 §7 原文） | 原方案以为换引擎后路径都会失效，但在本机的几个进程之间切换时系统框架的路径完全相同，重置会丢掉一个仍然有效的范围。只有换到 iOS 设备或模拟器时路径才对不上，那时选择器把这些已选镜像标成 `not indexed`，用户一眼就能看到并取消。 |
+| 2026-10-03 | 关系搜索有范围时，候选类型里范围内的排在前面（§7 未写） | 候选上限 50 在剪枝之前生效，部分匹配按名字排序时，前 50 个可能全是剪完为空的类型，范围内真正有结果的类型反而排不进来。只调整范围内外的先后，不改精确匹配优先的规则。 |
+| 2026-10-03 | 成员种类弹出按钮只取用户的选择；曾怀疑分页的大小写开关会在重绑时把共享查询写回 false，探针证伪 | 两层侧栏的 Find 分页共用一个查询，绑定时就发出当前值的输入会盖掉另一页的选择，所以种类弹出按钮用 `rx.click(with:)`。大小写开关写的是 `caseSensitiveButton.rx.state.asSignal()`：RxCocoa 的 `rx.state` 是绑定即发当前值的 `ControlProperty`，但它没有无参数的 `asSignal()`，只有 `ControlEvent` 有，于是类型检查选中 RxAppKit 动态成员的 `ControlEvent` 重载，只在点击时发值。临时探针照分页原样接线、先把共享查询设为大小写敏感再绑定，结果保持 true；探针未入库。 |
+| 2026-10-03 | 模式路径改用复刻 Xcode `DVTPathControl` 的自绘控件 `PathControl`（`RuntimeViewerUI`），规格与证据见 §4.2 | 用户：「复刻一下 Xcode 的 DVTPathControl，我们现在的这个 PathControl 是假的，选中效果也不一样」。反编译 Xcode 27.0 的 DVTKit / IDEKit 确认 Xcode 用的是 DVTKit 私有的 `NSPathControl` 拷贝、全部自绘：悬停底、悬停时换上下箭头、菜单把当前项压在组件上且不打勾，这些 `NSPathControl` 都没有。范围由用户选「Find 导航器用到的全部」（悬停、点击菜单、颜色、尺寸、压缩 / 渐隐 / 展开动画、键盘、辅助功能），不做图标、胶囊高亮、popover、拖拽、常规 / 大号尺寸；放在 `RuntimeViewerUI` 随本分支交付，不进 UIFoundation（那样要先发版再抬依赖）。 |
+| 2026-10-03 | 与 Xcode 的四处有意偏离：`Find` 无菜单、不悬停；悬停箭头用 `chevron.up.chevron.down`；一块 tracking area 判定悬停，菜单关闭后按指针重定；键盘焦点跳过无菜单的组件 | 我们没有 Replace，只列自己一项的菜单没有意义；`chevrons.popup` 是 DVTKit 私有资源；一块 area 不依赖相邻两块进出事件的先后，菜单关闭时指针可能已经离开；聚焦一个按什么都不做的组件没有用。 |
+| 2026-10-03 | 三处菜单的选择合成 `FindViewModel.Input.modePathChoiceSelected`，路径组成挪进 `FindViewModel.Output.modePath` | 新控件自己发 action，用 RxAppKit 的 `rx.click(with: \.lastSelection)` 接即可，原先的三个 relay 和手写的 `@objc` 菜单代码没有存在的理由；路径组成（含哪一项该强调）放在 ViewModel 里才测得到。测试替换菜单弹出入口 `menuPresenter`（internal）经用户同意。 |
+| 2026-10-03 | 「Aa」按钮照 Xcode：开启时加粗 + 强调色，关闭时常规字体、不着色 | 用户：「一起改」。依据 IDEKit `-[IDEFindNavigatorQueryParametersController refreshUserInterface:]`（`0x198474`）；§4.1 原先写的「off 时 `secondaryLabelColor`」是猜的。 |
+| 2026-10-03 | 控件改名 `PopUpPathControl`（文件、测试套件同步改名） | 用户：「不要直接叫 PathControl，这种名字一般属于基类」。每个组件都是一个弹出按钮：菜单打开时当前项压在组件上，与 `NSPopUpButton` 一致，辅助功能里也是 AXPopUpButton；DVTKit 自己的方法也叫 `popUpMenuForComponentCell:`。 |
