@@ -78,6 +78,12 @@ specific to it:
   directory beside the staged payload, which is what the payload's own
   `@loader_path/Frameworks` entry resolves. macOS never had to deal with this —
   macOS 27 still ships the shim in `/usr/lib/swift`.
+- **Signing and packaging are not Xcode's job here.** No provisioning profile
+  grants the variant's five entitlements, so the target sets
+  `CODE_SIGNING_ALLOWED = NO` and the product comes out unsigned;
+  `BuildJailbrokenIPAScript.sh` signs every Mach-O in it with `vphone-cli sign`
+  and packages the `.ipa`. A build installed by Xcode carries none of the five
+  and can neither list processes nor inject into one.
 
 ```bash
 # Debug build + launch (configuration "Debug-arm64e", workspace
@@ -101,6 +107,23 @@ specific to it:
 
 # Build RuntimeViewerServer XCFramework (all platforms)
 ./BuildRuntimeViewerServerXCFramework.sh
+
+# Build the jailbroken iOS variant and package it as an installable .ipa, signed
+# with the five entitlements it needs (scheme "RuntimeViewer iOS Jailbroken").
+# Goes through RuntimeViewer-Debug.xcworkspace, NOT RuntimeViewer.xcworkspace:
+# the variant is arm64e and only the Debug and Distribution workspaces set
+# iOSPackagesShouldBuildARM64e, so through the plain workspace every package
+# product comes out arm64-only and the payload fails to link. The script checks
+# for that setting up front rather than letting a cold build discover it.
+# Output: Products/Jailbroken/RuntimeViewerJailbroken.ipa. The script reads the
+# entitlements back off the packaged .ipa and fails when one is missing. Install
+# it with something that honours the entitlements already on the binary — vphoned
+# preserves them, a jailbreak installer grants them; Xcode re-signs and loses all
+# five. Defaults to Debug, the configuration verified on a device.
+./BuildJailbrokenIPAScript.sh
+./BuildJailbrokenIPAScript.sh --configuration Release
+./BuildJailbrokenIPAScript.sh --no-build   # re-package the last build
+./BuildJailbrokenIPAScript.sh --dry-run    # print commands without running
 
 # Update the package pins of all three workspaces (RuntimeViewer, -Debug,
 # -Distribution) to the newest versions the manifests allow. Use this instead of

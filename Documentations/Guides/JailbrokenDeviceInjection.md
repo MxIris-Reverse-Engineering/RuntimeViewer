@@ -20,6 +20,15 @@
    走 Xcode 正常 Run 装进去的版本**一条都没有**。前三条缺任意一条，功能整体不可用；
    后两条缺了是降级，不是报废 —— 仍然能注 daemon，因为系统本来就不挂起 daemon。
 
+   **怎么产出一个带着这五条的包**：在仓库根目录跑 `./BuildJailbrokenIPAScript.sh`。它构建
+   `RuntimeViewer iOS Jailbroken` 这个 scheme，用 `vphone-cli sign` 逐个签包里的 Mach-O（只有主可
+   执行带 entitlements，框架只要一个能加载的普通签名），打成
+   `Products/Jailbroken/RuntimeViewerJailbroken.ipa`，最后从打好的包里把 entitlements 读回来逐条
+   核对 —— 少一条就直接失败，不会交出一个装上去才发现列不出进程的包。
+
+   安装要用**会尊重二进制既有 entitlements** 的途径：vphoned 安装时会保留，越狱安装器直接授予。
+   装好之后再经 Xcode 跑一次会重签，五条全丢。
+
 2. **设备和 Mac 在同一个二层链路上**，且**设备能主动连到 Mac**。
 
 ### 网络：方向是「设备连 Mac」，不是反过来

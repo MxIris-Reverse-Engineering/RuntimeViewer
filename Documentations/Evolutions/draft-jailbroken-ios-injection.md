@@ -3,7 +3,7 @@
 - **状态**: Accepted
 - **作者**: JH
 - **创建日期**: 2026-10-01
-- **最后更新**: 2026-10-02
+- **最后更新**: 2026-10-04
 - **所属愿景**: 无
 - **关联提案**: [0014](0014-inject-ios-simulator-process.md)（模拟器注入；本提案是它明确列为非目标的「真机」那一半）
 - **实现分支 / PR**: `feature/jailbroken-ios-injection`
@@ -866,3 +866,5 @@ tooltip，与新门禁统一；若你希望 SIP 保持弹提示（它更像「�
 | 2026-10-02 | 两处映射没有单测,如实记下 | `AttachToProcessViewModel` / `MainViewModel` / `RemoteProcessItemSource` 都住在 App target,而**这个 target 没有测试 bundle**(工程里唯一的测试 target 是 `RuntimeViewerSourceEditorBridgeTests`)。这是既有结构,不在本提案范围内改。因此落地步骤 6 原写的「补 `RuntimeViewerApplicationTests` 契约测试」在这里不适用 —— 真正可测的部分已经测了:门禁的分流判据在 `RuntimeViewerCoreTests`(8 例),选择器的两条可选性规则与数据源在上游仓库(14 例)。剩下的映射只能靠第 8 步端到端覆盖。 |
 | 2026-10-02 | sheet 把引擎**持住**,不在确认时重读 | 读自己写的代码时发现的一个窄口子:选择器用「打开 sheet 那一刻的引擎」列清单,而 ViewModel 原本在用户确认时才去读 `documentState.runtimeEngine`。两者可以不一致 —— 对端断开后被替换会在 sheet 打开期间换掉文档的引擎 —— 而用户挑的那个 pid **只在它被列出来的那台机器上有意义**。重读等于拿另一台机器进程表里的标识符去注入当前选中的引擎,正是本设计一再要避免的那类错误。改成由协调器把同一个引擎传给两半。 |
 | 2026-10-02 | 顺带在真实构建里验证了模拟器切片未受影响 | 为了拿一个干净的绿灯,把模拟器 payload 建出来暂存到 copy phase 期望的位置。产物是 `x86_64 arm64` —— 这比之前只用 `-showBuildSettings` 查解析值更硬地证明了 `ARCHS[sdk=iphoneos*]` 那条改动没有碰到模拟器与 Catalyst 切片。 |
+| 2026-10-04 | 打包固化成仓库里的 `BuildJailbrokenIPAScript.sh` | 越狱版的签名**不可能**交给 Xcode（五条 entitlement 没有任何 provisioning profile 授予，target 因此带 `CODE_SIGNING_ALLOWED = NO`、产物是未签名的），所以它从来是「`xcodebuild` 构建 → `vphone-cli sign` 逐个签 → 手工 zip 成 `Payload/`」三段手工操作，此前只存在于一个一次性脚本里。固化时把原先写死的三处改成现读：**bundle identifier 从产物 `Info.plist` 读**（Debug 是 `dev.JH…`、Release 是 `com.JH…`，写死一个会在另一个配置上签错身份）；**要签的 Mach-O 用 `find` + `file` 现找**（内嵌框架随包依赖图变，写死清单会静默过期，而漏签一个框架的表现是设备上启动失败、离脚本很远）；**校验用的 entitlement 清单从 entitlements 文件自己读**（一次性脚本那条 grep 漏匹配了 `com.apple.multitasking.unlimitedassertions`，五条只显示四条，得另外手工核对，现在加一条就自动纳入校验且少一条直接失败）。另加两条原先没有的检查：主可执行必须有 **arm64e** 切片（没有就注不进系统进程），以及 entitlements 从**打好的 .ipa** 里读回来核对，因为被安装的是 .ipa 而不是暂存目录。只删 `__preview.dylib`、保留 `.debug.dylib`：`otool -L` 查过，主可执行真的链接后者，删了起不来。默认 `Debug`，因为那是真机验证过的配置。 |
+| 2026-10-04 | **越狱版只能用带 `iOSPackagesShouldBuildARM64e` 的 workspace 构建** —— `RuntimeViewer.xcworkspace` 不带，用它构建必在链接载荷时失败 | 写打包脚本时默认选了 `RuntimeViewer.xcworkspace`（主 workspace，远程 pin，看起来是最中立的选择），构建跑了十分钟后死在 `RuntimeViewerMobileServer` 的链接步：`Undefined symbols for architecture arm64e`，点名 `RuntimeViewerCore.RuntimePayloadRendezvous`、`RuntimeViewerCommunication.RuntimeNetworkBonjour`、`OSToolbox.LoggableMacro` —— 即它链接的每个 SwiftPM 包产物都没有 arm64e 切片。根因是**那是个 workspace 级设置**：三个 workspace 里只有 `-Debug` 和 `-Distribution` 的 `WorkspaceSettings.xcsettings` 写了 `iOSPackagesShouldBuildARM64e=true`，主 workspace 没有。越狱版 App 是 `ARCHS = arm64e`、载荷是 `arm64 arm64e`，两者都要包产物有 arm64e，所以这个开关对本变体是硬前提。**错误信息里没有任何一个字指向 workspace**，而代价是一次完整冷编，所以脚本里加了一条前置检查：workspace 的 settings 不含这个键就立刻失败并说明换哪个。脚本默认因此改为 `RuntimeViewer-Debug.xcworkspace`。验收（走 Debug workspace 重跑）：主可执行 `arm64e`、载荷 `arm64 arm64e`、四个内层 Mach-O 各自有签名、五条 entitlement 从打好的 .ipa 里逐条读回来全部命中、被跟踪的 `Package.resolved` SHA 未变。 |
