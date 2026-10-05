@@ -97,6 +97,17 @@ public final class RuntimeDeviceInjectionService: RuntimeInjectionService {
         try RuntimeDeviceProcessEnumerator.processList(injectorUserIdentifier: getuid())
     }
 
+    /// The icon files of these bundles, forwarded as the bytes that are in
+    /// them.
+    ///
+    /// The validation that makes this safe to expose to a network peer is
+    /// ``RuntimeDeviceApplicationIconLocator``'s, not this method's — it is the
+    /// one place a supplied path becomes a file system location, and it refuses
+    /// everything that is not an application bundle.
+    public func applicationIcons(forBundlesAtPaths applicationBundlePaths: [String]) async -> [String: Data] {
+        RuntimeDeviceApplicationIconLocator.iconData(forApplicationBundlesAtPaths: applicationBundlePaths)
+    }
+
     public func inject(
         intoProcessWithIdentifier processIdentifier: pid_t,
         rendezvous: RuntimePayloadRendezvous?,

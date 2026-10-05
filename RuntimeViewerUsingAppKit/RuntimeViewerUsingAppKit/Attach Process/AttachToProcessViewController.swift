@@ -59,15 +59,17 @@ final class AttachToProcessViewController: BaseViewController<AttachToProcessVie
             // directly. The Applications tab is dropped rather than left empty: it can only
             // ever show this Mac's applications, which are not attachable targets here.
             //
-            // Fields: no icon (there is none to fetch across the connection), no platform
-            // (every process on one device shares it), no sandbox column (not reported).
+            // Fields: no platform (every process on one device shares it) and no sandbox
+            // column (not reported). The icon *is* shown — the far end reads it out of the
+            // target's own application bundle and sends the PNG, and a process that has no
+            // bundle gets the generic executable icon, so no row is ever blank.
             let processConfiguration = RunningPickerTabViewController.ProcessConfiguration(
                 style: .list,
                 title: "Attach To Process on \(itemSource.machineName)",
                 description: "Select a process on \(itemSource.machineName) to attach to",
                 cancelButtonTitle: "Cancel",
                 confirmButtonTitle: "Attach",
-                allowsFields: [.name, .pid, .executablePath]
+                allowsFields: [.icon, .name, .pid, .executablePath]
             )
             self.pickerViewController = RunningPickerTabViewController(
                 configuration: .init(tabs: [.processes]),

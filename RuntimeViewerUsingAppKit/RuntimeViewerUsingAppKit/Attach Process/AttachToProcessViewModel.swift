@@ -65,6 +65,9 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     @Dependency(\.runtimeEngineManager)
     private var runtimeEngineManager
 
+    @Dependency(\.runtimeEngineIconProvider)
+    private var runtimeEngineIconProvider
+
     @RxObserved private(set) var isAttaching: Bool = false
 
     override var delayedLoading: Driver<Bool> {
@@ -110,7 +113,11 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                         let attacher = RuntimeProcessAttacher(engineManager: runtimeEngineManager, injectClient: runtimeInjectClient)
                         _ = try await attacher.attach(target)
                     } else {
-                        try await attachToRemoteProcess(target, using: runtimeEngine)
+                        // The row's icon travels with the target. It is the one
+                        // thing about a process on a device that this side
+                        // cannot work out later: it came from a file in a bundle
+                        // on that device, fetched to draw this very row.
+                        try await attachToRemoteProcess(target, icon: runningItem.icon, using: runtimeEngine)
                     }
                     router.trigger(.dismiss)
                 } catch {
@@ -135,9 +142,17 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
     /// before the rendezvous existed, still advertise themselves instead; the wait races
     /// both and drops the half nobody used. See
     /// `Documentations/Evolutions/draft-device-payload-reverse-connection.md`.
+    ///
+    /// - Parameter icon: What the picker showed for this process — the application's own
+    ///   icon, or the generic executable icon for a daemon. Recorded against the engine
+    ///   that reports in, because nothing downstream could derive it: the engine list
+    ///   resolves an icon from `NSRunningApplication`, which knows only this Mac's
+    ///   processes, and would otherwise fall back to the icon of the *device* and label
+    ///   every injected process with a picture of the phone.
     @discardableResult
     private func attachToRemoteProcess(
         _ target: RuntimeProcessAttacher.Target,
+        icon: NSImage?,
         using runtimeEngine: RuntimeEngine,
     ) async throws -> RuntimeEngine {
         // Still needed, and only for the advertising half of the race: an advertisement is
@@ -181,12 +196,18 @@ final class AttachToProcessViewModel: ViewModel<MainRoute> {
                 throw AttachFailure.injectionRefused(result)
             }
 
-            return try await runtimeEngineManager.awaitInjectedDeviceEngine(
+            // Either half of the race can win, so the icon is filed against the engine
+            // that actually reported in rather than the one the listener created.
+            let injectedEngine = try await runtimeEngineManager.awaitInjectedDeviceEngine(
                 name: target.name,
                 rendezvous: rendezvous,
                 deviceID: deviceIdentifier,
                 processIdentifier: target.processIdentifier,
             )
+            if let icon {
+                runtimeEngineIconProvider.record(icon, for: injectedEngine)
+            }
+            return injectedEngine
         } catch {
             // Every failure from here on leaves a listener nobody will ever dial. Left in
             // place it would hold its port and show up in the engine list as a process that

@@ -27,6 +27,32 @@ public protocol RuntimeInjectionService: Sendable {
     /// silently omits things cannot answer "why is it not there?".
     func processList() async throws -> [RuntimeProcess]
 
+    /// The icons of these application bundles, as the PNG bytes in them, keyed
+    /// by the bundle path asked for.
+    ///
+    /// Fetched by bundle rather than carried by ``RuntimeProcess`` so that the
+    /// several processes of one application — its app extensions included,
+    /// which resolve to their host — cost one icon between them, and so the
+    /// process list stays as cheap as it was for every caller that wants no
+    /// icons.
+    ///
+    /// A bundle with no icon is simply absent from the result. There is nothing
+    /// to report about it: plenty of bundles ship their icon only inside a
+    /// compiled asset catalogue, and the caller's answer is the same as for a
+    /// daemon either way.
+    ///
+    /// **The paths come from the caller, which on a device means over the
+    /// network.** An implementation must accept nothing but application bundle
+    /// paths and must read nothing out of one but the icon file names that
+    /// bundle's own `Info.plist` declares — otherwise this is an arbitrary file
+    /// read primitive with a network interface. See
+    /// `RuntimeDeviceApplicationIconLocator`.
+    ///
+    /// Defaulted to nothing, which is the honest answer for macOS: the host
+    /// lists its own processes there and gets their icons from `NSWorkspace`
+    /// without asking anyone.
+    func applicationIcons(forBundlesAtPaths applicationBundlePaths: [String]) async -> [String: Data]
+
     /// Loads the payload into the process with this identifier.
     ///
     /// Returns a result rather than throwing: the caller branches on *which*
@@ -63,4 +89,6 @@ public protocol RuntimeInjectionService: Sendable {
 
 extension RuntimeInjectionService {
     public func stopKeepingProcessAwake(withIdentifier processIdentifier: pid_t) async {}
+
+    public func applicationIcons(forBundlesAtPaths applicationBundlePaths: [String]) async -> [String: Data] { [:] }
 }

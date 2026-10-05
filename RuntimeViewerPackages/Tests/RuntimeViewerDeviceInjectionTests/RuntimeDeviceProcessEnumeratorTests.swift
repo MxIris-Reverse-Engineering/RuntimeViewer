@@ -196,4 +196,54 @@ struct RuntimeDeviceProcessEnumeratorTests {
             #expect(launchdRow.injectability.isInjectable == false)
         }
     }
+
+    // MARK: - The application bundle
+
+    /// That the resolved bundle actually reaches the wire.
+    ///
+    /// ``RuntimeDeviceApplicationIconLocatorTests`` covers what the resolution
+    /// *is*; these three cover the one line that puts it on the row, which
+    /// nothing else would catch. Measured against the live process table rather
+    /// than a fixture, because what can go wrong is the field never being
+    /// filled — and a fixture list would be filled by the test itself.
+    @Test("A process whose executable is inside an application reports that bundle")
+    func bundledProcessesReportTheirBundle() throws {
+        let processes = try RuntimeDeviceProcessEnumerator.processList(injectorUserIdentifier: getuid())
+        for process in processes {
+            guard let executablePath = process.executablePath,
+                  let expected = RuntimeDeviceApplicationIconLocator
+                      .applicationBundlePath(forExecutableAtPath: executablePath)
+            else { continue }
+            #expect(process.applicationBundlePath == expected)
+        }
+    }
+
+    /// The invariant the host relies on when it asks for icons: a reported path
+    /// names an application directory, and it is an ancestor of the executable
+    /// rather than something assembled another way.
+    @Test("A reported bundle path is an application directory containing the executable")
+    func reportedBundlePathsAreWellFormed() throws {
+        let processes = try RuntimeDeviceProcessEnumerator.processList(injectorUserIdentifier: getuid())
+        for process in processes {
+            guard let applicationBundlePath = process.applicationBundlePath else { continue }
+            #expect(applicationBundlePath.hasSuffix(".app"))
+            #expect(applicationBundlePath.hasPrefix("/"))
+            let executablePath = try #require(
+                process.executablePath,
+                "A bundle path can only come from an executable path, so one without the other is a bug.",
+            )
+            #expect(executablePath.hasPrefix(applicationBundlePath + "/"))
+        }
+    }
+
+    /// A daemon belongs to no bundle, and nearly every process on a device is a
+    /// daemon — so this is the common answer, and it has to stay `nil` rather
+    /// than become an empty string or the executable's own directory.
+    @Test("A process outside any application reports no bundle")
+    func unbundledProcessesReportNothing() throws {
+        let processes = try RuntimeDeviceProcessEnumerator.processList(injectorUserIdentifier: getuid())
+        for process in processes where process.executablePath?.contains(".app/") == false {
+            #expect(process.applicationBundlePath == nil)
+        }
+    }
 }

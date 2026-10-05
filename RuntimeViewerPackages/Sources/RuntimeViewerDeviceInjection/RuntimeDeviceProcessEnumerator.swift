@@ -105,6 +105,11 @@ public enum RuntimeDeviceProcessEnumerator {
                 ?? "pid \(processIdentifier)",
             executablePath: path,
             userIdentifier: userIdentifier,
+            // A path, not an icon. Resolving it here costs no file access —
+            // it is a walk up the string — while the icon itself is fetched
+            // per bundle by a separate command, so the several processes of
+            // one application cost one icon between them.
+            applicationBundlePath: path.flatMap(RuntimeDeviceApplicationIconLocator.applicationBundlePath(forExecutableAtPath:)),
             injectability: injectability(
                 ofProcessWithIdentifier: processIdentifier,
                 userIdentifier: userIdentifier,

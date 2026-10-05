@@ -19,6 +19,7 @@ struct InjectionCommandWireFormatTests {
         let prefix = "com.RuntimeViewer.RuntimeViewerCore.RuntimeEngine."
         #expect(RuntimeEngine.CommandNames.injectionCapability.commandName == prefix + "injectionCapability")
         #expect(RuntimeEngine.CommandNames.processList.commandName == prefix + "processList")
+        #expect(RuntimeEngine.CommandNames.applicationIcons.commandName == prefix + "applicationIcons")
         #expect(RuntimeEngine.CommandNames.injectIntoProcess.commandName == prefix + "injectIntoProcess")
     }
 
@@ -34,6 +35,7 @@ struct InjectionCommandWireFormatTests {
     func requestTypesNameTheirCommand() {
         #expect(RuntimeEngine.InjectionCapabilityRequest.commandName == RuntimeEngine.CommandNames.injectionCapability.commandName)
         #expect(RuntimeEngine.ProcessListRequest.commandName == RuntimeEngine.CommandNames.processList.commandName)
+        #expect(RuntimeEngine.ApplicationIconsRequest.commandName == RuntimeEngine.CommandNames.applicationIcons.commandName)
         #expect(RuntimeEngine.InjectIntoProcessRequest.commandName == RuntimeEngine.CommandNames.injectIntoProcess.commandName)
         #expect(RuntimeEngine.StopKeepingProcessAwakeRequest.commandName == RuntimeEngine.CommandNames.stopKeepingProcessAwake.commandName)
     }
@@ -72,18 +74,20 @@ struct InjectionCommandWireFormatTests {
         #expect(decoded == result)
     }
 
-    /// `executablePath` and `userIdentifier` are both deliberately optional —
-    /// "could not read it" is a real state for a live process — so every
-    /// combination has to survive the wire. A `nil` that decoded as a zero
-    /// would be the worst possible failure here: uid 0 is precisely the value
-    /// that means "root target, needs root to inject".
-    @Test("RuntimeProcess survives a round trip with either optional absent")
+    /// `executablePath`, `userIdentifier` and `applicationBundlePath` are all
+    /// deliberately optional — "could not read it" is a real state for a live
+    /// process, and "belongs to no application bundle" is the state of nearly
+    /// every one — so every combination has to survive the wire. A `nil` that
+    /// decoded as a zero would be the worst possible failure here: uid 0 is
+    /// precisely the value that means "root target, needs root to inject".
+    @Test("RuntimeProcess survives a round trip with any optional absent")
     func processRoundTrip() throws {
         let complete = RuntimeProcess(
             processIdentifier: 4321,
             name: "backboardd",
             executablePath: "/usr/libexec/backboardd",
             userIdentifier: 501,
+            applicationBundlePath: nil,
             injectability: .injectable,
         )
         let rootOwned = RuntimeProcess(
@@ -91,6 +95,7 @@ struct InjectionCommandWireFormatTests {
             name: "launchd",
             executablePath: nil,
             userIdentifier: 0,
+            applicationBundlePath: nil,
             injectability: .requiresRootOnTarget,
         )
         let unknownOwner = RuntimeProcess(
@@ -98,8 +103,20 @@ struct InjectionCommandWireFormatTests {
             name: "opaque",
             executablePath: nil,
             userIdentifier: nil,
+            applicationBundlePath: nil,
             injectability: .injectable,
         )
+        let bundled = RuntimeProcess(
+            processIdentifier: 988,
+            name: "MobileSafari",
+            executablePath: "/Applications/MobileSafari.app/MobileSafari",
+            userIdentifier: 501,
+            applicationBundlePath: "/Applications/MobileSafari.app",
+            injectability: .injectable,
+        )
+        #expect(try roundTrip(bundled) == bundled)
+        #expect(try roundTrip(bundled).applicationBundlePath == "/Applications/MobileSafari.app")
+        #expect(try roundTrip(complete).applicationBundlePath == nil)
         #expect(try roundTrip(complete) == complete)
         #expect(try roundTrip(rootOwned) == rootOwned)
         #expect(try roundTrip(unknownOwner) == unknownOwner)
@@ -112,10 +129,87 @@ struct InjectionCommandWireFormatTests {
     @Test("A process list survives a round trip as the response type it is")
     func processListRoundTrip() throws {
         let processes = [
-            RuntimeProcess(processIdentifier: 1, name: "launchd", executablePath: "/sbin/launchd", userIdentifier: 0, injectability: .requiresRootOnTarget),
-            RuntimeProcess(processIdentifier: 988, name: "SpringBoard", executablePath: nil, userIdentifier: 501, injectability: .injectable),
+            RuntimeProcess(processIdentifier: 1, name: "launchd", executablePath: "/sbin/launchd", userIdentifier: 0, applicationBundlePath: nil, injectability: .requiresRootOnTarget),
+            RuntimeProcess(processIdentifier: 988, name: "SpringBoard", executablePath: nil, userIdentifier: 501, applicationBundlePath: nil, injectability: .injectable),
         ]
         #expect(try roundTrip(processes) == processes)
+    }
+
+    // MARK: - Application icons
+
+    /// The compatibility direction that matters for the icons: a device build
+    /// made before application bundles were reported sends a process with no
+    /// such key. That has to decode as "this process has no bundle" — the host
+    /// then asks for no icon and shows the generic one — rather than failing
+    /// the decode and taking the whole process list down with it.
+    @Test("A process without the application bundle key decodes as having none")
+    func processFromAnOlderPeerHasNoApplicationBundle() throws {
+        let legacyEncoding = Data(#"""
+        {"processIdentifier":988,"name":"SpringBoard","executablePath":"/Applications/SpringBoard.app/SpringBoard","userIdentifier":501,"injectability":{"injectable":{}}}
+        """#.utf8)
+        let decoded = try JSONDecoder().decode(RuntimeProcess.self, from: legacyEncoding)
+        #expect(decoded.processIdentifier == 988)
+        #expect(decoded.applicationBundlePath == nil)
+        #expect(decoded.injectability == .injectable)
+    }
+
+    /// The other direction of the same story: a `nil` bundle path has to be
+    /// *absent* from the encoding rather than encoded as null, so that a peer
+    /// built before this change decodes the list unchanged.
+    @Test("A nil application bundle path is omitted from the encoding")
+    func nilApplicationBundlePathIsOmitted() throws {
+        let encoded = try JSONEncoder().encode(
+            RuntimeProcess(
+                processIdentifier: 42,
+                name: "mediaserverd",
+                executablePath: "/usr/sbin/mediaserverd",
+                userIdentifier: 501,
+                applicationBundlePath: nil,
+                injectability: .injectable,
+            )
+        )
+        let fields = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(fields["applicationBundlePath"] == nil)
+    }
+
+    /// Not routed through `roundTrip(_:)`: the request type is not `Equatable`,
+    /// and giving it a conformance only tests could use would be the test
+    /// shaping the API.
+    @Test("ApplicationIconsRequest carries its bundle paths across the wire")
+    func applicationIconsRequestRoundTrip() throws {
+        let paths = ["/Applications/MobileSafari.app", "/Applications/Preferences.app"]
+        let encoded = try JSONEncoder().encode(
+            RuntimeEngine.ApplicationIconsRequest(applicationBundlePaths: paths)
+        )
+        let decoded = try JSONDecoder().decode(RuntimeEngine.ApplicationIconsRequest.self, from: encoded)
+        #expect(decoded.applicationBundlePaths == paths)
+    }
+
+    /// The response is PNG bytes keyed by bundle path, and the bytes are
+    /// forwarded verbatim — the far end does not decode them and neither does
+    /// the transport. So what this pins is that `Data` survives as the same
+    /// bytes, byte for byte, including the eight-byte PNG signature the host
+    /// hands to `NSImage`.
+    @Test("An icon response survives a round trip byte for byte")
+    func applicationIconsResponseRoundTrip() throws {
+        let pngSignature = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+        let icons: [String: Data] = [
+            "/Applications/MobileSafari.app": pngSignature + Data(repeating: 0xAB, count: 512),
+            "/Applications/Preferences.app": pngSignature,
+        ]
+        let decoded = try roundTrip(icons)
+        #expect(decoded == icons)
+        #expect(decoded["/Applications/MobileSafari.app"]?.starts(with: pngSignature) == true)
+        #expect(decoded["/Applications/MobileSafari.app"]?.count == 520)
+    }
+
+    /// A bundle the far end has no icon for is *absent* from the response, not
+    /// present with empty bytes. The host branches on the key being there, so
+    /// an empty `Data` would reach `NSImage(data:)`, fail, and produce a blank
+    /// row instead of the generic icon.
+    @Test("An empty icon dictionary is a valid response")
+    func emptyIconResponseRoundTrip() throws {
+        #expect(try roundTrip([String: Data]()).isEmpty)
     }
 
     /// Not routed through `roundTrip(_:)`: the request type is not `Equatable`,

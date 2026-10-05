@@ -18,6 +18,10 @@ private enum InjectionCommandLog {
         #log(.default, "Injection capability query failed, treating as unavailable: \(error.localizedDescription, privacy: .public)")
     }
 
+    static func applicationIconsQueryFailed(_ error: any Error) {
+        #log(.default, "Could not fetch application icons from this engine's machine, so its processes will show the generic icon: \(error.localizedDescription, privacy: .public)")
+    }
+
     static func stopKeepingAwakeFailed(_ processIdentifier: pid_t, _ error: any Error) {
         #log(.default, "Could not tell the peer to stop keeping process \(processIdentifier, privacy: .public) awake; it may hold its assertion until that process exits: \(error.localizedDescription, privacy: .public)")
     }
@@ -68,6 +72,30 @@ extension RuntimeEngine {
         func perform(on engine: RuntimeEngine) async throws -> [RuntimeProcess] {
             guard let injectionService = RuntimeEngine.injectionService else { return [] }
             return try await injectionService.processList()
+        }
+    }
+
+    /// The icons of a named set of application bundles on the machine this
+    /// engine belongs to.
+    ///
+    /// Separate from ``RuntimeEngine/ProcessListRequest`` rather than folded
+    /// into it, for two reasons that are both about what the list costs: the
+    /// several processes of one application share one icon, and every caller
+    /// that wants no icons keeps the list it has today.
+    ///
+    /// The host decides which bundles to ask about, from the
+    /// ``RuntimeProcess/applicationBundlePath`` of the list it already has — so
+    /// the paths in this request are always paths the far end itself reported.
+    /// That does not make validating them unnecessary at the far end; see
+    /// ``RuntimeInjectionService/applicationIcons(forBundlesAtPaths:)``.
+    struct ApplicationIconsRequest: RuntimeEngineRequest {
+        let applicationBundlePaths: [String]
+
+        static var commandName: String { CommandNames.applicationIcons.commandName }
+
+        func perform(on engine: RuntimeEngine) async throws -> [String: Data] {
+            guard let injectionService = RuntimeEngine.injectionService else { return [:] }
+            return await injectionService.applicationIcons(forBundlesAtPaths: applicationBundlePaths)
         }
     }
 
@@ -199,6 +227,28 @@ extension RuntimeEngine {
     /// needs to see rather than a state to render.
     public func processList() async throws -> [RuntimeProcess] {
         try await dispatch(ProcessListRequest())
+    }
+
+    /// The icons of these application bundles on the machine this engine
+    /// belongs to, as PNG bytes keyed by the bundle path asked for.
+    ///
+    /// **Does not throw**, for the reason ``injectionAvailability()`` does not:
+    /// a peer built before this command existed has no handler and fails the
+    /// dispatch, which means "this machine has no icons to give" and must not
+    /// take the process picker down with it. A picker with no icons is the
+    /// state this whole command exists to improve on — it is not a failure.
+    ///
+    /// Asking for nothing answers nothing without a round trip, because the
+    /// common case on a device is a process table that is nearly all daemons
+    /// and the empty request is worth not sending at all.
+    public func applicationIcons(forBundlesAtPaths applicationBundlePaths: [String]) async -> [String: Data] {
+        guard !applicationBundlePaths.isEmpty else { return [:] }
+        do {
+            return try await dispatch(ApplicationIconsRequest(applicationBundlePaths: applicationBundlePaths))
+        } catch {
+            InjectionCommandLog.applicationIconsQueryFailed(error)
+            return [:]
+        }
     }
 
     /// Loads the payload into a process on the machine this engine belongs to.

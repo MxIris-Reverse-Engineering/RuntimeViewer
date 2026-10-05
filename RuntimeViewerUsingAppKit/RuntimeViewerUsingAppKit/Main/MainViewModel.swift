@@ -6,6 +6,7 @@ import RuntimeViewerApplication
 import RuntimeViewerCommunication
 import RuntimeViewerEngineManagement
 import RuntimeViewerSettings
+import RuntimeViewerUI
 
 enum MessageError: LocalizedError {
     case message(String)
@@ -194,19 +195,37 @@ final class MainViewModel: ViewModel<MainRoute> {
     func resolveEngineIcon(for engine: RuntimeEngine) -> NSImage? {
         switch engine.source {
         case .local:
-            return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+            return Self.machineIcon(for: engine)
         case .remote(_, let identifier, _) where identifier == .macCatalyst:
-            return NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
+            return Self.machineIcon(for: engine)
         default:
             if engine.hostInfo.hostID == RuntimeNetworkBonjour.localInstanceID {
                 return runtimeEngineIconProvider.cachedIcon(for: engine) ?? Self.genericExecutableIcon
             } else {
-                let fallback = engine.hostInfo.metadata.isSimulator
-                    ? NSWorkspace.shared.box.deviceSymbolIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                    : NSWorkspace.shared.box.deviceIcon(forModelIdentifier: engine.hostInfo.metadata.modelIdentifier)
-                return runtimeEngineIconProvider.cachedIcon(for: engine) ?? fallback
+                // The machine itself, for the engine that *is* the machine — the
+                // RuntimeViewer running on it. A process injected on that device
+                // is a different thing and gets an icon of its own, recorded by
+                // the attach flow; falling back to the device here would list
+                // every injected process under a picture of the phone.
+                return runtimeEngineIconProvider.cachedIcon(for: engine) ?? Self.machineIcon(for: engine)
             }
         }
+    }
+
+    /// The glyph standing for the machine an engine runs on.
+    ///
+    /// Every machine row goes through this, the local Mac included, because one
+    /// photorealistic row beside three flat ones is worse than either treatment
+    /// on its own. `deviceIcon(forModelIdentifier:)` stays as the last resort:
+    /// it substitutes a generic display, which is a fair showing of a machine
+    /// whose model and platform both said nothing.
+    private static func machineIcon(for engine: RuntimeEngine) -> NSImage {
+        let metadata = engine.hostInfo.metadata
+        return DeviceGlyph.image(
+            forModelIdentifier: metadata.modelIdentifier,
+            operatingSystemVersion: metadata.osVersion,
+            isSimulator: metadata.isSimulator,
+        ) ?? NSWorkspace.shared.box.deviceIcon(forModelIdentifier: metadata.modelIdentifier)
     }
 
     private let requestRestartConfirmationRelay = PublishRelay<Void>()
@@ -413,8 +432,19 @@ final class MainViewModel: ViewModel<MainRoute> {
             }
             .distinctUntilChanged()
 
-        let switchSourceState = Driver.combineLatest(
+        // The manager's sections, re-emitted when an icon lands after them.
+        //
+        // An injected device process's icon does: the attach flow can only file
+        // it once that process's engine has reported in, by which time the list
+        // has been published and drawn. Both consumers below resolve icons, so
+        // both need the nudge — the menu rows and the toolbar button's own image.
+        let runtimeEngineSections = Driver.combineLatest(
             runtimeEngineManager.rx.runtimeEngineSections,
+            runtimeEngineIconProvider.recordedIconsChanged.startWith(()),
+        ) { sections, _ in sections }
+
+        let switchSourceState = Driver.combineLatest(
+            runtimeEngineSections,
             $selectedEngineIdentifier.asDriver()
         ).map { [weak self] sections, selectedIdentifier -> SwitchSourceState in
             guard let self else {
@@ -527,7 +557,7 @@ final class MainViewModel: ViewModel<MainRoute> {
                     currentIndex: selected == nil && index >= 0 ? index + 1 : index
                 )
             },
-            runtimeEngineSections: runtimeEngineManager.rx.runtimeEngineSections,
+            runtimeEngineSections: runtimeEngineSections,
             switchSourceState: switchSourceState,
             attachAvailability: attachAvailability,
             requestFrameworkSelection: requestFrameworkSelection,

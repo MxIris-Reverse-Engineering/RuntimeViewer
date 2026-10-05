@@ -99,6 +99,11 @@ public actor RuntimeEngine {
         /// The process table of the machine this engine belongs to. Never
         /// merged with the asking host's own processes.
         case processList
+        /// The icons of a named set of application bundles on the machine this
+        /// engine belongs to, as the PNG bytes in those bundles. Separate from
+        /// `processList` so that the several processes of one application cost
+        /// one icon between them, and so the list itself stays cheap.
+        case applicationIcons
         /// Loads the payload into a process on the machine this engine belongs
         /// to. The injected server announces itself over Bonjour, so the
         /// response reports only how the attempt ended.

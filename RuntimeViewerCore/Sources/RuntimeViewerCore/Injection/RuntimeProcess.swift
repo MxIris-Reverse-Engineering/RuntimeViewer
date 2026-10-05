@@ -64,6 +64,23 @@ public struct RuntimeProcess: Codable, Hashable, Sendable {
     /// authority — see ``Injectability/injectable``.
     public let userIdentifier: uid_t?
 
+    /// The app bundle this process belongs to, when it belongs to one.
+    ///
+    /// `nil` for every daemon, which is most of a device's process table. An app
+    /// extension reports its *host* app's bundle rather than its own `.appex`,
+    /// because the `.appex` carries no icon of its own.
+    ///
+    /// **A path, not the icon.** The icon is fetched separately, by bundle, so
+    /// that the several processes of one app cost one icon between them and the
+    /// process list itself stays as cheap as it was — see
+    /// ``RuntimeInjectionService/applicationIcons(forBundlesAtPaths:)``.
+    ///
+    /// Optional for the compatibility it buys as much as for the daemons: a
+    /// lister built before this change omits the key, the synthesized decoder
+    /// reads that as `nil`, and the host asks for no icons instead of failing
+    /// to decode the list.
+    public let applicationBundlePath: String?
+
     public let injectability: Injectability
 
     public init(
@@ -71,12 +88,14 @@ public struct RuntimeProcess: Codable, Hashable, Sendable {
         name: String,
         executablePath: String?,
         userIdentifier: uid_t?,
+        applicationBundlePath: String?,
         injectability: Injectability,
     ) {
         self.processIdentifier = processIdentifier
         self.name = name
         self.executablePath = executablePath
         self.userIdentifier = userIdentifier
+        self.applicationBundlePath = applicationBundlePath
         self.injectability = injectability
     }
 }
