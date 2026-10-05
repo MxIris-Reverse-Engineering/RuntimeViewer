@@ -311,10 +311,12 @@ if #available(macOS 26, *) {
 - **「图标后到」这条没能配上单元测试，且是有意不配的**：坏的那一半在 App target 的 `MainViewModel`，
   包测试够不着；另一半 `RuntimeEngineIconProvider` 是 `private init` 的单例，测试里构造不出来，强行
   构造会连带起整个 `RuntimeEngineManager`（会去开 Bonjour 浏览）。为一条两行的接线改动把单例拆开，
-  代价不对等。这条只能靠设备实测。
-- **设备上的实测需要用户配合**：确认一台真实越狱设备上的进程列表里，app 进程显示图标、daemon
-  显示通用图标、首屏延迟可接受；注入之后引擎菜单里三类行各自的图标；**以及注入成功后不点那一行，
-  图标就应该已经是 app 的**。宿主侧按菜单真实的 20 点尺寸渲染过 before/after 对照图确认过观感。
+  代价不对等。**改为靠设备实测，2026-10-05 用户已在真机上确认**：注入成功后不点那一行，引擎列表里
+  显示的就已经是 app 自己的图标。
+- **设备上的实测（2026-10-05，用户在真实越狱设备上）**：attach picker 里 app 进程显示图标、
+  注入之后引擎列表里那一行**不用点就已经是 app 自己的图标**——两条都确认。仍未单独核对的是
+  daemon 行的通用图标与 picker 首屏多那一个 RTT 的延迟观感，没有报告问题但也没有专门看过。
+  宿主侧按菜单真实的 20 点尺寸渲染过 before/after 对照图确认过观感。
 
 ## 决策日志
 
@@ -336,6 +338,7 @@ if #available(macOS 26, *) {
 | 2026-10-05 | 遮罩走 `CALayer` + `cornerCurve = .continuous`，不走 `NSBezierPath(roundedRect:)` | iOS 图标角是连续曲率，`NSBezierPath` 只画得出圆弧。实测 `render(in:)` 认 `cornerCurve`：同一个 layer 两种画法，120×120 里 300 个像素 alpha 不同 —— 不是假定它生效。顺带实测「图片作 `contents` + `masksToBounds`」这条路也认（同样 300 个像素），而不是只对 `backgroundColor` 生效 |
 | 2026-10-05 | 引擎列表的图标**复用 picker 刚取过的那一张**，不再发一次请求 | 用户报告三行图标全一样。picker 为用户点的那一行已经取过、解码过、套过圆角，attach 流程是唯一同时知道「这个引擎 = 那台设备上的那个进程」的地方，所以由它把图推给 `RuntimeEngineIconProvider`，而不是让 provider 回头再问一次 |
 | 2026-10-05 | daemon 的通用图标**也记下来**，不留空 | 「没有图标」和「知道它没有图标」是两回事。只有后者该拦住引擎列表回退到**设备**的图标——不记的话每个注入进去的 daemon 都会顶着一台手机的图 |
+| 2026-10-05 | 真机验收通过：picker 与引擎列表的 app 图标都正确，后者不用点进去 | 用户确认。这条是「图标后到」那个修复唯一的验收手段——它没有单元测试，理由见上 |
 | 2026-10-05 | 记图标时多发一条 `recordedIconsChanged`，菜单与工具栏按钮都跟着重画 | 用户报告「不点进去那一行还是设备图标」。根因是时序：引擎进列表时菜单就建好了，而图标要等它报到之后才有，此后没有东西再触发重建——点一下让 `switchSourceState` 变化恰好触发了，所以才像「点进去才显示」。provider 原有两条路挂在 `willSet` 上，天然赶得上，只有注入到设备的进程赶不上 |
 | 2026-10-05 | 这条接线**不配单元测试**，记录理由而不是沉默跳过 | 坏的一半在 App target 够不着；另一半是 `private init` 单例，强行构造会拉起整个 `RuntimeEngineManager`（开 Bonjour 浏览）。为两行接线拆单例不划算，改为列进「需要设备实测」的清单 |
 | 2026-10-05 | **停止照截图调色，改为逆向 Xcode 取原配方** | 用户第三次指出不像并直接要求「逆一下 Xcode，不要猜了」。两轮按观感调（平涂双色、再加渐变）都明显不对，根因是两色 palette 画不出它的屏幕——它在**两个** palette 颜色之间渐变。配方取自 `IDEKit.RunDestinationIconProvider.symbolConfigurationIncludingEligibility(for:)`：`[.labelColor, systemCyan·white(0.13), systemBlue·white(0.13)]` + `colorRenderingMode = .gradient`。验收是逐字节的：机身 `#E0E0E1` 与截图采样相同 |
