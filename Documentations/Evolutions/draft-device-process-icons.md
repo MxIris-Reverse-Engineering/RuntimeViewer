@@ -303,11 +303,10 @@ if #available(macOS 26, *) {
   （单看这条只证明「有一层是中性的」，和上一条配对才钉住顺序）。**红过四条**：去掉补正方形、把模拟器
   配置换成双色、把渐变退回平涂、把 palette 顺序对调，每次都有对应的例子如期失败（原始退出码 1）。
 - **构建与测试状态**：Core 28 例、设备端 29 例全绿（看的是原始退出码）；
-  `RuntimeViewerApplicationTests` 246 例里 245 例绿，唯一的红是 `StatefulOutlineViewTrackingLoopTests`
-  那条**哨兵**，与本次改动无关：会话中途本机从 macOS 27.0 升到 27.2，AppKit 把
-  `NSTableView.mousePanGestureRecognizer` 改名拆成了 `NSTableView.dragPanGestureRecognizer`
-  与 `NSTableView.extendSelectionGestureRecognizer`，而那条测试正是为「名字变了就红」写的。它守的
-  行为本身没坏——实测覆写 `mouseDown` 的子类在 27.2 上依旧一个识别器都不装。另案处理；macOS App 经
+  `RuntimeViewerApplicationTests` 全绿（期间有一条与本次无关的红：
+  `StatefulOutlineViewTrackingLoopTests` 的哨兵钉死了私有识别器的名字，而 macOS 27.2 把它改名拆二。
+  那套件已按用户决定删除——它是「用私有 API 实现那个行为」那条路线的遗留，实际的修法是覆写
+  `mouseDown`，与识别器名字无关。见该 ResolvedIssues 的追记）；macOS App 经
   `RuntimeViewer.xcworkspace` / `RuntimeViewer macOS` / Debug 编过，零错误。
 - **「图标后到」这条没能配上单元测试，且是有意不配的**：坏的那一半在 App target 的 `MainViewModel`，
   包测试够不着；另一半 `RuntimeEngineIconProvider` 是 `private init` 的单例，测试里构造不出来，强行
